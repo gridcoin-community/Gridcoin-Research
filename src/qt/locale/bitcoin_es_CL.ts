@@ -1,4 +1,4 @@
-<TS language="es_CL" version="2.1">
+<TS language="es_CL" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -36,10 +36,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Editar</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Archivos separados por coma (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -82,14 +78,6 @@
     <message>
         <source>Unlock wallet</source>
         <translation>Desbloquea billetera</translation>
-    </message>
-    <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Esta operación necesita la contraseña para decodificar la billetara.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Decodificar cartera</translation>
     </message>
     <message>
         <source>Change passphrase</source>
@@ -136,10 +124,6 @@
         <translation>La contraseña introducida para decodificar la billetera es incorrecta.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Ha fallado la decodificación de la billetera</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>La contraseña de billetera ha sido cambiada con éxito.</translation>
     </message>
@@ -151,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Firmar &amp;Mensaje...</translation>
+        <source>Wallet</source>
+        <translation>Cartera</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -161,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Muestra una vista general de la billetera</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Envía</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>y recibir</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -179,6 +171,10 @@
         <translation>&amp;Opciones</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Mostrar/Ocultar</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Codificar la billetera...</translation>
     </message>
@@ -191,32 +187,20 @@
         <translation>Cambiar la contraseña utilizada para la codificación de la billetera</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Ventana &amp;Debug</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Abre consola de depuración y diagnóstico</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Firmar &amp;Mensaje...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>Verificar mensaje....</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Cartera</translation>
+        <source>&amp;Debug window</source>
+        <translation>Ventana &amp;Debug</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Envía</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>y recibir</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Mostrar/Ocultar</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Abre consola de depuración y diagnóstico</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -230,37 +214,55 @@
         <source>&amp;Help</source>
         <translation>&amp;Ayuda</translation>
     </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Actualizado</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
     <message>
         <source>[testnet]</source>
         <translation>[red-de-pruebas]</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Actualizado</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -378,6 +380,30 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -460,27 +486,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -525,7 +569,7 @@
         <source>Client name</source>
         <translation>Nombre del cliente</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -597,7 +641,7 @@
         <source>(no label)</source>
         <translation>(sin etiqueta)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -607,6 +651,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>&amp;Pagar a:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Mensaje:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -680,7 +728,10 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -708,7 +759,10 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -740,7 +794,10 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -802,7 +859,10 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Abierto para &amp;n bloque más</numerusform><numerusform>Abierto para &amp;n bloques más</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -922,10 +982,6 @@
     <message>
         <source>Show transaction details</source>
         <translation>Mostrar detalles de la transacción</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Archivos separados por coma (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>

@@ -1,4 +1,4 @@
-<TS language="hr" version="2.1">
+<TS language="hr" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -36,10 +36,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Izmjeniti</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Datoteka vrijednosti odvojenih zarezom (*. csv)</translation>
     </message>
     </context>
 <context>
@@ -88,14 +84,6 @@
         <translation>Otklju?aj nov?anik</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ova operacija treba lozinku vašeg nov?anika kako bi se nov?anik dešifrirao.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Dešifriranje nov?anika.</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Promjena lozinke</translation>
     </message>
@@ -136,10 +124,6 @@
         <translation>Lozinka za dešifriranje nov?anika nije to?na.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Dešifriranje nov?anika nije uspjelo</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Lozinka nov?anika je uspješno promijenjena.</translation>
     </message>
@@ -151,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>P&amp;otpišite poruku...</translation>
+        <source>Wallet</source>
+        <translation>Novčanik</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -161,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Prikaži opći pregled novčanika</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Pošalji</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>Pri&amp;mi</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -179,6 +171,10 @@
         <translation>Pos&amp;tavke...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>Po&amp;kaži / Sakrij</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>Ši&amp;friraj novčanik...</translation>
     </message>
@@ -191,32 +187,20 @@
         <translation>Promijenite lozinku za šifriranje novčanika</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Konzola za dijagnostiku</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Otvori konzolu za dijagnostiku</translation>
+        <source>Sign &amp;message...</source>
+        <translation>P&amp;otpišite poruku...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Potvrdite poruku...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Novčanik</translation>
+        <source>&amp;Debug window</source>
+        <translation>Konzola za dijagnostiku</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Pošalji</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>Pri&amp;mi</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>Po&amp;kaži / Sakrij</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Otvori konzolu za dijagnostiku</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -231,32 +215,56 @@
         <translation>&amp;Pomoć</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>Obrađen %n blok povijesti transakcije.</numerusform><numerusform>Obrađeno %n bloka povijesti transakcije.</numerusform><numerusform>Obrađeno %n blokova povijesti transakcije.</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Ažurno</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -378,6 +386,33 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -402,10 +437,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Proxy vrata (npr. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;Verzija:</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -479,27 +510,51 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -549,10 +604,6 @@
         <translation>Očisti konzolu</translation>
     </message>
     <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Koristite tipke gore i dolje za izbor već korištenih naredbi. &lt;b&gt;Ctrl-L&lt;/b&gt; kako bi očistili ekran i povijest naredbi.</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Procjenjeni ukupni broj blokova</translation>
     </message>
@@ -560,7 +611,11 @@
         <source>Client name</source>
         <translation>Ime klijenta</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Koristite tipke gore i dolje za izbor već korištenih naredbi. &lt;b&gt;Ctrl-L&lt;/b&gt; kako bi očistili ekran i povijest naredbi.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -639,7 +694,7 @@
         <source>(no label)</source>
         <translation>(bez oznake)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -649,6 +704,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>&amp;Primatelj plaćanja:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Poruka:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -706,7 +765,11 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -730,7 +793,11 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -766,7 +833,11 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -828,7 +899,11 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -948,10 +1023,6 @@
     <message>
         <source>Edit label</source>
         <translation>Izmjeniti oznaku</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Datoteka podataka odvojenih zarezima (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>

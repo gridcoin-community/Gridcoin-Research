@@ -1,4 +1,4 @@
-<TS language="vi_VN" version="2.1">
+<TS language="vi_VN" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -44,8 +44,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Chứ ký &amp; Tin nhắn...</translation>
+        <source>Wallet</source>
+        <translation>Ví</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -54,6 +54,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Hiện thỉ thông tin sơ lược chung về Ví</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Gửi</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Nhận</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -72,6 +80,10 @@
         <translation>&amp;Tùy chọn...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>Ẩn / H&amp;iện</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Mã hóa ví tiền</translation>
     </message>
@@ -84,28 +96,16 @@
         <translation>Thay đổi cụm mật mã dùng cho mã hoá Ví</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Cửa sổ xử lý lỗi (debug)</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Chứ ký &amp; Tin nhắn...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Tin nhắn xác thực</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Ví</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Gửi</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Nhận</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>Ẩn / H&amp;iện</translation>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Cửa sổ xử lý lỗi (debug)</translation>
     </message>
     <message>
         <source>&amp;Settings</source>
@@ -116,32 +116,44 @@
         <translation>Trợ &amp;giúp</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Đã cập nhật</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -215,6 +227,27 @@
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -264,27 +297,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -294,12 +339,12 @@
         <translation>Thông tin</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Gõ &lt;b&gt;help&lt;/b&gt; để xem nhưng câu lệnh có sẵn</translation>
-    </message>
-    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Sử dụng phím lên và xuống để di chuyển lịch sử, và &lt;b&gt;Ctrl-L&lt;/b&gt; để xóa màn hình</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Gõ &lt;b&gt;help&lt;/b&gt; để xem nhưng câu lệnh có sẵn</translation>
     </message>
     </context>
 <context>
@@ -379,15 +424,21 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Message</source>
@@ -402,7 +453,9 @@
     <name>TransactionTableModel</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>

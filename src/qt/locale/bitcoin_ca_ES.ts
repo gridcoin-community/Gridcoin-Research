@@ -1,4 +1,4 @@
-<TS language="ca_ES" version="2.1">
+<TS language="ca_ES" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -73,10 +73,6 @@
         <translation>&amp;Edita</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Fitxer separat per comes (*.csv)</translation>
-    </message>
-    <message>
         <source>Export Address Book Data</source>
         <translation>Exportar dades de la llibreta d'adreces </translation>
     </message>
@@ -147,14 +143,6 @@
         <translation>Desbloqueja el moneder</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Aquesta operació requereix la contrasenya del moneder per desencriptar-lo.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Desencripta el moneder</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Canvia la contrasenya</translation>
     </message>
@@ -175,12 +163,12 @@
         <translation>Esteu segur que voleu encriptar el vostre moneder?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin tancarà ara per acabar el procés de xifrat. Recordeu que l'encriptació del seu moneder no pot protegir completament les seves monedes de ser robades pel malware que pugui infectar al seu equip.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Moneder encriptat</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin tancarà ara per acabar el procés de xifrat. Recordeu que l'encriptació del seu moneder no pot protegir completament les seves monedes de ser robades pel malware que pugui infectar al seu equip.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -207,10 +195,6 @@
         <translation>La contrasenya introduïda per a desencriptar el moneder és incorrecta.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>La desencriptació del moneder ha fallat</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>La contrasenya del moneder ha estat modificada correctament.</translation>
     </message>
@@ -222,8 +206,12 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Signa el &amp;missatge...</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>S'ha produït un error fatal. Gridcoin ja no pot continuar de forma segura i es tancarà.</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Moneder</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -234,8 +222,28 @@
         <translation>Mostra el panorama general del moneder</translation>
     </message>
     <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Envia</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Enviar monedes a una adreça Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Rep</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Mostra la llista d'adreces per rebre pagaments</translation>
+    </message>
+    <message>
         <source>Browse transaction history</source>
         <translation>Cerca a l'historial de transaccions</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Edició de la llista d'adreces i etiquetes emmagatzemades</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -246,8 +254,24 @@
         <translation>Surt de l'aplicació</translation>
     </message>
     <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Sobre Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Mostra informació sobre Gridcoin</translation>
+    </message>
+    <message>
         <source>&amp;Options...</source>
         <translation>&amp;Opcions...</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Modificar les opcions de configuració per a Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Mostra / Amaga</translation>
     </message>
     <message>
         <source>&amp;Encrypt Wallet...</source>
@@ -260,98 +284,6 @@
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Canvia la contrasenya d'encriptació del moneder</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Finestra de depuració</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Obre la consola de diagnòstic i depuració</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Verifica el missatge...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Moneder</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Envia</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Rep</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Mostra / Amaga</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Fitxer</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Configuració</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Ajuda</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>S'ha processat %n bloc de l'historial de transacció.</numerusform><numerusform>S'han processat %n blocs de l'historial de transacció.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Al dia</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Enviar monedes a una adreça Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Mostra la llista d'adreces per rebre pagaments</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Edició de la llista d'adreces i etiquetes emmagatzemades</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;Sobre Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>Mostra informació sobre Gridcoin</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Modificar les opcions de configuració per a Gridcoin</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Xifrar o desxifrar moneder</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -370,6 +302,14 @@
         <translation>Bloquejar moneder</translation>
     </message>
     <message>
+        <source>Sign &amp;message...</source>
+        <translation>Signa el &amp;missatge...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Verifica el missatge...</translation>
+    </message>
+    <message>
         <source>&amp;Export...</source>
         <translation>&amp;Exportar...</translation>
     </message>
@@ -378,12 +318,80 @@
         <translation>Exportar les dades de la pestanya actual a un arxiu</translation>
     </message>
     <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Finestra de depuració</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Obre la consola de diagnòstic i depuració</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Fitxer</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Configuració</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Ajuda</translation>
+    </message>
+    <message>
         <source>Gridcoin client</source>
         <translation>Client Gridcoin</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Al dia</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -402,12 +410,24 @@
         <translation>Confirmeu comisió</translation>
     </message>
     <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>l'URI no es pot analitzar! Això pot ser causat per una adreça Gridcoin no vàlida o paràmetres URI malformats.</translation>
+        <source>Sent transaction</source>
+        <translation>Transacció enviada</translation>
+    </message>
+    <message>
+        <source>Incoming transaction</source>
+        <translation>Transacció entrant</translation>
     </message>
     <message>
         <source>URI handling</source>
         <translation>Manejant URI</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>l'URI no es pot analitzar! Això pot ser causat per una adreça Gridcoin no vàlida o paràmetres URI malformats.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;bloquejat&lt;/b&gt;</translation>
     </message>
     <message>
         <source>Backup Wallet</source>
@@ -425,23 +445,7 @@
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>Hi ha un error al tractar de salvar les dades del seu moneder a la nova ubicació.</translation>
     </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation>Transacció enviada</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation>Transacció entrant</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>El moneder està &lt;b&gt;encriptat&lt;/b&gt; i actualment &lt;b&gt;bloquejat&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>S'ha produït un error fatal. Gridcoin ja no pot continuar de forma segura i es tancarà.</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>ClientModel</name>
     <message>
@@ -466,10 +470,6 @@
     <message>
         <source>Coin Control</source>
         <translation>Opcions del control de monedes</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritat:</translation>
     </message>
     <message>
         <source>Low Output:</source>
@@ -508,10 +508,6 @@
         <translation>Adreça</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Prioritat</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Copia l'adreça</translation>
     </message>
@@ -544,10 +540,6 @@
         <translation>Copia els bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copiar prioritat</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copiar sortida baixa</translation>
     </message>
@@ -556,40 +548,12 @@
         <translation>Copia el canvi</translation>
     </message>
     <message>
-        <source>highest</source>
-        <translation>El més alt</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>Alt</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>mig-alt</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>mig</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>baix-mig</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>baix</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>el més baix</translation>
+        <source>DUST</source>
+        <translation>POLS</translation>
     </message>
     <message>
         <source>yes</source>
         <translation>sí</translation>
-    </message>
-    <message>
-        <source>DUST</source>
-        <translation>POLS</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -602,18 +566,6 @@
 En aquest cas es requereix una comisió d'almenys el %1 per kb. 
 
 Pot variar + / - 1 Byte per entrada.</translation>
-    </message>
-    <message>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than "medium".
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Les operacions amb més prioritat entren mes facilment a un bloc. 
-
-Aquesta etiqueta es torna vermella, si la prioritat és menor que "mitja".
-
-En aquest cas es requereix una comisió d'almenys el %1 per kb.</translation>
     </message>
     <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
@@ -719,6 +671,33 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -749,28 +728,12 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <translation>Obrir automàticament el port de client Gridcoin en el router. Això només funciona quan el router és compatible amb UPnP i està habilitat.</translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Connecteu-vos a la xarxa Gridcoin través d'un proxy SOCKS (per exemple, quan es connecta a través de Tor).</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Conectar a través d'un proxy SOCKS:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>Adreça IP del servidor proxy (per exemple, 127.0.0.1)</translation>
     </message>
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port del proxy (per exemple 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Versió de SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Versió SOCKS del proxy (per exemple 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -884,27 +847,51 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -949,11 +936,7 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <source>Save QR Code</source>
         <translation>Desar codi QR</translation>
     </message>
-    <message>
-        <source>PNG Images (*.png)</source>
-        <translation>Imatges PNG (*.png)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>RPCConsole</name>
     <message>
@@ -1017,18 +1000,6 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <translation>Neteja la consola</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Escriviu &lt;b&gt;help&lt;\b&gt; per a obtenir un llistat de les ordres disponibles.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Utilitza les fletxes d'amunt i avall per navegar per l'historial, i &lt;b&gt;Ctrl-L&lt;\b&gt; per netejar la pantalla.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Data de compilació</translation>
-    </message>
-    <message>
         <source>On testnet</source>
         <translation>A testnet</translation>
     </message>
@@ -1052,7 +1023,15 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <source>Client name</source>
         <translation>Nom del client</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Utilitza les fletxes d'amunt i avall per navegar per l'historial, i &lt;b&gt;Ctrl-L&lt;\b&gt; per netejar la pantalla.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Escriviu &lt;b&gt;help&lt;\b&gt; per a obtenir un llistat de les ordres disponibles.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -1078,14 +1057,6 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     <message>
         <source>Amount:</source>
         <translation>Import:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritat:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>mig</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -1160,10 +1131,6 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <translation>Copia el canvi</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copiar prioritat</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; a %2 (%3)</translation>
     </message>
@@ -1208,6 +1175,10 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <translation>Error: La transacció ha sigut rebutjada. Això pot passar si algunes de les monedes al moneder ja s'han gastat, per exemple, si vostè utilitza una còpia del wallet.dat i les monedes han estat gastades a la cópia pero no s'han marcat com a gastades aqui.</translation>
     </message>
     <message>
+        <source>(no label)</source>
+        <translation>(sense etiqueta)</translation>
+    </message>
+    <message>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>ADVERTÈNCIA: Direcció Gridcoin invàlida</translation>
     </message>
@@ -1215,11 +1186,7 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <source>WARNING: unknown change address</source>
         <translation>ADVERTÈNCIA: direcció de canvi desconeguda</translation>
     </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(sense etiqueta)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -1229,6 +1196,10 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     <message>
         <source>Pay &amp;To:</source>
         <translation>Paga &amp;a:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Missatge:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -1386,11 +1357,19 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Obert fins %1</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>conflicte</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -1399,10 +1378,6 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1/sense confirmar</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>conflicte</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -1418,7 +1393,11 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, transmès a través de %n node</numerusform><numerusform>, transmès a través de %n nodes</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1454,7 +1433,11 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>madura en %n bloc més</numerusform><numerusform>madura en %n blocs més</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1524,7 +1507,11 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Obert per a %n bloc més</numerusform><numerusform>Obert per a %n blocs més</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1666,10 +1653,6 @@ En aquest cas es requereix una comisió d'almenys %2.</translation>
         <translation>Exportació de dades de transaccions</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Fitxer separat per comes (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Confirmat</translation>
     </message>
@@ -1802,10 +1785,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>L'arxiu wallet.data és corrupte, el rescat de les dades ha fallat</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>S'ha demanat una versió desconeguda de -socks proxy: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Adreça -proxy invalida: '%s'</translation>
     </message>
@@ -1844,10 +1823,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Error loading wallet.dat</source>
         <translation>Error carregant wallet.dat</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Important fitxer de dades de la cadena de blocs</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>

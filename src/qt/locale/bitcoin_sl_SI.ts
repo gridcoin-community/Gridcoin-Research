@@ -1,4 +1,4 @@
-<TS language="sl_SI" version="2.1">
+<TS language="sl_SI" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -73,10 +73,6 @@
         <translation>&amp;Uredi</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Datoteka s podatki, lo?enimi z vejico (*.csv)</translation>
-    </message>
-    <message>
         <source>Export Address Book Data</source>
         <translation>Izvozi podatke imenika</translation>
     </message>
@@ -143,14 +139,6 @@
         <translation>Odkleni denarnico</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>To dejanje zahteva geslo za dešifriranje vaše denarnice.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Dešifriraj denarnico</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Zamenjaj geslo</translation>
     </message>
@@ -171,12 +159,12 @@
         <translation>Ali ste prepri?ani, da želite šifrirati vašo denarnico?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin se bo sedaj zaprl, da dokon?a proces šifriranje. Pomnite, da tudi šifriranje vaše denarnice ne more v celoti zaš?ititi vaših kovancev pred krajo z zlonamernimi programi in ra?unalniškimi virusi, ?e ti okužijo vaš ra?unalnik.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Denarnica šifrirana</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin se bo sedaj zaprl, da dokon?a proces šifriranje. Pomnite, da tudi šifriranje vaše denarnice ne more v celoti zaš?ititi vaših kovancev pred krajo z zlonamernimi programi in ra?unalniškimi virusi, ?e ti okužijo vaš ra?unalnik.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -203,10 +191,6 @@
         <translation>Geslo za dešifriranje denarnice, ki ste ga vnesli, ni pravilno.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Dešifriranje denarnice je spodletelo</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Geslo denarnice je bilo uspešno spremenjeno.</translation>
     </message>
@@ -218,8 +202,12 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Podpiši &amp;sporočilo ...</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Prišlo je do usodne napake. Program Gridcoin se ne more ve? varno nadaljevati in se bo zato zaprl. </translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Denarnica</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -230,8 +218,28 @@
         <translation>Oglejte si splošne informacije o vaši denarnici</translation>
     </message>
     <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Pošlji</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Pošlji kovance na Gridcoin naslov</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>P&amp;rejmi</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Prikaži seznam naslovov za prejemanje pla?il. </translation>
+    </message>
+    <message>
         <source>Browse transaction history</source>
         <translation>Brskajte po zgodovini transakcij</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Uredi seznam shranjenih naslovov in oznak</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -242,8 +250,24 @@
         <translation>Ustavite program</translation>
     </message>
     <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;O Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Pokaži informacije o Gridcoin</translation>
+    </message>
+    <message>
         <source>&amp;Options...</source>
         <translation>&amp;Možnosti ...</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Spremeni nastavitve za Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Prikaži / Skrij</translation>
     </message>
     <message>
         <source>&amp;Encrypt Wallet...</source>
@@ -256,98 +280,6 @@
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Spremenite geslo za šifriranje denarnice</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Razhroščevalno okno</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Odprite razhroščevalno in diagnostično konzolo</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Preveri sporočilo ...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Denarnica</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Pošlji</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>P&amp;rejmi</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Prikaži / Skrij</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Datoteka</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Nastavitve</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Pomoč</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>%n obdelan blok zgodovine transakcij.</numerusform><numerusform>%n obdelana bloka zgodovine transakcij.</numerusform><numerusform>%n obdelani bloki zgodovine transakcij.</numerusform><numerusform>%n obdelanih blokov zgodovine transakcij.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Posodobljeno</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Pošlji kovance na Gridcoin naslov</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Prikaži seznam naslovov za prejemanje pla?il. </translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Uredi seznam shranjenih naslovov in oznak</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;O Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>Pokaži informacije o Gridcoin</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Spremeni nastavitve za Gridcoin</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Šifriraj ali dešifriraj denarnico</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -366,6 +298,14 @@
         <translation>Zakleni denarnico</translation>
     </message>
     <message>
+        <source>Sign &amp;message...</source>
+        <translation>Podpiši &amp;sporočilo ...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Preveri sporočilo ...</translation>
+    </message>
+    <message>
         <source>&amp;Export...</source>
         <translation>&amp;Izvozi...</translation>
     </message>
@@ -374,12 +314,86 @@
         <translation>Izvozi podatke v izbranem zavihku v datoteko</translation>
     </message>
     <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Razhroščevalno okno</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Odprite razhroščevalno in diagnostično konzolo</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Datoteka</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Nastavitve</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Pomoč</translation>
+    </message>
+    <message>
         <source>Gridcoin client</source>
         <translation>Gridcoin program</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Posodobljeno</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -398,12 +412,24 @@
         <translation>Potrdi transakcijsko provizijo</translation>
     </message>
     <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI ne more biti raz?lenjen! To se lahko zgodi zaradi neveljavnega Gridcoin naslova ali slabih parametrov URI.</translation>
+        <source>Sent transaction</source>
+        <translation>Odlivi</translation>
+    </message>
+    <message>
+        <source>Incoming transaction</source>
+        <translation>Prilivi</translation>
     </message>
     <message>
         <source>URI handling</source>
         <translation>Rokovanje z URI</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI ne more biti raz?lenjen! To se lahko zgodi zaradi neveljavnega Gridcoin naslova ali slabih parametrov URI.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;zaklenjena&lt;/b&gt;</translation>
     </message>
     <message>
         <source>Backup Wallet</source>
@@ -421,23 +447,7 @@
         <source>There was an error trying to save the wallet data to the new location.</source>
         <translation>Prišlo je do napake ob poskušanju shranjevanja datoteke denarnice na novo lokacijo.</translation>
     </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation>Odlivi</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation>Prilivi</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Denarnica je &lt;b&gt;šifrirana&lt;/b&gt; in trenutno &lt;b&gt;zaklenjena&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>Prišlo je do usodne napake. Program Gridcoin se ne more ve? varno nadaljevati in se bo zato zaprl. </translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>ClientModel</name>
     <message>
@@ -466,10 +476,6 @@
     <message>
         <source>Coin Control</source>
         <translation>Kontrola kovancev</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prednostno mesto:</translation>
     </message>
     <message>
         <source>Low Output:</source>
@@ -508,10 +514,6 @@
         <translation>Naslov</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Prednostno mesto</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Kopiraj naslov</translation>
     </message>
@@ -544,10 +546,6 @@
         <translation>Kopiraj bite</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopiraj prednostno mesto</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Kopiraj nizek output:</translation>
     </message>
@@ -556,32 +554,8 @@
         <translation>Kopiraj spremembo</translation>
     </message>
     <message>
-        <source>highest</source>
-        <translation>najvišja</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>visoka</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>srednje visoka</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>srednje</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>srednje nizka</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>nizka</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>najnižja</translation>
+        <source>DUST</source>
+        <translation>PRAH</translation>
     </message>
     <message>
         <source>yes</source>
@@ -590,10 +564,6 @@
     <message>
         <source>no</source>
         <translation>ne</translation>
-    </message>
-    <message>
-        <source>DUST</source>
-        <translation>PRAH</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -606,18 +576,6 @@
  To pomeni, da je zahtevana provizija vsaj %1 na kb.
 
  Lahko variira +/- 1 Bajt na vnos.</translation>
-    </message>
-    <message>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than "medium".
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Transakcije z višjo prioriteto imajo višjo verjetnost, da so vklju?ene v blok.
-
-Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
-
- To pomeni, da je zahtevana provizija vsaj %1 na kb.</translation>
     </message>
     <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
@@ -723,6 +681,36 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -753,14 +741,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <translation>Avtomati?no odpri vrata na routerju za Gridcoin program. To deluje le ?e vaš router podpira UPnP in je ta omogo?en. </translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Poveži se na Gridcoin omrežje skozi SOCKS proxy (npr. ko se povezujete prek Tora)</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Poveži se skozi SOCKS proxy:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>IP naslov proxy strežnika (npr. 127.0.0.1)</translation>
     </message>
@@ -771,14 +751,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Vrata posredniškega strežnika (npr. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;razli?ica:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>SOCKS razli?ica proxya (npr.: 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -896,27 +868,57 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -961,11 +963,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <source>Save QR Code</source>
         <translation>Shrani QR kodo</translation>
     </message>
-    <message>
-        <source>PNG Images (*.png)</source>
-        <translation>PNG slike (*.png)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>RPCConsole</name>
     <message>
@@ -1037,30 +1035,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <translation>Počisti konzolo</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Vtipkajte &lt;b&gt;help&lt;/b&gt; za pregled razpoložljivih ukazov.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Uporabite tipki gor in dol za navigacijo po zgodovini ukazov. Uporabite &lt;b&gt;Ctrl-L&lt;/b&gt; za izbris zaslona in zgodovine ukazov.</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 KiB</translation>
-    </message>
-    <message>
-        <source>%1 MB</source>
-        <translation>%1 MiB</translation>
-    </message>
-    <message>
-        <source>%1 GB</source>
-        <translation>%1 GiB</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Datum izgradnje</translation>
-    </message>
-    <message>
         <source>On testnet</source>
         <translation>Na testnet</translation>
     </message>
@@ -1084,7 +1058,27 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <source>Client name</source>
         <translation>Ime odjemalca</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Uporabite tipki gor in dol za navigacijo po zgodovini ukazov. Uporabite &lt;b&gt;Ctrl-L&lt;/b&gt; za izbris zaslona in zgodovine ukazov.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Vtipkajte &lt;b&gt;help&lt;/b&gt; za pregled razpoložljivih ukazov.</translation>
+    </message>
+    <message>
+        <source>%1 KB</source>
+        <translation>%1 KiB</translation>
+    </message>
+    <message>
+        <source>%1 MB</source>
+        <translation>%1 MiB</translation>
+    </message>
+    <message>
+        <source>%1 GB</source>
+        <translation>%1 GiB</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -1114,14 +1108,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     <message>
         <source>Amount:</source>
         <translation>Znesek:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prednostno mesto:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>srednje</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -1200,10 +1186,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <translation>Kopiraj spremembo</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopiraj prednostno mesto</translation>
-    </message>
-    <message>
         <source>Confirm send coins</source>
         <translation>Potrdi odliv kovancev </translation>
     </message>
@@ -1244,6 +1226,10 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <translation>Napaka: Transakcija je bila zavrnjena. To se je lahko zgodilo, ?e so bili kovanci v vaši denarnici že zapravljeni, na primer ?e ste uporabili kopijo wallet.dat in so bili kovanci zapravljeni v kopiji, a tu še niso bili ozna?eni kot zapravljeni.</translation>
     </message>
     <message>
+        <source>(no label)</source>
+        <translation>(ni oznake)</translation>
+    </message>
+    <message>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>OPOZORILO: Neveljaven Gridcoin naslov</translation>
     </message>
@@ -1251,11 +1237,7 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <source>WARNING: unknown change address</source>
         <translation>OPOZORILO: neznana sprememba naslova</translation>
     </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(ni oznake)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -1265,6 +1247,10 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     <message>
         <source>Pay &amp;To:</source>
         <translation>Prejemnik &amp;plačila:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Sporočilo:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -1414,19 +1400,24 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Odpri enoto %1</translation>
     </message>
     <message>
-        <source>%1/unconfirmed</source>
-        <translation>%1/nepotrjeno</translation>
-    </message>
-    <message>
         <source>conflicted</source>
         <translation>sporen</translation>
+    </message>
+    <message>
+        <source>%1/unconfirmed</source>
+        <translation>%1/nepotrjeno</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -1442,7 +1433,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, predvajanje skozi %n vozliš?e</numerusform><numerusform>, predvajanje skozi %n vozliš?i</numerusform><numerusform>, predvajanje skozi %n vozliš?</numerusform><numerusform>, predvajanje skozi %n vozliš?</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1478,7 +1474,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>dozori ?ez %n blok</numerusform><numerusform>dozori ?ez %n bloka</numerusform><numerusform>dozori ?ez %n blokov</numerusform><numerusform>dozori ?ez %n blokov</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1548,7 +1549,12 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Odprt še  %n blok</numerusform><numerusform>Odprt še  %n bloka</numerusform><numerusform>Odprt še  %n blokov</numerusform><numerusform>Odprt še  %n blokov</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1694,10 +1700,6 @@ Ta oznaka se obarva rde?e, ?e je prioriteta manjša kot "srednja".
         <translation>Izvozi podatke transakcij</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Datoteka s podatki, lo?enimi z vejico (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Potrjeno</translation>
     </message>
@@ -1832,10 +1834,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>wallet.dat poškodovana, neuspešna obnova</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Zahtevana neznana -socks proxy razli?ica: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Neveljaven naslov -proxy: '%s'</translation>
     </message>
@@ -1874,10 +1872,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Error loading wallet.dat</source>
         <translation>Napaka pri nalaganju wallet.dat</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Uvažanje blockchain podatkovne datoteke.</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>

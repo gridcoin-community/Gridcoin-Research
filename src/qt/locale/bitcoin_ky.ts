@@ -1,4 +1,4 @@
-<TS language="ky" version="2.1">
+<TS language="ky" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -24,12 +24,12 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>&amp;Verify message...</source>
-        <translation>Билдирүүнү &amp;текшерүү...</translation>
-    </message>
-    <message>
         <source>Wallet</source>
         <translation>Капчык</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>Билдирүүнү &amp;текшерүү...</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -40,32 +40,50 @@
         <translation>&amp;Жардам</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Жаңыланган</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
     </message>
     </context>
 <context>
@@ -86,6 +104,30 @@
         <translation>&amp;Дарек</translation>
     </message>
     </context>
+<context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -117,27 +159,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -173,9 +233,13 @@
         <source>(no label)</source>
         <translation>(аты жок)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
+    <message>
+        <source>Message:</source>
+        <translation>Билдирүү:</translation>
+    </message>
     <message>
         <source>Paste address from clipboard</source>
         <translation>Даректи алмашуу буферинен коюу</translation>
@@ -196,7 +260,10 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -204,7 +271,10 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -212,7 +282,10 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Message</source>
@@ -227,7 +300,10 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>

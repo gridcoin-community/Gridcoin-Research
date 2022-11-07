@@ -1,4 +1,4 @@
-<TS language="la" version="2.1">
+<TS language="la" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -28,10 +28,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Muta</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma Separata Plica (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -80,14 +76,6 @@
         <translation>Resera cassidile</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Huic operationi necesse est tessera cassidili tuo ut cassidile decifret.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Decifra cassidile</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Muta tesseram</translation>
     </message>
@@ -132,10 +120,6 @@
         <translation>Tessera inserta pro cassidilis decifrando prava erat.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Cassidile decifrare abortum est.</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Tessera cassidilis successa est in mutando.</translation>
     </message>
@@ -147,8 +131,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Signa &amp;nuntium...</translation>
+        <source>Wallet</source>
+        <translation>Cassidile</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -157,6 +141,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Monstra generale summarium cassidilis</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Mitte</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Accipe</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -175,6 +167,10 @@
         <translation>&amp;Optiones</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Monstra/Occulta</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Cifra Cassidile...</translation>
     </message>
@@ -187,32 +183,20 @@
         <translation>Muta tesseram utam pro cassidilis cifrando</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Fenestra &amp;Debug</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Aperi terminalem debug et diagnosticalem</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Signa &amp;nuntium...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Verifica nuntium...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Cassidile</translation>
+        <source>&amp;Debug window</source>
+        <translation>Fenestra &amp;Debug</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Mitte</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Accipe</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Monstra/Occulta</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Aperi terminalem debug et diagnosticalem</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -227,32 +211,44 @@
         <translation>&amp;Auxilium</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Recentissimo</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -365,6 +361,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -389,14 +406,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Porta vicarii (e.g. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;Versio:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>SOCKS versio vicarii (e.g. 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -466,27 +475,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -536,18 +557,6 @@
         <translation>Vacuefac terminale</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Scribe &lt;b&gt;help&lt;/b&gt; pro summario possibilium mandatorum.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Utere sagittis sursum deorsumque ut per historiam naviges, et &lt;b&gt;Ctrl+L&lt;/b&gt; ut scrinium vacuefacias.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Dies aedificandi</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Aestimatus totalis numerus frustorum</translation>
     </message>
@@ -555,7 +564,15 @@
         <source>Client name</source>
         <translation>Nomen clientis</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Utere sagittis sursum deorsumque ut per historiam naviges, et &lt;b&gt;Ctrl+L&lt;/b&gt; ut scrinium vacuefacias.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Scribe &lt;b&gt;help&lt;/b&gt; pro summario possibilium mandatorum.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -622,7 +639,7 @@
         <source>(no label)</source>
         <translation>(nullus titulus)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -632,6 +649,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Pensa &amp;Ad:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Nuntius:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -753,7 +774,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -777,7 +800,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, disseminatum per %n nodo</numerusform><numerusform>, disseminata per %n nodis</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -813,7 +838,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>maturum erit in %n plure frusto</numerusform><numerusform>maturum erit in %n pluribus frustis</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -883,7 +910,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Aperi pro %n plure frusto</numerusform><numerusform>Aperi pro %n pluribus frustis</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1009,10 +1038,6 @@
         <translation>Monstra particularia transactionis</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Comma Separata Plica (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Confirmatum</translation>
     </message>
@@ -1102,10 +1127,6 @@ Si plica non existat, crea eam cum permissionibus ut solus eius dominus eam lege
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat corrupta, salvare abortum est</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Ignota -socks vicarii versio postulata: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

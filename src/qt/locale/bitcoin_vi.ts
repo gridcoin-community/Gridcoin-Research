@@ -1,4 +1,4 @@
-<TS language="vi" version="2.1">
+<TS language="vi" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -25,10 +25,6 @@
         <source>&amp;Delete</source>
         <translation>&amp;Xóa</translation>
     </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>T?p tin tách bi?t b?i d?u ph?y (*.csv)</translation>
-    </message>
     </context>
 <context>
     <name>AddressTableModel</name>
@@ -48,28 +44,40 @@
 <context>
     <name>BitcoinGUI</name>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -103,30 +111,63 @@
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -139,20 +180,26 @@
         <source>(no label)</source>
         <translation>(ch?a có nhãn)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Amount</source>
@@ -171,15 +218,13 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
     <name>TransactionView</name>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>T?p tin tách bi?t b?i d?u ph?y (*.csv)</translation>
-    </message>
     <message>
         <source>Label</source>
         <translation>Nhãn d? li?u</translation>

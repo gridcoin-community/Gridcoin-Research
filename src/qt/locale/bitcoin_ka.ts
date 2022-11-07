@@ -1,4 +1,4 @@
-<TS language="ka" version="2.1">
+<TS language="ka" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -48,8 +48,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>ხელ&amp;მოწერა</translation>
+        <source>Wallet</source>
+        <translation>საფულე</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -58,6 +58,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>საფულის ზოგადი მიმოხილვა</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;გაგზავნა</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;მიღება</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -76,6 +84,10 @@
         <translation>&amp;ოპციები</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;ჩვენება/დაფარვა</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>საფულის &amp;დაშიფრვა</translation>
     </message>
@@ -88,32 +100,20 @@
         <translation>საფულის დაშიფრვის ფრაზა-პაროლის შეცვლა</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>და&amp;ხვეწის ფანჯარა</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>დახვეწისა და გიაგნოსტიკის კონსოლის გაშვება</translation>
+        <source>Sign &amp;message...</source>
+        <translation>ხელ&amp;მოწერა</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;ვერიფიკაცია</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>საფულე</translation>
+        <source>&amp;Debug window</source>
+        <translation>და&amp;ხვეწის ფანჯარა</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;გაგზავნა</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;მიღება</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;ჩვენება/დაფარვა</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>დახვეწისა და გიაგნოსტიკის კონსოლის გაშვება</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -128,32 +128,50 @@
         <translation>&amp;დახმარება</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>განახლებულია</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -230,6 +248,30 @@
         <translation>მის&amp;ამართი</translation>
     </message>
     </context>
+<context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -332,27 +374,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -426,12 +486,12 @@
         <translation>კონსოლის გასუფთავება</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>აკრიფეთ &lt;b&gt;help&lt;/b&gt; ფაშვებული ბრძანებების სანახავად.</translation>
-    </message>
-    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>კლავიშები "ზევით" და "ქვევით" - ისტორიაში მოძრაობა, &lt;b&gt;Ctrl-L&lt;/b&gt; - ეკრანის გასუფთავება.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>აკრიფეთ &lt;b&gt;help&lt;/b&gt; ფაშვებული ბრძანებების სანახავად.</translation>
     </message>
     </context>
 <context>
@@ -504,6 +564,10 @@
         <translation>ადრესა&amp;ტი:</translation>
     </message>
     <message>
+        <source>Message:</source>
+        <translation>მესიჯი:</translation>
+    </message>
+    <message>
         <source>&amp;Label:</source>
         <translation>ნიშნუ&amp;ლი:</translation>
     </message>
@@ -559,15 +623,24 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -581,7 +654,10 @@
     <name>TransactionTableModel</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>

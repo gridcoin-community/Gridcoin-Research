@@ -1,4 +1,4 @@
-<TS language="ko_KR" version="2.1">
+<TS language="ko_KR" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -36,10 +36,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>편집 (&amp;E)</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>쉼표로 구분된 파일 (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -92,14 +88,6 @@
         <translation>지갑 잠금해제</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>이 작업은 지갑을 해독하기 위해 사용자 지갑의 암호가 필요합니다.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>지갑 복호화</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>암호 변경</translation>
     </message>
@@ -140,10 +128,6 @@
         <translation>지갑 해독을 위한 암호가 틀렸습니다.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>지갑 복호화 실패</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>지갑 비밀번호가 성공적으로 변경되었습니다.</translation>
     </message>
@@ -155,8 +139,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>메시지 서명(&amp;M)...</translation>
+        <source>Wallet</source>
+        <translation>지갑</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -165,6 +149,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>지갑의 일반적 개요를 보여줍니다.</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>보내기(&amp;S)</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>받기(&amp;R)</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -183,6 +175,10 @@
         <translation>옵션(&amp;O)</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>보이기/숨기기(&amp;S)</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>지갑 암호화(&amp;E)...</translation>
     </message>
@@ -195,32 +191,20 @@
         <translation>지갑 암호화에 사용되는 암호를 변경합니다</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>디버그 창(&amp;D)</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>디버깅 및 진단 콘솔을 엽니다</translation>
+        <source>Sign &amp;message...</source>
+        <translation>메시지 서명(&amp;M)...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>메시지 확인(&amp;V)...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>지갑</translation>
+        <source>&amp;Debug window</source>
+        <translation>디버그 창(&amp;D)</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>보내기(&amp;S)</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>받기(&amp;R)</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>보이기/숨기기(&amp;S)</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>디버깅 및 진단 콘솔을 엽니다</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -235,32 +219,44 @@
         <translation>도움말(&amp;H)</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>%n 블럭 만큼의 거래 기록이 처리됨.</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>현재까지</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -422,6 +418,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -527,27 +544,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -613,12 +642,12 @@
         <translation>콘솔 초기화</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>사용할 수 있는 명령을 둘러보려면 &lt;b&gt;help&lt;/b&gt;를 입력하십시오.</translation>
-    </message>
-    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>기록을 찾아보려면 위 아래 화살표 키를, 화면을 지우려면 &lt;b&gt;Ctrl-L&lt;/b&gt;키를 사용하십시오.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>사용할 수 있는 명령을 둘러보려면 &lt;b&gt;help&lt;/b&gt;를 입력하십시오.</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -723,7 +752,7 @@
         <source>(no label)</source>
         <translation>(라벨 없음)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -733,6 +762,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>송금할 대상(&amp;T):</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>메시지:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -790,11 +823,15 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -802,7 +839,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -824,7 +863,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Received with</source>
@@ -868,10 +909,6 @@
     <message>
         <source>Show transaction details</source>
         <translation>거래 세부 내역 보기</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>쉼표로 구분된 파일 (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>
