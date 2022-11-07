@@ -1,4 +1,4 @@
-<TS language="lt" version="2.1">
+<TS language="lt" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -52,10 +52,6 @@
         <source>&amp;Edit</source>
         <translation>&amp;Keisti</translation>
     </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Kableliais išskirtas failas (*.csv)</translation>
-    </message>
     </context>
 <context>
     <name>AddressTableModel</name>
@@ -103,14 +99,6 @@
         <translation>Atrakinti piniginę</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ši operacija reikalauja jūsų piniginės slaptafrazės jai iššifruoti.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Iššifruoti piniginę</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Pakeisti slaptafrazę</translation>
     </message>
@@ -151,10 +139,6 @@
         <translation>Neteisingai įvestas slaptažodis piniginės iššifravimui.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Nepavyko iššifruoti piniginės</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Piniginės slaptažodis sėkmingai pakeistas.</translation>
     </message>
@@ -166,8 +150,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Pasirašyti ži&amp;nutę...</translation>
+        <source>Wallet</source>
+        <translation>Piniginė</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -176,6 +160,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Rodyti piniginės bendrą apžvalgą</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Siųsti</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Gauti</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -194,6 +186,10 @@
         <translation>&amp;Parinktys...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Rodyti / Slėpti</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Užšifruoti piniginę...</translation>
     </message>
@@ -206,32 +202,28 @@
         <translation>Pakeisti slaptafrazę naudojamą piniginės užšifravimui</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Derinimo langas</translation>
+        <source>Unlock wallet</source>
+        <translation>Atrakinti piniginę</translation>
     </message>
     <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Atverti derinimo ir diagnostikos konsolę</translation>
+        <source>Lock wallet</source>
+        <translation>Užrakinti piniginę</translation>
+    </message>
+    <message>
+        <source>Sign &amp;message...</source>
+        <translation>Pasirašyti ži&amp;nutę...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Tikrinti žinutę...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Piniginė</translation>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Derinimo langas</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Siųsti</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Gauti</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Rodyti / Slėpti</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Atverti derinimo ir diagnostikos konsolę</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -245,45 +237,61 @@
         <source>&amp;Help</source>
         <translation>&amp;Pagalba</translation>
     </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Atnaujinta</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>Atrakinti piniginę</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>Užrakinti piniginę</translation>
-    </message>
     <message>
         <source>[testnet]</source>
         <translation>[testavimotinklas]</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Atnaujinta</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -435,6 +443,33 @@
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -459,14 +494,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Tarpinio serverio preivadas (pvz, 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;versija:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Tarpinio serverio SOCKS versija (pvz., 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -560,27 +587,51 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -653,10 +704,6 @@
         <translation>Išvalyti konsolę</translation>
     </message>
     <message>
-        <source>Build date</source>
-        <translation>Kompiliavimo data</translation>
-    </message>
-    <message>
         <source>Command-line options</source>
         <translation>Komandinės eilutės parametrai</translation>
     </message>
@@ -664,7 +711,7 @@
         <source>Client name</source>
         <translation>Kliento pavadinimas</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -743,7 +790,7 @@
         <source>(no label)</source>
         <translation>(nėra žymės)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -753,6 +800,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Mokėti &amp;gavėjui:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Žinutė:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -842,7 +893,11 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -870,7 +925,11 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -906,7 +965,11 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -976,7 +1039,11 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1100,10 +1167,6 @@
     <message>
         <source>Show transaction details</source>
         <translation>Rodyti sandorio detales</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Kableliais atskirtų duomenų failas (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>
