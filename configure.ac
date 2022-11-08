@@ -75,7 +75,7 @@ AC_PROG_OBJCXX
 ])
 
 dnl Libtool init checks.
-LT_INIT([pic-only])
+LT_INIT([pic-only win32-dll])
 
 dnl Check/return PATH for base programs.
 AC_PATH_TOOL(AR, ar)
