@@ -45,12 +45,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+75"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Double-click to edit address or label</translation>
-    </message>
-    <message>
-        <location line="+52"/>
+        <location filename="../forms/addressbookpage.ui" line="+127"/>
         <source>Create a new address</source>
         <translation>Create a new address</translation>
     </message>
@@ -110,7 +105,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+16"/>
+        <source>Double-click to edit label</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+122"/>
         <source>&amp;Delete</source>
         <translation>&amp;Delete</translation>
     </message>
@@ -1608,7 +1608,7 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../diagnosticsdialog.cpp" line="+59"/>
+        <location filename="../diagnosticsdialog.cpp" line="+80"/>
         <source>Testing...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1645,243 +1645,6 @@ Expires: %3
     <message>
         <location line="+5"/>
         <source>All tests passed. Your wallet operation is normal.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+62"/>
-        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <location line="+54"/>
-        <source>Passed: Count = %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-50"/>
-        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <location line="+27"/>
-        <source>Failed: Count = %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-6"/>
-        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+136"/>
-        <source>You should check your time and time zone settings for your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+50"/>
-        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Your network may be using a proxy server to communicate to public IP addresses on the Internet, and the wallet is not configured properly to use it. Please check the proxy settings under Options -&gt; Network -&gt; Connect through SOCKS5 proxy.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>The network is reporting an SSL error. If you also failed or got a warning on your clock test, you should check your clock settings, including your time and time zone. If your clock is ok, please check your computer&apos;s network configuration.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer&apos;s network configuration.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>Warning: 80 block difficulty is less than %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Warning: 80 block difficulty is less than %1. This wallet is probably forked.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Passed: 80 block difficulty is %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <location line="+8"/>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-3"/>
-        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+36"/>
-        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <location line="+38"/>
-        <location line="+37"/>
-        <location line="+52"/>
-        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-119"/>
-        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+37"/>
-        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+55"/>
-        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching. You should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should acquire more GRC to stake more often.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Failed: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
