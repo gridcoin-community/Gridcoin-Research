@@ -5682,17 +5682,17 @@ Expires: %3
         <translation></translation>
     </message>
     <message>
-        <location line="+279"/>
+        <location line="+427"/>
         <source>Usage:</source>
         <translation>Usage:</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-105"/>
         <source>List commands</source>
         <translation>List commands</translation>
     </message>
     <message>
-        <location line="-184"/>
+        <location line="-325"/>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5707,7 +5707,17 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+2"/>
+        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation type="unfinished">Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</translation>
     </message>
@@ -5728,6 +5738,16 @@ Expires: %3
     </message>
     <message>
         <location line="+3"/>
+        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Poll additional field value &quot;%s&quot; for field name &quot;%s&quot; exceeds %s characters.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5743,21 +5763,151 @@ Expires: %3
     </message>
     <message>
         <location line="+3"/>
+        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer&apos;s network configuration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+9"/>
+        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>WARNING: A mandatory release is available. Please upgrade as soon as possible.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+18"/>
+        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Warning: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards by staking - increase balance or use MRC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Warning: ETTS is infinite. No coins to stake - increase balance or use MRC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+13"/>
+        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You can use MRC  to retrieve your rewards, or you should acquire more GRC to stake more often.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>A poll choice cannot be empty.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5854,6 +6004,16 @@ Expires: %3
     <message>
         <location line="+2"/>
         <source>Failed to rename bootstrap file to .old for backup purposes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failed: 80 block difficulty is less than</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failed: Count =</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6003,6 +6163,16 @@ Expires: %3
     </message>
     <message>
         <location line="+3"/>
+        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Outbound communication to TCP port</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Outreach</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6014,6 +6184,21 @@ Expires: %3
     <message>
         <location line="+1"/>
         <source>Participant count polls are not supported.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: 80 block difficulty is</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: Count =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: ETTS =</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6222,7 +6407,17 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+2"/>
+        <source>This wallet is almost certainly forked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This wallet is probably forked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Unable to create the PID file &apos;%s&apos;: %s</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6232,7 +6427,27 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
+        <source>Warning: 45 days &lt; ETTS =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: 80 block difficulty is less than</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Cannot connect to NTP server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Count =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Wrong Payload version specified for current block height.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6243,12 +6458,22 @@ Expires: %3
     </message>
     <message>
         <location line="+1"/>
+        <source>You should check your time and time zone settings for your computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>You will need to delete the following.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>&quot;%s&quot; is not a valid poll choice.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>appears to be blocked.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6267,22 +6492,22 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-208"/>
         <source>Balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-256"/>
         <source>The %s developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Error: Unsupported argument -socks found. Setting SOCKS version isn&apos;t possible anymore, only SOCKS5 proxies are supported.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+205"/>
         <source>Block Version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6362,7 +6587,7 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+15"/>
         <source>GitHub version: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -6427,17 +6652,17 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+28"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-240"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+20"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</translation>
     </message>
@@ -6447,22 +6672,22 @@ Expires: %3
         <translation>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+126"/>
         <source>Error: Transaction creation failed  </source>
         <translation></translation>
     </message>
     <message>
-        <location line="-123"/>
+        <location line="-257"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation></translation>
     </message>
     <message>
-        <location line="+131"/>
+        <location line="+265"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Failed to listen on any port. Use -listen=0 if you want this.</translation>
     </message>
     <message>
-        <location line="+95"/>
+        <location line="+102"/>
         <source>Single Choice</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6477,12 +6702,12 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>To use the %s option</source>
         <translation>To use the %s option</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-433"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -6497,12 +6722,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+29"/>
         <source>Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+25"/>
         <source>Failed to download snapshot as mandatory client is available for download.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6512,12 +6737,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+66"/>
         <source>Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+17"/>
         <source>WARNING: Blockchain data may be corrupted.
 
 Gridcoin detected bad index entries. This may occur because of an unexpected exit, a power failure, or a late software upgrade.
@@ -6531,7 +6756,7 @@ Your wallet will re-download the blockchain. Your balance may appear incorrect u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+41"/>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -6540,12 +6765,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
 If the file does not exist, create it with owner-readable-only file permissions.</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+135"/>
         <source>Gridcoin version</source>
         <translation>Gridcoin version</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+86"/>
         <source>Resetting block chain index to prepare for reindexing...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6585,7 +6810,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Unknown error</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6595,7 +6820,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-19"/>
+        <location line="-21"/>
         <source>Staking Only - No active beacon</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6615,7 +6840,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Unknown poll response type.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6630,12 +6855,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-295"/>
+        <location line="-443"/>
         <source>None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+360"/>
         <source>No current polls</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6655,7 +6880,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+127"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Wallet %s resides outside data directory %s.</translation>
     </message>
@@ -6665,17 +6890,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation></translation>
     </message>
     <message>
-        <location line="-268"/>
+        <location line="-413"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation></translation>
     </message>
     <message>
-        <location line="+281"/>
+        <location line="+432"/>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation></translation>
     </message>
     <message>
-        <location line="-124"/>
+        <location line="-137"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Invalid -proxy address: &apos;%s&apos;</translation>
     </message>
@@ -6685,7 +6910,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Invalid -tor address: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-57"/>
+        <location line="-59"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Cannot resolve -bind address: &apos;%s&apos;</translation>
     </message>
@@ -6695,12 +6920,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Cannot resolve -externalip address: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+62"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation></translation>
     </message>
     <message>
-        <location line="-41"/>
+        <location line="-43"/>
         <source>Error loading blkindex.dat</source>
         <translation>Error loading blkindex.dat</translation>
     </message>
@@ -6715,12 +6940,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Error loading wallet.dat: Wallet requires newer version of Gridcoin</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+70"/>
         <source>Offline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+82"/>
         <source>Verifying checkpoints...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6735,12 +6960,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Wallet needed to be rewritten: restart Gridcoin to complete</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-159"/>
         <source>Error loading wallet.dat</source>
         <translation>Error loading wallet.dat</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+29"/>
         <source>Importing bootstrap blockchain data file.</source>
         <translation></translation>
     </message>
@@ -6750,22 +6975,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Loading addresses...</translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="-41"/>
         <source>Error: could not start node</source>
         <translation>Error: could not start node</translation>
     </message>
     <message>
-        <location line="-89"/>
+        <location line="-179"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Unable to bind to %s on this computer. Gridcoin is probably already running.</translation>
     </message>
     <message>
-        <location line="+215"/>
+        <location line="+314"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Unable to bind to %s on this computer (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-129"/>
+        <location line="-138"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation></translation>
     </message>
@@ -6775,42 +7000,42 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-119"/>
+        <location line="-253"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation></translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+358"/>
         <source>Sending...</source>
         <translation>Sending...</translation>
     </message>
     <message>
-        <location line="-65"/>
+        <location line="-70"/>
         <source>Invalid amount</source>
         <translation>Invalid amount</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-168"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</translation>
     </message>
     <message>
-        <location line="+200"/>
+        <location line="+281"/>
         <source>Vote signature failed. See debug.log.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>Warning: Disk space is low!</source>
         <translation>Warning: Disk space is low!</translation>
     </message>
     <message>
-        <location line="-13"/>
+        <location line="-17"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Unknown network specified in -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-113"/>
         <source>Insufficient funds</source>
         <translation>Insufficient funds</translation>
     </message>
@@ -6825,7 +7050,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Loading wallet...</translation>
     </message>
     <message>
-        <location line="-75"/>
+        <location line="-77"/>
         <source>Cannot downgrade wallet</source>
         <translation>Cannot downgrade wallet</translation>
     </message>
@@ -6835,12 +7060,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Cannot write default address</translation>
     </message>
     <message>
-        <location line="+120"/>
+        <location line="+127"/>
         <source>Rescanning...</source>
         <translation>Rescanning...</translation>
     </message>
     <message>
-        <location line="-110"/>
+        <location line="-117"/>
         <source>Done loading</source>
         <translation>Done loading</translation>
     </message>
