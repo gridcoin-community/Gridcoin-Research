@@ -30,7 +30,7 @@ extern std::atomic<int64_t> g_nTimeBestReceived;
 extern std::unique_ptr<GRC::Upgrade> g_UpdateChecker;
 
 class Researcher;
-/*
+/**
  * This class monitors the tests, upon construction, it will register the test
  * upon destructor, it will mark the test complete
  * if all tests are complete, it will clean the map
@@ -43,7 +43,7 @@ namespace DiagnoseLib {
  * m_results: an enum to indicate warning, failed, or passed test
  * Note: Each derived class must declare its unique name using the member m_test_name,
  * the m_test_name will be used to check the test status
- **/
+ */
 class Diagnose
 {
 public:
@@ -80,6 +80,7 @@ public:
 
         registerTest(this);
     }
+
     virtual ~Diagnose()
     {
         LOCK(cs_diagnostictests);
@@ -90,6 +91,7 @@ public:
      *  runCheck(): calls the function will run the test
      */
     virtual void runCheck() = 0;
+
     /**
      * Get the result of test enum name
      */
@@ -99,21 +101,27 @@ public:
      * Get the result of test , Fail, Warning, or Pass
      */
     virtual diagnoseResults getResults() { return m_results; }
-    /** Get the string containing a tip for the test being done
+
+    /**
+     *  Get the string containing a tip for the test being done
      */
     virtual std::string getResultsTip() { return m_results_tip; }
+
     /**
      * Get the final result string
      */
     virtual std::string getResultsString() { return m_results_string; }
+
     /**
      * The result can contains arguments using "$1". The functions returns the strings that should replace the argument
      */
     virtual std::vector<std::string> getStringArgs() { return m_results_string_arg; }
+
     /**
      * The Tip can contains arguments using "$1". The functions returns the strings that should replace the argument
      */
     virtual std::vector<std::string> getTipArgs() { return m_results_tip_arg; }
+
     /**
      * Register a running test to the map so we can check if it is running or not.
      */
@@ -125,6 +133,7 @@ public:
 
         assert(m_name_to_test_map.size() <= Diagnose::TestSize);
     };
+
     /**
      * Set the research mode the wallet is running
      */
@@ -155,6 +164,7 @@ public:
             return nullptr;
         }
     }
+
     /**
      * remove the test from the global map so it can not be tracked any more
      * make sure to call this function in the destructor of any test
@@ -193,19 +203,19 @@ public:
 
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
             m_results = Diagnose::WARNING;
-            m_results_tip = "Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
-                            "sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced "
-                            "your wallet before but you just started the wallet up, then wait a few more minutes and "
-                            "retry the diagnostics again.";
+            m_results_tip = _("Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the "
+                              "sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced "
+                              "your wallet before but you just started the wallet up, then wait a few more minutes and "
+                              "retry the diagnostics again.");
         } else if (g_nTimeBestReceived > 0 && OutOfSyncByAge()) {
             m_results = Diagnose::FAIL;
-            m_results_tip = "Your wallet is out of sync with the network but was in sync before. If this fails there is "
-                            "likely a severe problem that is preventing the wallet from syncing. If the lack of sync "
-                            "is due to network connection issues, you will see failures on the network connection "
-                            "test(s). If the network connections pass, but your wallet fails this test, and continues to "
-                            "fail this test on repeated attempts with a few minutes in between, this could indicate a "
-                            "more serious issue. In that case you should check the debug log to see if it sheds light "
-                            "on the cause for no sync.";
+            m_results_tip = _("Your wallet is out of sync with the network but was in sync before. If this fails there is "
+                              "likely a severe problem that is preventing the wallet from syncing. If the lack of sync "
+                              "is due to network connection issues, you will see failures on the network connection "
+                              "test(s). If the network connections pass, but your wallet fails this test, and continues to "
+                              "fail this test on repeated attempts with a few minutes in between, this could indicate a "
+                              "more serious issue. In that case you should check the debug log to see if it sheds light "
+                              "on the cause for no sync.");
         } else {
             m_results = Diagnose::PASS;
             m_results_tip = "";
@@ -243,25 +253,25 @@ public:
         }
 
         if (outbound_connections < 1) {
-            m_results_tip = "Your outbound connection count is critically low. Please check your the config file and "
-                            "ensure your addnode entries are up-to-date. If you recently started the wallet, you may "
-                            "want to wait another few minutes for connections to build up and then test again. Please see "
-                            "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
-            m_results_string = "Failed: Count = %1";
+            m_results_tip = _("Your outbound connection count is critically low. Please check your the config file and "
+                              "ensure your addnode entries are up-to-date. If you recently started the wallet, you may "
+                              "want to wait another few minutes for connections to build up and then test again. Please see "
+                              "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.");
+            m_results_string = _("Failed: Count =") + " %1";
             m_results = Diagnose::FAIL;
 
             std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
 
         } else if (outbound_connections < 3) {
-            m_results_tip = "Your outbound connection count is low. Please check your the config file and "
-                            "ensure your addnode entries are up-to-date. If you recently started the wallet, you may "
-                            "want to wait another few minutes for connections to build up and then test again. Please see "
-                            "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
+            m_results_tip = _("Your outbound connection count is low. Please check your the config file and "
+                              "ensure your addnode entries are up-to-date. If you recently started the wallet, you may "
+                              "want to wait another few minutes for connections to build up and then test again. Please see "
+                              "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.");
             m_results = Diagnose::WARNING;
         } else {
             m_results_tip = "";
-            m_results_string = "Passed: Count = %1";
+            m_results_string = _("Passed: Count =") + " %1";
             std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
@@ -295,27 +305,27 @@ public:
         std::string s_connections = ToString(m_connections);
 
         if (m_connections <= 7 && m_connections >= minimum_connections_to_stake) {
-            m_results_tip = "Please check your network and also check the config file and ensure your addnode entries "
-                            "are up-to-date. If you recently started the wallet, you may want to wait another few "
-                            "minutes for connections to build up and test again. Please see "
-                            "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.";
+            m_results_tip = _("Please check your network and also check the config file and ensure your addnode entries "
+                              "are up-to-date. If you recently started the wallet, you may want to wait another few "
+                              "minutes for connections to build up and test again. Please see "
+                              "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.");
             m_results = Diagnose::WARNING;
-            m_results_string = "Warning: Count = %1 (Pass = 8+)";
+            m_results_string = _("Warning: Count =") + " %1 (Pass = 8+)";
             m_results_string_arg.push_back(s_connections);
         } else if (m_connections >= 8) {
             m_results_tip = "";
-            m_results_string = "Passed: Count = %1";
+            m_results_string = _("Passed: Count =") + " %1";
             m_results_string_arg.push_back(s_connections);
             m_results = Diagnose::PASS;
 
         } else {
-            m_results_tip = "You will not be able to stake because you have less than %1 connection(s). Please check "
-                            "your network and also check the config file and ensure your addnode entries are up-to-date. "
-                            "If you recently started the wallet, you may want to wait another few minutes for connections "
-                            "to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and "
-                            "https://addnodes.cycy.me/.";
+            m_results_tip = _("You will not be able to stake because you have less than %1 connection(s). Please check "
+                              "your network and also check the config file and ensure your addnode entries are up-to-date. "
+                              "If you recently started the wallet, you may want to wait another few minutes for connections "
+                              "to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and "
+                              "https://addnodes.cycy.me/.");
             m_results = Diagnose::FAIL;
-            m_results_string = "Warning: Count = %1";
+            m_results_string = _("Warning: Count =") + " %1";
             m_results_string_arg.push_back(s_connections);
             m_results_tip_arg.push_back(ToString(minimum_connections_to_stake));
         }
@@ -393,13 +403,15 @@ public:
 
         std::string client_message;
 
-        if (g_UpdateChecker->CheckForLatestUpdate(client_message, false) && client_message.find("mandatory") != std::string::npos) {
-            m_results_tip = "There is a new mandatory version available and you should upgrade as soon as possible to "
-                            "ensure your wallet remains in consensus with the network.";
+        if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
+                && client_message.find("mandatory") != std::string::npos) {
+            m_results_tip = _("There is a new mandatory version available and you should upgrade as soon as possible to "
+                              "ensure your wallet remains in consensus with the network.");
             m_results = Diagnose::FAIL;
 
-        } else if (g_UpdateChecker->CheckForLatestUpdate(client_message, false) && client_message.find("mandatory") == std::string::npos) {
-            m_results_tip = "There is a new leisure version available and you should upgrade as soon as practical.";
+        } else if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
+                   && client_message.find("mandatory") == std::string::npos) {
+            m_results_tip = _("There is a new leisure version available and you should upgrade as soon as practical.");
             m_results = Diagnose::WARNING;
         } else {
             m_results_tip = "";
@@ -450,8 +462,8 @@ public:
             m_results_string = "";
             m_results = Diagnose::PASS;
         } else {
-            m_results_tip = "Check that BOINC is installed and that you have the correct path in the config file "
-                            "if you installed it to a nonstandard location.";
+            m_results_tip = _("Check that BOINC is installed and that you have the correct path in the config file "
+                              "if you installed it to a nonstandard location.");
 
             m_results_string = "";
             m_results = Diagnose::FAIL;
@@ -485,17 +497,17 @@ public:
             m_results = Diagnose::PASS;
         } else {
             if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
-                m_results_tip = "Your wallet is not in sync and has not previously been in sync during this run, please "
-                                "wait for the wallet to sync and retest. If there are other failures preventing the "
-                                "wallet from syncing, please correct those items and retest to see if this test passes.";
+                m_results_tip = _("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                  "wallet from syncing, please correct those items and retest to see if this test passes.");
                 m_results_string = "";
                 m_results = Diagnose::WARNING;
 
             } else {
-                m_results_tip = "Verify (1) that you have BOINC installed correctly, (2) that you have attached at least "
-                                "one whitelisted project, (3) that you advertised your beacon with the same email as you "
-                                "use for your BOINC project(s), and (4) that the CPID on the overview screen matches the "
-                                "CPID when you login to your BOINC project(s) online.";
+                m_results_tip = _("Verify (1) that you have BOINC installed correctly, (2) that you have attached at least "
+                                  "one whitelisted project, (3) that you advertised your beacon with the same email as you "
+                                  "use for your BOINC project(s), and (4) that the CPID on the overview screen matches the "
+                                  "CPID when you login to your BOINC project(s) online.");
                 m_results_string = "";
                 m_results = Diagnose::FAIL;
             }
@@ -553,15 +565,15 @@ public:
 
         } else {
             if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
-                m_results_tip = "Your wallet is not in sync and has not previously been in sync during this run, please "
-                                "wait for the wallet to sync and retest. If there are other failures preventing the "
-                                "wallet from syncing, please correct those items and retest to see if this test passes.";
+                m_results_tip = _("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                  "wallet from syncing, please correct those items and retest to see if this test passes.");
                 m_results_string = "";
                 m_results = Diagnose::WARNING;
 
             } else {
-                m_results_tip = "Please ensure that you have followed the process to advertise and verify your beacon. "
-                                "You can use the research wizard (the beacon button on the overview screen).";
+                m_results_tip = _("Please ensure that you have followed the process to advertise and verify your beacon. "
+                                  "You can use the research wizard (the beacon button on the overview screen).");
                 m_results_string = "";
                 m_results = Diagnose::FAIL;
             }
@@ -598,15 +610,15 @@ public:
 
         } else {
             if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
-                m_results_tip = "Your wallet is not in sync and has not previously been in sync during this run, please "
-                                "wait for the wallet to sync and retest. If there are other failures preventing the "
-                                "wallet from syncing, please correct those items and retest to see if this test passes.";
+                m_results_tip = _("Your wallet is not in sync and has not previously been in sync during this run, please "
+                                  "wait for the wallet to sync and retest. If there are other failures preventing the "
+                                  "wallet from syncing, please correct those items and retest to see if this test passes.");
                 m_results_string = "";
                 m_results = Diagnose::WARNING;
             } else {
-                m_results_tip = "Verify that you have actually completed workunits for the projects you have attached and "
-                                "that you have authorized the export of statistics. Please see "
-                                "https://gridcoin.us/guides/whitelist.htm.";
+                m_results_tip = _("Verify that you have actually completed workunits for the projects you have attached and "
+                                  "that you have authorized the export of statistics. Please see "
+                                  "https://gridcoin.us/guides/whitelist.htm.");
                 m_results_string = "";
                 m_results = Diagnose::FAIL;
             }
@@ -639,7 +651,8 @@ public:
         m_results_tip_arg.clear();
 
         auto CheckConnectionCount_Test = getTest(Diagnose::CheckConnectionCount);
-        if (CheckConnectionCount_Test && CheckConnectionCount_Test->getResults() != Diagnose::NONE && CheckConnectionCount_Test->getResults() != Diagnose::FAIL) {
+        if (CheckConnectionCount_Test && CheckConnectionCount_Test->getResults() != Diagnose::NONE
+                && CheckConnectionCount_Test->getResults() != Diagnose::FAIL) {
             m_results = Diagnose::PASS;
             return;
         }
@@ -649,15 +662,15 @@ public:
         auto endpoint_iterator = resolver.resolve("portquiz.net", "http");
 #else
         boost::asio::ip::tcp::resolver::query query(
-            "portquiz.net",
-            "http");
+                    "portquiz.net",
+                    "http");
         auto endpoint_iterator = resolver.resolve(query);
 #endif
 
         if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
             m_tcpSocket.close();
             m_results = WARNING;
-            m_results_tip = "Outbound communication to TCP port %1 appears to be blocked. ";
+            m_results_tip = _("Outbound communication to TCP port") + " %1 " + _("appears to be blocked.");
             std::string ss = ToString(GetListenPort());
             m_results_string_arg.push_back(ss);
         } else {
@@ -707,37 +720,39 @@ public:
         // If g_nTimeBestReceived == 0, the wallet is still in the initial sync process. In that case use the failure
         // standard and just warn, with a different explanation.
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge() && diff < fail_diff) {
-            m_results_string = "Warning: 80 block difficulty is less than %1.";
+            m_results_string = _("Warning: 80 block difficulty is less than") + " %1.";
             std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
-            m_results_tip = "Your difficulty is low but your wallet is still in initial sync. Please recheck it later "
-                            "to see if this passes.";
+            m_results_tip = _("Your difficulty is low but your wallet is still in initial sync. Please recheck it later "
+                              "to see if this passes.");
             m_results = Diagnose::WARNING;
         }
         // If the wallet has been in sync in the past in this run, then apply the normal standards, whether the wallet is
         // in sync or not right now.
         else if (g_nTimeBestReceived > 0 && diff < fail_diff) {
-            m_results_string = "Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.";
+            m_results_string = _("Failed: 80 block difficulty is less than") + " %1. " + _("This wallet is almost certainly "
+                                                                                           "forked.");
 
             std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
-            m_results_tip = "Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure "
-                            "you are running the latest version and try removing the blockchain database and resyncing "
-                            "from genesis using the menu option. (Note this will take 2-4 hours.)";
+            m_results_tip = _("Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure "
+                              "you are running the latest version and try removing the blockchain database and resyncing "
+                              "from genesis using the menu option. (Note this will take 2-4 hours.)");
             m_results = Diagnose::FAIL;
         } else if (g_nTimeBestReceived > 0 && diff < warn_diff) {
-            m_results_string = "Warning: 80 block difficulty is less than %1. This wallet is probably forked.";
+            m_results_string = _("Warning: 80 block difficulty is less than") + "%1. " + _("This wallet is probably "
+                                                                                           "forked.");
             std::string ss = ToString(warn_diff);
             m_results_string_arg.push_back(ss);
 
-            m_results_tip = "Your difficulty is very low and your wallet is probably forked. Please ensure you are "
-                            "running the latest version and try removing the blockchain database and resyncing from "
-                            "genesis using the menu option. (Note this will take 2-4 hours.)";
+            m_results_tip = _("Your difficulty is very low and your wallet is probably forked. Please ensure you are "
+                              "running the latest version and try removing the blockchain database and resyncing from "
+                              "genesis using the menu option. (Note this will take 2-4 hours.)");
             m_results = Diagnose::WARNING;
         } else {
-            m_results_string = "Passed: 80 block difficulty is %1.";
+            m_results_string = _("Passed: 80 block difficulty is") + " %1.";
             std::string ss = ToString(diff);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
@@ -788,34 +803,34 @@ public:
         }
 
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge()) {
-            m_results_tip = "Your wallet is not in sync and has not previously been in sync during this run, please "
-                            "wait for the wallet to sync and retest. If there are other failures preventing the "
-                            "wallet from syncing, please correct those items and retest to see if this test passes.";
+            m_results_tip = _("Your wallet is not in sync and has not previously been in sync during this run, please "
+                              "wait for the wallet to sync and retest. If there are other failures preventing the "
+                              "wallet from syncing, please correct those items and retest to see if this test passes.");
             m_results = Diagnose::WARNING;
         } else {
             // ETTS of zero actually means no coins, i.e. infinite.
             if (ETTS == 0.0) {
-                m_results_tip = "You have no balance and will be unable to retrieve your research rewards when solo "
-                                "crunching by staking. You can use MRC to retrieve your rewards, or you should "
-                                "acquire GRC to stake so you can retrieve your research rewards. "
-                                "Please see https://gridcoin.us/guides/boinc-install.htm.";
-                m_results_string = "Warning: ETTS is infinite. No coins to stake - increase balance or use MRC";
+                m_results_tip = _("You have no balance and will be unable to retrieve your research rewards when solo "
+                                  "crunching by staking. You can use MRC to retrieve your rewards, or you should "
+                                  "acquire GRC to stake so you can retrieve your research rewards. "
+                                  "Please see https://gridcoin.us/guides/boinc-install.htm.");
+                m_results_string = _("Warning: ETTS is infinite. No coins to stake - increase balance or use MRC");
                 m_results = Diagnose::WARNING;
             } else if (ETTS > 90.0) {
-                m_results_tip = "Your balance is too low given the current network difficulty to stake in a reasonable "
-                                "period of time to retrieve your research rewards when solo crunching. You can use MRC "
-                                " to retrieve your rewards, or you should acquire more GRC to stake more often.";
-                m_results_string = "Warning: ETTS is > 90 days. It will take a very long time to receive your research "
-                                   "rewards by staking - increase balance or use MRC";
+                m_results_tip = _("Your balance is too low given the current network difficulty to stake in a reasonable "
+                                  "period of time to retrieve your research rewards when solo crunching. You can use MRC "
+                                  " to retrieve your rewards, or you should acquire more GRC to stake more often.");
+                m_results_string = _("Warning: ETTS is > 90 days. It will take a very long time to receive your research "
+                                     "rewards by staking - increase balance or use MRC");
                 m_results = Diagnose::WARNING;
             } else if (ETTS > 45.0 && ETTS <= 90.0) {
-                m_results_tip = "Your balance is low given the current network difficulty to stake in a reasonable "
-                                "period of time to retrieve your research rewards when solo crunching. You should consider "
-                                "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.";
-                m_results_string = "Warning: 45 days < ETTS = %1 <= 90 days";
+                m_results_tip = _("Your balance is low given the current network difficulty to stake in a reasonable "
+                                  "period of time to retrieve your research rewards when solo crunching. You should consider "
+                                  "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.");
+                m_results_string = _("Warning: 45 days < ETTS =") + " %1 <= 90 days";
                 m_results = Diagnose::WARNING;
             } else {
-                m_results_string = "Passed: ETTS = %1 <= 45 days";
+                m_results_string = _("Passed: ETTS =") + " %1 <= 45 days";
                 m_results_string_arg.push_back(rounded_ETTS);
                 m_results = Diagnose::PASS;
             }
