@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_VOTING_RESULT_H
 #define GRIDCOIN_VOTING_RESULT_H
 
+#include "wallet/ismine.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/voting/fwd.h"
@@ -57,6 +58,7 @@ public:
         Weight m_amount;       //!< Total balance resolved for the vote.
         MiningId m_mining_id;  //!< CPID for the vote, if any.
         Magnitude m_magnitude; //!< Magnitude resolved for the vote.
+        isminetype m_ismine;         //!< True if the vote is from the wallet holder.
 
         //!
         //! \brief The selected poll choice offsets and the associated voting
@@ -75,6 +77,8 @@ public:
         //! \return \c true if the vote claims no balance or magnitude weight.
         //!
         bool Empty() const;
+
+        VoteDetail& operator=(const VoteDetail& b);
     };
 
     const Poll m_poll;                            //!< The poll associated with the result.
@@ -85,6 +89,8 @@ public:
     std::optional<double> m_vote_percent_avw;     //!< Vote weight percent of AVW.
     std::optional<bool> m_poll_results_validated; //!< Whether the poll's AVW is >= the minimum AVW for the poll.
     bool m_finished;                              //!< Whether the poll finished as of this result.
+    bool m_self_voted;                            //!< Whether the wallet holder voted.
+    VoteDetail m_self_vote_detail;                //!< The vote detail from the wallet holder's (last) vote
 
     //!
     //! \brief The aggregated voting weight tallied for each poll choice.
