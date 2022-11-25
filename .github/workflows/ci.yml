@@ -30,11 +30,11 @@ jobs:
             OS_NAME: linux
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
         - name: current time for cache
           run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v2
+          uses: actions/cache@v3
           with:
             path: |
                 ./depends/built
@@ -55,11 +55,11 @@ jobs:
             OS_NAME: macos
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
         - name: current time for cache
           run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v2
+          uses: actions/cache@v3
           with:
             path: |
                 ./ci/scratch/.ccache
@@ -87,9 +87,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
         - name: setup-python
-          uses: actions/setup-python@v2
+          uses: actions/setup-python@v3
           with:
             python-version: 3.9
         - name: lint
