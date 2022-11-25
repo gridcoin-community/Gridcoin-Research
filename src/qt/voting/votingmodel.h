@@ -9,6 +9,7 @@
 #include "gridcoin/voting/filter.h"
 #include "qt/voting/poll_types.h"
 #include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/result.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -83,6 +84,8 @@ public:
     bool m_multiple_choice;
     std::vector<AdditionalFieldEntry> m_additional_field_entries;
     std::vector<VoteResultItem> m_choices;
+    bool m_self_voted;
+    GRC::PollResult::VoteDetail m_self_vote_detail;
 };
 
 //!
