@@ -1040,7 +1040,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
    Fork is set to trigger at block 1420000.
  - Raise coinstake output count limit to 8 #1261 (@tomasbrod).
  - Port of Bitcoin hash implementation #1208 (@jamescowens).
- - Minor canges for the build documentation #1091 (@Lenni).
+ - Minor changes for the build documentation #1091 (@Lenni).
  - Allow sendmany to be used without an account specified #1158 (@Foggyx420).
 ### Fixed
  - Fix `cpids` and `validcpids` not returning the correct data #1233
@@ -1074,7 +1074,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - Compatibility with boost-1.67 (@denravonska)
  - Calculations to reduce network time offset (@jamescowens)
  - Feedback for addnode RPC command (@tomasbrod)
- - Added data acquisiton commands (@tomasbrod):
+ - Added data acquisition commands (@tomasbrod):
     - getrecentblocks
     - exportstats1
     - getsupervotes
@@ -1409,7 +1409,7 @@ Internal test version used to sort out the forks.
 
 ### Fixed
  - High CPU usage #349 (@tomasbrod)
- - Repetetive block signing #295 (@tomasbrod)
+ - Repetitive block signing #295 (@tomasbrod)
  - Staking creates 1 cent output #311 (@tomasbrod)
  - Client no longer has to be restarted for a beacon to activate #253
    (@Foggyx420).

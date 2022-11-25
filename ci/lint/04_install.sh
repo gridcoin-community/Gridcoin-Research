@@ -6,11 +6,11 @@
 
 export LC_ALL=C
 
-./ci/retry/retry sudo apt update && sudo apt install -y clang-format-9
-sudo update-alternatives --install /usr/bin/clang-format      clang-format      $(which clang-format-9     ) 100
-sudo update-alternatives --install /usr/bin/clang-format-diff clang-format-diff $(which clang-format-diff-9) 100
+./ci/retry/retry sudo apt update && sudo apt install -y clang-format-14
+sudo update-alternatives --install /usr/bin/clang-format      clang-format      $(which clang-format-14     ) 100
+sudo update-alternatives --install /usr/bin/clang-format-diff clang-format-diff $(which clang-format-diff-14) 100
 
-./ci/retry/retry pip3 install codespell==2.1.0
+./ci/retry/retry pip3 install codespell==2.2.2
 ./ci/retry/retry pip3 install flake8==4.0.1
 ./ci/retry/retry pip3 install mypy==0.942
 ./ci/retry/retry pip3 install vulture==2.3
