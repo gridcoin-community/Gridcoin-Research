@@ -9,10 +9,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dubbel-klik om die adres of etiket te wysig</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Skep 'n nuwe adres</translation>
     </message>

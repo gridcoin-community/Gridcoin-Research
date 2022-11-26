@@ -27,10 +27,6 @@ Ten produkt zawiera oprogramowanie stworzone przez OpenSSL Project do użytku pr
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Kliknij dwukrotnie, aby edytować adres lub etykietę</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Utwórz nowy adres</translation>
     </message>

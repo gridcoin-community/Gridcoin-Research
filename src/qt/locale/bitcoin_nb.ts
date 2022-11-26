@@ -13,10 +13,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dobbeltklikk for å redigere adresse eller merkelapp</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Opprett en ny addresse</translation>
     </message>

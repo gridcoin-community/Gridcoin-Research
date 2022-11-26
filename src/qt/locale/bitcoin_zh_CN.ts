@@ -13,10 +13,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>双击编辑地址或标签</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>创建新地址</translation>
     </message>

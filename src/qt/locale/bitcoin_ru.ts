@@ -38,10 +38,6 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Дважды кликните, чтобы изменить адрес или метку</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Создать новый адрес</translation>
     </message>
@@ -88,6 +84,10 @@ This product includes software developed by the OpenSSL Project for use in the O
     <message>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Здесь ваши адреса Gridcoin для приема платежей. Вы можете дать каждому отправителю разный адрес, чтобы вы могли отслеживать, кто вам платит.</translation>
+    </message>
+    <message>
+        <source>Double-click to edit label</source>
+        <translation>Двойной щелчок для изменения метки</translation>
     </message>
     <message>
         <source>&amp;Delete</source>
@@ -1309,192 +1309,6 @@ Expires: %3
     <message>
         <source>All tests passed. Your wallet operation is normal.</source>
         <translation>Все тесты пройдены. Ваш кошелек работает нормально.</translation>
-    </message>
-    <message>
-        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
-        <translation>Ваш кошелек все еще находится в начальной синхронизации. Если это синхронизация с самого начала (создания), то процесс синхронизации может занять от 2 до 4 часов, а на медленном компьютере дольше. Если вы уже синхронизировали свой кошелек раньше, но только что его запустили, подождите еще несколько минут и повторите попытку диагностики еще раз.</translation>
-    </message>
-    <message>
-        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
-        <translation>Ваш кошелек не синхронизирован с сетью, но синхронизировался раньше. Если это не удается, вероятно, возникла серьезная проблема, которая не позволяет кошельку синхронизоваться. Если отсутствие синхронизации связано с проблемами сетевого подключения, вы увидите сбои в тесте(ах) сетевого подключения. Если сетевые подключения проходят успешно, но ваш кошелек не проходит этот тест и продолжает не проходить этот тест при повторных попытках с интервалом в несколько минут, это может указывать на более серьезную проблему. В этом случае вы должны проверить debug.log, чтобы увидеть, указывает ли он на причину отсутствия синхронизации.</translation>
-    </message>
-    <message>
-        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока не установится соединение, и снова повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation>Внимание: Количество = %1 (Успешно = 8+)</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Пройдено: Количество = %1</translation>
-    </message>
-    <message>
-        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Вы не сможете стейкить, потому что у вас менее %1 соединения(ий). Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Неудачно: Количество = %1</translation>
-    </message>
-    <message>
-        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Ваше количество исходящих подключений критически мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Ваше количество исходящих подключений мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установятся соединения, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation>Внимание: Количество = %1 (Успешно = 3+)</translation>
-    </message>
-    <message>
-        <source>You should check your time and time zone settings for your computer.</source>
-        <translation>Вам следует проверить настройки времени и часового пояса на вашем компьютере.</translation>
-    </message>
-    <message>
-        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
-        <translation>Внимание: Расхождение часов составляет от 3 до 5 минут. Пожалуйста, проверьте настройки часов.</translation>
-    </message>
-    <message>
-        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
-        <translation>Ваши часы на вашем компьютере значительно отличаются от UTC или сетевого времени, и это может серьезно ухудшить работу кошелька, включая подключения к сети. Вам следует проверить настройки времени и часового пояса на вашем компьютере. Очень распространенной проблемой является отклонение на один час из-за проблем с часовым поясом или с переходом на летнее время.</translation>
-    </message>
-    <message>
-        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
-        <translation>Ошибка: расхождение часов составляет 5 минут или больше. Пожалуйста, проверьте настройки часов.</translation>
-    </message>
-    <message>
-        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
-        <translation>Кошелек имеет менее пяти подключений к сети и не может подключиться к NTP-серверу, чтобы проверить часы вашего компьютера. Это не обязательно является проблемой. Вы можете подождать несколько минут и попробовать пройти тест еще раз.</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Внимание: Невозможно подключиться к серверу времени.</translation>
-    </message>
-    <message>
-        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
-        <translation>Исходящий обмен данными с портом TCP %1 заблокирован.</translation>
-    </message>
-    <message>
-        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>В соединении с тестовым портом было отказано. Это может быть временная проблема с тестовым портом, но это также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>Тестовый порт не доступен. Это может быть временная проблема с тестовым портом, но также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, то ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
-        <translation>IP-адрес тестового порта не может быть определен. Это может означать, что ваш DNS работает неправильно. Кошелек может работать без DNS, но это может серьезно ухудшить его работу, особенно если кошелек новый и база данных предыдущих успешных подключений не была создана. Пожалуйста, проверьте свой компьютер и убедитесь, что обработка доменных имен работает правильно.</translation>
-    </message>
-    <message>
-        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
-        <translation>В сети произошла низкоуровневая ошибка, которая, вероятно, означает, что ваш IP-адрес или другие параметры сетевого подключения настроены неправильно. Пожалуйста, проверьте конфигурацию сети на вашем компьютере.</translation>
-    </message>
-    <message>
-        <source>Your network may be using a proxy server to communicate to public IP addresses on the Internet, and the wallet is not configured properly to use it. Please check the proxy settings under Options -&gt; Network -&gt; Connect through SOCKS5 proxy.</source>
-        <translation>Возможно, в вашей сети используется прокси-сервер для связи с общедоступными IP-адресами в Интернете, а кошелёк не настроен должным образом для его использования. Проверьте настройки прокси-сервера в разделе Параметры -&gt; Сеть -&gt; Подключиться через прокси-сервер SOCKS5.</translation>
-    </message>
-    <message>
-        <source>The network is reporting an SSL error. If you also failed or got a warning on your clock test, you should check your clock settings, including your time and time zone. If your clock is ok, please check your computer's network configuration.</source>
-        <translation>Сеть выдает ошибку SSL. Если вы также имеете ошибку или предупреждение при проверке часов, то проверьте настройки часов, включая время и часовой пояс. Если ваши часы в порядке, тогда проверьте сетевые настройки вашего компьютера.</translation>
-    </message>
-    <message>
-        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer's network configuration.</source>
-        <translation>Сеть сообщает о неизвестной ошибке сокета. Если вы также не проходите тест подключения, проверьте сетевую параметры вашего компьютера.</translation>
-    </message>
-    <message>
-        <source>Warning: 80 block difficulty is less than %1.</source>
-        <translation>Внимание: сложность 80 блоков меньше %1.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
-        <translation>Ваша сложность мала, но ваш кошелек все еще находится в начальной стадии синхронизации. Пожалуйста, повторите проверку позже, чтобы увидеть, пройдет ли этот пункт проверку.</translation>
-    </message>
-    <message>
-        <source>Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.</source>
-        <translation>Неудачно: сложность 80 блоков меньше %1. Этот кошелек почти наверняка разветвлен.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation>Ваша сложность чрезвычайно низка, и ваш кошелек скорее всего разветвлен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию с генезисом, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
-    </message>
-    <message>
-        <source>Warning: 80 block difficulty is less than %1. This wallet is probably forked.</source>
-        <translation>Внимание: сложность 80 блоков меньше %1. Этот кошелек, вероятно, разветвлен.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation>Ваша сложность очень низкая, и ваш кошелек, вероятно, разветвлен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию с генезисом, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
-    </message>
-    <message>
-        <source>Passed: 80 block difficulty is %1.</source>
-        <translation>Пройдено: сложность 80 блоков составляет %1.</translation>
-    </message>
-    <message>
-        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
-        <translation>Доступна новая обязательная версия, и вам следует обновить ее как можно скорее, чтобы обеспечить согласованность вашего кошелька с сетью.</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Внимание: Доступна новая версия клиента:
-%1</translation>
-    </message>
-    <message>
-        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
-        <translation>Доступна новая версия, и вам следует обновить ее, как только у вас появится на это время.</translation>
-    </message>
-    <message>
-        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
-        <translation>Убедитесь, что BOINC установлен и указан правильный путь в конфигурационном файле, если вы установили его в нестандартное место.</translation>
-    </message>
-    <message>
-        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
-        <translation>Ваш кошелек не синхронизирован и не был синхронизирован ранее во время этого запуска, пожалуйста, дождитесь синхронизации кошелька и повторите проверку. Если есть другие сбои, препятствующие синхронизации кошелька, исправьте их и повторите проверку, чтобы убедиться, что эти проверки проходят успешно.</translation>
-    </message>
-    <message>
-        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
-        <translation>Убедитесь, что (1) у вас правильно установлен BOINC, (2) что вы прикрепили хотя бы один проект из белого списка, (3) что вы объявили свой маяк с помощью того же адреса электронной почты, который вы используете для своих проект(ов) BOINC, и (4), что CPID на главном экране совпадает с CPID при входе в проект(ы) BOINC.</translation>
-    </message>
-    <message>
-        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
-        <translation>Убедитесь, что вы действительно включили рабочие единицы для прикрепленных проектов и разрешили экспорт статистики. Пожалуйста, посмотрите https://gridcoin.us/guides/whitelist.htm.</translation>
-    </message>
-    <message>
-        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
-        <translation>Убедитесь, что вы выполнили процедуру объявления и проверки маяка. Вы можете использовать мастер исследований (кнопка маяка на обзорном экране).</translation>
-    </message>
-    <message>
-        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching. You should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
-        <translation>У вас нет баланса и вы не сможете получить свои награды за исследования в одиночку. Вы должны приобрести GRC для стейкинга, чтобы получать свои награды за исследования. Пожалуйста, смотрите https://gridcoin.us/guides/boinc-install.htm.</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation>Неудачно: ETTS бесконечен. Нет монет для стейкинга.</translation>
-    </message>
-    <message>
-        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should acquire more GRC to stake more often.</source>
-        <translation>Ваш баланс слишком мал, учитывая текущую сложность сети, чтобы стейкить в течение разумного времени, чтобы получить вознаграждение за исследования при одиночной работе. Вам следует приобретать больше GRC, чтобы стейкить чаще.</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards.</source>
-        <translation>Неудачно: ETTS &gt; 90 дней. Получение наград за исследования займет очень много времени.</translation>
-    </message>
-    <message>
-        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often.</source>
-        <translation>Ваш баланс низкий, учитывая текущую сложность сети, чтобы стейкить в разумный период времени, чтобы получать вознаграждения за исследования при одиночной работе. Вам следует подумать о приобретении большего количества GRC, чтобы стейкить чаще.</translation>
-    </message>
-    <message>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation>Внимание: 45 дней &lt; ETTS = %1 &lt;= 90 дней</translation>
-    </message>
-    <message>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
-        <translation>Пройдено: ETTS = %1 &lt;= 45 days</translation>
     </message>
 </context>
 <context>
@@ -4639,6 +4453,14 @@ Expires: %3
         <translation>Не удается заблокировать каталог данных %s. Вероятно %s уже используется.</translation>
     </message>
     <message>
+        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
+        <translation>Убедитесь, что BOINC установлен и что указан правильный путь в файле конфигурации, если вы установили его в нестандартное место.</translation>
+    </message>
+    <message>
+        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
+        <translation>Ошибка: расхождение часов составляет 5 минут или больше. Пожалуйста, проверьте настройки часов.</translation>
+    </message>
+    <message>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Ошибка: Транзакция отклонена. Это может произойти, если некоторые монеты в вашем кошельке уже были потрачены, например, если вы использовали копию wallet.dat, и монеты были потрачены в этой копии, но не отмечены здесь как потраченные.</translation>
     </message>
@@ -4655,6 +4477,14 @@ Expires: %3
         <translation>Для опросов о представлении сообщества, связях с общественностью и коммуникации.</translation>
     </message>
     <message>
+        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока не установится соединение, и снова повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
+        <translation>Убедитесь, что вы выполнили процедуру объявления и проверки маяка. Вы можете использовать мастер исследований (кнопка маяка на обзорном экране).</translation>
+    </message>
+    <message>
         <source>Poll additional field value "%s" for field name "%s" exceeds %s characters.</source>
         <translation>Значение дополнительного поля опроса "%s" для имени поля "%s" превышает %s символов.</translation>
     </message>
@@ -4667,16 +4497,120 @@ Expires: %3
         <translation>Предлагайте добавления или удаления вычислительных проектов для получения награды за исследования.</translation>
     </message>
     <message>
+        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
+        <translation>Не возможно определить IP-адрес тестового порта. Это может означать, что ваш DNS работает неправильно. Кошелек может работать без DNS, но это может серьезно ухудшить его работу, особенно если кошелек новый и база данных предыдущих успешных подключений не была создана. Пожалуйста, проверьте свой компьютер и убедитесь, что обработка доменных имен работает правильно.</translation>
+    </message>
+    <message>
+        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>В соединении с тестовым портом было отказано. Это может быть временная проблема с тестовым портом, но это также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
+        <translation>В сети произошла низкоуровневая ошибка, которая, вероятно, означает, что ваш IP-адрес или другие параметры сетевого подключения настроены неправильно. Пожалуйста, проверьте конфигурацию сети на вашем компьютере.</translation>
+    </message>
+    <message>
+        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer's network configuration.</source>
+        <translation>Сеть сообщает о неизвестной ошибке сокета. Если вы также не проходите тест на подключение, проверьте сетевые параметры вашего компьютера.</translation>
+    </message>
+    <message>
+        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>Тестовый порт не доступен. Это может быть временная проблема с тестовым портом, но также может быть и с вашим брандмауэром. Если вы также не проходите проверку на подключение, то ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
+        <translation>Кошелек имеет менее пяти подключений к сети и не может подключиться к NTP-серверу, чтобы проверить часы вашего компьютера. Это не обязательно является проблемой. Вы можете подождать несколько минут и попробовать пройти тест еще раз.</translation>
+    </message>
+    <message>
         <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
         <translation>Кошелек будет закрыт. Пожалуйста, запустите свой кошелек, чтобы начать синхронизацию с нуля</translation>
+    </message>
+    <message>
+        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
+        <translation>Доступна новая версия, и вам следует обновить её, как только у вас появится на это время.</translation>
+    </message>
+    <message>
+        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
+        <translation>Доступна новая обязательная версия, и вам следует обновить её как можно скорее, чтобы обеспечить согласованность вашего кошелька с сетью.</translation>
+    </message>
+    <message>
+        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
+        <translation>Убедитесь, что (1) у вас правильно установлен BOINC, (2) что вы прикрепили хотя бы один проект из белого списка, (3) что вы объявили свой маяк с помощью того же адреса электронной почты, который вы используете для своих проект(ов) BOINC, и (4), что CPID на главном экране совпадает с CPID при входе в проект(ы) BOINC.</translation>
+    </message>
+    <message>
+        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
+        <translation>Убедитесь, что вы действительно включили рабочие единицы для прикрепленных проектов и разрешили экспорт статистики. Пожалуйста, посмотрите https://gridcoin.us/guides/whitelist.htm.</translation>
     </message>
     <message>
         <source>WARNING: A mandatory release is available. Please upgrade as soon as possible.</source>
         <translation>ВНИМАНИЕ! Доступен обязательный выпуск. Пожалуйста, обновитесь как можно скорее.</translation>
     </message>
     <message>
+        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
+        <translation>Внимание: Расхождение часов составляет от 3 до 5 минут. Пожалуйста, проверьте настройки часов.</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards by staking - increase balance or use MRC</source>
+        <translation>Внимание: ETTS &gt; 90 дней. Получение вознаграждения за исследования путём стейкинга займет очень много времени — увеличьте баланс или используйте MRC.</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is infinite. No coins to stake - increase balance or use MRC</source>
+        <translation>Внимание: ETTS бесконечен. Нет монет для стейкинга - увеличьте баланс или используйте MRC</translation>
+    </message>
+    <message>
         <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
         <translation>Внимание: Завершение этого процесса после Этапа 2 приведет к синхронизации с 0 или неполной/поврежденной цепочке блоков.</translation>
+    </message>
+    <message>
+        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
+        <translation>У вас нулевой баланс и вы не сможете получать свои награды за исследования в одиночку. Вы можете использовать MRC для получения своих наград, или вам следует приобрести GRC, чтобы стейкать и для возможности получать свои награды за исследования. Смотрите https://gridcoin.us/guides/boinc-install.htm.</translation>
+    </message>
+    <message>
+        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Вы не сможете стейкать, потому что у вас менее %1 соединения(ий). Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.</source>
+        <translation>Ваш баланс низкий, учитывая текущую сложность сети, чтобы стейкить в разумный период времени, для получения вознаграждений за исследования при одиночной работе. Вам следует подумать о приобретении большего количества GRC, чтобы стейкить чаще, или же использовать MRC для получения вознаграждения.</translation>
+    </message>
+    <message>
+        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You can use MRC  to retrieve your rewards, or you should acquire more GRC to stake more often.</source>
+        <translation>Ваш баланс слишком мал, учитывая текущую сложность сети, чтобы делать ставки в течение разумного периода времени, чтобы получить свои исследовательские награды при одиночной работе. Вы можете использовать MRC, чтобы получить свои награды, или вам следует приобретать больше GRC, чтобы стейкить чаще.</translation>
+    </message>
+    <message>
+        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
+        <translation>Ваши часы на вашем компьютере значительно отличаются от UTC или сетевого времени, и это может серьезно ухудшить работу кошелька, включая подключения к сети. Вам следует проверить настройки времени и часового пояса на вашем компьютере. Очень распространенной проблемой является отклонение на один час из-за проблем с часовым поясом или с переходом на летнее время.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>Ваша сложность чрезвычайно низка, и ваш кошелек скорее всего раздвоен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
+    </message>
+    <message>
+        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
+        <translation>Ваша сложность мала, но ваш кошелек все еще находится в начальной стадии синхронизации. Пожалуйста, повторите проверку позже, чтобы увидеть, пройдет ли этот пункт проверку.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>Ваша сложность очень низкая, и ваш кошелек, вероятно, раздвоен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Ваше количество исходящих подключений критически мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Ваше количество исходящих подключений мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установятся соединения, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
+        <translation>Ваш кошелек не синхронизирован и ранее не был синхронизирован во время этого запуска, пожалуйста, дождитесь синхронизации кошелька и повторите проверку. Если есть другие сбои, препятствующие синхронизации кошелька, исправьте их и повторите проверку,  чтобы увидеть, проходит ли этот тест.</translation>
+    </message>
+    <message>
+        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
+        <translation>Ваш кошелек не синхронизирован с сетью, но раньше был синхронизирован. Если это не удается, вероятно, возникла серьезная проблема, которая не позволяет кошельку синхронизоваться. Если отсутствие синхронизации связано с проблемами сетевого подключения, вы увидите сбои в тесте(ах) сетевого подключения. Если сетевые подключения проходят успешно, но ваш кошелек не проходит этот тест и продолжает не проходить этот тест при повторных попытках с интервалом в несколько минут, это может указывать на более серьезную проблему. В этом случае вы должны проверить debug.log, чтобы увидеть, указывает ли он на причину отсутствия синхронизации.</translation>
+    </message>
+    <message>
+        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
+        <translation>Ваш кошелек все еще находится в начальной синхронизации. Если это синхронизация с самого начала (создания), то процесс синхронизации может занять от 2 до 4 часов, а на медленном компьютере дольше. Если вы уже синхронизировали свой кошелек раньше, но только что его запустили, подождите еще несколько минут и повторите попытку диагностики еще раз.</translation>
     </message>
     <message>
         <source>A poll choice cannot be empty.</source>
@@ -4757,6 +4691,14 @@ Expires: %3
     <message>
         <source>Failed to rename bootstrap file to .old for backup purposes.</source>
         <translation>Не удалось переименовать файл начальной загрузки в .old для резервного копирования.</translation>
+    </message>
+    <message>
+        <source>Failed: 80 block difficulty is less than</source>
+        <translation>Неудачно: сложность 80 блоков меньше</translation>
+    </message>
+    <message>
+        <source>Failed: Count =</source>
+        <translation>Неудачно: Количество =</translation>
     </message>
     <message>
         <source>Fees Collected</source>
@@ -4871,6 +4813,14 @@ Expires: %3
         <translation>Кошелек недоступен.</translation>
     </message>
     <message>
+        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
+        <translation>Исходящая связь с TCP-портом %1, по-видимому, заблокирована.</translation>
+    </message>
+    <message>
+        <source>Outbound communication to TCP port</source>
+        <translation>Исходящая связь с TCP-портом</translation>
+    </message>
+    <message>
         <source>Outreach</source>
         <translation>Охват</translation>
     </message>
@@ -4881,6 +4831,18 @@ Expires: %3
     <message>
         <source>Participant count polls are not supported.</source>
         <translation>Опросы с подсчетом участников не поддерживаются.</translation>
+    </message>
+    <message>
+        <source>Passed: 80 block difficulty is</source>
+        <translation>Пройдено: сложность 80 блоков составляет</translation>
+    </message>
+    <message>
+        <source>Passed: Count =</source>
+        <translation>Пройдено: Количество =</translation>
+    </message>
+    <message>
+        <source>Passed: ETTS =</source>
+        <translation>Пройдено: ETTS =</translation>
     </message>
     <message>
         <source>Please enter a poll discussion website URL.</source>
@@ -5043,12 +5005,36 @@ Expires: %3
         <translation>Кошелек сейчас будет закрыт.</translation>
     </message>
     <message>
+        <source>This wallet is almost certainly forked.</source>
+        <translation>Этот кошелек скорее всего раздвоен.</translation>
+    </message>
+    <message>
+        <source>This wallet is probably forked.</source>
+        <translation>Этот кошелек, вероятно, раздвоен.</translation>
+    </message>
+    <message>
         <source>Unable to create the PID file '%s': %s</source>
         <translation>Не удалось создать PID файл '%s': %s</translation>
     </message>
     <message>
         <source>Unknown poll type. This should never happen.</source>
         <translation>Неизвестный тип опроса. Это никогда не должно случаться.</translation>
+    </message>
+    <message>
+        <source>Warning: 45 days &lt; ETTS =</source>
+        <translation>Внимание: 45 дней &lt; ETTS =</translation>
+    </message>
+    <message>
+        <source>Warning: 80 block difficulty is less than</source>
+        <translation>Внимание: сложность 80 блоков меньше</translation>
+    </message>
+    <message>
+        <source>Warning: Cannot connect to NTP server</source>
+        <translation>Внимание: Невозможно подключиться к NTP серверу</translation>
+    </message>
+    <message>
+        <source>Warning: Count =</source>
+        <translation>Внимание: Количество =</translation>
     </message>
     <message>
         <source>Wrong Payload version specified for current block height.</source>
@@ -5059,12 +5045,20 @@ Expires: %3
         <translation>Да/Нет/Воздержаться</translation>
     </message>
     <message>
+        <source>You should check your time and time zone settings for your computer.</source>
+        <translation>Вам следует проверить настройки времени и часового пояса на вашем компьютере.</translation>
+    </message>
+    <message>
         <source>You will need to delete the following.</source>
         <translation>Вам потребуется удалить следующее.</translation>
     </message>
     <message>
         <source>"%s" is not a valid poll choice.</source>
         <translation>"%s" не является допустимым выбором для опроса.</translation>
+    </message>
+    <message>
+        <source>appears to be blocked.</source>
+        <translation>похоже, что он заблокирован.</translation>
     </message>
     <message>
         <source>leisure</source>

@@ -9,10 +9,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dubbelklicka för att ändra adressen eller etiketten</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Skapa ny adress</translation>
     </message>
@@ -801,24 +797,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>Failed</source>
         <translation>Underkänt</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Godkända: Antal = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Underkända: Antal = %1</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Varning: Kan inte ansluta till NTP-server</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Varning: Ny version av klienten är tillgänglig:
- %1</translation>
     </message>
     </context>
 <context>
