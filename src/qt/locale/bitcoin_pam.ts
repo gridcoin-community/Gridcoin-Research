@@ -2,10 +2,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Pindutan meng makatidduang besis ban ayalilan me ing address o label</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Maglalang kang bayung address</translation>
     </message>

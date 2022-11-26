@@ -23,10 +23,6 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Duplo clique para editar o endereço ou a etiqueta</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Criar um novo endereço</translation>
     </message>
@@ -1254,112 +1250,6 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>All tests passed. Your wallet operation is normal.</source>
         <translation>Todos os testes concluídos. A operação da sua carteira está normal.</translation>
-    </message>
-    <message>
-        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
-        <translation>A sua carteira ainda está na sincronização inicial. Se esta sincronização estiver a ser feita de início (raiz), o processo poderá demorar de 2 a 4 horas, ou mais se for no computador lento. Se sincronizou a carteira anteriormente mas iniciou agora a carteira, então espere mais uns minutos e tente executar novamente os diagnósticos.</translation>
-    </message>
-    <message>
-        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
-        <translation>A sua carteira está dessincronizada da rede mas estava a ser sincronizada anteriormente. Se isto falhou, existe provavelmente um problema severo que está a impedir que a carteira sincronize. Se os problemas de sincronização forem derivados a problemas de acesso à Internet, irá verificar falhas nos testes às conexões de rede. Se os testes de conexões passaram, mas a sua carteira falhar este teste e continuar a falhar repetidamente durante vários minutos, isto pode indicar problemas mais graves. Nesse caso deverá verificar o log de depuração para ver se consegue perceber o problema relacionado com a sincronização.</translation>
-    </message>
-    <message>
-        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Por favor verifique a sua rede e também o ficheiro de configuração e confirme que as suas entradas de addnode estão atualizadas. Se iniciou a carteira recentemente, pode ter de aguardar alguns minutos para que as conexões sejam iniciadas e testar novamente. Por favor veja https://gridcoin.us/wiki/config-file.html e https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation>Aviso: Contagem = %1 (Sucesso = 8+)</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Sucesso: Contagem = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Falhou: Contagem = %1</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation>Aviso: Contagem = %1 (Pass = 3+)</translation>
-    </message>
-    <message>
-        <source>You should check your time and time zone settings for your computer.</source>
-        <translation>Deve verificar as configurações de horário e fuso horário do seu computador.</translation>
-    </message>
-    <message>
-        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
-        <translation>Aviso: O clock skew está entre 3 e 5 minutos. Por favor verifique as definições do seu relógio.</translation>
-    </message>
-    <message>
-        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
-        <translation>Erro. O clock skew é de 5 minutos ou mais. Por favor verifique as definições do seu relógio.</translation>
-    </message>
-    <message>
-        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
-        <translation>A carteira tem menos de 5 ligações à rede e não se consegue ligar a um servidor de NTP para verificar o relógio do seu computador. Isto não é necessariamente um problema. Pode esperar uns minutos e fazer o teste novamente.</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Aviso: Não foi possível ligar ao servidor NTP</translation>
-    </message>
-    <message>
-        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
-        <translation>Comunicação de saída para a porta %1 de TCP parece estar bloqueada.</translation>
-    </message>
-    <message>
-        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>A ligação à porta de teste do site foi recusada. Isto pode ser um problema transitório a porta de teste do site, mas também pode ser um problema com a sua firewall. Se também está a falhar o teste de ligação, a sua firewall está provavelmente a bloquear as comunicações com o cliente Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>A porta de teste do site está fechada na porta. Isto pode ser um problema transitório a porta de teste do site, mas também pode ser um problema com a sua firewall. Se também está a falhar o teste de ligação, a sua firewall está provavelmente a bloquear as comunicações com o cliente Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
-        <translation>O IP para a porte de teste do site não conseguiu ser resolvida. Isto pode dizer que o seu DNS não está a funcionar corretamente. A carteira pode operar sem DNS mas pode ficar bastante degradada, especialmente se a carteira for nova e a base de dados de ligações anteriores bem sucedidas ainda não tiver sido construída.</translation>
-    </message>
-    <message>
-        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
-        <translation>A rede tem experienciado um nível baixo de erros e isto provavelmente quer dizer que, o seu endereço de IP ou outros parâmetros de ligação não estão configurados corretamente. Por favor verifique as configurações de rede no seu computador.</translation>
-    </message>
-    <message>
-        <source>Your network may be using a proxy server to communicate to public IP addresses on the Internet, and the wallet is not configured properly to use it. Please check the proxy settings under Options -&gt; Network -&gt; Connect through SOCKS5 proxy.</source>
-        <translation>A sua rede pode estar a usar um servidor de proxy para comunicar o IP Público para os endereços na Internet e, a carteira não está configurada corretamente para isso. Por favor verifique as definições de proxy em Opções -&gt; Rede -&gt; Ligar através de proxy SOCKS5.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
-        <translation>A sua dificuldade é baixa mas a sua carteira ainda está numa fase inicial de sincronização. Por favor verifique novamente mais tarde para ver se já está OK.</translation>
-    </message>
-    <message>
-        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
-        <translation>Existe uma nova versão obrigatória e deverá atualizar o mais cedo possível, para garantir que a sua carteira se mantém em consenso com a rede.</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Aviso: Nova versão de Cliente disponível:
-%1</translation>
-    </message>
-    <message>
-        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
-        <translation>Existe uma nova versão opcional e deverá atualizar assim que for possível.</translation>
-    </message>
-    <message>
-        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
-        <translation>Verifique que o BOINC está instalado e que tem o caminho correto no ficheiro de configuração, caso o tenha instalado numa localização não definida por padrão.</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation>Falou: ETTS é infinito. Sem moedas para realizar stake.</translation>
-    </message>
-    <message>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation>Aviso: 45 dias &lt;ETTS = %1 &lt;= 90 dias</translation>
-    </message>
-    <message>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
-        <translation>Sucesso: ETTS = %1 &lt;= 45 dias</translation>
     </message>
 </context>
 <context>

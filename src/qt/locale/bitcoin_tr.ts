@@ -23,10 +23,6 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Adresi ya da etiketi düzenlemek için çift tıklayınız.</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Yeni bir adres oluştur</translation>
     </message>
@@ -902,45 +898,7 @@ Bitiş süresi: %3
         <source>Failed</source>
         <translation>Başarısız</translation>
     </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation>Uyarı: Miktar = %1 (Önerilen = 8+)</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Başarılı: Miktar = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Başarısız: Miktar = %1</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation>Uyarı: Miktar = %1 (Önerilen = 3+)</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Uyarı: NTP sunucusuna bağlanılamıyor</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Uyarı: Yeni istemci sürümü mevcut:
-%1</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation>Başarısız: ETTS sonsuz. Stakelemek için para yok.</translation>
-    </message>
-    <message>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation>Uyarı: 45 gün &lt; ETTS = %1 &lt;= 90 gün</translation>
-    </message>
-    <message>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
-        <translation>Başarılı: ETTS = %1 &lt;= 45 gün</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>

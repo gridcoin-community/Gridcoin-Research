@@ -2,10 +2,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dupliciter-clicca ut inscriptionem vel titulum mutes</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Crea novam inscriptionem</translation>
     </message>

@@ -13,10 +13,6 @@
 <context>
     <name>AddressBookPage</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Kattints duplán a cím vagy címke szerkesztéséhez</translation>
-    </message>
-    <message>
         <source>Create a new address</source>
         <translation>Új cím létrehozása</translation>
     </message>
@@ -477,12 +473,6 @@
     <message>
         <source>Check client version</source>
         <translation>Kliens verzió ellenőrzése</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Figyelmeztetés: Új kliens elérhető:
-%1</translation>
     </message>
     </context>
 <context>
