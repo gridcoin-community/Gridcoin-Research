@@ -124,7 +124,9 @@ protected:
     bool Unlock(const CKeyingMaterial& vMasterKeyIn);
 
 public:
-    CCryptoKeyStore() : fUseCrypto(false)
+    CCryptoKeyStore()
+        : fUseCrypto(false)
+        , fDecryptionThoroughlyChecked(false)
     {
     }
 
