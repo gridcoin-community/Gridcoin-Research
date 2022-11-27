@@ -104,6 +104,11 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
             result->m_responses[i].m_weight / COIN);
     }
 
+    item.m_self_voted = result->m_self_voted;
+    if (result->m_self_voted) {
+        item.m_self_vote_detail = result->m_self_vote_detail;
+    }
+
     if (!result->m_votes.empty()) {
         item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
     }

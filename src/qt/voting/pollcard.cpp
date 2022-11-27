@@ -33,6 +33,32 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
     ui->activeVoteWeightLabel->setText(QString::number(poll_item.m_active_weight));
     ui->votePercentAVWLabel->setText(QString::number(poll_item.m_vote_percent_AVW, 'f', 4) + '\%');
 
+    if (!poll_item.m_self_voted) {
+        ui->myLastVoteAnswerLabel->setText("No Vote");
+        ui->myVoteWeightLabel->setText("N/A");
+        ui->myPercentAVWLabel->setText("N/A");
+    } else {
+        QString choices_str;
+
+        int64_t my_total_weight = 0;
+
+        for (const auto& choice : poll_item.m_self_vote_detail.m_responses) {
+            if (!choices_str.isEmpty()) {
+                choices_str += ", " + QString(poll_item.m_choices[choice.first].m_label);
+            } else {
+                choices_str = QString(poll_item.m_choices[choice.first].m_label);
+            }
+
+            my_total_weight += choice.second / COIN;
+        }
+
+        ui->myLastVoteAnswerLabel->setText(choices_str);
+        ui->myVoteWeightLabel->setText(QString::number(my_total_weight));
+        if (poll_item.m_active_weight) ui->myPercentAVWLabel->setText(QString::number((double) my_total_weight
+                                                                                      / (double) poll_item.m_active_weight
+                                                                                      * (double) 100.0, 'f', 4) + '\%');
+    }
+
     if (!(poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE ||
           poll_item.m_weight_type == (int)GRC::PollWeightType::BALANCE_AND_MAGNITUDE)) {
         ui->balanceLabel->hide();

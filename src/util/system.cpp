@@ -54,16 +54,14 @@ ArgsManager gArgs;
 /**
  * Interpret a string argument as a boolean.
  *
- * The definition of atoi() requires that non-numeric string values like "foo",
- * return 0. This means that if a user unintentionally supplies a non-integer
- * argument here, the return value is always false. This means that -foo=false
- * does what the user probably expects, but -foo=true is well defined but does
- * not do what they probably expected.
+ * The definition of LocaleIndependentAtoi<int>() requires that non-numeric string values
+ * like "foo", return 0. This means that if a user unintentionally supplies a
+ * non-integer argument here, the return value is always false. This means that
+ * -foo=false does what the user probably expects, but -foo=true is well defined
+ * but does not do what they probably expected.
  *
- * The return value of atoi() is undefined when given input not representable as
- * an int. On most systems this means string value between "-2147483648" and
- * "2147483647" are well defined (this method will return true). Setting
- * -txindex=2147483648 on most systems, however, is probably undefined.
+ * The return value of LocaleIndependentAtoi<int>(...) is zero when given input not
+ * representable as an int.
  *
  * For a more extensive discussion of this topic (and a wide range of opinions
  * on the Right Way to change this code), see PR12713.
@@ -73,9 +71,9 @@ static bool InterpretBool(const std::string& strValue)
     if (strValue.empty())
         return true;
 
-    // Maintaining the behavior as described above, but replacing the atoi with ParseInt.
+    // Maintaining the behavior as described above, but replacing the atoi with ParseInt32.
     int value = 0;
-    if (!ParseInt(strValue, &value)) {
+    if (!ParseInt32(strValue, &value)) {
         // Do nothing. The value will remain at zero if not parseable. This is to prevent
         // a warning on [[nodiscard]]
     }

@@ -1,4 +1,4 @@
-<TS language="sk" version="2.1">
+<TS language="sk" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -8,10 +8,6 @@
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Adresu alebo popis upravíte dvojklikom</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Vytvoriť novú adresu</translation>
@@ -67,10 +63,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Upraviť</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Tabuľka CSV (*.csv)</translation>
     </message>
     <message>
         <source>Export Address Book Data</source>
@@ -138,8 +130,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Podpísať &amp;správu...</translation>
+        <source>Wallet</source>
+        <translation>Peňaženka</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -148,6 +140,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Zobraziť celkový prehľad o peňaženke</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Odoslať</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Prijať</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -166,6 +166,10 @@
         <translation>&amp;Možnosti...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>Zobraziť / skryť</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Zašifrovať Peňaženku...</translation>
     </message>
@@ -178,32 +182,20 @@
         <translation>Zmeniť heslo použité na šifrovanie peňaženky</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Okno pre ladenie</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Otvor konzolu pre ladenie a diagnostiku</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Podpísať &amp;správu...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>O&amp;veriť správu...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Peňaženka</translation>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Okno pre ladenie</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Odoslať</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Prijať</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>Zobraziť / skryť</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Otvor konzolu pre ladenie a diagnostiku</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -217,37 +209,61 @@
         <source>&amp;Help</source>
         <translation>&amp;Pomoc</translation>
     </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Aktualizovaný</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
     <message>
         <source>Gridcoin client</source>
         <translation>Gridcoin klient</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Aktualizovaný</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -258,14 +274,6 @@
         <translation>Posledný prijatý blok bol vytvorený %1.</translation>
     </message>
     <message>
-        <source>URI handling</source>
-        <translation>URI manipulácia</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Zálohovanie zlyhalo</translation>
-    </message>
-    <message>
         <source>Sent transaction</source>
         <translation>Odoslané transakcie</translation>
     </message>
@@ -274,8 +282,16 @@
         <translation>Prijatá transakcia</translation>
     </message>
     <message>
+        <source>URI handling</source>
+        <translation>URI manipulácia</translation>
+    </message>
+    <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Peňaženka je &lt;b&gt;zašifrovaná&lt;/b&gt; a momentálne &lt;b&gt;zamknutá&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Zálohovanie zlyhalo</translation>
     </message>
     </context>
 <context>
@@ -304,10 +320,6 @@
         <translation>Poplatok:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Priorita:</translation>
-    </message>
-    <message>
         <source>After Fee:</source>
         <translation>Po poplatku:</translation>
     </message>
@@ -334,10 +346,6 @@
     <message>
         <source>Address</source>
         <translation>Adresa</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Priorita</translation>
     </message>
     <message>
         <source>yes</source>
@@ -395,6 +403,33 @@
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -413,24 +448,12 @@
         <translation>Mapovať port pomocou &amp;UPnP</translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Pripojenie k sieti Gridcoin cez SOCKS proxy server (napr. pri pripojení cez Tor).</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Pripojenie cez SOCKS proxy server:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>IP adresa proxy servera (napr. 127.0.0.1)</translation>
     </message>
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port proxy (napr. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>SOCKS verzia proxy (napr. 5)</translation>
     </message>
     <message>
         <source>&amp;Window</source>
@@ -516,27 +539,51 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -553,11 +600,7 @@
         <source>The entered amount is invalid, please check.</source>
         <translation>Zadaná suma je neplatná, prosím skontrolujte.</translation>
     </message>
-    <message>
-        <source>PNG Images (*.png)</source>
-        <translation>PNG Obrázky (*.png)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>RPCConsole</name>
     <message>
@@ -629,22 +672,18 @@
         <translation>Vymazať konzolu</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Napíš &lt;b&gt;help&lt;/b&gt; pre prehľad dostupných príkazov.</translation>
+        <source>Client name</source>
+        <translation>Meno klienta</translation>
     </message>
     <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Použi šípky hore a dolu pre navigáciu históriou a &lt;b&gt;Ctrl-L&lt;/b&gt; pre vyčistenie obrazovky.</translation>
     </message>
     <message>
-        <source>Build date</source>
-        <translation>Dátum zostavenia</translation>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Napíš &lt;b&gt;help&lt;/b&gt; pre prehľad dostupných príkazov.</translation>
     </message>
-    <message>
-        <source>Client name</source>
-        <translation>Meno klienta</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -674,10 +713,6 @@
     <message>
         <source>Amount:</source>
         <translation>Suma:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Priorita:</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -728,14 +763,14 @@
         <translation>Chyba: Vytvorenie transakcie zlyhalo.</translation>
     </message>
     <message>
-        <source>WARNING: Invalid Gridcoin address</source>
-        <translation>UPOZORNENIE: Neplatná Gridcoin adresa</translation>
-    </message>
-    <message>
         <source>(no label)</source>
         <translation>(bez popisu)</translation>
     </message>
-</context>
+    <message>
+        <source>WARNING: Invalid Gridcoin address</source>
+        <translation>UPOZORNENIE: Neplatná Gridcoin adresa</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -745,6 +780,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Zapla&amp;tiť:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Správa:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -850,19 +889,23 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Otvorené do %1</translation>
     </message>
     <message>
-        <source>%1/unconfirmed</source>
-        <translation>%1/nepotvrdené</translation>
-    </message>
-    <message>
         <source>conflicted</source>
         <translation>v rozpore</translation>
+    </message>
+    <message>
+        <source>%1/unconfirmed</source>
+        <translation>%1/nepotvrdené</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -878,7 +921,11 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -902,7 +949,11 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Message</source>
@@ -956,7 +1007,11 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1110,10 +1165,6 @@
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat je poškodený, záchrana zlyhala</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Neznáma požadovaná SOCKS proxy verzia: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

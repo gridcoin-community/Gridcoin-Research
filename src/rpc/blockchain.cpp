@@ -74,7 +74,6 @@ UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
         json.pushKV("magnitude_unit", claim.m_magnitude_unit);
     }
 
-    json.pushKV("fees_to_staker", ValueFromAmount(claim.m_mrc_fees_to_staker));
     json.pushKV("m_mrc_tx_map_size", (uint64_t) claim.m_mrc_tx_map.size());
     UniValue mrcs(UniValue::VARR);
     if (claim.m_version >= 4) {
@@ -228,6 +227,14 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fP
     }
 
     result.pushKV("fees_collected", ValueFromAmount(mint.m_fees));
+
+    if (block.nVersion >= 12) {
+        GRC::MRCFees mrc_fees = block.GetMRCFees();
+
+        result.pushKV("mrc_foundation_fees", ValueFromAmount(mrc_fees.m_mrc_foundation_fees));
+        result.pushKV("mrc_staker_fees", ValueFromAmount(mrc_fees.m_mrc_staker_fees));
+    }
+
     result.pushKV("IsSuperBlock", blockindex->IsSuperblock());
     result.pushKV("IsContract", blockindex->IsContract());
 
@@ -449,6 +456,281 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
     report.pushKV("number_of_contracts_exported", num_contracts);
     if (contract_type == GRC::ContractType::BEACON) report.pushKV("number_of_beacons_verified", num_verified_beacons);
     report.pushKV("exported_to_file", path.string());
+
+    return report;
+}
+
+UniValue getmrcinfo(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 4)
+        throw runtime_error(
+                "getmrcinfo [detailed MRC info [CPID [low height [high height]]]]\n"
+                "\n"
+                "[detailed MRC info]: optional boolean to output MRC details.\n"
+                "                     Defaults to false.\n"
+                "[CPID]:              optional CPID. Defaults to current wallet CPID.\n"
+                "                     Use \"*\" for all CPIDs (network wide).\n"
+                "                     Note that block level mrc summary statistics are\n"
+                "                     specific to the scope specified with CPID.\n"
+                "[low height]:        optional low height for scope.\n"
+                "                     Defaults to V12 block height.\n"
+                "[high height]:       optional high height for scope.\n"
+                "                     Defaults to current block.\n"
+                );
+
+    bool output_mrc_details = false;
+    bool output_all_cpids = false;
+
+    if (params.size() > 0) {
+        output_mrc_details = params[0].get_bool();
+    }
+
+    GRC::MiningId mining_id;
+
+    LOCK(cs_main);
+
+    if (params.size() > 1) {
+        std::string cpid_string = params[1].get_str();
+
+        if (cpid_string == "*") {
+            output_all_cpids = true;
+        } else {
+            mining_id = GRC::MiningId::Parse(cpid_string);
+        }
+    } else {
+        mining_id = GRC::Researcher::Get()->Id();
+    }
+
+    if (!output_all_cpids && !mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    GRC::CpidOption cpid = mining_id.TryCpid();
+
+    if (!output_all_cpids && !cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for investor.");
+    }
+
+    // No MRC's below V12 block height.
+    int low_height = Params().GetConsensus().BlockV12Height;
+    int high_height = 0;
+
+    if (params.size() > 2) {
+        // If specified low height is lower than V12 height, set to V12 height.
+        low_height = std::max(params[2].get_int(), low_height);
+    }
+
+    if (params.size() > 3) {
+        // High height can't be lower than the low height.
+        high_height = std::max(low_height, params[3].get_int());
+    }
+
+    UniValue report(UniValue::VOBJ);
+    UniValue block_output_array(UniValue::VARR);
+
+    uint64_t total_mrcs_paid = 0;
+    uint64_t total_mrcs_fee_boosted = 0;
+
+    CAmount mrc_total_research_rewards = 0;
+    CAmount mrc_total_foundation_fees = 0;
+    CAmount mrc_total_staker_fees = 0;
+    CAmount mrc_total_calculated_minimum_fees = 0;
+    CAmount mrc_total_fee_boost = 0;
+
+    CBlock block;
+    UniValue block_output(UniValue::VOBJ);
+
+    // Set default high_height here if not specified above now that lock on cs_main is taken.
+    if (!high_height) {
+        high_height = pindexBest->nHeight;
+    }
+
+    CBlockIndex* blockindex = pindexBest;
+
+    // Rewind to low height.
+    for (; blockindex; blockindex = blockindex->pprev) {
+        if (blockindex->nHeight == low_height) break;
+    }
+
+    while (blockindex && blockindex->nHeight <= high_height) {
+        CAmount mrc_research_rewards = 0;
+
+        for (const auto& mrc_context : blockindex->m_mrc_researchers) {
+            if (output_all_cpids || mrc_context->m_cpid == *cpid) {
+                mrc_research_rewards += mrc_context->m_research_subsidy;
+            }
+        }
+
+        if (!mrc_research_rewards) {
+            blockindex = blockindex->pnext;
+            continue;
+        }
+
+        ReadBlockFromDisk(block, blockindex, Params().GetConsensus());
+
+        // Get the claim which is where MRCs are actually paid.
+        GRC::Claim claim = block.GetClaim();
+
+        GRC::MRCFees mrc_fees;
+        CAmount mrc_fee_boost = 0;
+        uint64_t mrcs_paid = 0;
+        uint64_t mrcs_fee_boosted = 0;
+
+        if (output_all_cpids) {
+            mrc_fees = block.GetMRCFees();
+            mrc_fee_boost = mrc_fees.m_mrc_foundation_fees
+                    + mrc_fees.m_mrc_staker_fees
+                    - mrc_fees.m_mrc_minimum_calc_fees;
+
+            mrcs_paid = claim.m_mrc_tx_map.size(); // This also matches the size of the blockindex->m_mrc_researchers
+
+            if (output_mrc_details) {
+                UniValue mrc_requests_output_array(UniValue::VARR);
+                uint64_t mrc_requests = 0;
+
+                block_output.pushKV("hash", block.GetHash().GetHex());
+                block_output.pushKV("height", blockindex->nHeight);
+                block_output.pushKV("mrc_research_rewards", ValueFromAmount(mrc_research_rewards));
+                block_output.pushKV("mrc_foundation_fees", ValueFromAmount(mrc_fees.m_mrc_foundation_fees));
+                block_output.pushKV("mrc_staker_fees", ValueFromAmount(mrc_fees.m_mrc_staker_fees));
+                block_output.pushKV("mrc_net_paid_to_researchers", ValueFromAmount(mrc_research_rewards
+                                                                                   - mrc_fees.m_mrc_foundation_fees
+                                                                                   - mrc_fees.m_mrc_staker_fees));
+                block_output.pushKV("mrc_calculated_minimum_fees", ValueFromAmount(mrc_fees.m_mrc_minimum_calc_fees));
+                block_output.pushKV("mrc_fee_boost", ValueFromAmount(mrc_fee_boost));
+                block_output.pushKV("mrcs_paid", mrcs_paid);
+                block_output.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
+
+                for (const auto& tx : block.vtx) {
+                    for (const auto& contract : tx.GetContracts()) {
+                        // We are only interested in MRC request contracts here.
+                        if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                        GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                        ++mrc_requests;
+
+                        CAmount mrc_calculated_min_fee = mrc.ComputeMRCFee();
+
+                        UniValue mrc_output(UniValue::VOBJ);
+
+                        mrc_output.pushKV("txid", tx.GetHash().GetHex());
+                        mrc_output.pushKVs(MRCToJson(mrc));
+                        mrc_output.pushKV("mrc_calculated_minimum_fee", ValueFromAmount(mrc_calculated_min_fee));
+
+                        if (mrc.m_fee > mrc_calculated_min_fee) ++mrcs_fee_boosted;
+
+                        mrc_requests_output_array.push_back(mrc_output);
+
+                    } // contracts
+                } // transaction
+
+                block_output.pushKV("mrc_requests", mrc_requests_output_array);
+
+                if (mrc_requests) {
+                    block_output_array.push_back(block_output);
+                }
+            } else { // no details, but get the # of mrcs that had fee boosting
+                for (const auto& tx : block.vtx) {
+                    for (const auto& contract : tx.GetContracts()) {
+                        // We are only interested in MRC request contracts here.
+                        if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                        GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                        CAmount mrc_calculated_min_fee = mrc.ComputeMRCFee();
+
+                        if (mrc.m_fee > mrc_calculated_min_fee) ++mrcs_fee_boosted;
+                    } // contracts
+                } // transaction
+            } // output_mrc_details
+        } else { // specific CPID
+            UniValue mrc_requests_output_array(UniValue::VARR);
+
+            for (const auto& tx : block.vtx) {
+                for (const auto& contract : tx.GetContracts()) {
+                    // We are only interested in MRC request contracts here.
+                    if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                    GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                    if (mrc.m_mining_id != *cpid) continue;
+
+                    ++mrcs_paid;
+
+                    Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+                    CAmount mrc_foundation_fee = mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                           / foundation_fee_fraction.GetDenominator();
+
+                    mrc_fees.m_mrc_foundation_fees += mrc_foundation_fee;
+
+                    mrc_fees.m_mrc_staker_fees += mrc.m_fee - mrc_foundation_fee;
+
+                    CAmount mrc_calculated_min_fee = mrc.ComputeMRCFee();
+
+                    mrc_fees.m_mrc_minimum_calc_fees += mrc_calculated_min_fee;
+                    mrc_fee_boost += mrc.m_fee - mrc_calculated_min_fee;
+
+                    UniValue mrc_output(UniValue::VOBJ);
+
+                    mrc_output.pushKV("txid", tx.GetHash().GetHex());
+                    mrc_output.pushKVs(MRCToJson(mrc));
+                    mrc_output.pushKV("mrc_calculated_minimum_fee", ValueFromAmount(mrc_calculated_min_fee));
+
+                    if (mrc.m_fee > mrc_calculated_min_fee) ++mrcs_fee_boosted;
+
+                    mrc_requests_output_array.push_back(mrc_output);
+
+                } // contracts
+            } // transaction
+
+            if (output_mrc_details) {
+                block_output.pushKV("hash", block.GetHash().GetHex());
+                block_output.pushKV("height", blockindex->nHeight);
+                block_output.pushKV("mrc_research_rewards", ValueFromAmount(mrc_research_rewards));
+                block_output.pushKV("mrc_foundation_fees", ValueFromAmount(mrc_fees.m_mrc_foundation_fees));
+                block_output.pushKV("mrc_staker_fees", ValueFromAmount(mrc_fees.m_mrc_staker_fees));
+                block_output.pushKV("mrc_net_paid_to_researchers", ValueFromAmount(mrc_research_rewards
+                                                                                   - mrc_fees.m_mrc_foundation_fees
+                                                                                   - mrc_fees.m_mrc_staker_fees));
+                block_output.pushKV("mrc_calculated_minimum_fees", ValueFromAmount(mrc_fees.m_mrc_minimum_calc_fees));
+                block_output.pushKV("mrc_fee_boost", ValueFromAmount(mrc_fee_boost));
+                block_output.pushKV("mrcs_paid", mrcs_paid);
+                block_output.pushKV("claim", ClaimToJson(block.GetClaim(), blockindex));
+
+                block_output.pushKV("mrc_requests", mrc_requests_output_array);
+
+                if (mrcs_paid) {
+                    block_output_array.push_back(block_output);
+                }
+            }
+        }
+
+        mrc_total_foundation_fees += mrc_fees.m_mrc_foundation_fees;
+        mrc_total_staker_fees += mrc_fees.m_mrc_staker_fees;
+        mrc_total_calculated_minimum_fees += mrc_fees.m_mrc_minimum_calc_fees;
+        mrc_total_fee_boost += mrc_fee_boost;
+        total_mrcs_paid += mrcs_paid;
+        total_mrcs_fee_boosted += mrcs_fee_boosted;
+        mrc_total_research_rewards += mrc_research_rewards;
+        blockindex = blockindex->pnext;
+    } // while (pblockindex...)
+
+    report.pushKV("total_mrcs_paid", total_mrcs_paid);
+    report.pushKV("total_mrcs_fee_boosted", total_mrcs_fee_boosted);
+    report.pushKV("mrc_total_research_rewards", ValueFromAmount(mrc_total_research_rewards));
+    report.pushKV("mrc_total_foundation_fees", ValueFromAmount(mrc_total_foundation_fees));
+    report.pushKV("mrc_total_staker_fees", ValueFromAmount(mrc_total_staker_fees));
+    report.pushKV("mrc_total_net_paid_to_researchers", ValueFromAmount(mrc_total_research_rewards
+                                                                       - mrc_total_foundation_fees
+                                                                       - mrc_total_staker_fees));
+    report.pushKV("mrc_total_calculated_minimum_fees", ValueFromAmount(mrc_total_calculated_minimum_fees));
+    report.pushKV("mrc_total_fee_boost", ValueFromAmount(mrc_total_fee_boost));
+
+    if (output_mrc_details) {
+        report.pushKV("mrc_details_by_block", block_output_array);
+    }
 
     return report;
 }
@@ -1173,7 +1455,7 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
                 "\n"
                 "<cpid> CPID associated with the beacon to revoke.\n"
                 "\n"
-                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+                "Revoke a beacon (Requires wallet to be fully unlocked)\n");
 
     EnsureWalletIsUnlocked();
 

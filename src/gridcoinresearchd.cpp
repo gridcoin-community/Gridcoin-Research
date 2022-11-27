@@ -196,6 +196,16 @@ bool AppInit(int argc, char* argv[])
             return !CommandLineRPC(argc, argv);
         }
 
+        if (gArgs.GetBoolArg("-printtoconsole", false) && gArgs.GetBoolArg("-daemon", DEFAULT_DAEMON)) {
+            return InitError("-printtoconsole && -daemon cannot be specified at the same time,\n"
+                             "because Gridcoin follows proper daemonization and disconnects the\n"
+                             "console when the process is forked. This is consistent with Bitcoin\n"
+                             "Core. Please see https://github.com/bitcoin/bitcoin/issues/10132.\n"
+                             "If you are not specifying -daemon as a startup parameter, but only\n"
+                             "-printtoconsole, and you are getting this error, please check the\n"
+                             "gridcoinresearch.conf and comment out daemon=1, or use -nodaemon.");
+        }
+
         // -server defaults to true for gridcoinresearchd but not for the GUI so do this here
         gArgs.SoftSetBoolArg("-server", true);
         // Initialize logging as early as possible.
@@ -287,7 +297,7 @@ bool AppInit(int argc, char* argv[])
                 if (token) { // Success
                     exit(EXIT_SUCCESS);
                 } else { // fRet = false or token read error (premature exit).
-                    tfm::format(std::cerr, "Error during initializaton - check debug.log for details\n");
+                    tfm::format(std::cerr, "Error during initialization - check debug.log for details\n");
                     exit(EXIT_FAILURE);
                 }
             }

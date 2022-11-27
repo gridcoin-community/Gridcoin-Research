@@ -867,7 +867,15 @@ public:
             CURRENT_VERSION);
 
         if (!registry_file.IsNull()) {
-            Unserialize(registry_file);
+            try {
+                Unserialize(registry_file);
+            } catch (const std::ios_base::failure& e) {
+                if (feof(registry_file.Get())) {
+                    throw SnapshotStateError("unexpected eof while loading the registry.");
+                }
+
+                throw;
+            }
         } else {
             m_entries.clear();
         }

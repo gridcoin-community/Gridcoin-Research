@@ -346,6 +346,7 @@ static const CRPCCommand vRPCCommands[] =
     { "walletlock",              &walletlock,              cat_wallet        },
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
+    { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
 
   // Staking commands
     { "advertisebeacon",         &advertisebeacon,         cat_staking        },
@@ -355,6 +356,7 @@ static const CRPCCommand vRPCCommands[] =
     { "createmrcrequest",        &createmrcrequest,        cat_staking        },
     { "explainmagnitude",        &explainmagnitude,        cat_staking        },
     { "getlaststake",            &getlaststake,            cat_staking        },
+    { "getmrcinfo",              &getmrcinfo,              cat_staking        },
     { "getstakinginfo",          &getstakinginfo,          cat_staking        },
     { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
     { "lifetime",                &lifetime,                cat_staking        },

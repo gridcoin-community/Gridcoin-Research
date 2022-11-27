@@ -184,7 +184,7 @@ bool CSplitBlob::SendPartTo(CNode* pto, const uint256& hash) EXCLUSIVE_LOCKS_REQ
     {
         if (ipart->second.present())
         {
-            pto->PushMessage("part",ipart->second.getReader());
+            pto->PushMessage(NetMsgType::PART,ipart->second.getReader());
             return true;
         }
     }
@@ -275,7 +275,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_mapParts)
 {
     LOCK(manifest->cs_manifest);
 
-    pto->PushMessage("scraperindex", *manifest);
+    pto->PushMessage(NetMsgType::SCRAPERINDEX, *manifest);
 
     return true;
 }

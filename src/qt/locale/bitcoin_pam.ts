@@ -1,10 +1,6 @@
-<TS language="pam" version="2.1">
+<TS language="pam" version="2.0">
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Pindutan meng makatidduang besis ban ayalilan me ing address o label</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Maglalang kang bayung address</translation>
@@ -76,14 +72,6 @@
         <translation>Unlock ya ing wallet</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ing operasyun a ini kailangan ne ing kekang wallet passphrase ban a-decrypt ne ing wallet.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>I-decrypt ya ing wallet</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Alilan ya ing passphrase</translation>
     </message>
@@ -128,10 +116,6 @@
         <translation>E ya istu ing passphrase a pepalub da para king wallet decryption</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Me-mali ya ing pamag-decrypt king wallet</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Mi-alilan ne ing passphrase na ning wallet.</translation>
     </message>
@@ -142,10 +126,6 @@
 </context>
 <context>
     <name>BitcoinGUI</name>
-    <message>
-        <source>Sign &amp;message...</source>
-        <translation>I-sign ing &amp;mensayi</translation>
-    </message>
     <message>
         <source>Show general overview of wallet</source>
         <translation>Ipakit ing kabuuang lawe ning wallet</translation>
@@ -167,6 +147,10 @@
         <translation>&amp;Pipamilian...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Ipalto / Isalikut</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>I-&amp;Encrypt in Wallet...</translation>
     </message>
@@ -179,20 +163,20 @@
         <translation>Alilan ya ing passphrase a gagamitan para king wallet encryption</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>I-&amp;Debug ing awang</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Ibuklat ing debugging at diagnostic console</translation>
+        <source>Sign &amp;message...</source>
+        <translation>I-sign ing &amp;mensayi</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Beripikan ing message...</translation>
     </message>
     <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Ipalto / Isalikut</translation>
+        <source>&amp;Debug window</source>
+        <translation>I-&amp;Debug ing awang</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Ibuklat ing debugging at diagnostic console</translation>
     </message>
     <message>
         <source>&amp;Settings</source>
@@ -203,32 +187,44 @@
         <translation>&amp;Saup</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Makatuki ya king aldo</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -321,6 +317,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -337,14 +354,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port na ning proxy(e.g. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Bersion na ning SOCKS</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Bersion a SOCKS ning proxy (e.g 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -414,27 +423,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -476,18 +497,6 @@
         <translation>I-Clear ing console</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>I-type ing &lt;b&gt;help&lt;/b&gt; ban akit la reng ati at magsilbing commands.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Gamitan me ing patas at pababang arrow para alibut me ing kasalesayan, at &lt;b&gt;Ctrl-L&lt;/b&gt; ban I-clear ya ing screen.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Kaaldauan ning pamaglalang</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Estima kareng kabuuan dareng blocks</translation>
     </message>
@@ -495,7 +504,15 @@
         <source>Client name</source>
         <translation>Lagyu ning kliente</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Gamitan me ing patas at pababang arrow para alibut me ing kasalesayan, at &lt;b&gt;Ctrl-L&lt;/b&gt; ban I-clear ya ing screen.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>I-type ing &lt;b&gt;help&lt;/b&gt; ban akit la reng ati at magsilbing commands.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -562,7 +579,7 @@
         <source>(no label)</source>
         <translation>(alang label)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -572,6 +589,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Ibayad &amp;kang:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Mensayi:</translation>
     </message>
     <message>
         <source>Paste address from clipboard</source>
@@ -685,7 +706,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -709,7 +732,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -737,7 +762,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -799,7 +826,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -986,10 +1015,6 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
     <message>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
         <translation>Eya maliari ing alaga keng -paytxfee=&lt;amount&gt;: '%s'</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>E kilalang -socks proxy version requested: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

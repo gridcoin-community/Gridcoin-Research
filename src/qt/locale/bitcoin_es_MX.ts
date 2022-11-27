@@ -1,10 +1,6 @@
-<TS language="es_MX" version="2.1">
+<TS language="es_MX" version="2.0">
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Haga doble clic para editar el domicilio o la etiqueta</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Crear una dirección nueva</translation>
@@ -28,10 +24,6 @@
     <message>
         <source>&amp;Delete</source>
         <translation>&amp;Borrar</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Archivo separado por comas (*.CSV)</translation>
     </message>
     </context>
 <context>
@@ -80,14 +72,6 @@
         <translation>Desbloquear cartera.</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Esta operación necesita la contraseña de su cartera para desencriptar su cartera.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Desencriptar la cartera</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Cambiar contraseña</translation>
     </message>
@@ -123,16 +107,12 @@
         <source>The passphrase entered for the wallet decryption was incorrect.</source>
         <translation>La contraseña ingresada para la des encriptación de la cartera es incorrecto</translation>
     </message>
-    <message>
-        <source>Wallet decryption failed</source>
-        <translation>La desencriptación de la cartera fallo</translation>
-    </message>
     </context>
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Firmar &amp;mensaje</translation>
+        <source>Wallet</source>
+        <translation>Cartera</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -141,6 +121,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Mostrar la vista previa general de la cartera</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Enviar</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Recibir</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -159,6 +147,10 @@
         <translation>&amp;Opciones</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Mostrar / Ocultar</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Encriptar cartera</translation>
     </message>
@@ -171,32 +163,20 @@
         <translation>Cambiar la contraseña usada para la encriptación de la cartera</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Depurar ventana</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Abrir consola de depuración y diagnostico</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Firmar &amp;mensaje</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Verificar mensaje...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Cartera</translation>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Depurar ventana</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Enviar</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Recibir</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Mostrar / Ocultar</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Abrir consola de depuración y diagnostico</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -211,32 +191,50 @@
         <translation>&amp;Ayuda</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Actualizado al dia </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -268,10 +266,6 @@
     <message>
         <source>Fee:</source>
         <translation>Cuota:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioridad:</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -326,10 +320,6 @@
         <translation>copiar bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>copiar prioridad</translation>
-    </message>
-    <message>
         <source>Copy change</source>
         <translation>copiar cambio</translation>
     </message>
@@ -382,6 +372,30 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -399,27 +413,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -435,10 +467,6 @@
     <message>
         <source>Amount:</source>
         <translation>Monto:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioridad:</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -481,10 +509,6 @@
         <translation>copiar cambio</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>copiar prioridad</translation>
-    </message>
-    <message>
         <source>Confirm send coins</source>
         <translation>Confirme para mandar monedas</translation>
     </message>
@@ -496,7 +520,7 @@
         <source>(no label)</source>
         <translation>(sin etiqueta)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -506,6 +530,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Pagar &amp;a:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Mensaje:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -531,7 +559,10 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -551,7 +582,10 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -563,7 +597,10 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Amount</source>
@@ -601,7 +638,10 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -705,10 +745,6 @@
     <message>
         <source>Edit label</source>
         <translation>Editar capa </translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Arhchivo separado por comas (*.CSV)</translation>
     </message>
     <message>
         <source>Confirmed</source>

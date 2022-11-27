@@ -18,7 +18,9 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
+#include "wallet/diagnose.h"
 
+#include <regex>
 #include <univalue.h>
 #include <variant>
 
@@ -458,7 +460,7 @@ UniValue signmessage(const UniValue& params, bool fHelp)
 
     CBitcoinAddress addr(strAddress);
     if (!addr.IsValid())
-        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
@@ -495,7 +497,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
 
     CBitcoinAddress addr(strAddress);
     if (!addr.IsValid())
-        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
@@ -505,7 +507,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
     vector<unsigned char> vchSig = DecodeBase64(strSign.c_str(), &fInvalid);
 
     if (fInvalid)
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+        throw JSONRPCError(RPC_TYPE_ERROR, "Malformed base64 encoding");
 
     CDataStream ss(SER_GETHASH, 0);
     ss << strMessageMagic;
@@ -2244,6 +2246,88 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+/**
+ * Run the walled diagnose checks
+ */
+UniValue walletdiagnose(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "walletdiagnose\n"
+                "\n"
+                "Runs several tests to diagnose issues in the wallet.");
+
+    std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
+    //Construct the tests needed.
+    //If need to add a test m just add it to the below set.
+    //Check Diagnose.h for the base class to create tests.
+    testSet.insert(make_pair(std::string("check_connection_count"),
+                             std::make_unique<DiagnoseLib::CheckConnectionCount>()));
+    testSet.insert(make_pair(std::string("check_outbound_connection_count"),
+                             std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>()));
+    testSet.insert(make_pair(std::string("verify_wallet_is_synced"),
+                             std::make_unique<DiagnoseLib::VerifyWalletIsSynced>()));
+    testSet.insert(make_pair(std::string("check_client_version"),
+                             std::make_unique<DiagnoseLib::CheckClientVersion>()));
+    testSet.insert(make_pair(std::string("verify_boinc_path"),
+                             std::make_unique<DiagnoseLib::VerifyBoincPath>()));
+    testSet.insert(make_pair(std::string("verify_cpid_has_rac"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>()));
+    testSet.insert(make_pair(std::string("verify_cpid_is_Active"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDIsActive>()));
+    testSet.insert(make_pair(std::string("verify_cpid_valid"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDValid>()));
+    testSet.insert(make_pair(std::string("verify_clock"),
+                             std::make_unique<DiagnoseLib::VerifyClock>()));
+    testSet.insert(make_pair(std::string("verify_tcp_port"),
+                             std::make_unique<DiagnoseLib::VerifyTCPPort>()));
+    testSet.insert(make_pair(std::string("check_difficulty"),
+                             std::make_unique<DiagnoseLib::CheckDifficulty>()));
+    testSet.insert(make_pair(std::string("check_etts"),
+                             std::make_unique<DiagnoseLib::CheckETTS>()));
+
+    UniValue obj(UniValue::VOBJ);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    for (auto& i : testSet) {
+        auto& diagnosetest = i.second;
+        auto diagnoselabel = i.first;
+        UniValue diff(UniValue::VOBJ);
+        diagnosetest->runCheck();
+        std::string tooltip = diagnosetest->getResultsTip();
+        std::string result = diagnosetest->getResultsString();
+        int k = 1;
+        for (auto& j : diagnosetest->getTipArgs()) {
+            std::stringstream ss;
+            ss.imbue(std::locale::classic());
+            ss << "%" << k++;
+            tooltip = std::regex_replace(tooltip, std::regex(ss.str()), j);
+        }
+        k = 1;
+        for (auto& j : diagnosetest->getStringArgs()) {
+            std::stringstream ss;
+            ss.imbue(std::locale::classic());
+            ss << "%" << k++;
+            result = std::regex_replace(result, std::regex(ss.str()), j);
+        }
+
+
+        if (diagnosetest->getResults() == DiagnoseLib::Diagnose::NONE) {
+            diff.pushKV("result", "NA");
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::FAIL) {
+            diff.pushKV("result", "FAIL");
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::WARNING) {
+            diff.pushKV("result", "WARNING");
+        } else {
+            diff.pushKV("result", "PASS");
+        }
+        diff.pushKV("desc", result);
+        diff.pushKV("info", tooltip);
+        obj.pushKV(diagnoselabel, diff);
+    }
+
+    return obj;
+}
 
 UniValue walletlock(const UniValue& params, bool fHelp)
 {

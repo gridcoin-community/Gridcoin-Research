@@ -191,6 +191,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "beaconreport"           , 0 },
     { "createmrcrequest"       , 0 },
     { "createmrcrequest"       , 1 },
+    { "getmrcinfo"             , 0 },
+    { "getmrcinfo"             , 2 },
+    { "getmrcinfo"             , 3 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 

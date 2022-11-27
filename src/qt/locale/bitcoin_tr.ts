@@ -1,4 +1,4 @@
-<TS language="tr" version="2.1">
+<TS language="tr" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -22,10 +22,6 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
 </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Adresi ya da etiketi düzenlemek için çift tıklayınız.</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Yeni bir adres oluştur</translation>
@@ -85,10 +81,6 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Değiştir</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Virgülle ayrılmış dosya (*.csv)</translation>
     </message>
     <message>
         <source>Export Address Book Data</source>
@@ -161,14 +153,6 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
         <translation>Cüzdan kilidini kaldır</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Bu eylem, cüzdanı açık hale getirmek için cüzdan parolanıza ihtiyaç duyuyor.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Cüzdanın şifrelemesini aç</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Parola değiştir</translation>
     </message>
@@ -189,12 +173,12 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
         <translation>Cüzdanınızı şifrelemek istediğinizden emin misiniz?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin, şifreleme işlemini tamamlamak için şimdi kapatılacak. Cüzdanınızı şifrelemenin; coinlerinizin, bilgisayarınızı etkileyen zararlı yazılımlar tarafından çalınmasını bütünüyle engelleyemeyebileceğini unutmayınız.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Cüzdan şifrelendi</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin, şifreleme işlemini tamamlamak için şimdi kapatılacak. Cüzdanınızı şifrelemenin; coinlerinizin, bilgisayarınızı etkileyen zararlı yazılımlar tarafından çalınmasını bütünüyle engelleyemeyebileceğini unutmayınız.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -221,10 +205,6 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
         <translation>Cüzdan şifresinin açılması için girilen parola yanlıştı.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Cüzdan şifresinin açılması başarısız oldu</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Cüzdan parolası başarılı bir şekilde değiştirildi.</translation>
     </message>
@@ -236,8 +216,12 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>&amp;İleti imzala...</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Önemli bir hata oluştu. Gridcoin artık güvenli bir şekilde devam edemez ve şimdi kapatılacak.</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Cüzdan</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -248,92 +232,44 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
         <translation>Cüzdana genel bakışı göster</translation>
     </message>
     <message>
-        <source>Browse transaction history</source>
-        <translation>İşlem geçmişine gözat</translation>
-    </message>
-    <message>
-        <source>E&amp;xit</source>
-        <translation>Ç&amp;ık</translation>
-    </message>
-    <message>
-        <source>Quit application</source>
-        <translation>Uygulamadan çık</translation>
-    </message>
-    <message>
-        <source>&amp;Options...</source>
-        <translation>&amp;Seçenekler...</translation>
-    </message>
-    <message>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>Cüzdanı &amp;Şifrele...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation>Parolayı &amp;Değiştir...</translation>
-    </message>
-    <message>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Cüzdan şifrelemesi için kullanılan parolayı değiştir</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Hata ayıklama penceresi</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Hata ayıklama ve teşhis penceresini aç</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>İletiyi &amp;kontrol et...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Cüzdan</translation>
-    </message>
-    <message>
         <source>&amp;Send</source>
         <translation>&amp;Gönder</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Al</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Göster / Gizle</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Dosya</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Ayarlar</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Yardım</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>%n blokluk işlem geçmişi işlendi.</numerusform><numerusform>%n blokluk işlem geçmişi işlendi.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Güncel</translation>
     </message>
     <message>
         <source>Send coins to a Gridcoin address</source>
         <translation>Bir Gridcoin adresine coin gönder</translation>
     </message>
     <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Al</translation>
+    </message>
+    <message>
         <source>Show the list of addresses for receiving payments</source>
         <translation>Ödeme almak için kullanılan adres listesini göster</translation>
     </message>
     <message>
+        <source>&amp;History</source>
+        <translation>&amp;Geçmiş</translation>
+    </message>
+    <message>
+        <source>Browse transaction history</source>
+        <translation>İşlem geçmişine gözat</translation>
+    </message>
+    <message>
+        <source>&amp;Favorites</source>
+        <translation>&amp;Favoriler</translation>
+    </message>
+    <message>
         <source>Edit the list of stored addresses and labels</source>
         <translation>Kayıtlı adresler ve etiketler listesini düzenle</translation>
+    </message>
+    <message>
+        <source>&amp;Voting</source>
+        <translation>&amp;Oylama</translation>
+    </message>
+    <message>
+        <source>Voting</source>
+        <translation>Oylama</translation>
     </message>
     <message>
         <source>&amp;Block Explorer</source>
@@ -364,12 +300,318 @@ Bu proje OpenSSL Project tarafından yazılmış OpenSSL Toolkit'i (https://www.
         <translation>Gridcoin BOINC ile yapılan hesaplamaları ödüllendirir</translation>
     </message>
     <message>
+        <source>E&amp;xit</source>
+        <translation>Ç&amp;ık</translation>
+    </message>
+    <message>
+        <source>Quit application</source>
+        <translation>Uygulamadan çık</translation>
+    </message>
+    <message>
         <source>&amp;About Gridcoin</source>
         <translation>Gridcoin &amp;Hakkında</translation>
     </message>
     <message>
         <source>Show information about Gridcoin</source>
         <translation>Gridcoin hakkındaki bilgiyi göster</translation>
+    </message>
+    <message>
+        <source>&amp;Diagnostics</source>
+        <translation>&amp;Tanılayıcı</translation>
+    </message>
+    <message>
+        <source>Diagnostics</source>
+        <translation>Tanılayıcı</translation>
+    </message>
+    <message>
+        <source>&amp;Options...</source>
+        <translation>&amp;Seçenekler...</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Gridcoin yapılandırma seçeneklerini değiştir</translation>
+    </message>
+    <message>
+        <source>Open config &amp;file...</source>
+        <translation>Konfig dosyasını &amp;aç...</translation>
+    </message>
+    <message>
+        <source>Open the config file in your standard editor</source>
+        <translation>Standart dosya editöründe konfig dosyasını aç</translation>
+    </message>
+    <message>
+        <source>&amp;Researcher Wizard...</source>
+        <translation>&amp;Araştırmacı Sihirbazı...</translation>
+    </message>
+    <message>
+        <source>Open BOINC and beacon settings for Gridcoin</source>
+        <translation>Gridcoin için BOINC ve beacon ayarlarını aç</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Göster / Gizle</translation>
+    </message>
+    <message>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>Cüzdanı &amp;Şifrele...</translation>
+    </message>
+    <message>
+        <source>&amp;Backup Wallet/Config...</source>
+        <translation>Cüzdanı/Konfigi &amp;Yedekle...</translation>
+    </message>
+    <message>
+        <source>Backup wallet/config to another location</source>
+        <translation>Cüzdanı/Konfigi başka bir yere yedekle</translation>
+    </message>
+    <message>
+        <source>&amp;Change Passphrase...</source>
+        <translation>Parolayı &amp;Değiştir...</translation>
+    </message>
+    <message>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Cüzdan şifrelemesi için kullanılan parolayı değiştir</translation>
+    </message>
+    <message>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>Cüzdanı &amp;Kilitle...</translation>
+    </message>
+    <message>
+        <source>Unlock wallet</source>
+        <translation>Cüzdanın kilidini aç</translation>
+    </message>
+    <message>
+        <source>&amp;Lock Wallet</source>
+        <translation>Cüzdanı &amp;Kilitle</translation>
+    </message>
+    <message>
+        <source>Lock wallet</source>
+        <translation>Cüzdanı Kilitle</translation>
+    </message>
+    <message>
+        <source>Sign &amp;message...</source>
+        <translation>&amp;İleti imzala...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>İletiyi &amp;kontrol et...</translation>
+    </message>
+    <message>
+        <source>&amp;Export...</source>
+        <translation>&amp;Dışa aktar...</translation>
+    </message>
+    <message>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Mevcut sekmedeki veriyi bir dosyaya aktar</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Hata ayıklama penceresi</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Hata ayıklama ve teşhis penceresini aç</translation>
+    </message>
+    <message>
+        <source>&amp;Snapshot Download</source>
+        <translation>&amp;Snapshot İndir</translation>
+    </message>
+    <message>
+        <source>Download and apply latest snapshot</source>
+        <translation>En yeni snapshotu indir ve uygula</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Dosya</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Ayarlar</translation>
+    </message>
+    <message>
+        <source>&amp;Community</source>
+        <translation>&amp;Topluluk</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Yardım</translation>
+    </message>
+    <message>
+        <source>Not staking: Miner is not initialized.</source>
+        <translation>Stakelenmiyor: Madenci başlatılmadı.</translation>
+    </message>
+    <message>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin istemcisi</translation>
+    </message>
+    <message>
+        <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
+        <translation>Gridcoin ağına aktif bağlantı yok. Eğer bu durum bir kaç dakikadan fazla sürerse lütfen konfigürasyonunuzu ve ağ bağlantınızı kontrol edin.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation>
+            <numerusform>Gridcoin ağına %n aktif bağlantı</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Güncel</translation>
+    </message>
+    <message>
+        <source>Catching up...</source>
+        <translation>Aralık kapatılıyor...</translation>
+    </message>
+    <message>
+        <source>Last received block was generated %1.</source>
+        <translation>Son alınan blok, üretildi %1.</translation>
+    </message>
+    <message>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>Bu işlem, büyüklük sınırının üzerindedir. İşleminizi gerçekleştirecek ağ noktalarına gidecek ve ağı desteklemeye yardımcı olacak %1 ücretle coin gönderebilirsiniz. Ücreti ödemek istiyor musunuz?</translation>
+    </message>
+    <message>
+        <source>Confirm transaction fee</source>
+        <translation>İşlem ücretini onayla</translation>
+    </message>
+    <message>
+        <source>Sent transaction</source>
+        <translation>Giden İşlem</translation>
+    </message>
+    <message>
+        <source>Incoming transaction</source>
+        <translation>Gelen işlem</translation>
+    </message>
+    <message>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4</source>
+        <translation>Tarih: %1
+Miktar: %2
+Tür: %3
+Adres: %4</translation>
+    </message>
+    <message>
+        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
+        <translation>En yeni snapshotu indirip kurmak istiyor musunuz? (Evet derseniz cüzdanınız kendini kapatıp snapshotu uygulayacaktır.)</translation>
+    </message>
+    <message>
+        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
+        <translation>Uyarı: İkinci aşamadan sonra iptal etmek blockchain dosyalarının sıfırlanmasına ya da bozulmasına sebep olur.</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>URI işleme</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI ayrıştırılamadı! Bu, geçersiz bir Gridcoin adresi veya hatalı URI parametreleri nedeniyle olabilir.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation>Cüzdanınız &lt;b&gt;şifreli&lt;/b&gt; ve şuanda %1 </translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation>&lt;b&gt;stakelemek için açık&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation>&lt;b&gt;tamamen açık&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilitlidir&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Wallet</source>
+        <translation>Cüzdanı Yedekle</translation>
+    </message>
+    <message>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Cüzdan Verisi (*.dat)</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Yedekleme Başarısız Oldu</translation>
+    </message>
+    <message>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>Cüzdan verisi, yeni bir konuma kaydedilmeye çalışılırken bir hata oluştu.</translation>
+    </message>
+    <message>
+        <source>Backup Config</source>
+        <translation>Konfigi Yedekle</translation>
+    </message>
+    <message>
+        <source>Wallet Config (*.conf)</source>
+        <translation>Cüzdan Konfigi (*.conf)</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>mevcut değil</translation>
+    </message>
+    <message>
+        <source>year</source>
+        <translation>Yılda</translation>
+    </message>
+    <message>
+        <source>month</source>
+        <translation>Ayda</translation>
+    </message>
+    <message>
+        <source>day</source>
+        <translation>Günde</translation>
+    </message>
+    <message>
+        <source>hour</source>
+        <translation>Saatte</translation>
+    </message>
+    <message>
+        <source>%1 times per %2</source>
+        <translation>%2 %1 kere</translation>
+    </message>
+    <message>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
+        <translation>Stakeleniyor.&lt;br&gt;Ağırlığınız %1&lt;br&gt;Ağ ağırlığı %2&lt;br&gt;&lt;b&gt;Tahmini&lt;/b&gt; stakeleme frekansı %3.</translation>
+    </message>
+    <message>
+        <source>Unable to stake: %1</source>
+        <translation>Stakelenemiyor: %1</translation>
+    </message>
+    <message>
+        <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
+        <translation>Stakelenmiyor: %1, &lt;b&gt;Tahmini&lt;/b&gt; stakeleme frekansı %2.</translation>
     </message>
     <message>
         <source>none</source>
@@ -409,212 +651,6 @@ Yayımlamayan scraperlar: %5.</translation>
         <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
         <translation>Scraper: Uzlaşım başarısız. Birkaç dakika içerisinde tekrar denencek.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation><numerusform>%n saniye önce</numerusform><numerusform>%n saniye önce</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation><numerusform>%n dakika önce</numerusform><numerusform>%n dakika önce</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation><numerusform>%n saat önce</numerusform><numerusform>%n saat önce</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation><numerusform>%n gün önce</numerusform><numerusform>%n gün önce</numerusform></translation>
-    </message>
-    <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4</source>
-        <translation>Tarih: %1
-Miktar: %2
-Tür: %3
-Adres: %4</translation>
-    </message>
-    <message>
-        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
-        <translation>En yeni snapshotu indirip kurmak istiyor musunuz? (Evet derseniz cüzdanınız kendini kapatıp snapshotu uygulayacaktır.)</translation>
-    </message>
-    <message>
-        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Uyarı: İkinci aşamadan sonra iptal etmek blockchain dosyalarının sıfırlanmasına ya da bozulmasına sebep olur.</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
-        <translation>Cüzdanınız &lt;b&gt;şifreli&lt;/b&gt; ve şuanda %1 </translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
-        <translation>&lt;b&gt;stakelemek için açık&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
-        <translation>&lt;b&gt;tamamen açık&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Backup Config</source>
-        <translation>Konfigi Yedekle</translation>
-    </message>
-    <message>
-        <source>Wallet Config (*.conf)</source>
-        <translation>Cüzdan Konfigi (*.conf)</translation>
-    </message>
-    <message>
-        <source>&amp;Voting</source>
-        <translation>&amp;Oylama</translation>
-    </message>
-    <message>
-        <source>Voting</source>
-        <translation>Oylama</translation>
-    </message>
-    <message>
-        <source>&amp;Diagnostics</source>
-        <translation>&amp;Tanılayıcı</translation>
-    </message>
-    <message>
-        <source>Diagnostics</source>
-        <translation>Tanılayıcı</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Gridcoin yapılandırma seçeneklerini değiştir</translation>
-    </message>
-    <message>
-        <source>Open config &amp;file...</source>
-        <translation>Konfig dosyasını &amp;aç...</translation>
-    </message>
-    <message>
-        <source>Open the config file in your standard editor</source>
-        <translation>Standart dosya editöründe konfig dosyasını aç</translation>
-    </message>
-    <message>
-        <source>&amp;Researcher Wizard...</source>
-        <translation>&amp;Araştırmacı Sihirbazı...</translation>
-    </message>
-    <message>
-        <source>Open BOINC and beacon settings for Gridcoin</source>
-        <translation>Gridcoin için BOINC ve beacon ayarlarını aç</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Cüzdanı şifrele veya cüzdanın şifresini aç</translation>
-    </message>
-    <message>
-        <source>&amp;Backup Wallet/Config...</source>
-        <translation>Cüzdanı/Konfigi &amp;Yedekle...</translation>
-    </message>
-    <message>
-        <source>Backup wallet/config to another location</source>
-        <translation>Cüzdanı/Konfigi başka bir yere yedekle</translation>
-    </message>
-    <message>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>Cüzdanı &amp;Kilitle...</translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>Cüzdanın kilidini aç</translation>
-    </message>
-    <message>
-        <source>&amp;Lock Wallet</source>
-        <translation>Cüzdanı &amp;Kilitle</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>Cüzdanı Kilitle</translation>
-    </message>
-    <message>
-        <source>&amp;Export...</source>
-        <translation>&amp;Dışa aktar...</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Mevcut sekmedeki veriyi bir dosyaya aktar</translation>
-    </message>
-    <message>
-        <source>&amp;Snapshot Download</source>
-        <translation>&amp;Snapshot İndir</translation>
-    </message>
-    <message>
-        <source>Download and apply latest snapshot</source>
-        <translation>En yeni snapshotu indir ve uygula</translation>
-    </message>
-    <message>
-        <source>&amp;Community</source>
-        <translation>&amp;Topluluk</translation>
-    </message>
-    <message>
-        <source>Not staking: Miner is not initialized.</source>
-        <translation>Stakelenmiyor: Madenci başlatılmadı.</translation>
-    </message>
-    <message>
-        <source>Gridcoin client</source>
-        <translation>Gridcoin istemcisi</translation>
-    </message>
-    <message>
-        <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
-        <translation>Gridcoin ağına aktif bağlantı yok. Eğer bu durum bir kaç dakikadan fazla sürerse lütfen konfigürasyonunuzu ve ağ bağlantınızı kontrol edin.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation><numerusform>Gridcoin ağına %n aktif bağlantı</numerusform><numerusform>Gridcoin ağına %n aktif bağlantı</numerusform></translation>
-    </message>
-    <message>
-        <source>Catching up...</source>
-        <translation>Aralık kapatılıyor...</translation>
-    </message>
-    <message>
-        <source>Last received block was generated %1.</source>
-        <translation>Son alınan blok, üretildi %1.</translation>
-    </message>
-    <message>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Bu işlem, büyüklük sınırının üzerindedir. İşleminizi gerçekleştirecek ağ noktalarına gidecek ve ağı desteklemeye yardımcı olacak %1 ücretle coin gönderebilirsiniz. Ücreti ödemek istiyor musunuz?</translation>
-    </message>
-    <message>
-        <source>Confirm transaction fee</source>
-        <translation>İşlem ücretini onayla</translation>
-    </message>
-    <message>
-        <source>not available</source>
-        <translation>mevcut değil</translation>
-    </message>
-    <message>
-        <source>year</source>
-        <translation>Yılda</translation>
-    </message>
-    <message>
-        <source>month</source>
-        <translation>Ayda</translation>
-    </message>
-    <message>
-        <source>day</source>
-        <translation>Günde</translation>
-    </message>
-    <message>
-        <source>hour</source>
-        <translation>Saatte</translation>
-    </message>
-    <message>
-        <source>%1 times per %2</source>
-        <translation>%2 %1 kere</translation>
-    </message>
-    <message>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
-        <translation>Stakeleniyor.&lt;br&gt;Ağırlığınız %1&lt;br&gt;Ağ ağırlığı %2&lt;br&gt;&lt;b&gt;Tahmini&lt;/b&gt; stakeleme frekansı %3.</translation>
-    </message>
-    <message>
-        <source>Unable to stake: %1</source>
-        <translation>Stakelenemiyor: %1</translation>
-    </message>
-    <message>
-        <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
-        <translation>Stakelenmiyor: %1, &lt;b&gt;Tahmini&lt;/b&gt; stakeleme frekansı %2.</translation>
-    </message>
     <message>
         <source>CPID: %1
 Beacon age: %2
@@ -626,46 +662,10 @@ Bitiş süresi: %3
 %4</translation>
     </message>
     <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI ayrıştırılamadı! Bu, geçersiz bir Gridcoin adresi veya hatalı URI parametreleri nedeniyle olabilir.</translation>
+        <source>New Poll</source>
+        <translation>Yeni Anket</translation>
     </message>
-    <message>
-        <source>URI handling</source>
-        <translation>URI işleme</translation>
-    </message>
-    <message>
-        <source>Backup Wallet</source>
-        <translation>Cüzdanı Yedekle</translation>
-    </message>
-    <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Cüzdan Verisi (*.dat)</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Yedekleme Başarısız Oldu</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Cüzdan verisi, yeni bir konuma kaydedilmeye çalışılırken bir hata oluştu.</translation>
-    </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation>Giden İşlem</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation>Gelen işlem</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Cüzdan &lt;b&gt;şifrelenmiştir&lt;/b&gt; ve şu anda &lt;b&gt;kilitlidir&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>Önemli bir hata oluştu. Gridcoin artık güvenli bir şekilde devam edemez ve şimdi kapatılacak.</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>ClientModel</name>
     <message>
@@ -694,10 +694,6 @@ Bitiş süresi: %3
     <message>
         <source>Coin Control</source>
         <translation>Coin Kontrolü</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Öncelik:</translation>
     </message>
     <message>
         <source>Low Output:</source>
@@ -744,10 +740,6 @@ Bitiş süresi: %3
         <translation>Adres</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Öncelik</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Adresi kopyala</translation>
     </message>
@@ -780,10 +772,6 @@ Bitiş süresi: %3
         <translation>Baytları kopyala</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Önceliği kopyala</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Düşük çıktıyı kopyala</translation>
     </message>
@@ -792,32 +780,8 @@ Bitiş süresi: %3
         <translation>Para üstünü kopyala</translation>
     </message>
     <message>
-        <source>highest</source>
-        <translation>en yüksek</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>yüksek</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>orta-yüksek</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>orta</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>düşük-orta</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>düşük</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>en düşük</translation>
+        <source>DUST</source>
+        <translation>BOZUKLUK</translation>
     </message>
     <message>
         <source>yes</source>
@@ -826,10 +790,6 @@ Bitiş süresi: %3
     <message>
         <source>no</source>
         <translation>hayır</translation>
-    </message>
-    <message>
-        <source>DUST</source>
-        <translation>BOZUKLUK</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -842,18 +802,6 @@ Bitiş süresi: %3
  Bu, kb başına en az %1 ücret gerektiği anlamına gelir.
 
  Girdi başına +/- 1 Byte değişkenlik gösterebilir.</translation>
-    </message>
-    <message>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than "medium".
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Yüksek öncelikli işlemler, daha yüksek ihtimalle bir bloğa düşer.
-
-Öncelik "orta" seviyeden düşükse, bu etiket kırmızıya döner.
-
- Bu, kb başına en az %1 ücret gerektiği anlamına gelir.</translation>
     </message>
     <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
@@ -950,45 +898,7 @@ This label turns red, if the priority is smaller than "medium".
         <source>Failed</source>
         <translation>Başarısız</translation>
     </message>
-    <message>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation>Başarısız: ETTS sonsuz. Stakelemek için para yok.</translation>
-    </message>
-    <message>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation>Uyarı: 45 gün &lt; ETTS = %1 &lt;= 90 gün</translation>
-    </message>
-    <message>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
-        <translation>Başarılı: ETTS = %1 &lt;= 45 gün</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation>Uyarı: Miktar = %1 (Önerilen = 3+)</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Başarılı: Miktar = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Başarısız: Miktar = %1</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation>Uyarı: Miktar = %1 (Önerilen = 8+)</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Uyarı: Yeni istemci sürümü mevcut:
-%1</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Uyarı: NTP sunucusuna bağlanılamıyor</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -1045,6 +955,13 @@ This label turns red, if the priority is smaller than "medium".
     </message>
 </context>
 <context>
+    <name>FavoritesPage</name>
+    <message>
+        <source>Favorites</source>
+        <translation>Favoriler</translation>
+    </message>
+    </context>
+<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -1059,6 +976,27 @@ This label turns red, if the priority is smaller than "medium".
         <translation>komut satırı seçenekleri</translation>
     </message>
     </context>
+<context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -1098,14 +1036,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Yönelticide Gridcoin istemci portunu otomatik olarak aç. Bu, sadece routerınız UPnP'i desteklediğinde ve etkin olduğunda çalışır.</translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Gridcoin ağına bir SOCKS vekil sunucusu yoluyla bağlan (örn. Tor yoluyla baılanıldığında)</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>SOCKS vekil sunucusu yoluyla &amp;bağlan:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>Vekil sunucunun IP adresi (örn. 127.0.0.1)</translation>
     </message>
@@ -1114,20 +1044,16 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Vekil sunucunun portu (mesela 9050)</translation>
     </message>
     <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;sürümü:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Vekil sunucunun SOCKS sürümü (mesela 5)</translation>
-    </message>
-    <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
         <translation>Pencere kapatıldığında uygulamadan çıkmak yerine uygulamayı küçültür. Bu seçenek etkinleştirildiğinde, uygulama sadece menüden çıkış seçildiğinde kapanacaktır.</translation>
     </message>
     <message>
         <source>Disable Transaction Notifications</source>
         <translation>İşlem Bildirimlerini Kapat</translation>
+    </message>
+    <message>
+        <source>Disable Poll Notifications</source>
+        <translation>Anket Bildirimlerini Kapat</translation>
     </message>
     <message>
         <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
@@ -1218,12 +1144,12 @@ This label turns red, if the priority is smaller than "medium".
         <translation>varsayılan</translation>
     </message>
     <message>
-        <source>Light</source>
-        <translation>Aydınlık</translation>
-    </message>
-    <message>
         <source>Dark</source>
         <translation>Karanlık</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>Aydınlık</translation>
     </message>
     <message>
         <source>Warning</source>
@@ -1302,7 +1228,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Staking</source>
-        <translation>Stakeleniyor</translation>
+        <translation>Ağ</translation>
     </message>
     <message>
         <source>Blocks:</source>
@@ -1323,6 +1249,14 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Status:</source>
         <translation>Durum:</translation>
+    </message>
+    <message>
+        <source>Recent Transactions</source>
+        <translation>Son İşlemler</translation>
+    </message>
+    <message>
+        <source>Current Polls</source>
+        <translation>Aktif Anketler</translation>
     </message>
     </context>
 <context>
@@ -1364,27 +1298,39 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>%1 d</source>
@@ -1589,12 +1535,48 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Konsolu temizle</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Mevcut komutların listesi için &lt;b&gt;help&lt;/b&gt; yazınız.</translation>
+        <source>Gridcoin - Debug Console</source>
+        <translation>Gridcoin - Debug Konsolu</translation>
     </message>
     <message>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation>Gridcoin RPC konsoluna hoş geldiniz!</translation>
+        <source>Boost version</source>
+        <translation>Boost sürümü</translation>
+    </message>
+    <message>
+        <source>Network:</source>
+        <translation>Ağ:</translation>
+    </message>
+    <message>
+        <source>On testnet</source>
+        <translation>Testnet üzerinde</translation>
+    </message>
+    <message>
+        <source>Estimated total blocks</source>
+        <translation>Tahmini toplam blok sayısı</translation>
+    </message>
+    <message>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Gridcoin hata ayıklama günlük kütüğü dosyasını, mevcut veri klasöründen aç. Bu işlem, büyük günlük kütüğü dosyaları için birkaç saniye sürebilir.</translation>
+    </message>
+    <message>
+        <source>Command-line options</source>
+        <translation>Komut satırı seçenekleri</translation>
+    </message>
+    <message>
+        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Mümkün Gridcoin komut istemi seçeneklerini görmek için yardım mesajını görüntüle.</translation>
+    </message>
+    <message>
+        <source>&amp;Show</source>
+        <translation>&amp;Göster</translation>
+    </message>
+    <message>
+        <source>OpenSSL version</source>
+        <translation>OpenSSL sürümü</translation>
+    </message>
+    <message>
+        <source>Client name</source>
+        <translation>İstemci ismi</translation>
     </message>
     <message>
         <source>&amp;Disconnect</source>
@@ -1633,8 +1615,16 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Hayır</translation>
     </message>
     <message>
+        <source>Welcome to the Gridcoin RPC console! </source>
+        <translation>Gridcoin RPC konsoluna hoş geldiniz!</translation>
+    </message>
+    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Tarihçede gezinmek için aşağı ve yukarı ok tuşlarını kullanınız, &lt;b&gt;Ctrl-L&lt;/b&gt; ile de ekranı temizleyebilirsiniz.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Mevcut komutların listesi için &lt;b&gt;help&lt;/b&gt; yazınız.</translation>
     </message>
     <message>
         <source>%1 m</source>
@@ -1671,54 +1661,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Unknown</source>
         <translation>Bilinmiyor</translation>
-    </message>
-    <message>
-        <source>Gridcoin - Debug Console</source>
-        <translation>Gridcoin - Debug Konsolu</translation>
-    </message>
-    <message>
-        <source>Boost version</source>
-        <translation>Boost sürümü</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Derleme tarihi</translation>
-    </message>
-    <message>
-        <source>Network:</source>
-        <translation>Ağ:</translation>
-    </message>
-    <message>
-        <source>On testnet</source>
-        <translation>Testnet üzerinde</translation>
-    </message>
-    <message>
-        <source>Estimated total blocks</source>
-        <translation>Tahmini toplam blok sayısı</translation>
-    </message>
-    <message>
-        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Gridcoin hata ayıklama günlük kütüğü dosyasını, mevcut veri klasöründen aç. Bu işlem, büyük günlük kütüğü dosyaları için birkaç saniye sürebilir.</translation>
-    </message>
-    <message>
-        <source>Command-line options</source>
-        <translation>Komut satırı seçenekleri</translation>
-    </message>
-    <message>
-        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation>Mümkün Gridcoin komut istemi seçeneklerini görmek için yardım mesajını görüntüle.</translation>
-    </message>
-    <message>
-        <source>&amp;Show</source>
-        <translation>&amp;Göster</translation>
-    </message>
-    <message>
-        <source>OpenSSL version</source>
-        <translation>OpenSSL sürümü</translation>
-    </message>
-    <message>
-        <source>Client name</source>
-        <translation>İstemci ismi</translation>
     </message>
 </context>
 <context>
@@ -2234,14 +2176,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Tutar:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Öncelik:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>orta</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Ücret:</translation>
     </message>
@@ -2322,10 +2256,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Para üstünü kopyala</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Önceliği kopyala</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; %2'ye (%3)</translation>
     </message>
@@ -2370,6 +2300,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Hata: İşlem reddedildi. Bu durum, wallet.dat dosyasının bir kopyasını kullandıysanız ve coinler, kopyada harcanmış ve burada harcanmış olarak işaretlenmemesinden kaynaklanabilir. </translation>
     </message>
     <message>
+        <source>(no label)</source>
+        <translation>(etiket yok)</translation>
+    </message>
+    <message>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>UYARI: Geçersiz Gridcoin adresi</translation>
     </message>
@@ -2377,11 +2311,7 @@ This label turns red, if the priority is smaller than "medium".
         <source>WARNING: unknown change address</source>
         <translation>UYARI: Bilinmeyen adres değişikliği</translation>
     </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(etiket yok)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -2393,12 +2323,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>&amp;Şu adrese öde:</translation>
     </message>
     <message>
+        <source>Message:</source>
+        <translation>İleti:</translation>
+    </message>
+    <message>
         <source>&amp;Label:</source>
         <translation>&amp;Etiket:</translation>
     </message>
     <message>
         <source>Paste address from clipboard</source>
         <translation>Panodan adres yapıştır</translation>
+    </message>
+    <message>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation>Gridcoin alıcısına bir mesaj yaz</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -2544,11 +2482,17 @@ This label turns red, if the priority is smaller than "medium".
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>%1 değerine dek açık</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>Çakışma</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -2557,10 +2501,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1/Doğrulanmadı</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>Çakışma</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -2576,7 +2516,9 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -2612,7 +2554,9 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>%n blok sonra olgunlaşacak.</numerusform><numerusform>%n blok sonra olgunlaşacak.</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -2690,7 +2634,9 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -2705,24 +2651,24 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Doğrulanmamış</translation>
     </message>
     <message>
-        <source>Confirmed (%1 confirmations)</source>
-        <translation>Doğrulandı (%1 doğrulama)</translation>
+        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
+        <translation>Onaylanıyor (%1/%2 önerilen onay)</translation>
     </message>
     <message>
-        <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
-        <translation>Onaylanıyor (%2 de %1 Onay aldı)</translation>
+        <source>Confirmed (%1 confirmations)</source>
+        <translation>Doğrulandı (%1 doğrulama)</translation>
     </message>
     <message>
         <source>Conflicted</source>
         <translation>Uyuşmadı</translation>
     </message>
     <message>
-        <source>Generated but not accepted</source>
-        <translation>Oluşturuldu ama kabul edilmedi</translation>
+        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
+        <translation>Olgunlaşmamış (%1 onaya sahip, %2 onay sonra geçerli olacaktır)</translation>
     </message>
     <message>
-        <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
-        <translation>Olgunlaşmamış (%1 onaylar, %2 onay sonra geçerli olacaktır)</translation>
+        <source>Generated but not accepted</source>
+        <translation>Oluşturuldu ama kabul edilmedi</translation>
     </message>
     <message>
         <source>Received with</source>
@@ -2746,7 +2692,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Poll</source>
-        <translation>Oylama</translation>
+        <translation>Anket</translation>
     </message>
     <message>
         <source>Vote</source>
@@ -2758,7 +2704,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>(n/a)</source>
-        <translation>(mevcut değil)</translation>
+        <translation>(alakasız)</translation>
     </message>
     <message>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
@@ -2783,6 +2729,10 @@ This label turns red, if the priority is smaller than "medium".
 </context>
 <context>
     <name>TransactionView</name>
+    <message>
+        <source>Transaction History</source>
+        <translation>İşlem Geçmişi</translation>
+    </message>
     <message>
         <source>Today</source>
         <translation>Bugün</translation>
@@ -2858,10 +2808,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Export Transaction Data</source>
         <translation>İşlem Verisini Dışarı Aktar</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Virgülle ayrılmış değerler dosyası (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>
@@ -2944,10 +2890,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Get help for a command</source>
         <translation>Komutlar için yardım al</translation>
-    </message>
-    <message>
-        <source>Github version: </source>
-        <translation>Github sürümü: </translation>
     </message>
     <message>
         <source>KB/s</source>
@@ -3066,10 +3008,6 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
         <translation>wallet.dat bozuk, geri kazanım başarısız oldu</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Bilinmeyen bir -socks vekil sürümü talep edildi: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Geçersiz -proxy adresi: '%s'</translation>
     </message>
@@ -3104,10 +3042,6 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <source>Error loading wallet.dat</source>
         <translation>wallet.dat dosyasının yüklenmesinde hata oluştu</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Blok zinciri veri dosyası içeri aktarılıyor.</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>

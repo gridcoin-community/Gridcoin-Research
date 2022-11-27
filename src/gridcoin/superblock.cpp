@@ -352,7 +352,7 @@ public:
         , m_averages(ExtractXML(packed, "<AVERAGES>", "</AVERAGES>"))
         , m_zero_mags(0)
     {
-        if (!ParseInt(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
+        if (!ParseInt32(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
             error("%s: Failed to parse zero mag CPIDs.", __func__);
         }
     }

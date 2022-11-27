@@ -137,7 +137,7 @@ bool CAlert::RelayTo(CNode* pnode) const
             AppliesToMe() ||
             GetAdjustedTime() < nRelayUntil)
         {
-            pnode->PushMessage("alert", *this);
+            pnode->PushMessage(NetMsgType::ALERT, *this);
             return true;
         }
     }
@@ -258,6 +258,7 @@ bool CAlert::ProcessAlert(bool fThread)
         if(AppliesToMe())
         {
             uiInterface.NotifyAlertChanged(GetHash(), CT_NEW);
+        #if HAVE_SYSTEM
             std::string strCmd = gArgs.GetArg("-alertnotify", "");
             if (!strCmd.empty())
             {
@@ -282,6 +283,7 @@ bool CAlert::ProcessAlert(bool fThread)
                 else
                     runCommand(strCmd);
             }
+        #endif
         }
     }
 

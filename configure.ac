@@ -2,7 +2,7 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 5)
 define(_CLIENT_VERSION_MINOR, 4)
-define(_CLIENT_VERSION_REVISION, 0)
+define(_CLIENT_VERSION_REVISION, 1)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2022)
@@ -75,7 +75,7 @@ AC_PROG_OBJCXX
 ])
 
 dnl Libtool init checks.
-LT_INIT([pic-only])
+LT_INIT([pic-only win32-dll])
 
 dnl Check/return PATH for base programs.
 AC_PATH_TOOL(AR, ar)
@@ -767,6 +767,31 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([
     fi
   ]
 )
+
+have_any_system=no
+AC_MSG_CHECKING([for std::system])
+AC_LINK_IFELSE(
+    [ AC_LANG_PROGRAM(
+        [[ #include <cstdlib> ]],
+        [[ int nErr = std::system(""); ]]
+    )],
+    [ AC_MSG_RESULT(yes); have_any_system=yes],
+    [ AC_MSG_RESULT(no) ]
+)
+
+AC_MSG_CHECKING([for ::_wsystem])
+AC_LINK_IFELSE(
+    [ AC_LANG_PROGRAM(
+        [[ ]],
+        [[ int nErr = ::_wsystem(""); ]]
+    )],
+    [ AC_MSG_RESULT(yes); have_any_system=yes],
+    [ AC_MSG_RESULT(no) ]
+)
+
+if test "x$have_any_system" != "xno"; then
+  AC_DEFINE(HAVE_SYSTEM, 1, Define to 1 if std::system or ::wsystem is available.)
+fi
 
 dnl Our minimum supported glibc is 2.17, however support for thread_local
 dnl did not arrive in glibc until 2.18.

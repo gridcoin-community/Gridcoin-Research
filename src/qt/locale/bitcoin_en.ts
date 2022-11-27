@@ -25,14 +25,27 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
 </context>
 <context>
-    <name>AddressBookPage</name>
+    <name>AdditionalFieldsTableDataModel</name>
     <message>
-        <location filename="../forms/addressbookpage.ui" line="+75"/>
-        <source>Double-click to edit address or label</source>
-        <translation>Double-click to edit address or label</translation>
+        <location filename="../voting/additionalfieldstablemodel.cpp" line="+24"/>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+1"/>
+        <source>Value</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Required</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AddressBookPage</name>
+    <message>
+        <location filename="../forms/addressbookpage.ui" line="+127"/>
         <source>Create a new address</source>
         <translation>Create a new address</translation>
     </message>
@@ -92,12 +105,17 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</translation>
     </message>
     <message>
-        <location line="+138"/>
+        <location line="+16"/>
+        <source>Double-click to edit label</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+122"/>
         <source>&amp;Delete</source>
         <translation>&amp;Delete</translation>
     </message>
     <message>
-        <location filename="../addressbookpage.cpp" line="+70"/>
+        <location filename="../addressbookpage.cpp" line="+73"/>
         <source>Copy &amp;Label</source>
         <translation type="unfinished"></translation>
     </message>
@@ -107,7 +125,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+257"/>
+        <location line="+255"/>
         <source>Export Address Book Data</source>
         <translation type="unfinished"></translation>
     </message>
@@ -141,7 +159,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished">Address</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+38"/>
         <source>(no label)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -284,7 +302,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BanTableModel</name>
     <message>
-        <location filename="../bantablemodel.cpp" line="+90"/>
+        <location filename="../bantablemodel.cpp" line="+88"/>
         <source>IP/Netmask</source>
         <translation type="unfinished"></translation>
     </message>
@@ -297,7 +315,7 @@ This product includes software developed by the OpenSSL Project for use in the O
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <location filename="../bitcoin.cpp" line="+238"/>
+        <location filename="../bitcoin.cpp" line="+242"/>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
         <translation>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</translation>
     </message>
@@ -312,7 +330,7 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation type="unfinished">Wallet</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+139"/>
         <source>&amp;Overview</source>
         <translation type="unfinished"></translation>
     </message>
@@ -640,7 +658,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <location line="+0"/>
-        <location line="+122"/>
+        <location line="+133"/>
         <source>Gridcoin client</source>
         <translation type="unfinished"></translation>
     </message>
@@ -776,7 +794,7 @@ Address: %4</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+152"/>
+        <location line="+159"/>
         <location line="+15"/>
         <source>URI handling</source>
         <translation type="unfinished"></translation>
@@ -932,7 +950,15 @@ Scraper(s) not publishing: %5.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+20"/>
+        <source>CPID: %1
+Beacon age: %2
+Current beacon expired!
+%3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>CPID: %1
 Beacon age: %2
 Expires: %3
@@ -986,22 +1012,17 @@ Expires: %3
         <translation type="unfinished">Amount:</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+39"/>
         <source>Fee:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-152"/>
+        <location line="-129"/>
         <source>Coin Control</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+113"/>
-        <source>Priority:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+65"/>
+        <location line="+155"/>
         <source>Low Output:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1022,7 +1043,7 @@ Expires: %3
     </message>
     <message>
         <location line="+3"/>
-        <location filename="../coincontroldialog.cpp" line="+227"/>
+        <location filename="../coincontroldialog.cpp" line="+222"/>
         <source>Select All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1107,12 +1128,7 @@ Expires: %3
         <translation type="unfinished">Address</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../coincontroldialog.cpp" line="-182"/>
+        <location filename="../coincontroldialog.cpp" line="-177"/>
         <source>Copy address</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1154,11 +1170,6 @@ Expires: %3
     </message>
     <message>
         <location line="+1"/>
-        <source>Copy priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Copy low output</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1168,7 +1179,7 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+58"/>
         <source>Flips the filter mode between selecting inputs less than or equal to the provided value (&lt;=) and greater than or equal to the provided value (&gt;=). The filter also automatically limits the number of inputs to %1, in ascending order for &lt;= and descending order for &gt;=.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1178,42 +1189,7 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+386"/>
-        <source>highest</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>high</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>medium-high</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>medium</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>low-medium</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>low</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>lowest</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+160"/>
+        <location line="+516"/>
         <source>DUST</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1228,21 +1204,12 @@ Expires: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
 
  This means a fee of at least %1 per kb is required.
 
  Can vary +/- 1 Byte per input.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than &quot;medium&quot;.
-
- This means a fee of at least %1 per kb is required.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1262,8 +1229,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
-        <location line="+65"/>
+        <location line="+36"/>
+        <location line="+57"/>
         <source>(no label)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1363,7 +1330,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+14"/>
-        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="+143"/>
+        <location filename="../consolidateunspentwizardselectinputspage.cpp" line="+141"/>
         <source>Select All</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1428,11 +1395,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Confirmed</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+75"/>
         <source>Quantity</source>
         <translation type="unfinished"></translation>
@@ -1483,8 +1445,8 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+411"/>
-        <location line="+66"/>
+        <location line="+404"/>
+        <location line="+57"/>
         <source>(no label)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1646,7 +1608,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../diagnosticsdialog.cpp" line="+59"/>
+        <location filename="../diagnosticsdialog.cpp" line="+80"/>
         <source>Testing...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1671,7 +1633,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+150"/>
         <source>One or more tests have generated a warning status. Wallet operation may be degraded. Please see the individual test tooltips for details and recommended action(s).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1683,243 +1645,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+5"/>
         <source>All tests passed. Your wallet operation is normal.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+62"/>
-        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+31"/>
-        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <location line="+54"/>
-        <source>Passed: Count = %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-50"/>
-        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <location line="+27"/>
-        <source>Failed: Count = %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-6"/>
-        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+136"/>
-        <source>You should check your time and time zone settings for your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+39"/>
-        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>Your network may be using a proxy server to communicate to public IP addresses on the Internet, and the wallet is not configured properly to use it. Please check the proxy settings under Options -&gt; Network -&gt; Connect through SOCKS5 proxy.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>The network is reporting an SSL error. If you also failed or got a warning on your clock test, you should check your clock settings, including your time and time zone. If your clock is ok, please check your computer&apos;s network configuration.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer&apos;s network configuration.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>Warning: 80 block difficulty is less than %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Warning: 80 block difficulty is less than %1. This wallet is probably forked.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Passed: 80 block difficulty is %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <location line="+8"/>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-3"/>
-        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+36"/>
-        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+27"/>
-        <location line="+38"/>
-        <location line="+37"/>
-        <location line="+52"/>
-        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-119"/>
-        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+38"/>
-        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+37"/>
-        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+55"/>
-        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching. You should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should acquire more GRC to stake more often.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Failed: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2003,6 +1728,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <location line="+23"/>
         <source>Search by address or label</source>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Form</name>
+    <message>
+        <location filename="../forms/voting/additionalfieldstableview.ui" line="+14"/>
+        <source>Form</source>
+        <translation type="unfinished">Form</translation>
     </message>
 </context>
 <context>
@@ -2126,6 +1859,190 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
             <numerusform></numerusform>
             <numerusform></numerusform>
         </translation>
+    </message>
+</context>
+<context>
+    <name>MRCModel</name>
+    <message>
+        <location filename="../mrcmodel.cpp" line="+290"/>
+        <source>Too soon since your last research rewards payment.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The total fee (the minimum fee + fee boost) is greater than the rewards due.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+79"/>
+        <source>Your MRC was successfully submitted earlier but has now become stale without being bound to the just received block by a staker. This may be because your MRC was submitted just before the block was staked and the MRC didn&apos;t make it to the staker in time, or your MRC was pushed down in the queue past the pay limit. Please wait for the next block to clear the queue and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>You have a pending MRC request.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Your MRC was successfully submitted, but other MRCs with higher fees have pushed your MRC down in the queue past the pay limit, and your MRC will be canceled. Wait until the next block is received and the queue clears and try again. Your fee for the canceled MRC will be refunded.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The MRC queue is full. You can try boosting your fee to put your MRC request in the queue and displace another MRC request.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The wallet is locked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MRCRequestPage</name>
+    <message>
+        <location filename="../forms/mrcrequestpage.ui" line="+20"/>
+        <source>MRC Requests</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Please wait.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>MRC Fee @ Pay Limit Position in Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>MRC Fee @ Tail of Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Your projected or actual position among MRCs in the memory pool ordered by MRC fee in descending order</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Number of All MRC Requests in Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The number of MRCs in the memory pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location filename="../mrcrequestpage.cpp" line="+196"/>
+        <location line="+21"/>
+        <location line="+14"/>
+        <source>Your Projected MRC Request Position in Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The MRC fee being paid by the MRC in the last position within the pay limit in the memory pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>MRC Request Pay Limit per Block</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Your MRC Calculated Minimum Fee</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The lowest MRC fee being paid of MRCs in the memory pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The maximum number of MRCs that can be paid per block</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>The highest MRC fee being paid of MRCs in the memory pool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>MRC Fee @ Head of Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>MRC Fee Boost</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Raise to Minimum For Submit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Update</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Submit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../mrcrequestpage.cpp" line="-112"/>
+        <location line="+6"/>
+        <location line="+6"/>
+        <location line="+19"/>
+        <location line="+16"/>
+        <location line="+16"/>
+        <location line="+13"/>
+        <location line="+21"/>
+        <location line="+3"/>
+        <source>N/A</source>
+        <translation type="unfinished">N/A</translation>
+    </message>
+    <message>
+        <location line="-71"/>
+        <location line="+16"/>
+        <location line="+16"/>
+        <source>Your Submitted MRC Request Position in Queue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+71"/>
+        <source>You must have an active beacon and the wallet must be in solo mode to submit MRCs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The block version must be v12 or higher to submit MRCs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The wallet must be in sync to submit MRCs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>A block update must have occurred after wallet start or sync to submit MRCs.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2481,12 +2398,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+23"/>
-        <location line="+662"/>
+        <location line="+672"/>
         <source>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</source>
         <translation>The displayed information may be out of date. Your wallet automatically synchronizes with the Gridcoin network after a connection is established, but this process has not completed yet.</translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-604"/>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</source>
         <translation>Total of transactions that have yet to be confirmed, and do not yet count toward the current balance</translation>
     </message>
@@ -2501,7 +2418,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+176"/>
         <source>Pending Reward:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2516,7 +2433,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-259"/>
+        <location line="-269"/>
         <source>Total mined coins that have not yet matured.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2592,7 +2509,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+23"/>
+        <source>Open the Manual Reward Claim (MRC) request page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+70"/>
         <source>Magnitude:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2612,13 +2534,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../overviewpage.cpp" line="+163"/>
+        <location filename="../overviewpage.cpp" line="+165"/>
         <location line="+1"/>
         <source>Out of Sync</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+276"/>
+        <location line="+298"/>
         <source>Pool</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2631,7 +2553,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>PeerTableModel</name>
     <message>
-        <location filename="../peertablemodel.cpp" line="+111"/>
+        <location filename="../peertablemodel.cpp" line="+109"/>
         <source>Node ID</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2669,7 +2591,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Form</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+100"/>
         <source>Votes:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2689,7 +2611,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-55"/>
+        <location line="-69"/>
+        <source>Poll Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>% of AVW:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2710,7 +2637,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+20"/>
-        <location filename="../voting/pollcard.cpp" line="+53"/>
+        <source>Validated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Invalid</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <location filename="../voting/pollcard.cpp" line="+86"/>
         <source>Voting finished.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2741,7 +2678,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Form</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+89"/>
+        <source>Additional Fields</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>Top Answer:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2809,6 +2751,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
+        <source>Poll Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Expiration</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2834,80 +2786,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
+        <source>Validated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Top Answer</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>PollTypes</name>
-    <message>
-        <location filename="../voting/poll_types.cpp" line="+20"/>
-        <source>Project Listing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Propose additions or removals of computing projects for research reward eligibility.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Protocol Development</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Propose a change to Gridcoin at the protocol level.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Governance</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Proposals related to Gridcoin management like poll requirements and funding.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Marketing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Propose marketing initiatives like ad campaigns.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Outreach</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>For polls about community representation, public relations, and communications.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Community</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>For other initiatives related to the Gridcoin community.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Survey</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>For opinion or casual polls without any particular requirements.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2987,13 +2871,18 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../voting/pollwizarddetailspage.cpp" line="+140"/>
-        <location line="+121"/>
+        <location line="+102"/>
+        <source>Additional Fields:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../voting/pollwizarddetailspage.cpp" line="+143"/>
+        <location line="+156"/>
         <source>Create Poll</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-105"/>
+        <location line="-137"/>
         <source>Balance</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3018,7 +2907,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+133"/>
         <source>This poll will cost %1 plus a transaction fee. Continue?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3031,7 +2920,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+17"/>
         <source>Add an unlisted project</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3056,18 +2945,13 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+10"/>
+        <source>Project URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+43"/>
         <source>Choose a project to delist:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../voting/pollwizardprojectpage.cpp" line="+90"/>
-        <source>Add %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Remove %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3110,7 +2994,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>ProjectTableModel</name>
     <message>
-        <location filename="../researcher/projecttablemodel.cpp" line="+123"/>
+        <location filename="../researcher/projecttablemodel.cpp" line="+131"/>
         <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3122,6 +3006,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Whitelist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Has GDPR Controls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3175,7 +3064,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+221"/>
+        <location line="+223"/>
         <source>%1 didn&apos;t yet exit safely...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3805,7 +3694,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>ResearcherModel</name>
     <message>
-        <location filename="../researcher/researchermodel.cpp" line="+115"/>
+        <location filename="../researcher/researchermodel.cpp" line="+125"/>
         <source>Beacon is active.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3866,17 +3755,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
-        <location line="+210"/>
+        <location line="+220"/>
         <source>Waiting for sync...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+122"/>
+        <location line="+124"/>
         <source>Not whitelisted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>Not attached</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4446,7 +4335,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <name>SendCoinsDialog</name>
     <message>
         <location filename="../forms/sendcoinsdialog.ui" line="+14"/>
-        <location filename="../sendcoinsdialog.cpp" line="+189"/>
+        <location filename="../sendcoinsdialog.cpp" line="+186"/>
         <location line="+5"/>
         <location line="+5"/>
         <location line="+5"/>
@@ -4480,7 +4369,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+14"/>
-        <location filename="../sendcoinsdialog.cpp" line="+229"/>
+        <location filename="../sendcoinsdialog.cpp" line="+223"/>
         <source>Inactive</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4532,24 +4421,14 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+16"/>
-        <location line="+68"/>
+        <location line="+45"/>
         <location line="+68"/>
         <location line="+23"/>
         <source>0.00 GRC</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-149"/>
-        <source>Priority:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>medium</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+29"/>
+        <location line="-107"/>
         <source>Fee:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4614,7 +4493,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../sendcoinsdialog.cpp" line="-561"/>
+        <location filename="../sendcoinsdialog.cpp" line="-552"/>
         <source>Copy quantity</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4640,11 +4519,6 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
-        <source>Copy priority</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Copy low output</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4654,7 +4528,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+90"/>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4709,7 +4583,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished">Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</translation>
     </message>
     <message>
-        <location line="+289"/>
+        <location line="+283"/>
         <location line="+49"/>
         <source>(no label)</source>
         <translation type="unfinished"></translation>
@@ -4922,27 +4796,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Enter Gridcoin signature</translation>
     </message>
     <message>
-        <location filename="../signverifymessagedialog.cpp" line="+108"/>
-        <location line="+81"/>
+        <location filename="../signverifymessagedialog.cpp" line="+110"/>
+        <location line="+83"/>
         <source>The entered address is invalid.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-83"/>
         <location line="+8"/>
-        <location line="+73"/>
+        <location line="+75"/>
         <location line="+8"/>
         <source>Please check the address and try again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-81"/>
-        <location line="+81"/>
+        <location line="-83"/>
+        <location line="+83"/>
         <source>The entered address does not refer to a key.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-73"/>
+        <location line="-75"/>
         <source>Wallet unlock was cancelled.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -4962,7 +4836,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+61"/>
         <source>The signature could not be decoded.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5090,6 +4964,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+3"/>
         <source>PoS+RR Side Stake Sent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MRC Payment Received</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MRC Payment Sent</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5384,6 +5268,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
+        <source>MRC Payment Received</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>MRC Payment Sent</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Mined - Superblock</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5409,16 +5303,21 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
+        <source>Manual Rewards Claim Request</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Message</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+75"/>
         <source>(n/a)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+190"/>
+        <location line="+191"/>
         <source>Transaction status. Hover over this field to show number of confirmations.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5446,7 +5345,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>TransactionView</name>
     <message>
-        <location filename="../transactionview.cpp" line="+48"/>
+        <location filename="../transactionview.cpp" line="+51"/>
         <source>Transaction History</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5556,7 +5455,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+151"/>
+        <location line="+143"/>
         <source>Export Transaction Data</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5677,7 +5576,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
 <context>
     <name>VotingModel</name>
     <message>
-        <location filename="../voting/votingmodel.cpp" line="+255"/>
+        <location filename="../voting/votingmodel.cpp" line="+315"/>
         <location line="+40"/>
         <source>Please unlock the wallet.</source>
         <translation type="unfinished"></translation>
@@ -5783,17 +5682,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation></translation>
     </message>
     <message>
-        <location line="+248"/>
+        <location line="+427"/>
         <source>Usage:</source>
         <translation>Usage:</translation>
     </message>
     <message>
-        <location line="-85"/>
+        <location line="-105"/>
         <source>List commands</source>
         <translation>List commands</translation>
     </message>
     <message>
-        <location line="-166"/>
+        <location line="-325"/>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5808,7 +5707,17 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+2"/>
+        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation type="unfinished">Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</translation>
     </message>
@@ -5819,21 +5728,186 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+11"/>
+        <source>For initiatives related to the Gridcoin community not covered by other poll types.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>For polls about community representation, public relations, and communications.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Poll additional field value &quot;%s&quot; for field name &quot;%s&quot; exceeds %s characters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Proposals related to Gridcoin management like poll requirements and funding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Propose additions or removals of computing projects for research reward eligibility.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer&apos;s network configuration.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+3"/>
+        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+9"/>
+        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>WARNING: A mandatory release is available. Please upgrade as soon as possible.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+18"/>
+        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Warning: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards by staking - increase balance or use MRC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Warning: ETTS is infinite. No coins to stake - increase balance or use MRC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+13"/>
+        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You can use MRC  to retrieve your rewards, or you should acquire more GRC to stake more often.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>A poll choice cannot be empty.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5879,11 +5953,21 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
+        <source>Community</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Could not create transaction. See debug.log.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+6"/>
+        <source>Duplicate poll additional field: %s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Duplicate poll choice: %s</source>
         <translation type="unfinished"></translation>
     </message>
@@ -5924,12 +6008,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+1"/>
+        <source>Failed: 80 block difficulty is less than</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failed: Count =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Fees Collected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Files:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>For opinion or casual polls without any particular requirements.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5949,6 +6048,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
+        <source>Governance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Gridcoin Update Available</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6014,6 +6118,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+2"/>
+        <source>Marketing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Multiple Choice</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6054,12 +6163,42 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     </message>
     <message>
         <location line="+3"/>
+        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Outbound communication to TCP port</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Outreach</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Participant Count</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Participant count polls are not supported.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: 80 block difficulty is</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: Count =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Passed: ETTS =</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6080,6 +6219,16 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>Please enter at least two poll choices.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Poll additional field name &quot;%s&quot; exceeds %s characters.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Poll cannot contain more than %s additional fields</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6143,7 +6292,27 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Project Listing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>Propose a change to Gridcoin at the protocol level.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Propose marketing initiatives like ad campaigns.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Protocol Development</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Quorum Hash</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6213,7 +6382,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
+        <source>Survey</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The field is not well-formed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The field list is not well-formed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>The wallet is now shutting down. Please restart your wallet.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6223,8 +6407,58 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+2"/>
+        <source>This wallet is almost certainly forked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This wallet is probably forked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unable to create the PID file &apos;%s&apos;: %s</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Unknown poll type. This should never happen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Warning: 45 days &lt; ETTS =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: 80 block difficulty is less than</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Cannot connect to NTP server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Warning: Count =</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Wrong Payload version specified for current block height.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Yes/No/Abstain</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You should check your time and time zone settings for your computer.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6235,6 +6469,11 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
     <message>
         <location line="+1"/>
         <source>&quot;%s&quot; is not a valid poll choice.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>appears to be blocked.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6253,22 +6492,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-175"/>
+        <location line="-208"/>
         <source>Balance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-103"/>
+        <location line="-256"/>
         <source>The %s developers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+52"/>
         <source>Error: Unsupported argument -socks found. Setting SOCKS version isn&apos;t possible anymore, only SOCKS5 proxies are supported.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+205"/>
         <source>Block Version</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6313,7 +6552,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Datadir: </source>
         <translation type="unfinished"></translation>
     </message>
@@ -6333,7 +6572,7 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>ERROR</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6348,12 +6587,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>GitHub version: </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Height</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6408,22 +6647,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Organization</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+28"/>
         <source>Project email mismatch</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-144"/>
+        <location line="-240"/>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+20"/>
         <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
         <translation>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</translation>
     </message>
@@ -6433,22 +6672,22 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+126"/>
         <source>Error: Transaction creation failed  </source>
         <translation></translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-257"/>
         <source>Error: The transaction was rejected.  This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation></translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+265"/>
         <source>Failed to listen on any port. Use -listen=0 if you want this.</source>
         <translation>Failed to listen on any port. Use -listen=0 if you want this.</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+102"/>
         <source>Single Choice</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6463,12 +6702,12 @@ This label turns red, if the priority is smaller than &quot;medium&quot;.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+27"/>
         <source>To use the %s option</source>
         <translation>To use the %s option</translation>
     </message>
     <message>
-        <location line="-256"/>
+        <location line="-433"/>
         <source>%s, you must set a rpcpassword in the configuration file:
  %s
 It is recommended you use the following random password:
@@ -6483,12 +6722,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+29"/>
         <source>Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+25"/>
         <source>Failed to download snapshot as mandatory client is available for download.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6498,12 +6737,12 @@ for example: alertnotify=echo %%s | mail -s &quot;Gridcoin Alert&quot; admin@foo
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+66"/>
         <source>Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+17"/>
         <source>WARNING: Blockchain data may be corrupted.
 
 Gridcoin detected bad index entries. This may occur because of an unexpected exit, a power failure, or a late software upgrade.
@@ -6517,7 +6756,7 @@ Your wallet will re-download the blockchain. Your balance may appear incorrect u
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+41"/>
         <source>You must set rpcpassword=&lt;password&gt; in the configuration file:
 %s
 If the file does not exist, create it with owner-readable-only file permissions.</source>
@@ -6526,12 +6765,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
 If the file does not exist, create it with owner-readable-only file permissions.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+135"/>
         <source>Gridcoin version</source>
         <translation>Gridcoin version</translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+86"/>
         <source>Resetting block chain index to prepare for reindexing...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6566,22 +6805,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Testnet-only version</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+11"/>
         <source>Unknown error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Unknown</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-14"/>
+        <location line="-21"/>
         <source>Staking Only - No active beacon</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6596,17 +6835,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+7"/>
         <source>This update is </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
         <source>Unknown poll response type.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Unknown poll type.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6616,17 +6855,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-264"/>
+        <location line="-443"/>
         <source>None</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+200"/>
+        <location line="+360"/>
         <source>No current polls</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="-28"/>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</source>
         <translation>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
@@ -6641,7 +6880,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+107"/>
+        <location line="+127"/>
         <source>Wallet %s resides outside data directory %s.</source>
         <translation>Wallet %s resides outside data directory %s.</translation>
     </message>
@@ -6651,17 +6890,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation></translation>
     </message>
     <message>
-        <location line="-237"/>
+        <location line="-413"/>
         <source>Error initializing database environment %s! To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.</source>
         <translation></translation>
     </message>
     <message>
-        <location line="+249"/>
+        <location line="+432"/>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation></translation>
     </message>
     <message>
-        <location line="-110"/>
+        <location line="-137"/>
         <source>Invalid -proxy address: &apos;%s&apos;</source>
         <translation>Invalid -proxy address: &apos;%s&apos;</translation>
     </message>
@@ -6671,7 +6910,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Invalid -tor address: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-53"/>
+        <location line="-59"/>
         <source>Cannot resolve -bind address: &apos;%s&apos;</source>
         <translation>Cannot resolve -bind address: &apos;%s&apos;</translation>
     </message>
@@ -6681,12 +6920,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Cannot resolve -externalip address: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+62"/>
         <source>Invalid amount for -reservebalance=&lt;amount&gt;</source>
         <translation></translation>
     </message>
     <message>
-        <location line="-39"/>
+        <location line="-43"/>
         <source>Error loading blkindex.dat</source>
         <translation>Error loading blkindex.dat</translation>
     </message>
@@ -6701,12 +6940,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Error loading wallet.dat: Wallet requires newer version of Gridcoin</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+70"/>
         <source>Offline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+82"/>
         <source>Verifying checkpoints...</source>
         <translation type="unfinished"></translation>
     </message>
@@ -6721,12 +6960,12 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Wallet needed to be rewritten: restart Gridcoin to complete</translation>
     </message>
     <message>
-        <location line="-135"/>
+        <location line="-159"/>
         <source>Error loading wallet.dat</source>
         <translation>Error loading wallet.dat</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+29"/>
         <source>Importing bootstrap blockchain data file.</source>
         <translation></translation>
     </message>
@@ -6736,22 +6975,22 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Loading addresses...</translation>
     </message>
     <message>
-        <location line="-37"/>
+        <location line="-41"/>
         <source>Error: could not start node</source>
         <translation>Error: could not start node</translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-179"/>
         <source>Unable to bind to %s on this computer. Gridcoin is probably already running.</source>
         <translation>Unable to bind to %s on this computer. Gridcoin is probably already running.</translation>
     </message>
     <message>
-        <location line="+200"/>
+        <location line="+314"/>
         <source>Unable to bind to %s on this computer (bind returned error %d, %s)</source>
         <translation>Unable to bind to %s on this computer (bind returned error %d, %s)</translation>
     </message>
     <message>
-        <location line="-116"/>
+        <location line="-138"/>
         <source>Error: Wallet locked, unable to create transaction  </source>
         <translation></translation>
     </message>
@@ -6761,42 +7000,42 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-103"/>
+        <location line="-253"/>
         <source>Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds  </source>
         <translation></translation>
     </message>
     <message>
-        <location line="+191"/>
+        <location line="+358"/>
         <source>Sending...</source>
         <translation>Sending...</translation>
     </message>
     <message>
-        <location line="-57"/>
+        <location line="-70"/>
         <source>Invalid amount</source>
         <translation>Invalid amount</translation>
     </message>
     <message>
-        <location line="-90"/>
+        <location line="-168"/>
         <source>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</source>
         <translation>Warning: Please check that your computer&apos;s date and time are correct! If your clock is wrong Gridcoin will not work properly.</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+281"/>
         <source>Vote signature failed. See debug.log.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>Warning: Disk space is low!</source>
         <translation>Warning: Disk space is low!</translation>
     </message>
     <message>
-        <location line="-12"/>
+        <location line="-17"/>
         <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
         <translation>Unknown network specified in -onlynet: &apos;%s&apos;</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-113"/>
         <source>Insufficient funds</source>
         <translation>Insufficient funds</translation>
     </message>
@@ -6811,7 +7050,7 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Loading wallet...</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-77"/>
         <source>Cannot downgrade wallet</source>
         <translation>Cannot downgrade wallet</translation>
     </message>
@@ -6821,17 +7060,17 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Cannot write default address</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+127"/>
         <source>Rescanning...</source>
         <translation>Rescanning...</translation>
     </message>
     <message>
-        <location line="-99"/>
+        <location line="-117"/>
         <source>Done loading</source>
         <translation>Done loading</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>

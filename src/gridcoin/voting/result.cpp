@@ -13,6 +13,8 @@
 #include "gridcoin/researcher.h"
 #include "txdb.h"
 #include "util/reverse_iterator.h"
+#include "wallet/wallet.h"
+#include "init.h"
 
 #include <optional>
 #include <queue>
@@ -101,6 +103,16 @@ public:
     }
 
     //!
+    //! \brief returns IsMine flag on transaction containing vote contract
+    //!
+    isminetype IsMine() const
+    {
+        LOCK(pwalletMain->cs_wallet);
+
+        return pwalletMain->IsMine(m_tx);
+    }
+
+    //!
     //! \brief Serialize a vote for claim signing and verification.
     //!
     //! Used for non-legacy vote contracts only.
@@ -162,6 +174,7 @@ public:
 
         VoteDetail detail;
         detail.m_amount = Resolve(vote.m_claim.m_balance_claim, message);
+        detail.m_ismine = candidate.IsMine();
 
         if (m_poll.IncludesMagnitudeWeight()) {
             detail.m_mining_id = vote.m_claim.m_magnitude_claim.m_mining_id;
@@ -1112,6 +1125,8 @@ PollResult::PollResult(Poll poll)
     , m_vote_percent_avw()
     , m_poll_results_validated()
     , m_finished(m_poll.Expired(GetAdjustedTime()))
+    , m_self_voted(false)
+    , m_self_vote_detail()
 {
     m_responses.resize(m_poll.Choices().size());
 }
@@ -1174,6 +1189,11 @@ void PollResult::TallyVote(VoteDetail detail)
         return;
     }
 
+    if (detail.m_ismine != ISMINE_NO) {
+        m_self_voted = true;
+        m_self_vote_detail = detail;
+    }
+
     for (const auto& response_pair : detail.m_responses) {
         const uint8_t response_offset = response_pair.first;
         const Weight response_weight = response_pair.second;
@@ -1198,7 +1218,7 @@ ResponseDetail::ResponseDetail() : m_weight(0), m_votes(0)
 // Class: PollResult::VoteDetail
 // -----------------------------------------------------------------------------
 
-VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero())
+VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero()), m_ismine(ISMINE_NO)
 {
 }
 
@@ -1206,3 +1226,5 @@ bool VoteDetail::Empty() const
 {
     return m_amount == 0 && m_magnitude == 0;
 }
+
+VoteDetail& VoteDetail::operator=(const VoteDetail& b) = default;

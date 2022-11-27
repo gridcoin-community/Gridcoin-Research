@@ -615,7 +615,7 @@ public:
 
             ReadOrderPos(nOrderPos, mapValue);
 
-            if (!mapValue.count("timesmart") || !ParseUInt(mapValue["timesmart"], &nTimeSmart)) {
+            if (!mapValue.count("timesmart") || !ParseUInt32(mapValue["timesmart"], &nTimeSmart)) {
                 nTimeSmart = 0;
             }
         }

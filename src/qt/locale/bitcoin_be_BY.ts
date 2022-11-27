@@ -1,4 +1,4 @@
-<TS language="be_BY" version="2.1">
+<TS language="be_BY" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -32,10 +32,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>Рэдагаваць</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Коскамі падзелены файл (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -88,14 +84,6 @@
         <translation>Разблакаваць гаманец</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Гэтая аперацыя патрабуе пароль каб расшыфраваць гаманец.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Рачшыфраваць гаманец</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Змяніць пароль</translation>
     </message>
@@ -136,10 +124,6 @@
         <translation>Уведзены пароль  для расшыфравання гаманца памылковы</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Расшыфраванне гаманца няўдалае</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Парольная фраза гаманца паспяхова зменена.</translation>
     </message>
@@ -151,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Падпісаць паведамленне...</translation>
+        <source>Wallet</source>
+        <translation>Гаманец</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -161,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Паказвае агульныя звесткі аб гаманцы</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>Даслаць</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>Атрымаць</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -179,6 +171,10 @@
         <translation>Опцыі...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Паказаць / Схаваць</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>Зашыфраваць Гаманец...</translation>
     </message>
@@ -187,32 +183,20 @@
         <translation>Змяніць пароль шыфравання гаманца</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Вакно адладкі</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Адкрыць кансоль дыягностыкі і адладкі</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Падпісаць паведамленне...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>Праверыць паведамленне...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Гаманец</translation>
+        <source>&amp;Debug window</source>
+        <translation>Вакно адладкі</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>Даслаць</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>Атрымаць</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Паказаць / Схаваць</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Адкрыць кансоль дыягностыкі і адладкі</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -227,32 +211,56 @@
         <translation>Дапамога</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Сінхранізавана</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -398,6 +406,33 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -415,27 +450,51 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -515,7 +574,7 @@
         <source>(no label)</source>
         <translation>непазначаны</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -525,6 +584,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Заплаціць да:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Паведамленне:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -550,7 +613,11 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>%1/unconfirmed</source>
@@ -570,7 +637,11 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -582,7 +653,11 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Message</source>
@@ -616,7 +691,11 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Confirmed (%1 confirmations)</source>
@@ -728,10 +807,6 @@
     <message>
         <source>Edit label</source>
         <translation>Рэдагаваць пазнаку</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Коскамі падзелены файл (*.csv)</translation>
     </message>
     <message>
         <source>Confirmed</source>

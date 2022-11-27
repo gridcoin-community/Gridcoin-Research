@@ -1,10 +1,6 @@
-<TS language="es_DO" version="2.1">
+<TS language="es_DO" version="2.0">
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Haga doble clic para editar una dirección o etiqueta</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Crear una nueva dirección</translation>
@@ -36,10 +32,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Editar</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Archivos de columnas separadas por coma (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -88,14 +80,6 @@
         <translation>Desbloquear cartera</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Esta operación requiere su contraseña para descifrar la cartera.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Descifrar la certare</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Cambiar contraseña</translation>
     </message>
@@ -140,10 +124,6 @@
         <translation>La contraseña introducida para descifrar el monedero es incorrecta.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Ha fallado el descifrado del monedero</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Se ha cambiado correctamente la contraseña del monedero.</translation>
     </message>
@@ -155,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Firmar &amp;mensaje...</translation>
+        <source>Wallet</source>
+        <translation>Monedero</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -165,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Mostrar vista general del monedero</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Enviar</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Recibir</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -183,6 +171,10 @@
         <translation>&amp;Opciones...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>Mo&amp;strar/ocultar</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Cifrar monedero…</translation>
     </message>
@@ -195,32 +187,20 @@
         <translation>Cambiar la contraseña utilizada para el cifrado del monedero</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Ventana de &amp;depuración</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Abrir la consola de depuración y diagnóstico</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Firmar &amp;mensaje...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Verificar mensaje...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Monedero</translation>
+        <source>&amp;Debug window</source>
+        <translation>Ventana de &amp;depuración</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Enviar</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Recibir</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>Mo&amp;strar/ocultar</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Abrir la consola de depuración y diagnóstico</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -235,32 +215,50 @@
         <translation>A&amp;yuda</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Actualizado</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -301,10 +299,6 @@
         <translation>Tasa:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioridad:</translation>
-    </message>
-    <message>
         <source>Low Output:</source>
         <translation>Envío pequeño:</translation>
     </message>
@@ -335,10 +329,6 @@
     <message>
         <source>Address</source>
         <translation>Dirección</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioridad</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -373,44 +363,12 @@
         <translation>Copiar bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copiar prioridad</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Copiar envío pequeño</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Copiar cambio</translation>
-    </message>
-    <message>
-        <source>highest</source>
-        <translation>lo más alto</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>alto</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>medio-alto</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>medio</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>bajo-medio</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>bajo</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>lo más bajo</translation>
     </message>
     <message>
         <source>yes</source>
@@ -473,6 +431,30 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -497,14 +479,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Puerto del servidor proxy (ej. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Versión SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Versión del proxy SOCKS (ej. 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -586,27 +560,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -680,18 +672,6 @@
         <translation>Borrar consola</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Escriba &lt;b&gt;help&lt;/b&gt; para ver un resumen de los comandos disponibles.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Use las flechas arriba y abajo para navegar por el historial y &lt;b&gt;Control+L&lt;/b&gt; para limpiar la pantalla.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Fecha de compilación</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Bloques totales estimados</translation>
     </message>
@@ -699,7 +679,15 @@
         <source>Client name</source>
         <translation>Nombre del cliente</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Use las flechas arriba y abajo para navegar por el historial y &lt;b&gt;Control+L&lt;/b&gt; para limpiar la pantalla.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Escriba &lt;b&gt;help&lt;/b&gt; para ver un resumen de los comandos disponibles.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -725,10 +713,6 @@
     <message>
         <source>Amount:</source>
         <translation>Cuantía:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioridad:</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -791,10 +775,6 @@
         <translation>Copiar Cambio</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Copiar prioridad</translation>
-    </message>
-    <message>
         <source>Confirm send coins</source>
         <translation>Confirmar el envío de monedas</translation>
     </message>
@@ -822,7 +802,7 @@
         <source>(no label)</source>
         <translation>(sin etiqueta)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -832,6 +812,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>&amp;Pagar a:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Mensaje:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -953,7 +937,10 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -981,7 +968,10 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, transmitir a través de %n nodo</numerusform><numerusform>, transmitir a través de %n nodos</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1017,7 +1007,10 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>disponible en %n bloque más</numerusform><numerusform>disponible en %n bloques más</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1087,7 +1080,10 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Abrir para %n bloque más</numerusform><numerusform>Abrir para %n bloques más</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1217,10 +1213,6 @@
         <translation>Mostrar detalles de la transacción</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Archivos de columnas separadas por coma (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Confirmado</translation>
     </message>
@@ -1312,10 +1304,6 @@ Si el archivo no existe, créelo con permiso de lectura solamente del propietari
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat corrupto. Ha fallado la recuperación.</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Solicitada versión de proxy -socks desconocida: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

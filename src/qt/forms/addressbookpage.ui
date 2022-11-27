@@ -72,7 +72,7 @@
          <enum>Qt::CustomContextMenu</enum>
         </property>
         <property name="toolTip">
-         <string>Double-click to edit address or label</string>
+         <string>Double-click to edit label</string>
         </property>
         <property name="tabKeyNavigation">
          <bool>false</bool>

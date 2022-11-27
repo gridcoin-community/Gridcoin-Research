@@ -97,6 +97,8 @@ ResearcherModel::ResearcherModel()
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
     , m_out_of_sync(true)
+    , m_split_cpid(false)
+    , m_privacy_enabled(false)
     , m_theme_suffix("_dark")
 {
     qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");

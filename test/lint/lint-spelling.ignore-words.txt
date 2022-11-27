@@ -24,3 +24,5 @@ nin
 inout
 smoe
 sur
+clen
+siz

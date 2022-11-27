@@ -162,6 +162,7 @@ extern UniValue verifymessage(const UniValue& params, bool fHelp);
 extern UniValue walletlock(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
+extern UniValue walletdiagnose(const UniValue& params, bool fHelp);
 
 // Staking
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
@@ -171,6 +172,7 @@ extern UniValue beaconstatus(const UniValue& params, bool fHelp);
 extern UniValue createmrcrequest(const UniValue& params, const bool fHelp);
 extern UniValue explainmagnitude(const UniValue& params, bool fHelp);
 extern UniValue getlaststake(const UniValue& params, bool fHelp);
+extern UniValue getmrcinfo(const UniValue& params, bool fHelp);
 extern UniValue getstakinginfo(const UniValue& params, bool fHelp);
 extern UniValue lifetime(const UniValue& params, bool fHelp);
 extern UniValue magnitude(const UniValue& params, bool fHelp);
