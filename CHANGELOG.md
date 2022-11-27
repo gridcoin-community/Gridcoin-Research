@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.1.0] 2022-11-27, leisure
+
+### Added
+ - net: Add and document network messages in protocol.h (backport) #2533 (@Pythonix)
+ - Define MAX_DIGITS_BTC for magic number in BitcoinUnits::format #2555 (@barton2526)
+ - rpc: Implementation of getmrcinfo #2570 (@jamescowens)
+ - init: Add init error message if -printtoconsole and -daemon specified simultaneously #2571 (@jamescowens)
+ - rpc: getmrcinfo part 2 - add calculated minimum fees and fee boosting and by CPID reporting #2575 (@jamescowens)
+ - fs: fully initialize `_OVERLAPPED` for win32 #2587 (@div72)
+ - util: Diagnose Lib Version #1 #2573 (@MinaFarhan)
+ - util: Implement core diagnostics #2 (@jamescowens)
+ - util: modify Win32LockedPageAllocator to query windows for limit. #2536 (@div72)
+ - gui, voting: Implement information for wallet holder's votes on poll info cards #2605 (@jamescowens)
+
+### Changed
+ - scripted-diff: Drop Darwin version for better maintainability #2557 (@barton2526)
+ - build: Require gcc8 on Ubuntu Bionic to enable C++17 features #2579 (@barton2526)
+ - util: Replace use of locale dependent atoi(…) with locale-independent std::from_chars(…) (C++17) #2564 (@barton2526)
+ - translation: Translation updates #2581 (@jamescowens)
+ - depends: update urls for dmg tools #2583 (@div72)
+ - Use ReadLE64 in uint256::GetUint64 instead of duplicating logic #2586 (@div72)
+ - util: Make Parse{Int,UInt}{32,64} use locale independent std::from_chars(…) (C++17) instead of locale dependent strto{l,ll,ul,ull} #2592 (@barton2526)
+ - build: don't set PORT=no in config.site #2593 (@barton2526)
+ - build: Replace `which` command with `command -v` #2595 (@barton2526)
+ - build: update ax_cxx_compile_stdcxx to serial 14 #2596 (@barton2526)
+ - gui: Changed the unlocked for staking only icons to green #2598 (@delta1513)
+ - gui: Translation updates #2599 (@jamescowens)
+ - build: update CI for linter and actions version #2606 (@jamescowens)
+ - gui: Update translations #2608 (@jamescowens)
+ 
+### Removed
+ - refactor: remove unused c-string variant of atoi64() #2562 (@barton2526)
+ - refactor: Remove unused CDataStream::rdbuf method #2585 (@div72)
+
+### Fixed
+ - net: Fix some benign races (backport) #2532 (@Pythonix)
+ - rpc: fix invalid parameter error codes for {sign,verify}message RPCs #2556 (@barton2526)
+ - build: Fix x86_64 <-> arm64 cross-compiling for macOS #2560 (@barton2526)
+ - rpc, mrc: Fix field name and initialization of mrc_fees_to_staker #2567 (@jamescowens)
+ - gui: Add missing resizeTableColumns to fix send address book column widths #2569 (@jamescowens)
+ - accrual: rebuild snapshot registry on corruption instead of crashing #2577 (@div72)
+ - doc: Fix link to MurmurHash3.cpp (moved from Google Code to Github) #2584 (@div72)
+ - fix help text for `revokebeacon` command #2591 (@Pythonix)
+ - util: Fix spelling error in gridcoinresearchd.cpp #2590 (@jamescowens)
+ - depends: always use correct ar for win qt build #2588 (@div72)
+ - util: Fix some bugs due to new implementation and change in BOINC dir handling (@jamescowens)
+ - util: Diagnose lib - Implement changes to solve crash on some Boost 1.66 machines #2597 (@jamescowens)
+ - contrib: Check for `patch` command, Check for `wget` command #2594 (@barton2526)
+ - build: Check std::system for -[alert|block|wallet]notify #2582 (@barton2526)
+ - gui: Changed the wording on the tooltip for the address book #2602 (@delta1513)
+ - build: pass win32-dll to LT_INIT() #2601 (@barton2526)
+ - build: minor cleanups to native_clang package #2600 (@barton2526)
+ - util: restore translations to diagnostics #2603 (@jamescowens)
+ - refactor: Fix problems found by valgrind #2607 (@jamescowens)
+
 ## [5.4.0.0] 2022-08-01, mandatory, "Kermit's Mom"
 
 ### Added
