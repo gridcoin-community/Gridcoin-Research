@@ -46,6 +46,9 @@ $(package)_config_opts_x86_64_darwin=darwin64-x86_64-cc
 $(package)_config_opts_aarch64_darwin=darwin64-arm64-cc
 $(package)_config_opts_x86_64_mingw32=mingw64
 $(package)_config_opts_i686_mingw32=mingw
+ifeq ($(build),darwin)
+$(package)_config_opts:=$(subst -arch $(arch),,$(package)_config_opts)
+endif
 endef
 
 define $(package)_config_cmds
