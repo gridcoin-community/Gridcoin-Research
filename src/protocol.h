@@ -59,6 +59,9 @@ class CMessageHeader
 
 /** nServices flags */
 enum ServiceFlags : uint64_t {
+    // NOTE: When adding here, be sure to update serviceFlagToStr too
+    // Nothing
+    NODE_NONE = 0,
     // NODE_NETWORK means that the node is capable of serving the complete block chain.
     NODE_NETWORK = (1 << 0),
 };

@@ -32,6 +32,7 @@ GRIDCOIN_TESTS =\
 	test/checkpoints_tests.cpp \
 	test/dos_tests.cpp \
 	test/accounting_tests.cpp \
+	test/addrman_tests.cpp \
 	test/allocator_tests.cpp \
 	test/base32_tests.cpp \
 	test/base58_tests.cpp \
@@ -59,6 +60,7 @@ GRIDCOIN_TESTS =\
 	test/mruset_tests.cpp \
 	test/multisig_tests.cpp \
 	test/netbase_tests.cpp \
+	test/net_tests.cpp \
 	test/random_tests.cpp \
 	test/rpc_tests.cpp \
 	test/sanity_tests.cpp \
