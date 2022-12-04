@@ -5,6 +5,9 @@
 
 #include <key.h>
 
+#include <crypto/common.h>
+#include <crypto/hmac_sha512.h>
+#include <hash.h>
 #include <random.h>
 
 #include <secp256k1.h>
@@ -288,6 +291,75 @@ bool CKey::Load(const CPrivKey &seckey, const CPubKey &vchPubKey, bool fSkipChec
         return true;
 
     return VerifyPubKey(vchPubKey);
+}
+
+bool CKey::Derive(CKey& keyChild, ChainCode &ccChild, unsigned int nChild, const ChainCode& cc) const {
+    assert(IsValid());
+    assert(IsCompressed());
+    std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
+    if ((nChild >> 31) == 0) {
+        CPubKey pubkey = GetPubKey();
+        assert(pubkey.size() == CPubKey::COMPRESSED_SIZE);
+        BIP32Hash(cc, nChild, *pubkey.begin(), pubkey.begin()+1, vout.data());
+    } else {
+        assert(size() == 32);
+        BIP32Hash(cc, nChild, 0, begin(), vout.data());
+    }
+    memcpy(ccChild.begin(), vout.data()+32, 32);
+    memcpy((unsigned char*)keyChild.begin(), begin(), 32);
+    bool ret = secp256k1_ec_seckey_tweak_add(secp256k1_context_sign, (unsigned char*)keyChild.begin(), vout.data());
+    keyChild.fCompressed = true;
+    keyChild.fValid = ret;
+    return ret;
+}
+
+bool CExtKey::Derive(CExtKey &out, unsigned int _nChild) const {
+    out.nDepth = nDepth + 1;
+    CKeyID id = key.GetPubKey().GetID();
+    memcpy(out.vchFingerprint, &id, 4);
+    out.nChild = _nChild;
+    return key.Derive(out.key, out.chaincode, _nChild, chaincode);
+}
+
+void CExtKey::SetSeed(Span<const std::byte> seed)
+{
+    static const unsigned char hashkey[] = {'B','i','t','c','o','i','n',' ','s','e','e','d'};
+    std::vector<unsigned char, secure_allocator<unsigned char>> vout(64);
+    CHMAC_SHA512{hashkey, sizeof(hashkey)}.Write(UCharCast(seed.data()), seed.size()).Finalize(vout.data());
+    key.Set(vout.data(), vout.data() + 32, true);
+    memcpy(chaincode.begin(), vout.data() + 32, 32);
+    nDepth = 0;
+    nChild = 0;
+    memset(vchFingerprint, 0, sizeof(vchFingerprint));
+}
+
+CExtPubKey CExtKey::Neuter() const {
+    CExtPubKey ret;
+    ret.nDepth = nDepth;
+    memcpy(ret.vchFingerprint, vchFingerprint, 4);
+    ret.nChild = nChild;
+    ret.pubkey = key.GetPubKey();
+    ret.chaincode = chaincode;
+    return ret;
+}
+
+void CExtKey::Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const {
+    code[0] = nDepth;
+    memcpy(code+1, vchFingerprint, 4);
+    WriteBE32(code+5, nChild);
+    memcpy(code+9, chaincode.begin(), 32);
+    code[41] = 0;
+    assert(key.size() == 32);
+    memcpy(code+42, key.begin(), 32);
+}
+
+void CExtKey::Decode(const unsigned char code[BIP32_EXTKEY_SIZE]) {
+    nDepth = code[0];
+    memcpy(vchFingerprint, code+1, 4);
+    nChild = ReadBE32(code+5);
+    memcpy(chaincode.begin(), code+9, 32);
+    key.Set(code+42, code+BIP32_EXTKEY_SIZE, true);
+    if ((nDepth == 0 && (nChild != 0 || ReadLE32(vchFingerprint) != 0)) || code[41] != 0) key = CKey();
 }
 
 bool ECC_InitSanityCheck() {

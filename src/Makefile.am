@@ -148,11 +148,13 @@ GRIDCOIN_CORE_H = \
     init.h \
     key.h \
     keystore.h \
+    key_io.h \
     logging.h \
     main.h \
     miner.h \
     mruset.h \
     netbase.h \
+    netaddress.h \
     net.h \
     node/blockstorage.h \
     pbkdf2.h \
@@ -186,6 +188,7 @@ GRIDCOIN_CORE_H = \
     txdb.h \
     node/ui_interface.h \
     uint256.h \
+    util/bip32.h \
     util/check.h \
     util/hash_type.h \
     util/macros.h \
@@ -204,11 +207,12 @@ GRIDCOIN_CORE_H = \
     version.h \
     wallet/coincontrol.h \
     wallet/db.h \
+    wallet/diagnose.h \
     wallet/generated_type.h \
-    wallet/walletdb.h \
-    wallet/wallet.h \
     wallet/ismine.h \
-    wallet/diagnose.h
+    wallet/wallet.h \
+    wallet/walletdb.h \
+    wallet/walletutil.h
 
 GRIDCOIN_CORE_CPP = addrdb.cpp \
     addrman.cpp \
@@ -261,10 +265,12 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     init.cpp \
     key.cpp \
     keystore.cpp \
+    key_io.cpp \
     logging.cpp \
     main.cpp \
     miner.cpp \
     netbase.cpp \
+    netaddress.cpp \
     net.cpp \
     node/blockstorage.cpp \
     node/ui_interface.cpp \
@@ -296,6 +302,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     sync.cpp \
     threadinterrupt.cpp \
     uint256.cpp \
+    util/bip32.cpp \
     util/settings.cpp \
     util/strencodings.cpp \
     util/string.cpp \
@@ -307,11 +314,12 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     util.cpp \
     validation.cpp \
     wallet/db.cpp \
+    wallet/diagnose.cpp \
     wallet/rpcdump.cpp \
     wallet/rpcwallet.cpp \
     wallet/wallet.cpp \
     wallet/walletdb.cpp \
-    wallet/diagnose.cpp
+    wallet/walletutil.cpp
 
 
 obj/build.h: FORCE

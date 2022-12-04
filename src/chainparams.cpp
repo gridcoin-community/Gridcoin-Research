@@ -93,8 +93,11 @@ public:
         assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
 
 
-        base58Prefix[PUBKEY_ADDRESS] = 62;
-        base58Prefix[SCRIPT_ADDRESS] = 85;
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,62);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,85);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,0); // TODO: What should be the exact value here? 128 + PUBKEY_ADDRESS as 4 bytes?
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
         m_is_test_chain = false;
         m_is_mockable_chain = false;
@@ -190,8 +193,11 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713"));
         assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
 
-        base58Prefix[PUBKEY_ADDRESS] = 111;
-        base58Prefix[SCRIPT_ADDRESS] = 196;
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,0); // TODO: What should be the exact value here? 128 + PUBKEY_ADDRESS as 4 bytes?
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         m_is_test_chain = true;
         m_is_mockable_chain = false;
