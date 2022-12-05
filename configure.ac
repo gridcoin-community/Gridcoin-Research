@@ -360,6 +360,7 @@ CXXFLAGS="$TEMP_CXXFLAGS"
 
 # ARM
 AX_CHECK_COMPILE_FLAG([-march=armv8-a+crc+crypto],[[ARM_CRC_CXXFLAGS="-march=armv8-a+crc+crypto"]],,[[$CXXFLAG_WERROR]])
+AX_CHECK_COMPILE_FLAG([-march=armv8-a+crc+crypto], [ARM_SHANI_CXXFLAGS="-march=armv8-a+crc+crypto"], [], [$CXXFLAG_WERROR])
 
 TEMP_CXXFLAGS="$CXXFLAGS"
 CXXFLAGS="$CXXFLAGS $ARM_CRC_CXXFLAGS"
@@ -377,6 +378,24 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
   ]])],
  [ AC_MSG_RESULT(yes); enable_arm_crc=yes; ],
  [ AC_MSG_RESULT(no)]
+)
+CXXFLAGS="$TEMP_CXXFLAGS"
+
+TEMP_CXXFLAGS="$CXXFLAGS"
+CXXFLAGS="$CXXFLAGS $ARM_SHANI_CXXFLAGS"
+AC_MSG_CHECKING([for ARMv8 SHA-NI intrinsics])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+    #include <arm_acle.h>
+    #include <arm_neon.h>
+  ]],[[
+    uint32x4_t a, b, c;
+    vsha256h2q_u32(a, b, c);
+    vsha256hq_u32(a, b, c);
+    vsha256su0q_u32(a, b);
+    vsha256su1q_u32(a, b, c);
+  ]])],
+ [ AC_MSG_RESULT([yes]); enable_arm_shani=yes; AC_DEFINE([ENABLE_ARM_SHANI], [1], [Define this symbol to build code that uses ARMv8 SHA-NI intrinsics]) ],
+ [ AC_MSG_RESULT([no])]
 )
 CXXFLAGS="$TEMP_CXXFLAGS"
 
@@ -1226,6 +1245,7 @@ AM_CONDITIONAL([ENABLE_SSE41],[test "$enable_sse41" = "yes"])
 AM_CONDITIONAL([ENABLE_AVX2],[test "$enable_avx2" = "yes"])
 AM_CONDITIONAL([ENABLE_X86_SHANI], [test "$enable_x86_shani" = "yes"])
 AM_CONDITIONAL([ENABLE_ARM_CRC],[test "$enable_arm_crc" = "yes"])
+AM_CONDITIONAL([ENABLE_ARM_SHANI], [test "$enable_arm_shani" = "yes"])
 AM_CONDITIONAL([USE_ASM],[test "$use_asm" = "yes"])
 AM_CONDITIONAL([WORDS_BIGENDIAN],[test "$ac_cv_c_bigendian" = "yes"])
 AM_CONDITIONAL([ARCH_x86], [test "$have_x86" = "true"])
@@ -1266,6 +1286,7 @@ AC_SUBST(SSE41_CXXFLAGS)
 AC_SUBST(AVX2_CXXFLAGS)
 AC_SUBST(X86_SHANI_CXXFLAGS)
 AC_SUBST(ARM_CRC_CXXFLAGS)
+AC_SUBST(ARM_SHANI_CXXFLAGS)
 AC_SUBST(LIBTOOL_APP_LDFLAGS)
 AC_SUBST(USE_UPNP)
 AC_SUBST(USE_QRCODE)

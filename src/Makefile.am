@@ -43,6 +43,10 @@ if ENABLE_X86_SHANI
 LIBGRIDCOIN_CRYPTO_X86_SHANI = crypto/libgridcoin_crypto_x86_shani.a
 LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_X86_SHANI)
 endif
+if ENABLE_ARM_SHANI
+LIBGRIDCOIN_CRYPTO_ARM_SHANI = crypto/libgridcoin_crypto_arm_shani.a
+LIBGRIDCOIN_CRYPTO += $(LIBGRIDCOIN_CRYPTO_ARM_SHANI)
+endif
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*.h) $(wildcard secp256k1/src/*.c) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
@@ -392,6 +396,12 @@ crypto_libgridcoin_crypto_x86_shani_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_x86_shani_a_CXXFLAGS += $(X86_SHANI_CXXFLAGS)
 crypto_libgridcoin_crypto_x86_shani_a_CPPFLAGS += -DENABLE_X86_SHANI
 crypto_libgridcoin_crypto_x86_shani_a_SOURCES = crypto/sha256_x86_shani.cpp
+
+crypto_libgridcoin_crypto_arm_shani_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+crypto_libgridcoin_crypto_arm_shani_a_CPPFLAGS = $(AM_CPPFLAGS)
+crypto_libgridcoin_crypto_arm_shani_a_CXXFLAGS += $(ARM_SHANI_CXXFLAGS)
+crypto_libgridcoin_crypto_arm_shani_a_CPPFLAGS += -DENABLE_ARM_SHANI
+crypto_libgridcoin_crypto_arm_shani_a_SOURCES = crypto/sha256_arm_shani.cpp
 
 CTAES_DIST =  crypto/ctaes/bench.c
 CTAES_DIST += crypto/ctaes/ctaes.c
