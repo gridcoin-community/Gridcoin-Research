@@ -182,7 +182,6 @@ GRIDCOIN_CORE_H = \
     support/cleanse.h \
     support/lockedpool.h \
     sync.h \
-    threadinterrupt.h \
     threadsafety.h \
     tinyformat.h \
     txdb.h \
@@ -200,6 +199,7 @@ GRIDCOIN_CORE_H = \
     util/syserror.h \
     util/system.h \
     util/threadnames.h \
+    util/threadinterrupt.h \
     util/time.h \
     util/tokenpipe.h \
     util.h \
@@ -300,7 +300,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     support/cleanse.cpp \
     support/lockedpool.cpp \
     sync.cpp \
-    threadinterrupt.cpp \
     uint256.cpp \
     util/bip32.cpp \
     util/settings.cpp \
@@ -308,6 +307,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     util/string.cpp \
     util/syserror.cpp \
     util/system.cpp \
+    util/threadinterrupt.cpp \
     util/threadnames.cpp \
     util/time.cpp \
     util/tokenpipe.cpp \

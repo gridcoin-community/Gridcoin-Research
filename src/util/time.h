@@ -14,7 +14,7 @@
 
 #include <unordered_map>
 #include <sync.h>
-#include <threadinterrupt.h>
+#include <util/threadinterrupt.h>
 
 using namespace std::chrono_literals;
 
