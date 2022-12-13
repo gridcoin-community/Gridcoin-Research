@@ -9,6 +9,18 @@
 #include <secp256k1_extrakeys.h>
 #include <secp256k1_recovery.h>
 
+namespace {
+
+struct Secp256k1SelfTester
+{
+    Secp256k1SelfTester() {
+        /* Run libsecp256k1 self-test before using the secp256k1_context_static. */
+        secp256k1_selftest();
+    }
+} SECP256K1_SELFTESTER;
+
+} // namespace
+
 /** This function is taken from the libsecp256k1 distribution and implements
  *  DER parsing for ECDSA signatures, while supporting an arbitrary subset of
  *  format violations.
