@@ -43,6 +43,8 @@ void NewPollReceived(VotingModel* model, int64_t poll_time)
 
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     const PollReference& ref = iter->Ref();
     const PollResultOption result = PollResult::BuildFor(ref);
 
@@ -113,6 +115,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
         item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
     }
 
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     return item;
 }
 } // Anonymous namespace
@@ -237,16 +240,20 @@ QStringList VotingModel::getActiveProjectUrls() const
 
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
 {
+    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, __func__);
+
     std::vector<PollItem> items;
 
     LOCK(cs_main);
 
     for (const auto& iter : m_registry.Polls().Where(flags)) {
-        if (std::optional<PollItem> item = BuildPollItem(iter)) {
+         if (std::optional<PollItem> item = BuildPollItem(iter)) {
             items.push_back(std::move(*item));
         }
     }
 
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, __func__);
     return items;
 }
 

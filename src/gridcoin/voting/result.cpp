@@ -169,6 +169,8 @@ public:
     //!
     VoteDetail Resolve(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         const Vote& vote = candidate.Vote();
         const ClaimMessage message = candidate.PackMessage();
 
@@ -181,6 +183,7 @@ public:
             detail.m_magnitude = Resolve(vote.m_claim.m_magnitude_claim, message);
         }
 
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
         return detail;
     }
 
@@ -802,6 +805,8 @@ public:
     //!
     void CountVotes(PollResult& result, const std::vector<uint256>& vote_txids)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         m_votes.reserve(vote_txids.size());
 
         for (const auto& txid : reverse_iterate(vote_txids)) {
@@ -821,6 +826,8 @@ public:
         }
 
         result.m_pools_voted = m_pools_voted;
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
 private:
@@ -913,6 +920,8 @@ private:
     //!
     void ProcessVote(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         VoteDetail detail = m_resolver.Resolve(candidate);
 
         if (detail.Empty()) {
@@ -950,6 +959,8 @@ private:
         }
 
         m_votes.emplace_back(std::move(detail));
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
     //!
@@ -1133,6 +1144,8 @@ PollResult::PollResult(Poll poll)
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     if (PollOption poll = poll_ref.TryReadFromDisk()) {
         CTxDB txdb("r");
         PollResult result(std::move(*poll));
@@ -1165,8 +1178,12 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
             }
         }
 
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
+
         return result;
     }
+
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
     return std::nullopt;
 }
