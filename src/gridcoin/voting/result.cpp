@@ -813,11 +813,17 @@ public:
             try {
                 ProcessVoteCandidate(FetchVoteCandidate(txid));
             } catch (const InvalidVoteError& e) {
-                LogPrint(LogFlags::VOTE, "%s: skipped invalid vote: %s",
+                LogPrint(LogFlags::VOTE, "INFO: %s: skipped invalid vote: %s",
                     __func__,
                     txid.ToString());
 
                 ++result.m_invalid_votes;
+            } catch (const InvalidDuetoReorgFork& e) {
+                LogPrint(LogFlags::VOTE, " INFO: %s: aborted vote count due to reorg/fork",
+                         __func__);
+
+                g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
+                throw InvalidDuetoReorgFork();
             }
         }
 
@@ -897,6 +903,10 @@ private:
     //!
     void ProcessVoteCandidate(const VoteCandidate& candidate)
     {
+        if (GetPollRegistry().reorg_occurred_during_reg_traversal) {
+            throw InvalidDuetoReorgFork();
+        }
+
         if (!candidate.IsLegacy()) {
             ProcessVote(candidate);
             return;
@@ -968,7 +978,7 @@ private:
     //!
     //! \param vote Contains the vote contract to resolve.
     //!
-    void ProcessLegacyVote(const LegacyVote& vote)
+    void ProcessLegacyVote(const LegacyVote& vote) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     {
         if (m_legacy.SeenKey(vote.m_key)) {
             LogPrint(LogFlags::VOTE, "%s: skipped duplicate key", __func__);

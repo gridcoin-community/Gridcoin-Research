@@ -296,7 +296,7 @@ PollRegistry& GRC::GetPollRegistry()
 
 std::string GRC::GetCurrentPollTitle()
 {
-    LOCK(cs_main);
+    LOCK(GetPollRegistry().cs_poll_registry);
 
     if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive()) {
         return poll_ref->Title();
@@ -323,9 +323,8 @@ ClaimMessage GRC::PackPollMessage(const Poll& poll, const CTransaction& tx)
 // -----------------------------------------------------------------------------
 // Class: PollReference
 // -----------------------------------------------------------------------------
-
 PollReference::PollReference()
-    : m_ptxid(nullptr)
+    : m_txid(uint256{})
     , m_payload_version(0)
     , m_type(PollType::UNKNOWN)
     , m_ptitle(nullptr)
@@ -338,7 +337,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
 {
     CTransaction tx;
 
-    if (!txdb.ReadDiskTx(*m_ptxid, tx)) {
+    if (!txdb.ReadDiskTx(m_txid, tx)) {
         error("%s: failed to read poll tx from disk", __func__);
         return std::nullopt;
     }
@@ -366,11 +365,7 @@ PollOption PollReference::TryReadFromDisk() const
 
 uint256 PollReference::Txid() const
 {
-    if (!m_ptxid) {
-        return uint256();
-    }
-
-    return *m_ptxid;
+    return m_txid;
 }
 
 uint32_t PollReference::GetPollPayloadVersion() const
@@ -422,12 +417,12 @@ int64_t PollReference::Expiration() const
     return m_timestamp + (int64_t) (m_duration_days * 86400);
 }
 
-CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
+CBlockIndex* PollReference::GetStartingBlockIndexPtr() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 block_hash;
     CTransaction tx;
 
-    GetTransaction(*m_ptxid, tx, block_hash);
+    GetTransaction(m_txid, tx, block_hash);
 
     auto iter = mapBlockIndex.find(block_hash);
 
@@ -438,7 +433,7 @@ CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
     return iter->second;
 }
 
-CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const
+CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindex_start) {
         pindex_start = GetStartingBlockIndexPtr();
@@ -458,7 +453,7 @@ CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) co
     return nullptr;
 }
 
-std::optional<int> PollReference::GetStartingHeight() const
+std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CBlockIndex* pindex = GetStartingBlockIndexPtr();
 
@@ -469,7 +464,7 @@ std::optional<int> PollReference::GetStartingHeight() const
     return std::nullopt;
 }
 
-std::optional<int> PollReference::GetEndingHeight() const
+std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex* pindex = GetEndingBlockIndexPtr();
 
@@ -484,6 +479,9 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+
+    // Unfortunately, cs_main must be locked for the duration of this method, because it uses the chain index pointers.
+    LOCK(cs_main);
 
     // Get the start and end of the poll.
     CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
@@ -731,13 +729,14 @@ void PollReference::UnlinkVote(const uint256 txid)
 // -----------------------------------------------------------------------------
 // Class: PollRegistry
 // -----------------------------------------------------------------------------
-
 const PollRegistry::Sequence PollRegistry::Polls() const
 {
+    LOCK(GetPollRegistry().cs_poll_registry);
+
     return Sequence(m_polls);
 }
 
-const PollReference* PollRegistry::TryLatestActive() const
+const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int64_t now = GetAdjustedTime();
 
@@ -764,7 +763,7 @@ const PollReference* PollRegistry::TryLatestActive() const
     return latest_not_expired;
 }
 
-const PollReference* PollRegistry::TryByTxid(const uint256 txid) const
+const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     const auto iter = m_polls_by_txid.find(txid);
 
@@ -775,12 +774,12 @@ const PollReference* PollRegistry::TryByTxid(const uint256 txid) const
     return iter->second;
 }
 
-PollReference* PollRegistry::TryBy(const uint256 txid)
+PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return const_cast<PollReference*>(TryByTxid(txid));
 }
 
-const PollReference* PollRegistry::TryByTitle(const std::string& title) const
+const PollReference* PollRegistry::TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     const auto iter = m_polls.find(title);
 
@@ -791,12 +790,13 @@ const PollReference* PollRegistry::TryByTitle(const std::string& title) const
     return &iter->second;
 }
 
-PollReference* PollRegistry::TryBy(const std::string& title)
+PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return const_cast<PollReference*>(TryByTitle(title));
 }
 
 const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     // Check and see if it is already in the registry and return the existing ref immediately if found. (This is
     // the equivalent of the plain TryByTxid() functionality.)
@@ -883,9 +883,13 @@ const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const 
 
 void PollRegistry::Reset()
 {
+    LOCK(cs_poll_registry);
+
     m_polls.clear();
     m_polls_by_txid.clear();
     m_latest_poll = nullptr;
+    registry_traversal_in_progress = false;
+    reorg_occurred_during_reg_traversal = false;
 }
 
 bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
@@ -939,17 +943,27 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
-void PollRegistry::Add(const ContractContext& ctx)
+void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
     if (ctx->m_type == ContractType::VOTE) {
         AddVote(ctx);
     } else {
         AddPoll(ctx);
     }
-}
 
-void PollRegistry::Delete(const ContractContext& ctx)
+    DetectReorg();
+ }
+
+void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
     if (ctx->m_type == ContractType::VOTE) {
         DeleteVote(ctx);
     } else {
@@ -957,7 +971,7 @@ void PollRegistry::Delete(const ContractContext& ctx)
     }
 }
 
-void PollRegistry::AddPoll(const ContractContext& ctx)
+void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
     std::string poll_title = payload->m_poll.m_title;
@@ -982,7 +996,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
         m_latest_poll = &poll_ref;
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
-        poll_ref.m_ptxid = &result_pair.first->first;
+        poll_ref.m_txid = result_pair.first->first;
 
         if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
@@ -990,7 +1004,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx)
     }
 }
 
-void PollRegistry::AddVote(const ContractContext& ctx)
+void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     if (ctx->m_version >= 2) {
         const auto vote = ctx->SharePayloadAs<Vote>();
@@ -1022,7 +1036,7 @@ void PollRegistry::AddVote(const ContractContext& ctx)
     }
 }
 
-void PollRegistry::DeletePoll(const ContractContext& ctx)
+void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
@@ -1036,7 +1050,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx)
     m_latest_poll = nullptr;
 }
 
-void PollRegistry::DeleteVote(const ContractContext& ctx)
+void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     if (ctx->m_version >= 2) {
         const auto vote = ctx->SharePayloadAs<Vote>();
@@ -1060,23 +1074,51 @@ void PollRegistry::DeleteVote(const ContractContext& ctx)
     }
 }
 
+void PollRegistry::DetectReorg()
+EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // Reorg detector
+    // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
+    // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
+    // these handlers are only triggered by those two contract types.
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, "
+                                    "m_block_height_hw = %i, nBestHeight = %i",
+             __func__,
+             registry_traversal_in_progress,
+             reorg_occurred_during_reg_traversal,
+             m_block_height_hw,
+             nBestHeight);
+
+    if (registry_traversal_in_progress && nBestHeight < m_block_height_hw) {
+        reorg_occurred_during_reg_traversal = true;
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to true.", __func__);
+    } else {
+        reorg_occurred_during_reg_traversal = false;
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to false.", __func__);
+    }
+
+    if (nBestHeight > m_block_height_hw) {
+        m_block_height_hw = nBestHeight;
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting m_block_height_hw to nBestHeight", __func__);
+    }
+}
 // -----------------------------------------------------------------------------
 // Class: PollRegistry::Sequence
 // -----------------------------------------------------------------------------
 
 using Sequence = PollRegistry::Sequence;
 
-Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags)
+Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     : m_polls(polls), m_flags(flags)
 {
 }
 
-Sequence Sequence::Where(const FilterFlag flags) const
+Sequence Sequence::Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return Sequence(m_polls, flags);
 }
 
-Sequence Sequence::OnlyActive(const bool active_only) const
+Sequence Sequence::OnlyActive(const bool active_only) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int flags = m_flags;
 
@@ -1087,7 +1129,7 @@ Sequence Sequence::OnlyActive(const bool active_only) const
     return Sequence(m_polls, static_cast<FilterFlag>(flags));
 }
 
-Sequence::Iterator Sequence::begin() const
+Sequence::Iterator Sequence::begin() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int64_t now = 0;
 
@@ -1098,7 +1140,7 @@ Sequence::Iterator Sequence::begin() const
     return Iterator(m_polls.begin(), m_polls.end(), m_flags, now);
 }
 
-Sequence::Iterator Sequence::end() const
+Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return Iterator(m_polls.end());
 }
@@ -1126,12 +1168,12 @@ Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
 {
 }
 
-const PollReference& Iterator::Ref() const
+const PollReference& Iterator::Ref() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter->second;
 }
 
-PollOption Iterator::TryPollFromDisk() const
+PollOption Iterator::TryPollFromDisk() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter->second.TryReadFromDisk();
 }
@@ -1146,7 +1188,7 @@ Iterator::pointer Iterator::operator->() const
     return this;
 }
 
-Iterator& Iterator::operator++()
+Iterator& Iterator::operator++() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     ++m_iter;
     SeekNextMatch();
@@ -1154,7 +1196,7 @@ Iterator& Iterator::operator++()
     return *this;
 }
 
-Iterator Iterator::operator++(int)
+Iterator Iterator::operator++(int) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     Iterator copy(*this);
     ++(*this);
@@ -1162,17 +1204,17 @@ Iterator Iterator::operator++(int)
     return copy;
 }
 
-bool Iterator::operator==(const Iterator& other) const
+bool Iterator::operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter == other.m_iter;
 }
 
-bool Iterator::operator!=(const Iterator& other) const
+bool Iterator::operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter != other.m_iter;
 }
 
-void Iterator::SeekNextMatch()
+void Iterator::SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     if (m_flags == FilterFlag::NO_FILTER) {
         return;
