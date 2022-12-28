@@ -1,0 +1,11 @@
+../../lang/csharp/src/db_dotnet
+../../examples/csharp/excs_access/excs_access
+../../examples/csharp/excs_bulk/excs_bulk
+../../examples/csharp/excs_lock/excs_lock
+../../examples/csharp/excs_btrec/excs_btrec
+../../examples/csharp/excs_env/excs_env
+../../examples/csharp/excs_getting_started/excs_getting_started
+../../examples/csharp/excs_repquote/excs_repquote
+../../examples/csharp/excs_sequence/excs_sequence
+../../examples/csharp/excs_txn/excs_txn
+../../test/csharp/DotNetTest

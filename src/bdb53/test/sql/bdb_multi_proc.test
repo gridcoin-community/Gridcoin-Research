@@ -1,0 +1,467 @@
+#
+#    May you do good and not evil.
+#    May you find forgiveness for yourself and forgive others.
+#    May you share freely, never taking more than you give.
+#
+#***********************************************************************
+# This file implements regression tests for parallel multi-process 
+# access to a database.
+set sqldir [file dirname $argv0]
+set testdir $sqldir/../../lang/sql/sqlite/test
+
+source $testdir/tester.tcl
+# Contains the definition of do_sync and do_multi_proc_test
+source $sqldir/../../test/tcl_utils/multi_proc_utils.tcl
+# Contains the definition of available_ports
+source $sqldir/../../test/tcl_utils/common_test_utils.tcl
+# Skip this test if threads are not enabled.  The do_sync function
+# requires threads.
+if {![run_thread_tests]} { 
+    puts "Tcl built without threads enabled, skipping test."
+    finish_test ; return 
+}
+if [catch {package require Thread}] {
+    puts "Tcl does not contain the Thread library, skipping test."
+    finish_test ; return 
+}
+
+# The first test tests that one process can read data inserted
+# into the database by another process. 
+set myports [ available_ports 2]
+set myPort1 [ lindex $myports 0]
+set myPort2 [ lindex $myports 1]
+do_multi_proc_test bdb_multi_proc-1 [list {
+    # Process 1 code
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts [lindex $cmd_args 1 ]
+    set timeout 20
+
+    # The scripts are run relative to the build_X directory 
+    set testdir ../lang/sql/sqlite/test
+    # For the definition of do_test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs.db
+
+    # Create the tables
+    do_test bdb_multi_proc-1.1.1 {
+	db eval { 
+	    BEGIN;
+	    CREATE TABLE t1(a);
+	    COMMIT;
+	}
+    } {}
+
+    # Wake up the other process
+    do_test bdb_multi_proc-1.1.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Pause while the other process inserts into the table
+    do_test bdb_multi_proc-1.1.3 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-1.1.4 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {1}
+
+    # Wake up the other process
+    do_test bdb_multi_proc-1.1.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    db close
+    finish_test
+} {
+    # Process 2 code.
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts [lindex $cmd_args 1 ]
+    set timeout 20
+
+    # The scripts are run relative to the build_X directory 
+    set testdir ../lang/sql/sqlite/test
+    # For the definition of do_test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs.db
+
+    # Wait while the other process creates the table
+    do_test bdb_multi_proc-1.2.1 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Insert into the table
+    do_test bdb_multi_proc-1.2.2 {
+	db eval { 
+	    INSERT INTO t1 values(1);
+	}
+    } {}
+
+    # Wake up the other process
+    do_test bdb_multi_proc-1.2.3 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Wait while the other process reads the table
+    do_test bdb_multi_proc-1.2.4 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    db close
+    finish_test
+
+# Below is the argument list for the processes.  The first list is
+# passed to Process 1, and the second list is passed to Process 2.
+# The lists consist of:
+# first myPort - Port for the server of the current process
+# last myPort - Port for the server of the other process
+}] [list [list $myPort1 $myPort2] \
+	[list $myPort2 $myPort1]]
+
+catch {file delete -force -- procs.db}
+catch {file delete -force -- procs.db-journal}
+
+# The second test tests that three processes can write data to the 
+# database and read each other's work.
+set myports [ available_ports 3]
+set myPort1 [ lindex $myports 0]
+set myPort2 [ lindex $myports 1]
+set myPort3 [ lindex $myports 2]
+do_multi_proc_test bdb_multi_proc-2 [list {
+    # Process 1
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts {}
+    lappend clientPorts [lindex $cmd_args 1 ]
+    lappend clientPorts [lindex $cmd_args 2 ]
+    set timeout 20
+
+    # The scripts are run relative to the build_X directory  
+    set testdir ../lang/sql/sqlite/test
+    # For the definition of do_test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs.db
+
+    # Create the tables
+    do_test bdb_multi_proc-2.1.1 {
+	db eval { 
+	    BEGIN;
+	    CREATE TABLE t1(a);
+	    COMMIT;
+	}
+    } {}
+
+    # Wake up the other proceses
+    do_test bdb_multi_proc-2.1.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Pause while process 2 inserts into the table
+    do_test bdb_multi_proc-2.1.3 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-2.1.4 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {2}
+
+    # Wake up the other processes after verifying process 2 write
+    do_test bdb_multi_proc-2.1.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Pause while process 3 writes to the table
+    do_test bdb_multi_proc-2.1.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-2.1.6 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {2 3}
+
+    db close
+    finish_test
+} {
+    # Process 2
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts {}
+    lappend clientPorts [lindex $cmd_args 1 ]
+    lappend clientPorts [lindex $cmd_args 2 ]
+    set timeout 20
+
+    # The scripts are run relative to the build_X directory 
+    set testdir ../lang/sql/sqlite/test
+    # For the definition of do_test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs.db
+
+    # Wait while process 1 creates the table
+    do_test bdb_multi_proc-2.2.1 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-2.2.2 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {}
+
+    # Insert into the table
+    do_test bdb_multi_proc-2.2.3 {
+	db eval { 
+	    INSERT INTO t1 values(2);
+	}
+    } {}
+
+    # Wake up the other processes
+    do_test bdb_multi_proc-2.2.4 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Wait while process 1 verifies our write
+    do_test bdb_multi_proc-2.2.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Wait while process 3 inserts into the table
+    do_test bdb_multi_proc-2.2.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-2.2.6 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {2 3}
+
+    db close
+    finish_test
+} {
+    # Process 3
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts {}
+    lappend clientPorts [lindex $cmd_args 1 ]
+    lappend clientPorts [lindex $cmd_args 2 ]
+    set timeout 20
+    # The scripts are run relative to the build_X directory 
+    set testdir ../lang/sql/sqlite/test
+    # For the definition of do_test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs.db
+
+    # Wait while process 1 creates the table
+    do_test bdb_multi_proc-2.3.1 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Wait while process 2 inserts into the table
+    do_test bdb_multi_proc-2.3.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Wait while process 1 verifies the write from process 2
+    do_test bdb_multi_proc-2.3.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Read from the table
+    do_test bdb_multi_proc-2.3.3 {
+	db eval { 
+	    SELECT * from t1;
+	}
+    } {2}
+
+    # Insert into the table
+    do_test bdb_multi_proc-2.3.4 {
+	db eval { 
+	    INSERT INTO t1 values(3);
+	}
+    } {}
+
+    # Wake up the other processes
+    do_test bdb_multi_proc-2.3.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    db close
+    finish_test
+# Below is the argument lists for the processes, consisting of
+# first myPort - Port for the server of the current process
+# last two myPort - Ports for the servers of the other processes
+}] [list [list $myPort1 $myPort2 $myPort3] \
+	[list $myPort2 $myPort1 $myPort3] \
+	[list $myPort3 $myPort1 $myPort2]]
+
+catch {file delete -force -- procs.db}
+catch {file delete -force -- procs.db-journal}
+
+sqlite3 db procs2.db
+
+do_test bdb_multi_proc-3.0 {
+    db eval { CREATE TABLE atable(a); }
+} {}
+
+db close
+
+# Check for a bug that could cause deadlock between
+# two processes that create new tables SR #20722
+set myports [ available_ports 2]
+set myPort1 [ lindex $myports 0]
+set myPort2 [ lindex $myports 1]
+do_multi_proc_test bdb_multi_proc-3 [list {
+    # Process 1 code
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts [lindex $cmd_args 1 ]
+    set timeout 20
+
+    set testdir ../lang/sql/sqlite/test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs2.db
+
+    # Create the table 1
+    do_test bdb_multi_proc-3.1.1 {
+	db eval { 
+	    CREATE TABLE t1(a);
+	}
+    } {}
+
+    # Wait on process 2
+    do_test bdb_multi_proc-3.1.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Start the transaction
+    do_test bdb_multi_proc-3.1.3 {
+	db eval { 
+	    BEGIN IMMEDIATE;
+	}
+    } {}
+
+    # Wait on process 2
+    do_test bdb_multi_proc-3.1.4 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Insert into the table we created
+    do_test bdb_multi_proc-3.1.5 {
+	db eval { 
+	    INSERT INTO t1 VALUES(1);
+	}
+    } {}
+
+    # Wake up process 2
+    do_test bdb_multi_proc-3.1.6 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Let process 2 become blocked
+    after 3000
+
+    # Insert into the table Process 2 created
+    do_test bdb_multi_proc-3.1.7 {
+	db eval { 
+	    INSERT INTO t2 VALUES(2);
+	}
+    } {}
+
+    # End the transaction letting process 2 continue
+    do_test bdb_multi_proc-3.1.8 {
+	db eval { 
+	    COMMIT;
+	}
+    } {}
+
+    db close
+    finish_test
+} {
+    # Process 2 code.
+    set cmd_args [ lindex $argv 0 ]
+    set myPort [ lindex $cmd_args 0 ]
+    set clientPorts [lindex $cmd_args 1 ]
+    set timeout 5
+
+    set testdir ../lang/sql/sqlite/test
+    source $testdir/tester.tcl
+    source ../test/tcl_utils/multi_proc_utils.tcl
+    sqlite3 db procs2.db
+
+    # Create the table2
+    do_test bdb_multi_proc-3.2.1 {
+	db eval { 
+	    CREATE TABLE t2(a);
+	}
+    } {}
+
+    # Wait on process 1
+    do_test bdb_multi_proc-3.2.2 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Start the transaction
+    do_test bdb_multi_proc-3.2.3 {
+	db eval { 
+	    BEGIN IMMEDIATE;
+	}
+    } {}
+
+    # Wait on process 1
+    do_test bdb_multi_proc-3.2.4 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Let process 1 insert first
+    do_test bdb_multi_proc-3.2.5 {
+	set ret [do_sync $myPort $clientPorts $timeout]
+    } {0}
+
+    # Insert into the table we created, will become
+    # blocked here until process 1 commits
+    do_test bdb_multi_proc-3.2.6 {
+	db eval { 
+	    INSERT INTO t2 VALUES(2);
+	}
+    } {}
+
+    # End the transaction
+    do_test bdb_multi_proc-3.2.8 {
+	db eval { 
+	    COMMIT;
+	}
+    } {}
+
+    db close
+    finish_test
+
+# Below is the argument list for the processes.  The first list is
+# passed to Process 1, and the second list is passed to Process 2.
+# The lists consist of:
+# first myPort - Port for the server of the current process
+# last myPort - Port for the server of the other process
+}] [list [list $myPort1 $myPort2] \
+	[list $myPort2 $myPort1]]
+
+catch {file delete -force -- procs2.db}
+catch {file delete -force -- procs2.db-journal}
+
+finish_test

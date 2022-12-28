@@ -1,0 +1,60 @@
+#!/bin/sh -
+#
+# $Id$
+#
+# Check ID generated for globalization support.
+# TODO: Verify the positional parameters (like "%d") in the two strings
+# to the macro.
+
+# Get the list of all message ID
+
+MSG_DIR="../../src/ ../../util/ ../../lang/dbm/"
+
+grep -E "DB_STR\([^ ,]*" $MSG_DIR -r -h -o | sed "s/\"//g" | \
+    sed "s/DB_STR(//g" > msg_id_unsorted
+grep -E "DB_STR_A\([^ ,]*" $MSG_DIR -r -h -o | sed "s/\"//g" | \
+    sed "s/DB_STR_A(//g" >> msg_id_unsorted
+sort msg_id_unsorted > msg_id_list 
+rm msg_id_unsorted
+
+maxline=`cat msg_id_list | wc -l`
+
+# The exception for duplicate messages
+rep_dup_msg_id=`grep -E "\"[0-9]{4}" -r ../../dist/gen_msg.awk -o | \
+    sed "s/\"//g"`
+lastnum=""
+for (( i = 1; i <= $maxline ; i++ ))
+do
+	curnum=`sed -n -e $i"p" msg_id_list`
+
+	# "DB_STR(id" and "DB_STR_A(id" are from macros defination, 
+	# should not be regarded as invalid message id.
+	if [ "$curnum" == "id" ]; then
+		continue
+	fi
+
+	# The message id should be 4 digit number.
+	if [ `echo $curnum | wc -c` -ne 5 ]; then
+		echo "[ERROR] size of message id should be 4: $curnum"
+		exit 1
+	fi
+	if [[ ! -z $(echo $curnum | sed 's/[0-9]//g') ]]; then
+		echo "[ERROR] message id should be digit number only: $curnum"
+		exit 1
+	fi
+	
+	# There shouldn't be duplicate message id.
+	if [ "$curnum" == "$lastnum" ]; then
+		if [ "$curnum" == "$rep_dup_msg_id" ]; then
+			echo "[EXPECTED] duplicate message id: $curnum"
+		else
+			echo "[ERROR] duplicate message id: $curnum"
+			exit 1
+		fi
+	fi
+	lastnum=$curnum
+done
+
+rm -f msg_id_list
+
+exit 0

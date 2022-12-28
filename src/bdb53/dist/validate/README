@@ -1,0 +1,10 @@
+All the files in this folder implement test cases that validate some component
+of the Berkeley DB system.
+
+They are driven by script files, that are shell script based. They are not
+generally designed to be run outside of the shell.
+
+There is a "driver" script called s_validate in the dist directory of the
+repository that can be used to run all the scripts in this directory.
+
+Any new script will be automatically run by the s_validate driver.

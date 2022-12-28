@@ -1,0 +1,16 @@
+#! /bin/sh -
+# Build documentation for the C# API.
+# Visual Studio (devenv.exe) must be in your PATH
+# The .NET Framework v3.5 must be installed
+
+# Cygwin/Mingw uses / as path separator.
+SYSROOT=`echo "$SYSTEMROOT" | sed '#\\#/#g'`
+
+# Build the release version of the C# library.
+cd ../build_windows
+devenv BDB_dotNet.sln /upgrade
+devenv BDB_dotNet.sln /build "Release|Win32"
+
+# Build the C# documentation.
+cd ../lang/csharp/doc
+$SYSROOT/Microsoft.Net/Framework/v3.5/MSBuild.exe /p:Configuration=Release CsharpDoc.shfbproj
