@@ -471,14 +471,6 @@ case $host in
          dnl Homebrew where each one is located, then adjust paths accordingly.
          dnl It's safe to add these paths even if the functionality is disabled by
          dnl the user (--without-wallet or --without-gui for example).
-
-         if $BREW list --versions berkeley-db@4 >/dev/null && test "$BDB_CFLAGS" = "" && test "$BDB_LIBS" = ""; then
-           bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
-           dnl This must precede the call to BITCOIN_FIND_BDB48 below.
-           BDB_CFLAGS="-I$bdb_prefix/include"
-           BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx-4.8"
-         fi
-
          openssl_prefix=`$BREW --prefix openssl@1.1 2>/dev/null`
          qt5_prefix=`$BREW --prefix qt@5 2>/dev/null`
          if test "$openssl_prefix" != ""; then
@@ -948,11 +940,6 @@ if test "$use_reduce_exports" = "yes"; then
   [AC_MSG_ERROR([Cannot set default symbol visibility. Use --disable-reduce-exports.])])
 fi
 
-if test "$enable_wallet" != "no"; then
-    dnl Check for libdb_cxx only if wallet enabled
-    BITCOIN_FIND_BDB48
-fi
-
 dnl Check for libminiupnpc (optional)
 if test "$use_upnp" != "no"; then
   AC_CHECK_HEADERS(
@@ -1318,8 +1305,17 @@ PKG_CONFIG_LIBDIR="$PKGCONFIG_LIBDIR_TEMP"
 
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-module-recovery"
 
+ADDITIONAL_BDB_FLAGS=""
+
+case $host in
+    *mingw*)
+        ADDITIONAL_BDB_FLAGS="--enable-mingw"
+    ;;
+esac
+
 AC_CONFIG_SUBDIRS([src/univalue])
 AC_CONFIG_SUBDIRS([src/secp256k1])
+AX_SUBDIRS_CONFIGURE([src/bdb53], [[CFLAGS="-Wno-error=implicit-function-declaration"], [CXXFLAGS="-Wno-error=implicit-function-declaration"], [--disable-java], [--disable-jdbc], [--disable-replication], [--enable-cxx], [$ADDITIONAL_BDB_FLAGS]], [], [], [])
 
 AC_OUTPUT
 
