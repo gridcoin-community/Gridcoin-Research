@@ -257,7 +257,7 @@ AC_DEFUN([AX_SUBDIRS_CONFIGURE],
       # Options that must be removed.
       m4_ifnblank([$5], [m4_foreach(opt, [$5], [ax_args=$(echo $ax_args | sed "s,'opt',,")
       ])])
-      AS_VAR_APPEND([ax_args], [" '--srcdir=$ac_srcdir'"])
+      # AS_VAR_APPEND([ax_args], [" '--srcdir=$ac_srcdir'"])
 
       # Add the subdirectory to the list of target subdirectories.
       ax_subconfigures="$ax_subconfigures $ax_dir"
