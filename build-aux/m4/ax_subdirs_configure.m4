@@ -302,6 +302,8 @@ AC_DEFUN([AX_SUBDIRS_CONFIGURE],
         elif test -f "$ac_srcdir/configure.in"; then
           # This should be Cygnus configure.
           ax_sub_configure=$ac_aux_dir/configure
+        elif test -f "$ac_srcdir/dist/configure"; then
+          ax_sub_configure=$ac_srcdir/dist/configure
         else
           AC_MSG_WARN([no configuration information is in $ax_dir])
           ax_sub_configure=
