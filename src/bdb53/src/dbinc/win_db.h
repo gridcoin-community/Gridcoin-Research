@@ -46,7 +46,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #ifndef DB_WINCE
-#include <WinIoCtl.h>
+#include <winioctl.h>
 #endif
 
 #ifdef HAVE_GETADDRINFO
