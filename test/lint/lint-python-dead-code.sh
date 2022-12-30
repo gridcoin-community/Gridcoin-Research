@@ -18,7 +18,7 @@ fi
 if ! vulture \
     --min-confidence 100 \
     --exclude "src/crc32c/.ycm_extra_conf.py" \
-    $(git ls-files -- "*.py"); then
+    $(git ls-files -- "*.py" ":(exclude)src/bdb53/"); then
     echo "Python dead code detection found some issues"
     exit 1
 fi
