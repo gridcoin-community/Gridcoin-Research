@@ -6,6 +6,7 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "consensus/merkle.h"
+#include "gridcoin/voting/registry.h"
 #include "util.h"
 #include "net.h"
 #include "streams.h"
@@ -913,6 +914,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 {
     set<string> vRereadCPIDs;
     GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+    GRC::PollRegistry& polls = GRC::GetPollRegistry();
 
     while(pindexBest != pcommon)
     {
@@ -934,7 +936,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         // Queue memory transactions to resurrect.
         // We only do this for blocks after the last checkpoint (reorganisation before that
-        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
+        // point should only happen with -reindex/-loadblock, or a misbehaving peer).
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
@@ -965,7 +967,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
-        // Delete beacons from contracts in disconnected blocks.
+        // Delete beacons, polls and votes from contracts in disconnected blocks.
         if (pindexBest->IsContract())
         {
             // Skip coinbase and coinstake transactions:
@@ -980,6 +982,12 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
 
                        beacons.Revert(contract_context);
+                    }
+
+                    if (contract.m_type == GRC::ContractType::POLL || contract.m_type == GRC::ContractType::VOTE) {
+                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                        polls.Revert(contract_context);
                     }
                 }
             }
@@ -1000,7 +1008,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     }
 
     /* fix up after disconnecting, prepare for new blocks */
-    if(cnt_dis>0)
+    if (cnt_dis > 0)
     {
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
