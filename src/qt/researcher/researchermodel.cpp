@@ -413,6 +413,15 @@ QString ResearcherModel::formatTimeToBeaconExpiration() const
     return GUIUtil::formatDurationStr(Beacon::MAX_AGE - m_beacon->Age(GetAdjustedTime()));
 }
 
+QString ResearcherModel::formatTimeToPendingBeaconExpiration() const
+{
+    if (!m_pending_beacon) {
+        return QString();
+    }
+
+    return GUIUtil::formatDurationStr(PendingBeacon::RETENTION_AGE - m_pending_beacon->Age(GetAdjustedTime()));
+}
+
 QString ResearcherModel::formatBeaconAddress() const
 {
     if (!m_beacon) {
