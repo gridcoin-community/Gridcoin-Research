@@ -86,6 +86,7 @@ public:
         m_mining_pools.push_back({ "7d0d73fe026d66fd4ab8d5d8da32a611", "grcpool.com", "https://grcpool.com/" });
         m_mining_pools.push_back({ "a914eba952be5dfcf73d926b508fd5fa", "grcpool.com-2", "https://grcpool.com/" });
         m_mining_pools.push_back({ "163f049997e8a2dee054d69a7720bf05", "grcpool.com-3", "https://grcpool.com/" });
+        m_mining_pools.push_back({ "f1f4d4e93b5b319b0a54b09dd47f1486", "grcpool.com-5", "https://grcpool.com/" });
         m_mining_pools.push_back({ "326bb50c0dd0ba9d46e15fae3484af35", "grc.arikado.pool", "https://gridcoinpool.ru/" });
     }
 
