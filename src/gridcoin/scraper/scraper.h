@@ -57,6 +57,7 @@ extern bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
 extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP;
 extern std::string TEAM_WHITELIST;
+extern std::string EXTERNAL_ADAPTER_PROJECTS;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
 extern CCriticalSection cs_mScrapersExt;

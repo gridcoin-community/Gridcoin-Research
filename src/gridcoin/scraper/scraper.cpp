@@ -167,6 +167,8 @@ unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE GUARDED_BY(cs_ScraperGlobals) = 0
 bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP GUARDED_BY(cs_ScraperGlobals) = false;
 /** Default team whitelist. Remember this will be overridden by appcache entries. */
 std::string TEAM_WHITELIST GUARDED_BY(cs_ScraperGlobals) = "Gridcoin";
+/** This is a short term place to hold projects that require an external adapter for the scrapers.*/
+std::string EXTERNAL_ADAPTER_PROJECTS GUARDED_BY(cs_ScraperGlobals) = std::string{};
 /** This is the period after the deauthorizing of a scraper in seconds before the nodes will start
  * to assign banscore to nodes sending unauthorized manifests.
  */
@@ -1365,6 +1367,7 @@ void ScraperApplyAppCacheEntries()
         ApplyCache("SCRAPER_MISBEHAVING_NODE_BANSCORE", SCRAPER_MISBEHAVING_NODE_BANSCORE);
         ApplyCache("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", REQUIRE_TEAM_WHITELIST_MEMBERSHIP);
         ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
+        ApplyCache("EXTERNAL_ADAPTER_PROJECTS", EXTERNAL_ADAPTER_PROJECTS);
         ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
@@ -1404,6 +1407,8 @@ void ScraperApplyAppCacheEntries()
              "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + ToString(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
              "TEAM_WHITELIST = " + TEAM_WHITELIST);
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
+             "EXTERNAL_ADAPTER_PROJECTS = " + EXTERNAL_ADAPTER_PROJECTS);
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
              "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + ToString(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
     }
