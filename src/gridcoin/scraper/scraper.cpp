@@ -274,6 +274,32 @@ template<typename T>
  */
 void ApplyCache(const std::string& key, T& result);
 
+
+const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
+{
+    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
+}
+
+const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
+{
+    return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
+}
+
+double MagRound(double dMag)
+{
+    return round(dMag / MAG_ROUND) * MAG_ROUND;
+}
+
+unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
+{
+    LOCK(cs_ScraperGlobals);
+
+    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM,
+                                      (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
+
+    return nRequired;
+}
+
 // Internal functions for scraper/subscriber operation.
 /**
  * @brief Gets scrapers AppCacheSection
@@ -1126,6 +1152,13 @@ std::vector<std::string> GetTeamWhiteList()
     }
 
     return split(TEAM_WHITELIST, delimiter);
+}
+
+std::vector<std::string> GetProjectsExternalAdapterRequired()
+{
+    LOCK(cs_ScraperGlobals);
+
+    return split(EXTERNAL_ADAPTER_PROJECTS, "|");
 }
 
 

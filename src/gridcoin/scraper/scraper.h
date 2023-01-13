@@ -190,30 +190,21 @@ static std::vector<std::string> scraperSBvalidationtypestrings = {
  * @param StatsObjType
  * @return std::string
  */
-const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
-{
-    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
-}
+const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType);
 
 /**
  * @brief Returns text that corresponds to the input scraperSBvalidationtype
  * @param ScraperSBValidationType
  * @return std::string
  */
-const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
-{
-    return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
-}
+const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType);
 
 /**
  * @brief Rounds the double floating point magnitude according to the global parameter MAG_ROUND.
  * @param dMag
  * @return double
  */
-double MagRound(double dMag)
-{
-    return round(dMag / MAG_ROUND) * MAG_ROUND;
-}
+double MagRound(double dMag);
 
 /**
  * @brief Returns the number of scrapers required for a supermajority when determining a convergence. This is a CONSENSUS
@@ -221,14 +212,9 @@ double MagRound(double dMag)
  * @param nScraperCount
  * @return unsigned int
  */
-unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
-{
-    LOCK(cs_ScraperGlobals);
+unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 
-    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM,
-                                      (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
-
-    return nRequired;
-}
+/** Gets a vector of projects that require an external adapter for the scrapers to pull statistics. */
+std::vector<std::string> GetProjectsExternalAdapterRequired();
 
 #endif // GRIDCOIN_SCRAPER_SCRAPER_H
