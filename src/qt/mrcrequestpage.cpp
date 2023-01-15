@@ -6,7 +6,7 @@
 #include "qspinbox.h"
 #include "sync.h"
 #include "mrcrequestpage.h"
-#include "ui_mrcrequestpage.h"
+#include "forms/ui_mrcrequestpage.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
@@ -266,6 +266,11 @@ void MRCRequestPage::showMRCStatus(const MRCModel::ModelStatus& status) {
     case MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT:
         ui->waitForBlockUpdateLabel->setText(tr("A block update must have occurred after wallet start or sync to submit "
                                                 "MRCs."));
+        ui->waitForNextBlockUpdateFrame->show();
+        ui->mrcStatusSubmitFrame->hide();
+        return;
+    case MRCModel::ModelStatus::INSUFFICIENT_MATURE_FUNDS:
+        ui->waitForBlockUpdateLabel->setText(tr("You must have a mature balance of at least 1 GRC to submit an MRC."));
         ui->waitForNextBlockUpdateFrame->show();
         ui->mrcStatusSubmitFrame->hide();
         return;
