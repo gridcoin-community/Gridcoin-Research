@@ -30,7 +30,8 @@ enum class MRCRequestStatus
     ZERO_PAYOUT,
     EXCESSIVE_FEE,
     WALLET_LOCKED,
-    SUBMIT_ERROR
+    SUBMIT_ERROR,
+    INSUFFICIENT_MATURE_FUNDS
 };
 
 //!
@@ -59,7 +60,8 @@ public:
         NOT_VALID_RESEARCHER,
         INVALID_BLOCK_VERSION,
         OUT_OF_SYNC,
-        NO_BLOCK_UPDATE_FROM_INIT
+        NO_BLOCK_UPDATE_FROM_INIT,
+        INSUFFICIENT_MATURE_FUNDS
     };
 
     WalletModel* getWalletModel();
