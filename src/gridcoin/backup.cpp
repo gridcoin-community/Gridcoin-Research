@@ -336,29 +336,3 @@ bool GRC::MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> 
     return true;
 }
 
-bool GRC::BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors)
-{
-    if (wallet.IsLocked() || fWalletUnlockStakingOnly)
-    {
-        sErrors = "Wallet needs to be fully unlocked to backup private keys.";
-        return false;
-    }
-    fs::path PrivateKeysTarget = GetBackupFilename("keys.dat");
-    fs::create_directories(PrivateKeysTarget.parent_path());
-    sTarget = PrivateKeysTarget.string();
-    fsbridge::ofstream myBackup;
-    myBackup.open(PrivateKeysTarget);
-    std::string sError;
-    for(const auto& keyPair : wallet.GetAllPrivateKeys(sError))
-    {
-        if (!sError.empty())
-        {
-            sErrors = sError;
-            return false;
-        }
-        myBackup << "Address: " << keyPair.first.ToString() << ", Secret: " << keyPair.second.ToString() << std::endl;
-    }
-    LogPrintf("BackupPrivateKeys: Backup made to %s", PrivateKeysTarget.string());
-    myBackup.close();
-    return true;
-}

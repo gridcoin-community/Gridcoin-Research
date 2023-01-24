@@ -1081,31 +1081,6 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue backupprivatekeys(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "backupprivatekeys\n"
-                "\n"
-                "Backup wallet private keys to file (Wallet must be fully unlocked!)\n");
-
-    string sErrors;
-    string sTarget;
-    UniValue res(UniValue::VOBJ);
-
-    bool bBackupPrivateKeys = GRC::BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
-
-    if (!bBackupPrivateKeys)
-        res.pushKV("error", sErrors);
-
-    else
-        res.pushKV("location", sTarget);
-
-    res.pushKV("result", bBackupPrivateKeys);
-
-    return res;
-}
-
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
     if (fHelp || (params.size() < 2 || params.size() > 4))
