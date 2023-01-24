@@ -23,7 +23,6 @@ bool BackupConfigFile(const std::string& strDest);
 bool MaintainBackups(fs::path wallet_backup_path, std::vector<std::string> backup_file_type,
                    unsigned int retention_by_num, unsigned int retention_by_days, std::vector<std::string>& files_removed);
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
-bool BackupPrivateKeys(const CWallet& wallet, std::string& sTarget, std::string& sErrors);
 }
 
 #endif // GRIDCOIN_BACKUP_H
