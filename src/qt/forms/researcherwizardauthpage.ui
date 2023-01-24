@@ -39,8 +39,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>610</width>
-        <height>460</height>
+        <width>596</width>
+        <height>498</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -76,7 +76,7 @@
        <item>
         <widget class="QLabel" name="step3Label">
          <property name="text">
-          <string>3. Change your username to the following verification code:</string>
+          <string>3. Change your &quot;name&quot; (real name or nickname) to the following verification code:</string>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
