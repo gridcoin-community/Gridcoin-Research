@@ -63,9 +63,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/asio/ssl.hpp
     boost/asio/system_timer.hpp
     boost/assert.hpp
-    boost/assign/list_inserter.hpp
     boost/assign/list_of.hpp
-    boost/assign/std/vector.hpp
     boost/bind/bind.hpp
     boost/date_time.hpp
     boost/date_time/gregorian/greg_date.hpp
