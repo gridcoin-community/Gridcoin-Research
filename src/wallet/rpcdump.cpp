@@ -9,7 +9,6 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "node/ui_interface.h"
-#include "base58.h"
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/algorithm/string.hpp>
@@ -122,20 +121,14 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
     if (params.size() > 2)
         fRescan = params[2].get_bool();
 
-    CBitcoinSecret vchSecret;
-    CKey key;
-    bool fGood = vchSecret.SetString(strSecret);
+    CKey key = DecodeSecret(strSecret);
 
-    // If CBitcoinSecret key decode failed, try to decode the key as hex
-    if(!fGood)
+    // If decoding the key failed, try to decode the key as hex instead.
+    if (!key.IsValid())
     {
         auto vecsecret = ParseHex(strSecret);
         if (!key.Load(CPrivKey(vecsecret.begin(), vecsecret.end()), CPubKey(), /*fSkipCheck=*/true))
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-    }
-    else
-    {
-        key = vchSecret.GetKey();
     }
 
     if (fWalletUnlockStakingOnly)
@@ -212,11 +205,11 @@ UniValue importwallet(const UniValue& params, bool fHelp)
         boost::split(vstr, line, boost::is_any_of(" "));
         if (vstr.size() < 2)
             continue;
-        CBitcoinSecret vchSecret;
-        if (!vchSecret.SetString(vstr[0]))
+
+        CKey key = DecodeSecret(vstr[0]);
+        if (!key.IsValid())
             continue;
 
-        CKey key = vchSecret.GetKey();
         CKeyID keyid = key.GetPubKey().GetID();
 
         if (pwalletMain->HaveKey(keyid)) {
@@ -313,14 +306,14 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
 
         UniValue result(UniValue::VOBJ);
 
-        result.pushKV("private_key", CBitcoinSecret(vchSecret).ToString());
+        result.pushKV("private_key", EncodeSecret(vchSecret));
         result.pushKV("private_key_hex", HexStr(key_out.GetPrivKey()));
         result.pushKV("public_key_hex", HexStr(key_out.GetPubKey()));
 
         return result;
     }
 
-    return CBitcoinSecret(vchSecret).ToString();
+    return EncodeSecret(vchSecret);
 }
 
 UniValue dumpwallet(const UniValue& params, bool fHelp)
@@ -393,7 +386,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
 
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {
-            file << strprintf("%s %s ", CBitcoinSecret(key).ToString(), strTime);
+            file << strprintf("%s %s ", EncodeSecret(key), strTime);
             if (pwalletMain->mapAddressBook.count(keyid)) {
                 file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid]));
             } else if (keyid == masterKeyID) {

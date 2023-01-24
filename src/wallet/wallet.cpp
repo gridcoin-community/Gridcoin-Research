@@ -4,12 +4,12 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
+#include <key_io.h>
 #include "txdb.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "crypter.h"
 #include "node/ui_interface.h"
-#include "base58.h"
 #include "wallet/coincontrol.h"
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
