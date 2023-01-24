@@ -518,13 +518,7 @@ UniValue sendalert(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    CBitcoinSecret vchSecret;
-
-    if (!vchSecret.SetString(params[0].get_str())) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-    }
-
-    key = vchSecret.GetKey();
+    key = DecodeSecret(params[0].get_str());
 
     if (!key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
@@ -602,13 +596,7 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    CBitcoinSecret vchSecret;
-
-    if (!vchSecret.SetString(params[0].get_str())) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-    }
-
-    key = vchSecret.GetKey();
+    key = DecodeSecret(params[0].get_str());
 
     if (!key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
