@@ -1247,16 +1247,6 @@ void CWallet::ResendWalletTransactions(bool fForce)
         {
             CWalletTx& wtx = *item.second;
             if (wtx.RevalidateTransaction(txdb)) {
-                AssertLockHeld(cs_main);
-
-                // Do not (re)send stale MRCs. Note that the RevalidateTransaction above does NOT
-                // check ValidateMRC. Stale/invalid MRC's are removed in GridcoinConnectBlock.
-                if (!wtx.vContracts.empty() && wtx.vContracts[0].m_type == GRC::ContractType::MRC) {
-                    GRC::MRC mrc = *(wtx.vContracts[0].SharePayloadAs<GRC::MRC>());
-
-                    if (mrc.m_last_block_hash != hashBestChain) continue;
-                }
-
                 // Transaction is valid for relaying.
                 wtx.RelayWalletTransaction(txdb);
             } else {
@@ -1277,8 +1267,35 @@ void CWallet::ResendWalletTransactions(bool fForce)
 
 bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
 {
+    CTransaction tx = (CTransaction) *this;
+
     // Redo basic transaction check
-    if (!CheckTransaction((CTransaction) *this)) return false;
+    if (!CheckTransaction(tx)) return false;
+
+    // Do a subset of the AcceptToMemoryPool transaction checks. Here we are going to check and see if the inputs exist
+    // and also do the vanilla contract and GRC specific contract checks.
+    MapPrevTx mapInputs;
+    map<uint256, CTxIndex> mapUnused;
+    bool fInvalid = false;
+    if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+    {
+        if (fInvalid) {
+            return error("%s: FetchInputs found invalid tx %s", __func__, tx.GetHash().ToString());
+        }
+        return error("%s: FetchInputs unable to fetch all inputs for tx %s", __func__, tx.GetHash().ToString());
+    }
+
+    // Validate any contracts published in the transaction:
+    if (!tx.GetContracts().empty()) {
+        if (!CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+            return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
+        }
+
+        int DoS = 0;
+        if (!GRC::ValidateContracts(tx, DoS)) {
+            return error("%s: GRC::ValidateContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
+        }
+    }
 
     // At this point we should not be relaying any version 1 transactions, since we are WAY
     // past the block v11 transition, which was also the transition from tx version 1 to 2.
