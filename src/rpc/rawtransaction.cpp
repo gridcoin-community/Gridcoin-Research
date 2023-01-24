@@ -17,6 +17,7 @@
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/tx_message.h"
 #include "gridcoin/voting/payloads.h"
+#include <key_io.h>
 #include "node/blockstorage.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
@@ -1762,11 +1763,10 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
         for (unsigned int idx = 0; idx < keys.size(); idx++)
         {
             UniValue k = keys[idx];
-            CBitcoinSecret vchSecret;
-            bool fGood = vchSecret.SetString(k.get_str());
-            if (!fGood)
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,"Invalid private key");
-            CKey key = vchSecret.GetKey();
+            CKey key = DecodeSecret(k.get_str());
+            if (!key.IsValid()) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+            }
             tempKeystore.AddKey(key);
         }
     }

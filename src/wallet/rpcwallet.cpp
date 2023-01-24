@@ -3,12 +3,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <key_io.h>
 #include "version.h"
 #include "txdb.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "init.h"
-#include "base58.h"
 #include "streams.h"
 #include "util.h"
 #include "gridcoin/backup.h"
@@ -2724,14 +2724,7 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
     if (params[1].isNull()) {
         master_pub_key = pwalletMain->GenerateNewHDMasterKey();
     } else {
-        CKey key;
-        CBitcoinSecret vchSecret;
-
-        if (!vchSecret.SetString(params[1].get_str())) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-        }
-
-        key = vchSecret.GetKey();
+        CKey key = DecodeSecret(params[1].get_str());
 
         if (!key.IsValid()) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
