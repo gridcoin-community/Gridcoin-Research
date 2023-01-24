@@ -2994,8 +2994,7 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 }
                 else
                 {
-                    CSecret secret(vchSecret.begin(), vchSecret.end());
-                    CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
+                    CBitcoinSecret privateKey(vchSecret);
                     res.push_back(std::make_pair(address, privateKey));
                 }
             }
@@ -3020,16 +3019,14 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
         else
         {
             CKey vchSecret;
-            //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
             {
                 LogPrintf("GetAllPrivateKeys: During Private Key Backup, Private key for address %s is not known", keyID.ToString());
             }
             else
             {
-                CSecret secret(vchSecret.begin(), vchSecret.end());
                 CBitcoinAddress address(keyID);
-                CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
+                CBitcoinSecret privateKey(vchSecret);
                 res.push_back(std::make_pair(address, privateKey));
             }
         }

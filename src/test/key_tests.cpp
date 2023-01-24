@@ -34,34 +34,24 @@ BOOST_AUTO_TEST_CASE(key_test1)
     BOOST_CHECK( bsecret2C.SetString(strSecret2C));
     BOOST_CHECK(!baddress1.SetString(strAddressBad));
 
-    bool fCompressed;
-    CSecret secret1  = bsecret1.GetSecret (fCompressed);
-    BOOST_CHECK(fCompressed == false);
-    CSecret secret2  = bsecret2.GetSecret (fCompressed);
-    BOOST_CHECK(fCompressed == false);
-    CSecret secret1C = bsecret1C.GetSecret(fCompressed);
-    BOOST_CHECK(fCompressed == true);
-    CSecret secret2C = bsecret2C.GetSecret(fCompressed);
-    BOOST_CHECK(fCompressed == true);
-
-    BOOST_CHECK(secret1 == secret1C);
-    BOOST_CHECK(secret2 == secret2C);
-
-    CKey key1, key2, key1C, key2C;
-    key1.Set(secret1.begin(), secret1.end(), false);
-    key2.Set(secret2.begin(), secret2.end(), false);
-    key1C.Set(secret1.begin(), secret1.end(), true);
-    key2C.Set(secret2.begin(), secret2.end(), true);
+    CKey key1  = bsecret1.GetKey();
+    BOOST_CHECK(key1.IsCompressed() == false);
+    CKey key2  = bsecret2.GetKey();
+    BOOST_CHECK(key2.IsCompressed() == false);
+    CKey key1C = bsecret1C.GetKey();
+    BOOST_CHECK(key1C.IsCompressed() == true);
+    CKey key2C = bsecret2C.GetKey();
+    BOOST_CHECK(key1C.IsCompressed() == true);
 
     CPubKey pubkey1  = key1. GetPubKey();
     CPubKey pubkey2  = key2. GetPubKey();
     CPubKey pubkey1C = key1C.GetPubKey();
     CPubKey pubkey2C = key2C.GetPubKey();
 
-    BOOST_CHECK(addr1.Get()  == CTxDestination(key1.GetPubKey().GetID()));
-    BOOST_CHECK(addr2.Get()  == CTxDestination(key2.GetPubKey().GetID()));
-    BOOST_CHECK(addr1C.Get() == CTxDestination(key1C.GetPubKey().GetID()));
-    BOOST_CHECK(addr2C.Get() == CTxDestination(key2C.GetPubKey().GetID()));
+    BOOST_CHECK(addr1.Get()  == CTxDestination(pubkey1.GetID()));
+    BOOST_CHECK(addr2.Get()  == CTxDestination(pubkey2.GetID()));
+    BOOST_CHECK(addr1C.Get() == CTxDestination(pubkey1C.GetID()));
+    BOOST_CHECK(addr2C.Get() == CTxDestination(pubkey2C.GetID()));
 
     for (int n=0; n<16; n++)
     {

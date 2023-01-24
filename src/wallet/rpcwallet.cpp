@@ -2731,9 +2731,7 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
         }
 
-        bool fCompressed;
-        CSecret secret = vchSecret.GetSecret(fCompressed);
-        key.Set(secret.begin(), secret.end(), fCompressed);
+        key = vchSecret.GetKey();
 
         if (!key.IsValid()) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
