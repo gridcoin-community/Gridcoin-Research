@@ -1766,10 +1766,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
             bool fGood = vchSecret.SetString(k.get_str());
             if (!fGood)
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,"Invalid private key");
-            CKey key;
-            bool fCompressed;
-            CSecret secret = vchSecret.GetSecret(fCompressed);
-            key.Set(secret.begin(), secret.end(), fCompressed);
+            CKey key = vchSecret.GetKey();
             tempKeystore.AddKey(key);
         }
     }

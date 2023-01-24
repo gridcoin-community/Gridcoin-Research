@@ -130,13 +130,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key.");
     }
 
-    bool fCompressed;
-    CSecret secret = vchSecret.GetSecret(fCompressed);
-    key.Set(secret.begin(), secret.end(), fCompressed);
-
-    if (!key.IsValid()) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key.");
-    }
+    key = vchSecret.GetKey();
 
     if (fWalletUnlockStakingOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
@@ -216,10 +210,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
         if (!vchSecret.SetString(vstr[0]))
             continue;
 
-        bool fCompressed;
-        CKey key;
-        CSecret secret = vchSecret.GetSecret(fCompressed);
-        key.Set(secret.begin(), secret.end(), fCompressed);
+        CKey key = vchSecret.GetKey();
         CKeyID keyid = key.GetPubKey().GetID();
 
         if (pwalletMain->HaveKey(keyid)) {
@@ -305,9 +296,8 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     CKeyID keyID;
     if (!address.GetKeyID(keyID))
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
-    CSecret vchSecret;
-    bool fCompressed;
-    if (!pwalletMain->GetSecret(keyID, vchSecret, fCompressed))
+    CKey vchSecret;
+    if (!pwalletMain->GetKey(keyID, vchSecret))
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
 
 
@@ -317,14 +307,14 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
 
         UniValue result(UniValue::VOBJ);
 
-        result.pushKV("private_key", CBitcoinSecret(vchSecret, fCompressed).ToString());
+        result.pushKV("private_key", CBitcoinSecret(vchSecret).ToString());
         result.pushKV("private_key_hex", HexStr(key_out.GetPrivKey()));
         result.pushKV("public_key_hex", HexStr(key_out.GetPubKey()));
 
         return result;
     }
 
-    return CBitcoinSecret(vchSecret, fCompressed).ToString();
+    return CBitcoinSecret(vchSecret).ToString();
 }
 
 UniValue dumpwallet(const UniValue& params, bool fHelp)
@@ -397,8 +387,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
 
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {
-            CSecret secret(key.begin(), key.end());
-            file << strprintf("%s %s ", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime);
+            file << strprintf("%s %s ", CBitcoinSecret(key).ToString(), strTime);
             if (pwalletMain->mapAddressBook.count(keyid)) {
                 file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid]));
             } else if (keyid == masterKeyID) {
