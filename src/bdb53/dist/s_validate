@@ -1,0 +1,79 @@
+#!/bin/sh -
+#	$Id$
+#
+# This script runs the various validation tests in the validate directory.
+
+# Run everything, even those known to be invalid or useless.
+all_tests=1
+# Run all tests, even those that require odd env setup or a long time.
+full=0
+ignore_failures=0
+nocleanup=0
+verbose=1
+while [ $# -gt 0 ]
+do 
+	case "$1" in
+	-a*) # all
+		all_tests=1; full=1; shift;;
+	-c*) # continue
+		ignore_failures=1; shift;;
+	-f*) # full
+		full=1; shift;;
+	-nocleanup)
+		nocleanup=1; shift;;
+	-q*)
+		verbose=0; shift;;
+	*)
+		echo "Unrecognized option: $1, ignoring"
+		shift;;
+	esac
+done
+
+# The set of full tests are those that have special env setup requirements
+# or take a long time to run. They should be run at release time.
+FULL_TESTS="s_chk_build_configs s_chk_vxworks"
+EXCLUDE_TESTS="s_chk_logverify s_chk_srcfiles s_chk_java_samples"
+
+# Run all s_chk scripts, files with extensions are used by the script with
+# the shorter name, they shouldn't be run directly.
+for t in `(cd validate && ls s_chk_* | grep -v "\.")`
+do
+	excluded=0
+	for skip in $FULL_TESTS; do
+		if [ $full = 0 -a "$t" = "$skip" ]; then
+			echo "===!! Skipping $t ==="
+			echo "=== Add -full to the command line to enable ==="
+			excluded=1
+			break;
+		fi
+	done
+	for skip in $EXCLUDE_TESTS; do
+		if [ $all_tests != 0 -a "$t" = "$skip" ]; then
+			echo "===!! Skipping $t ==="
+			echo "=== Add -all to the command line to enable ==="
+			excluded=1
+			break;
+		fi
+	done
+	if [ $excluded != 0 ]; then
+		continue
+	fi
+
+	echo "=== Running $t ==="
+	if [ "$verbose" = 1 ]; then
+		(cd validate && sh $t)
+	else
+		(cd validate && sh $t > /dev/null)
+	fi
+	ret_val=$?
+	if [ "$ret_val" != 0 ]; then
+		echo "=== Test $t reported a failure $ret_val." >&2
+		if [ $ignore_failures = 0 ]; then
+			exit $ret_val
+		fi
+	else
+		echo "=== Test $t passed, $ret_val"
+	fi
+	rm -f validate/__?
+done
+echo "Finished running validate tests."

@@ -1,0 +1,112 @@
+--- orginal/src/win/interop.c	2010-04-17 13:14:08 +0800
++++ SQLite.Interop/src/win/interop.c	2010-11-18 12:59:06 +0800
+@@ -1,6 +1,5 @@
+ #include "../core/sqlite3.c"
+ #include "../contrib/extension-functions.c"
+-#include "crypt.c"
+ 
+ extern int RegisterExtensionFunctions(sqlite3 *db);
+ 
+@@ -393,7 +392,7 @@
+   int n;
+   int ret = -1;
+ 
+-  sqlite3_mutex_enter(db->mutex);
++ /* sqlite3_mutex_enter(db->mutex);
+   for (n = 0; n < p->nCursor && p->apCsr[n] != NULL; n++)
+   {
+     if (p->apCsr[n]->isTable == FALSE) continue;
+@@ -405,7 +404,7 @@
+     }
+   }
+   sqlite3_mutex_leave(db->mutex);
+-
++*/
+   return ret;
+ }
+ 
+--- orginal/src/contrib/extension-functions.c	2009-04-28 08:01:14 +0800
++++ SQLite.Interop/src/contrib/extension-functions.c	2010-11-18 12:26:06 +0800
+@@ -120,6 +120,7 @@
+ #ifndef _WIN32_WCE
+ #include <errno.h>		/* LMH 2007-03-25 */
+ #else
++#undef errno
+ int errno;
+ #define strerror(x) ""
+ #endif
+@@ -134,8 +135,8 @@
+ 
+ typedef signed char int8_t;
+ typedef unsigned char uint8_t;
+-typedef signed int int16_t;
+-typedef unsigned int uint16_t;
++typedef signed short int16_t;
++typedef unsigned short uint16_t;
+ typedef signed long int int32_t;
+ typedef unsigned long int uint32_t;
+ typedef signed long long int int64_t;
+--- orginal/test/TestCases.cs	2011-04-27 17:27:26.000000000 +0800
++++ test/TestCases.cs	2011-05-17 17:53:26.000000000 +0800
+@@ -1204,7 +1204,8 @@
+       CheckLocked();
+     }
+ 
+-    [Test(Sequence = 60)]
++    // Skip below test due to difference between SQLite and DBSQL."
++    // [Test(Sequence = 60)]
+     internal void LockTest()
+     {
+       CheckSQLite();
+@@ -1289,7 +1290,8 @@
+       internal int value;
+     }
+ 
+-    [Test(Sequence=11)]
++    // Skip below test due to difference between SQLite and DBSQL."
++    // [Test(Sequence=11)]
+     internal void MultithreadingTest()
+     {
+       using (DbCommand cmd = _cnn.CreateCommand())
+--- orginal/testce/TestCases.cs	2011-04-27 17:27:26.000000000 +0800
++++ testce/TestCases.cs	2011-05-17 17:52:26.000000000 +0800
+@@ -103,8 +103,9 @@
+       try { VerifyBinaryData(cnn); frm.WriteLine("SUCCESS - VerifyBinaryData"); }
+       catch (Exception) { frm.WriteLine("FAIL - VerifyBinaryData"); }
+ 
+-      try { LockTest(cnn); frm.WriteLine("SUCCESS - LockTest"); }
+-      catch (Exception) { frm.WriteLine("FAIL - LockTest"); }
++      // Skip below test due to difference between SQLite and DBSQL."
++      // try { LockTest(cnn); frm.WriteLine("SUCCESS - LockTest"); }
++      // catch (Exception) { frm.WriteLine("FAIL - LockTest"); }
+ 
+       try { ParameterizedInsertMissingParams(cnn); frm.WriteLine("FAIL - ParameterizedInsertMissingParams"); }
+       catch (Exception) { frm.WriteLine("SUCCESS - ParameterizedInsertMissingParams"); }
+--- orginal/System.Data.SQLite/SQLiteConnection.cs	2011-04-27 17:27:26.000000000 +0800
++++ System.Data.SQLite/SQLiteConnection.cs	2011-05-17 17:58:36.000000000 +0800
+@@ -880,9 +880,10 @@
+               cmd.ExecuteNonQuery();
+             }
+ 
+-            defValue = FindKey(opts, "Legacy Format", Boolean.FalseString);
+-            cmd.CommandText = String.Format(CultureInfo.InvariantCulture, "PRAGMA legacy_file_format={0}", SQLiteConvert.ToBoolean(defValue) == true ? "ON" : "OFF");
+-            cmd.ExecuteNonQuery();
++            // DBSQL does not support "PRAGMA legacy_file_format", ignore this operation.
++            // defValue = FindKey(opts, "Legacy Format", Boolean.FalseString);
++            // cmd.CommandText = String.Format(CultureInfo.InvariantCulture, "PRAGMA legacy_file_format={0}", SQLiteConvert.ToBoolean(defValue) == true ? "ON" : "OFF");
++            // cmd.ExecuteNonQuery();
+ 
+             defValue = FindKey(opts, "Synchronous", "Normal");
+             if (String.Compare(defValue, "Full", StringComparison.OrdinalIgnoreCase) != 0)
+@@ -901,8 +902,9 @@
+             defValue = FindKey(opts, "Journal Mode", "Delete");
+             if (String.Compare(defValue, "Default", StringComparison.OrdinalIgnoreCase) != 0)
+             {
+-              cmd.CommandText = String.Format(CultureInfo.InvariantCulture, "PRAGMA journal_mode={0}", defValue);
+-              cmd.ExecuteNonQuery();
++              // DBSQL does not support "PRAGMA journal_mode", ignore this operation.
++              // cmd.CommandText = String.Format(CultureInfo.InvariantCulture, "PRAGMA journal_mode={0}", defValue);
++              // cmd.ExecuteNonQuery();
+             }
+ 
+             defValue = FindKey(opts, "Foreign Keys", Boolean.FalseString);

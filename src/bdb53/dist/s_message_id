@@ -1,0 +1,187 @@
+#!/bin/sh -
+#	$Id$
+#
+# Automatically generate message id.
+
+# Usage: A BDB#### would be replaced with an unused message id in:
+# 1) DB_STR(BDB####
+# 2) DB_STR_A(BDB####
+# NOTE: Do not add whitespace between DB_STR( or DB_STR_A( and the message ID.
+
+# NOTE: Please update the MSG_DIRS if there is any new source dir.
+MSG_DIRS="../src/ ../util/ ../lang/dbm/ ../dist/gen_msg.awk"
+
+# Environment Configuration
+GREP_CMDS="grep ggrep"
+for i in $GREP_CMDS; do
+	if [ "`which $i`" = "" ]; then
+		continue
+	fi
+	echo "s_message_id test" > s_message_id.tmp
+	$i "s_message_id test"  s_message_id.tmp -o --include=*.tmp | \
+	    $i -v "s_message_id.txt" > s_message_id.tmp.out 2>&1
+	if [ `$i "unrecognized option" s_message_id.tmp.out | wc -l` \
+	    -eq 0 ] && [ `$i "invalid option" s_message_id.tmp.out | \
+	    wc -l` -eq 0 ] && [ `$i "can't open" s_message_id.tmp.out | \
+	    wc -l` -eq 0 ]; then
+		GREP_CMD=$i
+		break
+	fi
+	rm s_message_id.tmp s_message_id.tmp.out
+done
+if [ "$GREP_CMD" = "" ]; then
+	echo "UNSUPPORTED COMMAND: (g)grep -o --include"
+	echo "Please try other platform"
+	exit 
+fi
+
+pref=MSG_INDX
+
+get_value() {
+	value=${1}${2}
+	eval "echo $`echo $value`"
+}
+
+get_max() {
+	if [ ${1} -gt ${2} ] ; then
+		eval "echo ${1}"
+	else
+		eval "echo ${2}"
+	fi
+}
+
+# Iterate source files and replace "BDB####" with the real message id.
+for i in $MSG_DIRS; do
+	for f in `$GREP_CMD BDB#### -r $i -wl --include=*.c --include=*.h \
+ 	    --include=*.in --include=*.awk | \
+	    $GREP_CMD -v "../util/db_dump185.c" | \
+	    $GREP_CMD -v "../util/db_sql_codegen"`; do
+		IFS='/'
+		set $f
+		# There are 11 categories in the MSG_DIRS:
+		# 1) COMMON; 2) DB; 3) AM; 4) ENV; 5) LOCK; 6) LOG;
+		# 7) MPOOL; 8) REP; 9) SEQUENCE; 10) TXN; 11) UTIL.
+		#
+		# NOTE: Please add a new block (see below) and assign the values
+		# of cat_indx and cat_dirs if there is new group, or update the
+		# existing block if there is new source tree under the existing
+		# group.
+		if [ "$i" = "../util/" ] || [ "$i" = "../lang/dbm/" ]; then
+			cat_indx=10
+			cat_dirs="../util/ ../lang/dbm/"
+		elif [ "$3" = "common" ] || [ "$3" = "crypto" ] || \
+		    [ "$3" = "fileops" ] || [ "$3" = "hmac" ] || \
+		    [ "$3" = "os" ] || [ "$3" = "os_qnx" ] || \
+		    [ "$3" = "os_vxworks" ] || [ "$3" = "os_windows" ]; then 
+			cat_indx=0
+			cat_dirs=$i"common "$i"crypto "$i"fileops "
+			cat_dirs=$cat_dirs$i"hmac "$i"os "$i"os_qnx "
+			cat_dirs=$cat_dirs$i"os_vxworks "$i"os_windows"
+		elif [ "$3" = "db" ] || [ "$3" = "dbinc" ] || \
+		    [ "$3" = "dbinc_auto" ]; then
+			cat_indx=1
+			cat_dirs=$i"db "$i"dbinc "$i"dbinc_auto"
+		elif [ "$3" = "btree" ] || [ "$3" = "hash" ] || \
+		    [ "$3" = "heap" ] || [ "$3" = "qam" ]; then
+			cat_indx=2
+			cat_dirs=$i"btree "$i"hash "$i"heap "$i"qam"
+		elif [ "$3" = "dbreg" ] || [ "$3" = "env" ] ; then
+			cat_indx=3
+			cat_dirs=$i"dbreg "$i"env"
+		elif [ "$3" = "lock" ] || [ "$3" = "mutex" ]; then
+			cat_indx=4
+			cat_dirs=$i"lock "$i"mutex"
+		elif [ "$3" = "log" ]; then
+			cat_indx=5
+			cat_dirs=$i"log"
+		elif [ "$3" = "mp" ]; then
+			cat_indx=6
+			cat_dirs=$i"mp"
+		elif [ "$3" = "rep" ] || [ "$3" = "repmgr" ] || \
+			[ "$3" = "gen_msg.awk" ] ; then
+			cat_indx=7
+			cat_dirs="../src/rep ../src/repmgr ../dist/gen_msg.awk"
+		elif [ "$3" = "sequence" ]; then
+			cat_indx=8
+			cat_dirs=$i"sequence"
+		elif [ "$3" = "txn" ] || [ "$3" = "xa" ]; then
+			cat_indx=9
+			cat_dirs=$i"txn "$i"xa"
+		else
+			echo "ERROR UNKNOWN PATH:" "$i""$3"
+			exit
+		fi
+
+		unset IFS
+
+		# Initialize MSG_INDX for each group if it is never initialized.
+		if [ "`get_value $pref $cat_indx`" = "" ]; then
+			# Get the start index, that is the next available number
+			# for the current group. If there is no existing message
+			# marked by DB_STR or DB_STR_A, the start index is the
+			# first available integer in its range. Unless, it is
+			# the next available integer in its range.
+			MSG_START_NUM=`expr $cat_indx \* 500 + 1`
+			DB_STR_NUM=`$GREP_CMD -E "DB_STR\(\"[0-9]{4}\"" -r \
+			    $cat_dirs | wc -l`
+			if [ $DB_STR_NUM -eq 0 ]; then
+				DB_STR_NUM=`expr 0 + $MSG_START_NUM`
+			else
+				DB_STR_NUM=`$GREP_CMD -E "DB_STR\(\"[0-9]{4}\"" -oh \
+				    -r $cat_dirs | sort | tail -n 1 | \
+				    sed -e "s/DB_STR(//g" | sed -e "s/\"//g"`
+				DB_STR_NUM=`expr 1 + $DB_STR_NUM`
+			fi
+
+			DB_STR_A_NUM=`$GREP_CMD -E "DB_STR_A\(\"[0-9]{4}\"" -r \
+			    $cat_dirs | wc -l`
+			if [ $DB_STR_A_NUM -eq 0 ]; then
+				DB_STR_A_NUM=`expr 0 + $MSG_START_NUM`
+			else
+				DB_STR_A_NUM=`$GREP_CMD -E \
+				    "DB_STR_A\(\"[0-9]{4}\"" -oh -r $cat_dirs | \
+				    sort | tail -n 1 | \
+				    sed -e "s/DB_STR_A(//g" | sed -e "s/\"//g"`
+				DB_STR_A_NUM=`expr 1 + $DB_STR_A_NUM`
+			fi
+
+			MSG_START_INDX=`get_max $DB_STR_NUM $DB_STR_A_NUM`
+			eval "$pref$cat_indx=$MSG_START_INDX"
+		fi
+
+		cat $f | awk '{
+			if(num<max && sub(/BDB####/, fill(num))==1) num++;
+			print $0>"tmp.tmp"
+		}END{
+			printf("%s", num)>"tmp.num"} 
+			function fill(i) {
+				s=""
+				j=4-length(i)
+				while(j) {
+				s=0""s
+				j--
+			}
+			return "\""s""i"\""
+		}' num=`get_value $pref $cat_indx` \
+		max=`expr \( $cat_indx + 1 \) \* 500`
+		cp tmp.tmp $f
+		eval "$pref$cat_indx=`sed 'q' tmp.num`"
+		if [ "$cat_indx" -lt 11 ]; then
+			if [ `get_value $pref $cat_indx` -ge \
+			    `expr \( $cat_indx + 1 \) \* 500` ]; then
+				echo "RANGE FULL"
+			fi
+		else
+			echo "ERROR CATEGORY NUMBER: " $cat_indx
+		fi
+		rm tmp.tmp tmp.num
+	done
+done
+
+# Check if there is any remaining "BDB####". 
+# NOTE: If "BDB####" is not .c, .h, .in files, they won't be updated with the 
+# real message id.
+if [ `$GREP_CMD "BDB####" -r $MSG_DIRS | wc -l` -gt 0 ]; then
+	echo "WARNING: There is remaining BDB####. Please check:"
+	$GREP_CMD "BDB####" -r $MSG_DIRS
+fi

@@ -1,0 +1,244 @@
+#!/bin/sh
+# $Id: $
+#
+die()
+{
+	echo >&2 "$@"
+	exit 1
+}
+
+# Build the distribution package.
+. ./RELEASE || die "Can't read the RELEASE file"
+
+CSHARP_DOC_SRC=""
+# 0 is none, 1 is local dir, 2 is remote dir
+CSHARP_DOC_LOCATION=0
+test_run=0
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-n)
+		nodocs=true;;
+	-csharp_doc_src)
+		shift
+		if [ ! $# -gt 0 ]; then
+	       		die "csharp_doc_dir param requires argument."
+		fi
+		CSHARP_DOC_SRC=$1
+		CSHARP_DOC_LOCATION=1
+		if [ ! -f $CSHARP_DOC_SRC ]; then
+			die "CSharp doc archive must exist."
+		fi;;
+	-csharp_doc_url)
+		shift
+		if [ ! $# -gt 0 ]; then
+	       		die "csharp_doc_dir param requires argument."
+		fi
+		CSHARP_DOC_SRC=$1
+		CSHARP_DOC_LOCATION=2;;
+	-test)
+		echo "Doing a test run - this may contain changes that aren't\
+reflected in a tag, so the package won't be reproducible."
+		test_run=1;;
+	esac
+	shift
+done
+
+# A version string can be specified on the command line (e.g., "20080219").
+# Otherwise, use the standard X.X.X format.
+VERSION=${1:-${DB_VERSION_MAJOR}.${DB_VERSION_MINOR}.${DB_VERSION_PATCH}}
+
+# Use "ustar" as the archiver
+TAR=ustar
+
+# Set root directory where we do the work, can be anywhere.
+START_DIR=`pwd`
+D=`pwd`/../release
+R="$D/db-${VERSION}"
+RNC="$D/db-$VERSION.NC"
+DOCS=`pwd`/../../docs_books-5.3
+DB_ADDONS=`pwd`/../../db_addons-5.3
+
+if [ ! -d $DB_ADDONS ]; then
+	echo "buildpkg requires a db_addons repository at the same level as the db repository."
+	exit 1
+fi
+
+# Create directory, remove any previous release tree.
+rm -rf $R $RNC
+mkdir -p $R
+
+echo "Removed old release build from $R"
+
+# Copy the files in the current tip to $R
+hg archive $R
+
+# If doing a test run, apply any local changes to the new tree.
+if [ $test_run != 0 ]; then
+	hg diff | patch -p1 -d $R
+fi
+
+echo "Created hg archive in $R"
+
+if [ "$nodocs" = true ] ; then
+	rm -rf $R/docs
+else
+	[ -d $DOCS ] || die "buildpkg requires a docs_books repository at the same level as the db repository."
+
+	# Check that the doc repo is up to date, and create a tag if necessary.
+	cd $DOCS
+	hg pull -u
+	if [ $? != 0 ]; then
+		rm -rf $R
+		die "Failed updating the docs_books repository."
+	fi
+	has_tag=`hg tags | grep "db-${VERSION}"`
+	if [ "$has_tag" = "" ]; then
+		hg tag "db-${VERSION}"
+		TAG_CREATED="true"
+	else
+		hg up -r "db-${VERSION}"
+	fi
+
+	# Build a copy of the documentation in the release tree.
+	cd $R/dist
+	sh s_docs db-${VERSION} $DOCS
+
+	if [ $? != 0 ]; then
+		rm -rf $R
+		die "Failed generating documentation."
+	fi
+
+	# Copy in the C sharp doc.
+	if [ $CSHARP_DOC_LOCATION -eq 2 ]; then
+		scp $CSHARP_DOC_SRC .
+		CSHARP_DOC_SRC="csharp_docs.tgz"
+		if [ ! -f $CSHARP_DOC_SRC ]; then
+			echo "WARNING: Invalid csharp doc file - csharp_docs.tgz expected."
+		fi
+	fi
+	if [ $CSHARP_DOC_LOCATION -eq 0 -o ! -f $CSHARP_DOC_SRC ]; then
+		echo "WARNING: No csharp docs, skipping."
+		CSHARP_DOC_LOCATION=0
+	fi
+	if [ $CSHARP_DOC_LOCATION != 0 ]; then
+		rm -rf $R/docs/csharp
+		mkdir -p $R/docs/csharp
+		$TAR zxf $CSHARP_DOC_SRC -C $R/docs/csharp
+	fi
+
+	# Build the Java documentation.
+	cd $R/dist && sh s_javadoc
+fi
+
+# Pull a copy of the JDBC and ODBC libraries into the package.
+# Build the ADO.NET package, including moving the ADO.NET doc built above
+# into that package.
+# Tell the script where to look for packages.
+cd $R/dist && sh s_sql_drivers ../../../..
+# Warn if s_sql_drivers didn't move its docs.
+if [ -e "$R/docs/bdb-sql-ado" ]; then
+	echo "WARNING: ADO.NET doc is still in the non ADO.NET package."
+fi
+
+cd $START_DIR
+
+# Pull a copy of the bfile directory into the package.
+cd $DB_ADDONS
+hg pull -u
+if [ $? != 0 ]; then
+	echo "Failed updating the db_addons repository. Exiting."
+	rm -rf $R
+	exit 1
+fi
+
+cd $START_DIR
+SQL_EXT_DIR=$R/lang/sql/sqlite/ext
+if [ ! -d $SQL_EXT_DIR ]; then
+	mkdir -p $SQL_EXT_DIR
+fi
+if [ -d $SQL_EXT_DIR/bfile ]; then
+	rm -rf $SQL_EXT_DIR/bfile
+fi
+cp -rp $DB_ADDONS/bfile $SQL_EXT_DIR
+
+# Remove source directories we don't distribute.
+cd $R && rm -rf test/tcl/TODO test/upgrade test/scr036 test/erlang
+cd $R && rm -rf test/perf test/purify test/repmgr
+cd $R && rm -rf test/server test/stl test/vxworks
+cd $R && find . -name '.hg*' | xargs rm -f
+cd $R && find . -name 'tags' | xargs rm -f
+
+# Create symbolic links and cscope output, fix permissions.
+#cd $R/dist && sh s_perm
+#cd $R/dist && sh s_cscope
+
+# Build a regular version and smoke test.
+### cd $R && rm -rf build_run && mkdir build_run
+### cd $R/build_run && ../dist/configure && make >& mklog
+### cd $R/build_run && make ex_access && echo "test" | ./ex_access
+# Check the install
+### cd $R/build_run && make prefix=`pwd`/BDB install
+
+# Build a small-footprint version and smoke test.
+### cd $R && rm -rf build_run && mkdir build_run
+### cd $R/build_run && ../dist/configure --enable-smallbuild && make >& mklog
+### cd $R/build_run && make ex_access && echo "test" | ./ex_access
+
+# Remove the build directory
+### cd $R && rm -rf build_run
+
+(cd $R/dist && ./s_perm)
+
+# Check for file names differing only in case.
+cd $R && find . | sort -f | uniq -ic | sed '/1 /d'
+
+# Create the crypto tar archive release.
+T="$D/db-$VERSION.tar.gz"
+rm -f $T
+cd $D || die "Can't find $D"
+# Move package files in db-$VERSION/release to current directory so that
+# regular packages won't includes generated package twice.
+if [ -d "db-$VERSION/release" ]; then
+	mv db-$VERSION/release/* .
+	rm -rf db-$VERSION/release
+fi
+$TAR czf $T -find db-$VERSION -chown 100 -chgrp 100
+chmod 444 $T
+
+# Create the non-crypto tree.
+cd $D && mv -i db-$VERSION $RNC && $TAR xzf $T
+cd $RNC/dist && sh s_crypto
+
+(cd $RNC/dist && ./s_perm)
+
+# Create the non-crypto tar archive release.
+T="$D/db-$VERSION.NC.tar.gz"
+rm -f $T
+cd $RNC/.. && $TAR czf $T -find db-$VERSION.NC -chown 100 -chgrp 100
+chmod 444 $T
+
+t=__tmp
+cd $R && awk '{print $0 "\r"}' < LICENSE > $t && rm -f LICENSE && cp $t LICENSE
+cd $R && awk '{print $0 "\r"}' < README > $t && rm -f README && cp $t README && rm $t
+cd $RNC && awk '{print $0 "\r"}' < LICENSE > $t && rm -f LICENSE && cp $t LICENSE
+cd $RNC && awk '{print $0 "\r"}' < README > $t && rm -f README && cp $t README && rm $t
+
+# Create the crypto zip archive release.
+T="$D/db-$VERSION.zip"
+rm -f $T
+cd $R/.. && rm -f $T && zip -q -r $T db-$VERSION
+chmod 444 $T
+
+# Create the non-crypto zip archive release.
+T="$D/db-$VERSION.NC.zip"
+rm -f $T
+cd $RNC/.. && rm -f $T && zip -q -r $T db-$VERSION.NC 
+chmod 444 $T
+
+rm -rf $R $RNC
+
+if [ "$TAG_CREATED" = "true" ]; then
+	echo "Created a tag in docs_books repository. Please push."
+fi

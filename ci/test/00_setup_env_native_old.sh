@@ -8,11 +8,11 @@ export LC_ALL=C.UTF-8
 
 export CONTAINER_NAME=ci_native_old
 export DOCKER_NAME_TAG=ubuntu:18.04
-export PACKAGES="gcc-8 g++-8 libqt5gui5 libqt5core5a qtbase5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-iostreams-dev libboost-test-dev libboost-thread-dev libdb5.3++-dev libminiupnpc-dev libqrencode-dev libzip-dev zlib1g zlib1g-dev libcurl4-openssl-dev"
+export PACKAGES="gcc-8 g++-8 libqt5gui5 libqt5core5a qtbase5-dev libqt5dbus5 qttools5-dev qttools5-dev-tools libssl-dev libevent-dev bsdmainutils libboost-system-dev libboost-filesystem-dev libboost-iostreams-dev libboost-test-dev libboost-thread-dev libminiupnpc-dev libqrencode-dev libzip-dev zlib1g zlib1g-dev libcurl4-openssl-dev"
 export RUN_UNIT_TESTS=true
 # export RUN_FUNCTIONAL_TESTS=false
 # export RUN_SECURITY_TESTS="true"
 export GOAL="install"
-export GRIDCOIN_CONFIG="--enable-reduce-exports --with-incompatible-bdb --with-gui=qt5 CC=gcc-8 CXX=g++-8"
+export GRIDCOIN_CONFIG="--enable-reduce-exports --with-gui=qt5 CC=gcc-8 CXX=g++-8"
 export NEED_XVFB="true"
 export NO_DEPENDS=1

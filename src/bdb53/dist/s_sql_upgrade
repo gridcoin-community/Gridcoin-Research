@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# This script needs to be run when upgrading the version of SQLite, it
+# automates the process as much as possible
+#
+# The first step is to replace the files in the sql/sqlite directory with those
+# from the latest release.
+# Once that is done - run this script, review the changes, and push to the
+# central server.
+
+sqldir=../lang/sql/sqlite
+
+copy_if_changes()
+{
+	f1="$1"
+	f2="$2"
+	cmp $f1 $f2 > /dev/null 2>&1 ||
+	(rm -f $f1 && cp $f2 $f1)
+	rm -f $f2
+}
+
+# Update the SQLite Makefile to refer to the replaced source files.
+MAKEFILE_NAME=$sqldir/Makefile.in
+for f in ../lang/sql/adapter/*.[ch]; do
+	short_f=`basename $f`
+	sed -e "s/\$(TOP)\/src\/$short_f/\$(TOP)\/..\/adapter\/$short_f/g" $MAKEFILE_NAME > $MAKEFILE_NAME.tmp
+	copy_if_changes $MAKEFILE_NAME $MAKEFILE_NAME.tmp
+done
+# Update the include path so that headers in sql/adapter dir can be found.
+sed -e '/^TCC/s/-I\. -I${TOP}\/src/& -I${TOP}\/..\/adapter/ -I${TOP}\/ext\/fts3' $MAKEFILE_NAME > $MAKEFILE_NAME.tmp
+copy_if_changes $MAKEFILE_NAME $MAKEFILE_NAME.tmp
+
+# We will be building from a different directory level, update the makefile
+# accordingly.
+sed -e 's/TOP = \.\.\/sqlite/TOP = \.\.\/\.\.\/sql\/sqlite/' $sqldir/Makefile.linux-gcc > $sqldir/Makefile.linux-gcc.tmp
+copy_if_changes $sqldir/Makefile.linux-gcc $sqldir/Makefile.linux-gcc.tmp
+
+echo "Applying patch files to the sqlite source tree."
+for f in $sqldir/../adapter/sqlite-patches/[0-9][0-9]_*.patch ; do
+	if (cd $sqldir && patch -p0 --dry-run --force --quiet) < $f > /dev/null; then
+		echo "Applying patch $f"
+		(cd $sqldir && patch -p0 --force --quiet) < $f
+	else
+		echo "Patch $f would fail. Exiting."
+		exit 1
+	fi
+done
+
+# Remove files from the SQLite source tree that have been replaced by db.
+( cd $sqldir/../adapter &&
+for f in *c *h ; do
+	rm -f ../sqlite/src/$f
+done
+)

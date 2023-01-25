@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Replication PRAGMAs</title>
+    <link rel="stylesheet" href="gettingStarted.css" type="text/css" />
+    <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
+    <link rel="start" href="index.html" title="Getting Started with the Oracle Berkeley DB SQL APIs" />
+    <link rel="up" href="sqlrep.html" title="Chapter 4. Using Replication with the SQL API" />
+    <link rel="prev" href="sqlrep.html" title="Chapter 4. Using Replication with the SQL API" />
+    <link rel="next" href="repstatistics.html" title="Displaying Replication Statistics" />
+  </head>
+  <body>
+    <div xmlns="" class="navheader">
+      <div class="libver">
+        <p>Library Version 11.2.5.3</p>
+      </div>
+      <table width="100%" summary="Navigation header">
+        <tr>
+          <th colspan="3" align="center">Replication PRAGMAs</th>
+        </tr>
+        <tr>
+          <td width="20%" align="left"><a accesskey="p" href="sqlrep.html">Prev</a> </td>
+          <th width="60%" align="center">Chapter 4. Using Replication with the SQL API</th>
+          <td width="20%" align="right"> <a accesskey="n" href="repstatistics.html">Next</a></td>
+        </tr>
+      </table>
+      <hr />
+    </div>
+    <div class="sect1" lang="en" xml:lang="en">
+      <div class="titlepage">
+        <div>
+          <div>
+            <h2 class="title" style="clear: both"><a id="reppragma"></a>Replication PRAGMAs</h2>
+          </div>
+        </div>
+      </div>
+      <div class="toc">
+        <dl>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication">PRAGMA replication</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_initial_master">PRAGMA replication_initial_master</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_local_site">PRAGMA replication_local_site</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_remote_site">PRAGMA replication_remote_site</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_remove_site">PRAGMA replication_remove_site</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_verbose_output">PRAGMA replication_verbose_output</a>
+            </span>
+          </dt>
+          <dt>
+            <span class="sect2">
+              <a href="reppragma.html#pragma_replication_verbose_file">PRAGMA replication_verbose_file</a>
+            </span>
+          </dt>
+        </dl>
+      </div>
+      <p>
+                To control replication when using the Berkeley DB SQL
+                interface, you use the following PRAGMAs. For an example of
+                how to use these, see
+                <a class="xref" href="rep_usageexamples.html" title="Replication Usage Examples">Replication Usage Examples</a>.
+            </p>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication"></a>PRAGMA replication</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication=ON|OFF </pre>
+        <p>
+                    Enables the local environment to participate in
+                    replication. 
+                </p>
+        <p>
+                    Before invoking this PRAGMA for a brand new
+                    database (one that has never been opened), you
+                    must invoke the
+                    <code class="literal">replication_local_site</code> PRAGMA
+                    and then either the
+                    <code class="literal">replication_initial_master</code> or
+                    the <code class="literal">replication_remote_site</code>
+                    PRAGMA. These actions define the way this site fits
+                    into the replication group.
+                </p>
+        <p>
+                    If you are enabling replication for an existing
+                    database, it must become the initial master for a
+                    new replication group. You must invoke the
+                    <code class="literal">replication_local_site</code> PRAGMA
+                    followed by the
+                    <code class="literal">replication_initial_master</code>
+                    PRAGMA before enabling replication. 
+                </p>
+        <p>
+                    If you use this PRAGMA to turn off replication,
+                    then replication is completely disabled for the
+                    environment. In order to enable replication again,
+                    you follow the procedure used to enable replication
+                    on an existing database; that is, invoke the
+                    <code class="literal">replication_local_site</code> PRAGMA
+                    followed by the
+                    <code class="literal">replication_initial_master</code>
+                    PRAGMA, followed by 
+                    <code class="literal">PRAGMA replication=ON</code>.
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_initial_master"></a>PRAGMA replication_initial_master</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_initial_master=ON|OFF </pre>
+        <p>
+                    Causes the local environment to start up as a
+                    master site. This PRAGMA must be used once and only
+                    once in the replicated lifetime of a BDB SQL
+                    environment.
+                </p>
+        <p>
+                    This PRAGMA is usually invoked for the first site in a
+                    new replication group before the
+                    <code class="literal">replication</code> PRAGMA is invoked
+                    and before BDB SQL initially creates the underlying
+                    BDB environment for a SQL database. Starting
+                    replication on the initial master site establishes
+                    the new replication group so that other sites can
+                    join it.
+                </p>
+        <p>
+                    However, you must call this PRAGMA 
+                    when enabling replication for a database that
+                    already exists. Doing so causes the existing
+                    database to become the replication master for a new
+                    replication group.
+                </p>
+        <p>
+                    Note that subsequent election activity can cause
+                    other sites in the replication group to become
+                    master. Do not assume that the initial master site
+                    will remain master indefinitely, or that it will
+                    rejoin the replication group as master after a
+                    shutdown.
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_local_site"></a>PRAGMA replication_local_site</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_local_site="hostname:port" </pre>
+        <p>
+                    Sets the local site information for replication.
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_remote_site"></a>PRAGMA replication_remote_site</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_remote_site="hostname:port" </pre>
+        <p>
+                    Sets information about a remote helper site in the
+                    replication group.
+                </p>
+        <p>
+                    This PRAGMA is needed when a site first joins an
+                    existing replication group to specify a site that
+                    is already in the replication group. It must be
+                    invoked before the <code class="literal">replication</code>
+                    PRAGMA is invoked. This PRAGMA is not needed on
+                    the initial master site or when restarting a site
+                    that is already a member of the replication group.
+                    However, supplying this PRAGMA in those situations
+                    does no harm.
+                </p>
+        <p>
+                    Note that the information provided to this PRAGMA
+                    can be superseded by normal replication activity 
+                    over the course of the environment's lifetime.
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_remove_site"></a>PRAGMA replication_remove_site</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_remove_site="hostname:port" </pre>
+        <p>
+                    Removes the specified site from the replication group.
+                    Use this PRAGMA if you truly want to remove the
+                    site permanently from the group. It is not
+                    desirable to call this PRAGMA if a site has been
+                    temporarily shut down or disconnected from the rest
+                    of the replication group.
+                </p>
+        <p>
+                    Removing a site from the replication group means
+                    that the site is no longer counted towards the
+                    total number of sites belonging to the group. This
+                    is important when the replication group requires
+                    knowledge about whether a quorum has been reached
+                    (such as when, for example, elections are held).
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_verbose_output"></a>PRAGMA replication_verbose_output</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_verbose_output=ON|OFF </pre>
+        <p>
+                    If set to TRUE, additional logging information
+                    specifically related to replication is created.
+                </p>
+      </div>
+      <div class="sect2" lang="en" xml:lang="en">
+        <div class="titlepage">
+          <div>
+            <div>
+              <h3 class="title"><a id="pragma_replication_verbose_file"></a>PRAGMA replication_verbose_file</h3>
+            </div>
+          </div>
+        </div>
+        <pre class="programlisting">PRAGMA replication_verbose_file="filename" </pre>
+        <p>
+                    Indicates that verbose replication output should be
+                    sent to the specified file, as opposed to STDOUT.
+                </p>
+      </div>
+    </div>
+    <div class="navfooter">
+      <hr />
+      <table width="100%" summary="Navigation footer">
+        <tr>
+          <td width="40%" align="left"><a accesskey="p" href="sqlrep.html">Prev</a> </td>
+          <td width="20%" align="center">
+            <a accesskey="u" href="sqlrep.html">Up</a>
+          </td>
+          <td width="40%" align="right"> <a accesskey="n" href="repstatistics.html">Next</a></td>
+        </tr>
+        <tr>
+          <td width="40%" align="left" valign="top">Chapter 4. Using Replication with the SQL API </td>
+          <td width="20%" align="center">
+            <a accesskey="h" href="index.html">Home</a>
+          </td>
+          <td width="40%" align="right" valign="top"> Displaying Replication Statistics</td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>

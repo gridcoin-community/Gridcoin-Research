@@ -11,7 +11,7 @@ Preparing the Build
 Install the required dependencies the usual way you [install software on FreeBSD](https://www.freebsd.org/doc/en/books/handbook/ports.html) - either with `pkg` or via the Ports collection. The example commands below use `pkg` which is usually run as `root` or via `sudo`. If you want to use `sudo`, and you haven't set it up: [use this guide](http://www.freebsdwiki.net/index.php/Sudo%2C_configuring) to setup `sudo` access on FreeBSD.
 #### General Dependencies
 ```bash
-pkg install autoconf automake boost-libs git gmake libevent libtool pkgconf db5 openssl libzip
+pkg install autoconf automake boost-libs git gmake libevent libtool pkgconf openssl libzip
 
 ```
 ---
@@ -46,9 +46,7 @@ There are many ways to configure Gridcoin, here are a few common examples:
 This explicitly enables wallet support and disables the GUI.
 ```bash
 ./autogen.sh
-./configure --with-gui=no --with-incompatible-bdb \
-    BDB_LIBS="-ldb_cxx-5" \
-    BDB_CFLAGS="-I/usr/local/include/db5" \
+./configure --with-gui=no \
     MAKE=gmake
 ```
 

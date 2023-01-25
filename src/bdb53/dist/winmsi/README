@@ -1,0 +1,158 @@
+This file describes the software needed to build Windows Binaries
+for Berkeley DB as well as how to ensure that new, renamed
+or deleted files are properly handled.  For that piece, see the end
+of this file.
+
+How to Build Windows Binaries
+-----------------------------
+
+Creation of the Windows binary installation file (db-x.y.z.msi)
+is driven by dist/s_winmsi, dist/winmsi/s_winmsi.fcn
+as well as various configuration files and scripts in dist/winmsi. 
+The scripts must be run from a cygwin bash shell.
+Prerequisites:
+o Cygwin
+o Visual Studio (Visual Studio 2005)
+o WiX (version 3.x)
+o Python
+o Java/JDK
+o WiX 3.x
+o XQilla (xqilla command line is used to help construct
+  WiX .wxs files which are in an XML format)
+
+Important: It is necessary to use Python from a Windows installation 
+vs Cygwin because of the pathname manipulation.
+
+Build checklist (this normally is only done once when
+setting up your machine):
+
+1.  Check dist/winmsi/build.bat to set Visual Studio installation path.
+2.  Add Windows Python PATH.  Cygwin's will not work.
+3.  Install WiX 3.x and add the installation dir to PATH 
+if it is not already set.
+4.  Install a recent Java JDK and make sure java and javac
+are in your PATH.  Also modify the proper variables in Visual
+Studio to find jni.h (<JDK installation dir>/include and 
+<JDK installation dir>/include/win32). 
+5.  If changing the release minor version (5.x->5.y), you must change 
+UpgradeCode and Upgrade id in db.wxs.  It is a GUID/UUID. You can generate
+a GUID from the Python shell:
+  import uuid
+  uuid.uuid1()
+This GUID is used for upgrade between releases.
+6.  From db-x.y.z/dist run "bash s_winmsi"
+
+The "staged" tree for building the binaries is created
+in db-x.y.z/stage.  The resulting .msi ends up in stage/wix.
+
+To test basic installation of the .msi:
+cd <db-x.y.z>/stage/wix
+  msiexec /i db-x.y.z.msi
+Uninstall:
+  msiexec /uninstall db-x.y.z.msi
+  (or use the Control Panel's uninstall programs tool)
+
+
+What is going on under the covers?
+----------------------------------
+
+The order of events can be seen in the s_winmsi script and 
+is roughly:
+1.  stage source components to be packaged from a clean tree.
+These include examples, doc, project files, and header files.
+2.  Build Berkeley DB using winmsi/build.bat.
+This will build the basic library, utilities as well as SQL,
+STL, C#, and SQL's JDBC and ODBC components.
+3.  Copy build artifacts (libraries, dlls, pdbs, exes) to
+the staging area.
+NOTE: the staging process also creates lists of files, one for
+each installation "group."  More on this below.
+4.  Build "component" lists for WiX.  This process is driven
+by the shell script winmsi/generateWix.sh which also uses a
+Python script (genWix.py) and XQuery Update scripts to construct
+db_components.wxs which contains the majority of the files
+for the binary distribution.  These all end up in the 
+stage/wix directory.
+5.  Call WiX to generate the db-x.y.z.msi install file
+
+What files drive this process?
+------------------------------
+
+Relatively static WiX files include:
+ o db.wxs ("main" WiX input file that includes the 
+    features to be installed).  This file references the
+    components/component groups that are generated in 
+    db_components.wxs
+ o links_frag.wxs (references the links that become part of
+    the Windows application menu after installation)
+ o required_frag.wxs (license file, readme and other required
+   bits of installation)
+
+The main generated file is db_components.wxs which is
+created by a combination of the Python script genWix.py,
+group.* files (created by staging process), and XQuery.
+There are several XQuery scripts (dist/winmsi/*.xq) that
+perform various transformations on generated XML to make it
+ready for WiX.  They have internal comments about what they 
+are doing.
+
+db_components.wxs has the complete list of files and components
+that are to be part of the install.
+
+How to change what files are included
+-------------------------------------
+
+Many files will be included automatically but some are custom.
+The files included are driven by "group.*" files that are
+created by the functions StageSourceComponents() and StageRuntimeComponents()
+in s_winmsi.fcn.  These put the paths to files in the various
+stage/group.* files based on which "feature" they are a part of.
+E.g. bin/libdb??.dll and bin/*.exe go into "group.runtime"
+and include/* go into "group.devo."  Example files go into
+"group.examples."
+
+After staging the Python script genWix.py walks the staging
+directories looking for files that match those in the group.*
+files and it generates a Component element for each set of
+files that belong to a given group in a given directory.  Let's
+look at the include directory as an example.
+In the resulting file there will be XML that looks like this:
+...
+<Directory Id="dir_include_3" Name="include">
+  <Component DiskId="1" Guid="b2ff36c0-36a8-11df-a6b5-00262db1b537" Id="_group_cxx_3" KeyPath="yes">
+    <File Id="dir_include_3_dbstl_base_iterator.h" Name="dbstl_base_iterator.h" Source="C:\Users\gmf\hg\db-5.0.13\stage\include\dbstl_base_iterator.h"/>
+    <File Id="dir_include_3_dbstl_common.h" Name="dbstl_common.h" Source="C:\Users\gmf\hg\db-5.0.13\stage\include\dbstl_common.h"/>
+    ...
+  </Component
+  <Component DiskId="1" Guid="b2ff5dd1-36a8-11df-bfe6-00262db1b537" Id="_group_devo_3" KeyPath="yes">
+    <File Id="dir_include_3_db.h" Name="db.h" Source="C:\Users\gmf\hg\db-5.0.13\stage\include\db.h"/>
+    <File Id="dir_include_3_db_cxx.h" Name="db_cxx.h" Source="C:\Users\gmf\hg\db-5.0.13\stage\include\db_cxx.h"/>
+  </Component>
+  ...
+</Directory>
+...
+
+The directory "include" has multiple components, one for "group_cxx" that
+includes the STL header files and one for "group_devo" that includes
+db.h and db_cxx.h.
+
+The output of genWix.py is massaged by various XQuery scripts to
+(1) remove stray empty components (2) add in ComponentGroup elements
+that group components into lists for inclusion by Feature 
+elements (from db.wxs) and (3) insertion of Environment elements
+to modify Windows environment on install/uninstall.
+
+XQuery is a simple way to manipulate the files because they are XML.
+
+Back to how to change the lists of files...
+The important work is in the StageSourceComponents() an
+StageRuntimeComponents() functions.  That's all that should
+really need to be changed to add/rename/remove files or
+to change which group they are a part of.
+
+I'm seeing warnings when generating the package, what's wrong?
+-------------------------------------
+
+Warnings in "light.exe" that are documented in the WiX manual can be safely
+ignored.  Errors cannot be ignored.
+

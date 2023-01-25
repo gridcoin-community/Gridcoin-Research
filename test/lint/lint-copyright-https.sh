@@ -18,7 +18,7 @@ while read f; do
     EXIT_CODE=1
     echo "$f: needs https correction for the copyright header."
   fi
-done < <(git diff --name-only "${COMMIT_RANGE}")
+done < <(git diff --name-only "${COMMIT_RANGE}" | grep -vE "src/(secp256k1|crc32c|leveldb|univalue|bdb53)")
 
 exit ${EXIT_CODE}
 

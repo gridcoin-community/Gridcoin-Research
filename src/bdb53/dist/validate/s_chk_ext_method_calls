@@ -1,0 +1,89 @@
+#!/bin/sh -
+#
+# $Id: s_chk_ext_method_calls,v 0f73af5ae3da 2010/05/10 05:38:40 alexander $
+#
+# Check that DB doesn't call DB or DB_ENV methods internally.
+
+d=../..
+[ -f $d/LICENSE ] || {
+	echo 'FAIL: cannot find source distribution directory.'
+	exit 1
+}
+
+s=$d/src
+
+t=__1
+
+echo ========================================================
+echo "Check that DB doesn't call DB or DB_ENV methods internally."
+echo ========================================================
+m=`grep '(\*[a-z][_a-z]*)' $s/dbinc/db.in |
+   sed -e 's/^[^(]*(\*//' \
+       -e 's/).*//' \
+       -e '/alt_close/d' \
+       -e '/am_bulk/d' \
+       -e '/am_close/d' \
+       -e '/am_del/d' \
+       -e '/am_destroy/d' \
+       -e '/am_get/d' \
+       -e '/am_put/d' \
+       -e '/am_remove/d' \
+       -e '/am_rename/d' \
+       -e '/am_writelock/d' \
+       -e '/app_dispatch/d' \
+       -e '/db_append_recno/d' \
+       -e '/db_errcall/d' \
+       -e '/db_event_func/d' \
+       -e '/db_feedback/d' \
+       -e '/db_free/d' \
+       -e '/db_malloc/d' \
+       -e '/db_paniccall/d' \
+       -e '/db_realloc/d' \
+       -e '/dbt_usercopy/d' \
+       -e '/dup_compare/d' \
+       -e '/s_callback/d' |
+   sort -u`
+
+(cd $s && for i in $m; do
+	#echo "$i..." > /dev/stderr
+	egrep -- "->$i\(" */*.[ch]
+done) |
+sed \
+    -e '/Wrapper function for/d' \
+    -e '/\/db.h:/d' \
+    -e '/^[^:]*:[	 ]*\*[	 ]/d' \
+    -e '/^common\/db_getlong.c:/d' \
+    -e '/^common\/util_cache.c:/d' \
+    -e '/^common\/util_log.c:/d' \
+    -e '/^common\/util_sig.c:/d' \
+    -e '/^dbm\//d' \
+    -e '/^hsearch\//d' \
+    -e '/^mutex\/tm.c:/d' \
+    -e '/closeme->close() is a wrapper;/d' \
+    -e '/crypto.c.*db_cipher->close/d' \
+    -e '/db_err.c:.*dbenv->db_msgcall(dbenv, buf);/d' \
+    -e '/db_iface.c:.*(txn->commit(txn, nosync ? DB_TXN_NOSYNC : 0));/d' \
+    -e '/db_iface.c:.*if ((t_ret = txn->abort(txn)) != 0)/d' \
+    -e '/db_iface.c:.*return (dbenv->txn_begin(dbenv, NULL, txnidp, 0));/d' \
+    -e '/db_iface.c:.*return (dbp->get(dbp, txn, key, &data, flags));/d' \
+    -e '/dbenv->is_alive(/d' \
+    -e '/dbenv->thread_id(/d' \
+    -e '/dbenv->thread_id_string(/d' \
+    -e '/rep_util.c:.*ret = dbenv->rep_send(/d' \
+    -e '/test_mutex.c:/d' \
+    -e '/xa.c:/d' \
+    -e '/repmgr\/repmgr_net.c.*env->close()/d'\
+    -e '/repmgr\/repmgr_method.c.*DB_CHANNEL->send_request()/d' \
+    -e '/dbinc\/repmgr.h.*set_config()/d' \
+    -e '/db_vrfyutil.c:.*vdp->txn->commit/d' \
+>$t
+
+test -s $t && {
+        cat $t
+	echo "FAIL: found DB/DB_ENV method calls DB library."
+	exit 1
+}
+
+rm -f $t
+
+exit 0

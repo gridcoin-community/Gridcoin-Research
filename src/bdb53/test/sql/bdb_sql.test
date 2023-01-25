@@ -1,0 +1,583 @@
+#
+#    May you do good and not evil.
+#    May you find forgiveness for yourself and forgive others.
+#    May you share freely, never taking more than you give.
+#
+#***********************************************************************
+# This file runs all tests relevant to Berkeley DB.
+# It is based on test/quick.test
+#
+# $Id$
+
+proc lshift {lvar} {
+  upvar $lvar l
+  set ret [lindex $l 0]
+  set l [lrange $l 1 end]
+  return $ret
+}
+while {[set arg [lshift argv]] != ""} {
+  switch -- $arg {
+    -sharedpagercache {
+      sqlite3_enable_shared_cache 1
+    }
+    -soak {
+       set SOAKTEST 1
+    }
+    -start {
+       set STARTAT "[lshift argv]*"
+    }
+    default {
+      set argv [linsert $argv 0 $arg]
+      break
+    }
+  }
+}
+
+set testdir [file dirname $argv0]
+source $testdir/tester.tcl
+rename finish_test really_finish_test
+proc finish_test {} {
+  catch {db close}
+  show_memstats
+}
+
+# Could be relevant but not sure.
+set MAYBE {
+  analyze.test
+  autovacuum_ioerr2.test
+  autovacuum.test
+  avtrans.test
+  bind.test
+  bindxfer.test
+  conflict.test
+  corrupt2.test
+  corrupt3.test
+  corrupt4.test
+  corrupt5.test
+  corrupt6.test
+  corrupt7.test
+  corrupt8.test
+  corrupt9.test
+  corruptA.test
+  corruptB.test
+  corruptC.test
+  corruptD.test
+  corrupt.test
+  diskfull.test
+  eval.test
+  exclusive2.test
+  exclusive.test
+  filectrl.test
+  fuzz2.test
+  fuzz3.test
+  fuzz_common.tcl
+  fuzz_malloc.test
+  fuzz.test
+  incrvacuum2.test
+  incrvacuum_ioerr.test
+  incrvacuum.test
+  journal1.test, # PRAGMA journal mode. I guess it should be off in DB?
+  jrnlmode2.test
+  jrnlmode3.test
+  jrnlmode.test
+  misc1.test
+  misc2.test
+  misc3.test
+  misc4.test
+  misc5.test
+  misc6.test
+  misc7.test
+  permutations.test
+  pragma2.test, # Probably want part of the pragma tests.
+  pragma.test
+  savepoint2.test
+  savepoint3.test
+  savepoint4.test
+  savepoint5.test
+  savepoint6.test
+  savepoint.test
+  varint.test
+}
+# Should pass, but test functionality that is outside that changed by 
+# Berkeley DB.
+set IRRELEVANT {
+  attach.test
+  attach2.test
+  attach3.test
+  attachmalloc.test
+  auth.test
+  auth2.test
+  auth3.test
+  capi2.test
+  capi3b.test
+  capi3c.test
+  capi3d.test
+  capi3.test
+  crash2.test, # These crash tests use simulated IO failure in orig btree.
+  crash3.test
+  crash4.test
+  crash5.test
+  crash6.test
+  crash7.test
+  crash8.test
+  crash.test
+  crashtest1.c
+  enc2.test
+  enc3.test
+  enc.test
+  exec.test
+  fts1a.test, # fts == full text search
+  fts1b.test
+  fts1c.test
+  fts1d.test
+  fts1e.test
+  fts1f.test
+  fts1i.test
+  fts1j.test
+  fts1k.test
+  fts1l.test
+  fts1m.test
+  fts1n.test
+  fts1o.test
+  fts1porter.test
+  fts2a.test
+  fts2b.test
+  fts2c.test
+  fts2d.test
+  fts2e.test
+  fts2f.test
+  fts2g.test
+  fts2h.test
+  fts2i.test
+  fts2j.test
+  fts2k.test
+  fts2l.test
+  fts2m.test
+  fts2n.test
+  fts2o.test
+  fts2p.test
+  fts2q.test
+  fts2r.test
+  fts2.test
+  fts2token.test
+  fts3aa.test
+  fts3ab.test
+  fts3ac.test
+  fts3ad.test
+  fts3ae.test
+  fts3af.test
+  fts3ag.test
+  fts3ah.test
+  fts3ai.test
+  fts3aj.test
+  fts3ak.test
+  fts3al.test
+  fts3am.test
+  fts3an.test
+  fts3ao.test
+  fts3atoken.test
+  fts3b.test
+  fts3c.test
+  fts3d.test
+  fts3e.test
+  fts3expr2.test
+  fts3expr.test
+  fts3near.test
+  fts3.test
+  hook.test
+  icu.test, # international character sets.
+  io.test
+  ioerr2.test
+  ioerr3.test
+  ioerr4.test
+  ioerr5.test
+  ioerr.test
+  join2.test
+  join3.test
+  join4.test
+  join5.test
+  join.test
+  keyword1.test
+  laststmtchanges.test
+  loadext2.test
+  loadext.test
+  lock2.test
+  lock3.test
+  lock4.test
+  lock5.test
+  lock6.test
+  lock.test
+  main.test
+  malloc3.test
+  malloc4.test
+  malloc5.test
+  malloc6.test
+  malloc7.test
+  malloc8.test
+  malloc9.test
+  mallocAll.test
+  mallocA.test
+  mallocB.test
+  malloc_common.tcl
+  mallocC.test
+  mallocD.test
+  mallocE.test
+  mallocF.test
+  mallocG.test
+  mallocH.test
+  mallocI.test
+  mallocJ.test
+  mallocK.test
+  malloc.test
+  misuse.test
+  mutex1.test
+  mutex2.test
+  notify1.test
+  notify2.test
+  openv2.test
+  pageropt.test
+  pcache2.test
+  pcache.test
+  printf.test
+  progress.test
+  quote.test
+  randexpr1.tcl
+  randexpr1.test
+  safety.test
+  shortread1.test
+  sidedelete.test
+  softheap1.test
+  speed1p.explain
+  speed1p.test
+  speed1.test
+  speed2.test
+  speed3.test
+  speed4p.explain
+  speed4p.test
+  speed4.test
+  tableapi.test
+  tclsqlite.test
+  tkt1435.test
+  tkt1443.test
+  tkt1444.test
+  tkt1449.test
+  tkt1473.test
+  tkt1501.test
+  tkt1512.test
+  tkt1514.test
+  tkt1536.test
+  tkt1537.test
+  tkt1567.test
+  tkt1644.test
+  tkt1667.test
+  tkt1873.test
+  tkt2141.test
+  tkt2192.test
+  tkt2213.test
+  tkt2251.test
+  tkt2285.test
+  tkt2332.test
+  tkt2339.test
+  tkt2391.test
+  tkt2409.test
+  tkt2450.test
+  tkt2565.test
+  tkt2640.test
+  tkt2643.test
+  tkt2686.test
+  tkt2767.test
+  tkt2817.test
+  tkt2820.test
+  tkt2822.test
+  tkt2832.test
+  tkt2854.test
+  tkt2920.test
+  tkt2927.test
+  tkt2942.test
+  tkt3080.test
+  tkt3093.test
+  tkt3121.test
+  tkt3201.test
+  tkt3292.test
+  tkt3298.test
+  tkt3334.test
+  tkt3346.test
+  tkt3357.test
+  tkt3419.test
+  tkt3424.test
+  tkt3442.test
+  tkt3457.test
+  tkt3461.test
+  tkt3472.test
+  tkt3493.test
+  tkt3508.test
+  tkt3522.test
+  tkt3527.test
+  tkt3541.test
+  tkt3554.test
+  tkt3581.test
+  tkt35xx.test
+  tkt3630.test
+  tkt3718.test
+  tkt3731.test
+  tkt3757.test
+  tkt3761.test
+  tkt3762.test
+  tkt3773.test
+  tkt3791.test
+  tkt3793.test
+  tkt3810.test
+  tkt3824.test
+  tkt3832.test
+  tkt3838.test
+  tkt3841.test
+  tkt3871.test
+  tkt3879.test
+  tkt3911.test
+  tkt3918.test
+  tkt3922.test
+  tkt3929.test
+  tkt3935.test
+  tkt3992.test
+  tkt3997.test
+  tokenize.test
+  trace.test
+  vacuum2.test
+  vacuum3.test
+  vacuum.test
+}
+set EXCLUDE {
+  all.test
+  backup2.test
+  backup_ioerr.test
+  backup_malloc.test
+  backup.test
+  filefmt.test
+  quick.test
+  soak.test
+  veryquick.test
+}
+
+if {[sqlite3 -has-codec]} {
+  # lappend EXCLUDE \
+  #  conflict.test
+}
+
+
+# Files to include in the test.  If this list is empty then everything
+# that is not in the EXCLUDE list is run.
+#
+set INCLUDE {
+  aggerror.test
+  alter.test
+  alter3.test
+  alter4.test
+  altermalloc.test
+  async.test
+  async2.test
+  async3.test
+  async4.test
+  async5.test
+  autoinc.test
+  badutf.test
+  backup.test
+  backup2.test
+  backup_malloc.test
+  bdb_deadlock.test
+  bdb_exclusive.test
+  bdb_inmem_memleak.test
+  bdb_logsize.test
+  bdb_multi_proc.test
+  bdb_mvcc.test
+  bdb_persistent_pragma.test
+  bdb_replication.test
+  bdb_sequence.test
+  between.test
+  bigrow.test
+  bitvec.test
+  blob.test
+  boundary1.tcl
+  boundary1.test
+  boundary2.tcl
+  boundary2.test
+  boundary3.tcl
+  boundary3.test
+  boundary4.tcl
+  boundary4.test
+  cast.test
+  check.test
+  collate1.test
+  collate2.test
+  collate3.test
+  collate4.test
+  collate5.test
+  collate6.test
+  collate7.test
+  collate8.test
+  collate9.test
+  collateA.test
+  colmeta.test
+  colname.test
+  count.test
+  createtab.test
+  cse.test
+  date.test
+  default.test
+  delete2.test
+  delete3.test
+  delete.test
+  descidx1.test
+  descidx2.test
+  descidx3.test
+  distinctagg.test
+  expr.test
+  fkey1.test
+  func.test
+  in.test
+  in2.test
+  in3.test
+  in4.test
+  incrblob2.test
+  incrblob_err.test
+  incrblob.test
+  index2.test
+  index3.test
+  indexedby.test
+  index.test
+  insert2.test
+  insert3.test
+  insert4.test
+  insert5.test
+  insert.test
+  interrupt.test
+  intpkey.test
+  lastinsert.test
+  like2.test
+  like.test
+  limit.test
+  lookaside.test
+  manydb.test
+  memdb.test
+  minmax2.test
+  minmax3.test
+  minmax.test
+  nan.test
+  notnull.test
+  null.test
+  pagesize.test
+  ptrchng.test
+  rdonly.test
+  reindex.test
+  rollback.test
+  rowhash.test
+  rowid.test
+  rtree.test
+  schema2.test
+  schema.test
+  select1.test
+  select2.test
+  select3.test
+  select4.test
+  select5.test
+  select6.test
+  select7.test
+  select8.test
+  select9.test
+  selectA.test
+  selectB.test
+  selectC.test
+  server1.test
+  shared2.test
+  shared3.test
+  shared4.test
+  shared6.test
+  shared7.test
+  sort.test
+  sqllimits1.test
+  subquery.test
+  subselect.test
+  substr.test
+  table.test
+  tempdb.test
+  temptable.test
+  temptrigger.test
+  thread001.test
+  thread002.test
+  thread003.test
+  thread004.test
+  thread005.test
+  thread1.test
+  thread2.test
+  thread_common.tcl
+  threadtest1.c
+  threadtest2.c
+  trans2.test
+  trans3.test
+  trans.test
+  trigger1.test
+  trigger2.test
+  trigger3.test
+  trigger4.test
+  trigger5.test
+  trigger6.test
+  trigger7.test
+  trigger8.test
+  trigger9.test
+  triggerA.test
+  triggerB.test
+  types2.test
+  types3.test
+  types.test
+  unique.test
+  update.test
+  utf16align.test
+  view.test
+  vtab1.test
+  vtab2.test
+  vtab3.test
+  vtab4.test
+  vtab5.test
+  vtab6.test
+  vtab7.test
+  vtab8.test
+  vtab9.test
+  vtab_alter.test
+  vtabA.test
+  vtabB.test
+  vtabC.test
+  vtabD.test
+  vtab_err.test
+  vtab_shared.test
+  make-where7.tcl
+  where2.test
+  where3.test
+  where4.test
+  where5.test
+  where6.test
+  where7.test
+  where8m.test
+  where8.test
+  where9.test
+  whereA.test
+  wherelimit.test
+  where.test
+  zeroblob.test
+}
+
+foreach testfile [lsort -dictionary [glob $testdir/*.test]] {
+  set tail [file tail $testfile]
+  if {[llength $INCLUDE]>0 && [lsearch -exact $INCLUDE $tail]<0} continue
+  if {[info exists STARTAT] && [string match $STARTAT $tail]} {unset STARTAT}
+  if {[info exists STARTAT]} continue
+  source $testfile
+  catch {db close}
+  if {$sqlite_open_file_count>0} {
+    puts "$tail did not close all files: $sqlite_open_file_count"
+    incr nErr
+    lappend ::failList $tail
+    set sqlite_open_file_count 0
+  }
+}
+
+set sqlite_open_file_count 0
+really_finish_test

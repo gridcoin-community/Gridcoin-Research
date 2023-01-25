@@ -1,0 +1,578 @@
+#
+# Functions used to build the Windows Installer Package
+#
+# This script uses several bash extensions that are convenient
+# since we "know" it will always run under Cygwin: shell functions,
+# 'return', declaration of 'local' variables, $(command) syntax,
+# ${#X} (counting chars), ${X#regexp} (searching) $((expr)) (arithmetic)
+#
+#   PRODUCT_SUB_BLDDIR  - top of the subproduct build e.g. "dbxml-2.0.1/dbxml"
+#   PRODUCT_BLDDIR       - top of the build tree e.g. "dbxml-2.0.1"
+#   ERRORLOG - error output file
+
+group_runtime="group.runtime"
+group_devo="group.devo"
+group_ex="group.examples"
+group_java="group.java"
+group_doc="group.doc"
+group_csharp="group.csharp"
+group_cxx="group.cxx"
+group_sql="group.sql"
+
+Progress()
+{
+    if [ "$1" = -minor ]; then
+       shift
+    else
+       echo "" >> $ERRORLOG
+       echo "============================" >> $ERRORLOG
+    fi
+    echo "$@" >> $ERRORLOG
+    echo "$@" >&15
+}
+
+SetupErrorLog() {
+
+    # Before we start to use ERRORLOG, we get a full pathname,
+    # since the caller may change directories at times.
+    case "$ERRORLOG" in
+    /* ) ;;
+    *)   ERRORLOG=`pwd`"/$ERRORLOG" ;;
+    esac
+
+    rm -f $ERRORLOG
+
+    # File descriptor tricks.
+    # Duplicate current stderr to 15, as we'll occasionally
+    # need to report progress to it.  Then, redirect all
+    # stderr from now on to the ERRORLOG.
+    # 
+    exec 15>&2
+    exec 2>>$ERRORLOG
+}
+
+SetProductDir()
+{
+    if [ -d $PRODUCT_BLDDIR/$dbver ]; then
+	PRODUCT_SUB_BLDDIR=${PRODUCT_BLDDIR}/$dbver
+	return
+    fi      
+    if [ -d $PRODUCT_BLDDIR/../$dbver ]; then
+	PRODUCT_SUB_BLDDIR=${PRODUCT_BLDDIR}/../$dbver
+	return
+    fi      
+    Error "Cannot find product dir ($dbver) in ${PRODUCT_BLDDIR}"
+    exit 1
+}
+
+# Fail fast for certain missing files
+RequireFileInPath()
+{
+    local type="$1"
+    local origpath="$2"
+    local file="$3"
+    local upath="$origpath"
+    if [ "$1" != PATH ]; then
+       upath=`cygpath -up "$origpath"`
+    fi
+
+    SAVEIFS="$IFS"
+    IFS=":"
+    found=no
+    for dir in $upath; do
+        if [ -f "$dir/$file" ]; then
+            IFS="$SAVEIFS"
+            return
+        fi
+    done
+    IFS="$SAVEIFS"
+    Error "File $file not found in $type path: $origpath"
+    exit 1
+}
+
+Error()
+{
+    echo "" >> $ERRORLOG
+    echo "****************** FAIL ******************" >> $ERRORLOG
+    echo "ERROR: $@" >> $ERRORLOG
+    echo "ERROR: $@" >&15
+    echo "See $ERRORLOG for details" >&15
+    return 1
+}
+
+RequireCygwin() {
+    Progress -minor "checking for Cygwin..."
+    RequireFileInPath PATH "$PATH" bash
+}
+
+RequireXQilla() {
+    Progress -minor "checking for XQilla..."
+    RequireFileInPath PATH "$PATH" xqilla
+}
+
+# RequireJava()
+# A java SDK (with include files) must be installed
+#
+RequireJava() {
+    Progress -minor "checking for Java..."
+    RequireFileInPath INCLUDE "$INCLUDE" jni.h
+#    RequireFileInPath INCLUDE "$INCLUDE" jni_md.h
+    RequireFileInPath PATH "$PATH" jar.exe
+    RequireFileInPath PATH "$PATH" javac.exe
+}
+
+# RequireTcl()
+# A Tcl SDK (with compatible .lib files) must be installed
+#
+RequireTcl() {
+    Progress -minor "checking for Tcl..."
+    RequireFileInPath INCLUDE "$INCLUDE" tcl.h
+    RequireFileInPath LIB "$LIB" tcl85g.lib
+    RequireFileInPath LIB "$LIB" tcl85.lib
+}
+
+# RequireWix()
+# WiX must be installed
+#
+RequireWix() {
+    Progress -minor "checking for WiX..."
+    RequireFileInPath PATH "$PATH" candle.exe
+    RequireFileInPath PATH "$PATH" light.exe
+}
+
+# RequirePerl()
+# Perl must be installed
+#
+RequirePerl() {
+    Progress -minor "checking for Perl..."
+    RequireFileInPath PATH "$PATH" perl.exe
+}
+
+# RequireTcl()
+# Tcl must be installed
+#
+RequireTcl() {
+    Progress -minor "checking for Tcl..."
+    RequireFileInPath INCLUDE "$INCLUDE" tcl.h
+    RequireFileInPath LIB "$LIB" tcl85.lib
+}
+
+# RequirePython()
+# Python (and include files) must be installed
+#
+RequirePython() {
+    Progress -minor "checking for Python..."
+    RequireFileInPath PATH "$PATH" python.exe
+}
+
+# RequirePHP()
+# PHP (and include files) must be installed
+#
+RequirePHP() {
+    Progress -minor "checking for PHP..."
+    RequireFileInPath INCLUDE "$INCLUDE" php.h
+    RequireFileInPath PATH "$PATH" php.exe
+}
+
+#
+# Locate the Merge Modules for Visual Studio.  This MUST
+# change if/when the default compiler is changed to a
+# newer version.  What will change is the registry key
+# being used as well as the file name (*.msm) to match
+# the new version.
+#
+FindMergeModules() {
+    Progress "Adding redistributable Visual Studio files..."
+    tscript=cmd$$a.cmd
+    tsed=sed$$a.sed
+    rm -f $tscript $tscript.out $tsed
+
+    # this short script removes leading/trailing spaces and turns
+    # '\' into '\\' in the path so *nix scripting and sed work
+    echo "s/\\\\/\\\\\\\\/g;s/^[ \\t]*//;s/[ \\t]*$//" > $tsed
+
+    # Query for location of VS Merge Module for CRT
+    # and return it to replace @MERGE_MODULES_LOCATION@ in db.wxs
+    echo "@echo off"                               > $tscript
+    echo "set DBROOTDIR="                         >> $tscript
+    echo "for /F \"tokens=2* skip=2\" %%a in ('reg query \"HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\8.0\\Setup\\VS\" /v MSMDir') do echo  %%b >> $tscript.out" >> $tscript
+    cmd /c $tscript
+    TLOC=`sed -f $tsed < $tscript.out`
+    MERGE_MODULES_LOCATION=${TLOC}Microsoft_VC80_CRT_x86.msm
+    rm -f $tscript $tscript.out $tsed
+}
+
+BuildProduct() {
+    local here=`pwd`
+    Progress "Building $PRODUCT_NAME in ${PRODUCT_SUB_BLDDIR}"
+    cd ${PRODUCT_SUB_BLDDIR}/dist
+    # make files writeable if necessary
+    chmod +w ${PRODUCT_SUB_BLDDIR}/build_windows/VS8/*.vcproj
+    chmod +w ${PRODUCT_SUB_BLDDIR}/build_windows/VS10/*.vcxproj
+    chmod +w ${PRODUCT_SUB_BLDDIR}/build_windows/VS10/*.props
+    chmod +w ${PRODUCT_SUB_BLDDIR}/build_windows/*.sln
+    cmd.exe /x /c call $MSI_DIR/build.bat
+}
+
+CreateLicenseRtf() {
+    local licensein="$1"
+    local licensertf="$2"
+
+    if [ ! -f "$licensein" ]; then
+        Error "License file $licensein: does not exist"
+        exit 1
+    fi
+    Progress "creating ${licensertf}..."
+    
+    # Build a list of references to components ids (i.e. directories)
+    # that are listed in the .wxs file.  This is needed to refer to
+    # all of the source (sadly it appears there is no better way!)
+    #
+    if ! grep '^=-=-=-=' $licensein > /dev/null; then
+        Error "LICENSE has changed format, this script must be adapted"
+        exit 1
+    fi
+    
+    sed -e '1,/^=-=-=-=-=/d' < $licensein | MakeRtf > $licensertf
+}
+
+# MakeRtf()
+# Standard input is plain text, standard output is RTF.
+#
+MakeRtf() {
+    temp1=/tmp/sbm$$a
+    cat > $temp1
+
+# Courier is a good font, but the lines with all caps
+# overflows our current dialog size:
+#     {\rtf1\ansi\deff0{\fonttbl{\f0\fnil\fcharset0 Courier New;}}
+#     \viewkind4\uc1\pard\lang1033\f0\fs16 
+#
+# Using Small fonts works:
+#      {\rtf1\ansi\deff0{\fonttbl{\f0\fswiss\fprq2\fcharset0 Small Fonts;}}
+#      {\colortbl ;\red0\green0\blue0;}
+#      \viewkind4\uc1\pard\cf1\lang1033\f0\fs14 
+
+# Arial is the best compromise:
+    sed -e 's/^ *//' << 'EndOfRTFHeader'
+      {\rtf1\ansi\deff0{\fonttbl{\f0\fswiss\fprq2\fcharset0 Arial;}}
+      {\colortbl ;\red0\green0\blue0;}
+      \viewkind4\uc1\pard\cf1\lang1033\f0\fs16 
+EndOfRTFHeader
+
+# Embedded '<' and '>' can cause problems for Wix
+    sed -e 's:$:\\par:' -e 's:<: \\lquote :' -e 's:>: \\rquote :' < $temp1
+    echo -n '}'
+    rm -f $temp1
+}
+
+CreateRuntimeComponents() {
+    local here=`pwd`
+    Progress "Building/updating .wxs files for runtime..."
+    cd "${PRODUCT_BLDDIR}"
+    bash ${DIST_DIR}/winmsi/generateWix.sh  dist/winmsi xqilla.exe
+    cd $here
+}
+
+MakeLink() {
+    local outfile=$1
+    local url=$2
+    echo '[Default]' > $outfile
+    echo "BASEURL=$url" >> $outfile
+    echo '[InternetShortcut]' >> $outfile
+    echo "URL=$url" >> $outfile
+    echo "Modified=0000000007DCC3101DE" >> $outfile
+    unix2dos $outfile
+}
+
+MakeCommand() {
+    local outfile=$1
+    local command=$2
+    echo "@echo off"                               > $outfile
+    echo "set DBROOTDIR="                         >> $outfile
+    echo "for /F \"tokens=2* skip=2\" %%A in ('REG QUERY \"HKLM\\SOFTWARE\\Oracle\\$PRODUCT_NAME\\$PRODUCT_VERSION\" /v RootDirectory') do set DBROOTDIR=%%B"                                   >> $outfile
+    echo "if \"%DBROOTDIR%\"==\"\" for /F \"tokens=2* skip=2\" %%A in ('REG QUERY \"HKLM\\SOFTWARE\\Wow6432Node\\Oracle\\$PRODUCT_NAME\\$PRODUCT_VERSION\" /v RootDirectory') do set DBROOTDIR=%%B"                             >> $outfile
+    echo "if ERRORLEVEL 2 goto MISSING"           >> $outfile
+    echo "if not defined DBROOTDIR goto MISSING"  >> $outfile
+    echo "set FN=\"%DBROOTDIR%$command\""         >> $outfile
+    echo "if not exist %FN% goto NOTFOUND"        >> $outfile
+    echo "cmd /k \"%DBROOTDIR%$command\"$CR"      >> $outfile
+    echo "goto END"                               >> $outfile
+    echo ":NOTFOUND"                              >> $outfile
+    echo "echo"                                   >> $outfile
+    echo "echo  Error: The program does not appear to be installed." >> $outfile
+    echo "echo"                                   >> $outfile
+    echo "cmd /k"                                 >> $outfile
+    echo "goto END"                               >> $outfile
+    echo ":MISSING"                               >> $outfile
+    echo "echo"                                   >> $outfile
+    echo "echo NOTE:"                             >> $outfile
+    echo "echo   The $PRODUCT_NAME version could not be determined." >> $outfile
+    echo "echo   If you are running on Windows 2000, make sure the" >> $outfile
+    echo "echo   REG.EXE program is installed from the Tools disk" >> $outfile
+    echo "echo"                                   >> $outfile
+    echo "cmd /k"                                 >> $outfile
+    echo ":END"                                   >> $outfile
+    unix2dos $outfile
+}
+
+CreateLinks() {
+    # Create link files that are referenced from
+    # links_frag.wxs and installed
+    echo "Making links"
+    mkdir links
+    cd links
+    MakeLink oracletn.bdbsc http://forums.oracle.com/forums/forum.jspa?forumID=271
+    MakeLink oracleon.bdbsc http://www.oracle.com/technetwork/database/berkeleydb/documentation/index.html
+    MakeLink oraclefa.bdbsc http://www.oracle.com/technetwork/database/berkeleydb/db-faq-095848.html
+    MakeLink oraclewb.bdbsc http://www.oracle.com
+    cp ${DIST_DIR}/winmsi/webicon.ico .
+    cd ..
+}
+
+# run C# example projects through XQilla to replace the project reference
+# with a reference to the runtime that will be installed.
+createCSharpExamples() {
+    local here=`pwd`
+    cd dist/winmsi
+    for i in `ls ../../examples/csharp`; do
+	f=../../stage/examples/csharp/$i/$i.csproj
+        mkdir -p ../../stage/examples/csharp/$i
+	xqilla.exe -u -v "inFile" $f -v "libname" libdb_dotnet$DB_VERSION_MAJOR$DB_VERSION_MINOR -v "libversion" $DB_VERSION_MAJOR.$DB_VERSION_MINOR.$DB_VERSION_PATCH.0 fixupCsharp.xq
+	# Visual studio doesn't like XML version 1.1...
+	sed -e's!version="1.1"!version="1.0"!g' $f > $f.tmp
+	cp -f $f.tmp $f
+	rm -rf $f.tmp
+    done
+    cd $here
+}
+
+# VS2010 examples need to remove the dependencies on db*.vcxproj
+# projects that do not get bundled with binaries
+fixup2010examples () {
+    local here=`pwd`
+    cd dist/winmsi
+    for i in `ls ../../stage/build_windows/*.vcxproj`; do
+	xqilla.exe -u -v "inFile" $i fixup2010.xq
+	# Visual studio doesn't like XML version 1.1...
+	sed -e's!version="1.1"!version="1.0"!g' $i > $i.tmp
+	cp -f $i.tmp $i
+	rm -rf $i.tmp
+    done
+    cd $here
+}
+
+#
+# This function copies source files to the staging
+# area for packaging.  It also creates lists of
+# files per component.  The component groups are
+# listed at the top of this file (see group_* variables)
+# These lists are used by genWix.py to generate the
+# proper WiX Components.  These files need to contain
+# valid paths into the staging area.
+#
+StageSourceComponents() {
+    local here=`pwd`
+    Progress "Staging source files -- examples and projects..."
+
+    cd "${PRODUCT_BLDDIR}"
+    # start with a clean slate
+    rm -rf stage
+    mkdir stage
+    mkdir stage/build_windows
+    mkdir stage/build_windows/VS8
+    mkdir stage/build_windows/VS10
+    mkdir stage/sql
+    mkdir stage/src
+    mkdir stage/src/clib
+    mkdir stage/include
+
+    #
+    # Examples
+    #
+    cp -r examples stage
+
+    # many examples rely on getopt.c
+    cp src/clib/getopt.c stage/src/clib
+    # example solution and project files
+    cp build_windows/Berkeley_DB_examples.sln stage/build_windows
+    cp build_windows/BDB_dotNet_examples.sln stage/build_windows
+    cp build_windows/Berkeley_DB_examples_vs2010.sln stage/build_windows
+    cp build_windows/BDB_dotNet_examples_vs2010.sln stage/build_windows
+    # NOTE: this assumes ALL example projects start with "ex"
+    cp build_windows/VS8/ex*.vcproj stage/build_windows/VS8
+    # VS2010 projects too
+    cp build_windows/VS10/ex*.vcxproj stage/build_windows/VS10
+    cp build_windows/VS10/*.props stage/build_windows/VS10
+
+    # note files in example group file, starting at stage
+    cd stage
+    find examples src build_windows -type f > $group_ex
+    cd ..
+
+    #
+    # Documentation
+    #
+    cp -r docs stage
+    find docs -type f > stage/$group_doc
+
+
+    #
+    # Header files for examples and devo
+    #
+
+    # development headers
+    cp build_windows/{db,db_cxx,dbstl_common}.h stage/include
+    echo "include/db.h" > stage/$group_devo
+    # put C++ in core devo, it's included in libdbXX
+    echo "include/db_cxx.h" >> stage/$group_devo
+
+    # dbinc/queue.h is required by rep_net.c for the LIST* macros, put it
+    # under include.  It has no external dependencies.
+    mkdir stage/include/dbinc
+    cp src/dbinc/queue.h stage/include/dbinc
+    echo "include/dbinc/queue.h" >> stage/$group_ex
+ 
+    # STL has a lot of header files that are external
+    cp lang/cxx/stl/*.h stage/include
+    cd stage
+    find include -name "dbstl*.h" >> $group_cxx
+    cd ..
+
+    cd $here
+}
+
+StageRuntimeComponents() {
+    local here=`pwd`
+    Progress "Staging runtime files/executables..."
+    cd "${PRODUCT_BLDDIR}"
+    # stage directory must exist, created above
+    mkdir stage/bin
+    mkdir stage/lib
+    mkdir stage/jar
+
+    # start clean
+    rm -f stage/$group_runtime stage/$group_java stage/$group_csharp \
+	stage/$group_sql
+
+    for file in `find . -name "*.exe"`; do
+	cp $file stage/bin
+    done
+    for file in `find . -name "*.dll"`; do
+	cp $file stage/bin
+    done
+    for file in `find . -name "*.lib"`; do
+	cp $file stage/lib
+    done
+    # remove static libraries
+    rm stage/lib/libdb*s.lib
+    for file in `find . -name "*.jar"`; do
+	cp $file stage/jar
+    done
+
+    # don't need .lib files for Java and C#, nobody
+    # links with them other than DB's DLLs.
+    rm -f stage/lib/libdb_java*
+    rm -f stage/lib/libdb_csharp*
+    rm -f stage/lib/sqlite_jni.lib
+    rm -f stage/lib/sqlite3odbc.lib
+
+    # copy library .pdb files by hand
+    cp build_windows/Win32/Release/libdb*.pdb stage/bin
+    # SQLite header, library .pdb files
+    cp lang/sql/generated/sqlite3.h stage/include
+    cp build_windows/Win32/Release/sqlite3odbc.pdb stage/bin
+    cp build_windows/Win32/Release/sqlite_jni.pdb stage/bin
+
+    # remove example artifacts -- they are not bundled
+    rm -f stage/bin/ex*.exe
+    rm -f stage/jar/dbexamples.jar
+
+    # copy some extra C# files
+    cp build_windows/AnyCPU/Release/libdb_dotnet$DB_VERSION_MAJOR$DB_VERSION_MINOR.XML stage/bin
+    cp build_windows/AnyCPU/Release/libdb_dotnet$DB_VERSION_MAJOR$DB_VERSION_MINOR.pdb stage/bin
+
+    # modify C# example project files
+    createCSharpExamples
+
+    # modify VS2010 example project files
+    fixup2010examples
+
+    cp README stage
+    cp LICENSE stage
+
+    #
+    # Update group files
+    #
+
+    cd stage
+    # runtime
+    # temp rename of dbsql to put it in SQL
+    mv bin/dbsql.exe bin/dbsql.exe.sv
+    find bin -name "*.exe" >> $group_runtime
+    find bin -name "libdb??.dll" >> $group_runtime
+    mv bin/dbsql.exe.sv bin/dbsql.exe
+
+    # core devo
+    find lib -name "libdb??.lib" >> $group_devo
+    find bin -name "libdb??.pdb" >> $group_devo
+
+    # java
+    echo "jar/db.jar" >> $group_java
+    find bin -name "libdb_java*" >> $group_java
+
+    # C++/STL (libdb?? includes C++ runtime)
+    find bin -name "libdb_stl*" >> $group_cxx
+    find lib -name "libdb_stl*" >> $group_cxx
+    
+    # C#
+    find bin -name "libdb_csharp*" >> $group_csharp
+    find bin -name "libdb_dotnet*" >> $group_csharp
+
+    # SQL (includes jdbc/odbc)
+    find bin -name "libdb_sql*" >> $group_sql
+    find bin -name "sqlite*" >> $group_sql
+    find lib -name "*sql*" >> $group_sql
+    echo "jar/jdbc.jar" >> $group_sql
+    echo "bin/dbsql.exe" >> $group_sql
+    echo "include/sqlite3.h" >> $group_sql
+    cd ..
+
+    cd $here
+}
+
+CreateMsi() {
+    local here=`pwd`
+    Progress "Building .msi file..."
+    cd "${PRODUCT_BLDDIR}"/stage
+    chmod +w README
+    unix2dos README
+    chmod 444 README
+    rm -rf wix
+    mkdir wix 2>/dev/null
+    cd wix
+
+    FindMergeModules
+    echo "MERGE: $MERGE_MODULES_LOCATION"
+
+    # copy/edit .wxs files to here
+    # use pattern that is *NOT* in lib_paths.sed to keep it intact
+    for i in db.wxs links_frag.wxs required_frag.wxs; do
+    	sed -e"s:@PRODUCT_NAME@:$PRODUCT_NAME:g" -e"s:@PROD_WIX_VERSION@:$PRODUCT_VERSION:g" -e"s:@PROD_DB_VERSION@:$DB_VERSION:g" -e"s:@REG_KEY_VERSION@:$REG_KEY_VERSION:g" -e"s:@REG_KEY_NAME@:$REG_KEY_NAME:g" -e"s:@PROD_WIX_VERSION_MIN@:$PRODUCT_VERSION_MAJOR.$PRODUCT_VERSION_MINOR.0:g " -e"s:@PRODUCT_MAJOR@:$PRODUCT_VERSION_MAJOR:g" -e"s:@PRODUCT_MINOR@:$PRODUCT_VERSION_MINOR:g" -e"s/@MERGE_MODULES_LOCATION@/$MERGE_MODULES_LOCATION/g" ${DIST_DIR}/winmsi/$i > ./$i
+    done
+    for i in db_components.wxs; do
+    	sed -e"s:@PRODUCT_NAME@:$PRODUCT_NAME:g" -e"s:@PROD_WIX_VERSION@:$PRODUCT_VERSION:g" -e"s:@PROD_WIX_VERSION_SHORT@:$PRODUCT_VERSION_MAJOR.$PRODUCT_VERSION_MINOR.$PRODUCT_VERSION_PATCH:g" -e"s:@PROD_WIX_VERSION_MIN@:$PRODUCT_VERSION_MAJOR.$PRODUCT_VERSION_MINOR.0:g" -e"s:@PRODUCT_MAJOR@:$PRODUCT_VERSION_MAJOR:g" -e"s:@PRODUCT_MINOR@:$PRODUCT_VERSION_MINOR:g" ../scripts/$i > ./$i
+    done
+
+    # WiX will pick up License.rtf in the current (work) directory
+    cp ${DIST_DIR}/License.rtf .
+
+    # Create link files.  These are referenced from links_frag.wxs,
+    # and "light" linking below will fail without them
+    CreateLinks
+
+    # Run WiX tools (these commands work with WiX 3.x)
+    candle *.wxs
+    light -out $dbver.msi -ext WixUIExtension *.wixobj
+    cd $here
+}

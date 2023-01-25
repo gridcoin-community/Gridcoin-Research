@@ -15,7 +15,7 @@ distribution are installed, for Debian and Ubuntu these are:
     apt-get install qt5-default qt5-qmake qtbase5-dev-tools qttools5-dev-tools \
         build-essential libboost-dev libboost-system-dev \
         libboost-filesystem-dev libboost-thread-dev \
-        libssl-dev libdb++-dev libminiupnpc-dev libzip-dev
+        libssl-dev libminiupnpc-dev libzip-dev
 
 then execute the following:
 
@@ -36,7 +36,7 @@ Windows build instructions:
 
 - Download the `QT Windows SDK`_ and install it. You don't need the Symbian stuff, just the desktop Qt.
 
-- Compile openssl, boost and dbcxx.
+- Compile openssl and boost.
 
 - Open the .pro file in QT creator and build as normal (ctrl-B)
 
@@ -53,7 +53,7 @@ MacOS
 ::
 
 	sudo port selfupdate
-	sudo port install boost db48 miniupnpc
+	sudo port install boost miniupnpc
 
 - Open the .pro file in Qt Creator and build as normal (cmd-B)
 
@@ -116,23 +116,6 @@ flag to qmake to control this:
 +--------------+--------------------------------------------------------------------------+
 | USE_QRCODE=1 | QRCode support enabled                                                   |
 +--------------+--------------------------------------------------------------------------+
-
-
-Berkeley DB version warning
-===========================
-
-A warning for people using the *static binary* version of Gridcoin on a Linux/UNIX-ish system (tl;dr: **Berkeley DB databases are not forward compatible**).
-
-The static binary version of Gridcoin is linked against libdb 5.0 (see also `this Debian issue`_).
-
-Now the nasty thing is that databases from 5.X are not compatible with 4.X.
-
-If the globally installed development package of Berkeley DB installed on your system is 5.X, any source you
-build yourself will be linked against that. The first time you run with a 5.X version the database will be upgraded,
-and 4.X cannot open the new format. This means that you cannot go back to the old statically linked version without
-significant hassle!
-
-.. _`this Debian issue`: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=621425
 
 Ubuntu 11.10 warning
 ====================

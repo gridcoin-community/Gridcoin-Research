@@ -1,0 +1,119 @@
+#! /bin/sh
+#	$Id$
+#
+# Build the documentation from a docs_books repository.
+#
+# Optional input is a release tag number to be built.
+
+distdir=`pwd`
+if [ `basename $distdir` != "dist" ]; then
+	echo "The s_docs script must be run from the dist dir."
+	exit 1
+fi
+
+tag=$1
+docs_dir=$2
+
+rootdir=`(cd $distdir/../.. ; pwd)`
+
+# Create temporary space.
+tmp_dir=$distdir/s_docs.tmp
+
+rm -rf $tmp_dir && mkdir $tmp_dir && mkdir $tmp_dir/logs
+
+if [ "$docs_dir" = "" ]; then
+	docs_dir=$rootdir/docs_books-5.3
+fi
+
+# Verify that the docs_books repository is where we expect it.
+if [ ! -d "$docs_dir" ]; then
+	echo "Script requires a doc repository at: $docs_dir"
+	exit 1
+fi
+
+# If a release tag is specified, ensure the docs_books is up to date.
+if [ "$tag" != "" ]; then
+	cd $docs_dir
+	hg up -r $tag > /dev/null
+	if [ $? != 0 ]; then
+		echo "Failed to update docs_books repo to requested tag." >&2
+		exit 1
+	fi
+	cd $distdir
+else
+	echo "No release tag specified, assuming docs_books repo already in required state."
+fi
+
+# Set up env variables.
+system=`uname | grep -i cygwin`
+if [ "$system"x != x ]; then
+	DOCS_REPOSITORY=`cygpath -m $docs_dir`; export DOCS_REPOSITORY
+	DOCS_OUTPUT_DIR=`cygpath -m $tmp_dir`; export DOCS_OUTPUT_DIR
+	DOCS_TARGET_REPOSITORY=`cygpath -m $distdir/../docs`; export DOCS_TARGET_REPOSITORY
+else
+	DOCS_REPOSITORY=$docs_dir; export DOCS_REPOSITORY
+	DOCS_OUTPUT_DIR=$tmp_dir; export DOCS_OUTPUT_DIR
+	DOCS_TARGET_REPOSITORY=$distdir/../docs; export DOCS_TARGET_REPOSITORY
+fi
+
+if [ "$DOCS_PDF_BUILDER" = "" ]; then
+	fop_cmd=`which fop`
+	if [ "$fop_cmd" = "" ]; then
+		echo "Could not find a FOP install. Add it to your path, or 
+set DOCS_PDF_BUILDER environment directory. The FOP install package can be
+found at s.o.c:/b/htdocs/documentation/sleepycat-fop095.zip"
+		exit 1;
+	fi
+	DOCS_PDF_BUILDER=$fop_cmd; export DOCS_PDF_BUILDER
+	echo "Found a fop command in the path. Using it's base dir as the FOP install."
+fi
+if [ "$DOCS_PARSER" = "" ]; then
+	xslt_cmd=`which xsltproc`
+	if [ "$xslt_cmd" = "" ]; then
+		echo "No xsltproc found. Install libxml2."
+		exit 1
+	fi
+	DOCS_PARSER=$xslt_cmd; export DOCS_PARSER
+fi
+
+###################################################################
+
+(`cd $distdir/../docs ; mkdir -p installation ; mkdir -p bdb-sql`)
+
+cd $docs_dir/tools/misc_doc_scripts
+
+./make_db_landing_page.py
+./make_db_changelog.py
+
+cd $docs_dir/tools/buildBooks
+
+for book in DB_PROG_REF DB_REF_C DB_REF_CXX DB_REF_STL DB_REF_TCL \
+	    DB_GSG_C DB_GSG_CXX DB_GSG_JAVA DB_REP_C DB_REP_CXX \
+	    DB_REP_JAVA DB_COLLECTIONS DB_TXN_C DB_TXN_CXX DB_TXN_JAVA \
+	    DB_PORT DB_INSTALL DB_UPGRADE DB_SQL DB_SQL_ADO \
+	    core_inmem_app core_mssgtxt; do
+
+	    case $book in
+	    DB_PROG_REF)
+	    	HTML_OPTS="-x"
+		PDF_OPTS=
+		;;
+	    core_*)
+	    	HTML_OPTS="-a"
+		PDF_OPTS="-a"
+		;;
+	    *)
+	    	HTML_OPTS=
+		PDF_OPTS=
+		;;
+	    esac
+
+	    DOCS_ERROR_FILE=$tmp_dir/${book}_err_htm.txt; export DOCS_ERROR_FILE
+	    ./buildBooks.py $HTML_OPTS -t $book -h
+	    DOCS_ERROR_FILE=$tmp_dir/${book}_err_pdf.txt; export DOCS_ERROR_FILE
+	    ./buildBooks.py $PDF_OPTS -t $book -p
+done
+
+# Cleanup after ourselves
+rm -rf $tmp_dir
+

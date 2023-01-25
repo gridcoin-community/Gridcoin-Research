@@ -1,0 +1,104 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"> 
+  <Fragment>
+    <!-- files in the links directory -->
+    <DirectoryRef Id='INSTALLDIR'>
+      <Directory Id='INSTALLURL' Name='links' >
+        <Component Guid='e721b40f-2ba8-11df-ba54-00262db1b537'
+          Id='RequiredLinks'
+          Location='either'>
+          <File
+            DiskId='1'
+            Id='File.oraclewb'
+            Name='oraclewb.bdbsc'
+            Source='links\oraclewb.bdbsc'
+           />
+          <File
+            DiskId='1'
+            Id='File.oracletn'
+            Name='oracletn.bdbsc'
+            Source='links\oracletn.bdbsc'
+           />
+          <File
+            DiskId='1'
+            Id='File.oracleon'
+            Name='oracleon.bdbsc'
+            Source='links\oracleon.bdbsc'
+           />
+          <File
+            DiskId='1'
+            Id='File.oraclefa'
+            Name='oraclefa.bdbsc'
+            Source='links\oraclefa.bdbsc'
+           />
+          <File
+            DiskId='1'
+            Id='webicon'
+            Name='webicon.ico'
+            Source='links\webicon.ico'
+           />
+	<RemoveFolder Id='removeBDBmenu' Directory='BerkeleyDbMenu' On='uninstall'/>
+        </Component>
+      </Directory>
+    </DirectoryRef>
+    <!-- shortcuts that point to files in the links directory -->
+    <DirectoryRef Id='BerkeleyDbMenu'>
+      <Component Guid='3d5585bff5697ea6ed5051fae0bb7abc'
+          Id='RequiredShortcuts'
+          Location='either'>
+        <Shortcut
+          Id='Short.install'
+          Name='Installation Directory'
+          Show='normal'
+          Target='[INSTALLDIR]'
+         />
+        <Shortcut
+          Id='Short.oracleon'
+          Name='Online Documentation'
+          Show='normal'
+          Target='[INSTALLDIR]\links\oracleon.bdbsc'
+         />
+        <Shortcut
+          Id='Short.oraclefa'
+          Name='@PRODUCT_NAME@ FAQ'
+          Show='normal'
+          Target='[INSTALLDIR]\links\oraclefa.bdbsc'
+         />
+        <Shortcut
+          Id='Short.oracletn'
+          Name='Oracle Technology Network'
+          Show='normal'
+          Target='[INSTALLDIR]\links\oracletn.bdbsc'
+         />
+        <Shortcut
+          Id='Short.oraclewb'
+          Name='Oracle Website'
+          Show='normal'
+          Target='[INSTALLDIR]\links\oraclewb.bdbsc'
+         />
+	<RemoveFolder Id='RequiredShortcuts' On='uninstall'/>
+	<RegistryValue Root="HKCU" Key='SOFTWARE\Oracle\@REG_KEY_NAME@\@REG_KEY_VERSION@'
+	Name='Installed' Type='integer' Value='1' KeyPath='yes'/>
+      </Component>
+      <!-- separate component for on-disk doc shortcuts if not installed -->
+      <Component Guid='fd666f0f-aa18-11df-af5b-00262db1b537'
+          Id='ondisk_doc'
+          Location='either'>
+        <Shortcut
+          Id='Short.oracleld'
+          Name='On Disk Documentation'
+          Show='normal'
+          Target='[INSTALLDIR]\docs\index.html'
+         />
+        <Shortcut
+          Id='Short.oraclech'
+          Name='Change Log for @PRODUCT_NAME@ @PROD_WIX_VERSION@'
+          Show='normal'
+          Target='[INSTALLDIR]\docs\installation\changelog_@PRODUCT_MAJOR@_@PRODUCT_MINOR@.html'
+         />
+	<RemoveFolder Id='ondisk_doc' On='uninstall'/>
+	<RegistryValue Root="HKCU" Key='SOFTWARE\Oracle\@REG_KEY_NAME@\@REG_KEY_VERSION@\doc'
+	Name='Installed' Type='integer' Value='1' KeyPath='yes'/>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

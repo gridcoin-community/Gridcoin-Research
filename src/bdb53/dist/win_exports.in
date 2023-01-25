@@ -1,0 +1,250 @@
+# $Id$
+
+# This is an input file for the s_windows script. It lists the symbols
+# which are used to build the db and db_small libraries.
+#
+# If you are adding a new symbol, put the symbol here in win_exports.in and
+# indicate which library requires the symbol.
+#
+# Each non-blank, non-comment line is of the form
+#   symbol_name		module [ module ...]
+
+# Standard interfaces.
+db_copy						db db_small 
+db_create						db db_small 
+db_env_create						db db_small 
+db_env_set_func_assert						db db_small 
+db_env_set_func_free						db db_small 
+db_env_set_func_malloc						db db_small 
+db_env_set_func_realloc						db db_small 
+db_env_set_win_security						db db_small 
+db_sequence_create						db db_small 
+db_strerror						db db_small 
+db_version						db db_small 
+db_full_version						db db_small 
+log_compare						db db_small 
+
+# These are needed to link the tcl library.
+__db_dbm_close						db 
+__db_dbm_delete						db 
+__db_dbm_fetch						db 
+__db_dbm_firstkey						db 
+__db_dbm_init						db 
+__db_dbm_nextkey						db 
+__db_dbm_store						db 
+__db_check_chksum						db db_small 
+__db_chksum						db db_small 
+__db_get_flags_fn						db db_small 
+__db_get_seq_flags_fn						db db_small 
+__db_hcreate						db 
+__db_hdestroy						db 
+__db_hsearch						db 
+__db_loadme						db db_small 
+__db_ndbm_clearerr						db 
+__db_ndbm_close						db 
+__db_ndbm_delete						db 
+__db_ndbm_dirfno						db 
+__db_ndbm_error						db 
+__db_ndbm_fetch						db 
+__db_ndbm_firstkey						db 
+__db_ndbm_nextkey						db 
+__db_ndbm_open						db 
+__db_ndbm_pagfno						db 
+__db_ndbm_rdonly						db 
+__db_ndbm_store						db 
+__db_win32_mutex_lock						db db_small 
+__db_win32_mutex_unlock						db db_small 
+__env_panic						db db_small 
+__env_ref_get						db
+__ham_func2						db db_small 
+__ham_func3						db db_small 
+__ham_func4						db db_small 
+__ham_func5						db db_small 
+__ham_test						db db_small 
+__lock_id_set						db db_small 
+__mutex_alloc						db db_small 
+__mutex_free						db db_small 
+__os_calloc						db db_small 
+__os_closehandle						db db_small 
+__os_dirfree						db db_small 
+__os_dirlist						db db_small 
+__os_free						db db_small 
+__os_fsync						db db_small 
+__os_get_syserr						db db_small 
+__os_getenv						db db_small 
+__os_ioinfo						db db_small 
+__os_malloc						db db_small 
+__os_mkdir						db db_small 
+__os_open						db db_small 
+__os_openhandle						db db_small 
+__os_posix_err						db db_small 
+__os_read						db db_small 
+__os_realloc						db db_small 
+__os_rename						db db_small 
+__os_strdup						db db_small 
+__os_umalloc						db db_small 
+__os_unlink						db db_small 
+__os_write						db db_small 
+__txn_id_set						db db_small 
+
+# These are needed for linking tools or java.
+__bam_adj_desc						db db_small 
+__bam_cadjust_desc						db db_small 
+__bam_cdel_desc						db db_small 
+__bam_curadj_desc						db db_small 
+__bam_irep_desc						db db_small 
+__bam_merge_44_desc						db db_small 
+__bam_pgin						db db_small 
+__bam_pgout						db db_small 
+__bam_rcuradj_desc						db db_small 
+__bam_relink_43_desc						db db_small 
+__bam_repl_desc						db db_small 
+__bam_root_desc						db db_small 
+__bam_rsplit_desc						db db_small 
+__bam_split_42_desc						db db_small 
+__bam_split_48_desc						db db_small 
+__bam_split_desc						db db_small 
+__bam_traverse						db db_small 
+__crdel_inmem_create_desc						db db_small 
+__crdel_inmem_remove_desc						db db_small 
+__crdel_inmem_rename_desc						db db_small 
+__crdel_metasub_desc						db db_small 
+__db_Cstrsep						db db_small 
+__db_add_recovery_int						db db_small 
+__db_addrem_42_desc						db db_small 
+__db_addrem_desc						db db_small 
+__db_big_42_desc						db db_small 
+__db_big_desc						db db_small 
+__db_cksum_desc						db db_small 
+__db_close						db db_small 
+__db_compress_count_int						db 
+__db_compress_int						db 
+__db_debug_desc						db db_small 
+__db_decompress_count_int						db 
+__db_decompress_int						db 
+__db_decompress_int32						db 
+__db_dispatch						db db_small 
+__db_dl						db db_small 
+__db_dumptree						db db_small 
+__db_err						db db_small 
+__db_errx						db db_small 
+__db_getlong						db db_small 
+__db_getulong						db db_small 
+__db_global_values						db db_small 
+__db_isbigendian						db db_small 
+__db_merge_desc						db db_small 
+__db_mkpath						db db_small 
+__db_msg						db db_small 
+__db_noop_desc						db db_small 
+__db_ovref_desc						db db_small 
+__db_pg_alloc_42_desc						db db_small 
+__db_pg_alloc_desc						db db_small 
+__db_pg_free_42_desc						db db_small 
+__db_pg_free_desc						db db_small 
+__db_pg_freedata_42_desc						db db_small 
+__db_pg_freedata_desc						db db_small 
+__db_pg_init_desc						db db_small 
+__db_pg_sort_44_desc						db db_small 
+__db_pg_trunc_desc						db db_small 
+__db_pgin						db db_small 
+__db_pgno_desc						db db_small 
+__db_pgout						db db_small 
+__db_pr_callback						db db_small 
+__db_realloc_desc						db db_small 
+__db_relink_42_desc						db db_small 
+__db_relink_desc						db db_small 
+__db_rpath						db db_small 
+__db_stat_pp						db db_small 
+__db_stat_print_pp						db db_small 
+__db_util_cache						db db_small 
+__db_util_interrupted						db db_small 
+__db_util_logset						db db_small 
+__db_util_siginit						db db_small 
+__db_util_sigresend						db db_small 
+__db_verify_internal						db db_small 
+__dbreg_register_desc						db db_small 
+__dbt_usercopy						db db_small 
+__dbt_userfree						db db_small 
+__fop_create_42_desc						db db_small 
+__fop_create_desc						db db_small 
+__fop_file_remove_desc						db db_small 
+__fop_remove_desc						db db_small 
+__fop_rename_42_desc						db db_small 
+__fop_rename_desc						db db_small 
+__fop_write_42_desc						db db_small 
+__fop_write_desc						db db_small 
+__ham_changeslot_desc						db 
+__ham_chgpg_desc						db 
+__ham_contract_desc						db 
+__ham_copypage_desc						db 
+__ham_curadj_desc						db 
+__ham_get_meta						db 
+__ham_groupalloc_42_desc						db 
+__ham_groupalloc_desc						db 
+__ham_insdel_42_desc						db 
+__ham_insdel_desc						db 
+__ham_metagroup_42_desc						db 
+__ham_metagroup_desc						db 
+__ham_newpage_desc						db 
+__ham_pgin						db db_small 
+__ham_pgout						db db_small 
+__ham_release_meta						db 
+__ham_replace_42_desc						db 
+__ham_replace_desc						db 
+__ham_splitdata_desc						db 
+__heap_addrem_desc						db 
+__heap_exist						db db_small 
+__heap_init_print						db db_small 
+__heap_pg_alloc_desc						db 
+__heap_trunc_meta_desc						db 
+__heap_trunc_page_desc						db 
+__lock_list_print						db db_small 
+__log_current_lsn						db db_small 
+__log_print_record						db 
+__log_stat_pp						db db_small 
+__log_verify_pp						db db_small 
+__log_verify						db db_small 
+__mutex_set_wait_info						db db_small 
+__os_abort						db db_small 
+__os_abspath						db db_small 
+__os_cpu_count						db db_small 
+__os_ctime						db db_small 
+__os_exists						db db_small 
+__os_fdlock						db db_small 
+__os_fileid 						db db_small 
+__os_freeaddrinfo						db 
+__os_get_errno						db db_small 
+__os_getaddrinfo						db 
+__os_gettime						db db_small 
+__os_id						db db_small 
+__os_io						db db_small 
+__os_isroot						db db_small 
+__os_mapfile						db db_small 
+__os_physwrite						db db_small 
+__os_seek						db db_small 
+__os_set_errno						db db_small 
+__os_truncate						db db_small 
+__os_ufree						db db_small 
+__os_unique_id						db db_small 
+__os_unmapfile						db db_small 
+__os_urealloc						db db_small 
+__os_yield						db db_small 
+__qam_add_desc						db 
+__qam_del_desc						db 
+__qam_delext_desc						db 
+__qam_incfirst_desc						db 
+__qam_mvptr_desc						db 
+__qam_pgin_out						db db_small 
+__rep_stat_print						db db_small 
+__repmgr_member_desc						db 
+__txn_child_desc						db db_small 
+__txn_ckp_42_desc						db db_small 
+__txn_ckp_desc						db db_small 
+__txn_prepare_desc						db db_small 
+__txn_recycle_desc						db db_small 
+__txn_regop_42_desc						db db_small 
+__txn_regop_desc						db db_small 
+__txn_xa_regop_42_desc						db db_small 
+
+# These are needed for internal test programs.
+__repmgr_getaddr						db 
