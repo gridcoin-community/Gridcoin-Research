@@ -88,6 +88,7 @@ uint256 hashBestChain;
 CBlockIndex* pindexBest = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
+std::atomic<bool> g_reorg_in_progress = false;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
 
 
@@ -874,39 +875,51 @@ bool ForceReorganizeToHash(uint256 NewHash)
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
-    if(mapItem == mapBlockIndex.end())
-        return error("ForceReorganizeToHash: failed to find requested block in block index");
+    if (mapItem == mapBlockIndex.end()) {
+        return error("%s: failed to find requested block in block index", __func__);
+    }
 
     CBlockIndex* pindexCur = pindexBest;
     CBlockIndex* pindexNew = mapItem->second;
-    LogPrintf("** Force Reorganize **");
-    LogPrintf(" Current best height %i hash %s", pindexCur->nHeight,pindexCur->GetBlockHash().GetHex());
-    LogPrintf(" Target height %i hash %s", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
+    LogPrintf("INFO: %s: current best height %i hash %s "
+              " Target height %i hash %s",
+              __func__,
+              pindexCur->nHeight,pindexCur->GetBlockHash().GetHex(),
+              pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
 
     CBlock blockNew;
-    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus()))
-    {
-        LogPrintf("ForceReorganizeToHash: Fatal Error while reading new best block.");
-        return false;
+    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus())) {
+        return error("%s: Fatal Error while reading new best block.", __func__);
     }
 
     const arith_uint256 previous_chain_trust = g_chain_trust.Best();
-    unsigned cnt_dis=0;
-    unsigned cnt_con=0;
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
     bool success = false;
 
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(g_chain_trust.Best() < previous_chain_trust)
-        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less than before!");
+    if (g_chain_trust.Best() < previous_chain_trust) {
+        LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
+    }
 
-    if (!success)
-    {
-        return error("ForceReorganizeToHash: Fatal Error while setting best chain.");
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller. It is debatable whether this should
+    // be cleared here if g_chain_trust.Best() < previous_chain_trust.
+    g_reorg_in_progress = false;
+
+    if (!success) {
+        return error("%s: Fatal Error while setting best chain.", __func__);
     }
 
     AskForOutstandingBlocks(uint256());
-    LogPrintf("ForceReorganizeToHash: success! height %d hash %s", pindexBest->nHeight,pindexBest->GetBlockHash().GetHex());
+    LogPrintf("INFO %s: success! height %d hash %s",
+              __func__,
+              pindexBest->nHeight,
+              pindexBest->GetBlockHash().GetHex());
+
     return true;
 }
 
@@ -1033,17 +1046,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     return true;
 }
 
-bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     assert(pindexNew);
-    //assert(!pindexNew->pnext);
-    //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
-    //assert(nBestHeight == pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
-    //assert(!pindexBest->pnext);
     assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
     /* note: it was already determined that this chain is better than current best */
     /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overridden by command */
-    assert( !pindexGenesisBlock == !pindexBest );
+    assert(!pindexGenesisBlock == !pindexBest);
 
     list<CTransaction> vResurrect;
     list<CBlockIndex*> vConnect;
@@ -1051,50 +1061,57 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
     /* find fork point */
     CBlockIndex* pcommon = nullptr;
-    if(pindexGenesisBlock)
-    {
+
+    if (pindexGenesisBlock) {
         pcommon = pindexNew;
+        // The trivial reorg that most often happens here is where pcommon IS pindexBest, which
+        // means effectively we are simply adding a new block to the end of the current chain.
+        // Notice the logic of the while statement allows one traversal in that case... When
+        // pcommon = pindexNew then pcommon->pnext will be nullptr. It will also satisfy
+        // pcommon != pindexBest. Then the pointer moves back one block, which in the trivial
+        // case will be pindexBest and the while loop ends with pcommon = pindexBest.
         while (pcommon->pnext == nullptr && pcommon != pindexBest) {
             pcommon = pcommon->pprev;
 
-            if(!pcommon)
-                return error("ReorganizeChain: unable to find fork root");
+            if (!pcommon) {
+                return error("%s: unable to find fork root", __func__);
+            }
         }
 
         // Blocks version 11+ do not use the legacy tally system triggered by
         // block height intervals:
         //
-        if (pcommon->nVersion <= 10 && pcommon != pindexBest)
-        {
+        if (pcommon->nVersion <= 10 && pcommon != pindexBest) {
             pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
-            if(!pcommon)
-                return error("ReorganizeChain: unable to find fork root with tally point");
+
+            if (!pcommon) {
+                return error("%s: unable to find fork root with tally point", __func__);
+            }
         }
 
-        if (pcommon!=pindexBest || pindexNew->pprev!=pcommon)
-        {
-            LogPrintf("ReorganizeChain: from {%s %d}\n"
-                     "ReorganizeChain: comm {%s %d}\n"
-                     "ReorganizeChain: to   {%s %d}\n"
-                     "REORGANIZE: disconnect %d, connect %d blocks"
-                ,pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight
-                ,pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight
-                ,pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight
-                ,pindexBest->nHeight - pcommon->nHeight
-                ,pindexNew->nHeight - pcommon->nHeight);
+        if (pcommon != pindexBest || pindexNew->pprev != pcommon) {
+            // This is set for the benefit of other threads, such as the GUI or rpc for the poll registry,
+            // that do work while not locking cs_main.
+            g_reorg_in_progress = true;
+
+            LogPrintf("INFO: %s: from {%s %d}, common {%s %d}, to {%s %d}, disconnecting %d, connecting %d blocks",
+                      __func__,
+                      pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight,
+                      pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight,
+                      pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight,
+                      pindexBest->nHeight - pcommon->nHeight,
+                      pindexNew->nHeight - pcommon->nHeight);
         }
     }
 
-    /* disconnect blocks */
-    if(pcommon!=pindexBest)
-    {
-        if (!txdb.TxnBegin())
-            return error("ReorganizeChain: TxnBegin failed");
-        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon))
-        {
-            error("ReorganizeChain: DisconnectBlocksBatch() failed");
-            LogPrintf("This is fatal error. Chain index may be corrupt. Aborting.\n"
-                      "Please Reindex the chain and Restart.");
+    /* disconnect blocks (in non-trivial condition) */
+    if (pcommon != pindexBest) {
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
+        if (!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon)) {
+            error("%s: DisconnectBlocksBatch() failed. This is a fatal error. The chain index may be corrupt. Aborting. "
+                  "Please reindex the chain and restart.", __func__);
             exit(1); //todo
         }
 
@@ -1103,60 +1120,64 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) {
 
-    for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
+        LogPrintf("INFO: %s: disconnected %d blocks", __func__, cnt_dis);
+    }
+
+    for (CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev) {
         vConnect.push_front(p);
+    }
 
     /* Connect blocks */
-    for(auto const pindex : vConnect)
-    {
+    for (auto const pindex : vConnect) {
         CBlock block_load;
         CBlock &block = (pindex==pindexNew)? blockNew : block_load;
 
-        if(pindex!=pindexNew)
-        {
-            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-                return error("ReorganizeChain: ReadFromDisk for connect failed");
+        if (pindex != pindexNew) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+                return error("%s: ReadFromDisk for connect failed", __func__);
+            }
+
             assert(pindex->GetBlockHash()==block.GetHash(true));
-        }
-        else
-        {
-            assert(pindex==pindexNew);
-            assert(pindexNew->GetBlockHash()==block.GetHash(true));
-            assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
+        } else {
+            assert(pindex == pindexNew);
+            assert(pindexNew->GetBlockHash() == block.GetHash(true));
+            assert(pindexNew->GetBlockHash() == blockNew.GetHash(true));
         }
 
         uint256 hash = block.GetHash(true);
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: connect %s", __func__, hash.ToString());
 
-        if (!txdb.TxnBegin())
-            return error("ReorganizeChain: TxnBegin failed");
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
 
         if (pindexGenesisBlock == nullptr) {
-            if(hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
-            {
+            if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
                 txdb.TxnAbort();
-                return error("ReorganizeChain: genesis block hash does not match");
+                return error("%s: genesis block hash does not match", __func__);
             }
+
             pindexGenesisBlock = pindex;
         } else {
             assert(pindex->GetBlockHash()==block.GetHash(true));
             assert(pindex->pprev == pindexBest);
-            if (!ConnectBlock(block, txdb, pindex, false))
-            {
+
+            if (!ConnectBlock(block, txdb, pindex, false)) {
                 txdb.TxnAbort();
-                error("ReorganizeChain: ConnectBlock %s failed", hash.ToString().c_str());
-                LogPrintf("Previous block %s",pindex->pprev->GetBlockHash().ToString());
+                error("%s: ConnectBlock %s failed, Previous block %s",
+                      __func__,
+                      hash.ToString().c_str(),
+                      pindex->pprev->GetBlockHash().ToString());
                 InvalidChainFound(pindex);
                 return false;
             }
         }
 
         // Delete redundant memory transactions
-        for (auto const& tx : block.vtx)
-        {
+        for (auto const& tx : block.vtx) {
             mempool.remove(tx);
             mempool.removeConflicts(tx);
         }
@@ -1203,20 +1224,19 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
             pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
         }
 
-        if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
-        {
+        if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
             txdb.TxnAbort();
-            return error("ReorganizeChain: WriteHashBestChain failed");
+            return error("%s: WriteHashBestChain failed", __func__);
         }
 
         // Make sure it's successfully written to disk before changing memory structure
-        if (!txdb.TxnCommit())
-            return error("ReorganizeChain: TxnCommit failed");
+        if (!txdb.TxnCommit()) {
+            return error("%s: TxnCommit failed", __func__);
+        }
 
         // Add to current best branch
-        if(pindex->pprev)
-        {
-            assert( !pindex->pprev->pnext );
+        if (pindex->pprev) {
+            assert(!pindex->pprev->pnext);
             pindex->pprev->pnext = pindex;
         }
 
@@ -1231,59 +1251,74 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
-            && GRC::Tally::IsLegacyTrigger(nBestHeight))
-        {
+            && GRC::Tally::IsLegacyTrigger(nBestHeight)) {
+
             GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1))
-        LogPrintf("ReorganizeChain: Disconnected %d and Connected %d blocks.",cnt_dis,cnt_con);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1)) {
+        LogPrintf("INFO %s: Disconnected %d and connected %d blocks.",__func__, cnt_dis, cnt_con);
+    }
 
     return true;
 }
 
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    unsigned cnt_dis=0;
-    unsigned cnt_con=0;
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
     bool success = false;
     const auto origBestIndex = pindexBest;
     const arith_uint256 previous_chain_trust = g_chain_trust.Best();
 
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if (previous_chain_trust > g_chain_trust.Best())
-    {
-        LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
+    if (previous_chain_trust > g_chain_trust.Best()) {
+        LogPrintf("INFO: %s: Reorganize caused lower chain trust than before. Reorganizing back.", __func__);
+
         CBlock origBlock;
-        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus()))
-            return error("SetBestChain: Fatal Error while reading original best block");
+
+        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus())) {
+            return error("%s: Fatal Error while reading original best block", __func__);
+        }
+
         success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
     }
 
-    if(!success)
+    if (!success) {
         return false;
+    }
+
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller, because as above it can
+    // be called more than once as part of what is really a single reorg.
+    g_reorg_in_progress = false;
 
     /* Fix up after block connecting */
 
     // Update best block in wallet (so we can detect restored wallets)
     bool fIsInitialDownload = IsInitialBlockDownload();
-    if (!fIsInitialDownload)
-    {
+
+    if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
         ::SetBestChain(locator);
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
-    {
-        LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
-               hashBestChain.ToString(), nBestHeight,
-               g_chain_trust.Best().ToString(),
-               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
+        LogPrintf("INFO: %s: new best block {%s %d}, trust=%s, date=%s",
+                  __func__,
+                  hashBestChain.ToString(), nBestHeight,
+                  g_chain_trust.Best().ToString(),
+                  DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+    } else {
+        LogPrintf("INFO: %s: new best block {%s %d}",
+                  __func__,
+                  hashBestChain.ToString(),
+                  nBestHeight);
     }
-    else
-        LogPrintf("{SBC} new best {%s %d} ; ",hashBestChain.ToString(), nBestHeight);
 
     #if HAVE_SYSTEM
     std::string strCmd = gArgs.GetArg("-blocknotify", "");

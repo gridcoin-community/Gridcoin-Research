@@ -954,8 +954,6 @@ void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_m
     } else {
         AddPoll(ctx);
     }
-
-    DetectReorg();
  }
 
 void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1075,31 +1073,23 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 }
 
 void PollRegistry::DetectReorg()
-EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Reorg detector
     // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
     // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
     // these handlers are only triggered by those two contract types.
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, "
-                                    "m_block_height_hw = %i, nBestHeight = %i",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, ",
              __func__,
              registry_traversal_in_progress,
-             reorg_occurred_during_reg_traversal,
-             m_block_height_hw,
-             nBestHeight);
+             reorg_occurred_during_reg_traversal
+             );
 
-    if (registry_traversal_in_progress && nBestHeight < m_block_height_hw) {
+    if (registry_traversal_in_progress && g_reorg_in_progress) {
         reorg_occurred_during_reg_traversal = true;
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to true.", __func__);
     } else {
         reorg_occurred_during_reg_traversal = false;
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to false.", __func__);
-    }
-
-    if (nBestHeight > m_block_height_hw) {
-        m_block_height_hw = nBestHeight;
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting m_block_height_hw to nBestHeight", __func__);
     }
 }
 // -----------------------------------------------------------------------------

@@ -296,13 +296,14 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
         if (!fork_reorg_during_run) break;
 
         // Periodically recheck until reorg/fork has cleared. The reorg_occurred_during_reg_traversal will
-        // be cleared by the DetectReorg function as soon as the blockheight reaches the high water mark recorded
-        // before.
+        // be cleared by the DetectReorg function as soon as the g_reorg_in_progress is cleared by the caller of
+        // ReorganizeChain. If ReorganizeChain returns a fatal error, but does not directly end program execution,
+        // then g_reorg_in_progress may remain set. The call chain will eventually end program execution in that case,
+        // in which this thread will be interrupted on the MilliSleep call. We do not want to attempt to resume
+        // the tally if a reorganize is unsuccessful.
         while (m_registry.reorg_occurred_during_reg_traversal) {
-            // Return here is for thread interrrupt during shutdown.
+            // Return here is for thread interrupt during shutdown.
             if (!MilliSleep(1000)) return items;
-
-            LOCK(cs_main);
 
             m_registry.PollRegistry::DetectReorg();
         }

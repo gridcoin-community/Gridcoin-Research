@@ -427,7 +427,6 @@ public:
     //!
     void DetectReorg();
 
-    std::atomic<int> m_block_height_hw = 0;                        //!< High water block height from contracts.
     std::atomic<bool> registry_traversal_in_progress = false;      //!< Boolean that registry traversal is in progress.
     std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
 
