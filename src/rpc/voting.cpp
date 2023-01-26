@@ -543,7 +543,11 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the results for the specified poll.\n");
+                "Display the results for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the poll, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
@@ -692,7 +696,11 @@ UniValue votedetails(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the vote details for the specified poll.\n");
+                "Display the vote details for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the vote details, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
