@@ -551,9 +551,9 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(GetPollRegistry().cs_poll_registry);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return PollResultToJson(*ref);
     }
 
@@ -704,9 +704,9 @@ UniValue votedetails(const UniValue& params, bool fHelp)
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(GetPollRegistry().cs_poll_registry);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return VoteDetailsToJson(*ref);
     }
 
