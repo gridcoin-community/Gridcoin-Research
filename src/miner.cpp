@@ -7,6 +7,7 @@
 #include "amount.h"
 #include "consensus/merkle.h"
 #include "txdb.h"
+#include <key_io.h>
 #include "miner.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -192,9 +193,9 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
 
             if (beacon && mrc_outputs.size() <= output_limit) {
-                CBitcoinAddress beacon_address = beacon->GetAddress();
+                CTxDestination beacon_address = beacon->GetAddress();
                 CScript script_beacon_key;
-                script_beacon_key.SetDestination(beacon_address.Get());
+                script_beacon_key.SetDestination(beacon_address);
 
                 // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
                 // minus the fees for the MRC.
@@ -251,7 +252,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
 
             CScript script_foundation_key;
-            script_foundation_key.SetDestination(FoundationSideStakeAddress().Get());
+            script_foundation_key.SetDestination(FoundationSideStakeAddress());
 
             // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
             coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
@@ -921,8 +922,8 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
             ++iterSideStake)
         {
-            CBitcoinAddress address(iterSideStake->first);
-            if (!address.IsValid())
+            CTxDestination dest = DecodeDestination(iterSideStake->first);
+            if (!IsValidDestination(dest))
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
                           iterSideStake->first.c_str());
@@ -948,7 +949,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             // Push to an output the (reward times the allocation) to the address, increment the accumulator for allocation,
             // decrement the remaining stake output value, and increment outputs used.
 
-            SideStakeScriptPubKey.SetDestination(address.Get());
+            SideStakeScriptPubKey.SetDestination(dest);
 
             // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake
             // entries if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that
@@ -1305,8 +1306,7 @@ SideStakeAlloc GetSideStakingStatusAndAlloc()
 
         sAddress = entry.first;
 
-        CBitcoinAddress address(sAddress);
-        if (!address.IsValid())
+        if (!IsValidDestinationString(sAddress))
         {
             LogPrintf("WARN: %s: ignoring sidestake invalid address %s.", __func__, sAddress);
             continue;

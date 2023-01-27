@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <key_io.h>
 #include "streams.h"
 #include "wallet/walletdb.h"
 #include "wallet/wallet.h"
@@ -226,7 +227,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             string strAddress;
             ssKey >> strAddress;
-            ssValue >> pwallet->mapAddressBook[CBitcoinAddress(strAddress).Get()];
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)];
         }
         else if (strType == "tx")
         {

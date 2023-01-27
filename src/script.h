@@ -95,6 +95,9 @@ public:
  */
 typedef std::variant<CNoDestination, CKeyID, CScriptID> CTxDestination;
 
+/** Check whether a CTxDestination is a CNoDestination. */
+bool IsValidDestination(const CTxDestination& dest);
+
 const char* GetTxnOutputType(txnouttype t);
 
 /** Script opcodes */

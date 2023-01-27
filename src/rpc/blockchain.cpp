@@ -5,6 +5,7 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include <key_io.h>
 #include "node/blockstorage.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -1151,8 +1152,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
 
-    //------- CPID -------------- beacon address -- Mag --- payment - suppressed
-    std::map<GRC::Cpid, std::tuple<CBitcoinAddress, double, CAmount, bool>> mCPIDRain;
+    //------- CPID --------------- beacon addr --- mag --- payment - suppressed
+    std::map<GRC::Cpid, std::tuple<CTxDestination, double, CAmount, bool>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
     {
@@ -1180,7 +1181,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
-            CBitcoinAddress address;
+            CTxDestination address = CNoDestination();
 
             // If the beacon is active get the address and insert an entry into the map for payment,
             // otherwise skip.
@@ -1237,7 +1238,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
         // Make it easier to read.
         const GRC::Cpid& cpid = iter.first;
-        const CBitcoinAddress& address = std::get<0>(iter.second);
+        const CTxDestination& address = std::get<0>(iter.second);
         const double& magnitude = std::get<1>(iter.second);
 
         // This is not a const reference on purpose because it has to be renormalized.
@@ -1250,18 +1251,18 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         payment = roundint64((double) payment * (double) amount / (double) total_amount_1st_pass);
 
         CScript scriptPubKey;
-        scriptPubKey.SetDestination(address.Get());
+        scriptPubKey.SetDestination(address);
 
         LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: cpid = %s. address = %s, magnitude = %.2f, "
                                            "payment = %s, dust_suppressed = %u",
-                 __func__, cpid.ToString(), address.ToString(), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
+                 __func__, cpid.ToString(), EncodeDestination(address), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
 
         if (output_details)
         {
             UniValue detail_entry(UniValue::VOBJ);
 
             detail_entry.pushKV("cpid", cpid.ToString());
-            detail_entry.pushKV("address", address.ToString());
+            detail_entry.pushKV("address", EncodeDestination(address));
             detail_entry.pushKV("magnitude", magnitude);
             detail_entry.pushKV("amount", ValueFromAmount(payment));
             detail_entry.pushKV("suppressed", suppressed);
@@ -1525,7 +1526,7 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
         if (active_only && beacon_pair.second->Expired(now)) continue;
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
-        entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon_pair.second->GetAddress()));
         entry.pushKV("timestamp", beacon_pair.second->m_timestamp);
         entry.pushKV("hash", beacon_pair.second->m_hash.GetHex());
         entry.pushKV("prev_beacon_hash", beacon_pair.second->m_prev_beacon_hash.GetHex());
@@ -1696,7 +1697,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("expired", beacon->Expired(now));
         entry.pushKV("renewable", beacon->Renewable(now));
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
-        entry.pushKV("address", beacon->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon->GetAddress()));
         entry.pushKV("public_key", HexStr(beacon->m_public_key));
         entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", GRC::Quorum::GetMagnitude(*cpid).Floating());
@@ -1714,7 +1715,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("expired", beacon_ptr->Expired(now));
         entry.pushKV("renewable", false);
         entry.pushKV("timestamp", TimestampToHRDate(beacon_ptr->m_timestamp));
-        entry.pushKV("address", beacon_ptr->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon_ptr->GetAddress()));
         entry.pushKV("public_key", HexStr(beacon_ptr->m_public_key));
         entry.pushKV("private_key_available", beacon_ptr->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);

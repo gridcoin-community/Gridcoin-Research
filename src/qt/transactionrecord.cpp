@@ -1,6 +1,6 @@
+#include <key_io.h>
 #include "transactionrecord.h"
 #include "wallet/wallet.h"
-#include "base58.h"
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
@@ -87,7 +87,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                 if (ExtractDestination(txout.scriptPubKey, address))
                 {
-                    sub.address = CBitcoinAddress(address).ToString();
+                    sub.address = EncodeDestination(address);
                 }
 
                 // Generated (proof-of-work)
@@ -120,7 +120,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             // The coinstake HAS to be from an address.
             if(ExtractDestination(wtx.vout[1].scriptPubKey, address))
             {
-                sub.address = CBitcoinAddress(address).ToString();
+                sub.address = EncodeDestination(address);
             }
 
             // Here we add up all of the outputs, whether they are ours (the stake return with
@@ -161,7 +161,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                 if (ExtractDestination(wtx.vout[t].scriptPubKey, address))
                 {
-                    sub.address = CBitcoinAddress(address).ToString();
+                    sub.address = EncodeDestination(address);
                 }
 
                 int64_t nValue = wtx.vout[t].nValue;
@@ -193,7 +193,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 {
                     // Received by Bitcoin Address
                     sub.type = TransactionRecord::RecvWithAddress;
-                    sub.address = CBitcoinAddress(address).ToString();
+                    sub.address = EncodeDestination(address);
                 }
                 else
                 {
@@ -269,7 +269,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 {
                     // Sent to Bitcoin Address
                     sub.type = TransactionRecord::SendToAddress;
-                    sub.address = CBitcoinAddress(address).ToString();
+                    sub.address = EncodeDestination(address);
                 }
                 else
                 {

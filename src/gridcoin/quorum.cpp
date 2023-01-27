@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
 #include "chainparams.h"
+#include <key_io.h>
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
@@ -253,17 +253,17 @@ class QuorumVote
 {
 public:
     const QuorumHash m_hash;           //!< Hash of the superblock to vote for.
-    const CBitcoinAddress m_address;   //!< Address of the voting wallet.
+    const CTxDestination m_address;    //!< Address of the voting wallet.
     const CBlockIndex* const m_pindex; //!< Block that contains the vote.
 
     //!
     //! \brief Initialize a legacy quorum vote.
     //!
     //! \param hash    Hash of the superblock to vote for.
-    //! \param address Default address of the voting wallet.
+    //! \param dest    Default address of the voting wallet.
     //! \param pindex  Block that contains the vote.
     //!
-    QuorumVote(QuorumHash hash, CBitcoinAddress address, const CBlockIndex* pindex)
+    QuorumVote(QuorumHash hash, CTxDestination address, const CBlockIndex* pindex)
         : m_hash(hash)
         , m_address(std::move(address))
         , m_pindex(pindex)
@@ -374,9 +374,9 @@ public:
             return;
         }
 
-        CBitcoinAddress address(grc_address);
+        CTxDestination destination = DecodeDestination(grc_address);
 
-        if (!address.IsValid()) {
+        if (!IsValidDestination(destination)) {
             LogPrint(BCLog::LogFlags::VERBOSE,
                      "Quorum::RecordVote: invalid address: %s HASH: %s",
                      grc_address,
@@ -395,7 +395,7 @@ public:
 
         m_votes.emplace(pindex->nHeight, QuorumVote(
             quorum_hash,
-            std::move(address),
+            std::move(destination),
             pindex));
     }
 
@@ -509,7 +509,7 @@ private:
         const int64_t min_height = last_height - STANDARD_LOOKBACK;
 
         PopularityMap popularity_map;
-        std::map<CBitcoinAddress, QuorumHash> addresses_seen;
+        std::map<CTxDestination, QuorumHash> addresses_seen;
 
         for (const auto& vote_pair : reverse_iterate(m_votes)) {
             const int64_t vote_height = vote_pair.first;
@@ -1557,9 +1557,7 @@ bool Quorum::ValidateSuperblockClaim(
         return ValidateSuperblock(superblock);
     }
 
-    const CBitcoinAddress address(claim.m_quorum_address);
-
-    if (!address.IsValid()) {
+    if (!IsValidDestinationString(claim.m_quorum_address)) {
         return error("ValidateSuperblockClaim(): "
             "invalid quorum address: %s", claim.m_quorum_address);
     }

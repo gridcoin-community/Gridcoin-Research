@@ -2,7 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
+#include <key_io.h>
 #include "logging.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -139,9 +139,9 @@ CKeyID Beacon::GetId() const
     return m_public_key.GetID();
 }
 
-CBitcoinAddress Beacon::GetAddress() const
+CTxDestination Beacon::GetAddress() const
 {
-    return CBitcoinAddress(CTxDestination(m_public_key.GetID()));
+    return CTxDestination(m_public_key.GetID());
 }
 
 std::string Beacon::GetVerificationCode() const
@@ -164,7 +164,7 @@ std::string Beacon::ToString() const
 {
     return EncodeBase64(
         "0;0;"  // Unused: [CPIDv2];[nonce];
-        + GetAddress().ToString()
+        + EncodeDestination(GetAddress())
         + ";"
         + HexStr(m_public_key));
 }
@@ -368,7 +368,7 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
                                    "contracts in the same block get stored/replayed.",
                  __func__,
                  renewal.m_cpid.ToString(),
-                 renewal.GetAddress().ToString(),
+                 EncodeDestination(renewal.GetAddress()),
                  renewal.m_hash.GetHex());
     }
 
@@ -437,7 +437,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
                                        "contracts in the same block get stored/replayed.",
                      __func__,
                      historical.m_cpid.ToString(),
-                     historical.GetAddress().ToString(),
+                     EncodeDestination(historical.GetAddress()),
                      historical.m_hash.GetHex());
         }
         m_beacons[payload.m_cpid] = m_beacon_db.find(ctx.m_tx.GetHash())->second;
@@ -469,7 +469,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
                                    "contracts in the same block get stored/replayed.",
                  __func__,
                  pending.m_cpid.ToString(),
-                 pending.GetAddress().ToString(),
+                 EncodeDestination(pending.GetAddress()),
                  pending.m_hash.GetHex());
     }
 
@@ -852,7 +852,7 @@ void BeaconRegistry::ActivatePending(
             LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
                      __func__,
                      activated_beacon.m_cpid.ToString(),
-                     activated_beacon.GetAddress().ToString(),
+                     EncodeDestination(activated_beacon.GetAddress()),
                      activated_beacon.m_hash.GetHex());
 
             // It is possible that more than one pending beacon with the same CPID can be attempted to be
@@ -892,7 +892,7 @@ void BeaconRegistry::ActivatePending(
             LogPrint(LogFlags::BEACON, "INFO: %s: Marking pending beacon expired for cpid %s, address %s, hash %s.",
                      __func__,
                      pending_beacon.m_cpid.ToString(),
-                     pending_beacon.GetAddress().ToString(),
+                     EncodeDestination(pending_beacon.GetAddress()),
                      pending_beacon.m_hash.GetHex());
 
             // Insert the expired pending beacon into the db.
@@ -1143,7 +1143,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                   "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
                   __func__,
                   beacon.m_cpid.ToString(), // cpid
-                  beacon.GetAddress().ToString(), // address
+                  EncodeDestination(beacon.GetAddress()), // address
                   beacon.m_timestamp, // timestamp
                   beacon.m_hash.GetHex(), // transaction hash
                   beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1169,7 +1169,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                       "prev_beacon_hash %s, beacon status = %u - (1) PENDING, recnum = %" PRId64 ".",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
+                      EncodeDestination(beacon.GetAddress()), // address
                       beacon.m_timestamp, // timestamp
                       beacon.m_hash.GetHex(), // transaction hash
                       beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1187,7 +1187,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                       "prev_beacon_hash %s, beacon status = %u - (2) ACTIVE or (3) RENEWAL, recnum = %" PRId64 ".",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
+                      EncodeDestination(beacon.GetAddress()), // address
                       beacon.m_timestamp, // timestamp
                       beacon.m_hash.GetHex(), // transaction hash
                       beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1207,7 +1207,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                          "prev_beacon_hash %s, beacon status = %u - (2), recnum = %" PRId64 ".",
                           __func__,
                           pending_to_delete->second->m_cpid.ToString(), // cpid
-                          pending_to_delete->second->GetAddress().ToString(), // address
+                          EncodeDestination(pending_to_delete->second->GetAddress()), // address
                           pending_to_delete->second->m_timestamp, // timestamp
                           pending_to_delete->second->m_hash.GetHex(), // transaction hash
                           pending_to_delete->second->m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1225,7 +1225,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                       "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
+                      EncodeDestination(beacon.GetAddress()), // address
                       beacon.m_timestamp, // timestamp
                       beacon.m_hash.GetHex(), // transaction hash
                       beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1243,7 +1243,7 @@ int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap&
                       "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
                       __func__,
                       beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
+                      EncodeDestination(beacon.GetAddress()), // address
                       beacon.m_timestamp, // timestamp
                       beacon.m_hash.GetHex(), // transaction hash
                       beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
@@ -1461,7 +1461,7 @@ bool BeaconRegistry::BeaconDB::insert(const uint256 &hash, const int& height, co
                   ", hash %s, prev_beacon_hash %s, status = %u.",
                   __func__,
                   beacon.m_cpid.ToString(), // cpid
-                  beacon.GetAddress().ToString(), // address
+                  EncodeDestination(beacon.GetAddress()), // address
                   height, // height
                   beacon.m_timestamp, // timestamp
                   beacon.m_hash.GetHex(), // transaction hash

@@ -2064,3 +2064,7 @@ void CScript::SetMultisig(int nRequired, const std::vector<CPubKey>& keys)
         *this << key;
     *this << EncodeOP_N(keys.size()) << OP_CHECKMULTISIG;
 }
+
+bool IsValidDestination(const CTxDestination& dest) {
+    return dest.index() != 0;
+}
