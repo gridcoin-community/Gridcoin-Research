@@ -620,6 +620,8 @@ void GRC::ApplyContracts(
             }
         }
 
+        // Note that for polls and votes, this rescan could overlap contracts already recorded. The handlers for polls/votes
+        // check for the existence of contracts already recorded and will prevent a double application.
         g_dispatcher.Apply({ contract, tx, pindex });
 
         // Don't track transaction message contracts in the block index:

@@ -330,6 +330,7 @@ PollReference::PollReference()
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
+    , m_votes({})
 {
 }
 
@@ -972,6 +973,12 @@ void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(c
 void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    // In a contract replay inserts may overlap what was already inserted. Check to see if poll already exists, and
+    // if so skip this add.
+    if (m_polls_by_txid.find(ctx.m_tx.GetHash()) != m_polls_by_txid.end()) {
+        return;
+    }
     std::string poll_title = payload->m_poll.m_title;
 
     // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
@@ -999,6 +1006,11 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
         }
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
+                 __func__,
+                 *poll_ref.m_ptitle,
+                 m_polls.size());
     }
 }
 
@@ -1015,7 +1027,22 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
                     ctx.m_tx.GetHash().ToString(),
                     poll_ref->Txid().ToString());
             } else {
+                // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
+                // if so skip this add. This gets expensive as the number of votes increases.
+                // TODO: consider changing Votes to a map.
+                auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
+                if (existing_vote != poll_ref->Votes().end()) {
+                    return;
+                }
+
                 poll_ref->LinkVote(ctx.m_tx.GetHash());
+
+                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s, poll_ref->Votes().size() = %u.",
+                         __func__,
+                         ctx.m_tx.GetHash().GetHex(),
+                         *poll_ref->m_ptitle,
+                         poll_ref->Votes().size());
+
             }
         }
 
@@ -1030,6 +1057,13 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     }
 
     if (PollReference* poll_ref = TryBy(title)) {
+        // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
+        // if so skip this add. This gets expensive as the number of votes increases.
+        // TODO: consider changing Votes to a map.
+        auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
+        if (existing_vote != poll_ref->Votes().end()) {
+            return;
+        }
         poll_ref->LinkVote(ctx.m_tx.GetHash());
     }
 }
@@ -1046,6 +1080,12 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     m_polls_by_txid.erase(ctx.m_tx.GetHash());
     m_latest_poll = nullptr;
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s to the registry, m_polls.size() = %u.",
+             __func__,
+             payload->m_poll.m_title,
+             m_polls.size());
+
 }
 
 void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
@@ -1055,6 +1095,12 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
         if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
             poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted vote %s from poll %s, poll_ref->Votes().size() = %u.",
+                     __func__,
+                     ctx.m_tx.GetHash().GetHex(),
+                     *poll_ref->m_ptitle,
+                     poll_ref->Votes().size());
         }
 
         return;

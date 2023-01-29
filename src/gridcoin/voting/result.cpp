@@ -1167,6 +1167,9 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
                 ResolveMoneySupplyForPoll(result.m_poll));
         }
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
+                 __func__, poll_ref.Votes().size(), result.m_poll.m_title);
+
         counter.CountVotes(result, poll_ref.Votes());
 
         if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
