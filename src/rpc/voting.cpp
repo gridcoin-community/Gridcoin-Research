@@ -164,13 +164,21 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
 
 UniValue PollResultToJson(const PollReference& poll_ref)
 {
+    GetPollRegistry().registry_traversal_in_progress = true;
+
     try {
-        if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+         if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+            GetPollRegistry().registry_traversal_in_progress = false;
+
             return PollResultToJson(*result, poll_ref);
         }
     } catch (InvalidDuetoReorgFork& e) {
+        GetPollRegistry().registry_traversal_in_progress = false;
+
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
+
+    GetPollRegistry().registry_traversal_in_progress = false;
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
 }
