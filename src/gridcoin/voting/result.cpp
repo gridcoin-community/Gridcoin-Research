@@ -169,6 +169,8 @@ public:
     //!
     VoteDetail Resolve(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         const Vote& vote = candidate.Vote();
         const ClaimMessage message = candidate.PackMessage();
 
@@ -181,6 +183,7 @@ public:
             detail.m_magnitude = Resolve(vote.m_claim.m_magnitude_claim, message);
         }
 
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
         return detail;
     }
 
@@ -802,17 +805,25 @@ public:
     //!
     void CountVotes(PollResult& result, const std::vector<uint256>& vote_txids)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         m_votes.reserve(vote_txids.size());
 
         for (const auto& txid : reverse_iterate(vote_txids)) {
             try {
                 ProcessVoteCandidate(FetchVoteCandidate(txid));
             } catch (const InvalidVoteError& e) {
-                LogPrint(LogFlags::VOTE, "%s: skipped invalid vote: %s",
+                LogPrint(LogFlags::VOTE, "INFO: %s: skipped invalid vote: %s",
                     __func__,
                     txid.ToString());
 
                 ++result.m_invalid_votes;
+            } catch (const InvalidDuetoReorgFork& e) {
+                LogPrint(LogFlags::VOTE, " INFO: %s: aborted vote count due to reorg/fork",
+                         __func__);
+
+                g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
+                throw InvalidDuetoReorgFork();
             }
         }
 
@@ -821,6 +832,8 @@ public:
         }
 
         result.m_pools_voted = m_pools_voted;
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
 private:
@@ -890,6 +903,10 @@ private:
     //!
     void ProcessVoteCandidate(const VoteCandidate& candidate)
     {
+        if (GetPollRegistry().reorg_occurred_during_reg_traversal) {
+            throw InvalidDuetoReorgFork();
+        }
+
         if (!candidate.IsLegacy()) {
             ProcessVote(candidate);
             return;
@@ -913,6 +930,8 @@ private:
     //!
     void ProcessVote(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         VoteDetail detail = m_resolver.Resolve(candidate);
 
         if (detail.Empty()) {
@@ -950,6 +969,8 @@ private:
         }
 
         m_votes.emplace_back(std::move(detail));
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
     //!
@@ -957,7 +978,7 @@ private:
     //!
     //! \param vote Contains the vote contract to resolve.
     //!
-    void ProcessLegacyVote(const LegacyVote& vote)
+    void ProcessLegacyVote(const LegacyVote& vote) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     {
         if (m_legacy.SeenKey(vote.m_key)) {
             LogPrint(LogFlags::VOTE, "%s: skipped duplicate key", __func__);
@@ -1133,6 +1154,8 @@ PollResult::PollResult(Poll poll)
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     if (PollOption poll = poll_ref.TryReadFromDisk()) {
         CTxDB txdb("r");
         PollResult result(std::move(*poll));
@@ -1143,6 +1166,9 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
                 ResolveSuperblockForPoll(result.m_poll),
                 ResolveMoneySupplyForPoll(result.m_poll));
         }
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
+                 __func__, poll_ref.Votes().size(), result.m_poll.m_title);
 
         counter.CountVotes(result, poll_ref.Votes());
 
@@ -1165,8 +1191,12 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
             }
         }
 
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
+
         return result;
     }
+
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
     return std::nullopt;
 }
