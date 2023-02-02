@@ -1,0 +1,86 @@
+(:
+*  This script will copy a WinCE configuration from default Win32
+* configuration for SQLite.Interop.2008.vcproj
+:)
+declare variable $PLATFORM_NAME := '@PLATFORM_NAME@';
+declare variable $PROJECT_GUID := '@PROJECT_GUID@';
+declare variable $PROJECT_FILE := '@PROJECT_FILE@';
+
+(: Copy WinCE Configurations from exisitng Win32 project :)
+declare function local:renameConfig($config)
+{
+  copy $newConfig := $config
+  modify (
+    (: Change Win32 to PLATFORM_NAME :)
+    replace value of node $newConfig/@Name with
+      fn:replace($config/@Name/string(), 'Win32', $PLATFORM_NAME)
+  )
+  return $newConfig
+};
+
+let $root := VisualStudioProject
+return
+(
+  (: Change VisualStudioProject attributes :)
+  (
+    (replace value of node $root/@ProjectGUID with '@PROJECT_GUID@'),
+    (replace value of node $root/@Keyword with 'WinCE_Proj'),
+    (replace value of node $root/@Name with '@PROJECT_FILE@')
+  ),
+
+  (: Add WinCE Platform and remove others:)
+  (
+    (
+      for $platforms in $root/Platforms/* return delete node $platforms
+    ),
+    (
+      for $platforms in $root/Platforms
+      return insert node <Platform Name="{$PLATFORM_NAME}" /> as last into $platforms
+    )
+  ),
+
+  (: Copy WinCE Project from exisitng Win32 project :)
+  (
+    for $config in $root/Configurations/Configuration
+    return
+    (
+      (
+        if (fn:contains($config/@Name, "Win32")) then (
+          let $newConfig := local:renameConfig($config)
+          return replace node $config with $newConfig
+        ) else ()
+      ),
+
+      (: Remove Win32/x64 platform :)
+      (
+        if (fn:contains($config/@Name, "Win32") or
+            fn:contains($config/@Name, "x64")) then (
+           delete node $config
+        ) else ()
+      )
+    )
+  ),
+
+  (: Copy FileConfiguration for WinCE from exisitng Win32 FileConfiguration :)
+  (
+    for $fconfig in $root/Files/Filter/File/FileConfiguration
+    return
+    (
+      (
+        if (fn:contains($fconfig/@Name, "Win32")) then (
+          let $newConfig := local:renameConfig($fconfig)
+          return replace node $fconfig with $newConfig
+        ) else ()
+      ),
+
+      (: Remove Win32/x64 platform :)
+      (
+        if (fn:contains($fconfig/@Name, "Win32") or
+            fn:contains($fconfig/@Name, "x64")) then (
+           delete node $fconfig
+        ) else ()
+      )
+    )
+  )
+)
+

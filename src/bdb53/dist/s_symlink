@@ -1,0 +1,47 @@
+#!/bin/sh -
+#	$Id$
+
+echo 'Creating Berkeley DB source tree symbolic links...'
+
+build()
+{
+	#echo "	$1 -> $2"
+	(cd ../`dirname $1` && rm -f `basename $1` && ln -s $2 `basename $1`)
+}
+
+build src/btree/tags ../../dist/tagdir/tags
+build build_unix/tags ../dist/tagdir/tags
+build src/clib/tags ../../dist/tagdir/tags
+build src/common/tags ../../dist/tagdir/tags
+build src/crypto/tags ../../dist/tagdir/tags
+build lang/cxx/tags ../../dist/tagdir/tags
+build src/db/tags ../../dist/tagdir/tags
+build lang/db185/tags ../../dist/tagdir/tags
+build util/tags ../dist/tagdir/tags
+build src/dbinc/tags ../../dist/tagdir/tags
+build src/dbinc_auto/tags ../../dist/tagdir/tags
+build lang/dbm/tags ../../dist/tagdir/tags
+build src/dbreg/tags ../../dist/tagdir/tags
+build src/env/tags ../../dist/tagdir/tags
+build examples/c/tags ../../dist/tagdir/tags
+build examples/cxx/tags ../../dist/tagdir/tags
+build src/fileops/tags ../../dist/tagdir/tags
+build src/hash/tags ../../dist/tagdir/tags
+build src/hmac/tags ../../dist/tagdir/tags
+build lang/hsearch/tags ../../dist/tagdir/tags
+build lang/java/libdb_java/tags ../../../dist/tagdir/tags
+build src/lock/tags ../../dist/tagdir/tags
+build src/log/tags ../../dist/tagdir/tags
+build src/mp/tags ../../dist/tagdir/tags
+build src/mutex/tags ../../dist/tagdir/tags
+build src/os/tags ../../dist/tagdir/tags
+build src/os_qnx/tags ../../dist/tagdir/tags
+build src/os_vxworks/tags ../../dist/tagdir/tags
+build src/os_windows/tags ../../dist/tagdir/tags
+build src/qam/tags ../../dist/tagdir/tags
+build src/rep/tags ../../dist/tagdir/tags
+build src/repmgr/tags ../../dist/tagdir/tags
+build src/sequence/tags ../../dist/tagdir/tags
+build lang/tcl/tags ../../dist/tagdir/tags
+build src/txn/tags ../../dist/tagdir/tags
+build src/xa/tags ../../dist/tagdir/tags

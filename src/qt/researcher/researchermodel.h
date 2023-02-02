@@ -115,6 +115,7 @@ public:
     QString formatBeaconStatus() const;
     QString formatBeaconAge() const;
     QString formatTimeToBeaconExpiration() const;
+    QString formatTimeToPendingBeaconExpiration() const;
     QString formatBeaconAddress() const;
     QString formatBeaconVerificationCode() const;
 

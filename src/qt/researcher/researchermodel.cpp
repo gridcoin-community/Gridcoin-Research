@@ -10,6 +10,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper.h"
 #include "node/ui_interface.h"
 
 #include "qt/bitcoinunits.h"
@@ -413,6 +414,15 @@ QString ResearcherModel::formatTimeToBeaconExpiration() const
     return GUIUtil::formatDurationStr(Beacon::MAX_AGE - m_beacon->Age(GetAdjustedTime()));
 }
 
+QString ResearcherModel::formatTimeToPendingBeaconExpiration() const
+{
+    if (!m_pending_beacon) {
+        return QString();
+    }
+
+    return GUIUtil::formatDurationStr(PendingBeacon::RETENTION_AGE - m_pending_beacon->Age(GetAdjustedTime()));
+}
+
 QString ResearcherModel::formatBeaconAddress() const
 {
     if (!m_beacon) {
@@ -444,6 +454,13 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
     //
 
     const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+
+    // This is temporary implementation of the suppression of "not attached" for projects that
+    // are whitelisted that require an external adapter, and so will not be attached as a native
+    // BOINC project. This will be replaced by a field in the Projects class at the next mandatory
+    // (5.5.0.0).
+    std::vector<std::string> external_adapter_projects = GetProjectsExternalAdapterRequired();
+
     std::vector<ExplainMagnitudeProject> explain_mag;
     std::map<std::string, ProjectRow> rows;
 
@@ -511,7 +528,14 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         row.m_whitelisted = true;
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
-        row.m_error = tr("Not attached");
+
+        if (std::find(external_adapter_projects.begin(),
+                      external_adapter_projects.end(),
+                      project.m_name) == external_adapter_projects.end()) {
+            row.m_error = tr("Not attached");
+        } else {
+            row.m_error = tr("Uses external adapter");
+        }
 
         for (const auto& explain_mag_project : explain_mag) {
             if (explain_mag_project.m_name == project.m_name) {

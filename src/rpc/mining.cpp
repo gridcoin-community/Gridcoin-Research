@@ -313,6 +313,9 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     // This walks back the entries in the historical beacon map linked by renewal prev tx hash until the first
     // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier than here.
     uint64_t renewals = 0;
+    // The renewals <= 100 is simply to prevent an infinite loop if there is a problem with the beacon chain in the registry. This
+    // was an issue in post Fern beacon db work, but has been resolved and not encountered since. Still makes sense to leave the
+    // limit in, which represents 41 years worth of beacon chain at the 150 day standard auto-renewal cycle.
     while (beacon_ptr->Renewed() && renewals <= 100)
     {
         auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash);
@@ -334,193 +337,214 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         ++renewals;
     }
 
-    GRC::SuperblockPtr superblock;
+    bool retry_from_baseline = false;
 
-    const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
+    // Up to two passes. The first is from the start of the current beacon chain for the CPID, the second from the Fern baseline.
+    for (unsigned int i = 0; i < 2; ++i) {
+        GRC::SuperblockPtr superblock;
 
-    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
+        const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
 
-    const CBlockIndex* pindex_superblock;
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
 
-    // Find the first superblock after the baseline within scope of the beacon chain for the given CPID as the starting
-    // point for the audit.
-    for (pindex_superblock = pindex_baseline;
-        pindex_superblock;
-        pindex_superblock = pindex_superblock->pnext)
-    {
-        if (pindex_superblock->IsSuperblock() && pindex_superblock->nTime >= beacon_ptr->m_timestamp) {
-            superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
-            break;
-        }
-    }
+        const CBlockIndex* pindex_superblock;
 
-    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: First in scope superblock nHeight = %i", __func__,
-             pindex_superblock->nHeight);
-
-    // Set the pindex_low to the pindex_superblock. For right now, we are going to take the accrual at the first snapshot
-    // after the flip to v11 (the second snapshot in the accrual directory recorded at the first SB after the transition
-    // height) as gospel. This doesn't allow us to verify the accrual between the transition height and the first snapshot
-    // afterwards, but it drastically reduces the complexity of the audit.
-    const CBlockIndex* pindex = pindex_superblock;
-    const CBlockIndex* pindex_low = pindex_superblock;
-
-    const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
-    const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
-
-    int64_t accrual = 0;
-    auto entry = snapshot.m_records.find(cpid.value());
-
-    if (entry != snapshot.m_records.end())
-    {
-        accrual = entry->second;
-    }
-
-    const auto tally_accrual_period = [&](
-        const std::string& boundary,
-        const uint64_t height,
-        const int64_t low_time,
-        const int64_t high_time,
-        const int64_t claimed)
-    {
-        const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(*cpid);
-
-        int64_t time_interval = high_time - low_time;
-        int64_t abs_time_interval = time_interval;
-
-        int sign = (time_interval >= 0) ? 1 : -1;
-
-        if (sign < 0) {
-            abs_time_interval = -time_interval;
-        }
-
-        // This is the same way that AccrualDelta calculates accruals in the snapshot calculator. Here
-        // we use the absolute value of the time interval to ensure negative values are carried through
-        // correctly in the bignumber calculations.
-        const uint64_t base_accrual = abs_time_interval
-            * magnitude.Scaled()
-            * MAG_UNIT_NUMERATOR;
-
-        int64_t period = 0;
-
-        if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
-            arith_uint256 accrual_bn(base_accrual);
-            accrual_bn *= COIN;
-            accrual_bn /= 86400;
-            accrual_bn /= Magnitude::SCALE_FACTOR;
-            accrual_bn /= MAG_UNIT_DENOMINATOR;
-
-            period = accrual_bn.GetLow64() * (int64_t) sign;
-        }
-        else
+        // Find the first superblock after the baseline within scope of the beacon chain for the given CPID as the starting
+        // point for the audit. If the second pass, where a difference was found because someone may have missed a renewal and
+        // therefore have multiple beacon chains, then start from the first superblock after the baseline. This is much more
+        // time-consuming, and so is only done if there is a difference found in the first pass. Even in the second pass, the starting
+        // point of the first superblock after the transition height doesn't allow us to verify the accrual between the actual
+        // transition height and the first snapshot afterwards, but it drastically reduces the complexity of the audit.
+        for (pindex_superblock = pindex_baseline;
+             pindex_superblock;
+             pindex_superblock = pindex_superblock->pnext)
         {
-            period = base_accrual * (int64_t) sign
-                    * COIN
-                    / 86400
-                    / Magnitude::SCALE_FACTOR
-                    / MAG_UNIT_DENOMINATOR;
+            if (pindex_superblock->IsSuperblock()
+                    && (retry_from_baseline || pindex_superblock->nTime >= beacon_ptr->m_timestamp)) {
+                superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
+                break;
+            }
         }
 
-        accrual += period;
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: First in scope superblock nHeight = %i", __func__,
+                 pindex_superblock->nHeight);
 
-        // TODO: Change this to refer to MaxReward() from the snapshot computer.
-        int64_t max_reward = 16384 * COIN;
+        // Set the pindex_low to the pindex_superblock.
+        const CBlockIndex* pindex = pindex_superblock;
+        const CBlockIndex* pindex_low = pindex_superblock;
 
-        if (accrual > max_reward)
+        const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
+        const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
+
+        int64_t accrual = 0;
+        auto entry = snapshot.m_records.find(cpid.value());
+
+        if (entry != snapshot.m_records.end())
         {
-            int64_t overage = accrual - max_reward;
-            // Cap accrual at max_reward;
-            accrual = max_reward;
-            // Remove overage from period, because you can't have a period accrual to over the max.
-            period -= overage;
+            accrual = entry->second;
         }
+
+        const auto tally_accrual_period = [&](
+                const std::string& boundary,
+                const uint64_t height,
+                const int64_t low_time,
+                const int64_t high_time,
+                const int64_t claimed)
+        {
+            const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(*cpid);
+
+            int64_t time_interval = high_time - low_time;
+            int64_t abs_time_interval = time_interval;
+
+            int sign = (time_interval >= 0) ? 1 : -1;
+
+            if (sign < 0) {
+                abs_time_interval = -time_interval;
+            }
+
+            // This is the same way that AccrualDelta calculates accruals in the snapshot calculator. Here
+            // we use the absolute value of the time interval to ensure negative values are carried through
+            // correctly in the bignumber calculations.
+            const uint64_t base_accrual = abs_time_interval
+                    * magnitude.Scaled()
+                    * MAG_UNIT_NUMERATOR;
+
+            int64_t period = 0;
+
+            if (base_accrual > std::numeric_limits<uint64_t>::max() / COIN) {
+                arith_uint256 accrual_bn(base_accrual);
+                accrual_bn *= COIN;
+                accrual_bn /= 86400;
+                accrual_bn /= Magnitude::SCALE_FACTOR;
+                accrual_bn /= MAG_UNIT_DENOMINATOR;
+
+                period = accrual_bn.GetLow64() * (int64_t) sign;
+            }
+            else
+            {
+                period = base_accrual * (int64_t) sign
+                        * COIN
+                        / 86400
+                        / Magnitude::SCALE_FACTOR
+                        / MAG_UNIT_DENOMINATOR;
+            }
+
+            accrual += period;
+
+            // TODO: Change this to refer to MaxReward() from the snapshot computer.
+            int64_t max_reward = 16384 * COIN;
+
+            if (accrual > max_reward)
+            {
+                int64_t overage = accrual - max_reward;
+                // Cap accrual at max_reward;
+                accrual = max_reward;
+                // Remove overage from period, because you can't have a period accrual to over the max.
+                period -= overage;
+            }
+
+            if (report_details) {
+                UniValue accrual_out(UniValue::VOBJ);
+                accrual_out.pushKV("period", period);
+                accrual_out.pushKV("accumulated", accrual);
+                accrual_out.pushKV("claimed", claimed);
+
+                UniValue delta(UniValue::VOBJ);
+                delta.pushKV("boundary", boundary);
+                delta.pushKV("low_time", low_time);
+                delta.pushKV("high_height", height ? height : NullUniValue);
+                delta.pushKV("high_time", high_time);
+                delta.pushKV("magnitude_at_low", magnitude.Floating());
+                delta.pushKV("accrual", accrual_out);
+
+                audit.push_back(delta);
+            }
+
+            return period;
+        };
+
+        for (; pindex; pindex = pindex->pnext) {
+            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
+                tally_accrual_period(
+                            "stake",
+                            pindex->nHeight,
+                            pindex_low->nTime,
+                            pindex->nTime,
+                            pindex->ResearchSubsidy());
+
+                accrual = 0;
+                pindex_low = pindex;
+            } else if (!pindex->m_mrc_researchers.empty()) {
+                // Because m_mrc_researchers is derived from a map that is keyed by CPID, the CPID must exist, and it
+                // must be unique (i.e. there will only be one match).
+                for (const auto& mrc : pindex->m_mrc_researchers) {
+                    // mrc payments are on the block previous to the staked block (the head of the chain when the mrc
+                    // was submitted.
+                    if (mrc->m_cpid == *cpid) {
+                        tally_accrual_period(
+                                    "mrc payment",
+                                    pindex->nHeight,
+                                    pindex_low->nTime,
+                                    pindex->pprev->nTime,
+                                    mrc->m_research_subsidy);
+
+                        accrual = 0;
+                        pindex_low = pindex->pprev;
+
+                        // Once the one match is processed, no need to continue iterating.
+                        break;
+                    }
+                }
+            } else if (pindex->IsSuperblock()) {
+                tally_accrual_period(
+                            "superblock",
+                            pindex->nHeight,
+                            pindex_low->nTime,
+                            pindex->nTime,
+                            0);
+
+                pindex_low = pindex;
+            }
+
+            if (pindex->IsSuperblock()) {
+                superblock = SuperblockPtr::ReadFromDisk(pindex);
+            }
+        }
+
+        // The final period is from the last event till "now".
+        int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
+
+        result.pushKV("cpid", cpid->ToString());
+        result.pushKV("accrual_account_exists", accrual_account_exists);
+        result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
+        result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
+        result.pushKV("renewals", renewals);
+        result.pushKV("accrual_by_audit", accrual);
+        result.pushKV("accrual_by_GetAccrual", computed);
+        result.pushKV("newbie_correction", newbie_correction);
+        result.pushKV("accrual_last_period", period);
 
         if (report_details) {
-            UniValue accrual_out(UniValue::VOBJ);
-            accrual_out.pushKV("period", period);
-            accrual_out.pushKV("accumulated", accrual);
-            accrual_out.pushKV("claimed", claimed);
-
-            UniValue delta(UniValue::VOBJ);
-            delta.pushKV("boundary", boundary);
-            delta.pushKV("low_time", low_time);
-            delta.pushKV("high_height", height ? height : NullUniValue);
-            delta.pushKV("high_time", high_time);
-            delta.pushKV("magnitude_at_low", magnitude.Floating());
-            delta.pushKV("accrual", accrual_out);
-
-            audit.push_back(delta);
+            result.pushKV("beacon_chain", beacon_chain);
+            result.pushKV("audit", audit);
         }
 
-        return period;
-    };
-
-    for (; pindex; pindex = pindex->pnext) {
-        if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
-            tally_accrual_period(
-                "stake",
-                pindex->nHeight,
-                pindex_low->nTime,
-                pindex->nTime,
-                pindex->ResearchSubsidy());
-
-            accrual = 0;
-            pindex_low = pindex;
-        } else if (!pindex->m_mrc_researchers.empty()) {
-            // Because m_mrc_researchers is derived from a map that is keyed by CPID, the CPID must exist, and it
-            // must be unique (i.e. there will only be one match).
-            for (const auto& mrc : pindex->m_mrc_researchers) {
-                // mrc payments are on the block previous to the staked block (the head of the chain when the mrc
-                // was submitted.
-                if (mrc->m_cpid == *cpid) {
-                    tally_accrual_period(
-                        "mrc payment",
-                        pindex->nHeight,
-                        pindex_low->nTime,
-                        pindex->pprev->nTime,
-                        mrc->m_research_subsidy);
-
-                    accrual = 0;
-                    pindex_low = pindex->pprev;
-
-                    // Once the one match is processed, no need to continue iterating.
-                    break;
-                }
-            }
-        } else if (pindex->IsSuperblock()) {
-            tally_accrual_period(
-                "superblock",
-                pindex->nHeight,
-                pindex_low->nTime,
-                pindex->nTime,
-                0);
-
-            pindex_low = pindex;
+        // The second part of this if statement condition is to deal with the 1 Halford difference that crops up between
+        // this audit calculation and the newbie_correction. The two calculations are very similar, but the newbie correction
+        // goes backwards in the chain, and this one goes forward. Somewhere there is a 1 Halford difference. Not worth tracking
+        // down, and the consensus critical newbie correction algorithm gives consistent values across all nodes.
+        if (accrual == computed || accrual - (newbie_correction + period) <= 1) {
+            break;
+        } else {
+            result.clear();
+            retry_from_baseline = true;
+            LogPrintf("WARNING: %s: Doing second pass on auditsnapshotaccrual loop because of mismatch after the first pass. "
+                      "This can be expected if someone let their beacon expire and there are multiple beacon chains with the "
+                      "same CPID since the Fern baseline.", __func__);
         }
+    } //retry from baseline for loop.
 
-        if (pindex->IsSuperblock()) {
-            superblock = SuperblockPtr::ReadFromDisk(pindex);
-        }
-    }
-
-    // The final period is from the last event till "now".
-    int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
-
-    result.pushKV("cpid", cpid->ToString());
-    result.pushKV("accrual_account_exists", accrual_account_exists);
-    result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
-    result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
-    result.pushKV("renewals", renewals);
-    result.pushKV("accrual_by_audit", accrual);
-    result.pushKV("accrual_by_GetAccrual", computed);
-    result.pushKV("newbie_correction", newbie_correction);
-    result.pushKV("accrual_last_period", period);
-
-    if (report_details) {
-        result.pushKV("beacon_chain", beacon_chain);
-        result.pushKV("audit", audit);
-    }
-
-        return result;
+    return result;
 }
 
 UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
@@ -550,8 +574,7 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
     int number_accrual_accounts_not_present = 0;
     int number_not_present = 0;
 
-    for (const auto& iter : superblock->m_cpids)
-    {
+    for (const auto& iter : superblock->m_cpids) {
         std::vector<UniValue> v_params {iter.Cpid().ToString(), false};
 
         UniValue internal_params(UniValue::VARR);
@@ -562,15 +585,19 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 
         UniValue audit(auditsnapshotaccrual(internal_params, false));
 
-        if (!audit.empty())
-        {
+        if (!audit.empty()) {
             const CAmount& accrual_by_audit = find_value(audit, "accrual_by_audit").get_int64();
             const CAmount& accrual_by_GetAccrual = find_value(audit, "accrual_by_GetAccrual").get_int64();
+            const CAmount& newbie_correction = find_value(audit, "newbie_correction").get_int64();
             const CAmount& accrual_last_period = find_value(audit, "accrual_last_period").get_int64();
             const bool accrual_account_exists = find_value(audit, "accrual_account_exists").get_bool();
 
-            if (accrual_by_audit == accrual_by_GetAccrual)
-            {
+            // The second part of this if statement condition is to deal with the 1 Halford difference that crops up between
+            // this audit calculation and the newbie_correction. The two calculations are very similar, but the newbie correction
+            // goes backwards in the chain, and this one goes forward. Somewhere there is a 1 Halford difference. Not worth tracking
+            // down, and the consensus critical newbie correction algorithm gives consistent values across all nodes.
+            if (accrual_by_audit == accrual_by_GetAccrual
+                    || accrual_by_audit - (newbie_correction + accrual_last_period) <= 1) {
                 if (!report_only_mismatches)
                 {
                     match_status.pushKV("CPID", iter.Cpid().ToString());
@@ -579,8 +606,7 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
                 }
                 ++number_of_matches;
             }
-            else
-            {
+            else {
                 match_status.pushKV("CPID", iter.Cpid().ToString());
 
                 if (accrual_last_period == accrual_by_GetAccrual)
@@ -598,8 +624,7 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 
             if (!accrual_account_exists) ++number_accrual_accounts_not_present;
         }
-        else
-        {
+        else {
             ++number_not_present;
         }
 

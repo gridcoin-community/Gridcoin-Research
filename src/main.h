@@ -85,6 +85,7 @@ extern int nBestHeight;
 extern arith_uint256 nBestChainTrust;
 extern uint256 hashBestChain;
 extern CBlockIndex* pindexBest;
+extern std::atomic<bool> g_reorg_in_progress;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;

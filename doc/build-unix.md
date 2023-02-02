@@ -61,7 +61,6 @@ These dependencies are required:
  libboost    | Utility          | Library for threading, data structures, etc
  libevent    | Networking       | OS independent asynchronous networking
  miniupnpc   | UPnP Support     | Firewall-jumping support
- libdb4.8    | Berkeley DB      | Wallet storage (only needed when wallet enabled)
  qt          | GUI              | GUI toolkit (only needed when GUI enabled)
  libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
  libzip      | Zip Compression  | For Zip Compression and Decompression for snapshot and scraper related functions
@@ -96,36 +95,6 @@ Build requirements:
 Now, you can either build from self-compiled [depends](/depends/README.md) or install the required dependencies:
 
         sudo apt-get install libboost-system-dev libboost-filesystem-dev libboost-test-dev libboost-thread-dev libboost-iostreams-dev libcurl4-gnutls-dev
-
-BerkeleyDB is required for the wallet.
-
-Ubuntu and Debian have their own `libdb-dev` and `libdb++-dev` packages, but these will install
-Berkeley DB 5.1 or later. This will break binary wallet compatibility with the distributed executables, which
-are based on BerkeleyDB 4.8. If you do not care about wallet compatibility,
-pass `--with-incompatible-bdb` to configure.
-
-**For Ubuntu only:** db4.8 packages are available [here](https://launchpad.net/~bitcoin/+archive/bitcoin).
-
-You can add the repository and install using the following commands:
-
-**For Ubuntu 18.04**
-
-    sudo apt-get install software-properties-common
-    sudo add-apt-repository ppa:bitcoin/bitcoin
-    sudo apt-get update
-    sudo apt-get install libdb4.8-dev libdb4.8++-dev
-
-**For Ubuntu 20.04+ or Debian 10/Raspberry Pi**
-
-    For Ubuntu 20.04+ users the db4.8 is not available on the Bitcoin PPA. Use the script in contrib/install_db4.sh
-    to compile and install db4.8. You can use the script in your build location. For example if your build
-    location is Gridcoin-Research/ then `./contrib/install_db4.sh $PWD`. Once complete, when running `./configure`, you
-    must tell it about the location of the compiled db4.8 which you can do with the export line given when install_db4.sh
-    is finished in the form of `export BDB_PREFIX='/compiled/location'`. Then run:
-    `./configure BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" BDB_CFLAGS="-I${BDB_PREFIX}/include"`
-    followed by whatever other flags you want such as --without-gui.
-
-
 
 Optional (see --with-miniupnpc and --enable-upnp-default):
 
@@ -170,10 +139,6 @@ Leap:
 
     sudo zypper install boost_1_61-devel
 
-BerkeleyDB is required for the wallet.
-
-    sudo zypper install libdb-4_8-devel
-
 Optional (see --with-miniupnpc and --enable-upnp-default):
 
     sudo zypper install libminiupnpc-devel
@@ -202,15 +167,7 @@ Dependency Build Instructions: Alpine Linux
 
 Build requirements:
 
-    apk add autoconf automake boost-dev build-base curl-dev db-dev libtool libzip-dev miniupnpc-dev openssl-dev pkgconfig
-
-**Note:** Alpine Linux only includes Berkeley DB version 5.3 in the package repositories, so we must
-run _configure_ with the following option:
-
-    ./configure --with-incompatible-bdb
-
-To build the wallet with Berkeley DB version 4.8, we need to compile the library from source. See the
-[README](../depends/README.md) in the depends directory for one option.
+    apk add autoconf automake boost-dev build-base curl-dev libtool libzip-dev miniupnpc-dev openssl-dev pkgconfig
 
 Dependencies for the GUI: Alpine Linux
 -----------------------------------------
@@ -231,14 +188,6 @@ This example lists the steps necessary to setup and build a command line only of
     ./autogen.sh
     ./configure --without-gui --without-miniupnpc
     make check
-
-Note:
-Enabling wallet support requires either compiling against a Berkeley DB newer than 4.8 (package `db`) using `--with-incompatible-bdb`,
-or building and depending on a local version of Berkeley DB 4.8. The readily available Arch Linux packages are currently built using
-`--with-incompatible-bdb` according to the [PKGBUILD](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=gridcoinresearch).
-As mentioned above, when maintaining portability of the wallet between the standard Gridcoin distributions and independently built
-node software is desired, Berkeley DB 4.8 must be used.
-
 
 ARM Cross-compilation
 -------------------

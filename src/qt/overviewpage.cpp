@@ -2,7 +2,7 @@
 #include <QListView>
 
 #include "overviewpage.h"
-#include "ui_overviewpage.h"
+#include "forms/ui_overviewpage.h"
 
 #ifndef Q_MOC_RUN
 #include "qt/decoration.h"

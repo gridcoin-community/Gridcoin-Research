@@ -1,0 +1,197 @@
+(:
+*  This template is for changing SQLite.Interop/SQLite.Interop.vcproj
+*  of ADO.NET
+:)
+declare variable $WINDOWS_PROJ_URL := '@BDB_PATH@/build_windows/VS8/db.vcproj';
+declare variable $WINDOWS_FILES := fn:document($WINDOWS_PROJ_URL)/VisualStudioProject/Files;
+declare variable $WINCE_FILES := fn:document($WINCE_PROJ_URL)/VisualStudioProject/Files;
+
+(: Copy File List and adapt it :)
+declare function local:getFileList($fileList)
+{
+  copy $newFileList := $fileList
+  modify (
+    (: Remove build_windows files, e.g.: libdb.def and libdb.rc :)
+    delete node $newFileList/File[fn:contains(@RelativePath, 'build_windows')],
+    (: Remove useless lang files, e.g.: lang\cxx :)
+    delete node $newFileList/File[fn:contains(@RelativePath, '..\lang')],
+    (: Change file path :)
+    for $filePath in $newFileList/File/@RelativePath
+    return replace value of node $filePath
+      with fn:replace($filePath, '..\\..\\src', $WIN_SRC)
+  )
+  return $newFileList
+};
+
+let $root := VisualStudioProject
+let $isWinCE := fn:contains($root/@Keyword, 'WinCE')
+let $fileList := if ($isWinCE) then ($WINCE_FILES) else ($WINDOWS_FILES)
+let $cflags := if ($isWinCE) then ($WINCE_FLAGS) else ($WINDOWS_FLAGS)
+let $includes := if ($isWinCE) then ($WINCE_INCLUDE) else ($WINDOWS_INCLUDE)
+let $inputLib := if ($isWinCE) then ('') else ($WINDOWS_INPUT_LIB)
+return
+(
+  (: Add BDB Files :)
+  (
+    let $newFileList := local:getFileList($fileList)
+    for $fileEntry in $root/Files/Filter[@Name="Source Files"]
+      for $fileItem in $newFileList/File
+        return insert node $fileItem as last into $fileEntry
+  ),
+
+  (: Update Configurations :)
+  (
+    for $config in $root/Configurations/Configuration
+    let $VCCLCompilerTool := $config/Tool[@Name="VCCLCompilerTool"]
+    let $VCLinkerTool := $config/Tool[@Name="VCLinkerTool"]
+    let $VCManifestTool := $config/Tool[@Name="VCManifestTool"]
+    let $PreprocessorDefinitions := $VCCLCompilerTool/@PreprocessorDefinitions
+    let $AdditionalIncludeDirectories := $VCCLCompilerTool/@AdditionalIncludeDirectories
+    let $WarningLevel := $VCCLCompilerTool/@WarningLevel
+    let $AdditionalDependencies := $VCLinkerTool/@AdditionalDependencies
+    return
+    (
+      (: For Win32/x64/WinCE :)
+      if (fn:contains($config/@Name, "Win32") or
+          fn:contains($config/@Name, "x64") or
+          fn:contains($config/@Name, $WINCE_PLATFORM_NAME)) then (
+
+        (: Update PreprocessorDefinitions :)
+        (
+          for $node in $PreprocessorDefinitions
+          let $additionalFlags := 
+            if (fn:contains($config/@Name, 'Debug')) then (
+              $DEBUG_ADDITIONAL_FLAGS
+            ) else ()
+          let $combinedFlags := 
+            if (fn:contains($config/@Name, $WINCE_PLATFORM_NAME)) then (
+              fn:concat($cflags, $additionalFlags)
+            ) else (
+              fn:concat($node/string(), $cflags, $additionalFlags)
+            )
+          return replace value of node $node with $combinedFlags
+        ), 
+
+        (: Update AdditionalIncludeDirectories :)
+        (
+          if (fn:exists($AdditionalIncludeDirectories)) then (
+             (: Update the attribute if exist:)
+             replace value of node $AdditionalIncludeDirectories
+             with fn:concat($AdditionalIncludeDirectories/string(), ' ', $includes)
+           ) else (
+           (: Insert the attribute otherwise :)
+             insert node attribute AdditionalIncludeDirectories {$includes} 
+             into $VCCLCompilerTool
+          )
+        ),
+
+        (: Update AdditionalDependencies :)
+        (
+          if (fn:exists($AdditionalDependencies)) then (
+             (: Update the attribute if exist:)
+             replace value of node $AdditionalDependencies
+             with fn:concat($AdditionalDependencies/string(), ' ', $inputLib)
+           ) else if ($inputLib != '') then (
+             (: Insert the attribute otherwise :)
+             insert node attribute AdditionalDependencies {$inputLib} 
+             into $VCLinkerTool
+           ) else ()
+        ),
+
+        (: Update WarningLevel :)
+        (
+          for $node in $WarningLevel
+          return
+            replace value of node $node with '3'
+        ), 
+
+        (: Clean VCManifestTool for Windows CE/Mobile) :)
+        (
+          if (fn:contains($config/@Name, $WINCE_PLATFORM_NAME)) then (
+            for $node in $VCManifestTool
+            return replace node $node with 
+              <Tool Name="VCManifestTool" EmbedManifest="true"/>
+          ) else ()
+        ),
+
+        (: Set LinkTool for Windows CE/Mobile:)
+        (
+          if (fn:contains($config/@Name, $WINCE_PLATFORM_NAME)) then (
+            for $node in $VCLinkerTool
+            (: Update the attribute if exist. Otherwise, insert it:)
+            return (
+              ( (: Set TargetMachine to Multi-threaded (/MT):)
+                let $value := $WINCE_TARGET_MACHINE
+                let $attr := $node/@TargetMachine
+                return
+                  if (fn:exists($attr)) then (
+                    replace value of node $attr with $value
+                  ) else (
+                    insert node attribute TargetMachine {$value} into $node
+                  )
+              ),
+              ( (: Change SubSystem for Windows CE/Mobile) :)
+                let $value := $WINCE_SUB_SYSTEM
+                let $attr := $node/@SubSystem
+                return
+                  if (fn:exists($attr)) then (
+                    replace value of node $attr with $value
+                  ) else (
+                    insert node attribute SubSystem {$value} into $node
+                  )
+              )
+            )
+          ) else ()
+        ),
+
+        (: Set ComplierTool for Windows CE/Mobile:)
+        (
+          if (fn:contains($config/@Name, $WINCE_PLATFORM_NAME)) then (
+            for $node in $VCCLCompilerTool
+            (: Update the attribute if exist. Otherwise, insert it:)
+            return (
+              ( (: Set RuntimeLibrary to Multi-threaded (/MT):)
+                let $value := "0"
+                let $attr := $node/@RuntimeLibrary
+                return
+                  if (fn:exists($attr)) then (
+                    replace value of node $attr with $value
+                  ) else (
+                    insert node attribute RuntimeLibrary {$value} into $node
+                  )
+              ),
+              ( (: Set WholeProgramOptimization to false :)
+                let $value := "false"
+                let $attr := $node/@WholeProgramOptimization
+                return
+                  if (fn:exists($attr)) then (
+                    replace value of node $attr with $value
+                  ) else (
+                    insert node attribute WholeProgramOptimization {$value} into $node
+                  )
+              ),
+              ( (: Set default Optimization from 3 to 2 :)
+                let $value := "2"
+                for $attr in $node/@Optimization[string() = "3"]
+                return
+                  replace value of node $attr with $value
+              ),
+              ( (: Favor Small Code (/Os) for Windows CE/Mobile :)
+                let $value := "2"
+                let $attr := $node/@FavorSizeOrSpeed
+                return
+                  if (fn:exists($attr)) then (
+                    replace value of node $attr with $value
+                  ) else (
+                    insert node attribute FavorSizeOrSpeed {$value} into $node
+                  )
+              )
+            )
+          ) else ()
+        )
+
+      ) else ()
+    )
+  )
+)
+

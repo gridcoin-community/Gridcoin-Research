@@ -1,0 +1,65 @@
+(:
+* Common part of XQuery scripts
+:)
+declare boundary-space preserve;
+
+declare variable $WINCE_PLATFORM_NAME := '@WINCE_PLATFORM_NAME@';
+declare variable $WINCE_TARGET_MACHINE := '3'; (: const value in Visual Studio :)
+declare variable $WINCE_SUB_SYSTEM := '8';     (: const value in Visual Studio :)
+
+declare variable $COMMON_FLAGS := fn:concat(
+  '_WINDOWS;',
+  '_LIB;',
+  'SQLITE_HAS_CODEC;',
+  'SQLITE_EXPORTS;',
+  'SQLITE_CORE;',
+  'UNICODE;',
+  '_UNICODE;',
+  '_USRDLL;',
+  'HAVE_ERRNO_H;');
+
+declare variable $WINDOWS_FLAGS := fn:concat(';',
+  $COMMON_FLAGS,
+  '_CRT_SECURE_NO_DEPRECATE;',
+  '_CRT_NONSTDC_NO_DEPRECATE;',
+  'DB_CREATE_DLL;');
+
+declare variable $WINCE_FLAGS := fn:concat(
+  $COMMON_FLAGS,
+  '_WIN32_WCE=$(CEVER);',
+  'UNDER_CE=$(CEVER);',
+  'WINCE;',
+  '$(CePlatform);',
+  '$(PLATFORMDEFINES);',
+  '$(ARCHFAM);',
+  '$(_ARCHFAM_);',
+  'DB_WIN32;',
+  'DB_WINCE;',
+  'ARM;',
+  '_ARM_;',
+  'ARMV4;',
+  'HAVE_LOCALTIME;',
+  '__NO_SYSTEM_INCLUDES;',
+  'SQLITE_THREADSAFE=1;',
+  'BDBSQL_SINGLE_PROCESS;',
+  'CPPSMART_EXPORTS;',
+  'SQLITE_ENABLE_COLUMN_METADATA;',
+  'SQLITE_ENABLE_FTS3;',
+  'SQLITE_ENABLE_RTREE;',
+  'SQLITE_ENABLE_LOAD_EXTENSION;',
+  'SQLITE_SOUNDEX;',
+  'SQLITE_OMIT_WAL;',
+  'INVALID_FILE_ATTRIBUTES=((DWORD)-1);');
+
+declare variable $DEBUG_ADDITIONAL_FLAGS := fn:concat(
+  'DIAGNOSTIC;',
+  '_DEBUG;',
+  'CONFIG_TEST');
+
+(: Win32/x64 variables :)
+declare variable $WINCE_PROJ_URL := '@BDB_PATH@/build_wince/VS8/db.vcproj';
+declare variable $WINDOWS_INCLUDE := '..\@BDB_NAME@\build_windows,..\@BDB_NAME@\src';
+declare variable $WINCE_INCLUDE := '..\@BDB_NAME@\build_wince,..\@BDB_NAME@\src';
+declare variable $WIN_SRC := '..\\@BDB_NAME@\\src';
+declare variable $WINDOWS_INPUT_LIB := 'ws2_32.lib';
+

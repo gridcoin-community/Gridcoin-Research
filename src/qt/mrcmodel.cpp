@@ -150,7 +150,9 @@ int MRCModel::getMRCOutputLimit()
 MRCModel::ModelStatus MRCModel::getMRCModelStatus()
 {
     if (m_mrc_status == MRCRequestStatus::NOT_VALID_RESEARCHER) {
-        return MRCModel::NOT_VALID_RESEARCHER;
+        return MRCModel::ModelStatus::NOT_VALID_RESEARCHER;
+    } else if (m_mrc_status == MRCRequestStatus::INSUFFICIENT_MATURE_FUNDS) {
+        return MRCModel::ModelStatus::INSUFFICIENT_MATURE_FUNDS;
     } else if (!IsV12Enabled(m_block_height)) {
         return MRCModel::ModelStatus::INVALID_BLOCK_VERSION;
     } else if (OutOfSyncByAge()) {
@@ -259,6 +261,18 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // Store this locally so we don't have to get this from the client model, which takes another lock on cs_main.
     m_block_height = pindexBest->nHeight;
 
+    // Do a balance check before anything else.
+    if (m_wallet_model) {
+        CAmount mature_balance = m_wallet_model->getBalance();
+
+        if (mature_balance < COIN) {
+            m_mrc_error |= true;
+            m_mrc_status = MRCRequestStatus::INSUFFICIENT_MATURE_FUNDS;
+            m_mrc_error_desc = tr("You must have a mature balance of at least 1 GRC to submit an MRC.");
+            return;
+        }
+    }
+
     if (!IsV12Enabled(pindexBest->nHeight)) {
         return;
     }
@@ -274,7 +288,8 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     m_mrc_output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
 
-    // Do a first run with m_mrc_min_fee = 0 to compute the mrc min fee required.
+    // Do a first run with m_mrc_min_fee = 0 to compute the mrc min fee required. The lock on pwalletMain is taken in the
+    // call scope of CreateMRC.
     try {
         GRC::CreateMRC(pindexBest, m_mrc, m_reward, m_mrc_min_fee, pwalletMain, m_wallet_locked);
     } catch (GRC::MRC_error& e) {

@@ -67,18 +67,8 @@ jobs:
             restore-keys: |
                 ${{ runner.os }}-
         - name: install-packages
-          # We run the contrib/install_db4.sh script rather than installing the
-          # Homebrew berkeley-db4 formula to add the Berkeley DB 4.8 dependency
-          # to avoid a quirk with macOS on GitHub Actions. This script compiles
-          # BDB with the "--disable-replication" flag. The tests failed because
-          # BDB complained that "replication requires locking support".
-          #
-          # As of Xcode 12, Clang fails by default for functions called without
-          # an explicit declaration. This breaks the mutex detection in the BDB
-          # configure script so we switch it back to a warning:
           run: |
             brew install autoconf automake boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl@1.1 pkg-config python qt@5 xquartz
-            CFLAGS="-Wno-error=implicit-function-declaration" contrib/install_db4.sh .
         - name: test
           run: |
             ./ci/test_run_all.sh
@@ -89,9 +79,9 @@ jobs:
         - name: checkout
           uses: actions/checkout@v3
         - name: setup-python
-          uses: actions/setup-python@v3
+          uses: actions/setup-python@v4
           with:
-            python-version: 3.9
+            python-version: 3.11
         - name: lint
           run: |
             set -o errexit; source ./ci/lint/04_install.sh

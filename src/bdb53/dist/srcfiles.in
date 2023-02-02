@@ -1,0 +1,344 @@
+#	$Id$
+#
+# This is an input file for the s_vxworks script.  It lists the source files in
+# the Berkeley DB tree and notes which are used to build the Android and
+# VxWorks libraries.
+#
+# If you are adding a new file, putting the filename here in srcfiles.in and
+# indicate which modules require the file. Also make sure to add the file to
+# dist/win_projects/projects.template.xml for Windows, and
+# dist/win_projects/projects_wince.template.xml for Windows CE.
+#
+# Please keep this list sorted alphabetically!
+#
+# Each non-blank, non-comment line is of the form
+#   filename		module [ module ...]
+
+src/btree/bt_compact.c						android vx vxsmall 
+src/btree/bt_compare.c						android vx vxsmall 
+src/btree/bt_compress.c						android vx vxsmall 
+src/btree/bt_conv.c						android vx vxsmall 
+src/btree/bt_curadj.c						android vx vxsmall 
+src/btree/bt_cursor.c						android vx vxsmall 
+src/btree/bt_delete.c						android vx vxsmall 
+src/btree/bt_method.c						android vx vxsmall 
+src/btree/bt_open.c						android vx vxsmall 
+src/btree/bt_put.c						android vx vxsmall 
+src/btree/bt_rec.c						android vx vxsmall 
+src/btree/bt_reclaim.c						android vx vxsmall 
+src/btree/bt_recno.c						android vx vxsmall 
+src/btree/bt_rsearch.c						android vx vxsmall 
+src/btree/bt_search.c						android vx vxsmall 
+src/btree/bt_split.c						android vx vxsmall 
+src/btree/bt_stat.c						android vx vxsmall 
+src/btree/bt_upgrade.c						android vx vxsmall 
+src/btree/bt_verify.c						vx
+src/btree/btree_auto.c						android vx vxsmall 
+src/btree/btree_autop.c						vx6
+build_vxworks/util/db_archive.c					vx6
+build_vxworks/util/db_checkpoint.c				vx6
+build_vxworks/util/db_deadlock.c				vx6
+build_vxworks/util/db_dump.c					vx6
+build_vxworks/util/db_hotbackup.c				vx6
+build_vxworks/util/db_load.c					vx6
+build_vxworks/util/db_log_verify.c				vx6
+build_vxworks/util/db_printlog.c				vx6
+build_vxworks/util/db_recover.c					vx6
+build_vxworks/util/db_stat.c					vx6
+build_vxworks/util/db_tuner.c					vx6
+build_vxworks/util/db_upgrade.c					vx6
+build_vxworks/util/db_verify.c					vx6
+build_vxworks/dbdemo/dbdemo.c					vx6
+build_vxworks/test/micro/b_curalloc.c				vx6
+build_vxworks/test/micro/b_curwalk.c				vx6
+build_vxworks/test/micro/b_del.c				vx6
+build_vxworks/test/micro/b_get.c				vx6
+build_vxworks/test/micro/b_inmem.c				vx6
+build_vxworks/test/micro/b_latch.c				vx6
+build_vxworks/test/micro/b_load.c				vx6
+build_vxworks/test/micro/b_open.c				vx6
+build_vxworks/test/micro/b_put.c				vx6
+build_vxworks/test/micro/b_recover.c				vx6
+build_vxworks/test/micro/b_txn.c				vx6
+build_vxworks/test/micro/b_txn_write.c				vx6
+build_vxworks/test/micro/b_uname.c				vx6
+build_vxworks/test/micro/b_util.c				vx6
+build_vxworks/test/micro/b_workload.c				vx6
+build_vxworks/test/micro/test_micro.c				vx6
+src/clib/getopt.c						vx vxsmall
+src/clib/rand.c							android 
+src/clib/snprintf.c						android vx vxsmall 
+src/clib/strcasecmp.c						vx vxsmall
+src/clib/strdup.c						vx vxsmall
+src/clib/strsep.c						vx vxsmall
+src/common/clock.c						android vx vxsmall 
+src/common/crypto_stub.c					vxsmall 
+src/common/db_byteorder.c					android vx vxsmall 
+src/common/db_compint.c						android vx vxsmall 
+src/common/db_err.c						android vx vxsmall 
+src/common/db_getlong.c						android vx vxsmall 
+src/common/db_idspace.c						android vx vxsmall 
+src/common/db_log2.c						android vx vxsmall 
+src/common/db_shash.c						android vx vxsmall 
+src/common/dbt.c						android vx vxsmall 
+src/common/mkpath.c						android vx vxsmall 
+src/common/os_method.c						android vx vxsmall 
+src/common/util_arg.c						vx vxsmall
+src/common/util_cache.c						vx vxsmall
+src/common/util_log.c						vx vxsmall
+src/common/util_sig.c						vx vxsmall
+src/common/zerofill.c						android vx vxsmall 
+src/crypto/aes_method.c						vx
+src/crypto/crypto.c						vx
+src/crypto/mersenne/mt19937db.c					vx
+src/crypto/rijndael/rijndael-alg-fst.c				vx
+src/crypto/rijndael/rijndael-api-fst.c				vx
+lang/cxx/cxx_channel.cpp					vx6
+lang/cxx/cxx_db.cpp						vx6
+lang/cxx/cxx_dbc.cpp						vx6
+lang/cxx/cxx_dbt.cpp						vx6
+lang/cxx/cxx_env.cpp						vx6
+lang/cxx/cxx_except.cpp						vx6
+lang/cxx/cxx_lock.cpp						vx6
+lang/cxx/cxx_logc.cpp						vx6
+lang/cxx/cxx_mpool.cpp						vx6
+lang/cxx/cxx_multi.cpp						vx6
+lang/cxx/cxx_seq.cpp						vx6
+lang/cxx/cxx_site.cpp						vx6
+lang/cxx/cxx_txn.cpp						vx6
+src/db/crdel_auto.c						android vx vxsmall 
+src/db/crdel_autop.c						vx6
+src/db/crdel_rec.c						android vx vxsmall 
+src/db/db.c							android vx vxsmall 
+src/db/db_am.c							android vx vxsmall 
+src/db/db_auto.c						android vx vxsmall 
+src/db/db_autop.c						vx6
+src/db/db_backup.c						android vx vxsmall 
+src/db/db_cam.c							android vx vxsmall 
+src/db/db_cds.c							android vx vxsmall 
+src/db/db_compact.c						android vx vxsmall 
+src/db/db_conv.c						android vx vxsmall 
+src/db/db_copy.c						android vx vxsmall 
+src/db/db_dispatch.c						android vx vxsmall 
+src/db/db_dup.c							android vx vxsmall 
+src/db/db_iface.c						android vx vxsmall 
+src/db/db_join.c						android vx vxsmall 
+src/db/db_meta.c						android vx vxsmall 
+src/db/db_method.c						android vx vxsmall 
+src/db/db_open.c						android vx vxsmall 
+src/db/db_overflow.c						android vx vxsmall 
+src/db/db_ovfl_vrfy.c						vx
+src/db/db_pr.c							android vx vxsmall 
+src/db/db_rec.c							android vx vxsmall 
+src/db/db_reclaim.c						android vx vxsmall 
+src/db/db_remove.c						android vx vxsmall 
+src/db/db_rename.c						android vx vxsmall 
+src/db/db_ret.c							android vx vxsmall 
+src/db/db_setid.c						android vx vxsmall 
+src/db/db_setlsn.c						android vx vxsmall 
+src/db/db_sort_multiple.c					android vx vxsmall 
+src/db/db_stati.c						android vx vxsmall 
+src/db/db_truncate.c						android vx vxsmall 
+src/db/db_upg.c							android vx vxsmall 
+src/db/db_upg_opd.c						android vx vxsmall 
+src/db/db_vrfy.c						vx
+src/db/db_vrfy_stub.c						android vxsmall 
+src/db/db_vrfyutil.c						vx
+src/db/partition.c						android vx 
+lang/db185/db185.c
+src/dbreg/dbreg.c						android vx vxsmall 
+src/dbreg/dbreg_auto.c						android vx vxsmall 
+src/dbreg/dbreg_autop.c						vx6
+src/dbreg/dbreg_rec.c						android vx vxsmall 
+src/dbreg/dbreg_stat.c						android vx vxsmall 
+src/dbreg/dbreg_util.c						android vx vxsmall 
+src/env/env_alloc.c						android vx vxsmall 
+src/env/env_backup.c						android vx vxsmall 
+src/env/env_config.c						android vx vxsmall 
+src/env/env_failchk.c						android vx vxsmall 
+src/env/env_file.c						android vx vxsmall 
+src/env/env_globals.c						android vx vxsmall 
+src/env/env_method.c						android vx vxsmall 
+src/env/env_name.c						android vx vxsmall 
+src/env/env_open.c						android vx vxsmall 
+src/env/env_recover.c						android vx vxsmall 
+src/env/env_region.c						android vx vxsmall 
+src/env/env_register.c						android vx vxsmall 
+src/env/env_sig.c						android vx vxsmall 
+src/env/env_stat.c						android vx vxsmall 
+src/fileops/fileops_auto.c					android vx vxsmall 
+src/fileops/fileops_autop.c					vx6
+src/fileops/fop_basic.c						android vx vxsmall 
+src/fileops/fop_rec.c						android vx vxsmall 
+src/fileops/fop_util.c						android vx vxsmall 
+src/hash/hash.c							vx
+src/hash/hash_auto.c						vx
+src/hash/hash_autop.c						vx6
+src/hash/hash_compact.c						vx
+src/hash/hash_conv.c						vx
+src/hash/hash_dup.c						vx
+src/hash/hash_func.c						android vx vxsmall 
+src/hash/hash_meta.c						vx
+src/hash/hash_method.c						vx
+src/hash/hash_open.c						vx
+src/hash/hash_page.c						vx
+src/hash/hash_rec.c						vx
+src/hash/hash_reclaim.c						vx
+src/hash/hash_stat.c						vx
+src/hash/hash_stub.c						android vxsmall 
+src/hash/hash_upgrade.c						vx
+src/hash/hash_verify.c						vx
+src/heap/heap_auto.c						vx
+src/heap/heap_autop.c						vx
+src/heap/heap_backup.c						vx
+src/heap/heap.c							vx
+src/heap/heap_conv.c						vx
+src/heap/heap_method.c						vx
+src/heap/heap_open.c						vx
+src/heap/heap_rec.c						vx
+src/heap/heap_reclaim.c						vx
+src/heap/heap_stat.c						vx
+src/heap/heap_stub.c						android vxsmall
+src/heap/heap_verify.c						vx
+src/hmac/hmac.c							android vx vxsmall 
+src/hmac/sha1.c							android vx vxsmall 
+src/lock/lock.c							android vx vxsmall 
+src/lock/lock_deadlock.c					android vx vxsmall 
+src/lock/lock_failchk.c						android vx vxsmall 
+src/lock/lock_id.c						android vx vxsmall 
+src/lock/lock_list.c						android vx vxsmall 
+src/lock/lock_method.c						android vx vxsmall 
+src/lock/lock_region.c						android vx vxsmall 
+src/lock/lock_stat.c						android vx vxsmall 
+src/lock/lock_timer.c						android vx vxsmall 
+src/lock/lock_util.c						android vx vxsmall 
+src/log/log.c							android vx vxsmall 
+src/log/log_archive.c						android vx vxsmall 
+src/log/log_compare.c						android vx vxsmall 
+src/log/log_debug.c						android vx vxsmall 
+src/log/log_get.c						android vx vxsmall 
+src/log/log_method.c						android vx vxsmall 
+src/log/log_print.c						android vx vxsmall 
+src/log/log_put.c						android vx vxsmall 
+src/log/log_stat.c						android vx vxsmall 
+src/log/log_verify.c						vx 
+src/log/log_verify_util.c					vx 
+src/log/log_verify_auto.c					vx 
+src/log/log_verify_int.c					vx 
+src/log/log_verify_stub.c					android vxsmall 
+src/mp/mp_alloc.c						android vx vxsmall 
+src/mp/mp_backup.c						android vx vxsmall 
+src/mp/mp_bh.c							android vx vxsmall 
+src/mp/mp_fget.c						android vx vxsmall 
+src/mp/mp_fmethod.c						android vx vxsmall 
+src/mp/mp_fopen.c						android vx vxsmall 
+src/mp/mp_fput.c						android vx vxsmall 
+src/mp/mp_fset.c						android vx vxsmall 
+src/mp/mp_method.c						android vx vxsmall 
+src/mp/mp_mvcc.c						android vx vxsmall 
+src/mp/mp_region.c						android vx vxsmall 
+src/mp/mp_register.c						android vx vxsmall 
+src/mp/mp_resize.c						android vx vxsmall 
+src/mp/mp_stat.c						android vx vxsmall 
+src/mp/mp_sync.c						android vx vxsmall 
+src/mp/mp_trickle.c						android vx vxsmall 
+src/mutex/mut_alloc.c						android vx vxsmall 
+src/mutex/mut_failchk.c						android vx vxsmall 
+src/mutex/mut_fcntl.c
+src/mutex/mut_method.c						android vx vxsmall 
+src/mutex/mut_region.c						android vx vxsmall 
+src/mutex/mut_stat.c						android vx vxsmall 
+src/mutex/mut_tas.c						android vx vxsmall 
+src/mutex/mut_win32.c						ce_small
+src/os/os_abort.c						android vx vxsmall 
+src/os/os_abs.c							android 
+src/os/os_addrinfo.c						vx
+src/os/os_alloc.c						android vx vxsmall 
+src/os/os_clock.c						android vx vxsmall 
+src/os/os_config.c						android
+src/os/os_cpu.c							android vx vxsmall 
+src/os/os_ctime.c						android vx vxsmall 
+src/os/os_dir.c							android vx vxsmall 
+src/os/os_errno.c						android vx vxsmall 
+src/os/os_fid.c							android vx vxsmall 
+src/os/os_flock.c						android vx vxsmall 
+src/os/os_fsync.c						android vx vxsmall 
+src/os/os_getenv.c						android vx vxsmall 
+src/os/os_handle.c						android vx vxsmall 
+src/os/os_map.c							android 
+src/os/os_mkdir.c						android vx vxsmall 
+src/os/os_open.c						android vx vxsmall 
+src/os/os_path.c						android vx vxsmall 
+src/os/os_pid.c							android vx vxsmall 
+src/os/os_rename.c						android vx vxsmall 
+src/os/os_root.c						android vx vxsmall 
+src/os/os_rpath.c						android 
+src/os/os_rw.c							android vx vxsmall 
+src/os/os_seek.c						android vx vxsmall 
+src/os/os_stack.c						android vx vxsmall 
+src/os/os_stat.c						android vx vxsmall 
+src/os/os_tmpdir.c						android vx vxsmall 
+src/os/os_truncate.c						android vx vxsmall 
+src/os/os_uid.c							android vx vxsmall 
+src/os/os_unlink.c						android vx vxsmall 
+src/os/os_yield.c						android 
+src/os_qnx/os_qnx_fsync.c
+src/os_qnx/os_qnx_open.c
+src/os_vxworks/os_vx_abs.c					vx vxsmall
+src/os_vxworks/os_vx_config.c					vx vxsmall
+src/os_vxworks/os_vx_map.c					vx vxsmall
+src/os_vxworks/os_vx_rpath.c					vx vxsmall
+src/os_vxworks/os_vx_yield.c					vx vxsmall
+src/qam/qam.c							vx
+src/qam/qam_auto.c						vx
+src/qam/qam_autop.c						vx6
+src/qam/qam_conv.c						vx
+src/qam/qam_files.c						vx
+src/qam/qam_method.c						vx
+src/qam/qam_open.c						vx
+src/qam/qam_rec.c						vx
+src/qam/qam_stat.c						vx
+src/qam/qam_stub.c						android vxsmall 
+src/qam/qam_upgrade.c						vx
+src/qam/qam_verify.c						vx
+src/rep/rep_automsg.c						vx
+src/rep/rep_backup.c						vx
+src/rep/rep_elect.c						vx
+src/rep/rep_lease.c						vx
+src/rep/rep_log.c						vx
+src/rep/rep_method.c						vx
+src/rep/rep_record.c						vx
+src/rep/rep_region.c						vx
+src/rep/rep_stat.c						vx
+src/rep/rep_stub.c						android vxsmall 
+src/rep/rep_util.c						vx
+src/rep/rep_verify.c						vx
+src/repmgr/repmgr_auto.c					vx
+src/repmgr/repmgr_autop.c					vx6
+src/repmgr/repmgr_automsg.c					vx
+src/repmgr/repmgr_elect.c					vx
+src/repmgr/repmgr_method.c					vx
+src/repmgr/repmgr_msg.c						vx
+src/repmgr/repmgr_net.c						vx
+src/repmgr/repmgr_posix.c					vx
+src/repmgr/repmgr_queue.c					vx
+src/repmgr/repmgr_rec.c						vx
+src/repmgr/repmgr_sel.c						vx
+src/repmgr/repmgr_stat.c					vx
+src/repmgr/repmgr_stub.c					android vxsmall 
+src/repmgr/repmgr_util.c					vx
+src/sequence/seq_stat.c						android vx6 
+src/sequence/sequence.c						android vx6 
+src/txn/txn.c							android vx vxsmall 
+src/txn/txn_auto.c						android vx vxsmall 
+src/txn/txn_autop.c						vx6
+src/txn/txn_chkpt.c						android vx vxsmall 
+src/txn/txn_failchk.c						android vx vxsmall 
+src/txn/txn_method.c						android vx vxsmall 
+src/txn/txn_rec.c						android vx vxsmall 
+src/txn/txn_recover.c						android vx vxsmall 
+src/txn/txn_region.c						android vx vxsmall 
+src/txn/txn_stat.c						android vx vxsmall 
+src/txn/txn_util.c						android vx vxsmall 
+src/xa/xa.c							vx
+src/xa/xa_map.c							vx

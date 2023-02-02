@@ -1,0 +1,42 @@
+#!/bin/sh -
+#
+# $Id$
+#
+# Check for inclusion of files already included in db_int.h.
+
+d=../..
+[ -f $d/LICENSE ] || {
+	echo 'FAIL: cannot find source distribution directory.'
+	exit 1
+}
+
+s=$d/src
+t1=__1
+t2=__2
+
+egrep -- '#include[	 ]' $s/dbinc/db_int.in |
+sed -e '/[	 ]db\.h'/d \
+    -e 's/^#include.//' \
+    -e 's/[<>"]//g' \
+    -e 's/[	 ].*//' > $t1
+
+for i in `cat $t1`; do
+	(cd $s && egrep "^#include[	 ].*[<\"]$i[>\"]" */*.[ch])
+done |
+sed -e '/^build/d' \
+    -e '/^clib\/getopt.c/d' \
+    -e '/^dbinc\/mutex_int.h.*<sys\/mman.h>/d' \
+    -e '/^dbinc\/win_db.h:/d' \
+    -e '/^mutex\/tm.c/d' \
+    -e '/^os\/os_map.c.*<sys\/mman.h>/d' \
+    > $t2
+
+[ -s $t2 ] && {
+	echo 'FAIL: found extraneous includes in the source'
+	cat $t2
+	exit 1
+}
+
+rm -f $t1 $t2
+
+exit 0

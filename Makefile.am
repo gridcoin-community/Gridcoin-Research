@@ -60,8 +60,16 @@ iconsdir = $(prefix)
 nobase_icons_DATA = $(DIST_ICONS)
 endif
 
+# BDB's Makefile does not support distdir, so we manually do it here.
+if ENABLE_WALLET
 dist-hook:
 	-$(GIT) archive --format=tar HEAD -- src/clientversion.cpp | $(AMTAR) -C $(top_distdir) -xf -
+	$(AM_V_at)$(MKDIR_P) $(top_distdir)/src/bdb53
+	$(AM_V_AT)cp -r $(wildcard src/bdb53/*) $(top_distdir)/src/bdb53
+else
+dist-hook:
+	-$(GIT) archive --format=tar HEAD -- src/clientversion.cpp | $(AMTAR) -C $(top_distdir) -xf -
+endif
 
 $(BITCOIN_WIN_INSTALLER): all-recursive
 	$(MKDIR_P) $(top_builddir)/release

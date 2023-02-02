@@ -256,7 +256,9 @@ public:
     {
         // Don't reset the beacon registry as it is now backed by a database.
         // GetBeaconRegistry().Reset();
-        GetPollRegistry().Reset();
+
+        // Don't reset the poll registry as reorgs are properly handled.
+        // GetPollRegistry().Reset();
         GetWhitelist().Reset();
         m_appcache_handler.Reset();
     }
@@ -458,7 +460,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
 
-    // This no longer includes beacons.
+    // This no longer includes beacons or polls.
     g_dispatcher.ResetHandlers();
 
     BeaconRegistry& beacons = GetBeaconRegistry();
@@ -618,6 +620,8 @@ void GRC::ApplyContracts(
             }
         }
 
+        // Note that for polls and votes, this rescan could overlap contracts already recorded. The handlers for polls/votes
+        // check for the existence of contracts already recorded and will prevent a double application.
         g_dispatcher.Apply({ contract, tx, pindex });
 
         // Don't track transaction message contracts in the block index:

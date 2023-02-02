@@ -229,13 +229,15 @@ std::optional<std::string> ReadClientStateXml()
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
-    uiInterface.ThreadSafeMessageBox(strprintf("Could not access BOINC data directory \"%s\". "
-                                               "Please check that the directory exists and check the directory "
-                                               "and client_state.xml file permissions.",
-                                               path.string()),
-                                     "", CClientUIInterface::ICON_ERROR
-                                     | CClientUIInterface::BTN_OK
-                                     | CClientUIInterface::MODAL);
+    if (!path.empty()) {
+        uiInterface.ThreadSafeMessageBox(strprintf("Could not access BOINC data directory \"%s\". "
+                                                   "Please check that the directory exists and check the directory "
+                                                   "and client_state.xml file permissions.",
+                                                   path.string()),
+                                         "Error", CClientUIInterface::ICON_ERROR
+                                         | CClientUIInterface::BTN_OK
+                                         | CClientUIInterface::MODAL);
+    }
 
     return std::nullopt;
 }
