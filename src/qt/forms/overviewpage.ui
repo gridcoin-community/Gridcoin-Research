@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>948</width>
-    <height>635</height>
+    <height>755</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -788,10 +788,10 @@
                 <property name="spacing">
                  <number>12</number>
                 </property>
-                <item row="0" column="0">
-                 <widget class="QLabel" name="statusTextLabel">
+                <item row="1" column="0">
+                 <widget class="QLabel" name="magnitudeTextLabel">
                   <property name="text">
-                   <string>Status:</string>
+                   <string>Magnitude:</string>
                   </property>
                   <property name="isRowHeader" stdset="0">
                    <bool>true</bool>
@@ -817,16 +817,6 @@
                   </property>
                  </widget>
                 </item>
-                <item row="1" column="0">
-                 <widget class="QLabel" name="magnitudeTextLabel">
-                  <property name="text">
-                   <string>Magnitude:</string>
-                  </property>
-                  <property name="isRowHeader" stdset="0">
-                   <bool>true</bool>
-                  </property>
-                 </widget>
-                </item>
                 <item row="1" column="1">
                  <widget class="QLabel" name="magnitudeLabel">
                   <property name="sizePolicy">
@@ -843,16 +833,6 @@
                   </property>
                  </widget>
                 </item>
-                <item row="2" column="0">
-                 <widget class="QLabel" name="accrualTextLabel">
-                  <property name="text">
-                   <string>Pending Reward:</string>
-                  </property>
-                  <property name="isRowHeader" stdset="0">
-                   <bool>true</bool>
-                  </property>
-                 </widget>
-                </item>
                 <item row="2" column="1">
                  <widget class="QLabel" name="accrualLabel">
                   <property name="sizePolicy">
@@ -866,6 +846,48 @@
                   </property>
                   <property name="textInteractionFlags">
                    <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="0">
+                 <widget class="QLabel" name="statusTextLabel">
+                  <property name="text">
+                   <string>Status:</string>
+                  </property>
+                  <property name="isRowHeader" stdset="0">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="accrualTextLabel">
+                  <property name="text">
+                   <string>Pending Reward:</string>
+                  </property>
+                  <property name="isRowHeader" stdset="0">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="2">
+                 <widget class="QLabel" name="accrualLimitWarningIconlabel">
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>You are approaching the accrual limit of 16384 GRC. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</string>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="pixmap">
+                   <pixmap resource="../bitcoin.qrc">:/icons/warning</pixmap>
+                  </property>
+                  <property name="scaledContents">
+                   <bool>true</bool>
                   </property>
                  </widget>
                 </item>
@@ -1108,6 +1130,8 @@
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../bitcoin.qrc"/>
+ </resources>
  <connections/>
 </ui>

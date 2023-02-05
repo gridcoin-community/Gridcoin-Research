@@ -165,6 +165,16 @@ public:
         return m_account.AverageLifetimeMagnitude() * m_magnitude_unit * COIN * 5;
     }
 
+    CAmount NearRewardLimit() const override
+    {
+        // This returns MaxReward() - 2 * ExpectedDaily() or 1/2 of MaxReward(), whichever
+        // is greater
+
+        CAmount threshold = std::max(MaxReward() / 2, MaxReward() - 2 * ExpectedDaily());
+
+        return threshold;
+    }
+
     //!
     //! \brief Determine whether the account exceeded the daily payment limit.
     //!

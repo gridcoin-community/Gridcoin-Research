@@ -1329,6 +1329,21 @@ CAmount Researcher::Accrual() const
     return Tally::GetAccrual(*cpid, now, pindexBest);
 }
 
+CAmount Researcher::AccrualNearLimit() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+
+    if (!cpid || !pindexBest) {
+        return false;
+    }
+
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+
+    LOCK(cs_main);
+
+    return Tally::AccrualNearLimit(*cpid, now, pindexBest);
+}
+
 ResearcherStatus Researcher::Status() const
 {
     if (Eligible()) {

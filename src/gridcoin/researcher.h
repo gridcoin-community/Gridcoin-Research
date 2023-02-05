@@ -551,6 +551,12 @@ public:
     CAmount Accrual() const;
 
     //!
+    //! \brief Value of account accrual that is near MaxReward() based on accrual rate..
+    //! \return CAmount value. This is implemented in IAccrualComputer::NearRewardLimit().
+    //!
+    CAmount AccrualNearLimit() const;
+
+    //!
     //! \brief Get a value that indicates how the wallet participates in the
     //! research reward protocol.
     //!

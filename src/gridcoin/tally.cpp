@@ -1090,6 +1090,14 @@ CAmount Tally::GetAccrual(
     return GetComputer(cpid, payment_time, last_block_ptr)->Accrual();
 }
 
+CAmount Tally::AccrualNearLimit(
+        const Cpid cpid,
+        const int64_t payment_time,
+        const CBlockIndex* const last_block_ptr)
+{
+    return (GetComputer(cpid, payment_time, last_block_ptr)->NearRewardLimit()) ;
+}
+
 //!
 //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
 //!
