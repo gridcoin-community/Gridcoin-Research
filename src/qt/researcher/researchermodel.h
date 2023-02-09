@@ -101,12 +101,13 @@ public:
     bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
 
+    CAmount accrualNearLimit() const;
     CAmount getAccrual() const;
 
     QString email() const;
     QString formatCpid() const;
     QString formatMagnitude() const;
-    QString formatAccrual(const int display_unit) const;
+    QString formatAccrual(const int display_unit, bool& near_limit) const;
     QString formatStatus() const;
     QString formatBoincPath() const;
 
