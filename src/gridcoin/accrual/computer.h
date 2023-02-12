@@ -72,6 +72,12 @@ public:
     virtual CAmount PaymentPerDayLimit() const = 0;
 
     //!
+    //! \brief Return an accrual value that is nearing the limit based on accrual rate.
+    //! \return Value of near limit in CAmount units.
+    //!
+    virtual CAmount NearRewardLimit() const = 0;
+
+    //!
     //! \brief Determine whether the account exceeded the daily payment limit.
     //!
     //! \return \c true if the average daily research payment amount exceeds

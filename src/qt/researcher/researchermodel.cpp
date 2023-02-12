@@ -317,6 +317,11 @@ bool ResearcherModel::needsBeaconAuth() const
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
 }
 
+CAmount ResearcherModel::accrualNearLimit() const
+{
+    return m_researcher->AccrualNearLimit();
+}
+
 CAmount ResearcherModel::getAccrual() const
 {
     return m_researcher->Accrual();
@@ -353,15 +358,22 @@ QString ResearcherModel::formatMagnitude() const
     return text;
 }
 
-QString ResearcherModel::formatAccrual(const int display_unit) const
+QString ResearcherModel::formatAccrual(const int display_unit, bool& near_limit) const
 {
     QString text;
+
+    // We only do the actual accrual calculation once. The AccrualNearLimit() is lighter.
+    CAmount accrual = m_researcher->Accrual();
+
+    near_limit = (accrual >= m_researcher->AccrualNearLimit());
 
     if (outOfSync()) {
         text = "...";
     } else {
-        text = BitcoinUnits::formatWithPrivacy(display_unit, m_researcher->Accrual(), m_privacy_enabled);
+        text = BitcoinUnits::formatWithPrivacy(display_unit, accrual, m_privacy_enabled);
     }
+
+
 
     return text;
 }
