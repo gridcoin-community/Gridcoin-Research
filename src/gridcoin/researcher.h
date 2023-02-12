@@ -554,7 +554,7 @@ public:
     //! \brief Value of account accrual that is near MaxReward() based on accrual rate..
     //! \return CAmount value. This is implemented in IAccrualComputer::NearRewardLimit().
     //!
-    CAmount AccrualNearLimit() const;
+    std::optional<CAmount> AccrualNearLimit() const;
 
     //!
     //! \brief Get a value that indicates how the wallet participates in the

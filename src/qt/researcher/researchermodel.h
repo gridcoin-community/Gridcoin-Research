@@ -101,7 +101,7 @@ public:
     bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
 
-    CAmount accrualNearLimit() const;
+    std::optional<CAmount> accrualNearLimit() const;
     CAmount getAccrual() const;
 
     QString email() const;

@@ -317,7 +317,7 @@ bool ResearcherModel::needsBeaconAuth() const
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
 }
 
-CAmount ResearcherModel::accrualNearLimit() const
+std::optional<CAmount> ResearcherModel::accrualNearLimit() const
 {
     return m_researcher->AccrualNearLimit();
 }
@@ -364,8 +364,13 @@ QString ResearcherModel::formatAccrual(const int display_unit, bool& near_limit)
 
     // We only do the actual accrual calculation once. The AccrualNearLimit() is lighter.
     CAmount accrual = m_researcher->Accrual();
+    std::optional<CAmount> near_limit_accrual = accrualNearLimit();
 
-    near_limit = (accrual >= m_researcher->AccrualNearLimit());
+    if (near_limit_accrual && accrual >= *near_limit_accrual) {
+        near_limit = true;
+    } else {
+        near_limit = false;
+    }
 
     if (outOfSync()) {
         text = "...";
