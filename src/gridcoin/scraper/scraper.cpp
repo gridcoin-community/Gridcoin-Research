@@ -178,53 +178,6 @@ int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD GUARDED_BY(cs_ScraperGlobals)
 /** Map that holds extended app cache entries for scrapers, which includes deleted entries. */
 AppCacheSectionExt mScrapersExt GUARDED_BY(cs_mScrapersExt) = {};
 
-/** Enum for scraper log attributes */
-enum class logattribute
-{
-    // Can't use ERROR here because it is defined already in windows.h.
-    ERR,
-    INFO,
-    WARNING,
-    CRITICAL
-};
-
-/** Defines scraper file manifest entry. These are the entries for individual project stats file downloads. */
-struct ScraperFileManifestEntry
-{
-    std::string filename; // Filename
-    std::string project;
-    uint256 hash; // hash of file
-    int64_t timestamp = 0;
-    bool current = true;
-    bool excludefromcsmanifest = true;
-    std::string filetype;
-};
-
-/**
- * @brief Defines the scaper file manifest map.
- * --------- filename ---ScraperFileManifestEntry
- * std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap
- */
-typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
-
-/** Defines a structure that combines the ScraperFileManifestMap along with a map hash, the block hash of the
- * consensus block, and the time that the above fields were updated.
- */
-struct ScraperFileManifest
-{
-    ScraperFileManifestMap mScraperFileManifest;
-    uint256 nFileManifestMapHash;
-    uint256 nConsensusBlockHash;
-    int64_t timestamp = 0;
-};
-
-// Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
-/** Stores the team IDs for each team keyed by project. (Team ID's are different for the same team across different
- * projects.)
- * --------- project -------------team name -- teamID
- * std::map<std::string, std::map<std::string, int64_t>> mTeamIDs
- */
-typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
 mTeamIDs TeamIDMap GUARDED_BY(cs_TeamIDMap);
 
 /** ProjTeamETags is not persisted to disk. There would be little to be gained by doing so. The scrapers are restarted very
