@@ -126,6 +126,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/scraper/scraper_registry.h \
     gridcoin/staking/chain_trust.h \
     gridcoin/staking/difficulty.h \
     gridcoin/staking/exceptions.h \
@@ -253,6 +254,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/scraper/http.cpp \
     gridcoin/scraper/scraper.cpp \
     gridcoin/scraper/scraper_net.cpp \
+    gridcoin/scraper/scraper_registry.cpp \
     gridcoin/staking/difficulty.cpp \
     gridcoin/staking/exceptions.cpp \
     gridcoin/staking/kernel.cpp \
