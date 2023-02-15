@@ -27,10 +27,6 @@ uint256 HashScraperEntryPayload(const ScraperEntryPayload& payload)
 
     return hasher.GetHash();
 }
-
-
-
-
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
