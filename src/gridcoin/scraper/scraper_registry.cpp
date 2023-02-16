@@ -51,17 +51,17 @@ ScraperEntry::ScraperEntry()
 {
 }
 
-ScraperEntry::ScraperEntry(CKeyID key_id)
-    : ScraperEntry(std::move(key_id), 0, uint256 {})
+ScraperEntry::ScraperEntry(CKeyID key_id, Status status)
+    : ScraperEntry(std::move(key_id), status, 0, uint256 {})
 {
 }
 
-ScraperEntry::ScraperEntry(CKeyID key_id, int64_t tx_timestamp, uint256 hash)
+ScraperEntry::ScraperEntry(CKeyID key_id, Status status, int64_t tx_timestamp, uint256 hash)
     : m_keyid(key_id)
     , m_timestamp(tx_timestamp)
     , m_hash(hash)
     , m_previous_hash()
-    , m_status(ScraperEntryStatus::UNKNOWN)
+    , m_status(status)
 {
 }
 
@@ -137,6 +137,12 @@ ScraperEntryPayload::ScraperEntryPayload()
 {
 }
 
+ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, CKeyID key_id, ScraperEntryStatus status)
+    : m_version(version)
+    , m_scraper_entry(ScraperEntry(key_id, status))
+{
+}
+
 ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, ScraperEntry scraper_entry)
     : m_version(version)
     , m_scraper_entry(std::move(scraper_entry))
@@ -146,6 +152,11 @@ ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, ScraperEntry sc
 ScraperEntryPayload::ScraperEntryPayload(ScraperEntry scraper_entry)
     : ScraperEntryPayload(CURRENT_VERSION, std::move(scraper_entry))
 {
+}
+
+ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::string& value)
+{
+    Parse(key, value);
 }
 
 ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std::string& value)
@@ -161,7 +172,7 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
     CKeyID key_id;
     address.GetKeyID(key_id);
 
-    ScraperEntry entry(key_id);
+    ScraperEntry entry(key_id, ScraperEntryStatus::UNKNOWN);
 
     if (ToLower(value) == "true") {
         entry.m_status = ScraperEntryStatus::AUTHORIZED;

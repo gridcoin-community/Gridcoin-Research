@@ -92,16 +92,17 @@ public:
     //!
     //! \param key_id. The CkeyID (i.e. address) of the scraper.
     //!
-    ScraperEntry(CKeyID key_id);
+    ScraperEntry(CKeyID key_id, Status status);
 
     //!
     //! \brief Initialize a scraper entry instance with data from a contract.
     //!
     //! \param key_id. The CkeyID (i.e. address) of the scraper.
+    //! \param status. The scraper entry status.
     //! \param tx_timestamp. Time of the transaction with the scraper entry contract.
     //! \param hash. Hash of the transaction with the scraper entry contract.
     //!
-    ScraperEntry(CKeyID key_id, int64_t tx_timestamp, uint256 hash);
+    ScraperEntry(CKeyID key_id, Status status, int64_t tx_timestamp, uint256 hash);
 
     //static ScraperEntry Parse(const std::string& value);
 
@@ -229,10 +230,20 @@ public:
     ScraperEntryPayload();
 
     //!
+    //! \brief Initialize a ScraperEntryPayload from a scraper entry constructed from
+    //! key_id and status
+    //!
+    //! \param version Version of the serialized scraper entry format.
+    //! \param key_id CKeyID of the scraper entry
+    //! \param status Status of the scraper entry
+    //!
+    ScraperEntryPayload(const uint32_t version, CKeyID key_id, ScraperEntryStatus status);
+
+    //!
     //! \brief Initialize a scraper entry payload from the given scraper entry
     //! with the provided version number (and format).
     //!
-    //! \param version Version of the serialized scraper format.
+    //! \param version Version of the serialized scraper entry format.
     //! \param scraper_entry The scraper entry itself.
     //!
     ScraperEntryPayload(const uint32_t version, ScraperEntry scraper_entry);
@@ -243,6 +254,14 @@ public:
     //! \param scraper_entry The scraper entry itself.
     //!
     ScraperEntryPayload(ScraperEntry scraper_entry);
+
+    //!
+    //! \brief ScraperEntryPayload
+    //!
+    //! \param key
+    //! \param value
+    //!
+    ScraperEntryPayload(const std::string& key, const std::string& value);
 
     //!
     //! \brief Initialize a scraper entry payload from the legacy (appcache) string format.

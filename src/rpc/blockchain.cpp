@@ -5,6 +5,7 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -2003,11 +2004,13 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     bool project_v2_enabled = false;
+    bool block_v13_enabled = false;
 
     {
         LOCK(cs_main);
 
         project_v2_enabled = IsProjectV2Enabled(nBestHeight);
+        block_v13_enabled = IsV13Enabled(nBestHeight);
     }
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
@@ -2037,10 +2040,11 @@ UniValue addkey(const UniValue& params, bool fHelp)
         param_count_max = 5;
     }
 
-    if (type == GRC::ContractType::PROJECT && action == GRC::ContractAction::REMOVE) {
+    if ((type == GRC::ContractType::PROJECT || type == GRC::ContractType::SCRAPER)
+            && action == GRC::ContractAction::REMOVE) {
         required_param_count = 3;
 
-        // This is for compatibility with scripts for project administration that may put something in the
+        // This is for compatibility with scripts for project and scraper administration that may put something in the
         // fourth parameter because it was originally required even though ignored. The same principal applies
         // to v2, where the last two parameters for a remove can be supplied, but they will be ignored.
         if (project_v2_enabled) {
@@ -2082,7 +2086,9 @@ UniValue addkey(const UniValue& params, bool fHelp)
                            "Error: Please enter the wallet passphrase with walletpassphrase first.");
     }
 
-    if (type == GRC::ContractType::UNKNOWN) {
+    if (!(type == GRC::ContractType::PROJECT
+          || type == GRC::ContractType::SCRAPER
+          || type == GRC::ContractType::PROTOCOL)) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
     }
 
@@ -2131,7 +2137,58 @@ UniValue addkey(const UniValue& params, bool fHelp)
             }
         }
         break;
-    default:
+    case GRC::ContractType::SCRAPER:
+    {
+        std::string status_string = ToLower(params[3].get_str());
+        GRC::ScraperEntryStatus status = GRC::ScraperEntryStatus::UNKNOWN;
+
+        CBitcoinAddress scraper_address;
+        if (!scraper_address.SetString(params[2].get_str())) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the scraper is invalid.");
+        }
+
+        if (block_v13_enabled) {
+            CKeyID key_id;
+
+            scraper_address.GetKeyID(key_id);
+
+            if (action == GRC::ContractAction::ADD) {
+                if (status_string == "false") {
+                    status = GRC::ScraperEntryStatus::NOT_AUTHORIZED;
+                } else if (status_string == "true") {
+                    status = GRC::ScraperEntryStatus::AUTHORIZED;
+                } else if (status_string == "explorer") {
+                    status = GRC::ScraperEntryStatus::EXPLORER;
+                } else {
+                    JSONRPCError(RPC_INVALID_PARAMETER, "Status specified for the scraper is invalid.");
+                }
+            } else if (action == GRC::ContractAction::REMOVE) {
+                status = GRC::ScraperEntryStatus::DELETED;
+            }
+
+            contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        action,
+                        uint32_t {2}, // Contract payload version number
+                        key_id,
+                        status);
+
+        } else { // block v13 not enabled
+            if (action == GRC::ContractAction::ADD && !(status_string == "false" || status_string == "true")) {
+                JSONRPCError(RPC_INVALID_PARAMETER, "Status specified for the scraper is invalid.");
+            } else if (action == GRC::ContractAction::REMOVE) {
+                status_string = "false";
+            }
+
+            // This form of ScraperEntryPayload generation matches the payload constructor that uses the Parse
+            // function to convert legacy arguments into a native scraper entry.
+            contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        action,
+                        scraper_address.ToString(),
+                        status_string);
+        }
+    }
+        break;
+    default: // The only thing left on this is PROTOCOL.
         contract = GRC::MakeLegacyContract(
                     type.Value(),
                     action,
