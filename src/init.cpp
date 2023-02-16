@@ -610,6 +610,9 @@ void SetupServerArgs()
     hidden_args.emplace_back("-daemonwait");
 #endif
 
+    // Temporary hidden option for block v13 height override to facilitate testing.
+    hidden_args.emplace_back("-blockv13height");
+
     // Additional hidden options
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
