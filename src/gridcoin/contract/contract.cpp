@@ -13,6 +13,7 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tx_message.h"
@@ -913,7 +914,8 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
         case ContractType::PROTOCOL:
             return m_payload;
         case ContractType::SCRAPER:
-            return m_payload;
+            return ContractPayload::Make<ScraperEntryPayload>(
+                ScraperEntryPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::VOTE:
             return ContractPayload::Make<LegacyVote>(
                 LegacyVote::Parse(legacy.m_key, legacy.m_value));
