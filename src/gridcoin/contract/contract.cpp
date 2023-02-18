@@ -10,6 +10,7 @@
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
@@ -156,7 +157,6 @@ public:
     void Reset() override
     {
         ClearCache(Section::PROTOCOL);
-        ClearCache(Section::SCRAPER);
     }
 
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
@@ -423,6 +423,8 @@ bool CheckLegacyContract(const Contract& contract, const CTransaction& tx, int b
 
     return CPubKey(Params().MasterKey(block_height)).Verify(body_hash, sig);
 }
+
+
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -466,11 +468,16 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
     // This no longer includes beacons or polls.
     g_dispatcher.ResetHandlers();
 
+    RegistryBookmarks db_heights;
+
+    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: Beacon database at height %i",
+             __func__, db_heights.GetRegistryBlockHeight(ContractType::BEACON));
+
+    LogPrint(BCLog::LogFlags::SCRAPER, "INFO: %s: Scraper entry database at height %i",
+             __func__, db_heights.GetRegistryBlockHeight(ContractType::SCRAPER));
+
     BeaconRegistry& beacons = GetBeaconRegistry();
-
-    int beacon_db_height = beacons.GetDBHeight();
-
-    LogPrint(BCLog::LogFlags::BEACON, "Beacon database at height %i", beacon_db_height);
+    //ScraperRegistry& scrapers = GetScraperRegistry();
 
     if (beacons.NeedsIsContractCorrection())
     {
@@ -494,7 +501,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
             }
 
             bool found_contract;
-            ApplyContracts(block, pindex, beacon_db_height, found_contract);
+            ApplyContracts(block, pindex, db_heights, found_contract);
 
             // If a contract was found and the NeedsIsContractCorrection flag is set, then
             // record that a contract was found in the block index. This corrects the block index
@@ -529,11 +536,11 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
             // Only apply activations that have not already been stored/loaded into
             // the beacon DB. This is at the block level, so we have to be careful here.
-            // If the pindex->nHeight is equal to the beacon_db_height, then the ActivatePending
+            // If the pindex->nHeight is equal to the beacon db height, then the ActivatePending
             // has already been replayed for this block and we do not need to call it again for that block.
             // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
             // calls within the same block like below in ApplyContracts.
-            if (pindex->nHeight > beacon_db_height)
+            if (pindex->nHeight > db_heights.GetRegistryBlockHeight(ContractType::BEACON))
             {
                 GetBeaconRegistry().ActivatePending(
                             block.GetSuperblock()->m_verified_beacons.m_verified,
@@ -545,7 +552,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
             {
                 LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
                           "skipped for superblock: pindex->height = %i <= beacon_db_height = %i."
-                          , __func__, pindex->nHeight, beacon_db_height);
+                          , __func__, pindex->nHeight, db_heights.GetRegistryBlockHeight(ContractType::BEACON));
             }
         }
 
@@ -564,7 +571,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
 void GRC::ApplyContracts(
     const CBlock& block,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract)
 {
     out_found_contract = false;
@@ -574,32 +581,50 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, beacon_db_height, out_found_contract);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract)
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
-        // the beacon DB up to the block BEFORE the beacon db height. Because the beacon
-        // db height is at the block level, and is updated on each beacon insert, when
-        // in a sync from zero situation where the contracts are played as each block is validated,
-        // any beacon contract in the block EQUAL to the beacon db height must fail this test
-        // and be inserted again, because otherwise the second and succeeding contracts on the
-        // same block will not be inserted and those CPID's will not be recorded properly.
-        // This was the cause of the failure to sync through 2069264 that started on 20210312. See
-        // GitHub issue #2045.
-        if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
+        // the beacon DB or scraper entry db up to the block BEFORE the beacon db height. Because
+        // these db heights are at the block level, and are updated on each beacon or scraper entry
+        // insert, when in a sync from zero situation where the contracts are played as each block
+        // is validated, any beacon or scraper contract in the block EQUAL to the relevant db height
+        // must fail this test and be inserted again, because otherwise the second and succeeding
+        // contracts on the same block will not be inserted and those CPID's or scraper entries will
+        // not be recorded properly. For beacons, this was the cause of the failure to sync through
+        //2069264 that started on 20210312. See GitHub issue #2045.
+
+        if (contract.m_type == ContractType::BEACON)
         {
-            LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
-                      "pindex->height = %i <= beacon_db_height = %i and "
-                      "ContractType is BEACON."
-                      , __func__, pindex->nHeight, beacon_db_height);
-            continue;
+            const int beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+
+            if (pindex->nHeight < beacon_db_height) {
+                LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
+                          "pindex->height = %i <= beacon_db_height = %i and "
+                          "ContractType is BEACON."
+                          , __func__, pindex->nHeight, beacon_db_height);
+                continue;
+            }
+        }
+
+        if (contract.m_type == ContractType::SCRAPER)
+        {
+            const int scraper_db_height = db_heights.GetRegistryBlockHeight(ContractType::SCRAPER);
+
+            if (pindex->nHeight < scraper_db_height) {
+                LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
+                          "pindex->height = %i <= scraper_db_height = %i and "
+                          "ContractType is SCRAPER."
+                          , __func__, pindex->nHeight, scraper_db_height);
+                continue;
+            }
         }
 
         // V2 contracts are checked upon receipt:

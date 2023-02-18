@@ -8,6 +8,7 @@
 #include "dbwrapper.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/quorum.h"
@@ -1424,13 +1425,11 @@ bool GridcoinConnectBlock(
 
     bool found_contract;
 
-    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-
-    int beacon_db_height = beacons.GetDBHeight();
+    GRC::RegistryBookmarks db_heights;
 
     // Note this does NOT handle mrc's. The recording of MRC's is a block level event controlled by the claim.
     // See below.
-    GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
+    GRC::ApplyContracts(block, pindex, db_heights, found_contract);
 
     if (found_contract) {
         pindex->MarkAsContract();

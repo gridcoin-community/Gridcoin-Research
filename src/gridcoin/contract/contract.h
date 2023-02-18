@@ -20,6 +20,8 @@ class CBlockIndex;
 class CTransaction;
 
 namespace GRC {
+class RegistryBookmarks;
+
 //!
 //! \brief Represents a Gridcoin contract embedded in a transaction message.
 //!
@@ -495,7 +497,7 @@ void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullpt
 //! \param out_found        Will update to \c true when a block contains a contract.
 //!
 void ApplyContracts(const CBlock& block,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract);
 
 //!
@@ -506,9 +508,8 @@ void ApplyContracts(const CBlock& block,
 //! \param pindex           Block index for the block that contains the transaction.
 //! \param beacon_db_height Height that db is updated to prior to call
 //!
-void ApplyContracts(
-    const CTransaction& tx,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+void ApplyContracts(const CTransaction& tx,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract);
 
 //!
