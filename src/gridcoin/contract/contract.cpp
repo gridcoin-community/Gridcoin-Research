@@ -261,6 +261,8 @@ public:
         // Don't reset the poll registry as reorgs are properly handled.
         // GetPollRegistry().Reset();
         GetWhitelist().Reset();
+
+        // m_appcache_handler no longer includes the scraper entries.
         m_appcache_handler.Reset();
     }
 
@@ -360,7 +362,7 @@ private:
             case ContractType::POLL:       return GetPollRegistry();
             case ContractType::PROJECT:    return GetWhitelist();
             case ContractType::PROTOCOL:   return m_appcache_handler;
-            case ContractType::SCRAPER:    return m_appcache_handler;
+            case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
             case ContractType::MRC:        return m_mrc_contract_handler;
             default:                       return m_unknown_handler;
