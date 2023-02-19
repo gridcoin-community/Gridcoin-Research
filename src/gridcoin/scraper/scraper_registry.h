@@ -37,7 +37,11 @@ namespace GRC {
 //! EXPLORER is a new status that is meant to be able to establish differentiated
 //! permission between a normal scraper node and one that is authorized to download
 //! and retain all project stats files and store for an extended period. For legacy
-//! purposes, this translates to "true' in the old appcache scraper section as well.
+//! purposes, this translates to "true' in the old appcache scraper section as well. Once
+//! the scraper code has been converted over to use the native calls here from the
+//! compatibility shims, then this new status can be used to specifically control
+//! which scrapers are allowed to do extended explorer style statistics download and
+//! retention.
 //!
 //! OUT_OF_BOUND must go at the end and be retained for the EnumBytes wrapper.
 //!
@@ -88,7 +92,7 @@ public:
     ScraperEntry();
 
     //!
-    //! \brief Initialize a new scraper entry for submision in a contract.
+    //! \brief Initialize a new scraper entry for submission in a contract.
     //!
     //! \param key_id. The CkeyID (i.e. address) of the scraper.
     //!
@@ -103,8 +107,6 @@ public:
     //! \param hash. Hash of the transaction with the scraper entry contract.
     //!
     ScraperEntry(CKeyID key_id, Status status, int64_t tx_timestamp, uint256 hash);
-
-    //static ScraperEntry Parse(const std::string& value);
 
     //!
     //! \brief Determine whether a scraper entry contains each of the required elements.
@@ -123,18 +125,11 @@ public:
     //!
     //! \brief Return the address from the m_keyid.
     //!
-    //! \return \c CBitCoinAddress derived from the m_keyid.
+    //! \return \c CBitcoinAddress derived from the m_keyid.
     //!
     CBitcoinAddress GetAddress() const;
 
-    //!
-    //! \brief Return the std::string form of the address for the scraper entry.
-    //!
-    //! \return \c std::string form of the CBitcoinAddress for the scraper entry.
-    //!
-    std::string GetAddressString();
-
-    //!
+     //!
     //! \brief Determine whether the given wallet contains a private key for
     //! this scraper entry's m_keyid. Because this function is intended to work
     //! even if the wallet is locked, it does not check whether the key pair is
@@ -196,9 +191,19 @@ typedef std::shared_ptr<ScraperEntry> ScraperEntry_ptr;
 typedef const ScraperEntry_ptr ScraperEntryOption;
 
 //!
-//! \brief The body of a scraper entry contract.
+//! \brief The body of a scraper entry contract. Note that this body is bimodal. It
+//! supports both the personality of the "LegacyPayload" which is found in the anonymous
+//! namespace of the contracts.cpp, and also the new native ScraperEntry format.
+//! Because the payloads in legacy contracts are not versioned, the default version
+//! for this class is 1, which causes it to use the legacy-like deserialization. The
+//! constructor of a new object, if a version is not specified, uses CURRENT_VERSION,
+//! which is 2+, and will follow the native (de)serialization. In the
+//! Contract::Body::ConvertFromLegacy call, by the time this call has been reached, the
+//! contract will have already been deserialized. This will follow the legacy mode.
+//! For contracts at version 3+, the Contract::SharePayload() will NOT call the
+//! ConvertFromLegacy.
 //!
-class ScraperEntryPayload : public IContractPayload
+class ScraperEntryPayload : public LegacyPayload
 {
 public:
     //!
@@ -213,7 +218,9 @@ public:
     //!
     //! \brief Version number of the serialized scraper entry format.
     //!
-    //! Defaults to the most recent version for a new scraper entry instance.
+    //! Initializes to the CURRENT_VERSION Note the
+    //! constructor that takes a ScraperEntry defaults to CURRENT_VERSION. When the legacy
+    //! K-V fields are used which correspond to the legacy appcache implementation, the version is 1.
     //!
     //! Version 1: appcache string key value:
     //!
@@ -222,6 +229,8 @@ public:
     //!
     uint32_t m_version = CURRENT_VERSION;
 
+    //std::string m_key;     //!< The legacy string key.
+    //std::string m_value;   //!< The legacy string value.
     ScraperEntry m_scraper_entry; //!< The scraper entry in the payload.
 
     //!
@@ -250,13 +259,13 @@ public:
 
     //!
     //! \brief Initialize a scraper entry payload from the given scraper entry
-    //! with the default version.
+    //! with the CURRENT_VERSION.
     //! \param scraper_entry The scraper entry itself.
     //!
     ScraperEntryPayload(ScraperEntry scraper_entry);
 
     //!
-    //! \brief ScraperEntryPayload
+    //! \brief Initialize a scraper entry payload from legacy data.
     //!
     //! \param key
     //! \param value
@@ -306,7 +315,11 @@ public:
     //!
     std::string LegacyKeyString() const override
     {
-        return m_scraper_entry.m_keyid.ToString();
+        CBitcoinAddress address;
+
+        address.Set(m_scraper_entry.m_keyid);
+
+        return address.ToString();
     }
 
     //!
@@ -341,8 +354,20 @@ public:
         Operation ser_action,
         const ContractAction contract_action)
     {
-        READWRITE(m_version);
-        READWRITE(m_scraper_entry);
+        // These will be filled in for legacy scraper entries, but will also be present as empties in
+        // native scraper records to solve the (de)serialization problem between legacy and native.
+        READWRITE(m_key);
+
+        if (contract_action != ContractAction::REMOVE) {
+            READWRITE(m_value);
+        }
+
+        if (m_key.empty()) {
+            READWRITE(m_version);
+            READWRITE(m_scraper_entry);
+        } else {
+            m_version = 1;
+        }
     }
 }; // ScraperEntryPayload
 
@@ -380,12 +405,26 @@ public:
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
     //! for compatibility purposes until the scraper code can be upgraded to use the
+    //! native structures here. Only includes AUTHORIZED and EXPLORER scrapers, which are
+    //! both reported with a std::string status of "true".
+    //!
+    //! \return \c AppCacheEntrySection consisting of key (address string) and
+    //! { value, timestamp }.
+    //!
+    const AppCacheSection GetScrapersLegacy() const;
+
+    //!
+    //! \brief A shim method to cross-wire this into the existing scraper code
+    //! for compatibility purposes until the scraper code can be upgraded to use the
     //! native structures here.
+    //!
+    //! \param authorized_only Boolean that if true requires that results include scraper entries
+    //! with AUTHORIZED or EXPLORER status only.
     //!
     //! \return \c AppCacheEntrySectionExt consisting of key (address string) and
     //! { value, timestamp, deleted }.
     //!
-    const AppCacheSectionExt GetScrapersLegacy() const;
+    const AppCacheSectionExt GetScrapersLegacyExt(const bool& authorized_only = false) const;
 
     //!
     //! \brief Get the current scraper entry for the specified CKeyID key_id.
@@ -395,7 +434,7 @@ public:
     //! \return An object that either contains a reference to some scraper entry if it exists
     //! for the key_id or does not.
     //!
-    ScraperEntryOption Try(const CKeyID key_id) const;
+    ScraperEntryOption Try(const CKeyID& key_id) const;
 
     //!
     //! \brief Get the current scraper entry for the specified CKeyID key_id if it is in
@@ -406,7 +445,7 @@ public:
     //! \return An object that either contains a reference to some scraper entry if it exists
     //! for the key_id and is in the required status or does not.
     //!
-    ScraperEntryOption TryAuhorized(const CKeyID key_id) const;
+    ScraperEntryOption TryAuthorized(const CKeyID& key_id) const;
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -426,7 +465,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid scraper entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int &DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
 
     //!
     //! \brief Determine whether a scraper entry contract is valid including block context. This is used
@@ -516,6 +555,11 @@ public:
 
 private:
     //!
+    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //!
+    mutable CCriticalSection cs_lock;
+
+    //!
     //! \brief Private helper method for the Add and Delete methods above. They both use identical code (with
     //! different input statuses).
     //!
@@ -527,6 +571,7 @@ private:
 
     //!
     //! \brief A class private to the ScraperRegistry class that implements LevelDB backing storage for scraper entries.
+    //! This is very similar to the BeaconDB.
     //!
     class ScraperEntryDB
     {
@@ -697,7 +742,7 @@ private:
         HistoricalScraperMap m_historical;
 
         //!
-        //!//! \brief Boolan to indicate whether the database has been successfully initialized from LevelDB during
+        //! \brief Boolan to indicate whether the database has been successfully initialized from LevelDB during
         //! startup.
         //!
         bool m_database_init = false;
@@ -741,7 +786,7 @@ private:
         //!
         //! \return Success or failure.
         //!
-        bool Load(const uint256 &hash, ScraperEntry& scraper_entry);
+        bool Load(const uint256& hash, ScraperEntry& scraper_entry);
 
         //!
         //! \brief Delete a scraper entry object from LevelDB with the provided key value (if it exists).

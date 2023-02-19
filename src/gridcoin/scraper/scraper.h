@@ -26,7 +26,6 @@
 // Thread safety. See scraper.cpp for documentation.
 extern CCriticalSection cs_Scraper;
 extern CCriticalSection cs_ScraperGlobals;
-extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_StructScraperFileManifest;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern CCriticalSection cs_TeamIDMap;
@@ -59,10 +58,6 @@ extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP;
 extern std::string TEAM_WHITELIST;
 extern std::string EXTERNAL_ADAPTER_PROJECTS;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
-
-extern CCriticalSection cs_mScrapersExt;
-
-extern AppCacheSectionExt mScrapersExt;
 
 /** Enum for scraper log attributes */
 enum class logattribute

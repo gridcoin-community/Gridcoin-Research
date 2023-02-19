@@ -13,6 +13,7 @@
 #include "gridcoin/scraper/http.h"
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
@@ -57,10 +58,6 @@ CCriticalSection cs_Scraper;
  * @brief Protects the scraper globals
  */
 CCriticalSection cs_ScraperGlobals;
-/**
- * @brief Protects the extended scraper app cache global map.
- */
-CCriticalSection cs_mScrapersExt;
 /**
  * @brief Protects the main scraper file manifest structure. This is the primary global state machine for the scraper on the
  * file side.
@@ -174,9 +171,6 @@ std::string EXTERNAL_ADAPTER_PROJECTS GUARDED_BY(cs_ScraperGlobals) = std::strin
  * to assign banscore to nodes sending unauthorized manifests.
  */
 int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD GUARDED_BY(cs_ScraperGlobals) = 300;
-
-/** Map that holds extended app cache entries for scrapers, which includes deleted entries. */
-AppCacheSectionExt mScrapersExt GUARDED_BY(cs_mScrapersExt) = {};
 
 mTeamIDs TeamIDMap GUARDED_BY(cs_TeamIDMap);
 
@@ -1413,14 +1407,17 @@ void ScraperApplyAppCacheEntries()
 
 AppCacheSection GetScrapersCache()
 {
-    return ReadCacheSection(Section::SCRAPER);
+    // Includes authorized scraper entries only.
+    return GRC::GetScraperRegistry().GetScrapersLegacy();
 }
 
 AppCacheSectionExt GetExtendedScrapersCache()
 {
-    AppCacheSection mScrapers = GetScrapersCache();
-
     // For the IsManifestAuthorized() function...
+
+    // The below is the old comment that provides original motivation behind AppCacheSection vs. AppCacheSectionExt.
+    // Note that the GetScrapersLegacy() and GetScrapersLegacyExt() mimic the old behavior. These will be changed
+    // out for native wiring as part of a scraper update.
 
     /* We cannot use the AppCacheSection mScrapers in the raw, because there are two ways to deauthorize scrapers.
      * The first way is to change the value of an existing entry to false. This works fine with mScrapers. The second way
@@ -1434,34 +1431,8 @@ AppCacheSectionExt GetExtendedScrapersCache()
      * scraper is deauthorized and the block containing that deauthorization is received by the sending node.
      */
 
-    // So we are going to make use of AppCacheEntryExt and mScrapersExt, which are just like the normal AppCache structure,
-    // except they have an explicit deleted boolean.
-
-    // First, walk the mScrapersExt map and see if it contains an entry that does not exist in mScrapers. If so,
-    // update the entry's value and timestamp and mark deleted.
-    LOCK(cs_mScrapersExt);
-
-    for (auto const& entry : mScrapersExt)
-    {
-        const auto& iter = mScrapers.find(entry.first);
-
-        if (iter == mScrapers.end())
-        {
-            // Mark entry in mScrapersExt as deleted at the current adjusted time. The value is changed
-            // to false, because if it is deleted, it is also not authorized.
-            mScrapersExt[entry.first] = AppCacheEntryExt {"false", GetAdjustedTime(), true};
-        }
-
-    }
-
-    // Now insert/update entries from mScrapers into mScrapersExt.
-    for (auto const& entry : mScrapers)
-    {
-        mScrapersExt[entry.first] = AppCacheEntryExt {entry.second.value, entry.second.timestamp, false};
-    }
-
-    // Return a copy of the global on purpose so the cs_mScrapersExt can be a short term lock. This map is very small.
-    return mScrapersExt;
+    // Includes deleted scraper entries.
+    return GRC::GetScraperRegistry().GetScrapersLegacyExt(false);
 }
 
 // This is the "main" scraper function.

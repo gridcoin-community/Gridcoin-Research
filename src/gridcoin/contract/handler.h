@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_CONTRACT_HANDLER_H
 #define GRIDCOIN_CONTRACT_HANDLER_H
 
+#include <string>
+
 class CBlockIndex;
 class CTransaction;
 
@@ -46,6 +48,13 @@ public:
         , m_pindex(pindex)
     {
     }
+
+    //!
+    //! \brief Superset of contract logger at ctx level.
+    //!
+    //! \param prefix. String to be prefixed
+    //!
+    void Log(const std::string& prefix) const;
 
     const Contract& operator*() const noexcept { return m_contract; }
     const Contract* operator->() const noexcept { return &m_contract; }

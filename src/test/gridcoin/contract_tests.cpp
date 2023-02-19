@@ -440,7 +440,7 @@ BOOST_AUTO_TEST_CASE(it_converts_a_legacy_payload_into_a_specific_contract_type)
         "https://example.com/@");
 
     const GRC::ContractPayload payload = contract.m_body.ConvertFromLegacy(
-        GRC::ContractType::PROJECT);
+        GRC::ContractType::PROJECT, 1);
 
     BOOST_CHECK(payload->ContractType() == GRC::ContractType::PROJECT);
     BOOST_CHECK(payload->WellFormed(contract.m_action.Value()) == true);

@@ -12,21 +12,6 @@ extern int64_t g_v11_timestamp;
 
 namespace {
 ScraperRegistry g_scrapers;
-
-//!
-//! \brief Compute the hash of a scraper entry payload object.
-//!
-//! \param payload The scraper entry payload object to hash.
-//!
-uint256 HashScraperEntryPayload(const ScraperEntryPayload& payload)
-{
-    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-
-    // Ignore the contract action and hash the whole object:
-    payload.Serialize(hasher, GRC::ContractAction::UNKNOWN);
-
-    return hasher.GetHash();
-}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -52,7 +37,7 @@ ScraperEntry::ScraperEntry()
 }
 
 ScraperEntry::ScraperEntry(CKeyID key_id, Status status)
-    : ScraperEntry(std::move(key_id), status, 0, uint256 {})
+    : ScraperEntry(std::move(key_id), std::move(status), 0, uint256 {})
 {
 }
 
@@ -64,10 +49,6 @@ ScraperEntry::ScraperEntry(CKeyID key_id, Status status, int64_t tx_timestamp, u
     , m_status(status)
 {
 }
-
-//ScraperEntry ScraperEntry::Parse(const std::string& value)
-//{
-//}
 
 bool ScraperEntry::WellFormed() const
 {
@@ -84,11 +65,6 @@ CKeyID ScraperEntry::GetId() const
 CBitcoinAddress ScraperEntry::GetAddress() const
 {
     return CBitcoinAddress(m_keyid);
-}
-
-std::string ScraperEntry::GetAddressString()
-{
-    return CBitcoinAddress(m_keyid).ToString();
 }
 
 bool ScraperEntry::WalletHasPrivateKey(const CWallet* const wallet) const
@@ -128,7 +104,7 @@ bool ScraperEntry::operator!=(ScraperEntry b)
 }
 
 // -----------------------------------------------------------------------------
-// Class: SCraperEntryPayload
+// Class: ScraperEntryPayload
 // -----------------------------------------------------------------------------
 
 constexpr uint32_t ScraperEntryPayload::CURRENT_VERSION; // For clang
@@ -138,13 +114,15 @@ ScraperEntryPayload::ScraperEntryPayload()
 }
 
 ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, CKeyID key_id, ScraperEntryStatus status)
-    : m_version(version)
+    : LegacyPayload()
+    , m_version(version)
     , m_scraper_entry(ScraperEntry(key_id, status))
 {
 }
 
 ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, ScraperEntry scraper_entry)
-    : m_version(version)
+    : LegacyPayload()
+    , m_version(version)
     , m_scraper_entry(std::move(scraper_entry))
 {
 }
@@ -155,8 +133,31 @@ ScraperEntryPayload::ScraperEntryPayload(ScraperEntry scraper_entry)
 }
 
 ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::string& value)
+    : LegacyPayload(key, value)
 {
-    Parse(key, value);
+    // Ensure m_version = 1. It should be already from the default value of m_version in the class definition.
+    m_version = 1;
+
+    CBitcoinAddress address;
+
+    address.SetString(m_key);
+
+    if (!address.IsValid()) {
+        error("%s: Error during initialization of ScraperEntryPayload from legacy format: key = %s, value = %s",
+              __func__,
+              key,
+              value);
+        return;
+    }
+
+    address.GetKeyID(m_scraper_entry.m_keyid);
+
+    if (ToLower(m_value) == "true") {
+        m_scraper_entry.m_status = ScraperEntryStatus::AUTHORIZED;
+    } else {
+        // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
+        m_scraper_entry.m_status = ScraperEntryStatus::NOT_AUTHORIZED;
+    }
 }
 
 ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std::string& value)
@@ -172,17 +173,12 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
     CKeyID key_id;
     address.GetKeyID(key_id);
 
-    ScraperEntry entry(key_id, ScraperEntryStatus::UNKNOWN);
-
     if (ToLower(value) == "true") {
-        entry.m_status = ScraperEntryStatus::AUTHORIZED;
-    } else {
-        // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
-        entry.m_status = ScraperEntryStatus::NOT_AUTHORIZED;
+        return ScraperEntryPayload(1, key_id, ScraperEntryStatus::AUTHORIZED);
     }
 
-    // Legacy scraper payloads always parse to version 1.
-    return ScraperEntryPayload(1, entry);
+    // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
+    return ScraperEntryPayload(1, key_id, ScraperEntryStatus::NOT_AUTHORIZED);
 }
 
 // -----------------------------------------------------------------------------
@@ -193,9 +189,28 @@ const ScraperRegistry::ScraperMap& ScraperRegistry::Scrapers() const
     return m_scrapers;
 }
 
-const AppCacheSectionExt ScraperRegistry::GetScrapersLegacy() const
+const AppCacheSection ScraperRegistry::GetScrapersLegacy() const
+{
+    AppCacheSection scrapers;
+
+    // Only includes authorized scrapers.
+    for (const auto& iter : GetScrapersLegacyExt(true)) {
+        AppCacheEntry entry;
+
+        entry.timestamp = iter.second.timestamp;
+        entry.value = iter.second.value;
+
+        scrapers[iter.first] = entry;
+    }
+
+    return scrapers;
+}
+
+const AppCacheSectionExt ScraperRegistry::GetScrapersLegacyExt(const bool& authorized_only) const
 {
     AppCacheSectionExt scrapers_ext;
+
+    LOCK(cs_lock);
 
     for (const auto& entry : m_scrapers) {
 
@@ -205,7 +220,9 @@ const AppCacheSectionExt ScraperRegistry::GetScrapersLegacy() const
         case ScraperEntryStatus::DELETED:
             // Mark entry in scrapers_ext as deleted at the timestamp of the deletion. The value is changed
             // to false, because if it is deleted, it is also not authorized.
-            scrapers_ext[key] = AppCacheEntryExt {"false", entry.second->m_timestamp, true};
+            if (!authorized_only) {
+                scrapers_ext[key] = AppCacheEntryExt {"false", entry.second->m_timestamp, true};
+            }
             break;
 
         case ScraperEntryStatus::NOT_AUTHORIZED:
@@ -229,8 +246,10 @@ const AppCacheSectionExt ScraperRegistry::GetScrapersLegacy() const
     return scrapers_ext;
 }
 
-ScraperEntryOption ScraperRegistry::Try(const CKeyID key_id) const
+ScraperEntryOption ScraperRegistry::Try(const CKeyID& key_id) const
 {
+    LOCK(cs_lock);
+
     const auto iter = m_scrapers.find(key_id);
 
     if (iter == m_scrapers.end()) {
@@ -240,8 +259,10 @@ ScraperEntryOption ScraperRegistry::Try(const CKeyID key_id) const
     return iter->second;
 }
 
-ScraperEntryOption ScraperRegistry::TryAuhorized(const CKeyID key_id) const
+ScraperEntryOption ScraperRegistry::TryAuthorized(const CKeyID& key_id) const
 {
+    LOCK(cs_lock);
+
     if (const ScraperEntryOption scraper_entry = Try(key_id)) {
         if (scraper_entry->m_status == ScraperEntryStatus::AUTHORIZED
                 || scraper_entry->m_status == ScraperEntryStatus::EXPLORER) {
@@ -254,6 +275,8 @@ ScraperEntryOption ScraperRegistry::TryAuhorized(const CKeyID key_id) const
 
 void ScraperRegistry::Reset()
 {
+    LOCK(cs_lock);
+
     m_scrapers.clear();
     m_scraper_db.clear();
 }
@@ -268,17 +291,30 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
         height = ctx.m_pindex->nHeight;
     }
 
-    // Get an iterator to any existing scraper entry with the same keyid already in the
-    // m_scrapers map.
     ScraperEntryPayload payload = ctx->CopyPayloadAs<ScraperEntryPayload>();
+
+    // If the payload m_version is less than two, then the payload is initialized from the legacy key value. Therefore
+    // we must fill in the hash and timestamp from the transaction context, and also mark the status deleted if the
+    // contract action was REMOVE, because that action resulted in an implicit deletion with the legacy K-V entries and
+    // the appcache. The new status makes it explicit.
+    if (payload.m_version < 2) {
+        payload.m_scraper_entry.m_hash = ctx.m_tx.GetHash();
+        payload.m_scraper_entry.m_timestamp = ctx.m_tx.nTime;
+
+        if (ctx->m_action == ContractAction::REMOVE) {
+            payload.m_scraper_entry.m_status = ScraperEntryStatus::DELETED;
+        }
+    }
+
+    LOCK(cs_lock);
 
     auto scraper_entry_pair_iter = m_scrapers.find(payload.m_scraper_entry.m_keyid);
 
     ScraperEntry_ptr current_scraper_entry_ptr = nullptr;
 
     // Make sure the payload m_scraper has the correct time and transaction hash.
-    payload.m_scraper_entry.m_timestamp = ctx.m_tx.nTime;
-    payload.m_scraper_entry.m_hash = ctx.m_tx.GetHash();
+    //payload.m_scraper_entry.m_timestamp = ctx.m_tx.nTime;
+    //payload.m_scraper_entry.m_hash = ctx.m_tx.GetHash();
 
     // Is there an existing scraper entry in the map?
     bool current_scraper_entry_present = (scraper_entry_pair_iter != m_scrapers.end());
@@ -293,10 +329,23 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
         payload.m_scraper_entry.m_previous_hash = uint256 {};
     }
 
-    // TODO: Make sure this is parsed and carried through properly from the legacy payload.
-    ScraperEntry historical(payload.m_scraper_entry);
-    historical.m_keyid = payload.m_scraper_entry.m_keyid;
-    historical.m_status = payload.m_scraper_entry.m_status;
+    CBitcoinAddress address;
+    address.Set(payload.m_scraper_entry.m_keyid);
+
+    LogPrint(LogFlags::SCRAPER, "INFO: %s: scraper entry add/delete: contract m_version = %u, payload "
+                                "m_version = %u, address for m_keyid = %s, m_timestamp = %" PRId64 ", "
+                                "m_hash = %s, m_previous_hash = %s, m_status = %i",
+             __func__,
+             ctx->m_version,
+             payload.m_version,
+             address.ToString(),
+             payload.m_scraper_entry.m_timestamp,
+             payload.m_scraper_entry.m_hash.ToString(),
+             payload.m_scraper_entry.m_previous_hash.ToString(),
+             payload.m_scraper_entry.m_status.Raw()
+             );
+
+    ScraperEntry& historical = payload.m_scraper_entry;
 
     if (!m_scraper_db.insert(ctx.m_tx.GetHash(), height, historical))
     {
@@ -331,6 +380,8 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
     // For scraper entries, both adds and removes will have records to revert in the m_scrapers map,
     // and also, if not the first entry for that scraper keyid, will have a historical record to
     // resurrect.
+    LOCK(cs_lock);
+
     auto entry_to_revert = m_scrapers.find(payload->m_scraper_entry.m_keyid);
 
     if (entry_to_revert == m_scrapers.end()) {
@@ -398,15 +449,15 @@ bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx,
     const auto payload = contract.SharePayloadAs<ScraperEntryPayload>();
 
     // TODO review if this is correct for scraper entries.
-    if (payload->m_version < 2) {
+    if (contract.m_version >= 3 && payload->m_version < 2) {
         DoS = 25;
-        LogPrint(LogFlags::CONTRACT, "%s: Legacy scraper contract", __func__);
+        error("%s: Legacy scraper contract in contract v3", __func__);
         return false;
     }
 
     if (!payload->WellFormed(contract.m_action.Value())) {
         DoS = 25;
-        LogPrint(LogFlags::CONTRACT, "%s: Malformed scraper contract", __func__);
+        error("%s: Malformed scraper contract", __func__);
         return false;
     }
 
@@ -420,6 +471,8 @@ bool ScraperRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 
 int ScraperRegistry::Initialize()
 {
+    LOCK(cs_lock);
+
     int height = m_scraper_db.Initialize(m_scrapers);
 
     LogPrint(LogFlags::SCRAPER, "INFO %s: m_scraper_db size after load: %u", __func__, m_scraper_db.size());
@@ -430,12 +483,16 @@ int ScraperRegistry::Initialize()
 
 void ScraperRegistry::SetDBHeight(int& height)
 {
+    LOCK(cs_lock);
+
     m_scraper_db.StoreDBHeight(height);
 }
 
 int ScraperRegistry::GetDBHeight()
 {
     int height = 0;
+
+    LOCK(cs_lock);
 
     m_scraper_db.LoadDBHeight(height);
 
@@ -444,12 +501,16 @@ int ScraperRegistry::GetDBHeight()
 
 void ScraperRegistry::ResetInMemoryOnly()
 {
+    LOCK(cs_lock);
+
     m_scrapers.clear();
     m_scraper_db.clear_in_memory_only();
 }
 
 uint64_t ScraperRegistry::PassivateDB()
 {
+    LOCK(cs_lock);
+
     return m_scraper_db.passivate_db();
 }
 
@@ -561,7 +622,7 @@ int ScraperRegistry::ScraperEntryDB::Initialize(ScraperMap& scrapers)
         recnum_high_watermark = std::max(recnum_high_watermark, recnum);
 
         LogPrint(LogFlags::SCRAPER, "INFO: %s: scraper entry m_historical insert: address %s, timestamp %" PRId64 ", hash %s, "
-                                                                                                                  "previous_hash %s, scraper entry status = %u, recnum = %" PRId64 ".",
+                                    "previous_hash %s, scraper entry status = %u, recnum = %" PRId64 ".",
                  __func__,
                  scraper_entry.GetAddress().ToString(), // address
                  scraper_entry.m_timestamp, // timestamp
@@ -589,8 +650,9 @@ int ScraperRegistry::ScraperEntryDB::Initialize(ScraperMap& scrapers)
         // the scraper entry contract will fail validation, but to be thorough, include the filter condition anyway.
         // Unlike beacons, this is a straight replay.
         if (scraper_entry.m_status != ScraperEntryStatus::UNKNOWN && scraper_entry.m_status != ScraperEntryStatus::OUT_OF_BOUND) {
-            LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scrapers insert: address %s, timestamp %" PRId64 ", hash %s, "
-                                                                                                      "previous_hash %s, scraper entry status = %u - (2) ACTIVE or (3) RENEWAL, recnum = %" PRId64 ".",
+            LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scrapers insert: address %s; timestamp %" PRId64 "; hash %s; "
+                                        "previous_hash %s; status = %u - (1) DELETED, (2) NOT_AUTHORIZED, (3) AUTHORIZED, "
+                                        "(4) EXPLORER; recnum = %" PRId64 ".",
                      __func__,
                      scraper_entry.GetAddress().ToString(), // address
                      scraper_entry.m_timestamp, // timestamp
@@ -741,7 +803,7 @@ bool ScraperRegistry::ScraperEntryDB::LoadDBHeight(int& height_stored)
     return status;
 }
 
-bool ScraperRegistry::ScraperEntryDB::insert(const uint256 &hash, const int& height, const ScraperEntry &scraper_entry)
+bool ScraperRegistry::ScraperEntryDB::insert(const uint256 &hash, const int& height, const ScraperEntry& scraper_entry)
 {
     bool status = false;
 

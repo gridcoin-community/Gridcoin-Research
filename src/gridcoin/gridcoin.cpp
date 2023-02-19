@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "main.h"
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"
@@ -166,6 +167,31 @@ void InitializeContracts(CBlockIndex* pindexBest)
         LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
     }
 
+    LogPrintf("Gridcoin: Loading scraper entry history...");
+    uiInterface.InitMessage(_("Loading scraper entry history..."));
+
+    ScraperRegistry& scrapers = GetScraperRegistry();
+
+    // If the clearscraperhistory argument is provided, then clear everything from the beacon registry,
+    // including the beacon_db and beacon key type elements from LevelDB.
+    if (gArgs.GetBoolArg("-clearscraperentryhistory", false))
+    {
+        scrapers.Reset();
+    }
+
+    LogPrintf("Gridcoin: Initializing scraper entry from stored history...");
+    uiInterface.InitMessage(_("Initializing scraper entry from stored history..."));
+    int scraper_db_height = scrapers.Initialize();
+
+    if (scraper_db_height > 0)
+    {
+        LogPrintf("Gridcoin: scraper entry history loaded through height = %i.", beacon_db_height);
+    }
+    else
+    {
+        LogPrintf("Gridcoin: scraper entry history load not successful. Will initialize from contract replay.");
+    }
+
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
@@ -175,12 +201,14 @@ void InitializeContracts(CBlockIndex* pindexBest)
     const int& lookback_window_low_height = pindex_start->nHeight;
 
     // This tricky clamp ensures the correct start height for the contract replay. Note that the current
-    // implementation will skip beacon contracts that overlap the already loaded beacon history. See
+    // implementation will skip beacon and scraper entry contracts that overlap the already loaded history. See
     // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
     // This is the replay that will be encountered when starting a wallet that was in sync with this code, and the
     // head of the chain is more than MAX AGE above the V11Height. When the contracts are replayed, the beacon db
-    // will then be initialized and the controlling window will be consistent with MAX_AGE on restarts and reorgs.
-    const int& start_height = std::min(std::max(beacon_db_height, V11_height), lookback_window_low_height);
+    // and scraper entry db will then be initialized and the controlling window will be consistent with MAX_AGE
+    // on restarts and reorgs for beacons and scraper entries.
+    int min_db_height = std::min(beacon_db_height, scraper_db_height);
+    const int& start_height = std::min(std::max(min_db_height, V11_height), lookback_window_low_height);
 
     LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
 

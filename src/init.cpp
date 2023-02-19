@@ -618,6 +618,7 @@ void SetupServerArgs()
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
     hidden_args.emplace_back("-clearbeaconhistory");
+    hidden_args.emplace_back("-clearscraperentryhistory");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.

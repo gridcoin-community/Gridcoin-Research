@@ -188,7 +188,7 @@ public:
         //!
         //! \return An IContractPayload implementation for the specified type.
         //!
-        ContractPayload ConvertFromLegacy(const ContractType type) const;
+        ContractPayload ConvertFromLegacy(const ContractType type, const uint32_t version) const;
 
         //!
         //! \brief Serialize the object to the provided stream.
@@ -440,6 +440,80 @@ public:
         m_body.Unserialize(s, m_action.Value());
     }
 }; // Contract
+
+//!
+//! \brief A payload parsed from a legacy, version 1 contract.
+//!
+//! Version 2+ contracts provide support for binary representation of payload
+//! data. Legacy contract data exists as strings. This class provides for use
+//! of the contract payload API with legacy string contracts.
+//!
+class LegacyPayload : public IContractPayload
+{
+public:
+    std::string m_key;   //!< Legacy representation of a contract key.
+    std::string m_value; //!< Legacy representation of a contract value.
+
+    //!
+    //! \brief Initialize an empty, invalid legacy payload.
+    //!
+    LegacyPayload()
+    {
+    }
+
+    //!
+    //! \brief Initialize a legacy payload with data from a legacy contract.
+    //!
+    //! \param key   Legacy contract key as it exists in a transaction.
+    //! \param value Legacy contract value as it exists in a transaction.
+    //!
+    LegacyPayload(std::string key, std::string value)
+        : m_key(std::move(key))
+        , m_value(std::move(value))
+    {
+    }
+
+    GRC::ContractType ContractType() const override
+    {
+        return GRC::ContractType::UNKNOWN;
+    }
+
+    bool WellFormed(const ContractAction action) const override
+    {
+        return !m_key.empty()
+            && (action == ContractAction::REMOVE || !m_value.empty());
+    }
+
+    std::string LegacyKeyString() const override
+    {
+        return m_key;
+    }
+
+    std::string LegacyValueString() const override
+    {
+        return m_value;
+    }
+
+    CAmount RequiredBurnAmount() const override
+    {
+        return Contract::STANDARD_BURN_AMOUNT;
+    }
+
+    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(
+        Stream& s,
+        Operation ser_action,
+        const ContractAction contract_action)
+    {
+        READWRITE(m_key);
+
+        if (contract_action != ContractAction::REMOVE) {
+            READWRITE(m_value);
+        }
+    }
+}; // LegacyPayload
 
 //!
 //! \brief Initialize a new contract.
