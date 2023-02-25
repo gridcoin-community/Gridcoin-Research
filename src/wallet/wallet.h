@@ -248,6 +248,15 @@ public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     void ReacceptWalletTransactions();
+
+
+    //!
+    //! \brief This method resends wallet transactions that have not been confirmed on the chain. The original implementation
+    //! was based on old Bitcoin code and was really bad. This new revision adapts some of the ideas from the Bitcoin Core
+    //! current master (~v22), but to straighten everything out requires a full port of the newer Bitcoin wallet code.
+    //!
+    //! \param fForce
+    //!
     void ResendWalletTransactions(bool fForce = false);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;
