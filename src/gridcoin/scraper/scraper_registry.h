@@ -129,7 +129,24 @@ public:
     //!
     CBitcoinAddress GetAddress() const;
 
-     //!
+    //!
+    //! \brief Returns the string representation of the current scraper entry status
+    //!
+    //! \return Translated string representation of scraper status
+    //!
+    std::string ScraperStatusToString() const;
+
+    //!
+    //! \brief Returns the translated or untranslated string of the input scraper entry status
+    //!
+    //! \param status. ScraperEntryStatus
+    //! \param translated. True for translated, false for not translated. Defaults to true.
+    //!
+    //! \return Scraper entry status string.
+    //!
+    std::string ScraperStatusToString(const ScraperEntryStatus& status, const bool& translated = true) const;
+
+    //!
     //! \brief Determine whether the given wallet contains a private key for
     //! this scraper entry's m_keyid. Because this function is intended to work
     //! even if the wallet is locked, it does not check whether the key pair is

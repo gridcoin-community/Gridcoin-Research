@@ -198,6 +198,7 @@ extern UniValue listalerts(const UniValue& params, bool fHelp);
 extern UniValue listdata(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
 extern UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
+extern UniValue listscrapers(const UniValue& params, bool fHelp);
 extern UniValue listsettings(const UniValue& params, bool fHelp);
 extern UniValue logging(const UniValue& params, bool fHelp);
 extern UniValue network(const UniValue& params, bool fHelp);

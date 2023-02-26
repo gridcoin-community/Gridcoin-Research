@@ -2357,6 +2357,42 @@ UniValue listprojects(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue listscrapers(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listscrapers\n"
+                "\n"
+                "Displays information about scrapers recognized by the network.\n");
+
+    UniValue res(UniValue::VOBJ);
+    UniValue scraper_entries(UniValue::VARR);
+
+    for (const auto& scraper : GRC::GetScraperRegistry().Scrapers()) {
+        UniValue entry(UniValue::VOBJ);
+
+        CBitcoinAddress address(scraper.first);
+
+        entry.pushKV("scraper_address", address.ToString());
+        entry.pushKV("current_scraper_entry_tx_hash", scraper.second->m_hash.ToString());
+        if (scraper.second->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_scraper_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_scraper_entry_tx_hash", scraper.second->m_previous_hash.ToString());
+        }
+
+        entry.pushKV("scraper_entry_timestamp", scraper.second->m_timestamp);
+        entry.pushKV("scraper_entry_time", DateTimeStrFormat(scraper.second->m_timestamp));
+        entry.pushKV("scraper_entry_status", scraper.second->ScraperStatusToString());
+
+        scraper_entries.push_back(entry);
+    }
+
+    res.pushKV("current_scraper_entries", scraper_entries);
+
+    return res;
+}
+
 UniValue network(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)

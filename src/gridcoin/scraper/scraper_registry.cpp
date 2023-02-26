@@ -67,6 +67,43 @@ CBitcoinAddress ScraperEntry::GetAddress() const
     return CBitcoinAddress(m_keyid);
 }
 
+std::string ScraperEntry::ScraperStatusToString() const
+{
+    return ScraperStatusToString(m_status.Value());
+}
+
+std::string ScraperEntry::ScraperStatusToString(const ScraperEntryStatus& status, const bool& translated) const
+{
+    if (translated) {
+        switch(status) {
+        case ScraperEntryStatus::UNKNOWN:         return _("Unknown");
+        case ScraperEntryStatus::DELETED:         return _("Deleted");
+        case ScraperEntryStatus::NOT_AUTHORIZED:  return _("Not authorized");
+        case ScraperEntryStatus::AUTHORIZED:      return _("Authorized");
+        case ScraperEntryStatus::EXPLORER:        return _("Explorer");
+        case ScraperEntryStatus::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    } else {
+        // The untranslated versions are really meant to serve as the string equivalent of the enum values.
+        switch(status) {
+        case ScraperEntryStatus::UNKNOWN:         return "unknown";
+        case ScraperEntryStatus::DELETED:         return "deleted";
+        case ScraperEntryStatus::NOT_AUTHORIZED:  return "not_authorized";
+        case ScraperEntryStatus::AUTHORIZED:      return "authorized";
+        case ScraperEntryStatus::EXPLORER:        return "explorer";
+        case ScraperEntryStatus::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    }
+
+    // This will never be reached. Put it in anyway to prevent control reaches end of non-void function warning
+    // from some compiler versions.
+    return std::string{};
+}
+
 bool ScraperEntry::WalletHasPrivateKey(const CWallet* const wallet) const
 {
     LOCK(wallet->cs_wallet);
