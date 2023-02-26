@@ -1113,6 +1113,49 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
     return ret;
 }
 
+// Scan the block chain (starting in pindexStart) for MRC request transactions.
+// If fUpdate is true, found transactions that already exist in the wallet will be updated.
+// This restores MRC request transactions to the wallet that may have been removed
+// do to an overly aggressive ResendWalletTransactions in 5.4.1.0. Note the MRC
+// payment transactions were not affected. The change in effective balance due to this
+// is very small, since a successful MRC request costs 0.011 GRC.
+int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate)
+{
+    int ret = 0;
+
+    {
+        LOCK2(cs_main, cs_wallet);
+        for(CBlockIndex* pindex = pindexStart; pindex && pindex->nHeight < pindexEnd->nHeight;)
+        {
+            // no need to read and scan block, if block was created before
+            // our wallet birthday (as adjusted for block time variability)
+            if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
+                pindex = pindex->pnext;
+                continue;
+            }
+
+            if (pindex->ResearchMRCSubsidy() > 0) {
+                // If at pindex there were MRC payment(s), then pindex->pprev there
+                // were MRC requests.
+                CBlock block;
+                ReadBlockFromDisk(block, pindex->pprev, Params().GetConsensus());
+                for (auto const& tx : block.vtx)
+                {
+                    if (!tx.GetContracts().empty()
+                            && tx.GetContracts()[0].m_type == GRC::ContractType::MRC
+                            && mapWallet.find(tx.GetHash()) == mapWallet.end()
+                            && AddToWalletIfInvolvingMe(tx, &block, fUpdate))
+                        ret++;
+                }
+            }
+
+            pindex = pindex->pnext;
+        }
+    }
+    return ret;
+}
+
+
 void CWallet::ReacceptWalletTransactions()
 {
     CTxDB txdb("r");
