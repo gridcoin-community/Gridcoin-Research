@@ -320,10 +320,13 @@ public:
             return false;
         }
 
+        // Upon contract receipt for version 1 payload, need to follow the rules for
+        // legacy payload.
         if (m_version == 1) {
-            return m_scraper_entry.WellFormed() || action == ContractAction::REMOVE;
+            return !m_key.empty() && (action == GRC::ContractAction::REMOVE || !m_value.empty());
         }
 
+        // Scraper Entry Payloads version 2+ follow full scraper entry validation rules
         return m_scraper_entry.WellFormed();
     }
 
@@ -373,10 +376,12 @@ public:
     {
         // These will be filled in for legacy scraper entries, but will also be present as empties in
         // native scraper records to solve the (de)serialization problem between legacy and native.
+
         READWRITE(m_key);
 
         if (contract_action != ContractAction::REMOVE) {
             READWRITE(m_value);
+
         }
 
         if (m_key.empty()) {
@@ -384,6 +389,7 @@ public:
             READWRITE(m_scraper_entry);
         } else {
             m_version = 1;
+
         }
     }
 }; // ScraperEntryPayload

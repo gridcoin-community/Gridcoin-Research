@@ -2089,7 +2089,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER
           || type == GRC::ContractType::PROTOCOL)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     }
 
     if (action == GRC::ContractAction::UNKNOWN) {
@@ -2105,35 +2105,35 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 contract = GRC::MakeContract<GRC::Project>(
                             action,
                             params[2].get_str(),  // Name
-                            params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{2},          // Contract version number, 2
-                            params[4].getBool()); // GDPR stats export protection enforced boolean
+                        params[3].get_str(),  // URL
+                        int64_t{0},           // Default zero timestamp
+                uint32_t{2},          // Contract version number, 2
+                params[4].getBool()); // GDPR stats export protection enforced boolean
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
                             action,
                             params[2].get_str(),  // Name
-                            params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract version number, 1
+                        params[3].get_str(),  // URL
+                        int64_t{0},           // Default zero timestamp
+                uint32_t{1});         // Contract version number, 1
             }
         } else if (action == GRC::ContractAction::REMOVE) {
             if (project_v2_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
                             action,
                             params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{2});         // Contract version number, 2
+                        std::string{},        // URL ignored
+                int64_t{0},           // Default zero timestamp
+                uint32_t{2});         // Contract version number, 2
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
                             action,
                             params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract version number, 1
+                        std::string{},        // URL ignored
+                int64_t{0},           // Default zero timestamp
+                uint32_t{1});         // Contract version number, 1
             }
         }
         break;
@@ -2186,15 +2186,31 @@ UniValue addkey(const UniValue& params, bool fHelp)
                         scraper_address.ToString(),
                         status_string);
         }
-    }
         break;
-    default: // The only thing left on this is PROTOCOL.
+    }
+    case GRC::ContractType::PROTOCOL:
         contract = GRC::MakeLegacyContract(
                     type.Value(),
                     action,
                     params[2].get_str(),   // key
-                    params[3].get_str());  // value
+                params[3].get_str());  // value
         break;
+    case GRC::ContractType::BEACON:
+        [[fallthrough]];
+    case GRC::ContractType::CLAIM:
+        [[fallthrough]];
+    case GRC::ContractType::MESSAGE:
+        [[fallthrough]];
+    case GRC::ContractType::MRC:
+        [[fallthrough]];
+    case GRC::ContractType::POLL:
+        [[fallthrough]];
+    case GRC::ContractType::VOTE:
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
+    case GRC::ContractType::UNKNOWN:
+        [[fallthrough]];
+    case GRC::ContractType::OUT_OF_BOUND:
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type.");
     }
 
     if (!contract.RequiresMasterKey()) {

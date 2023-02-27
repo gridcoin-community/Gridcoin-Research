@@ -209,13 +209,21 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
 
     CKeyID key_id;
     address.GetKeyID(key_id);
+    ScraperEntryStatus scraper_entry_status = ScraperEntryStatus::UNKNOWN;
 
-    if (ToLower(value) == "true") {
-        return ScraperEntryPayload(1, key_id, ScraperEntryStatus::AUTHORIZED);
-    }
+     if (ToLower(value) == "true") {
+        scraper_entry_status = ScraperEntryStatus::AUTHORIZED;
+    } else {
+         // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
+         scraper_entry_status = ScraperEntryStatus::NOT_AUTHORIZED;
+     }
 
-    // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
-    return ScraperEntryPayload(1, key_id, ScraperEntryStatus::NOT_AUTHORIZED);
+    ScraperEntryPayload payload(1, key_id, scraper_entry_status);
+    // The above constructor doesn't carry over the legacy K-V which we need.
+    payload.m_key = key;
+    payload.m_value = value;
+
+     return payload;
 }
 
 // -----------------------------------------------------------------------------
