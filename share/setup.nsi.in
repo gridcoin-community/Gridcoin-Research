@@ -168,10 +168,14 @@ Function .onInit
       Abort
     ${EndIf}
 !endif
-    ; Check for stale HKCU registry entries and uninstall if found
+    ; Check for HKCU Path registry and prompt for uninstallation if found
     ReadRegStr $0 HKCU "${REGKEY}" "Path"
     ${IfThen} $0 == "" ${|} Return ${|}
-    ${IfNot} ${Cmd} 'MessageBox MB_YESNO|MB_ICONEXCLAMATION "Old version with stale registry entries detected. Uninstallation will proceed first. Continue?" /SD IDYES IDYES'
+    ${IfNot} ${Cmd} \
+        'MessageBox MB_YESNO|MB_ICONEXCLAMATION \
+          "An old version is found to be installed on your system. \
+          Uninstallation will proceed first to migrate registry entries and shortcuts. Continue?" \
+          /SD IDYES IDYES'
       Abort
     ${EndIf}
     ReadRegStr $1 HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" "UninstallString"
