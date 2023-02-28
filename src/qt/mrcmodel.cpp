@@ -302,7 +302,8 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     if (m_mrc_min_fee == m_reward) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::ZERO_PAYOUT;
-        m_mrc_error_desc = tr("Too soon since your last research rewards payment.");
+        m_mrc_error_desc = tr("Too soon to submit an MRC request. At least 14 days must elapse from your original beacon "
+                              "advertisement or last research reward payment, whether by stake or MRC, whichever is later.");
     }
 
     // If there is a fee boost, add the boost to the fee from the initial run above.
