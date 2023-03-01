@@ -173,8 +173,8 @@ Function .onInit
     ${IfThen} $0 == "" ${|} Return ${|}
     ${IfNot} ${Cmd} \
         'MessageBox MB_YESNO|MB_ICONEXCLAMATION \
-          "An old version is found to be installed on your system. \
-          Uninstallation will proceed first to migrate registry entries and shortcuts. Continue?" \
+          "An old version is found on your system and will be uninstalled first to migrate registry entries and shortcuts. \
+          Your wallet data will not be affected. Continue?" \
           /SD IDYES IDYES'
       Abort
     ${EndIf}
