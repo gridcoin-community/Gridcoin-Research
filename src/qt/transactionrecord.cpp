@@ -146,6 +146,17 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
         // sidestake.
         for (unsigned int t = 2; t < wtx_size; t++)
         {
+            // If not a stake split and a self sidestake, then we need to net the self-sidestake
+            // from the gross stake entry above. The first condition below guarantees that
+            // parts[0] will be "my" gross stake and exists because it matches the condition
+            // above, the second guarantees that the output t is a sidestake back to me. The
+            // actual self-sidestake entry itself is handled below.
+            if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey
+                    && wallet->IsMine(wtx.vout[1]) != ISMINE_NO
+                    && wallet->IsMine(wtx.vout[t]) != ISMINE_NO) {
+                parts[0].debit += -wtx.vout[t].nValue;
+            }
+
             // If this is not a stake split AND either vout[1] is mine OR
             // vout[t] is mine
             if (wtx.vout[t].scriptPubKey != wtx.vout[1].scriptPubKey &&
