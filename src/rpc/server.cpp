@@ -419,6 +419,7 @@ static const CRPCCommand vRPCCommands[] =
     { "clearbanned",             &clearbanned,             cat_network       },
     { "currenttime",             &currenttime,             cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
+    { "getnodeaddresses",        &getnodeaddresses,        cat_network       },
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },

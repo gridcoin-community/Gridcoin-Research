@@ -231,6 +231,7 @@ extern UniValue changesettings(const UniValue& params, bool fHelp);
 extern UniValue clearbanned(const UniValue& params, bool fHelp);
 extern UniValue currenttime(const UniValue& params, bool fHelp);
 extern UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
+extern UniValue getnodeaddresses(const UniValue& params, bool fHelp);
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp);
 extern UniValue getblock(const UniValue& params, bool fHelp);
 extern UniValue getblockbynumber(const UniValue& params, bool fHelp);
