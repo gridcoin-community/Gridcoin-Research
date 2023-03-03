@@ -227,6 +227,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
 
     // Network
     { "getaddednodeinfo"       , 0 },
+    { "getnodeaddresses"       , 0 },
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
