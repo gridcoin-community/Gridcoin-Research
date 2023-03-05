@@ -337,10 +337,6 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     std::vector<PollType> valid_poll_types;
 
     {
-        if (OutOfSyncByAge()) {
-            throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
-        }
-
         LOCK(cs_main);
 
         payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
@@ -381,6 +377,10 @@ UniValue addpoll(const UniValue& params, bool fHelp)
                     types_ss.str());
 
         throw std::runtime_error(e);
+    }
+
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
     }
 
     std::string type_string = ToLower(params[0].get_str());
