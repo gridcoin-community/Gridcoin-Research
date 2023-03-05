@@ -2005,12 +2005,15 @@ UniValue addkey(const UniValue& params, bool fHelp)
 {
     bool project_v2_enabled = false;
     bool block_v13_enabled = false;
+    uint32_t contract_version = 0;
 
     {
         LOCK(cs_main);
 
         project_v2_enabled = IsProjectV2Enabled(nBestHeight);
+
         block_v13_enabled = IsV13Enabled(nBestHeight);
+        contract_version = block_v13_enabled ? 3 : 2;
     }
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
@@ -2101,39 +2104,43 @@ UniValue addkey(const UniValue& params, bool fHelp)
     switch (type.Value()) {
     case GRC::ContractType::PROJECT:
         if (action == GRC::ContractAction::ADD) {
-            if (project_v2_enabled) {
+            if (project_v2_enabled) { // Contract version for Project changes from 2 to 3 after project v2 enabled.
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                        params[3].get_str(),  // URL
-                        int64_t{0},           // Default zero timestamp
-                uint32_t{2},          // Contract version number, 2
-                params[4].getBool()); // GDPR stats export protection enforced boolean
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2},          // Contract payload version number, 2
+                            params[4].getBool()); // GDPR stats export protection enforced boolean
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                        params[3].get_str(),  // URL
-                        int64_t{0},           // Default zero timestamp
-                uint32_t{1});         // Contract version number, 1
+                            params[3].get_str(),  // URL
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract payload version number, 1
             }
         } else if (action == GRC::ContractAction::REMOVE) {
-            if (project_v2_enabled) {
+            if (project_v2_enabled) { // Contract version for Project changes from 2 to 3 after project v2 enabled.
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                        std::string{},        // URL ignored
-                int64_t{0},           // Default zero timestamp
-                uint32_t{2});         // Contract version number, 2
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{2});         // Contract payload version number, 2
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                        std::string{},        // URL ignored
-                int64_t{0},           // Default zero timestamp
-                uint32_t{1});         // Contract version number, 1
+                            std::string{},        // URL ignored
+                            int64_t{0},           // Default zero timestamp
+                            uint32_t{1});         // Contract payload version number, 1
             }
         }
         break;
@@ -2147,7 +2154,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the scraper is invalid.");
         }
 
-        if (block_v13_enabled) {
+        if (block_v13_enabled) { // Contract version will be 3.
             CKeyID key_id;
 
             scraper_address.GetKeyID(key_id);
@@ -2167,12 +2174,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
             }
 
             contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        contract_version,
                         action,
                         uint32_t {2}, // Contract payload version number
                         key_id,
                         status);
 
-        } else { // block v13 not enabled
+        } else { // Block v13 not enabled. (Contract version will be 2.)
             if (action == GRC::ContractAction::ADD && !(status_string == "false" || status_string == "true")) {
                 JSONRPCError(RPC_INVALID_PARAMETER, "Status specified for the scraper is invalid.");
             } else if (action == GRC::ContractAction::REMOVE) {
@@ -2182,6 +2190,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
             // This form of ScraperEntryPayload generation matches the payload constructor that uses the Parse
             // function to convert legacy arguments into a native scraper entry.
             contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        contract_version,
                         action,
                         scraper_address.ToString(),
                         status_string);
@@ -2189,11 +2198,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
         break;
     }
     case GRC::ContractType::PROTOCOL:
+        // There will be no legacy payload contracts past version 2. This will need to be changed before the
+        // block v13 mandatory (which also means contract v3).
         contract = GRC::MakeLegacyContract(
                     type.Value(),
                     action,
                     params[2].get_str(),   // key
-                params[3].get_str());  // value
+                    params[3].get_str());  // value
         break;
     case GRC::ContractType::BEACON:
         [[fallthrough]];
@@ -3106,7 +3117,11 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         CWalletTx wtx;
         std::string error;
 
-        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc));
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
+                                                                             GRC::ContractAction::ADD,
+                                                                             mrc));
         if (!error.empty()) {
             throw runtime_error(error);
         }

@@ -189,7 +189,11 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
     CWalletTx wtx;
     std::string e_str;
 
-    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, m_mrc));
+    uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
+                                                                         GRC::ContractAction::ADD,
+                                                                         m_mrc));
     if (!e_str.empty()) {
         m_mrc_error = true;
         s = m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;

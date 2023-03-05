@@ -114,6 +114,22 @@ struct TestMessage
     }
 
     //!
+    //! \brief Create a complete, signed contract object for the latest contract
+    //! version.
+    //!
+    //! \return Contains the default content used to create the v2 signature
+    //! above and includes that signature.
+    //!
+    static GRC::Contract V2()
+    {
+        return GRC::Contract(
+            2,
+            GRC::ContractType::PROJECT,
+            GRC::ContractAction::ADD,
+            GRC::ContractPayload::Make<GRC::Project>("test", "test", 123, 1));
+    }
+
+    //!
     //! \brief Create a complete, signed, legacy, version 1 contract object.
     //!
     //! \return Contains the default content used to create the v1 signature
@@ -161,6 +177,31 @@ struct TestMessage
     {
         std::vector<unsigned char> serialized {
             0x02, 0x00, 0x00, 0x00, // Version: 32-bit int (little-endian)
+            0x05,                   // Type: PROJECT
+            0x01,                   // Action: ADD
+            0x01, 0x00, 0x00, 0x00, // Project contract version
+            0x04,                   // Length of the project name
+            0x74, 0x65, 0x73, 0x74, // "test" as bytes
+            0x04,                   // Length of the project URL
+            0x74, 0x65, 0x73, 0x74, // "test" as bytes
+        };
+
+        return serialized;
+    }
+
+    //!
+    //! \brief Get a serialized representation of a valid version 3 contract
+    //! message.
+    //!
+    //! \return As bytes. Matches the contract message string above (without
+    //! tags) and includes version 2 components.
+    //!
+    //! TODO: Do a better v3 contract example
+    //!
+    static std::vector<unsigned char> V3Serialized()
+    {
+        std::vector<unsigned char> serialized {
+            0x03, 0x00, 0x00, 0x00, // Version: 32-bit int (little-endian)
             0x05,                   // Type: PROJECT
             0x01,                   // Action: ADD
             0x01, 0x00, 0x00, 0x00, // Project contract version
@@ -665,9 +706,9 @@ BOOST_AUTO_TEST_CASE(it_moves_a_cast_or_converted_payload)
     BOOST_CHECK(contract.WellFormed() == false);
 }
 
-BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_v2)
 {
-    GRC::Contract contract = TestMessage::Current();
+    GRC::Contract contract = TestMessage::V2();
 
     // 20 bytes = 4 bytes for the serialization protocol version
     //  + 1 byte each for the type and action
@@ -684,11 +725,47 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
     BOOST_CHECK(output == TestMessage::V2Serialized());
 }
 
-BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
+{
+    GRC::Contract contract = TestMessage::Current();
+
+    // 20 bytes = 4 bytes for the serialization protocol version
+    //  + 1 byte each for the type and action
+    //  + 14 bytes for the project payload
+    //  + 1 byte for the empty public key size
+    //
+    BOOST_CHECK(GetSerializeSize(contract, SER_NETWORK, 1) == 20);
+
+    CDataStream stream(SER_NETWORK, 1);
+
+    stream << contract;
+    std::vector<unsigned char> output((unsigned char*)&stream.begin()[0], (unsigned char*)&stream.end()[0]);
+
+    BOOST_CHECK(output == TestMessage::V3Serialized());
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_v2)
 {
     GRC::Contract contract;
 
     CDataStream stream(TestMessage::V2Serialized(), SER_NETWORK, 1);
+
+    stream >> contract;
+
+    GRC::ContractPayload payload = contract.SharePayload();
+
+    BOOST_CHECK(contract.WellFormed() == true);
+    BOOST_CHECK(contract.m_version == 2);
+    BOOST_CHECK(contract.m_type == GRC::ContractType::PROJECT);
+    BOOST_CHECK(contract.m_action == GRC::ContractAction::ADD);
+    BOOST_CHECK(payload->LegacyKeyString() == "test");
+}
+
+BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream)
+{
+    GRC::Contract contract;
+
+    CDataStream stream(TestMessage::V3Serialized(), SER_NETWORK, 1);
 
     stream >> contract;
 

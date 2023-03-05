@@ -382,7 +382,9 @@ Contract GRC::MakeLegacyContract(
     std::string key,
     std::string value)
 {
+    // There will be no new LegacyPayload contracts past version 2.
     Contract contract = MakeContract<LegacyPayload>(
+        uint32_t {2},
         action,
         std::move(key),
         std::move(value));

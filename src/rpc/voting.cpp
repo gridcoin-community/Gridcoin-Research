@@ -303,7 +303,10 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
         LOCK2(cs_main, pwalletMain->cs_wallet);
         // Note that a lock on cs_poll_registry does NOT need to be taken here.
         // This lock will be taken by the contract handler.
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3: 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {
@@ -507,7 +510,10 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         LOCK2(cs_main, pwalletMain->cs_wallet);
         // Note that a lock on cs_poll_registry does NOT need to be taken here.
         // This lock will be taken by the contract handler.
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {

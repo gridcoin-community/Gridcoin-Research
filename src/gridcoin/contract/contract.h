@@ -48,7 +48,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief The amount of coin set for a burn output in a transaction that
@@ -238,6 +238,10 @@ public:
     //! Version 2: Contract data serializable in binary format. Stored in a
     //! transaction's \c vContracts field. It excludes the legacy signature
     //! and public key from version 1.
+    //!
+    //! Version 3: Contract data serializable in binary format as version 2
+    //! but also with remaining payloads that were still legacy in version
+    //! 2 (scraper and protocol) now native.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -537,6 +541,31 @@ Contract MakeContract(const ContractAction action, Args&&... args)
 
     return Contract(type, action, std::move(payload));
 }
+
+//!
+//! \brief Initialize a new contract with the specified contract version.
+//!
+//! \tparam PayloadType A type that implements the IContractPayload interface.
+//!
+//! \param contract_version The version of the contract to create
+//! \param action The action of the contract to publish.
+//! \param body   Arguments to pass to the constructor of the contract payload.
+//!
+//! \return A contract object for submission in a transaction.
+//!
+template <typename PayloadType, typename... Args>
+Contract MakeContract(const uint32_t contract_version, const ContractAction action, Args&&... args)
+{
+    static_assert(
+        std::is_base_of<IContractPayload, PayloadType>::value,
+        "Contract::PullPayloadAs<T>: T not derived from IContractPayload.");
+
+    auto payload = ContractPayload::Make<PayloadType>(std::forward<Args>(args)...);
+    const ContractType type = payload->ContractType();
+
+    return Contract(contract_version, type, action, std::move(payload));
+}
+
 
 //!
 //! \brief Initialize a new legacy contract.

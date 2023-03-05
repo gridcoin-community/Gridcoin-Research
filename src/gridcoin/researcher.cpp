@@ -722,8 +722,10 @@ AdvertiseBeaconResult SendBeaconContract(
         return BeaconError::MISSING_KEY;
     }
 
+    uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
     const auto result_pair = SendContract(
-        MakeContract<BeaconPayload>(action, std::move(payload)));
+        MakeContract<BeaconPayload>(contract_version, action, std::move(payload)));
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;

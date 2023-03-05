@@ -245,11 +245,13 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     GRC::Claim claim;
 
+    uint32_t claim_contract_version = 2;
+
     LOCK(cs_main);
 
     BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
 
-    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, claim, wallet));
+    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, claim_contract_version, claim, wallet));
 
     // TODO(div72): Separate this test into pieces and actually have it do
     // some useful testing by testing the validation logic against it.
