@@ -38,6 +38,19 @@ public:
         m_db_heights[ContractType::SCRAPER] = GetScraperRegistry().GetDBHeight();
     }
 
+    int GetLowestRegistryBlockHeight()
+    {
+        int lowest_height = std::numeric_limits<int>::max();
+
+        for (const auto& iter : m_db_heights) {
+            if (iter.second < lowest_height) {
+                lowest_height = iter.second;
+            }
+        }
+
+        return lowest_height;
+    }
+
 private:
     RegistryBlockHeights m_db_heights;
 };

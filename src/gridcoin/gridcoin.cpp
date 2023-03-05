@@ -8,6 +8,7 @@
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
@@ -195,24 +196,44 @@ void InitializeContracts(CBlockIndex* pindexBest)
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
-    CBlockIndex* pindex_start = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+    CBlockIndex* pindex_start = GRC::BlockFinder::FindByMinTime(pindexBest->nTime
+                                                                - Params().GetConsensus().StandardContractReplayLookback);
 
     const int& V11_height = Params().GetConsensus().BlockV11Height;
     const int& lookback_window_low_height = pindex_start->nHeight;
 
+    // Gets a registry db height bookmark object with the heights loaded now that the registries are loaded.
+    RegistryBookmarks db_heights;
+
     // This tricky clamp ensures the correct start height for the contract replay. Note that the current
-    // implementation will skip beacon and scraper entry contracts that overlap the already loaded history. See
+    // implementation will skip beacon, scraper entry, poll and vote contracts that overlap the already loaded history. See
     // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
-    // This is the replay that will be encountered when starting a wallet that was in sync with this code, and the
-    // head of the chain is more than MAX AGE above the V11Height. When the contracts are replayed, the beacon db
-    // and scraper entry db will then be initialized and the controlling window will be consistent with MAX_AGE
-    // on restarts and reorgs for beacons and scraper entries.
-    int min_db_height = std::min(beacon_db_height, scraper_db_height);
-    const int& start_height = std::min(std::max(min_db_height, V11_height), lookback_window_low_height);
+    // This is the replay that will be encountered when starting a wallet that was in sync with this code but has
+    // uninitialized registry dbs, and the head of the chain is more than MAX AGE above the V11_height, because
+    // GetLowestRegistryBlockHeight() is 0, and then the maximum of V11_height and GetLowestRegistryBlockHeight() will be
+    // V11_height and the minimum of V11_height and lookback_window_low_height will be V11_height. When the contracts are
+    // replayed, the beacon db and scraper entry db will then be initialized and the controlling window will be either the
+    // GetLowestRegistryBlockHeight() or the lookback_window_low_height, whichever is higher. The MAX_AGE (i.e.
+    // lookback_window_low_height) condition once the contract types that have a backing db are initialized is now driven
+    // by the following remaining contract types which have no registry (backing) db:
+    //
+    // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
+    // POLL/VOTE (polls and voting)                   true                                        false
+    // PROJECT (whitelist)                            true                                        true
+    // PROTOCOL (protocol entries - legacy appcache)  true                                        true
+    //
+    // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
+    // for POLL/VOTE's, but is still required for PROJECT and PROTOCOL until the proper contract revert structures are done.
+    // The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add is simply to delete them.
+    // For PROJECTS and PROTOCOL entries, the same key can have multiple adds essentially being an update record. This
+    // complicates the reversion architecture and makes the requirements equivalent to what was done in the scraper entry
+    // registry.
+    const int& start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
+                                       lookback_window_low_height);
 
     LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
 
-    CBlockIndex* pblock_index = mapBlockIndex[hashBestChain];
+    CBlockIndex* pblock_index = pindexBest;
 
     while (pblock_index->nHeight > start_height)
     {

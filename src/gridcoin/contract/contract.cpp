@@ -398,10 +398,10 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the beacon database in LevelDB has not already been populated.
+    // when the beacon and scraper database in LevelDB has not already been populated.
     if (!pindex)
     {
-        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
     }
 
     if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
@@ -410,7 +410,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
 
-    // This no longer includes beacons or polls.
+    // This no longer includes beacons, scraper entries, or polls/votes, but DOES include projects and protocol entries.
     g_dispatcher.ResetHandlers();
 
     RegistryBookmarks db_heights;
@@ -421,8 +421,10 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
     LogPrint(BCLog::LogFlags::SCRAPER, "INFO: %s: Scraper entry database at height %i",
              __func__, db_heights.GetRegistryBlockHeight(ContractType::SCRAPER));
 
+    // This provides a convenient reference for the beacon registry, which has special processing below due to activations
+    // and the IsContract flag corrections. The scraper entries require no such special processing and are handled
+    // by the ApplyContracts call.
     BeaconRegistry& beacons = GetBeaconRegistry();
-    //ScraperRegistry& scrapers = GetScraperRegistry();
 
     if (beacons.NeedsIsContractCorrection())
     {
@@ -487,7 +489,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
             // calls within the same block like below in ApplyContracts.
             if (pindex->nHeight > db_heights.GetRegistryBlockHeight(ContractType::BEACON))
             {
-                GetBeaconRegistry().ActivatePending(
+                beacons.ActivatePending(
                             block.GetSuperblock()->m_verified_beacons.m_verified,
                             block.GetBlockTime(),
                             block.GetHash(),
@@ -537,7 +539,7 @@ void GRC::ApplyContracts(
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
-        // the beacon DB or scraper entry db up to the block BEFORE the beacon db height. Because
+        // the beacon DB or scraper entry db up to the block BEFORE the relevant db height. Because
         // these db heights are at the block level, and are updated on each beacon or scraper entry
         // insert, when in a sync from zero situation where the contracts are played as each block
         // is validated, any beacon or scraper contract in the block EQUAL to the relevant db height

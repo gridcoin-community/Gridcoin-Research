@@ -74,6 +74,9 @@ public:
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 14 days on mainnet
         consensus.MRCZeroPaymentInterval = 14 * 24 * 60 * 60;
+        // The "standard" contract replay lookback for those contract types
+        // that do not have a registry db.
+        consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
         // "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
         // Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -184,6 +187,9 @@ public:
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.
         consensus.MRCZeroPaymentInterval = 10 * 60;
+        // The "standard" contract replay lookback for those contract types
+        // that do not have a registry db.
+        consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
         // Equivalent to ~arith_uint256() >> 16 or 1f00ffff in compact notation.
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 

@@ -48,6 +48,8 @@ struct Params {
       */
     int64_t MRCZeroPaymentInterval;
 
+    int64_t StandardContractReplayLookback;
+
     uint256 powLimit;
 };
 } // namespace Consensus
