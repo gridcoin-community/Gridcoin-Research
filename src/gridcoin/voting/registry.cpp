@@ -1071,11 +1071,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    if (ctx->m_version >= 2) {
-        m_polls.erase(payload->m_poll.m_title);
-    } else {
-        m_polls.erase(boost::to_lower_copy(payload->m_poll.m_title));
-    }
+    m_polls.erase(ToLower(payload->m_poll.m_title));
 
     m_polls_by_txid.erase(ctx.m_tx.GetHash());
     m_latest_poll = nullptr;
