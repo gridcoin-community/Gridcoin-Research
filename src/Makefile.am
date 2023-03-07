@@ -116,6 +116,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/contract/message.h \
     gridcoin/contract/payload.h \
     gridcoin/contract/registry.h \
+    gridcoin/contract/registry_db.h \
     gridcoin/cpid.h \
     gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
