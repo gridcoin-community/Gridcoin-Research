@@ -12,6 +12,7 @@
 #include "gridcoin/scraper/fwd.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
+#include "gridcoin/contract/registry_db.h"
 #include "gridcoin/support/enumbytes.h"
 
 
@@ -59,9 +60,9 @@ enum class ScraperEntryStatus
 //! \brief This class formalizes the concept of an authorized scraper entry and replaces
 //! the older appcache "scraper" section. Scrapers are authorized by their address, i.e.
 //! CKeyID (since the other modes in CTxDestination do not apply). So the "key" field in
-//! the ScraperEntry is m_keyid. The datetime of the transaction containing the contract
-//! that gives rise to the Entry is stored as m_timestamp. The hash of the transaction
-//! is stored as m_hash. m_previous_hash stores the transaction hash of a previous
+//! the ScraperEntry is m_key of type CKeyID. The datetime of the transaction containing
+//! the contract that gives rise to the Entry is stored as m_timestamp. The hash of the
+//! transaction is stored as m_hash. m_previous_hash stores the transaction hash of a previous
 //! scraper entry with the same CKeyID, if there is one. This has the effect of creating
 //! "chainlets", or a one-way linked list by hash of scraper entries with the same key.
 //! This becomes very important to support reversion and avoid expensive forward contract
@@ -76,14 +77,10 @@ public:
     //!
     using Status = EnumByte<ScraperEntryStatus>;
 
-    CKeyID m_keyid;           //!< Identifies the scraper (address) for the entry.
-
+    CKeyID m_key;             //!< Identifies the scraper (address) for the entry.
     int64_t m_timestamp;      //!< Time of the scraper entry contract transaction.
-
     uint256 m_hash;           //!< The txid of the transaction that contains the scraper entry.
-
-    uint256 m_previous_hash;  //!< The m_hash of the previous scraper entry with the same m_keyid.
-
+    uint256 m_previous_hash;  //!< The m_hash of the previous scraper entry with the same m_key.
     Status m_status;          //!< The status of the scraper entry. (Note serialization converts to/from int.)
 
     //!
@@ -116,6 +113,12 @@ public:
     bool WellFormed() const;
 
     //!
+    //! \brief Provides the key (address) and status as string
+    //! \return std::pair of strings
+    //!
+    std::pair<std::string, std::string> KeyValueToString() const;
+
+    //!
     //! \brief Return the hash of scraper entry's public key (equivalent to address).
     //!
     //! \return RIPEMD-160 hash corresponding to the public key/address of the scraper.
@@ -123,9 +126,9 @@ public:
     CKeyID GetId() const;
 
     //!
-    //! \brief Return the address from the m_keyid.
+    //! \brief Return the address from the m_key.
     //!
-    //! \return \c CBitcoinAddress derived from the m_keyid.
+    //! \return \c CBitcoinAddress derived from the m_key.
     //!
     CBitcoinAddress GetAddress() const;
 
@@ -134,7 +137,7 @@ public:
     //!
     //! \return Translated string representation of scraper status
     //!
-    std::string ScraperStatusToString() const;
+    std::string StatusToString() const;
 
     //!
     //! \brief Returns the translated or untranslated string of the input scraper entry status
@@ -144,11 +147,11 @@ public:
     //!
     //! \return Scraper entry status string.
     //!
-    std::string ScraperStatusToString(const ScraperEntryStatus& status, const bool& translated = true) const;
+    std::string StatusToString(const ScraperEntryStatus& status, const bool& translated = true) const;
 
     //!
     //! \brief Determine whether the given wallet contains a private key for
-    //! this scraper entry's m_keyid. Because this function is intended to work
+    //! this scraper entry's m_key. Because this function is intended to work
     //! even if the wallet is locked, it does not check whether the key pair is
     //! actually valid. This is used in authorizing a node to operate as a scraper
     //! and in which mode.
@@ -189,7 +192,7 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(m_keyid);
+        READWRITE(m_key);
         READWRITE(m_timestamp);
         READWRITE(m_hash);
         READWRITE(m_previous_hash);
@@ -336,7 +339,7 @@ public:
     {
         CBitcoinAddress address;
 
-        address.Set(m_scraper_entry.m_keyid);
+        address.Set(m_scraper_entry.m_key);
 
         return address.ToString();
     }
@@ -400,6 +403,16 @@ public:
 class ScraperRegistry : public IContractHandler
 {
 public:
+    //!
+    //! \brief ProtocolRegistry constructor. The parameter is the version number of the underlying
+    //! protocol entry db. This must be incremented when implementing format changes to the protocol
+    //! entries to force a reinit.
+    //!
+    ScraperRegistry()
+        : m_scraper_db(1)
+    {
+    };
+
     //!
     //! \brief The type that keys scraper entries by their CKeyID, which is equivalent
     //! to the scraper's address. Note that the enties in this map are actually smart shared
@@ -575,6 +588,15 @@ public:
     //!
     static void RunScraperDBPassivation();
 
+    //!
+    //! \brief Specializes the template RegistryDB for the ScraperEntry class
+    //!
+    typedef RegistryDB<ScraperEntry,
+                        ScraperEntryStatus,
+                        ScraperMap,
+                        HistoricalScraperMap,
+                        ScraperRegistry> ScraperEntryDB;
+
 private:
     //!
     //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
@@ -590,234 +612,6 @@ private:
     void AddDelete(const ContractContext& ctx);
 
     ScraperMap m_scrapers; //!< Contains the current scraper entries, including entries marked DELETED.
-
-    //!
-    //! \brief A class private to the ScraperRegistry class that implements LevelDB backing storage for scraper entries.
-    //! This is very similar to the BeaconDB.
-    //!
-    class ScraperEntryDB
-    {
-    public:
-        //!
-        //! \brief Version number of the scraper entry db.
-        //!
-        //! CONSENSUS: Increment this value when introducing a breaking change to the scraper entry db. This
-        //! will ensure that when the wallet is restarted, the level db scraper entry storage will be cleared and
-        //! reloaded from the contract replay with the correct lookback scope.
-        //!
-        //! Version 1: = TBD
-        //!
-        static constexpr uint32_t CURRENT_VERSION = 1;
-
-        //!
-        //! \brief Initializes the Scraper Registry map structures from the replay of the scraper entry states stored
-        //! in the scraper entry database.
-        //!
-        //! \param m_scraper The map of current scraper entries.
-        //!
-        //! \return block height up to and including which the scraper entry records were stored.
-        //!
-        int Initialize(ScraperMap& scrapers);
-
-        //!
-        //! \brief Clears the historical scraper entry map of the database. This is only used during testing.
-        //!
-        void clear_in_memory_only();
-
-        //!
-        //! \brief Clears the LevelDB scraper entry storage area.
-        //!
-        //! \return Success or failure.
-        //!
-        bool clear_leveldb();
-
-        //!
-        //! \brief Removes in memory elements for all historical records not in m_scrapers.
-        //! \return Number of elements passivated.
-        //!
-        uint64_t passivate_db();
-
-        //!
-        //! \brief Clear the historical map and LevelDB scraper entry storage area.
-        //!
-        //! \return Success or failure.
-        //!
-        bool clear();
-
-        //!
-        //! \brief The number of scraper entry historical elements in the scraper entry database. This includes in memory
-        //! entries only and not passivated entries.
-        //!
-        //! \return The number of elements.
-        //!
-        size_t size();
-
-        //!
-        //! \brief This stores the height to which the database entries are valid (the db scope). Note that it
-        //! is not desired to expose this function as a public function, but currently the Revert function
-        //! only operates on a single transaction context, and does not encapsulate the post reversion height
-        //! after the reversion state. TODO: Create a Revert overload that takes a vector of contract contexts
-        //! to be reverted (in order in which they are in the vector) and the post revert batch height (i.e.
-        //! the common block of the fork/reorg).
-        //!
-        //! \param height_stored
-        //!
-        //! \return Success or failure.
-        //!
-        bool StoreDBHeight(const int& height_stored);
-
-        //!
-        //! \brief Provides the block height to which the scraper entry db covers. This is persisted in LevelDB.
-        //!
-        //! \param height_stored
-        //!
-        //! \return
-        //!
-        bool LoadDBHeight(int& height_stored);
-
-        //!
-        //! \brief Insert a scraper entry record into the historical database.
-        //!
-        //! \param hash The hash for the key to the historical record which is the txid (hash) of the transaction
-        //! containing the scraper entry contract.
-        //! \param height The height of the block from which the scraper entry record originates.
-        //! \param scraper The scraper entry record to insert (which includes the appropriate status).
-        //!
-        //! \return Success or Failure. This will fail if a record with the same key already exists in the
-        //! database.
-        //!
-        bool insert(const uint256& hash, const int& height, const ScraperEntry& scraper_entry);
-
-        //!
-        //! \brief Erase a record from the database.
-        //!
-        //! \param hash The key of the record to erase.
-        //!
-        //! \return Success or failure.
-        //!
-        bool erase(const uint256& hash);
-
-        //!
-        //! \brief Remove an individual in memory element that is backed by LevelDB that is not in m_scrapers.
-        //!
-        //! \param hash The hash that is the key to the element.
-        //!
-        //! \return A pair, the first part of which is an iterator to the next element, or map::end() if the last one, and
-        //! the second is success or failure of the passivation.
-        //!
-        std::pair<ScraperRegistry::HistoricalScraperMap::iterator, bool>
-            passivate(ScraperRegistry::HistoricalScraperMap::iterator& iter);
-
-        //!
-        //! \brief Iterator to the beginning of the database records.
-        //!
-        //! \return Iterator.
-        //!
-        HistoricalScraperMap::iterator begin();
-
-        //!
-        //! \brief Iterator to end().
-        //!
-        //! \return Iterator.
-        //!
-        HistoricalScraperMap::iterator end();
-
-        //!
-        //! \brief Provides an iterator pointing to the element which key value matches the provided hash. Note that
-        //! this wrapper extends the behavior of the normal find function and will, in the case the element is not
-        //! present in the in-memory map, look in LevelDB and attempt to load the element from LevelDB, place in the
-        //! map, and return an iterator. end() is returned if the element is not found.
-        //!
-        //! \param hash The hash value with which to match on the key.
-        //!
-        //! \return Iterator.
-        //!
-        HistoricalScraperMap::iterator find(const uint256& hash);
-
-        //!
-        //! \brief Advances the iterator to the next element.
-        //!
-        //! \param iter
-        //!
-        //! \return iter
-        //!
-        HistoricalScraperMap::iterator advance(HistoricalScraperMap::iterator iter);
-
-    private:
-        //!
-        //! \brief Type definition for the storage scraper entry map used in Initialize. Note that the uint64_t
-        //! is the record number, which unfortunately is required to preserve the contract application order
-        //! since they are applied in the order of the block's transaction vector rather than the transaction time.
-        //!
-        typedef std::map<uint256, std::pair<uint64_t, ScraperEntry>> StorageScraperMap;
-
-        //!
-        //! \brief Type definition for the map used to replay state from LevelDB scraper entry area.
-        //!
-        typedef std::map<uint64_t, ScraperEntry> StorageScraperMapByRecordNum;
-
-        //!
-        //! \brief This is a map keyed by uint256 (SHA256) hash that stores the historical scraper entry elements.
-        //! It is persisted in LevelDB storage.
-        //!
-        HistoricalScraperMap m_historical;
-
-        //!
-        //! \brief Boolan to indicate whether the database has been successfully initialized from LevelDB during
-        //! startup.
-        //!
-        bool m_database_init = false;
-
-        //!
-        //! \brief The block height for scraper entry records stored in the scraper database. This is a bookmark. It is
-        //! adjusted by StoreDBHeight, persisted in memory by this private member variable, and persisted in storage
-        //! to LevelDB.
-        //!
-        int m_height_stored = 0;
-
-        //!
-        //! \brief The record number stored watermark. This effectively a sequence number for records stored in
-        //! the LevelDB scraper entry area. The value in memory will be at the highest record number inserted (or played
-        //! back during initialization).
-        //!
-        uint64_t m_recnum_stored = 0;
-
-        //!
-        //! \brief The flag that indicates whether memory optimization can occur by passivating the database. This
-        //! flag is set true when find() retrieves a scraper entry element from LevelDB to satisfy a hash search.
-        //! This would typically occur on a reorganization (revert).
-        //!
-        bool m_needs_passivation = false;
-
-        //!
-        //! \brief Store a scraper entry object in LevelDB with the provided key value.
-        //!
-        //! \param hash The SHA256 hash key value for the element.
-        //! \param scraper_entry The scraper entry historical state element to be stored.
-        //!
-        //! \return Success or failure.
-        //!
-        bool Store(const uint256& hash, const ScraperEntry& scraper_entry);
-
-        //!
-        //! \brief Load a scraper entry object from LevelDB using the provided key value.
-        //!
-        //! \param hash The SHA256 hash key value for the element.
-        //! \param scraper_entry The scraper entry historical state element loaded.
-        //!
-        //! \return Success or failure.
-        //!
-        bool Load(const uint256& hash, ScraperEntry& scraper_entry);
-
-        //!
-        //! \brief Delete a scraper entry object from LevelDB with the provided key value (if it exists).
-        //!
-        //! \param hash The SHA256 hash key value for the element.
-        //!
-        //! \return Success or failure.
-        //!
-        bool Delete(const uint256& hash);
-    }; // ScraperEntryDB
 
     ScraperEntryDB m_scraper_db;
 

@@ -2410,7 +2410,7 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
 
         entry.pushKV("scraper_entry_timestamp", scraper.second->m_timestamp);
         entry.pushKV("scraper_entry_time", DateTimeStrFormat(scraper.second->m_timestamp));
-        entry.pushKV("scraper_entry_status", scraper.second->ScraperStatusToString());
+        entry.pushKV("scraper_entry_status", scraper.second->StatusToString());
 
         scraper_entries.push_back(entry);
     }
