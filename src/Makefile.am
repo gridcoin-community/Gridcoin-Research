@@ -122,6 +122,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/magnitude.h \
     gridcoin/mrc.h \
     gridcoin/project.h \
+    gridcoin/protocol.h \
     gridcoin/quorum.h \
     gridcoin/researcher.h \
     gridcoin/scraper/fwd.h \
@@ -251,6 +252,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/gridcoin.cpp \
     gridcoin/mrc.cpp \
     gridcoin/project.cpp \
+    gridcoin/protocol.cpp \
     gridcoin/quorum.cpp \
     gridcoin/researcher.cpp \
     gridcoin/scraper/http.cpp \
