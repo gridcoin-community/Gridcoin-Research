@@ -172,7 +172,6 @@ ScraperEntryPayload::ScraperEntryPayload(ScraperEntry scraper_entry)
 ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::string& value)
     : LegacyPayload(key, value)
 {
-    // Ensure m_version = 1. It should be already from the default value of m_version in the class definition.
     m_version = 1;
 
     CBitcoinAddress address;

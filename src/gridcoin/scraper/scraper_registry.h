@@ -209,16 +209,17 @@ typedef const ScraperEntry_ptr ScraperEntryOption;
 
 //!
 //! \brief The body of a scraper entry contract. Note that this body is bimodal. It
-//! supports both the personality of the "LegacyPayload" which is found in the anonymous
-//! namespace of the contracts.cpp, and also the new native ScraperEntry format.
-//! Because the payloads in legacy contracts are not versioned, the default version
-//! for this class is 1, which causes it to use the legacy-like deserialization. The
-//! constructor of a new object, if a version is not specified, uses CURRENT_VERSION,
-//! which is 2+, and will follow the native (de)serialization. In the
-//! Contract::Body::ConvertFromLegacy call, by the time this call has been reached, the
-//! contract will have already been deserialized. This will follow the legacy mode.
-//! For contracts at version 3+, the Contract::SharePayload() will NOT call the
-//! ConvertFromLegacy.
+//! supports both the personality of the "LegacyPayload", and also the new native
+//! ScraperEntry format. In the Contract::Body::ConvertFromLegacy call, by the time
+//! this call has been reached, the contract will have already been deserialized.
+//! This will follow the legacy mode. For contracts at version 3+, the
+//! Contract::SharePayload() will NOT call the ConvertFromLegacy. Note that because
+//! the existing legacyPayloads are not versioned, the deserialization of
+//! the payload first (de)serializes m_key, which is guaranteed to exist in either
+//! legacy or native. If the key is empty, then payload v2+ is being deserialized
+//! and the m_version and m_scraper_entry are (de)serialized. This is ugly
+//! but necessary to deal with the unversioned Legacy Payloads and maintain
+//! compatibility.
 //!
 class ScraperEntryPayload : public LegacyPayload
 {
@@ -235,9 +236,9 @@ public:
     //!
     //! \brief Version number of the serialized scraper entry format.
     //!
-    //! Initializes to the CURRENT_VERSION Note the
-    //! constructor that takes a ScraperEntry defaults to CURRENT_VERSION. When the legacy
-    //! K-V fields are used which correspond to the legacy appcache implementation, the version is 1.
+    //! Initializes to the CURRENT_VERSION Note the constructor that takes a ScraperEntry
+    //! defaults to CURRENT_VERSION. When the legacy K-V fields are used which correspond
+    //! to the legacy appcache implementation, the version is 1.
     //!
     //! Version 1: appcache string key value:
     //!
@@ -246,8 +247,6 @@ public:
     //!
     uint32_t m_version = CURRENT_VERSION;
 
-    //std::string m_key;     //!< The legacy string key.
-    //std::string m_value;   //!< The legacy string value.
     ScraperEntry m_scraper_entry; //!< The scraper entry in the payload.
 
     //!
@@ -606,7 +605,6 @@ private:
         //! will ensure that when the wallet is restarted, the level db scraper entry storage will be cleared and
         //! reloaded from the contract replay with the correct lookback scope.
         //!
-        //! Version 0: <= TBD
         //! Version 1: = TBD
         //!
         static constexpr uint32_t CURRENT_VERSION = 1;
