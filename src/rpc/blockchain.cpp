@@ -5,6 +5,7 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
@@ -2416,6 +2417,41 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
     }
 
     res.pushKV("current_scraper_entries", scraper_entries);
+
+    return res;
+}
+
+UniValue listprotocolentries(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listprotocolentries\n"
+                "\n"
+                "Displays the protocol entries on the network.\n");
+
+    UniValue res(UniValue::VOBJ);
+    UniValue scraper_entries(UniValue::VARR);
+
+    for (const auto& protocol : GRC::GetProtocolRegistry().ProtocolEntries()) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("protocol_entry_key", protocol.first);
+        entry.pushKV("protocol_entry_value", protocol.second->m_value);
+        entry.pushKV("current_protocol_entry_tx_hash", protocol.second->m_hash.ToString());
+        if (protocol.second->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_protocol_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_protocol_entry_tx_hash", protocol.second->m_previous_hash.ToString());
+        }
+
+        entry.pushKV("protocol_entry_timestamp", protocol.second->m_timestamp);
+        entry.pushKV("protocol_entry_time", DateTimeStrFormat(protocol.second->m_timestamp));
+        entry.pushKV("protocol_entry_status", protocol.second->StatusToString());
+
+        scraper_entries.push_back(entry);
+    }
+
+    res.pushKV("current_protocol_entries", scraper_entries);
 
     return res;
 }
