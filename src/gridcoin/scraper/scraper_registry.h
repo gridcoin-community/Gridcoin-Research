@@ -255,7 +255,7 @@ public:
     //!
     //! \brief Initialize an empty, invalid scraper entry payload.
     //!
-    ScraperEntryPayload();
+    ScraperEntryPayload(const uint32_t version = CURRENT_VERSION);
 
     //!
     //! \brief Initialize a ScraperEntryPayload from a scraper entry constructed from

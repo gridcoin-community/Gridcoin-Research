@@ -151,7 +151,8 @@ bool ScraperEntry::operator!=(ScraperEntry b)
 
 constexpr uint32_t ScraperEntryPayload::CURRENT_VERSION; // For clang
 
-ScraperEntryPayload::ScraperEntryPayload()
+ScraperEntryPayload::ScraperEntryPayload(const uint32_t version)
+    : m_version(version)
 {
 }
 
