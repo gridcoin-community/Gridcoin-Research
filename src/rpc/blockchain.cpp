@@ -2294,65 +2294,6 @@ UniValue debug(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue getlistof(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getlistof <keytype>\n"
-                "\n"
-                "<keytype> -> key of requested data\n"
-                "\n"
-                "Displays data associated to a specified key type\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sType = params[0].get_str();
-
-    res.pushKV("Key Type", sType);
-
-    LOCK(cs_main);
-
-    UniValue entries(UniValue::VOBJ);
-    for(const auto& entry : ReadSortedCacheSection(StringToSection(sType)))
-    {
-        const auto& key = entry.first;
-        const auto& value = entry.second;
-
-        UniValue obj(UniValue::VOBJ);
-        obj.pushKV("value", value.value);
-        obj.pushKV("timestamp", value.timestamp);
-        entries.pushKV(key, obj);
-    }
-
-    res.pushKV("entries", entries);
-    return res;
-}
-
-UniValue listdata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "listdata <keytype>\n"
-                "\n"
-                "<keytype> -> key in cache\n"
-                "\n"
-                "Displays data associated to a key stored in cache\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sType = params[0].get_str();
-
-    res.pushKV("Key Type", sType);
-
-    LOCK(cs_main);
-
-    Section section = StringToSection(sType);
-    for(const auto& item : ReadCacheSection(section))
-        res.pushKV(item.first, item.second.value);
-
-    return res;
-}
-
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
