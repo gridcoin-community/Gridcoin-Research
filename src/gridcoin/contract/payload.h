@@ -69,6 +69,23 @@ enum class ContractType
 };
 
 //!
+//! \brief Allows use of the PollType enum in range based for loops.
+//!
+static constexpr GRC::ContractType CONTRACT_TYPES[] = {
+    ContractType::UNKNOWN,
+    ContractType::BEACON,
+    ContractType::CLAIM,
+    ContractType::MESSAGE,
+    ContractType::POLL,
+    ContractType::PROJECT,
+    ContractType::PROTOCOL,
+    ContractType::SCRAPER,
+    ContractType::VOTE,
+    ContractType::MRC,
+    ContractType::OUT_OF_BOUND
+};
+
+//!
 //! \brief The type of action that a contract declares.
 //!
 //! CONSENSUS: Do not remove or reorder items in this enumeration except for

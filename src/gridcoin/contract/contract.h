@@ -96,6 +96,14 @@ public:
         //! \return The string as it would appear in a legacy transaction message.
         //!
         std::string ToString() const;
+
+        //!
+        //! \brief Get the string representation of the provide contract type.
+        //!
+        //! \return The string as it would appear in a legacy transaction message.
+        //!
+        static std::string ToString(ContractType contract_type);
+
     }; // Contract::Type
 
     //!
