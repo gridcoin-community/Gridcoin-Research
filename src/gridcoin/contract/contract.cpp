@@ -8,6 +8,7 @@
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/registry.h"
@@ -306,7 +307,7 @@ private:
             case ContractType::BEACON:     return GetBeaconRegistry();
             case ContractType::POLL:       return GetPollRegistry();
             case ContractType::PROJECT:    return GetWhitelist();
-            case ContractType::PROTOCOL:   return m_appcache_handler;
+            case ContractType::PROTOCOL:   return GetProtocolRegistry();
             case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
             case ContractType::MRC:        return m_mrc_contract_handler;
@@ -417,11 +418,16 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     RegistryBookmarks db_heights;
 
-    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: Beacon database at height %i",
-             __func__, db_heights.GetRegistryBlockHeight(ContractType::BEACON));
+    for (const auto& contract_type : CONTRACT_TYPES) {
+        std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
 
-    LogPrint(BCLog::LogFlags::SCRAPER, "INFO: %s: Scraper entry database at height %i",
-             __func__, db_heights.GetRegistryBlockHeight(ContractType::SCRAPER));
+        if (!db_height) continue;
+
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: %s entry database at height %i",
+                 __func__,
+                 Contract::Type::ToString(contract_type),
+                 *db_height);
+    }
 
     // This provides a convenient reference for the beacon registry, which has special processing below due to activations
     // and the IsContract flag corrections. The scraper entries require no such special processing and are handled
@@ -449,6 +455,8 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
                 continue;
             }
 
+            // The ApplyContracts below handles all of the contract types. The rest of this is special
+            // processing required for beacons.
             bool found_contract;
             ApplyContracts(block, pindex, db_heights, found_contract);
 
@@ -489,19 +497,20 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
             // has already been replayed for this block and we do not need to call it again for that block.
             // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
             // calls within the same block like below in ApplyContracts.
-            if (pindex->nHeight > db_heights.GetRegistryBlockHeight(ContractType::BEACON))
-            {
-                beacons.ActivatePending(
-                            block.GetSuperblock()->m_verified_beacons.m_verified,
-                            block.GetBlockTime(),
-                            block.GetHash(),
-                            pindex->nHeight);
-            }
-            else
-            {
-                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
-                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i."
-                          , __func__, pindex->nHeight, db_heights.GetRegistryBlockHeight(ContractType::BEACON));
+            std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+
+            if (beacon_db_height) {
+                if (pindex->nHeight > *beacon_db_height) {
+                    beacons.ActivatePending(
+                                block.GetSuperblock()->m_verified_beacons.m_verified,
+                                block.GetBlockTime(),
+                                block.GetHash(),
+                                pindex->nHeight);
+                } else {
+                    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                              "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
+                             __func__, pindex->nHeight, *beacon_db_height);
+                }
             }
         }
 
@@ -541,40 +550,30 @@ void GRC::ApplyContracts(
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
-        // the beacon DB or scraper entry db up to the block BEFORE the relevant db height. Because
-        // these db heights are at the block level, and are updated on each beacon or scraper entry
+        // the relevant entry dbs up to the block BEFORE the relevant db height. Because
+        // these db heights are at the block level, and are updated on each relevant entry
         // insert, when in a sync from zero situation where the contracts are played as each block
-        // is validated, any beacon or scraper contract in the block EQUAL to the relevant db height
+        // is validated, any relevant contract in the block EQUAL to the relevant db height
         // must fail this test and be inserted again, because otherwise the second and succeeding
-        // contracts on the same block will not be inserted and those CPID's or scraper entries will
+        // contracts on the same block will not be inserted and those relevant entries will
         // not be recorded properly. For beacons, this was the cause of the failure to sync through
         //2069264 that started on 20210312. See GitHub issue #2045.
 
-        if (contract.m_type == ContractType::BEACON)
-        {
-            const int beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+        bool skip_apply_contract = false;
 
-            if (pindex->nHeight < beacon_db_height) {
-                LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
-                          "pindex->height = %i <= beacon_db_height = %i and "
-                          "ContractType is BEACON."
-                          , __func__, pindex->nHeight, beacon_db_height);
-                continue;
+        for (const auto& contract_type : CONTRACT_TYPES) {
+            if (contract.m_type == contract_type) {
+
+                std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
+
+                if (db_height && pindex->nHeight < *db_height) {
+                    skip_apply_contract = true;
+                    break;
+                }
             }
         }
 
-        if (contract.m_type == ContractType::SCRAPER)
-        {
-            const int scraper_db_height = db_heights.GetRegistryBlockHeight(ContractType::SCRAPER);
-
-            if (pindex->nHeight < scraper_db_height) {
-                LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
-                          "pindex->height = %i <= scraper_db_height = %i and "
-                          "ContractType is SCRAPER."
-                          , __func__, pindex->nHeight, scraper_db_height);
-                continue;
-            }
-        }
+        if (skip_apply_contract) continue;
 
         // V2 contracts are checked upon receipt:
         if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
@@ -799,6 +798,22 @@ Contract::Type Contract::Type::Parse(std::string input)
 std::string Contract::Type::ToString() const
 {
     switch (m_value) {
+        case ContractType::BEACON:     return "beacon";
+        case ContractType::CLAIM:      return "claim";
+        case ContractType::MRC:        return "mrc";
+        case ContractType::MESSAGE:    return "message";
+        case ContractType::POLL:       return "poll";
+        case ContractType::PROJECT:    return "project";
+        case ContractType::PROTOCOL:   return "protocol";
+        case ContractType::SCRAPER:    return "scraper";
+        case ContractType::VOTE:       return "vote";
+        default:                       return "";
+    }
+}
+
+std::string Contract::Type::ToString(ContractType contract_type)
+{
+    switch (contract_type) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::CLAIM:      return "claim";
         case ContractType::MRC:        return "mrc";

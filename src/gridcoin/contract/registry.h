@@ -3,6 +3,7 @@
 
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
 
 namespace GRC {
@@ -16,18 +17,18 @@ public:
     {
         m_db_heights.insert(std::make_pair(ContractType::BEACON, GetBeaconRegistry().GetDBHeight()));
         m_db_heights.insert(std::make_pair(ContractType::SCRAPER, GetScraperRegistry().GetDBHeight()));
+        m_db_heights.insert(std::make_pair(ContractType::PROTOCOL, GetProtocolRegistry().GetDBHeight()));
     }
 
-    int GetRegistryBlockHeight(const ContractType type) const
+    std::optional<int> GetRegistryBlockHeight(const ContractType type) const
     {
-        int db_height = 0;
         auto db_height_entry = m_db_heights.find(type);
 
-        if (db_height_entry != m_db_heights.end()) {
-            db_height = db_height_entry->second;
+        if (db_height_entry == m_db_heights.end()) {
+            return std::nullopt;
         }
 
-        return db_height;
+        return db_height_entry->second;
     }
 
     void UpdateRegistryBlockHeights()
@@ -36,6 +37,7 @@ public:
         // be created.
         m_db_heights[ContractType::BEACON] = GetBeaconRegistry().GetDBHeight();
         m_db_heights[ContractType::SCRAPER] = GetScraperRegistry().GetDBHeight();
+        m_db_heights[ContractType::PROTOCOL] = GetProtocolRegistry().GetDBHeight();
     }
 
     int GetLowestRegistryBlockHeight()
