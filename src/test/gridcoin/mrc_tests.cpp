@@ -62,6 +62,9 @@ struct Setup {
         tx.nTime = pindexGenesisBlock->nTime;
 
         key.MakeNewKey(false);
+
+        LOCK(wallet->cs_wallet);
+
         wallet->AddKey(key);
 
         GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
@@ -155,6 +158,8 @@ BOOST_AUTO_TEST_CASE(it_rejects_invalid_claims)
 {
     GRC::MRC mrc;
 
+    LOCK(cs_main);
+
     mrc.m_mining_id = cpid;
     mrc.m_client_version = "6.0.0.0";
     mrc.m_last_block_hash = pindex->GetBlockHash();
@@ -194,6 +199,9 @@ BOOST_AUTO_TEST_CASE(createmrc_creates_valid_mrcs)
     account.m_accrual = 72;
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
 
     BOOST_CHECK_EQUAL(reward, 72);
@@ -208,6 +216,9 @@ BOOST_AUTO_TEST_CASE(it_accepts_valid_fees)
     account.m_accrual = 72;
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
     GRC::CreateMRC(pindex->pprev, mrc, reward, fee, wallet);
 
     mrc.m_fee = 14;
@@ -234,6 +245,9 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
     std::map<GRC::Cpid, uint256> mrc_tx_map;
 
     account.m_accrual = 72;
+
+    LOCK2(cs_main, wallet->cs_wallet);
+
     pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
 
     BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map));
@@ -246,8 +260,6 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
     GRC::Claim claim;
 
     uint32_t claim_contract_version = 2;
-
-    LOCK(cs_main);
 
     BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
 
