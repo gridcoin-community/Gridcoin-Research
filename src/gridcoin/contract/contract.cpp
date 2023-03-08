@@ -557,7 +557,7 @@ void GRC::ApplyContracts(
         // must fail this test and be inserted again, because otherwise the second and succeeding
         // contracts on the same block will not be inserted and those relevant entries will
         // not be recorded properly. For beacons, this was the cause of the failure to sync through
-        //2069264 that started on 20210312. See GitHub issue #2045.
+        // 2069264 that started on 20210312. See GitHub issue #2045.
 
         bool skip_apply_contract = false;
 
@@ -735,7 +735,8 @@ ContractPayload Contract::SharePayload() const
     // The scraper entry format is changed to native later than the others and a new contract
     // version three is introduced for that. This will be coincident with block v13.
     if (m_version < 2
-            || (m_type == ContractType::SCRAPER && m_version < 3)) {
+            || (m_type == ContractType::SCRAPER && m_version < 3)
+            || (m_type == ContractType::PROTOCOL && m_version < 3)) {
         return m_body.ConvertFromLegacy(m_type.Value(), m_version);
     }
 
@@ -910,21 +911,11 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
         case ContractType::PROJECT:
             return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
         case ContractType::PROTOCOL:
-            return m_payload;
+            return ContractPayload::Make<ProtocolEntryPayload>(
+                ProtocolEntryPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::SCRAPER:
-        {
-            // for the scraper entries we are going to pick up the K-V pair filled in during the deserialization
-            // that is handled in the ScraperEntryPayload. This is for version 2 contracts or less for scraper
-            // entries.
-            //const ScraperEntryPayload& scraper_entry = static_cast<const ScraperEntryPayload&>(*m_payload);
-
-            // Rather than use the InitializeFromLegacy on the object, we are going to create a new object from
-            // the static Parse method, which will leave the legacy fields empty. This requires another object
-            // construction, but saves memory.
             return ContractPayload::Make<ScraperEntryPayload>(
-                //ScraperEntryPayload::Parse(scraper_entry.m_legacy_key, scraper_entry.m_legacy_value));
                 ScraperEntryPayload::Parse(legacy.m_key, legacy.m_value));
-        }
         case ContractType::VOTE:
             return ContractPayload::Make<LegacyVote>(
                 LegacyVote::Parse(legacy.m_key, legacy.m_value));
@@ -964,10 +955,18 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new Project());
             break;
         case ContractType::PROTOCOL:
-            m_payload.Reset(new LegacyPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new ProtocolEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
             break;
         case ContractType::SCRAPER:
-            m_payload.Reset(new ScraperEntryPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new ScraperEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
             break;
         case ContractType::VOTE:
             m_payload.Reset(new Vote());

@@ -138,7 +138,8 @@ bool ProtocolEntry::operator!=(ProtocolEntry b)
 
 constexpr uint32_t ProtocolEntryPayload::CURRENT_VERSION; // For clang
 
-ProtocolEntryPayload::ProtocolEntryPayload()
+ProtocolEntryPayload::ProtocolEntryPayload(uint32_t version)
+    : m_version(version)
 {
 }
 
@@ -163,12 +164,9 @@ ProtocolEntryPayload::ProtocolEntryPayload(ProtocolEntry entry)
 
 ProtocolEntryPayload::ProtocolEntryPayload(const std::string& key, const std::string& value)
     : LegacyPayload(key, value)
+    , m_version(1)
+    , m_entry(key, value)
 {
-    m_version = 1;
-
-    m_entry.m_key = key;
-    m_entry.m_value = value;
-    m_entry.m_status = ProtocolEntryStatus::ACTIVE;
 }
 
 ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const std::string& value)
@@ -238,6 +236,28 @@ const AppCacheSectionExt ProtocolRegistry::GetProtocolEntriesLegacyExt(const boo
     }
 
     return protocol_entries_ext;
+}
+
+const AppCacheEntry ProtocolRegistry::GetProtocolEntryByKeyLegacy(std::string key) const
+{
+    AppCacheEntry entry;
+
+    entry.value = std::string {};
+    entry.timestamp = 0;
+
+    LOCK(cs_lock);
+
+    auto iter = m_protocol_entries.find(key);
+
+    // Only want to return entries that exist and are active. If not return an empty AppCacheEntry.
+    if (iter == m_protocol_entries.end() || iter->second->m_status != ProtocolEntryStatus::ACTIVE) {
+        return entry;
+    }
+
+    entry.value = iter->second->m_value;
+    entry.timestamp = iter->second->m_timestamp;
+
+    return entry;
 }
 
 ProtocolEntryOption ProtocolRegistry::Try(const std::string& key) const

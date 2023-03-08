@@ -221,7 +221,7 @@ public:
     //!
     //! \brief Initialize an empty, invalid protocol entry payload.
     //!
-    ProtocolEntryPayload();
+    ProtocolEntryPayload(uint32_t version = CURRENT_VERSION);
 
     //!
     //! \brief Initialize a ProtocolEntryPayload from a protocol entry constructed from
@@ -414,6 +414,8 @@ public:
     //! { value, timestamp, deleted }.
     //!
     const AppCacheSectionExt GetProtocolEntriesLegacyExt(const bool& active_only = false) const;
+
+    const AppCacheEntry GetProtocolEntryByKeyLegacy(std::string key) const;
 
     //!
     //! \brief Get the current protocol entry for the specified key string.

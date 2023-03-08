@@ -9,6 +9,7 @@
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/scraper/http.h"
 #include "gridcoin/scraper/scraper.h"
@@ -1235,8 +1236,10 @@ public:
 template<typename T>
 void ApplyCache(const std::string& key, T& result)
 {
-    // Local reference to avoid double lookup.
-    const auto& entry = ReadCache(Section::PROTOCOL, key);
+    // Local reference to avoid double lookup. This is changed from ReadCache with Section::PROTOCOL to
+    // the shunt call in ProtocolRegistry GetProtocolEntryByKeyLegacy.
+    // const auto& entry = ReadCache(Section::PROTOCOL, key);
+    const auto& entry = GetProtocolRegistry().GetProtocolEntryByKeyLegacy(key);
 
     // If the entry has an empty string (no value) then leave the original undisturbed.
     if (entry.value.empty())
