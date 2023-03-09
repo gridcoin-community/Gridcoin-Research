@@ -32,8 +32,8 @@ namespace {
       }
    };
 
-   void AddProtocolEntry(const std::string& key, const std::string& value,
-                         const int& height, const uint64_t time, const bool& reset_registry = false)
+   void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
+                         const CBlockIndex index, const bool& reset_registry = false)
    {
        GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 
@@ -41,23 +41,29 @@ namespace {
        if (reset_registry) registry.Reset();
 
        CTransaction dummy_tx;
-       CBlockIndex* dummy_index = new CBlockIndex();
-       dummy_index->nHeight = height;
-       dummy_tx.nTime = time;
-       dummy_index->nTime = time;
+       dummy_tx.nTime = index.nTime;
 
-       // Simulate a protocol control directive with whitelisted teams:
-       GRC::Contract contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
-                   uint32_t {2}, // Contract version (pre v13)
-                   GRC::ContractAction::ADD,
-                   uint32_t {1}, // Protocol payload version (pre v13)
-                   key,
-                   value,
-                   GRC::ProtocolEntryStatus::ACTIVE);
+       GRC::Contract contract;
+
+       if (payload_version < 2) {
+           contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                       uint32_t {2}, // Contract version (pre v13)
+                       GRC::ContractAction::ADD,
+                       key,
+                       value);
+       } else {
+           contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                       uint32_t {3}, // Contract version (post v13)
+                       GRC::ContractAction::ADD,
+                       payload_version, // Protocol payload version (post v13)
+                       key,
+                       value,
+                       GRC::ProtocolEntryStatus::ACTIVE);
+       }
 
        dummy_tx.vContracts.push_back(contract);
 
-       registry.Add({contract, dummy_tx, dummy_index});
+       registry.Add({contract, dummy_tx, &index});
    }
 
 } // anonymous namespace
@@ -96,17 +102,8 @@ BOOST_AUTO_TEST_SUITE_END()
 //
 // CBR tests
 //
-struct GridcoinCBRTestConfig
-{
-    GridcoinCBRTestConfig()
-    {
-        // Clear out previous CBR settings.
-        GRC::GetProtocolRegistry().Reset();
-    }
-};
 
 BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
-BOOST_GLOBAL_FIXTURE(GridcoinCBRTestConfig);
 
 BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
 {
@@ -116,36 +113,120 @@ BOOST_AUTO_TEST_CASE(gridcoin_DefaultCBRShouldBe10)
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
 
+// Note that payload versions 1 and 2 alternate here. This is to test the constructors and
+// the machinery to add to the registry. This alternating approach is not what would
+// happen on the real blockchain, but is tolerated by the Registry independent of
+// block acceptance rules.
+
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
 {
     const int64_t time = 123456;
-    const int64_t cbr = 14.9 * COIN;
+    int64_t cbr = 14.9 * COIN;
 
-    CBlockIndex index;
-    index.nVersion = 10;
-    index.nTime = time;
+    CBlockIndex index_1;
+    index_1.nVersion = 10;
+    index_1.nTime = time;
+    index_1.nHeight = 1;
 
-    AddProtocolEntry("blockreward1", ToString(cbr), 1, time, true);
-    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), cbr);
+    auto& registry = GRC::GetProtocolRegistry();
+
+    // Protocol payload version 1
+
+    AddProtocolEntry(1, "blockreward1", ToString(cbr), index_1, true);
+
+    if (GRC::ProtocolEntryOption entry = registry.TryActive("blockreward1")) {
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Protocol entry: m_key %s, m_value %s, m_hash %s, m_previous_hash %s, "
+                                            "m_timestamp %" PRId64 ", m_status string %s",
+                 __func__,
+                 entry->m_key,
+                 entry->m_value,
+                 entry->m_hash.ToString(),
+                 entry->m_previous_hash.ToString(),
+                 entry->m_timestamp,
+                 entry->StatusToString()
+                 );
+    }
+
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index_1), cbr);
+
+    cbr = 16.0 * COIN;
+
+    CBlockIndex index_2;
+    index_2.nVersion = 13;
+    index_2.nTime = time + 1;
+    index_2.nHeight = 2;
+
+    // Protocol payload version 2
+
+    AddProtocolEntry(2, "blockreward1", ToString(cbr), index_2, false);
+
+    if (GRC::ProtocolEntryOption entry = registry.TryActive("blockreward1")) {
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Protocol entry: m_key %s, m_value %s, m_hash %s, m_previous_hash %s, "
+                                            "m_timestamp %" PRId64 ", m_status string %s",
+                 __func__,
+                 entry->m_key,
+                 entry->m_value,
+                 entry->m_hash.ToString(),
+                 entry->m_previous_hash.ToString(),
+                 entry->m_timestamp,
+                 entry->StatusToString()
+                 );
+    }
+
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index_2), cbr);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
 {
-    const int64_t time = 123457;
+    const int64_t time = 123456;
     CBlockIndex index;
-    index.nTime = time;
+    index.nTime = time + 2;
+    index.nHeight = 3;
 
-    AddProtocolEntry("blockreward1", ToString(-1 * COIN), 2, time, false);
+    auto& registry = GRC::GetProtocolRegistry();
+
+    AddProtocolEntry(1, "blockreward1", ToString(-1 * COIN), index, false);
+
+    if (GRC::ProtocolEntryOption entry = registry.TryActive("blockreward1")) {
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Protocol entry: m_key %s, m_value %s, m_hash %s, m_previous_hash %s, "
+                                            "m_timestamp %" PRId64 ", m_status string %s",
+                 __func__,
+                 entry->m_key,
+                 entry->m_value,
+                 entry->m_hash.ToString(),
+                 entry->m_previous_hash.ToString(),
+                 entry->m_timestamp,
+                 entry->StatusToString()
+                 );
+    }
+
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), 0);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
 {
-    const int64_t time = 123458;
+    const int64_t time = 123456;
     CBlockIndex index;
-    index.nTime = time;
+    index.nTime = time + 3;
+    index.nHeight = 4;
 
-    AddProtocolEntry("blockreward1", ToString(DEFAULT_CBR * 3), 3, time, false);
+    auto& registry = GRC::GetProtocolRegistry();
+
+    AddProtocolEntry(2, "blockreward1", ToString(DEFAULT_CBR * 3), index, false);
+
+    if (GRC::ProtocolEntryOption entry = registry.TryActive("blockreward1")) {
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Protocol entry: m_key %s, m_value %s, m_hash %s, m_previous_hash %s, "
+                                            "m_timestamp %" PRId64 ", m_status string %s",
+                 __func__,
+                 entry->m_key,
+                 entry->m_value,
+                 entry->m_hash.ToString(),
+                 entry->m_previous_hash.ToString(),
+                 entry->m_timestamp,
+                 entry->StatusToString()
+                 );
+    }
+
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
@@ -153,15 +234,33 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
 // be irrelevant and invalid.
 BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
 {
-    CBlockIndex index;
-    index.nTime = 1538066417;
+    CBlockIndex index_check;
+    index_check.nTime = 1538066417;
+    index_check.nHeight = 6;
     const int64_t max_message_age = 60 * 60 * 24 * 180;
 
-    // Make the block reward message 1 second older than the max age
-    // relative to the block.
-    AddProtocolEntry("blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1, 1, true);
+    CBlockIndex index_add;
+    index_add.nTime = index_check.nTime - max_message_age - 1;
+    index_add.nHeight = 5;
 
-    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
+    auto& registry = GRC::GetProtocolRegistry();
+
+    AddProtocolEntry(2, "blockreward1", ToString(3 * COIN), index_add, false);
+
+    if (GRC::ProtocolEntryOption entry = registry.TryActive("blockreward1")) {
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Protocol entry: m_key %s, m_value %s, m_hash %s, m_previous_hash %s, "
+                                            "m_timestamp %" PRId64 ", m_status string %s",
+                 __func__,
+                 entry->m_key,
+                 entry->m_value,
+                 entry->m_hash.ToString(),
+                 entry->m_previous_hash.ToString(),
+                 entry->m_timestamp,
+                 entry->StatusToString()
+                 );
+    }
+
+    BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index_check), DEFAULT_CBR);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

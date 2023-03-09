@@ -145,7 +145,7 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
     GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
 }
 
-void AddProtocolEntry(const std::string& key, const std::string& value,
+void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
                       const int& height, const bool& reset_registry = false)
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
@@ -154,25 +154,34 @@ void AddProtocolEntry(const std::string& key, const std::string& value,
     if (reset_registry) registry.Reset();
 
     CTransaction dummy_tx;
-    CBlockIndex* dummy_index = new CBlockIndex();
-    dummy_index->nHeight = height;
+    CBlockIndex dummy_index = CBlockIndex {};
+    dummy_index.nHeight = height;
 
     //use time = height for these tests
-    dummy_index->nTime = height;
+    dummy_index.nTime = height;
     dummy_tx.nTime = height;
 
-    // Simulate a protocol control directive with whitelisted teams:
-    GRC::Contract contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
-                uint32_t {2}, // Pre v13
-                GRC::ContractAction::ADD,
-                uint32_t {1}, // Pre v13
-                key,
-                value,
-                GRC::ProtocolEntryStatus::ACTIVE);
+    GRC::Contract contract;
+
+    if (payload_version < 2) {
+        contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                    uint32_t {2}, // Contract version (pre v13)
+                    GRC::ContractAction::ADD,
+                    key,
+                    value);
+    } else {
+        contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                    uint32_t {3}, // Contract version (post v13)
+                    GRC::ContractAction::ADD,
+                    payload_version, // Protocol payload version (post v13)
+                    key,
+                    value,
+                    GRC::ProtocolEntryStatus::ACTIVE);
+    }
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, dummy_index});
+    registry.Add({contract, dummy_tx, &dummy_index});
 }
 } // anonymous namespace
 
@@ -802,6 +811,10 @@ BOOST_AUTO_TEST_CASE(it_provides_an_overall_status_of_the_researcher_context)
 
 BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
 {
+    // Reset registry to go back to default values, including team requirement
+    // and default team whitelist requirement.
+    GRC::GetProtocolRegistry().Reset();
+
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
@@ -868,6 +881,9 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
 
 BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
 {
+    // Simulate a protocol control directive that disables the team requirement:
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
+
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
@@ -915,6 +931,10 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_mode_when_parsing_no_projects)
 
 BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 {
+    // Simulate a protocol control directive that enables the team requirement. Resetting
+    // the protocol registry defaults the team whitelist to just Gridcoin.
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1, true);
+
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
@@ -1165,10 +1185,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
-    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP",
-                     "false",
-                     1,
-                     true);
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1216,10 +1233,9 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
-    AddProtocolEntry("TEAM_WHITELIST",
-                     "team 1|Team 2",
-                     1,
-                     true);
+    // Resetting the protocol registry goes back to the default value of requiring the
+    // team whitelist.
+    AddProtocolEntry(2, "TEAM_WHITELIST", "team 1|Team 2", 1, true);
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1306,6 +1322,9 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
 
 BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
 {
+    // Simulate a protocol control directive that enables the team requirement:
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1, true);
+
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
@@ -1332,7 +1351,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     }
 
     // Simulate a protocol control directive that disables the team requirement:
-    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 2, false);
 
     // Rescan in-memory projects for previously-ineligible teams:
     GRC::Researcher::MarkDirty();
@@ -1349,7 +1368,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     }
 
     // Simulate a protocol control directive that enables the team requirement:
-    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 2, false);
+    AddProtocolEntry(2, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 3, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1373,6 +1392,10 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
 
 BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
 {
+    // Simulate a protocol control directive that enables the team requirement. Resetting
+    // the protocol registry defaults the team whitelist to just Gridcoin.
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1, true);
+
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
@@ -1430,8 +1453,8 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
         BOOST_FAIL("Project 3 does not exist in the mining project map.");
     }
 
-    // Simulate a protocol control directive that enables the team whitelist:
-    AddProtocolEntry("TEAM_WHITELIST", "Team 1|Team 2", 1, true);
+    // Simulate a protocol control directive that changes the team whitelist from the default.
+    AddProtocolEntry(1, "TEAM_WHITELIST", "Team 1|Team 2", 2, false);
 
     // Rescan in-memory projects for previously-ineligible teams:
     GRC::Researcher::MarkDirty();
@@ -1462,7 +1485,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     }
 
     // Simulate a protocol control directive that disables the team whitelist:
-    AddProtocolEntry("TEAM_WHITELIST", "", 2, false);
+    AddProtocolEntry(2, "TEAM_WHITELIST", "", 3, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1504,7 +1527,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Simulate a protocol control directive that disables the team requirement:
-    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
+    AddProtocolEntry(1, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
 
     AddTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
 
@@ -1531,7 +1554,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     }
 
     // Simulate a protocol control directive that enables the team whitelist:
-    AddProtocolEntry("TEAM_WHITELIST", "Team 1|Team 2", 2, false);
+    AddProtocolEntry(2, "TEAM_WHITELIST", "Team 1|Team 2", 2, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1549,7 +1572,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
 
     // Simulate a protocol control directive that enables the team requirement
     // (and thus, the whitelist):
-    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 3, false);
+    AddProtocolEntry(2, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 3, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1711,6 +1734,10 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
     BOOST_CHECK(GRC::Researcher::Get()->Eligible() == false);
     BOOST_CHECK(GRC::Researcher::Get()->Status() == GRC::ResearcherStatus::POOL);
 
+    // If whitelist membership rule is false, then the second project, which is
+    // a non-pool CPID should match the original cpid at the top.
+    AddProtocolEntry(2, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
+
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
         <project>
@@ -1735,6 +1762,36 @@ BOOST_AUTO_TEST_CASE(it_resets_to_investor_when_it_only_finds_pool_projects)
     BOOST_CHECK(GRC::Researcher::Get()->Id() == cpid);
     BOOST_CHECK(GRC::Researcher::Get()->Eligible() == true);
     BOOST_CHECK(GRC::Researcher::Get()->Status() != GRC::ResearcherStatus::POOL);
+
+    // If whitelist membership rule is true and the non-pool project does not match the whitelist,
+    // then researcher should be investor status.
+    AddProtocolEntry(2, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 2, false);
+    AddProtocolEntry(2, "TEAM_WHITELIST", "Team 1|Team 2", 3, false);
+
+    GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>My Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>7d0d73fe026d66fd4ab8d5d8da32a611</external_cpid>
+        </project>
+        )XML",
+        R"XML(
+        <project>
+          <master_url>https://example.com/</master_url>
+          <project_name>Pool Project</project_name>
+          <team_name>Gridcoin</team_name>
+          <cross_project_id>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</cross_project_id>
+          <external_cpid>f5d8234352e5a5ae3915debba7258294</external_cpid>
+        </project>
+        )XML",
+    }));
+
+    BOOST_CHECK(GRC::Researcher::Get()->Id() == GRC::MiningId::ForInvestor());
+    BOOST_CHECK(GRC::Researcher::Get()->Eligible() == false);
+    BOOST_CHECK(GRC::Researcher::Get()->Status() == GRC::ResearcherStatus::POOL);
 
     // Clean up:
     gArgs.ForceSetArg("email", "");

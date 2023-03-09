@@ -28,10 +28,6 @@ TEXT_TEST_FILES = \
 GENERATED_TEST_FILES = $(JSON_TEST_FILES:.json=.json.h) $(BINARY_TEST_FILES:.bin=.bin.h) $(TEXT_TEST_FILES:.txt=.txt.h)
 
 # test_n binary #
-#	test/gridcoin_tests.cpp \
-#	test/gridcoin/protocol_tests.cpp \
-#	test/gridcoin/researcher_tests.cpp \
-
 
 GRIDCOIN_TESTS =\
 	test/checkpoints_tests.cpp \
@@ -48,6 +44,7 @@ GRIDCOIN_TESTS =\
 	test/crypto_tests.cpp \
 	test/fs_tests.cpp \
 	test/getarg_tests.cpp \
+	test/gridcoin_tests.cpp \
 	test/gridcoin/beacon_tests.cpp \
 	test/gridcoin/block_finder_tests.cpp \
 	test/gridcoin/claim_tests.cpp \
@@ -57,6 +54,9 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/magnitude_tests.cpp \
 	test/gridcoin/mrc_tests.cpp \
 	test/gridcoin/project_tests.cpp \
+	test/gridcoin/protocol_tests.cpp \
+	test/gridcoin/researcher_tests.cpp \
+	test/gridcoin/scraper_registry_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \
 	test/key_tests.cpp \
 	test/merkle_tests.cpp \
