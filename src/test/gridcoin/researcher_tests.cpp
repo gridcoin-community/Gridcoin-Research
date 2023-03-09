@@ -2,8 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/protocol.h"
 #include "main.h"
-#include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
@@ -14,6 +14,8 @@
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <vector>
+
+extern leveldb::DB *txdb;
 
 namespace {
 
@@ -141,6 +143,36 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
 
     GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
     GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+}
+
+void AddProtocolEntry(const std::string& key, const std::string& value,
+                      const int& height, const bool& reset_registry = false)
+{
+    GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
+
+    // Make sure the registry is reset.
+    if (reset_registry) registry.Reset();
+
+    CTransaction dummy_tx;
+    CBlockIndex* dummy_index = new CBlockIndex();
+    dummy_index->nHeight = height;
+
+    //use time = height for these tests
+    dummy_index->nTime = height;
+    dummy_tx.nTime = height;
+
+    // Simulate a protocol control directive with whitelisted teams:
+    GRC::Contract contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                uint32_t {2}, // Pre v13
+                GRC::ContractAction::ADD,
+                uint32_t {1}, // Pre v13
+                key,
+                value,
+                GRC::ProtocolEntryStatus::ACTIVE);
+
+    dummy_tx.vContracts.push_back(contract);
+
+    registry.Add({contract, dummy_tx, dummy_index});
 }
 } // anonymous namespace
 
@@ -1133,8 +1165,10 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
-    // Simulate a protocol control directive that disables the team requirement:
-    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
+    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP",
+                     "false",
+                     1,
+                     true);
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1173,7 +1207,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
-    DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
+    //DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1182,8 +1216,10 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
     // External CPIDs generated with this email address:
     gArgs.ForceSetArg("email", "researcher@example.com");
 
-    // Simulate a protocol control directive with whitelisted teams:
-    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "team 1|Team 2", 1);
+    AddProtocolEntry("TEAM_WHITELIST",
+                     "team 1|Team 2",
+                     1,
+                     true);
 
     GRC::Researcher::Reload(GRC::MiningProjectMap::Parse({
         R"XML(
@@ -1264,7 +1300,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
-    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    //DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1296,7 +1332,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     }
 
     // Simulate a protocol control directive that disables the team requirement:
-    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
+    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
 
     // Rescan in-memory projects for previously-ineligible teams:
     GRC::Researcher::MarkDirty();
@@ -1313,7 +1349,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
     }
 
     // Simulate a protocol control directive that enables the team requirement:
-    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
+    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 2, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1331,7 +1367,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_requirement_dynamically)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
-    DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
+    //DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1395,7 +1431,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     }
 
     // Simulate a protocol control directive that enables the team whitelist:
-    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
+    AddProtocolEntry("TEAM_WHITELIST", "Team 1|Team 2", 1, true);
 
     // Rescan in-memory projects for previously-ineligible teams:
     GRC::Researcher::MarkDirty();
@@ -1426,7 +1462,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
     }
 
     // Simulate a protocol control directive that disables the team whitelist:
-    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "", 1);
+    AddProtocolEntry("TEAM_WHITELIST", "", 2, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1458,7 +1494,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_dynamically)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
-    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    //DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
@@ -1468,7 +1504,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     gArgs.ForceSetArg("email", "researcher@example.com");
 
     // Simulate a protocol control directive that disables the team requirement:
-    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1);
+    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "false", 1, true);
 
     AddTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
 
@@ -1495,7 +1531,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
     }
 
     // Simulate a protocol control directive that enables the team whitelist:
-    WriteCache(Section::PROTOCOL, "TEAM_WHITELIST", "Team 1|Team 2", 1);
+    AddProtocolEntry("TEAM_WHITELIST", "Team 1|Team 2", 2, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1513,7 +1549,7 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
 
     // Simulate a protocol control directive that enables the team requirement
     // (and thus, the whitelist):
-    WriteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 1);
+    AddProtocolEntry("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", "true", 3, false);
 
     // Rescan in-memory projects for previously-eligible teams:
     GRC::Researcher::MarkDirty();
@@ -1531,8 +1567,8 @@ BOOST_AUTO_TEST_CASE(it_ignores_the_team_whitelist_without_the_team_requirement)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
-    DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
-    DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    //DeleteCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP");
+    //DeleteCache(Section::PROTOCOL, "TEAM_WHITELIST");
     RemoveTestBeacon(GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294"));
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }

@@ -94,49 +94,6 @@ public:
 
 
 //!
-//! \brief Temporary interface implementation that reads and writes contracts
-//! to AppCache to use while we refactor away each of the AppCache sections:
-//!
-class AppCacheContractHandler : public IContractHandler
-{
-public:
-    void Reset() override
-    {
-        ClearCache(Section::PROTOCOL);
-    }
-
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
-
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
-
-    void Add(const ContractContext& ctx) override
-    {
-        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
-
-        WriteCache(
-            StringToSection(ctx->m_type.ToString()),
-            payload->m_key,
-            payload->m_value,
-            ctx.m_tx.nTime);
-    }
-
-    void Delete(const ContractContext& ctx) override
-    {
-        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
-
-        DeleteCache(
-            StringToSection(ctx->m_type.ToString()),
-            payload->m_key);
-    }
-};
-
-//!
 //! \brief Handles unknown contract message types by logging a message.
 //!
 class UnknownContractHandler : public IContractHandler
@@ -196,20 +153,20 @@ class Dispatcher
 {
 public:
     //!
-    //! \brief Reset the cached state of each contract handler to prepare for
-    //! historical contract replay.
+    //! \brief Reset the cached state of any contract handler to prepare for
+    //! historical contract replay. Note that all handlers are now native. The
+    //! appcache is formally retired. The only handler left that requires
+    //! historical reversion during reorgs because of multiple entries with
+    //! the same key, but no registry backing store, is the Projects (whitelist)
+    //! Registry. So this sole handler has to be reset and contracts replayed.
+    //! The contract replay will skip contracts for other handler types where
+    //! the backing store exists (beacons, scraper entries, and protocol entries),
+    //! or the objects are independent and unique by key and admit to simple
+    //! reversion, such as polls/votes.
     //!
     void ResetHandlers()
     {
-        // Don't reset the beacon registry as it is now backed by a database.
-        // GetBeaconRegistry().Reset();
-
-        // Don't reset the poll registry as reorgs are properly handled.
-        // GetPollRegistry().Reset();
         GetWhitelist().Reset();
-
-        // m_appcache_handler no longer includes the scraper entries.
-        m_appcache_handler.Reset();
     }
 
     //!
@@ -288,7 +245,6 @@ public:
     }
 
 private:
-    AppCacheContractHandler m_appcache_handler; //<! Temporary.
     MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 

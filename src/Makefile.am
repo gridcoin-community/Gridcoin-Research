@@ -241,7 +241,6 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     crypter.cpp \
     dbwrapper.cpp \
     fs.cpp \
-    gridcoin/appcache.cpp \
     gridcoin/backup.cpp \
     gridcoin/beacon.cpp \
     gridcoin/boinc.cpp \

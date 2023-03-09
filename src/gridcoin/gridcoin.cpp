@@ -248,14 +248,12 @@ void InitializeContracts(CBlockIndex* pindexBest)
     // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
     // POLL/VOTE (polls and voting)                   true                                        false
     // PROJECT (whitelist)                            true                                        true
-    // PROTOCOL (protocol entries - legacy appcache)  true                                        true
     //
     // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
-    // for POLL/VOTE's, but is still required for PROJECT and PROTOCOL until the proper contract revert structures are done.
+    // for POLL/VOTE's, but is still required for PROJECT until the proper contract revert structures are done.
     // The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add is simply to delete them.
-    // For PROJECTS and PROTOCOL entries, the same key can have multiple adds essentially being an update record. This
-    // complicates the reversion architecture and makes the requirements equivalent to what was done in the scraper entry
-    // registry.
+    // For PROJECT entries, the same key can have multiple adds essentially being an update record. This complicates the
+    // reversion architecture and makes the requirements equivalent to what was done in the scraper entry registry.
     const int& start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
                                        lookback_window_low_height);
 

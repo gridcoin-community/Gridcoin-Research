@@ -3,13 +3,14 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "gridcoin/appcache.h"
+//#include "gridcoin/appcache.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/project.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/support/xml.h"
@@ -282,7 +283,7 @@ std::vector<std::string> FetchProjectsXml()
 //!
 bool ShouldEnforceTeamMembership()
 {
-    return ReadCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP").value != "false";
+    return GetProtocolRegistry().GetProtocolEntryByKeyLegacy("REQUIRE_TEAM_WHITELIST_MEMBERSHIP").value != "false";
 }
 
 //!
@@ -298,7 +299,7 @@ std::set<std::string> GetTeamWhitelist()
         return { };
     }
 
-    const AppCacheEntry entry = ReadCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    const AppCacheEntry entry = GetProtocolRegistry().GetProtocolEntryByKeyLegacy("TEAM_WHITELIST");
 
     if (entry.value.empty()) {
         return { "gridcoin" };

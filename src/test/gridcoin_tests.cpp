@@ -4,9 +4,9 @@
 
 #include "chainparams.h"
 #include "uint256.h"
+#include "gridcoin/protocol.h"
 #include "util.h"
 #include "main.h"
-#include "gridcoin/appcache.h"
 #include "gridcoin/staking/reward.h"
 
 #include <boost/test/unit_test.hpp>
@@ -15,9 +15,9 @@
 #include <string>
 
 extern bool fTestNet;
+extern leveldb::DB *txdb;
 
-namespace
-{
+namespace {
    // Arbitrary random characters generated with Python UUID.
    const std::string TEST_CPID("17c65330c0924259b2f93c31d25b03ac");
 
@@ -31,7 +31,36 @@ namespace
       {
       }
    };
-}
+
+   void AddProtocolEntry(const std::string& key, const std::string& value,
+                         const int& height, const uint64_t time, const bool& reset_registry = false)
+   {
+       GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
+
+       // Make sure the registry is reset.
+       if (reset_registry) registry.Reset();
+
+       CTransaction dummy_tx;
+       CBlockIndex* dummy_index = new CBlockIndex();
+       dummy_index->nHeight = height;
+       dummy_tx.nTime = time;
+       dummy_index->nTime = time;
+
+       // Simulate a protocol control directive with whitelisted teams:
+       GRC::Contract contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                   uint32_t {2}, // Contract version (pre v13)
+                   GRC::ContractAction::ADD,
+                   uint32_t {1}, // Protocol payload version (pre v13)
+                   key,
+                   value,
+                   GRC::ProtocolEntryStatus::ACTIVE);
+
+       dummy_tx.vContracts.push_back(contract);
+
+       registry.Add({contract, dummy_tx, dummy_index});
+   }
+
+} // anonymous namespace
 
 BOOST_GLOBAL_FIXTURE(GridcoinTestsConfig);
 
@@ -72,7 +101,7 @@ struct GridcoinCBRTestConfig
     GridcoinCBRTestConfig()
     {
         // Clear out previous CBR settings.
-        DeleteCache(Section::PROTOCOL, "blockreward1");
+        GRC::GetProtocolRegistry().Reset();
     }
 };
 
@@ -96,39 +125,41 @@ BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldOverrideDefault)
     index.nVersion = 10;
     index.nTime = time;
 
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(cbr), time);
+    AddProtocolEntry("blockreward1", ToString(cbr), 1, time, true);
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), cbr);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_NegativeCBRShouldClampTo0)
 {
-    const int64_t time = 123456;
+    const int64_t time = 123457;
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(-1 * COIN), time);
+    AddProtocolEntry("blockreward1", ToString(-1 * COIN), 2, time, false);
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), 0);
 }
 
 BOOST_AUTO_TEST_CASE(gridcoin_ConfigurableCBRShouldClampTo2xDefault)
 {
-    const int64_t time = 123456;
+    const int64_t time = 123458;
     CBlockIndex index;
     index.nTime = time;
 
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(DEFAULT_CBR * 3), time);
+    AddProtocolEntry("blockreward1", ToString(DEFAULT_CBR * 3), 3, time, false);
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR * 2);
 }
 
+// TODO: when the 180 day lookback is removed, this should be removed as a test as it will
+// be irrelevant and invalid.
 BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
 {
     CBlockIndex index;
     index.nTime = 1538066417;
-    const int64_t max_message_age = 60 * 24 * 30 * 6 * 60;
+    const int64_t max_message_age = 60 * 60 * 24 * 180;
 
     // Make the block reward message 1 second older than the max age
     // relative to the block.
-    WriteCache(Section::PROTOCOL, "blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1);
+    AddProtocolEntry("blockreward1", ToString(3 * COIN), index.nTime - max_message_age - 1, 1, true);
 
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index), DEFAULT_CBR);
 }
