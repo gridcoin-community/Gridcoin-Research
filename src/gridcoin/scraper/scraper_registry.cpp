@@ -161,6 +161,7 @@ ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, CKeyID key_id, 
     , m_version(version)
     , m_scraper_entry(ScraperEntry(key_id, status))
 {
+    assert(version > 1);
 }
 
 ScraperEntryPayload::ScraperEntryPayload(const uint32_t version, ScraperEntry scraper_entry)
@@ -216,14 +217,14 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
     address.GetKeyID(key_id);
     ScraperEntryStatus scraper_entry_status = ScraperEntryStatus::UNKNOWN;
 
-     if (ToLower(value) == "true") {
+    if (ToLower(value) == "true") {
         scraper_entry_status = ScraperEntryStatus::AUTHORIZED;
     } else {
-         // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
-         scraper_entry_status = ScraperEntryStatus::NOT_AUTHORIZED;
-     }
+        // any other value than "true" in legacy scraper contract is interpreted as NOT_AUTHORIZED.
+        scraper_entry_status = ScraperEntryStatus::NOT_AUTHORIZED;
+    }
 
-    ScraperEntryPayload payload(1, key_id, scraper_entry_status);
+    ScraperEntryPayload payload(1, ScraperEntry(key_id, scraper_entry_status));
     // The above constructor doesn't carry over the legacy K-V which we need.
     payload.m_key = key;
     payload.m_value = value;
@@ -288,6 +289,7 @@ const AppCacheSectionExt ScraperRegistry::GetScrapersLegacyExt(const bool& autho
 
             // Ignore UNKNOWN and OUT_OF_BOUND.
         case ScraperEntryStatus::UNKNOWN:
+            [[fallthrough]];
         case ScraperEntryStatus::OUT_OF_BOUND:
             break;
         }
@@ -343,17 +345,14 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
 
     ScraperEntryPayload payload = ctx->CopyPayloadAs<ScraperEntryPayload>();
 
-    // If the payload m_version is less than two, then the payload is initialized from the legacy key value. Therefore
-    // we must fill in the hash and timestamp from the transaction context, and also mark the status deleted if the
-    // contract action was REMOVE, because that action resulted in an implicit deletion with the legacy K-V entries and
-    // the appcache. The new status makes it explicit.
-    if (payload.m_version < 2) {
-        payload.m_scraper_entry.m_hash = ctx.m_tx.GetHash();
-        payload.m_scraper_entry.m_timestamp = ctx.m_tx.nTime;
+    // Fill in the hash and time from the transaction context, because this is not done during payload initialization.
+    payload.m_scraper_entry.m_hash = ctx.m_tx.GetHash();
+    payload.m_scraper_entry.m_timestamp = ctx.m_tx.nTime;
 
-        if (ctx->m_action == ContractAction::REMOVE) {
-            payload.m_scraper_entry.m_status = ScraperEntryStatus::DELETED;
-        }
+    // If the contract action is to remove a scraper entry, then the record added must have a status of deleted,
+    // regardless of what was specified in the status.
+    if (ctx->m_action == ContractAction::REMOVE) {
+        payload.m_scraper_entry.m_status = ScraperEntryStatus::DELETED;
     }
 
     LOCK(cs_lock);

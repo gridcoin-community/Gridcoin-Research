@@ -139,7 +139,8 @@ bool ProtocolEntry::operator!=(ProtocolEntry b)
 constexpr uint32_t ProtocolEntryPayload::CURRENT_VERSION; // For clang
 
 ProtocolEntryPayload::ProtocolEntryPayload(uint32_t version)
-    : m_version(version)
+    : LegacyPayload()
+    , m_version(version)
 {
 }
 
@@ -148,6 +149,7 @@ ProtocolEntryPayload::ProtocolEntryPayload(const uint32_t version, std::string k
     , m_version(version)
     , m_entry(ProtocolEntry(key, value, status))
 {
+    assert(version > 1);
 }
 
 ProtocolEntryPayload::ProtocolEntryPayload(const uint32_t version, ProtocolEntry entry)
@@ -171,10 +173,8 @@ ProtocolEntryPayload::ProtocolEntryPayload(const std::string& key, const std::st
 
 ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const std::string& value)
 {
-    ProtocolEntryPayload payload(1, key, value, ProtocolEntryStatus::ACTIVE);
-    // The above constructor doesn't carry over the legacy K-V which we need.
-    payload.m_key = key;
-    payload.m_value = value;
+    // This constructor assigns the entry with a status of active and also fills out the legacy payload.
+    ProtocolEntryPayload payload(key, value);
 
      return payload;
 }
@@ -306,17 +306,15 @@ void ProtocolRegistry::AddDelete(const ContractContext& ctx)
 
     ProtocolEntryPayload payload = ctx->CopyPayloadAs<ProtocolEntryPayload>();
 
-    // If the payload m_version is less than two, then the payload is initialized from the legacy key value. Therefore
-    // we must fill in the hash and timestamp from the transaction context, and also mark the status deleted if the
-    // contract action was REMOVE, because that action resulted in an implicit deletion with the legacy K-V entries and
-    // the appcache. The new status makes it explicit.
-    if (payload.m_version < 2) {
-        payload.m_entry.m_hash = ctx.m_tx.GetHash();
-        payload.m_entry.m_timestamp = ctx.m_tx.nTime;
+    // Fill this in from the transaction context because these are not done during payload
+    // initialization.
+    payload.m_entry.m_hash = ctx.m_tx.GetHash();
+    payload.m_entry.m_timestamp = ctx.m_tx.nTime;
 
-        if (ctx->m_action == ContractAction::REMOVE) {
-            payload.m_entry.m_status = ProtocolEntryStatus::DELETED;
-        }
+    // Ensure status is DELETED if the contract action was REMOVE, regardless of what was actually
+    // specified.
+    if (ctx->m_action == ContractAction::REMOVE) {
+        payload.m_entry.m_status = ProtocolEntryStatus::DELETED;
     }
 
     LOCK(cs_lock);

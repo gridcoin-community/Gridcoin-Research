@@ -269,7 +269,8 @@ public:
 
     //!
     //! \brief Initialize a scraper entry payload from the given scraper entry
-    //! with the provided version number (and format).
+    //! with the provided version number (and format). This can only be used for
+    //! payload version > 1. It will assert if used for payload version 1.
     //!
     //! \param version Version of the serialized scraper entry format.
     //! \param scraper_entry The scraper entry itself.

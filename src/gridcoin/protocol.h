@@ -225,7 +225,8 @@ public:
 
     //!
     //! \brief Initialize a ProtocolEntryPayload from a protocol entry constructed from
-    //! string key and value. The status is initialized to ACTIVE.
+    //! string key and value. Not to be used for version 1 payloads. Will assert. Does NOT
+    //! initialize hash fields.
     //!
     //! \param key. Key string for the protocol entry
     //! \param value. Value string for the protocol entry
@@ -245,12 +246,14 @@ public:
     //!
     //! \brief Initialize a protocol entry payload from the given protocol entry
     //! with the CURRENT_VERSION.
+    //!
     //! \param protocol_entry The protocol entry itself.
     //!
     ProtocolEntryPayload(ProtocolEntry protocol_entry);
 
     //!
-    //! \brief Initialize a protocol entry payload from legacy data.
+    //! \brief Initialize a protocol entry payload from legacy data. Does NOT
+    //! initialize hash fields.
     //!
     //! \param key
     //! \param value
