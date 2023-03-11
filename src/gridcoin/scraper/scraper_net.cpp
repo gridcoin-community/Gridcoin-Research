@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <atomic>
+#include <stdexcept>
 #include "main.h"
 #include "net.h"
 #include "rpc/server.h"

@@ -7,6 +7,7 @@
 #include "init.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <univalue.h>
 #include <vector>
 #include <boost/thread.hpp>

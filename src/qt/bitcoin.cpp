@@ -32,6 +32,8 @@
 #include "validation.h"
 #include "decoration.h"
 
+#include <stdexcept>
+
 #include <QMessageBox>
 #include <QGridLayout>
 #include <QDebug>

@@ -12,6 +12,8 @@
 #include "main.h"
 #endif
 
+#include <stdexcept>
+
 #include <QThread>
 #include <QTextEdit>
 #include <QUrl>

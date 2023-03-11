@@ -25,6 +25,7 @@
 #include <boost/thread.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <stdio.h>
+#include <stdexcept>
 
 extern bool fQtActive;
 

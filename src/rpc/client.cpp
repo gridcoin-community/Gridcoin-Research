@@ -24,6 +24,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <stdexcept>
 
 #include <memory>
 

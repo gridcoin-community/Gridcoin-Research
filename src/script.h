@@ -6,6 +6,7 @@
 #ifndef BITCOIN_SCRIPT_H
 #define BITCOIN_SCRIPT_H
 
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>

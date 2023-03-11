@@ -2,6 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <stdexcept>
+
 #include "server.h"
 #include "protocol.h"
 #include "alert.h"

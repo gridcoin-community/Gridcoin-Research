@@ -12,6 +12,7 @@
 
 #include <assert.h>
 
+#include <stdexcept>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 

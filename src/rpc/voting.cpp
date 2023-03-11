@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "init.h"
 #include "main.h"
 #include "gridcoin/contract/contract.h"

@@ -18,6 +18,8 @@
 #include "protocol.h"
 #include "server.h"
 
+#include <stdexcept>
+
 using namespace std;
 
 UniValue getstakinginfo(const UniValue& params, bool fHelp)

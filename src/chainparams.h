@@ -14,6 +14,7 @@
 #include "util/system.h"
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 typedef std::map<int, uint256> MapCheckpoints;

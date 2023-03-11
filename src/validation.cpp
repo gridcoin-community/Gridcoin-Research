@@ -27,6 +27,7 @@
 #include "wallet/wallet.h"
 
 #include <set>
+#include <stdexcept>
 
 extern GRC::SeenStakes g_seen_stakes;
 extern GRC::ChainTrustCache g_chain_trust;
