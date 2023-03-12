@@ -240,7 +240,17 @@ public:
 
         // The default implementation of IContractHandler reverses an action
         // (addition or deletion) declared in the contract argument, but the
-        // type-specific handlers may override this behavior as needed:
+        // type-specific handlers may override this behavior as needed. The
+        // default implementation can ONLY be used for those contracts whose
+        // objects are unique. A good example is polls and votes. Each poll
+        // and each vote is a unique object (by key). In this case the simple
+        // reversion works. For objects that effectively are "revised", such
+        // as beacons, which have a complex lifecycle, and a history of
+        // revisions for the same key (CPID for beacon), a much more complex
+        // implementation, along with a backing db that stores historical
+        // objects and a linkage from current to previous objects is required.
+        // The scraper entry and protocol entry registry are good examples of
+        // this type.
         GetHandler(ctx->m_type.Value()).Revert(ctx);
     }
 
@@ -257,7 +267,6 @@ private:
     //!
     IContractHandler& GetHandler(const ContractType type)
     {
-        // TODO: build contract handlers for the remaining contract types:
         // TODO: refactor to dynamic registration for easier testing:
         switch (type) {
             case ContractType::BEACON:     return GetBeaconRegistry();
