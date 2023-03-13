@@ -569,7 +569,7 @@ uint64_t ScraperRegistry::PassivateDB()
 }
 
 // This is static and called by the scheduler.
-void ScraperRegistry::RunScraperDBPassivation()
+void ScraperRegistry::RunDBPassivation()
 {
     TRY_LOCK(cs_main, locked_main);
 

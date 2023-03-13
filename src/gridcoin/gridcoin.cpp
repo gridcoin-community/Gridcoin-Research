@@ -526,11 +526,14 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
     }, std::chrono::minutes{1});
 }
 
-void ScheduleBeaconDBPassivation(CScheduler& scheduler)
+void ScheduleRegistriesPassivation(CScheduler& scheduler)
 {
-    // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
+    // Run registry database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(BeaconRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(ScraperRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(ProtocolRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(Whitelist::RunDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -595,7 +598,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
-    ScheduleBeaconDBPassivation(scheduler);
+    ScheduleRegistriesPassivation(scheduler);
 }
 
 bool GRC::CleanConfig() {

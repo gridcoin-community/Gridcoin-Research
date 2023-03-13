@@ -595,7 +595,7 @@ public:
     //!
     //! \brief A static function that is called by the scheduler to run the scraper entry database passivation.
     //!
-    static void RunScraperDBPassivation();
+    static void RunDBPassivation();
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class

@@ -734,7 +734,7 @@ public:
     //!
     //! \brief A static function that is called by the scheduler to run the beacon database passivation.
     //!
-    static void RunBeaconDBPassivation();
+    static void RunDBPassivation();
 
 
 private:

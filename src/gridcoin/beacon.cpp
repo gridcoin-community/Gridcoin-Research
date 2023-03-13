@@ -1292,7 +1292,7 @@ uint64_t BeaconRegistry::PassivateDB()
 }
 
 // This is static and called by the scheduler.
-void BeaconRegistry::RunBeaconDBPassivation()
+void BeaconRegistry::RunDBPassivation()
 {
     TRY_LOCK(cs_main, locked_main);
 
