@@ -2104,15 +2104,23 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     switch (type.Value()) {
     case GRC::ContractType::PROJECT:
+    {
         if (action == GRC::ContractAction::ADD) {
-            if (project_v2_enabled) { // Contract version for Project changes from 2 to 3 after project v2 enabled.
+            if (block_v13_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
+                            uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
+                            params[4].getBool()); // GDPR stats export protection enforced boolean
+            } else if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
+                            action,
                             uint32_t{2},          // Contract payload version number, 2
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
                             params[4].getBool()); // GDPR stats export protection enforced boolean
 
             } else {
@@ -2120,31 +2128,37 @@ UniValue addkey(const UniValue& params, bool fHelp)
                             contract_version,
                             action,
                             params[2].get_str(),  // Name
-                            params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract payload version number, 1
+                            params[3].get_str()); // URL
             }
         } else if (action == GRC::ContractAction::REMOVE) {
-            if (project_v2_enabled) { // Contract version for Project changes from 2 to 3 after project v2 enabled.
+            if (block_v13_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
+                            uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{2});         // Contract payload version number, 2
+                            false);               // GDPR status irrelevant
+
+            } else if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
+                            action,
+                            uint32_t{2},          // Contract payload version number, 2
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            false);               // GDPR status irrelevant
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
                             params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract payload version number, 1
-            }
+                            std::string{});       // URL ignored
+           }
         }
         break;
+    }
     case GRC::ContractType::SCRAPER:
     {
         std::string status_string = ToLower(params[3].get_str());

@@ -3,6 +3,7 @@
 
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
 
@@ -18,6 +19,7 @@ public:
         m_db_heights.insert(std::make_pair(ContractType::BEACON, GetBeaconRegistry().GetDBHeight()));
         m_db_heights.insert(std::make_pair(ContractType::SCRAPER, GetScraperRegistry().GetDBHeight()));
         m_db_heights.insert(std::make_pair(ContractType::PROTOCOL, GetProtocolRegistry().GetDBHeight()));
+        m_db_heights.insert(std::make_pair(ContractType::PROJECT, GetWhitelist().GetDBHeight()));
     }
 
     std::optional<int> GetRegistryBlockHeight(const ContractType type) const
@@ -38,6 +40,7 @@ public:
         m_db_heights[ContractType::BEACON] = GetBeaconRegistry().GetDBHeight();
         m_db_heights[ContractType::SCRAPER] = GetScraperRegistry().GetDBHeight();
         m_db_heights[ContractType::PROTOCOL] = GetProtocolRegistry().GetDBHeight();
+        m_db_heights[ContractType::PROJECT] = GetWhitelist().GetDBHeight();
     }
 
     int GetLowestRegistryBlockHeight()

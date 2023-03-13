@@ -155,18 +155,16 @@ public:
     //!
     //! \brief Reset the cached state of any contract handler to prepare for
     //! historical contract replay. Note that all handlers are now native. The
-    //! appcache is formally retired. The only handler left that requires
-    //! historical reversion during reorgs because of multiple entries with
-    //! the same key, but no registry backing store, is the Projects (whitelist)
-    //! Registry. So this sole handler has to be reset and contracts replayed.
+    //! appcache is formally retired.
+    //!
     //! The contract replay will skip contracts for other handler types where
-    //! the backing store exists (beacons, scraper entries, and protocol entries),
-    //! or the objects are independent and unique by key and admit to simple
-    //! reversion, such as polls/votes.
+    //! the backing store exists (beacons, scraper entries, protocol entries, and
+    //! projects), or the objects are independent and unique by key and admit to
+    //! simple reversion, such as polls/votes.
     //!
     void ResetHandlers()
     {
-        GetWhitelist().Reset();
+        // Nothing to do.
     }
 
     //!
@@ -849,6 +847,7 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     //
     LegacyPayload legacy;
 
+    //TODO: Evaluate if this condition is relevant anymore
     //if (version < 2) {
         legacy = static_cast<const LegacyPayload&>(*m_payload);
     //}
@@ -874,7 +873,7 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
             return ContractPayload::Make<PollPayload>(
                 Poll::Parse(legacy.m_key, legacy.m_value));
         case ContractType::PROJECT:
-            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
+            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value);
         case ContractType::PROTOCOL:
             return ContractPayload::Make<ProtocolEntryPayload>(
                 ProtocolEntryPayload::Parse(legacy.m_key, legacy.m_value));
@@ -917,7 +916,11 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROJECT:
-            m_payload.Reset(new Project());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new Project(IsV13Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROTOCOL:
             // Note that the contract code expects cs_main to already be taken which

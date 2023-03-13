@@ -21,7 +21,7 @@ namespace GRC {
 
 class Beacon;
 class Magnitude;
-class Project;
+class ProjectEntry;
 class WhitelistSnapshot;
 
 //!
@@ -160,7 +160,7 @@ struct MiningProject
     //!
     //! \return A pointer to the whitelist project if it matches.
     //!
-    const Project* TryWhitelist(const WhitelistSnapshot& whitelist) const;
+    const GRC::ProjectEntry* TryWhitelist(const WhitelistSnapshot& whitelist) const;
 
     //!
     //! \brief Determine whether the project is whitelisted.

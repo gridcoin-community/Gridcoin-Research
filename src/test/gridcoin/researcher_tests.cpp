@@ -355,8 +355,8 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_whitelisted)
                                0.0);
 
     GRC::WhitelistSnapshot s(std::make_shared<GRC::ProjectList>(GRC::ProjectList {
-        GRC::Project("Enigma", "http://enigma.test/@", 1234567),
-        GRC::Project("Einstein@home", "http://einsteinathome.org/@", 1234567),
+        GRC::Project("Enigma", "http://enigma.test/@"),
+        GRC::Project("Einstein@home", "http://einsteinathome.org/@"),
     }));
 
     BOOST_CHECK(project.Whitelisted(s) == false);

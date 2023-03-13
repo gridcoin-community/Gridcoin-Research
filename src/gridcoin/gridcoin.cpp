@@ -144,6 +144,32 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 void InitializeContracts(CBlockIndex* pindexBest)
 {
     {
+        LogPrintf("Gridcoin: Loading project history...");
+        uiInterface.InitMessage(_("Loading project history..."));
+
+        Whitelist& projects = GetWhitelist();
+
+        // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
+        if (gArgs.GetBoolArg("-clearprojectentryhistory", false))
+        {
+            projects.Reset();
+        }
+
+        LogPrintf("Gridcoin: Initializing project entry registry from stored history...");
+        uiInterface.InitMessage(_("Initializing project entry registry from stored history..."));
+        int project_db_height = projects.Initialize();
+
+        if (project_db_height > 0)
+        {
+            LogPrintf("Gridcoin: project entry history loaded through height = %i.", project_db_height);
+        }
+        else
+        {
+            LogPrintf("Gridcoin: project entry history load not successful. Will initialize from contract replay.");
+        }
+    }
+
+    {
         LogPrintf("Gridcoin: Loading beacon history...");
         uiInterface.InitMessage(_("Loading beacon history..."));
 
@@ -247,13 +273,11 @@ void InitializeContracts(CBlockIndex* pindexBest)
     //
     // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
     // POLL/VOTE (polls and voting)                   true                                        false
-    // PROJECT (whitelist)                            true                                        true
     //
     // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
-    // for POLL/VOTE's, but is still required for PROJECT until the proper contract revert structures are done.
-    // The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add is simply to delete them.
-    // For PROJECT entries, the same key can have multiple adds essentially being an update record. This complicates the
-    // reversion architecture and makes the requirements equivalent to what was done in the scraper entry registry.
+    // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
+    // is simply to delete them. The wallet startup replay requirement is still required for polls and votes, because
+    // the Poll/Vote classes do not have a backing registry db yet.
     const int& start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
                                        lookback_window_low_height);
 
@@ -269,8 +293,8 @@ void InitializeContracts(CBlockIndex* pindexBest)
     // Reset pindex_start to the index for the block at start_height
     pindex_start = pblock_index;
 
-    // The replay contract window here may overlap with the beacon db coverage. Logic is now included in
-    // the ApplyContracts to ignore beacon contracts that have already been covered by the beacon db.
+    // The replay contract window here may overlap with the registry db coverage for the various registries. Logic
+    // is now included in the ApplyContracts to ignore contracts that have already been covered by the registry dbs.
     ReplayContracts(pindexBest, pindex_start);
 }
 

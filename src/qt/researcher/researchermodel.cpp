@@ -505,7 +505,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         // that also compares the project URL to establish the relationship
         // between local projects and whitelisted projects:
         //
-        if (const Project* whitelist_project = project.TryWhitelist(whitelist)) {
+        if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
             row.m_whitelisted = true;
             row.m_name = QString::fromStdString(whitelist_project->DisplayName()).toLower();
 

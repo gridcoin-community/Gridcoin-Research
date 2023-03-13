@@ -148,7 +148,7 @@ bool CompareProjectHostname(const std::string& url_1, const std::string& url_2)
 //!
 //! \return A pointer to the whitelist project if it matches.
 //!
-const Project* ResolveWhitelistProject(
+const ProjectEntry* ResolveWhitelistProject(
     const MiningProject& project,
     const WhitelistSnapshot& whitelist)
 {
@@ -902,7 +902,7 @@ bool MiningProject::Eligible() const
     return m_error == Error::NONE;
 }
 
-const Project* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
+const ProjectEntry* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
 {
     return ResolveWhitelistProject(*this, whitelist);
 }
