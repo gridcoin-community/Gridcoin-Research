@@ -64,6 +64,11 @@ bool ProtocolEntry::WellFormed() const
             && m_status != ProtocolEntryStatus::OUT_OF_BOUND);
 }
 
+std::string ProtocolEntry::Key() const
+{
+    return m_key;
+}
+
 std::pair<std::string, std::string> ProtocolEntry::KeyValueToString() const
 {
     return std::make_pair(m_key, m_value);

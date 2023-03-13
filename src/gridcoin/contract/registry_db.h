@@ -193,7 +193,7 @@ public:
                          );
 
                 // Insert or replace the existing map entry with the latest.
-                entries[entry.m_key] = historical_entry_ptr;
+                entries[entry.Key()] = historical_entry_ptr;
             }
 
             if (prev_historical_iter != m_historical.end()) {

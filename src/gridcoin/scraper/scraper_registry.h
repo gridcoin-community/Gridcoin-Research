@@ -113,6 +113,14 @@ public:
     bool WellFormed() const;
 
     //!
+    //! \brief This is the standardized method that returns the key value for the scraper entry (for
+    //! the registry_db.h template.) Here it is the same as the GetId() method below.
+    //!
+    //! \return CKeyID value for the scraper entry.
+    //!
+    CKeyID Key() const;
+
+    //!
     //! \brief Provides the key (address) and status as string
     //! \return std::pair of strings
     //!

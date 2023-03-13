@@ -106,6 +106,18 @@ public:
     //!
     bool WellFormed() const;
 
+    //!
+    //! \brief This is the standardized method that returns the key value for the protocol entry (for
+    //! the registry_db.h template.)
+    //!
+    //! \return std::string key value for the protocol entry
+    //!
+    std::string Key() const;
+
+    //!
+    //! \brief Provides the protocol key and value as a pair.
+    //! \return std::pair of strings
+    //!
     std::pair<std::string, std::string> KeyValueToString() const;
 
     //!

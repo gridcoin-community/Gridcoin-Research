@@ -57,6 +57,11 @@ bool ScraperEntry::WellFormed() const
             && m_status != ScraperEntryStatus::OUT_OF_BOUND);
 }
 
+CKeyID ScraperEntry::Key() const
+{
+    return m_key;
+}
+
 std::pair<std::string, std::string> ScraperEntry::KeyValueToString() const
 {
     return std::make_pair(CBitcoinAddress(m_key).ToString(), StatusToString());
