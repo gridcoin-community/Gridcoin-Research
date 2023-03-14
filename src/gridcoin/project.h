@@ -614,8 +614,7 @@ public:
     typedef RegistryDB<ProjectEntry,
                        ProjectEntryStatus,
                        ProjectEntryMap,
-                       HistoricalProjectEntryMap,
-                       Whitelist> ProjectEntryDB;
+                       HistoricalProjectEntryMap> ProjectEntryDB;
 
 private:
     //!

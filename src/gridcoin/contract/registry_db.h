@@ -24,9 +24,8 @@ namespace GRC {
 //! S: the entry status enum
 //! M: the map type for the entries
 //! H: the historical map type for historical entries
-//! R: the registry class itself (used for the first part of the key string name in leveldb)
 //!
-template<class E, class S, class M, class H, class R>
+template<class E, class S, class M, class H>
 class RegistryDB
 {
 public:

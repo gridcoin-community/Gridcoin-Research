@@ -601,10 +601,9 @@ public:
     //! \brief Specializes the template RegistryDB for the ScraperEntry class
     //!
     typedef RegistryDB<ScraperEntry,
-                        ScraperEntryStatus,
-                        ScraperMap,
-                        HistoricalScraperMap,
-                        ScraperRegistry> ScraperEntryDB;
+                       ScraperEntryStatus,
+                       ScraperMap,
+                       HistoricalScraperMap> ScraperEntryDB;
 
 private:
     //!

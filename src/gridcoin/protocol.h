@@ -564,8 +564,7 @@ public:
     typedef RegistryDB<ProtocolEntry,
                        ProtocolEntryStatus,
                        ProtocolEntryMap,
-                       HistoricalProtocolEntryMap,
-                       ProtocolRegistry> ProtocolEntryDB;
+                       HistoricalProtocolEntryMap> ProtocolEntryDB;
 
 private:
     //!
