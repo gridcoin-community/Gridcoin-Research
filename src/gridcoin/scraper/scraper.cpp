@@ -34,6 +34,7 @@
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <util/strencodings.h>
 #include <random>
+#include <stdexcept>
 #include <util/string.h>
 
 using namespace GRC;

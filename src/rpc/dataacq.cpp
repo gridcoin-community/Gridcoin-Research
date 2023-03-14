@@ -19,6 +19,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <algorithm>
+#include <stdexcept>
 
 #include <univalue.h>
 

@@ -7,6 +7,7 @@
 #include "util.h"
 
 #include <univalue.h>
+#include <stdexcept>
 
 using namespace std;
 

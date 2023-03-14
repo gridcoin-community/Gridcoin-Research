@@ -5,6 +5,7 @@
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <vector>
+#include <stdexcept>
 #include <string>
 
 #include "crypter.h"

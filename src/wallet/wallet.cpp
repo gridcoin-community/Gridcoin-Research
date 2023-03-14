@@ -27,6 +27,7 @@
 #include "policy/fees.h"
 #include "node/blockstorage.h"
 
+#include <stdexcept>
 
 using namespace std;
 
@@ -1113,6 +1114,48 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
     return ret;
 }
 
+// Scan the block chain (starting in pindexStart) for MRC request transactions.
+// If fUpdate is true, found transactions that already exist in the wallet will be updated.
+// This restores MRC request transactions to the wallet that may have been removed
+// do to an overly aggressive ResendWalletTransactions in 5.4.1.0. Note the MRC
+// payment transactions were not affected. The change in effective balance due to this
+// is very small, since a successful MRC request costs 0.011 GRC.
+int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate)
+{
+    int ret = 0;
+
+    {
+        LOCK2(cs_main, cs_wallet);
+        for(CBlockIndex* pindex = pindexStart; pindex && pindex->nHeight < pindexEnd->nHeight;)
+        {
+            // no need to read and scan block, if block was created before
+            // our wallet birthday (as adjusted for block time variability)
+            if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
+                pindex = pindex->pnext;
+                continue;
+            }
+
+            if (pindex->ResearchMRCSubsidy() > 0) {
+                // If at pindex there were MRC payment(s), then pindex->pprev there
+                // were MRC requests.
+                CBlock block;
+                ReadBlockFromDisk(block, pindex->pprev, Params().GetConsensus());
+                for (auto const& tx : block.vtx)
+                {
+                    if (!tx.GetContracts().empty()
+                            && tx.GetContracts()[0].m_type == GRC::ContractType::MRC
+                            && AddToWalletIfInvolvingMe(tx, &block, fUpdate))
+                        ret++;
+                }
+            }
+
+            pindex = pindex->pnext;
+        }
+    }
+    return ret;
+}
+
+
 void CWallet::ReacceptWalletTransactions()
 {
     CTxDB txdb("r");
@@ -1210,12 +1253,20 @@ void CWallet::ResendWalletTransactions(bool fForce)
     if (!fForce)
     {
         // Do this infrequently and randomly to avoid giving away
-        // that these are our transactions.
+        // that these are our transactions. Also only do if the wallet
+        // is in sync. During initial block loads, etc. using a transferred
+        // wallet.dat file, the unconfirmed status of the transactions may not be correct.
+        if (IsInitialBlockDownload() || OutOfSyncByAge()) {
+            return;
+        }
+
         static int64_t nNextTime;
         if ( GetAdjustedTime() < nNextTime)
             return;
         bool fFirst = (nNextTime == 0);
-        nNextTime =  GetAdjustedTime() + GetRand(30 * 60);
+
+        // Choose a random time up to about 10 blocks at target spacing.
+        nNextTime =  GetAdjustedTime() + GetRand(GetTargetSpacing(nBestHeight) * 10);
         if (fFirst)
             return;
 
@@ -1226,43 +1277,87 @@ void CWallet::ResendWalletTransactions(bool fForce)
         nLastTime =  GetAdjustedTime();
     }
 
-    // Rebroadcast any of our txes that aren't in a block yet, and clean up invalid transactions.
-    std::vector<CTransaction> to_be_erased;
+    std::map<uint256, CTransaction> to_be_erased;
+
+    unsigned int txns_relayed = 0;
+    unsigned int txns_failed_validation = 0;
+    unsigned int txns_erased_from_wallet = 0;
 
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
-        // Sort them in chronological order
+        // Sort them in chronological order.
         multimap<unsigned int, CWalletTx*> mapSorted;
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: mapWallet.size() = %u.",
+                 __func__,
+                 mapWallet.size());
+
         for (auto &item : mapWallet)
         {
             CWalletTx& wtx = item.second;
-            // Don't rebroadcast until it's had plenty of time that
-            // it should have gotten in already by now.
-            if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
-                mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
+
+            // Resend only if hashBlock is null AND not in the mainchain AND not in the mempool (this is depth = -1).
+            if (wtx.hashBlock.IsNull() && wtx.GetDepthInMainChain() == -1) {
+                // Don't rebroadcast until it's had plenty of time that it should have gotten in already by now.
+                // Here we are using time of approximately 5 blocks at target spacing.
+                if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > GetTargetSpacing(nBestHeight) * 5)
+                    mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
+            }
         }
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Candidate transactions for sending: mapSorted.size() = %u",
+                 __func__,
+                 mapSorted.size());
 
         for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
+
             if (wtx.RevalidateTransaction(txdb)) {
                 // Transaction is valid for relaying.
                 wtx.RelayWalletTransaction(txdb);
+
+                ++txns_relayed;
             } else {
-                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s. Transaction will be "
-                          "erased.", wtx.GetHash().ToString());
-                to_be_erased.push_back(wtx);
+                LogPrintf("WARNING: %s: CheckTransaction failed for transaction %s. Transaction will be "
+                          "erased.",
+                          __func__,
+                          wtx.GetHash().ToString());
+
+                to_be_erased.insert(std::make_pair(wtx.GetHash(), wtx));
+
+                ++txns_failed_validation;
             }
         }
     }
 
-    for (const auto& wtx : to_be_erased) {
-        LogPrintf("%s: Erasing invalid transaction %s.", __func__, wtx.GetHash().ToString());
-        EraseFromWallet(wtx.GetHash());
-        mempool.remove((CTransaction) wtx);
-        NotifyTransactionChanged(this, wtx.GetHash(), CT_DELETED);
+    if (to_be_erased.size()) {
+        LogPrint(BCLog::LogFlags::VERBOSE, "WARNING: %s: to_be_erased.size() = %u", __func__, to_be_erased.size());
     }
+
+    for (const auto& wtx : to_be_erased) {
+
+        const CTransaction& tx = wtx.second;
+
+        if (EraseFromWallet(wtx.first)) {
+            LogPrintf("WARNING %s: Erased invalid transaction %s from the wallet.", __func__, wtx.first.ToString());
+
+            ++txns_erased_from_wallet;
+        } else {
+            LogPrintf("WARNING %s: Unable to erase invalid transaction %s from the wallet.",
+                      __func__, wtx.first.ToString());
+        }
+
+        NotifyTransactionChanged(this, tx.GetHash(), CT_DELETED);
+    }
+
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: %u transactions relayed, %u transactions failed validation, "
+                                       "%u transactions erased from wallet.",
+             __func__,
+             txns_relayed,
+             txns_failed_validation,
+             txns_erased_from_wallet);
 }
 
 bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
@@ -1286,6 +1381,7 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     }
 
     // Validate any contracts published in the transaction:
+
     if (!tx.GetContracts().empty()) {
         if (!CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
             return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());

@@ -7,6 +7,7 @@
 #include "util.h"
 
 #include <curl/curl.h>
+#include <stdexcept>
 #include <stdio.h>
 #include <string.h>
 #include <memory>

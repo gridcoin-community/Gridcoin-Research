@@ -386,7 +386,7 @@ const std::string& PollReference::Title() const
         return empty;
     }
 
-    return *m_ptitle;
+    return m_title;
 }
 
 const std::vector<uint256>& PollReference::Votes() const
@@ -984,15 +984,14 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
     // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
     // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
     // with the same title except for a difference in case.
-    poll_title = ToLower(poll_title);
-
-    auto result_pair = m_polls.emplace(std::move(poll_title), PollReference());
+    auto result_pair = m_polls.emplace(ToLower(poll_title), PollReference());
 
     if (result_pair.second) {
         const std::string& title = result_pair.first->first;
 
         PollReference& poll_ref = result_pair.first->second;
         poll_ref.m_ptitle = &title;
+        poll_ref.m_title = poll_title;
         poll_ref.m_payload_version = payload->m_version;
         poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
@@ -1072,11 +1071,7 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    if (ctx->m_version >= 2) {
-        m_polls.erase(payload->m_poll.m_title);
-    } else {
-        m_polls.erase(boost::to_lower_copy(payload->m_poll.m_title));
-    }
+    m_polls.erase(ToLower(payload->m_poll.m_title));
 
     m_polls_by_txid.erase(ctx.m_tx.GetHash());
     m_latest_poll = nullptr;

@@ -2,6 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <stdexcept>
+
 #include "server.h"
 #include "protocol.h"
 #include "alert.h"
@@ -78,6 +80,38 @@ UniValue addnode(const UniValue& params, bool fHelp)
     UniValue result(UniValue::VOBJ);
     result.pushKV("result", "ok");
     return result;
+}
+
+UniValue getnodeaddresses(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "getnodeaddresses [count]\n"
+                "\nReturn known addresses which can potentially be used to find new nodes in the network\n"
+                "count: How many addresses to return. Limited to the smaller of " + std::to_string(ADDRMAN_GETADDR_MAX) +
+                " or " + std::to_string(ADDRMAN_GETADDR_MAX_PCT) + "% of all known addresses. (default = 1)\n");
+    int count = 1;
+    if(!params[0].isNull())
+        count = params[0].get_int();
+
+    if (count <= 0)
+        throw JSONRPCError(-8, "Address count out of range");
+
+    // returns a shuffled list of CAddress
+    std::vector<CAddress> vAddr = addrman.GetAddr();
+    UniValue ret(UniValue::VARR);
+
+    int address_return_count = std::min<int>(count, vAddr.size());
+    for (int i = 0; i < address_return_count; ++i) {
+        UniValue obj(UniValue::VOBJ);
+        const CAddress& addr = vAddr[i];
+        obj.pushKV("time", (int)addr.nTime);
+        obj.pushKV("services", (uint64_t)addr.nServices);
+        obj.pushKV("address", addr.ToStringIP());
+        obj.pushKV("port", addr.GetPort());
+        ret.push_back(obj);
+    }
+    return ret;
 }
 
 UniValue getaddednodeinfo(const UniValue& params, bool fHelp)

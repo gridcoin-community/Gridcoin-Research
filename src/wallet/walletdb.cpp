@@ -8,6 +8,7 @@
 #include "wallet/wallet.h"
 #include "init.h"
 
+#include <stdexcept>
 #include <variant>
 
 using namespace std;

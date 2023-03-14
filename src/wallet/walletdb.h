@@ -212,6 +212,19 @@ public:
         nWalletDBUpdated++;
         return Write(std::string("backuptime"), backup_time);
     }
+
+    template<typename T>
+    bool WriteAttribute(const std::string& attribute, const T& value)
+    {
+        nWalletDBUpdated++;
+        return Write(std::make_pair(std::string("attribute"), attribute), value);
+    }
+
+    template<typename T>
+    bool ReadAttribute(const std::string& attribute, T& value)
+    {
+        return Read(std::make_pair(std::string("attribute"), attribute), value);
+    }
 private:
     bool WriteAccountingEntry(const uint64_t nAccEntryNum, const CAccountingEntry& acentry);
 public:

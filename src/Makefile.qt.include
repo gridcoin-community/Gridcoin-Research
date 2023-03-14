@@ -67,7 +67,6 @@ QT_TS = \
   qt/locale/bitcoin_uk.ts \
   qt/locale/bitcoin_ur_PK.ts \
   qt/locale/bitcoin_vi.ts \
-  qt/locale/bitcoin_vi_VN.ts \
   qt/locale/bitcoin_zh_CN.ts \
   qt/locale/bitcoin_zh_TW.ts
 

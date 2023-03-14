@@ -18,6 +18,8 @@
 #include "protocol.h"
 #include "server.h"
 
+#include <stdexcept>
+
 using namespace std;
 
 UniValue getstakinginfo(const UniValue& params, bool fHelp)
@@ -647,7 +649,7 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
         throw runtime_error(
-            "listresearcheraccrounts\n"
+            "listresearcheraccounts\n"
             "\n"
             "List researcher accounts in the accrual system and their current accruals.\n");
 

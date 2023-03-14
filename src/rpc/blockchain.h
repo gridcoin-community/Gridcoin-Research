@@ -28,6 +28,8 @@
 #include "policy/fees.h"
 #include "util.h"
 
+#include <stdexcept>
+
 namespace GRC
 {
 class MockBlockIndex : CDiskBlockIndex

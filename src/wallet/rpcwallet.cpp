@@ -21,6 +21,7 @@
 #include "wallet/diagnose.h"
 
 #include <regex>
+#include <stdexcept>
 #include <univalue.h>
 #include <variant>
 

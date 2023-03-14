@@ -11,6 +11,7 @@
 #include "node/ui_interface.h"
 #include "base58.h"
 
+#include <stdexcept>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/algorithm/string.hpp>
 
