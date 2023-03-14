@@ -13,6 +13,7 @@
 #include <chainparamsbase.h>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <stdexcept>
 #include <thread>
 #include <typeinfo>
 #include <univalue.h>

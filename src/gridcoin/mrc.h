@@ -14,6 +14,7 @@
 #include "uint256.h"
 
 #include <optional>
+#include <stdexcept>
 
 class CPubKey;
 

@@ -6,6 +6,7 @@
 #ifndef BITCOIN_WALLET_WALLET_H
 #define BITCOIN_WALLET_WALLET_H
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <set>

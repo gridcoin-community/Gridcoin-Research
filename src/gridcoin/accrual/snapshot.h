@@ -20,6 +20,7 @@
 #include "streams.h"
 #include "tinyformat.h"
 
+#include <stdexcept>
 #include <unordered_map>
 
 class CBlockIndex;

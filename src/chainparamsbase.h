@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <stdexcept>
 
 class ArgsManager;
 

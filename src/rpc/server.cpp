@@ -25,6 +25,7 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
+#include <stdexcept>
 
 #include <memory>
 

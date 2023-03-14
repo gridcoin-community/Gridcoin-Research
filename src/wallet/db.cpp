@@ -11,6 +11,7 @@
 #include "util.h"
 
 #include <stdint.h>
+#include <stdexcept>
 
 #ifndef WIN32
 #include "sys/stat.h"

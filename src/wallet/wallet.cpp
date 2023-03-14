@@ -27,6 +27,7 @@
 #include "policy/fees.h"
 #include "node/blockstorage.h"
 
+#include <stdexcept>
 
 using namespace std;
 
