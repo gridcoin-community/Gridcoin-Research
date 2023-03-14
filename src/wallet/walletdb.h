@@ -223,7 +223,6 @@ public:
     template<typename T>
     bool ReadAttribute(const std::string& attribute, T& value)
     {
-        nWalletDBUpdated++;
         return Read(std::make_pair(std::string("attribute"), attribute), value);
     }
 private:
