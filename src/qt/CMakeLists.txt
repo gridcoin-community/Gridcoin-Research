@@ -172,6 +172,22 @@ target_link_libraries(gridcoinresearch PRIVATE
     gridcoinqt
 )
 
+if(UNIX AND NOT APPLE)
+    include(GNUInstallDirs)
+    install(TARGETS gridcoinresearch
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}"
+    )
+    install(FILES "${CMAKE_SOURCE_DIR}/contrib/gridcoinresearch.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
+    )
+    install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearch.1"
+        DESTINATION "${CMAKE_INSTALL_MANDIR}"
+    )
+endif()
+
 
 # Tests
 # =====

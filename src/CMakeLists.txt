@@ -256,6 +256,19 @@ if(ENABLE_DAEMON)
     if(WIN32)
         target_sources(gridcoinresearchd PRIVATE gridcoinresearchd-res.rc)
     endif()
+
+    if(UNIX AND NOT APPLE)
+        include(GNUInstallDirs)
+        install(TARGETS gridcoinresearchd
+            DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        )
+        install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1"
+            DESTINATION "${CMAKE_INSTALL_MANDIR}"
+        )
+        install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd.service"
+            DESTINATION /lib/systemd/system
+        )
+    endif()
 endif()
 
 
