@@ -1143,7 +1143,6 @@ int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd
                 {
                     if (!tx.GetContracts().empty()
                             && tx.GetContracts()[0].m_type == GRC::ContractType::MRC
-                            && mapWallet.find(tx.GetHash()) == mapWallet.end()
                             && AddToWalletIfInvolvingMe(tx, &block, fUpdate))
                         ret++;
                 }
