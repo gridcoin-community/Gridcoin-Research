@@ -20,6 +20,17 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 
+# Dependencies
+# ============
+
+if(SYSTEM_UNIVALUE)
+    set(LIBUNIVALUE PkgConfig::UNIVALUE)
+else()
+    add_subdirectory(univalue)
+    set(LIBUNIVALUE univalue)
+endif()
+
+
 # libgridcoin_crypto
 # ==================
 
@@ -144,13 +155,12 @@ target_include_directories(gridcoin_util PUBLIC
 )
 
 target_link_libraries(gridcoin_util PUBLIC
-    -lm ${ATOMICS_LIBRARIES}
+    -lm ${ATOMICS_LIBRARIES} ${LIBUNIVALUE}
     BerkeleyDB::CXX
     Boost::filesystem Boost::headers Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     PkgConfig::SECP256K1
-    PkgConfig::UNIVALUE
     Threads::Threads
     leveldb::leveldb
     libzip::zip

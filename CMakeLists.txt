@@ -75,6 +75,7 @@ option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
 option(SYSTEM_XXD       "Find system xxd binary" OFF)
+option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
 
 
 # Find dependencies
@@ -94,7 +95,10 @@ find_package(libzip REQUIRED)
 
 find_package(PkgConfig)
 pkg_check_modules(SECP256K1 REQUIRED IMPORTED_TARGET "libsecp256k1 >= 0.2.0")
-pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
+
+if(SYSTEM_UNIVALUE)
+    pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
+endif()
 
 if(ENABLE_GUI)
     find_package(Qt5 ${QT5_MINIMUM_VERSION} REQUIRED COMPONENTS
