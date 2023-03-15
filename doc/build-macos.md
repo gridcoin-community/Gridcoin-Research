@@ -14,6 +14,7 @@ macOS comes with a built-in Terminal located in:
 /Applications/Utilities/Terminal.app
 ```
 ### 1. Xcode Command Line Tools
+
 The Xcode Command Line Tools are a collection of build tools for macOS.
 These tools must be installed in order to build Gridcoin from source.
 
@@ -27,6 +28,7 @@ Upon running the command, you should see a popup appear.
 Click on `Install` to continue the installation process.
 
 ### 2. Homebrew Package Manager
+
 Homebrew is a package manager for macOS that allows one to install packages from the command line easily.
 While several package managers are available for macOS, this guide will focus on Homebrew as it is the most popular.
 Since the examples in this guide which walk through the installation of a package will use Homebrew, it is recommended that you install it to follow along.
@@ -35,13 +37,19 @@ Otherwise, you can adapt the commands to your package manager of choice.
 To install the Homebrew package manager, see: https://brew.sh
 
 Note: If you run into issues while installing Homebrew or pulling packages, refer to [Homebrew's troubleshooting page](https://docs.brew.sh/Troubleshooting).
+
 ### 3. Install Required Dependencies
+
 The first step is to download the required dependencies.
 These dependencies represent the packages required to get a barebones installation up and running.
 To install, run the following from your terminal:
 
 ```shell
-brew install automake libtool boost openssl pkg-config libzip berkeley-db@4
+brew install cmake
+# or
+brew install automake libtool
+
+brew install berkeley-db@5 boost curl leveldb libzip openssl pkgconf secp256k1
 ```
 
 ### 4. Clone Gridcoin repository
@@ -107,11 +115,19 @@ brew install miniupnpc
 #### Test Suite Dependencies
 
 There is an included test suite that is useful for testing code changes when developing.
-To run the test suite (recommended), you will need to have Python 3 installed:
+To run the test suite (recommended), you will need to have the following packages installed:
 
-``` bash
-brew install python
-```
+* With CMake:
+
+  ```bash
+  brew install vim
+  ```
+
+* With Autotools:
+
+  ```bash
+  brew install python
+  ```
 
 ---
 
@@ -132,32 +148,57 @@ pip3 install ds_store mac_alias
 
 ## Build Gridcoin
 
-1.  Build Gridcoin:
+1. Prepare the assembly code (requires Perl):
 
-    Prepare the assembly code (requires Perl):
-    ```shell
-    cd src/
-    ../contrib/nomacro.pl
-    cd ..
-    ```
+   ```shell
+   pushd src
+   ../contrib/nomacro.pl
+   popd
+   ```
 
-    Configure and build the headless Gridcoin binaries as well as the GUI (if Qt is found).
-    ```shell
-    ./autogen.sh
-    ./configure
-    make
-    ```
-    You can disable the GUI build by passing `--without-gui` to configure.
+2. Configure and build the Gridcoin binaries:
 
-2.  It is recommended to build and run the unit tests:
-    ```shell
-    make check
-    ```
+   You can enable the GUI build by passing `-DENABLE_GUI=ON` to CMake or
+   `--with-gui=qt5` to the configure script.
 
-3.  You can also create a  `.dmg` that contains the `.app` bundle (optional):
-    ```shell
-    make deploy
-    ```
+   * With CMake:
+
+     ```shell
+     mkdir build && cd build
+     cmake ..
+     cmake --build .
+     ```
+   * With Autotools:
+
+     ```shell
+     ./autogen.sh
+     ./configure
+     make
+     ```
+
+3. It is recommended to build and run the unit tests:
+
+   * With CMake:
+
+     ```shell
+     cmake .. -DENABLE_TESTS=ON
+     cmake --build .
+     ctest .
+     ```
+
+   * With Autotools:
+
+     ```shell
+     make check
+     ```
+
+4. You can also create a  `.dmg` that contains the `.app` bundle (optional):
+
+   * With Autotools:
+
+     ```shell
+     make deploy
+     ```
 
 ## Running
 

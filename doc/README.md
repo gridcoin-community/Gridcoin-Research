@@ -2,7 +2,7 @@ Gridcoin
 =============
 
 Setup
----------------------
+-----
 Gridcoin is a free open source project derived from Bitcoin, with
 the goal of providing a long-term energy-efficient cryptocurrency, rewarding BOINC work.
 Built on the foundation of Bitcoin, PPCoin and NovaCoin, innovations such as proof-of-stake
@@ -16,16 +16,18 @@ To download Gridcoin, visit [gridcoin.us](https://gridcoin.us).
 for help and more information.
 * A lot of features core features are based on Bitcoin and have been documented on the [Bitcoin Wiki](https://en.bitcoin.it/wiki/Main_Page)
 * For general questions, please visit our Discord server at https://discord.gg/jf9XX4a
-* Ask for help or discuss on [#gridcoin](https://webchat.freenode.net?channels=gridcoin) on Freenode
-* You can also join us on [Slack](https://join.slack.com/t/teamgridcoin/shared_invite/enQtMjk2NTI4MzAwMzg0LTE4N2I3ZWZjYWJlZGM1Zjg3MTUyMDhiN2M5NmRmZTA2NDA0ZmY1ZTFmOGM3ZGU2YTBkOTdhNTk2ZjkzMGZkODY/)```
+* Ask for help or discuss on [#gridcoin](https://web.libera.chat/?channels=#gridcoin) on Libera Chat
+* You can also join us on [Slack](https://join.slack.com/t/teamgridcoin/shared_invite/enQtMjk2NTI4MzAwMzg0LTE4N2I3ZWZjYWJlZGM1Zjg3MTUyMDhiN2M5NmRmZTA2NDA0ZmY1ZTFmOGM3ZGU2YTBkOTdhNTk2ZjkzMGZkODY/)
 
 Building
----------------------
+--------
 The following are developer notes on how to build Gridcoin on your native platform. They are not complete guides, but include notes on the necessary libraries, compile flags, etc.
 
+- [CMake Build Options](cmake-options.md)
 - [OS X Build Notes](build-macos.md)
 - [Unix Build Notes](build-unix.md)
 - [Windows Build Notes](build-windows.md)
+- [FreeBSD Build Notes](build-freebsd.md)
 - [OpenBSD Build Notes](build-openbsd.md)
 
 Running
@@ -35,15 +37,14 @@ To create a secure environment for running Gridcoin see:
 - [Running Gridcoin](running.md)
 
 Development
----------------------
+-----------
 The Gridcoin repo's [root README](/README.md) contains relevant information on the development process and automated testing.
 
 - [Developer Notes](coding.txt)
 - [Release Process](release-process.md)
-- [Travis CI](travis-ci.md)
 
 License
----------------------
+-------
 Distributed under the [MIT software license](/COPYING). 
 This product includes software developed by the OpenSSL Project for use in the [OpenSSL Toolkit](https://www.openssl.org/). This product includes
 cryptographic software written by Eric Young ([eay@cryptsoft.com](mailto:eay@cryptsoft.com)), and UPnP software written by Thomas Bernard. 

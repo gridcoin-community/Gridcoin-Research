@@ -1,6 +1,8 @@
 WINDOWS BUILD NOTES
 ====================
 
+> This document is outdated.
+
 Below are some notes on how to build Gridcoin for Windows.
 
 The options known to work for building Gridcoin on Windows are:
@@ -13,7 +15,7 @@ Other options which may work, but which have not been extensively tested are (pl
 * On Windows, using a POSIX compatibility layer application such as [cygwin](https://www.cygwin.com/) or [msys2](https://www.msys2.org/).
 
 Installing Windows Subsystem for Linux
----------------------------------------
+--------------------------------------
 
 Follow the upstream installation instructions, available [here](https://docs.microsoft.com/windows/wsl/install-win10).
 
@@ -115,7 +117,7 @@ Then build using:
 For further documentation on the depends system see [README.md](../depends/README.md) in the depends directory.
 
 Installation
--------------
+------------
 
 After building using the Windows subsystem it can be useful to copy the compiled
 executables to a directory on the Windows drive in the same directory structure

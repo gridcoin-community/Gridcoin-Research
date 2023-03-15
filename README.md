@@ -11,18 +11,28 @@ Building Gridcoin
 
 These dependencies are required:
 
- Library     | Purpose          | Description
- ------------|------------------|----------------------------------------------------------------
- pkg-config  | Build            | Learn library inter-dependencies
- libssl      | Crypto           | Random Number Generation, Elliptic Curve Cryptography
- libboost    | Utility          | Library for threading, data structures, etc
- libevent    | Networking       | OS independent asynchronous networking
- miniupnpc   | UPnP Support     | Firewall-jumping support
- qt          | GUI              | GUI toolkit (only needed when GUI enabled)
- libqrencode | QR codes in GUI  | Optional for generating QR codes (only needed when GUI enabled)
+ Library      | Purpose          | Description
+ -------------|------------------|----------------------------------------------------------------
+ cmake        | Build            | Build system (optional)
+ pkgconf      | Build            | Learn library inter-dependencies
+ openssl      | Crypto           | Random Number Generation, Elliptic Curve Cryptography
+ libboost     | Utility          | Library for threading, data structures, etc
+ libcurl      | Utility          | URL client library
+ libzip       | Utility          | Library for manipulating zip archives
+ miniupnpc    | UPnP Support     | Firewall-jumping support (optional)
+ qt5          | GUI              | GUI toolkit (optional)
+ libqrencode  | QR codes in GUI  | Library for encoding data in a QR Code symbol (optional, depends on GUI)
 
-To build, run
-```./autogen.sh && ./configure && make```.
+To build, run:
+
+* With CMake:
+
+  `mkdir build && cmake build && cmake .. && cmake --build .`
+
+* With Autotools:
+
+  `./autogen.sh && ./configure && make`
+
 For more detailed and platform-specific instructions, see [the doc folder.](doc/)
 
 Development process
@@ -71,7 +81,7 @@ master if the staging branch is busy.
 Community
 =========
 
-For general questions, please visit our Discord server at https://discord.gg/jf9XX4a, or Freenode IRC in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/zt-3s81akww-GHt~_KvtxfhxUgi3yW3~Bg).
+For general questions, please visit our Discord server at https://discord.gg/jf9XX4a, or Libera Chat in #gridcoin-help. We also have a Slack channel at [teamgridcoin.slack.com](https://join.slack.com/t/teamgridcoin/shared_invite/zt-3s81akww-GHt~_KvtxfhxUgi3yW3~Bg).
 
 License
 -------
