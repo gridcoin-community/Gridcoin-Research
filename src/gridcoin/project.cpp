@@ -493,7 +493,7 @@ int Whitelist::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_project_db.Initialize(m_project_entries);
+    int height = m_project_db.Initialize(m_project_entries, m_pending_project_entries);
 
     LogPrint(LogFlags::CONTRACT, "INFO %s: m_project_db size after load: %u", __func__, m_project_db.size());
     LogPrint(LogFlags::CONTRACT, "INFO %s: m_project_entries size after load: %u", __func__, m_project_entries.size());
@@ -532,6 +532,11 @@ uint64_t Whitelist::PassivateDB()
     LOCK(cs_lock);
 
     return m_project_db.passivate_db();
+}
+
+Whitelist::ProjectEntryDB &Whitelist::GetProjectDB()
+{
+    return m_project_db;
 }
 
 // This is static and called by the scheduler.

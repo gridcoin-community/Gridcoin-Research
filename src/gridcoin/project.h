@@ -496,6 +496,11 @@ public:
     typedef std::map<std::string, ProjectEntry_ptr> ProjectEntryMap;
 
     //!
+    //! \brief PendingProjectEntryMap. Not actually used here, but required for the template.
+    //!
+    typedef ProjectEntryMap PendingProjectEntryMap;
+
+    //!
     //! \brief The type that keys historical project entries by the contract hash (txid).
     //! Note that the entries in this map are actually smart shared pointer wrappers, so that
     //! the same actual object can be held by both this map and the (current) project entry map
@@ -612,8 +617,10 @@ public:
     //! \brief Specializes the template RegistryDB for the ScraperEntry class
     //!
     typedef RegistryDB<ProjectEntry,
+                       ProjectEntry,
                        ProjectEntryStatus,
                        ProjectEntryMap,
+                       PendingProjectEntryMap,
                        HistoricalProjectEntryMap> ProjectEntryDB;
 
 private:
@@ -631,7 +638,8 @@ private:
     void AddDelete(const ContractContext& ctx);
 
     // With C++20, use std::atomic<std::shared_ptr<T>> instead:
-    ProjectEntryMap m_project_entries;  //!< The set of whitelisted projects.
+    ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
+    PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
 
     ProjectEntryDB m_project_db; //!< The project db member
 public:

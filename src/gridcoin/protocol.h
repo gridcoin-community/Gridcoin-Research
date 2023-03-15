@@ -391,6 +391,11 @@ public:
     typedef std::map<std::string, ProtocolEntry_ptr> ProtocolEntryMap;
 
     //!
+    //! \brief PendingProtocolEntryMap. This is not actually used but defined to satisfy the template.
+    //!
+    typedef ProtocolEntryMap PendingProtocolEntryMap;
+
+    //!
     //! \brief The type that keys historical protocol entries by the contract hash (txid).
     //! Note that the entries in this map are actually smart shared pointer wrappers, so that
     //! the same actual object can be held by both this map and the (current) protocol entry map
@@ -562,8 +567,10 @@ public:
     //! \brief Specializes the template RegistryDB for the ProtocolEntry class
     //!
     typedef RegistryDB<ProtocolEntry,
+                       ProtocolEntry,
                        ProtocolEntryStatus,
                        ProtocolEntryMap,
+                       PendingProtocolEntryMap,
                        HistoricalProtocolEntryMap> ProtocolEntryDB;
 
 private:
@@ -580,7 +587,8 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ProtocolEntryMap m_protocol_entries; //!< Contains the current protocol entries, including entries marked DELETED.
+    ProtocolEntryMap m_protocol_entries;                   //!< Contains the current protocol entries including entries marked DELETED.
+    PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
 
     ProtocolEntryDB m_protocol_db;
 

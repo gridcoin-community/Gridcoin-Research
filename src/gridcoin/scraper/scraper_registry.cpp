@@ -527,7 +527,7 @@ int ScraperRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_scraper_db.Initialize(m_scrapers);
+    int height = m_scraper_db.Initialize(m_scrapers, m_pending_scrapers);
 
     LogPrint(LogFlags::SCRAPER, "INFO %s: m_scraper_db size after load: %u", __func__, m_scraper_db.size());
     LogPrint(LogFlags::SCRAPER, "INFO %s: m_scrapers size after load: %u", __func__, m_scrapers.size());
@@ -566,6 +566,11 @@ uint64_t ScraperRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_scraper_db.passivate_db();
+}
+
+ScraperRegistry::ScraperEntryDB &ScraperRegistry::GetScraperDB()
+{
+    return m_scraper_db;
 }
 
 // This is static and called by the scheduler.

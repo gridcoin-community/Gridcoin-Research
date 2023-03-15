@@ -413,7 +413,7 @@ class ScraperRegistry : public IContractHandler
 {
 public:
     //!
-    //! \brief ProtocolRegistry constructor. The parameter is the version number of the underlying
+    //! \brief ScraperRegistry constructor. The parameter is the version number of the underlying
     //! protocol entry db. This must be incremented when implementing format changes to the protocol
     //! entries to force a reinit.
     //!
@@ -429,6 +429,11 @@ public:
     //! and the historical scraper map without object duplication.
     //!
     typedef std::map<CKeyID, ScraperEntry_ptr> ScraperMap;
+
+    //!
+    //! \brief PendingScraperMap. This is not actually used but defined to satisfy the template.
+    //!
+    typedef ScraperMap PendingScraperMap;
 
     //!
     //! \brief The type that keys historical scraper entries by the contract hash (txid).
@@ -601,8 +606,10 @@ public:
     //! \brief Specializes the template RegistryDB for the ScraperEntry class
     //!
     typedef RegistryDB<ScraperEntry,
+                       ScraperEntry,
                        ScraperEntryStatus,
                        ScraperMap,
+                       PendingScraperMap,
                        HistoricalScraperMap> ScraperEntryDB;
 
 private:
@@ -619,7 +626,8 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ScraperMap m_scrapers; //!< Contains the current scraper entries, including entries marked DELETED.
+    ScraperMap m_scrapers;                   //!< Contains the current scraper entries, including entries marked DELETED.
+    PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
 
     ScraperEntryDB m_scraper_db;
 

@@ -482,7 +482,7 @@ int ProtocolRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_protocol_db.Initialize(m_protocol_entries);
+    int height = m_protocol_db.Initialize(m_protocol_entries, m_pending_protocol_entries);
 
     LogPrint(LogFlags::CONTRACT, "INFO %s: m_protocol_db size after load: %u", __func__, m_protocol_db.size());
     LogPrint(LogFlags::CONTRACT, "INFO %s: m_protocol_entries size after load: %u", __func__, m_protocol_entries.size());
@@ -521,6 +521,11 @@ uint64_t ProtocolRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_protocol_db.passivate_db();
+}
+
+ProtocolRegistry::ProtocolEntryDB &ProtocolRegistry::GetProtocolEntryDB()
+{
+    return m_protocol_db;
 }
 
 // This is static and called by the scheduler.

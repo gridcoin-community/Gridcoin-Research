@@ -20,12 +20,15 @@ namespace GRC {
 //! the original code.
 //!
 //! The class template parameters are
-//! E: the entry type
-//! S: the entry status enum
-//! M: the map type for the entries
-//! H: the historical map type for historical entries
+//! E:  the entry type
+//! SE: the storage entry type. For all except beacons this is the same as E.
+//! S:  the entry status enum
+//! M:  the map type for the entries
+//! P:  the map type for pending entries. This is really only used for beacons. In all other registries it is typedef'd to
+//!     the same as M.
+//! H:  the historical map type for historical entries
 //!
-template<class E, class S, class M, class H>
+template<class E, class SE, class S, class M, class P, class H>
 class RegistryDB
 {
 public:
@@ -57,17 +60,19 @@ public:
     //! in the entry database.
     //!
     //! \param entries The map of current entries.
+    //! \param pending_entries. The map of pending entries. This is not used in the general template, only in the beacons
+    //! specialization.
     //!
     //! \return block height up to and including which the entry records were stored.
     //!
-    int Initialize(M& entries)
+    int Initialize(M& entries, P& pending_entries)
     {
         bool status = true;
         int height = 0;
         uint32_t version = 0;
         std::string key_type = KeyType();
 
-        // First load the typename R db version from LevelDB and check it against the constant in the class.
+        // First load the KeyType() db version from LevelDB and check it against the constant in the class.
         {
             CTxDB txdb("r");
 
@@ -164,45 +169,10 @@ public:
             m_historical[iter.second.m_hash] = std::make_shared<E>(entry);
             entry_ptr& historical_entry_ptr = m_historical[iter.second.m_hash];
 
-            typename H::iterator prev_historical_iter = m_historical.end();
+            HandleCurrentHistoricalEntries(entries, pending_entries, entry,
+                                                historical_entry_ptr, recnum, key_type);
 
-            // prev_historical_iter here is for purposes of passivation later. If insertion of records by recnum results in a
-            // second or succeeding record for the same key, then m_previous_hash will not be null. If the prior record
-            // pointed to by that hash is found, then it can be removed from memory, since only the current record by recnum
-            // needs to be retained.
-            if (!historical_entry_ptr->m_previous_hash.IsNull()) {
-                prev_historical_iter = m_historical.find(historical_entry_ptr->m_previous_hash);
-            }
-
-            // The unknown or out of bound status conditions should have never made it into leveldb to begin with, since
-            // the entry contract will fail validation, but to be thorough, include the filter condition anyway.
-            // Unlike beacons, this is a straight replay.
-            if (entry.m_status != S::UNKNOWN && entry.m_status != S::OUT_OF_BOUND) {
-                LogPrint(LogFlags::CONTRACT, "INFO: %s: %s entry insert: key %s, value %s, timestamp %" PRId64 "; hash %s; "
-                                             "previous_hash %s; status %s, recnum %" PRId64 ".",
-                         __func__,
-                         key_type,
-                         entry.KeyValueToString().first, // key
-                         entry.KeyValueToString().second, //value
-                         entry.m_timestamp, // timestamp
-                         entry.m_hash.GetHex(), // transaction hash
-                         entry.m_previous_hash.GetHex(), // prev entry transaction hash
-                         entry.StatusToString(), // status
-                         recnum
-                         );
-
-                // Insert or replace the existing map entry with the latest.
-                entries[entry.Key()] = historical_entry_ptr;
-            }
-
-            if (prev_historical_iter != m_historical.end()) {
-                // Note that passivation is not expected to be successful for every call. See the comments
-                // in the passivate() function.
-                std::pair<typename H::iterator, bool> passivation_result
-                        = passivate(prev_historical_iter);
-
-                number_passivated += passivation_result.second;
-            }
+            number_passivated += (uint64_t) HandlePreviousHistoricalEntries(historical_entry_ptr);
         } // storage_by_record_num iteration
 
         LogPrint(LogFlags::CONTRACT, "INFO: %s: number of historical records passivated: %" PRId64 ".",
@@ -216,6 +186,76 @@ public:
         m_needs_passivation = true;
 
         return height;
+    }
+
+    //!
+    //! \brief Handles the insertion/deletion of entries in the current entry map and pending entry map. Note that this
+    //! method is specialized for beacons, and the standard template method does not actually use pending_entries.
+    //!
+    //! \param entries
+    //! \param pending_entries
+    //! \param entry
+    //! \param historical_entry_ptr
+    //! \param recnum
+    //! \param key_type
+    //!
+    void HandleCurrentHistoricalEntries(M& entries, P& pending_entries, const E& entry,
+                                        entry_ptr& historical_entry_ptr, const uint64_t& recnum,
+                                        const std::string& key_type)
+    {
+        // The unknown or out of bound status conditions should have never made it into leveldb to begin with, since
+        // the entry contract will fail validation, but to be thorough, include the filter condition anyway.
+        // Unlike beacons, this is a straight replay.
+        if (entry.m_status != S::UNKNOWN && entry.m_status != S::OUT_OF_BOUND) {
+            LogPrint(LogFlags::CONTRACT, "INFO: %s: %s entry insert: key %s, value %s, timestamp %" PRId64 "; hash %s; "
+                                         "previous_hash %s; status %s, recnum %" PRId64 ".",
+                     __func__,
+                     key_type,
+                     entry.KeyValueToString().first, // key
+                     entry.KeyValueToString().second, //value
+                     entry.m_timestamp, // timestamp
+                     entry.m_hash.GetHex(), // transaction hash
+                     entry.m_previous_hash.GetHex(), // prev entry transaction hash
+                     entry.StatusToString(), // status
+                     recnum
+                     );
+
+            // Insert or replace the existing map entry with the latest.
+            entries[entry.Key()] = historical_entry_ptr;
+        }
+    }
+
+    //!
+    //! \brief Handles the passivation of previous historical entries that have been superceded by current entries.
+    //!
+    //! \param historical_entry_ptr. Shared smart pointer to current historical entry already inserted into historical map.
+    //!
+    //! \return Boolean - true if a passivation occurred.
+    //!
+    bool HandlePreviousHistoricalEntries(const entry_ptr& historical_entry_ptr)
+    {
+        bool passivated = false;
+
+        typename H::iterator prev_historical_iter = m_historical.end();
+
+        // prev_historical_iter here is for purposes of passivation later. If insertion of records by recnum results in a
+        // second or succeeding record for the same key, then m_previous_hash will not be null. If the prior record
+        // pointed to by that hash is found, then it can be removed from memory, since only the current record by recnum
+        // needs to be retained.
+        if (!historical_entry_ptr->m_previous_hash.IsNull()) {
+            prev_historical_iter = m_historical.find(historical_entry_ptr->m_previous_hash);
+        }
+
+        if (prev_historical_iter != m_historical.end()) {
+            // Note that passivation is not expected to be successful for every call. See the comments
+            // in the passivate() function.
+            std::pair<typename H::iterator, bool> passivation_result
+                    = passivate(prev_historical_iter);
+
+            passivated = passivation_result.second;
+        }
+
+        return passivated;
     }
 
     //!
@@ -319,6 +359,33 @@ public:
     }
 
     //!
+    //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization.
+    //! \return
+    //!
+    bool NeedsIsContractCorrection()
+    {
+        return m_needs_IsContract_correction;
+    }
+
+    //!
+    //! \brief Sets the state of the IsContract needs correction flag in memory and LevelDB
+    //! \param flag The state to set
+    //! \return
+    //!
+    bool SetNeedsIsContractCorrection(bool flag)
+    {
+        // Update the in-memory flag.
+        m_needs_IsContract_correction = flag;
+
+        // Update LevelDB
+        CTxDB txdb("rw");
+
+        std::pair<std::string, std::string> key = std::make_pair(KeyType() + "_db", "needs_IsContract_correction");
+
+        return txdb.WriteGenericSerializable(key, m_needs_IsContract_correction);
+    }
+
+    //!
     //! \brief This stores the height to which the database entries are valid (the db scope). Note that it
     //! is not desired to expose this function as a public function, but currently the Revert function
     //! only operates on a single transaction context, and does not encapsulate the post reversion height
@@ -412,7 +479,7 @@ public:
 
             m_historical.insert(std::make_pair(hash, std::make_shared<E>(entry)));
 
-            status = Store(hash, entry);
+            status = Store(hash, static_cast<SE>(entry));
 
             if (height) {
                 status &= StoreDBHeight(height);
@@ -510,7 +577,7 @@ public:
 
         // If it isn't, attempt to load the entry from LevelDB into the map.
         if (iter == m_historical.end()) {
-            E entry;
+            SE entry;
 
             // If the load from LevelDB is successful, insert into the historical map and return the iterator.
             if (Load(hash, entry)) {
@@ -544,12 +611,12 @@ private:
     //! is the record number, which unfortunately is required to preserve the contract application order
     //! since they are applied in the order of the block's transaction vector rather than the transaction time.
     //!
-    typedef std::map<uint256, std::pair<uint64_t, E>> StorageMap;
+    typedef std::map<uint256, std::pair<uint64_t, SE>> StorageMap;
 
     //!
     //! \brief Type definition for the map used to replay state from LevelDB type R entry area.
     //!
-    typedef std::map<uint64_t, E> StorageMapByRecordNum;
+    typedef std::map<uint64_t, SE> StorageMapByRecordNum;
 
     //!
     //! \brief This is a map keyed by uint256 (SHA256) hash that stores the historical entry elements.
@@ -585,6 +652,12 @@ private:
     bool m_needs_passivation = false;
 
     //!
+    //! \brief The flag that indicates whether IsContract correction is needed in ReplayContracts during initialization.
+    //! This is relevant only for the Beacon Registry specialization.
+    //!
+    bool m_needs_IsContract_correction = false;
+
+    //!
     //! \brief The function that returns the string value to be used in leveldb as the key prefix for the registry.
     //! For example, the ScaperRegistry uses "scraper". This must be implemented in the class specialization.
 
@@ -600,7 +673,7 @@ private:
     //!
     //! \return Success or failure.
     //!
-    bool Store(const uint256& hash, const E& entry)
+    bool Store(const uint256& hash, const SE& entry)
     {
         CTxDB txdb("rw");
 
@@ -619,13 +692,13 @@ private:
     //!
     //! \return Success or failure.
     //!
-    bool Load(const uint256& hash, E& entry)
+    bool Load(const uint256& hash, SE& entry)
     {
         CTxDB txdb("r");
 
         std::pair<std::string, uint256> key = std::make_pair(KeyType(), hash);
 
-        std::pair<uint64_t, E> entry_pair;
+        std::pair<uint64_t, SE> entry_pair;
 
         bool status = txdb.ReadGenericSerializable(key, entry_pair);
 
