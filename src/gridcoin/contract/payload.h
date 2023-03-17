@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -69,7 +69,7 @@ enum class ContractType
 };
 
 //!
-//! \brief Allows use of the PollType enum in range based for loops.
+//! \brief Allows use of the ContractType enum in range based for loops.
 //!
 static constexpr GRC::ContractType CONTRACT_TYPES[] = {
     ContractType::UNKNOWN,

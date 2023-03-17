@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -143,6 +143,10 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 void InitializeContracts(CBlockIndex* pindexBest)
 {
+    // Yes, this is the same code block repeated four times.
+    // TODO: Make a proper loop that will automatically do any registry that has a db. This will
+    // require an extension to the RegistryBookmarks class.
+
     {
         LogPrintf("Gridcoin: Loading project history...");
         uiInterface.InitMessage(_("Loading project history..."));
@@ -260,9 +264,9 @@ void InitializeContracts(CBlockIndex* pindexBest)
     RegistryBookmarks db_heights;
 
     // This tricky clamp ensures the correct start height for the contract replay. Note that the current
-    // implementation will skip beacon, scraper entry, poll and vote contracts that overlap the already loaded history. See
-    // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
-    // This is the replay that will be encountered when starting a wallet that was in sync with this code but has
+    // implementation will skip beacon, scraper entry, project, poll and vote contracts that overlap the already loaded
+    // history. See ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current
+    // height. This is the replay that will be encountered when starting a wallet that was in sync with this code but has
     // uninitialized registry dbs, and the head of the chain is more than MAX AGE above the V11_height, because
     // GetLowestRegistryBlockHeight() is 0, and then the maximum of V11_height and GetLowestRegistryBlockHeight() will be
     // V11_height and the minimum of V11_height and lookback_window_low_height will be V11_height. When the contracts are
@@ -272,7 +276,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
     // by the following remaining contract types which have no registry (backing) db:
     //
     // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
-    // POLL/VOTE (polls and voting)                   true                                        false
+    // POLL/VOTE (polls and voting)               V11 or std lookback                             false
     //
     // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
     // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
@@ -530,6 +534,7 @@ void ScheduleRegistriesPassivation(CScheduler& scheduler)
 {
     // Run registry database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
+    // TODO: Turn into a loop using extension of RegistryBookmarks
     scheduler.scheduleEvery(BeaconRegistry::RunDBPassivation, std::chrono::minutes{5});
     scheduler.scheduleEvery(ScraperRegistry::RunDBPassivation, std::chrono::minutes{5});
     scheduler.scheduleEvery(ProtocolRegistry::RunDBPassivation, std::chrono::minutes{5});

@@ -43,8 +43,8 @@ struct AppCacheEntryExt
 };
 
 //!
-//! \brief Extended AppCache map typedef similar to those in AppCache.h, except a deleted flag is provided. This
-//! is provided as a legacy shim only and will be replaced by native calls.
+//! \brief Extended AppCache map typedef similar to AppCacheSection, except a deleted flag is provided for use by
+//! the scraper. This is provided as a legacy shim only and will be replaced by native calls.
 //!
 typedef std::unordered_map<std::string, AppCacheEntryExt> AppCacheSectionExt;
 

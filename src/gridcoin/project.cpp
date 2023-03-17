@@ -169,6 +169,8 @@ std::optional<bool> ProjectEntry::HasGDPRControls() const
 // Class: Project
 // -----------------------------------------------------------------------------
 
+// TODO: Evaluate and remove some of these constructors, some of which are identical
+// except the arguments are in a different order to support existing code.
 Project::Project(uint32_t version)
     : ProjectEntry(version)
 {

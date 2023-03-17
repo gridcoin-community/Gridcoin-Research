@@ -247,8 +247,9 @@ public:
         // revisions for the same key (CPID for beacon), a much more complex
         // implementation, along with a backing db that stores historical
         // objects and a linkage from current to previous objects is required.
-        // The scraper entry and protocol entry registry are good examples of
-        // this type.
+        // The scraper entry, protocol entry, project (whitelist) and beacon
+        // registry are all examples of this type which are backed by
+        // implementations of the RegistryDB template class.
         GetHandler(ctx->m_type.Value()).Revert(ctx);
     }
 
@@ -256,6 +257,7 @@ private:
     MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
+protected:
     //!
     //! \brief Select an appropriate contract handler based on the message type.
     //!
@@ -364,7 +366,8 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the beacon and scraper database in LevelDB has not already been populated.
+    // when the corresponding RegistryDB instantiations and initialization in LevelDB has not already been populated
+    // for the registry types that use the RegistryDB.
     if (!pindex)
     {
         pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
@@ -376,7 +379,9 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
 
-    // This no longer includes beacons, scraper entries, or polls/votes, but DOES include projects and protocol entries.
+    // This is actually a no-op now, because all existing contract types do proper reversion, either through implementations
+    // of the RegistryDB, or because they use independent objects that have no linked history and admit simple reverts
+    // provided by the default add/delete/revert.
     g_dispatcher.ResetHandlers();
 
     RegistryBookmarks db_heights;
@@ -695,7 +700,7 @@ bool Contract::WellFormed() const
 
 ContractPayload Contract::SharePayload() const
 {
-    // The scraper entry format is changed to native later than the others and a new contract
+    // The scraper and protocol entry formats were changed to native later than the others and a new contract
     // version three is introduced for that. This will be coincident with block v13.
     if (m_version < 2
             || (m_type == ContractType::SCRAPER && m_version < 3)

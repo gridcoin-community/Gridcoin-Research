@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2023 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
 #ifndef GRIDCOIN_CONTRACT_REGISTRY_H
 #define GRIDCOIN_CONTRACT_REGISTRY_H
 

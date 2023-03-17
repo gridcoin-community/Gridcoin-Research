@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -1066,6 +1066,14 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
                                                const uint64_t& recnum,
                                                const std::string& key_type)
 {
+    // Note that in this specialization, entry.m_cpid and entry.GetId() are used for the map keys. In the general template,
+    // entry.Key() is used (which here is the same as entry.m_cpid). No generalized method to implement entry.PendingKey()
+    // has been implemented up to this point, because the pending map is actually only used here in the beacon
+    // specialization.
+
+    // If there is another registry class that arises that actually needs to use the "pending" state then it would be
+    // necessary to implement the PendingKey() call in the template.
+
     if (entry.m_status == BeaconStatusForStorage::PENDING)
     {
         LogPrint(LogFlags::CONTRACT, "INFO: %s: %ss: pending entry insert: cpid %s, address %s, timestamp %" PRId64 ", "

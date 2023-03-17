@@ -542,6 +542,14 @@ public:
     //! beacon entry db. This must be incremented when implementing format changes to the beacon
     //! entries to force a reinit.
     //!
+    //! Version 0: <= 5.2.0.0
+    //! Version 1: = 5.2.1.0
+    //! Version 2: 5.2.1.0 with hotfix and > 5.2.1.0
+    //!
+    //! The current version of the beacon db is 2. No changes to the underlying storage have
+    //! occurred during the refactor to the registry db template, so this version remains unchanged
+    //! through 5.4.2.0+
+    //!
     BeaconRegistry()
         : m_beacon_db(2)
     {

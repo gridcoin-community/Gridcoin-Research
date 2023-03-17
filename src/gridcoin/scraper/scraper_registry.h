@@ -417,6 +417,9 @@ public:
     //! protocol entry db. This must be incremented when implementing format changes to the protocol
     //! entries to force a reinit.
     //!
+    //! Version 0: <= 5.4.2.0 (no backing db).
+    //! Version 1: TBD.
+    //!
     ScraperRegistry()
         : m_scraper_db(1)
     {

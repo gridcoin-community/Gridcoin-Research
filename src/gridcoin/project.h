@@ -481,7 +481,11 @@ class Whitelist : public IContractHandler
 {
 public:
     //!
-    //! \brief Initializes the project whitelist manager.
+    //! \brief Initializes the project whitelist manager. The version must be incremented when
+    //! introducing a breaking change in the storage format (serialization) of the project entry.
+    //!
+    //! Version 0: <= 5.4.2.0 where there was no backing db.
+    //! Version 1: TBD.
     //!
     Whitelist()
         :m_project_db(1)
@@ -637,7 +641,6 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    // With C++20, use std::atomic<std::shared_ptr<T>> instead:
     ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
     PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
 

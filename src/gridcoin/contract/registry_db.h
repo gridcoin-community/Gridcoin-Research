@@ -16,8 +16,8 @@ namespace GRC {
 //!
 //! \brief This is a template class generalization of the original beacon registry db in leveldb. This has been made into
 //! a template to facilitate usage of the db with strong typing for additional registries, but not have to repeat essentially
-//! the same code over and over. The intention will be to retrofit the beacon registry to use the template rather than
-//! the original code.
+//! the same code over and over. The original beacon registry db code has been refactored to use this template, with some
+//! necessary specializations.
 //!
 //! The class template parameters are
 //! E:  the entry type
@@ -452,7 +452,10 @@ public:
     //! \param hash The hash for the key to the historical record which is the txid (hash) of the transaction
     //! containing the entry contract.
     //! \param height The height of the block from which the entry record originates.
-    //! \param entry The entry record to insert (which includes the appropriate status).
+    //! \param entry The entry record to insert (which includes the appropriate status). Note that this entry
+    //! will be cast into the SE type for storage if the SE type is different from the E type. In general if
+    //! SE is different from E, it will be to implement different serialization for storage (such as the beacon
+    //! implementation).
     //!
     //! \return Success or Failure. This will fail if a record with the same key already exists in the
     //! database.
@@ -607,14 +610,14 @@ public:
 
 private:
     //!
-    //! \brief Type definition for the storage typename E entry map used in Initialize. Note that the uint64_t
+    //! \brief Type definition for the storage typename SE entry map used in Initialize. Note that the uint64_t
     //! is the record number, which unfortunately is required to preserve the contract application order
     //! since they are applied in the order of the block's transaction vector rather than the transaction time.
     //!
     typedef std::map<uint256, std::pair<uint64_t, SE>> StorageMap;
 
     //!
-    //! \brief Type definition for the map used to replay state from LevelDB type R entry area.
+    //! \brief Type definition for the map used to replay state from LevelDB KeyType() entry area.
     //!
     typedef std::map<uint64_t, SE> StorageMapByRecordNum;
 
