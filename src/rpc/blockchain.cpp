@@ -1558,6 +1558,7 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
         entry.pushKV("hash", beacon_pair.second->m_hash.GetHex());
         entry.pushKV("prev_beacon_hash", beacon_pair.second->m_previous_hash.GetHex());
         entry.pushKV("status", beacon_pair.second->m_status.Raw());
+        entry.pushKV("status_text", beacon_pair.second->StatusToString());
 
         results.push_back(entry);
     }
@@ -1671,8 +1672,14 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
+        CBitcoinAddress address;
+        const CKeyID& key_id = pending_beacon_pair.first;
+
+        address.Set(key_id);
+
         entry.pushKV("cpid", pending_beacon_pair.second->m_cpid.ToString());
-        entry.pushKV("address", pending_beacon_pair.first.ToString());
+        entry.pushKV("key_id", pending_beacon_pair.first.ToString());
+        entry.pushKV("address", address.ToString());
         entry.pushKV("timestamp", pending_beacon_pair.second->m_timestamp);
 
         results.push_back(entry);
