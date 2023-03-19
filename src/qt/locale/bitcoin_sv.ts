@@ -2592,10 +2592,6 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Laddar plånbok...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Kan inte nedgradera plånboken</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Kan inte skriva standardadress</translation>
     </message>

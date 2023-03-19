@@ -1390,10 +1390,6 @@ Pokud konfigura?ní soubor ješt? neexistuje, vytvo? ho tak, aby ho mohl ?íst p
         <translation>Načítám peněženku...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nemohu převést peněženku do staršího formátu</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nemohu napsat výchozí adresu</translation>
     </message>

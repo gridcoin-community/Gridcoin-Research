@@ -691,10 +691,6 @@
         <translation>საფულის ჩატვირთვა...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>საფულის ძველ ვერსიაზე გადაყვანა შეუძლებელია</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>ვერ ხერხდება ნაგულისხმევი მისამართის ჩაწერა</translation>
     </message>

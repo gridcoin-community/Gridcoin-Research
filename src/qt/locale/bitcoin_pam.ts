@@ -1065,10 +1065,6 @@ Nung ing file ala ya, gawa ka gamit ing owner-readable-only file permissions.</t
         <translation>Lo-load dane ing wallet...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Ali ya magsilbing i-downgrade ing wallet</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Eya misulat ing default address</translation>
     </message>
