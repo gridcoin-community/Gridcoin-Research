@@ -1930,10 +1930,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Nalagam denarnico ...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Ne morem </translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Ni mogoče zapisati privzetega naslova</translation>
     </message>

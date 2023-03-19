@@ -730,10 +730,6 @@
         <translation>Завантаження гаманця...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Не вдається понизити версію гаманця</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Неможливо записати типову адресу</translation>
     </message>

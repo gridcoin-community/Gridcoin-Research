@@ -1358,10 +1358,6 @@ Ha a fájl nem létezik, hozd létre 'csak a felhasználó által olvasható' f�
         <translation>Tárca betöltése...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nem sikerült a Tárca visszaállítása a korábbi verzióra</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nem sikerült az alapértelmezett címet írni.</translation>
     </message>

@@ -1427,10 +1427,6 @@ Se o arquivo non existe, debes crealo con permisos de so lectura para o propieta
         <translation>Cargando moedeiro...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Non se pode desactualizar o moedeiro</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Non se pode escribir a dirección por defecto</translation>
     </message>

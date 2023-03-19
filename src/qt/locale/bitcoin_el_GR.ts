@@ -687,10 +687,6 @@
         <translation>Φόρτωση πορτοφολιού...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Δεν μπορώ να υποβαθμίσω το πορτοφόλι</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Δεν μπορώ να γράψω την προεπιλεγμένη διεύθυνση</translation>
     </message>

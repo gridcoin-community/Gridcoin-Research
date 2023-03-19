@@ -1112,10 +1112,6 @@
         <translation>Učitavanje novčanika...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nije moguće novčanik vratiti na prijašnju verziju.</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nije moguće upisati zadanu adresu.</translation>
     </message>

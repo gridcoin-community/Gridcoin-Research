@@ -2032,10 +2032,6 @@ Si le fichier n'existe pas, créez-le avec les droits de lecture seule accordés
         <translation>Chargement du porte-monnaie…</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Impossible de revenir à une version inférieure du porte-monnaie</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Impossible d'écrire l'adresse par défaut</translation>
     </message>

@@ -752,6 +752,12 @@ Scraper(ов) не публикуются: %5.</translation>
     </message>
     <message>
         <source>CPID: %1
+Time left to activate: %2%3</source>
+        <translation>CPID: %1
+Осталось времени для активации: %2%3</translation>
+    </message>
+    <message>
+        <source>CPID: %1
 Beacon age: %2
 Current beacon expired!
 %3</source>
@@ -1484,6 +1490,10 @@ Expires: %3
 <context>
     <name>MRCModel</name>
     <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Чтобы отправить MRC, у вас должен быть зрелый баланс не менее 1 GRC.</translation>
+    </message>
+    <message>
         <source>Too soon since your last research rewards payment.</source>
         <translation>Слишком рано с момента вашей последней выплаты вознаграждения за исследование.</translation>
     </message>
@@ -1617,6 +1627,10 @@ Expires: %3
     <message>
         <source>A block update must have occurred after wallet start or sync to submit MRCs.</source>
         <translation>Обновление блока должно произойти после запуска кошелька или синхронизации для отправки MRC.</translation>
+    </message>
+    <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Чтобы отправить MRC, у вас должен быть зрелый баланс не менее 1 GRC.</translation>
     </message>
 </context>
 <context>
@@ -1988,6 +2002,10 @@ Expires: %3
         <translation>Состояние:</translation>
     </message>
     <message>
+        <source>You are approaching the accrual limit of 16384 GRC. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</source>
+        <translation>Вы приближаетесь к лимиту накопления в 16384 GRC. Если у вас относительно низкий баланс, вам следует запросить оплату через MRC, чтобы не потерять заработанные вознаграждения.</translation>
+    </message>
+    <message>
         <source>Recent Transactions</source>
         <translation>Последние Транзакции</translation>
     </message>
@@ -2064,6 +2082,18 @@ Expires: %3
     <message>
         <source>AVW:</source>
         <translation>ВАГ:</translation>
+    </message>
+    <message>
+        <source>Your Last Vote:</source>
+        <translation>Ваш Последний Голос:</translation>
+    </message>
+    <message>
+        <source>Your Vote Weight:</source>
+        <translation>Вес Вашего Голоса:</translation>
+    </message>
+    <message>
+        <source>Your % of AVW:</source>
+        <translation>Ваш % AVW:</translation>
     </message>
     <message>
         <source>Balance</source>
@@ -2937,6 +2967,10 @@ Expires: %3
         <source>Not attached</source>
         <translation>Не прикреплен</translation>
     </message>
+    <message>
+        <source>Uses external adapter</source>
+        <translation>Использует внешний адаптер</translation>
+    </message>
 </context>
 <context>
     <name>ResearcherWizard</name>
@@ -2968,8 +3002,8 @@ Expires: %3
         <translation>2. Посетите страницу настроек, чтобы сменить имя пользователя. Многие проекты помечают это как "other account info".</translation>
     </message>
     <message>
-        <source>3. Change your username to the following verification code:</source>
-        <translation>3. Измените ваше имя пользователя на следующий код подтверждения:</translation>
+        <source>3. Change your "name" (real name or nickname) to the following verification code:</source>
+        <translation>3. Измените свое "имя" (реальное или никнейм) на следующий код подтверждения:</translation>
     </message>
     <message>
         <source>Copy the verification code to the system clipboard</source>
@@ -5533,10 +5567,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Loading wallet...</source>
         <translation>Загрузка кошелька...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Не удаётся понизить версию кошелька</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

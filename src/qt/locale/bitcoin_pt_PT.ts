@@ -21,6 +21,21 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
     </message>
 </context>
 <context>
+    <name>AdditionalFieldsTableDataModel</name>
+    <message>
+        <source>Name</source>
+        <translation>Nome</translation>
+    </message>
+    <message>
+        <source>Value</source>
+        <translation>Valor</translation>
+    </message>
+    <message>
+        <source>Required</source>
+        <translation>Requerido</translation>
+    </message>
+</context>
+<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -69,6 +84,10 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
     <message>
         <source>These are your Gridcoin addresses for receiving payments. You may want to give a different one to each sender so you can keep track of who is paying you.</source>
         <translation>Estes são os seus endereços do Gridcoin para receber pagamentos. Pode dar diferentes nomes a cada remetente, para que saiba quem lhe está a pagar.</translation>
+    </message>
+    <message>
+        <source>Double-click to edit label</source>
+        <translation>Duplo clique para editar a etiqueta</translation>
     </message>
     <message>
         <source>&amp;Delete</source>
@@ -187,7 +206,7 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
-        <translation>IMPORTANTE: Qualquer cópia de segurança feita ao ficheiro da carteira, deverá ser substituido pelo novo ficheiro, atualmente encriptado na carteira. Por razões de segurança, cópias de segurança não encriptadas efectuadas anteriormente do ficheiro da carteira tornar-se-ão inúteis assim que começar a usar a nova carteira encriptada.</translation>
+        <translation>IMPORTANTE: Qualquer cópia de segurança feita ao ficheiro da carteira, deverá ser substituído pelo novo ficheiro, atualmente encriptado na carteira. Por razões de segurança, cópias de segurança não encriptadas efetuadas anteriormente do ficheiro da carteira tornar-se-ão inúteis assim que começar a usar a nova carteira encriptada.</translation>
     </message>
     <message>
         <source>Wallet encryption failed</source>
@@ -736,6 +755,16 @@ Projeto(s) excluído(s): %2.</translation>
     <message>
         <source>CPID: %1
 Beacon age: %2
+Current beacon expired!
+%3</source>
+        <translation>CPID: %1
+Idade do Beacon: %2
+ Beacon atual expirado!
+%3</translation>
+    </message>
+    <message>
+        <source>CPID: %1
+Beacon age: %2
 Expires: %3
 %4</source>
         <translation>CPID: %1
@@ -1161,31 +1190,31 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Verify outbound port works</source>
-        <translation>Verifica que as portas de saída estão a funcionar</translation>
+        <translation>A verificar que as portas de saída estão a funcionar</translation>
     </message>
     <message>
         <source>Check total connections</source>
-        <translation>Verifica total de conexões</translation>
+        <translation>A verificar total de ligaçoes</translation>
     </message>
     <message>
         <source>Verify CPID has active beacon</source>
-        <translation>Verificar que o CPID tem um beacon ativo</translation>
+        <translation>A verificar que o CPID tem um beacon ativo</translation>
     </message>
     <message>
         <source>Verify BOINC path</source>
-        <translation>Verifica a diretoria do BOINC</translation>
+        <translation>A verificar a diretoria do BOINC</translation>
     </message>
     <message>
         <source>Check outbound connections</source>
-        <translation>Verifica conexões de saída</translation>
+        <translation>A verificar ligaçoes de saída</translation>
     </message>
     <message>
         <source>Check difficulty</source>
-        <translation>Verifica dificuldade</translation>
+        <translation>a verificar dificuldade</translation>
     </message>
     <message>
         <source>Verify CPID has RAC</source>
-        <translation>Verifica que o CPID tem RAC</translation>
+        <translation>A verificar que o CPID tem RAC</translation>
     </message>
     <message>
         <source>Overall Result</source>
@@ -1193,23 +1222,23 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Verify wallet is synced</source>
-        <translation>Verifica que a carteira está sincronizada</translation>
+        <translation>A verificar que a carteira está sincronizada</translation>
     </message>
     <message>
         <source>Verify CPID is valid</source>
-        <translation>Verifica que o CPID é válido</translation>
+        <translation>A verificar que o CPID é válido</translation>
     </message>
     <message>
         <source>Verify clock</source>
-        <translation>Verifica as horas</translation>
+        <translation>A verificar data/hora</translation>
     </message>
     <message>
         <source>Check client version</source>
-        <translation>Verifica versão do cliente</translation>
+        <translation>A verificar versão do cliente</translation>
     </message>
     <message>
         <source>Check estimated time to stake </source>
-        <translation>Verifica tempo estimado para realizar stake</translation>
+        <translation>A verificar tempo estimado para realizar stake</translation>
     </message>
     <message>
         <source>Close</source>
@@ -1217,7 +1246,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Test</source>
-        <translation>Teste</translation>
+        <translation>Testar</translation>
     </message>
     <message>
         <source>Testing...</source>
@@ -1319,6 +1348,13 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
 </context>
 <context>
+    <name>Form</name>
+    <message>
+        <source>Form</source>
+        <translation>Formulário</translation>
+    </message>
+</context>
+<context>
     <name>FreespaceChecker</name>
     <message>
         <source>A new data directory will be created.</source>
@@ -1363,6 +1399,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Bem-vindo a %1.</translation>
     </message>
     <message>
+        <source>As this is the first time the program is launched, you can choose where %1 will store its data.</source>
+        <translation>Como é a primeira vez que o programa é lançado, pode escolher onde %1 irá armazenar os dados.</translation>
+    </message>
+    <message>
         <source>Use the default data directory</source>
         <translation>Utilizar a diretoria de dados predefinida</translation>
     </message>
@@ -1400,6 +1440,68 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         </translation>
     </message>
 </context>
+<context>
+    <name>MRCModel</name>
+    <message>
+        <source>You have a pending MRC request.</source>
+        <translation>Tem uma solicitação de MRC pendente.</translation>
+    </message>
+    <message>
+        <source>The wallet is locked.</source>
+        <translation>A carteira está trancada.</translation>
+    </message>
+</context>
+<context>
+    <name>MRCRequestPage</name>
+    <message>
+        <source>MRC Requests</source>
+        <translation>Solicitações MRC</translation>
+    </message>
+    <message>
+        <source>Please wait.</source>
+        <translation>Por favor aguarde.</translation>
+    </message>
+    <message>
+        <source>MRC Fee @ Pay Limit Position in Queue</source>
+        <translation>Taxa MRC @ Posição Limite de Pagamento na Fila</translation>
+    </message>
+    <message>
+        <source>Number of All MRC Requests in Queue</source>
+        <translation>Número de Todos os Pedidos MRC na Fila</translation>
+    </message>
+    <message>
+        <source>The number of MRCs in the memory pool</source>
+        <translation>Número de pedidos MRC em espera</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Atualizar</translation>
+    </message>
+    <message>
+        <source>Submit</source>
+        <translation>Submeter</translation>
+    </message>
+    <message>
+        <source>Your Submitted MRC Request Position in Queue</source>
+        <translation>A Posição na Fila do Seu Pedido MRC Submetido</translation>
+    </message>
+    <message>
+        <source>You must have an active beacon and the wallet must be in solo mode to submit MRCs.</source>
+        <translation>Tem um pedido ativo de beacon e, a carteira tem de estar em modo solo para submeter MRCs.</translation>
+    </message>
+    <message>
+        <source>The block version must be v12 or higher to submit MRCs.</source>
+        <translation>A versão do bloco tem de ser v12 ou superior para submeter pedidos MRC.</translation>
+    </message>
+    <message>
+        <source>The wallet must be in sync to submit MRCs.</source>
+        <translation>A carteira tem de estar sincronizada para submeter um pedido MRC.</translation>
+    </message>
+    <message>
+        <source>A block update must have occurred after wallet start or sync to submit MRCs.</source>
+        <translation>Uma atualização do bloco tem de ocorrer depois da carteira iniciar ou sincronizar, para submeter um pedido MRC.</translation>
+    </message>
+    </context>
 <context>
     <name>NoResult</name>
     <message>
@@ -1490,6 +1592,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Minimize em vez sair da aplicação quando a janela é fechada. Com esta  opção selecionada, a aplicação apenas será encerrada quando escolher Sair da aplicação no menu.</translation>
     </message>
     <message>
+        <source>&amp;Confirm on close</source>
+        <translation>&amp;Confirmar ao sair</translation>
+    </message>
+    <message>
         <source>Disable Transaction Notifications</source>
         <translation>Desabilitar Notificações de Transações</translation>
     </message>
@@ -1540,6 +1646,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Disable &amp;update checks</source>
         <translation>Desabilitar verificações de &amp;atualização</translation>
+    </message>
+    <message>
+        <source>&amp;Connect through SOCKS5 proxy:</source>
+        <translation>&amp;Ligar através de proxy SOCKS5:</translation>
     </message>
     <message>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
@@ -1763,8 +1873,20 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Peso Total:</translation>
     </message>
     <message>
+        <source>Poll Type</source>
+        <translation>Tipo de Votação</translation>
+    </message>
+    <message>
         <source>Balance</source>
         <translation>Balanço</translation>
+    </message>
+    <message>
+        <source>Validated</source>
+        <translation>Validado</translation>
+    </message>
+    <message>
+        <source>Invalid</source>
+        <translation>Inválido</translation>
     </message>
     <message>
         <source>Voting finished.</source>
@@ -1791,6 +1913,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Form</source>
         <translation>Formulário</translation>
+    </message>
+    <message>
+        <source>Additional Fields</source>
+        <translation>Campos Adicionais</translation>
     </message>
     <message>
         <source>Top Answer:</source>
@@ -1849,6 +1975,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Título</translation>
     </message>
     <message>
+        <source>Poll Type</source>
+        <translation>Tipo de Votação</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>Duração</translation>
+    </message>
+    <message>
         <source>Expiration</source>
         <translation>Data de Término</translation>
     </message>
@@ -1863,6 +1997,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Total Weight</source>
         <translation>Peso Total</translation>
+    </message>
+    <message>
+        <source>% of Active Vote Weight</source>
+        <translation>% Peso dos Votos Ativos</translation>
+    </message>
+    <message>
+        <source>Validated</source>
+        <translation>Validado</translation>
     </message>
     <message>
         <source>Top Answer</source>
@@ -1911,6 +2053,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>URL de Discussão: </translation>
     </message>
     <message>
+        <source>A link to the main discussion thread on GitHub or Reddit.</source>
+        <translation>Link para a discussão principal no GitHub ou no Reddit.</translation>
+    </message>
+    <message>
         <source>Weight Type:</source>
         <translation>Tipo de Peso:</translation>
     </message>
@@ -1925,6 +2071,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
         <translation>Uma votação com uma resposta do tipo sim/não/abster-se, não pode incluir quaisquer escolhas adicionais.</translation>
+    </message>
+    <message>
+        <source>Additional Fields:</source>
+        <translation>Campos Adicionais:</translation>
     </message>
     <message>
         <source>Create Poll</source>
@@ -1982,6 +2132,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Este projeto satisfaz a listagem de critérios do Gridcoin. </translation>
     </message>
     <message>
+        <source>Project URL</source>
+        <translation>URL do Projeto</translation>
+    </message>
+    <message>
         <source>Choose a project to delist:</source>
         <translation>Escolha um projeto para retirar:</translation>
     </message>
@@ -2029,6 +2183,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Whitelist</source>
         <translation>Lista Aprovada</translation>
+    </message>
+    <message>
+        <source>Has GDPR Controls</source>
+        <translation>Tem Controles GDPR</translation>
     </message>
     <message>
         <source>Avg. Credit</source>
@@ -2516,7 +2674,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <source>Not attached</source>
         <translation>Não anexado</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>ResearcherWizard</name>
     <message>
@@ -2545,10 +2703,6 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>2. Visit the settings page to change your username. Many projects label it as "other account info".</source>
         <translation>2. Visite a página de configurações para alterar o nome de utilizador. Muitos projetos identificam como "outra informação da conta"</translation>
-    </message>
-    <message>
-        <source>3. Change your username to the following verification code:</source>
-        <translation>3. Altere o seu nome de utilizador para o seguinte código de verificação:</translation>
     </message>
     <message>
         <source>Copy the verification code to the system clipboard</source>
@@ -4003,8 +4157,16 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Clique em "Mostrar Detalhes" para ver as alterações da ultima atualização.</translation>
     </message>
     <message>
+        <source>Community</source>
+        <translation>Comunidade</translation>
+    </message>
+    <message>
         <source>Could not create transaction. See debug.log.</source>
         <translation>Não foi possível criar transação. Ver debug.log</translation>
+    </message>
+    <message>
+        <source>Duplicate poll additional field: %s</source>
+        <translation>Duplicar campo adicional na votação: %s</translation>
     </message>
     <message>
         <source>Duplicate poll choice: %s</source>
@@ -4013,6 +4175,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Duplicate response for poll choice: %s</source>
         <translation>Duplicar respostas para escolha da votação %s</translation>
+    </message>
+    <message>
+        <source>Entire balance reserved</source>
+        <translation>Saldo inteiro reservado</translation>
     </message>
     <message>
         <source>Error loading %s: Wallet corrupted</source>
@@ -4031,6 +4197,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Falhou a transferência do snapshot.zip; Ver debug.log</translation>
     </message>
     <message>
+        <source>Failed to rename bootstrap file to .old for backup purposes.</source>
+        <translation>Falhou a alteração de nome por motivos de backups no ficheiro bootstrap para .old.</translation>
+    </message>
+    <message>
+        <source>Failed: Count =</source>
+        <translation>Falhou: Contagem =</translation>
+    </message>
+    <message>
         <source>Fees Collected</source>
         <translation>Taxas coletadas</translation>
     </message>
@@ -4039,8 +4213,16 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Ficheiros:</translation>
     </message>
     <message>
+        <source>For opinion or casual polls without any particular requirements.</source>
+        <translation>Para opiniões ou votações casuais sem requisitos especiais.</translation>
+    </message>
+    <message>
         <source>Get help for a command</source>
         <translation>Obter ajuda para um comando</translation>
+    </message>
+    <message>
+        <source>Governance</source>
+        <translation>Governança</translation>
     </message>
     <message>
         <source>Gridcoin Update Available</source>
@@ -4115,6 +4297,18 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Carteira não disponível.</translation>
     </message>
     <message>
+        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
+        <translation>Comunicação de saída na porta TCP %1 parece estar bloqueada.</translation>
+    </message>
+    <message>
+        <source>Outbound communication to TCP port</source>
+        <translation>Comunicação de saída na porta TCP</translation>
+    </message>
+    <message>
+        <source>Outreach</source>
+        <translation>Divulgação</translation>
+    </message>
+    <message>
         <source>Participant Count</source>
         <translation>Contagem de Participantes</translation>
     </message>
@@ -4183,12 +4377,20 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Quórum de  Hashes</translation>
     </message>
     <message>
+        <source>Reindexing blockchain from on disk block data files...</source>
+        <translation>Reindexando blockchain dos ficheiros de dados no disco...</translation>
+    </message>
+    <message>
         <source>Replaying contracts...</source>
         <translation>Recarregando contratos..</translation>
     </message>
     <message>
+        <source>Reset Blockchain Data: Blockchain data removal failed.</source>
+        <translation>Repor Dados da Blockchain: Remoção de dados da Blockchain falhou.</translation>
+    </message>
+    <message>
         <source>Reset Blockchain Data: Blockchain data removal was a success</source>
-        <translation>Limpar Dados da Blockchain: Remoção de dados da Blockchain com sucesso</translation>
+        <translation>Repor Dados da Blockchain: Remoção de dados da Blockchain realizada com sucesso</translation>
     </message>
     <message>
         <source>Send command to -server or gridcoinresearchd</source>
@@ -4457,7 +4659,7 @@ Please exit Gridcoin, open the data directory, and delete:
 
 Your wallet will re-download the blockchain. Your balance may appear incorrect until the synchronization finishes.
 </source>
-        <translation>AVISO: A Blockchain pode estar corrompido.
+        <translation>AVISO: A Blockchain pode estar corrompida.
 
 O Gridcoin detetou entradas incorretas do índice. Isto pode ocorrer devido uma fecho inesperado, falha de energia ou uma atualização da aplicação.
 
@@ -4490,7 +4692,7 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>Stage (3/4): Cleanup blockchain data:          </source>
-        <translation>Etapa (3/4): Limpando dados do blockchain:</translation>
+        <translation>Etapa (3/4): Limpar dados da blockchain:</translation>
     </message>
     <message>
         <source>Stage (4/4): Extracting snapshot.zip:          </source>
@@ -4695,10 +4897,6 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     <message>
         <source>Loading wallet...</source>
         <translation>A carregar a carteira...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Impossível alterar a carteira para uma versão anterior</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

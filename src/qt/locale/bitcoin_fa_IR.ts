@@ -448,10 +448,6 @@
         <translation>wallet در حال لود شدن است...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>قابلیت برگشت به نسخه قبلی برای wallet امکان پذیر نیست</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>آدرس پیش فرض قابل ذخیره نیست</translation>
     </message>

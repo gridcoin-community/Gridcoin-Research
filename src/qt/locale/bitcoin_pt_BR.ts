@@ -1420,10 +1420,6 @@ Se o arquivo não existir, crie um com permissão de leitura apenas pelo dono</t
         <translation>Carregando carteira...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Não é possível fazer downgrade da carteira</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Não foi possível escrever no endereço padrão</translation>
     </message>

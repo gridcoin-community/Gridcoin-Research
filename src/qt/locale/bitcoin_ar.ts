@@ -1205,10 +1205,6 @@
         <translation>تحميل المحفظه</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>لا يمكن تخفيض قيمة المحفظة</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>لايمكن كتابة العنوان الافتراضي</translation>
     </message>

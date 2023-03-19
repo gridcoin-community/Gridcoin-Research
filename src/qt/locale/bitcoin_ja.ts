@@ -1198,10 +1198,6 @@
         <translation>ウォレットを読み込んでいます...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>ウォレットのダウングレードはできません</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>初期値のアドレスを書き込むことができません</translation>
     </message>

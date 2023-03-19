@@ -1721,7 +1721,7 @@ Bitiş süresi: %3
         <source>Not attached</source>
         <translation>Bağlı değil</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>ResearcherWizard</name>
     <message>
@@ -1750,10 +1750,6 @@ Bitiş süresi: %3
     <message>
         <source>2. Visit the settings page to change your username. Many projects label it as "other account info".</source>
         <translation>2. Kullanıcı adınızı değiştirmek için ayarlara girin. Bir çok proje burayı "diğer hesap bilgisi" şeklinde adlandırır.</translation>
-    </message>
-    <message>
-        <source>3. Change your username to the following verification code:</source>
-        <translation>3. Kullanıcı adınızı belirtilen doğrulama koduna değiştirin:</translation>
     </message>
     <message>
         <source>Copy the verification code to the system clipboard</source>
@@ -3106,10 +3102,6 @@ Dosya mevcut deilse, sadece sahibi için okumayla sınırlı izin ile oluşturun
     <message>
         <source>Loading wallet...</source>
         <translation>Cüzdan yükleniyor...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Cüzdan eski sürüme geri alınamaz</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

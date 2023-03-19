@@ -1752,10 +1752,6 @@ As die lêer bestaan nie, dit skep met eienaar-leesbare-net lêer toestemmings.<
         <translation>Laai beursie...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Beursie kan downgrade</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Verstek adres kan skryf</translation>
     </message>
