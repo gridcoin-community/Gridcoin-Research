@@ -159,7 +159,7 @@
         <item row="6" column="1">
          <widget class="QLabel" name="mrcMinimumSubmitFee">
           <property name="toolTip">
-           <string>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</string>
+           <string>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, the MRC Fee Boost field will appear and you need to use it to raise the fee to get your MRC in the queue.</string>
           </property>
           <property name="text">
            <string/>
@@ -226,19 +226,26 @@
            <string>MRC Fee Boost</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="mrcFeeBoostRaiseToMinimumButton">
+          <property name="toolTip">
+           <string>This will automatically boost the MRC fee you are paying to get your MRC request in the queue.</string>
+          </property>
           <property name="text">
            <string>Raise to Minimum For Submit</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="BitcoinAmountField" name="mrcFeeBoostSpinBox"/>
+         <widget class="BitcoinAmountField" name="mrcFeeBoostSpinBox">
+          <property name="toolTip">
+           <string>This appears if the queue is full and you need to boost the fee you will pay out of your rewards to displace someone else in the queue. It is NOT the amount of reward to be redeemed!</string>
+          </property>
+         </widget>
         </item>
        </layout>
       </item>

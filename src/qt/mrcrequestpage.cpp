@@ -149,8 +149,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->show();
             ui->ErrorIconLabel->hide();
@@ -165,8 +168,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
@@ -181,8 +187,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
@@ -198,11 +207,17 @@ void MRCRequestPage::updateMRCStatus()
             ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
             if (m_mrc_model->getMRCReward() > m_mrc_model->getMRCQueuePayLimitFee()) {
+                ui->mrcFeeBoostLabel->show();
                 ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(true);
                 ui->mrcFeeBoostRaiseToMinimumButton->show();
+                ui->mrcFeeBoostSpinBox->setEnabled(true);
+                ui->mrcFeeBoostSpinBox->show();
             } else {
+                ui->mrcFeeBoostLabel->hide();
                 ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
                 ui->mrcFeeBoostRaiseToMinimumButton->hide();
+                ui->mrcFeeBoostSpinBox->setEnabled(false);
+                ui->mrcFeeBoostSpinBox->hide();
             }
 
             ui->SubmittedIconLabel->hide();
@@ -218,6 +233,12 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
+            ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+            ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
+
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
@@ -232,8 +253,11 @@ void MRCRequestPage::updateMRCStatus()
 
         ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
+        ui->mrcFeeBoostLabel->hide();
         ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
         ui->mrcFeeBoostRaiseToMinimumButton->hide();
+        ui->mrcFeeBoostSpinBox->setEnabled(false);
+        ui->mrcFeeBoostSpinBox->hide();
 
         ui->mrcSubmitButton->setEnabled(true);
         ui->mrcSubmitButton->setToolTip(message);
