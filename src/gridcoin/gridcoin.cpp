@@ -143,111 +143,43 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 void InitializeContracts(CBlockIndex* pindexBest)
 {
-    // Yes, this is the same code block repeated four times.
-    // TODO: Make a proper loop that will automatically do any registry that has a db. This will
-    // require an extension to the RegistryBookmarks class.
+    // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
+    for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
 
-    {
-        LogPrintf("Gridcoin: Loading project history...");
-        uiInterface.InitMessage(_("Loading project history..."));
+        std::string contract_type_string = Contract::Type::ToString(contract_type);
+        std::string tr_contract_type_string = Contract::Type::ToTranslatedString(contract_type);
 
-        Whitelist& projects = GetWhitelist();
+        LogPrintf("INFO: %s: Loading stored history for contract type %s...",
+                  __func__,
+                  contract_type_string);
 
-        // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
-        if (gArgs.GetBoolArg("-clearprojectentryhistory", false))
-        {
-            projects.Reset();
+        uiInterface.InitMessage(_("Loading history for contract type ") + tr_contract_type_string + "...");
+
+        std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
+        if (gArgs.GetBoolArg(history_arg, false)) {
+            registry.Reset();
         }
 
-        LogPrintf("Gridcoin: Initializing project entry registry from stored history...");
-        uiInterface.InitMessage(_("Initializing project entry registry from stored history..."));
-        int project_db_height = projects.Initialize();
+        LogPrintf("INFO: %s: Initializing registry from stored history for contract type %s...",
+                  __func__,
+                  contract_type_string);
 
-        if (project_db_height > 0)
-        {
-            LogPrintf("Gridcoin: project entry history loaded through height = %i.", project_db_height);
-        }
-        else
-        {
-            LogPrintf("Gridcoin: project entry history load not successful. Will initialize from contract replay.");
-        }
-    }
+        uiInterface.InitMessage(_("Initializing registry from stored history for contract type ")
+                                  + tr_contract_type_string + "...");
 
-    {
-        LogPrintf("Gridcoin: Loading beacon history...");
-        uiInterface.InitMessage(_("Loading beacon history..."));
+        int db_height = registry.Initialize();
 
-        BeaconRegistry& beacons = GetBeaconRegistry();
-
-        // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
-        if (gArgs.GetBoolArg("-clearbeaconhistory", false))
-        {
-            beacons.Reset();
-        }
-
-        LogPrintf("Gridcoin: Initializing beacon registry from stored history...");
-        uiInterface.InitMessage(_("Initializing beacon registry from stored history..."));
-        int beacon_db_height = beacons.Initialize();
-
-        if (beacon_db_height > 0)
-        {
-            LogPrintf("Gridcoin: beacon history loaded through height = %i.", beacon_db_height);
-        }
-        else
-        {
-            LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
-        }
-    }
-
-    {
-        LogPrintf("Gridcoin: Loading scraper entry history...");
-        uiInterface.InitMessage(_("Loading scraper entry history..."));
-
-        ScraperRegistry& scrapers = GetScraperRegistry();
-
-        // If the clearscraperhistory argument is provided, then clear everything from the scraper registry,
-        if (gArgs.GetBoolArg("-clearscraperentryhistory", false))
-        {
-            scrapers.Reset();
-        }
-
-        LogPrintf("Gridcoin: Initializing scraper entry from stored history...");
-        uiInterface.InitMessage(_("Initializing scraper entry from stored history..."));
-        int scraper_db_height = scrapers.Initialize();
-
-        if (scraper_db_height > 0)
-        {
-            LogPrintf("Gridcoin: scraper entry history loaded through height = %i.", scraper_db_height);
-        }
-        else
-        {
-            LogPrintf("Gridcoin: scraper entry history load not successful. Will initialize from contract replay.");
-        }
-    }
-
-    {
-        LogPrintf("Gridcoin: Loading protocol entry history...");
-        uiInterface.InitMessage(_("Loading protocol entry history..."));
-
-        ProtocolRegistry& protocol_entries = GetProtocolRegistry();
-
-        // If the clearprotocolentryhistory argument is provided, then clear everything from the protocol registry,
-        if (gArgs.GetBoolArg("-clearprotocolentryhistory", false))
-        {
-            protocol_entries.Reset();
-        }
-
-        LogPrintf("Gridcoin: Initializing protocol entry from stored history...");
-        uiInterface.InitMessage(_("Initializing protocol entry from stored history..."));
-        int protocol_db_height = protocol_entries.Initialize();
-
-        if (protocol_db_height > 0)
-        {
-            LogPrintf("Gridcoin: protocol entry history loaded through height = %i.", protocol_db_height);
-        }
-        else
-        {
-            LogPrintf("Gridcoin: protocol entry history load not successful. Will initialize from contract replay.");
+        if (db_height > 0) {
+            LogPrintf("INFO: %s: History loaded through height %i for contract type %s",
+                      __func__,
+                      db_height,
+                      contract_type_string);
+        } else {
+            LogPrintf("INFO: %s: History load not successful for contract type %s. Will initialize "
+                      "from contract replay.",
+                      __func__,
+                      contract_type_string);
         }
     }
 

@@ -386,6 +386,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     RegistryBookmarks db_heights;
 
+    // Logs db_heights for reference in logs.
     for (const auto& contract_type : CONTRACT_TYPES) {
         std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
 
@@ -796,6 +797,22 @@ std::string Contract::Type::ToString(ContractType contract_type)
     }
 }
 
+std::string Contract::Type::ToTranslatedString(ContractType contract_type)
+{
+    switch (contract_type) {
+        case ContractType::BEACON:     return _("beacon");
+        case ContractType::CLAIM:      return _("claim");
+        case ContractType::MRC:        return _("mrc");
+        case ContractType::MESSAGE:    return _("message");
+        case ContractType::POLL:       return _("poll");
+        case ContractType::PROJECT:    return _("project");
+        case ContractType::PROTOCOL:   return _("protocol");
+        case ContractType::SCRAPER:    return _("scraper");
+        case ContractType::VOTE:       return _("vote");
+        default:                       return "";
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Class: Contract::Action
 // -----------------------------------------------------------------------------
@@ -966,4 +983,18 @@ void IContractHandler::Revert(const ContractContext& ctx)
     }
 
     error("Unknown contract action ignored: %s", ctx->m_action.ToString());
+}
+
+int IContractHandler::Initialize()
+{
+    return 0;
+}
+
+int IContractHandler::GetDBHeight()
+{
+    return 0;
+}
+
+void IContractHandler::SetDBHeight(int& height)
+{
 }

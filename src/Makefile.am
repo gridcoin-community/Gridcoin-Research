@@ -247,6 +247,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/claim.cpp \
     gridcoin/contract/contract.cpp \
     gridcoin/contract/message.cpp \
+    gridcoin/contract/registry.cpp \
     gridcoin/cpid.cpp \
     gridcoin/gridcoin.cpp \
     gridcoin/mrc.cpp \

@@ -324,7 +324,7 @@ public:
             }
         }
 
-        LogPrint(BCLog::LogFlags::CONTRACT, "INFO %s: Passivated %" PRId64 " elements from %s entry db.",
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Passivated %" PRId64 " elements from %s entry db.",
                  __func__,
                  KeyType(),
                  number_passivated);

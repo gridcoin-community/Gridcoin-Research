@@ -576,14 +576,14 @@ public:
     //! there is some issue in LevelDB project entry retrieval. (This will cause the contract replay to change scope
     //! and initialize the Whitelist from contract replay and store in LevelDB.)
     //!
-    int Initialize();
+    int Initialize() override;
 
     //!
     //! \brief Gets the block height through which is stored in the project entry registry database.
     //!
     //! \return block height.
     //!
-    int GetDBHeight();
+    int GetDBHeight() override;
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -594,7 +594,7 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height);
+    void SetDBHeight(int& height) override;
 
     //!
     //! \brief Resets the maps in the Whitelist but does not disturb the underlying LevelDB

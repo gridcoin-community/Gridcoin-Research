@@ -98,11 +98,18 @@ public:
         std::string ToString() const;
 
         //!
-        //! \brief Get the string representation of the provide contract type.
+        //! \brief Get the string representation of the provided contract type.
         //!
         //! \return The string as it would appear in a legacy transaction message.
         //!
         static std::string ToString(ContractType contract_type);
+
+        //!
+        //! \brief Get the translated string representation of the provided contract type.
+        //!
+        //! \return The string as it would appear in a legacy transaction message.
+        //!
+        static std::string ToTranslatedString(ContractType contract_type);
 
     }; // Contract::Type
 

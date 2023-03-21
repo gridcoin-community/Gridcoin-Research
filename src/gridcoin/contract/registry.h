@@ -10,20 +10,105 @@
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/voting/registry.h"
 
 namespace GRC {
+
+class RegistryBookmarks_error : public std::runtime_error
+{
+public:
+    explicit RegistryBookmarks_error(const std::string& str)
+        : std::runtime_error("ERROR: " + str)
+    {
+        LogPrintf("ERROR: %s", str);
+    }
+};
+
+//!
+//! \brief Registry is simply a mnemonic alias for IContractHandler.
+//!
+typedef IContractHandler Registry;
 
 typedef std::unordered_map<ContractType, int> RegistryBlockHeights;
 
 class RegistryBookmarks
 {
 public:
+    static const std::vector<GRC::ContractType> CONTRACT_TYPES_WITH_REG_DB;
+
+    static const std::vector<GRC::ContractType> CONTRACT_TYPES_SUPPORTING_REVERT;
+
     RegistryBookmarks()
     {
-        m_db_heights.insert(std::make_pair(ContractType::BEACON, GetBeaconRegistry().GetDBHeight()));
-        m_db_heights.insert(std::make_pair(ContractType::SCRAPER, GetScraperRegistry().GetDBHeight()));
-        m_db_heights.insert(std::make_pair(ContractType::PROTOCOL, GetProtocolRegistry().GetDBHeight()));
-        m_db_heights.insert(std::make_pair(ContractType::PROJECT, GetWhitelist().GetDBHeight()));
+        UpdateRegistryBookmarks();
+    }
+
+    static Registry& GetRegistryWithDB(const ContractType type)
+    {
+        switch (type) {
+        case ContractType::BEACON:      return GetBeaconRegistry();
+        case ContractType::PROJECT:     return GetWhitelist();
+        case ContractType::PROTOCOL:    return GetProtocolRegistry();
+        case ContractType::SCRAPER:     return GetScraperRegistry();
+        case ContractType::UNKNOWN:
+            [[fallthrough]];
+        case ContractType::CLAIM:
+            [[fallthrough]];
+        case ContractType::MESSAGE:
+            [[fallthrough]];
+        case ContractType::POLL:
+            [[fallthrough]];
+        case ContractType::VOTE:
+            [[fallthrough]];
+        case ContractType::MRC:
+            [[fallthrough]];
+        case ContractType::OUT_OF_BOUND:
+            break;
+        }
+
+        throw RegistryBookmarks_error("Contract type has no registry db.");
+    }
+
+    static Registry& GetRegistryWithRevert(const ContractType type)
+    {
+        switch (type) {
+        case ContractType::BEACON:      return GetBeaconRegistry();
+        case ContractType::POLL:        return GetPollRegistry();
+        case ContractType::PROJECT:     return GetWhitelist();
+        case ContractType::PROTOCOL:    return GetProtocolRegistry();
+        case ContractType::SCRAPER:     return GetScraperRegistry();
+        case ContractType::VOTE:        return GetPollRegistry();
+            [[fallthrough]];
+        case ContractType::UNKNOWN:
+            [[fallthrough]];
+        case ContractType::CLAIM:
+            [[fallthrough]];
+        case ContractType::MESSAGE:
+            [[fallthrough]];
+        case ContractType::MRC:
+            [[fallthrough]];
+        case ContractType::OUT_OF_BOUND:
+            break;
+        }
+
+        throw RegistryBookmarks_error("Contract type has no contract handler reversion capability.");
+    }
+
+
+    static bool IsRegistryBackedByDB(const ContractType& type)
+    {
+        auto iter = std::find(CONTRACT_TYPES_WITH_REG_DB.begin(),
+                              CONTRACT_TYPES_WITH_REG_DB.end(), type);
+
+        return (iter != CONTRACT_TYPES_WITH_REG_DB.end());
+    }
+
+    static bool IsRegistryRevertCapable(const ContractType& type)
+    {
+        auto iter = std::find(CONTRACT_TYPES_SUPPORTING_REVERT.begin(),
+                              CONTRACT_TYPES_SUPPORTING_REVERT.end(), type);
+
+        return (iter != CONTRACT_TYPES_SUPPORTING_REVERT.end());
     }
 
     std::optional<int> GetRegistryBlockHeight(const ContractType type) const
@@ -37,14 +122,31 @@ public:
         return db_height_entry->second;
     }
 
-    void UpdateRegistryBlockHeights()
+    void UpdateRegistryBookmarks()
     {
         // We use array notation here, because we want the latest to override, and if one doesn't exist it will
         // be created.
-        m_db_heights[ContractType::BEACON] = GetBeaconRegistry().GetDBHeight();
-        m_db_heights[ContractType::SCRAPER] = GetScraperRegistry().GetDBHeight();
-        m_db_heights[ContractType::PROTOCOL] = GetProtocolRegistry().GetDBHeight();
-        m_db_heights[ContractType::PROJECT] = GetWhitelist().GetDBHeight();
+        for (const auto& registry_type : CONTRACT_TYPES_WITH_REG_DB) {
+            m_db_heights[registry_type] = GetRegistryWithDB(registry_type).GetDBHeight();
+        }
+    }
+
+    //!
+    //! \brief This method is used in the cleanup after disconnecting blocks in DisconnectBlocksBatch to reset the db
+    //! bookmark heights. It will reset the DB block height AND bookmark for a registry if the new (head of chain)
+    //! height is less than the recorded bookmark for that contract type.
+    //!
+    //! \param block_height.
+    //!
+    void UpdateRegistryBlockHeights(int& block_height)
+    {
+        for (const auto& registry_type : CONTRACT_TYPES_WITH_REG_DB) {
+            if (GetRegistryBlockHeight(registry_type) > block_height) {
+                GetRegistryWithDB(registry_type).SetDBHeight(block_height);
+
+                m_db_heights[registry_type] = block_height;
+            }
+        }
     }
 
     int GetLowestRegistryBlockHeight()

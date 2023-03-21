@@ -484,8 +484,8 @@ int ProtocolRegistry::Initialize()
 
     int height = m_protocol_db.Initialize(m_protocol_entries, m_pending_protocol_entries);
 
-    LogPrint(LogFlags::CONTRACT, "INFO %s: m_protocol_db size after load: %u", __func__, m_protocol_db.size());
-    LogPrint(LogFlags::CONTRACT, "INFO %s: m_protocol_entries size after load: %u", __func__, m_protocol_entries.size());
+    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_protocol_db size after load: %u", __func__, m_protocol_db.size());
+    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_protocol_entries size after load: %u", __func__, m_protocol_entries.size());
 
     return height;
 }

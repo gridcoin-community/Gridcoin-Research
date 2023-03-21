@@ -497,8 +497,8 @@ int Whitelist::Initialize()
 
     int height = m_project_db.Initialize(m_project_entries, m_pending_project_entries);
 
-    LogPrint(LogFlags::CONTRACT, "INFO %s: m_project_db size after load: %u", __func__, m_project_db.size());
-    LogPrint(LogFlags::CONTRACT, "INFO %s: m_project_entries size after load: %u", __func__, m_project_entries.size());
+    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_project_db size after load: %u", __func__, m_project_db.size());
+    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_project_entries size after load: %u", __func__, m_project_entries.size());
 
     return height;
 }

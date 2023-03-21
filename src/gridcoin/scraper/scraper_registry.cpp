@@ -529,8 +529,8 @@ int ScraperRegistry::Initialize()
 
     int height = m_scraper_db.Initialize(m_scrapers, m_pending_scrapers);
 
-    LogPrint(LogFlags::SCRAPER, "INFO %s: m_scraper_db size after load: %u", __func__, m_scraper_db.size());
-    LogPrint(LogFlags::SCRAPER, "INFO %s: m_scrapers size after load: %u", __func__, m_scrapers.size());
+    LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scraper_db size after load: %u", __func__, m_scraper_db.size());
+    LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scrapers size after load: %u", __func__, m_scrapers.size());
 
     return height;
 }

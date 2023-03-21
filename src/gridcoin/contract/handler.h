@@ -134,7 +134,27 @@ struct IContractHandler
     //! \param ctx References the contract and associated context.
     //!
     virtual void Revert(const ContractContext& ctx);
+
+    //!
+    //! \brief This method is implemented for those contract handlers that have a registry (backing) database.
+    //! \return
+    //!
+    virtual int Initialize();
+
+    //!
+    //! \brief This method is implemented for those contract handlers that have a registry (backing) database.
+    //! \return
+    //!
+    virtual int GetDBHeight();
+
+    //!
+    //! \brief This method is implemented for those contract handlers that have a registry (backing) database.
+    //!
+    //! \param height
+    //!
+    virtual void SetDBHeight(int& height);
 };
-}
+
+} // namespace GRC
 
 #endif // GRIDCOIN_CONTRACT_HANDLER_H

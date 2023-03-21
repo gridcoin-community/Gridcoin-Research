@@ -19,6 +19,7 @@
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "node/blockstorage.h"
 #include <util/syserror.h>
@@ -617,10 +618,14 @@ void SetupServerArgs()
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
-    hidden_args.emplace_back("-clearbeaconhistory");
-    hidden_args.emplace_back("-clearscraperentryhistory");
-    hidden_args.emplace_back("-clearprotocolentryhistory");
-    hidden_args.emplace_back("-clearprojectentryhistory");
+
+    // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
+    // registry with a backing db. This is currently beacon, project, protocol, and scraper.
+    for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
+
+        hidden_args.emplace_back(history_arg);
+    }
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
