@@ -1,7 +1,7 @@
 set(JSON_TEST_FILES
-    base58_keys_valid.json
     base58_encode_decode.json
-    base58_keys_invalid.json
+    key_io_invalid.json
+    key_io_valid.json
     script_valid.json
     script_invalid.json
     tx_invalid.json

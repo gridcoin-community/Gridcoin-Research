@@ -8,9 +8,9 @@ TEST_SRCDIR = test
 TEST_BINARY=test/test_gridcoin$(EXEEXT)
 
 JSON_TEST_FILES = \
-	test/data/base58_keys_valid.json \
 	test/data/base58_encode_decode.json \
-	test/data/base58_keys_invalid.json \
+	test/data/key_io_invalid.json \
+	test/data/key_io_valid.json \
 	test/data/script_valid.json \
 	test/data/script_invalid.json \
 	test/data/tx_invalid.json \
@@ -59,6 +59,7 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/sidestake_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \
 	test/key_tests.cpp \
+	test/key_io_tests.cpp \
 	test/merkle_tests.cpp \
 	test/mruset_tests.cpp \
 	test/multisig_tests.cpp \
