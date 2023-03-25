@@ -2109,10 +2109,6 @@ Jeżeli plik nie istnieje, utwórz go z uprawnieniami właćciciela-tylko-do-odc
         <translation>Wczytywanie portfela...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nie można dezaktualizować portfela</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nie można zapisać domyślnego adresu</translation>
     </message>

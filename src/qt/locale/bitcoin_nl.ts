@@ -1820,10 +1820,6 @@ Als het bestand niet bestaat, maak het dan aan, met een alleen-lezen permissie.<
         <translation>Portemonnee aan het laden...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Kan portemonnee niet downgraden</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Kan standaardadres niet schrijven</translation>
     </message>

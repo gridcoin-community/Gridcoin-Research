@@ -7,6 +7,13 @@
     </message>
     </context>
 <context>
+    <name>AdditionalFieldsTableDataModel</name>
+    <message>
+        <source>Value</source>
+        <translation>Wert</translation>
+    </message>
+    </context>
+<context>
     <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
@@ -385,30 +392,30 @@
     </message>
     <message numerus="yes">
         <source>%n second(s) ago</source>
-        <translation type="unfinished">
-            <numerusform />
-            <numerusform />
+        <translation>
+            <numerusform>vor %n Sekunde</numerusform>
+            <numerusform>vor %n Sekunden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s) ago</source>
-        <translation type="unfinished">
-            <numerusform />
-            <numerusform />
+        <translation>
+            <numerusform>vor %n Minute</numerusform>
+            <numerusform>vor %n Minuten</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s) ago</source>
-        <translation type="unfinished">
-            <numerusform />
-            <numerusform />
+        <translation>
+            <numerusform>vor %n Stunde</numerusform>
+            <numerusform>vor %n Stunden</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s) ago</source>
-        <translation type="unfinished">
-            <numerusform />
-            <numerusform />
+        <translation>
+            <numerusform>vor %n Tag</numerusform>
+            <numerusform>vor %n Tagen</numerusform>
         </translation>
     </message>
     <message>
@@ -502,6 +509,10 @@
     <message>
         <source>hour</source>
         <translation>Stunde</translation>
+    </message>
+    <message>
+        <source>%1 times per %2</source>
+        <translation>%1 Mal pro %2</translation>
     </message>
     </context>
 <context>
@@ -663,6 +674,20 @@
     </message>
 </context>
 <context>
+    <name>ConsolidateUnspentWizardSelectDestinationPage</name>
+    <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    </context>
+<context>
+    <name>ConsolidateUnspentWizardSelectInputsPage</name>
+    <message>
+        <source>Date</source>
+        <translation>Datum</translation>
+    </message>
+    </context>
+<context>
     <name>DiagnosticsDialog</name>
     <message>
         <source>Warning</source>
@@ -748,6 +773,10 @@
     </context>
 <context>
     <name>Intro</name>
+    <message>
+        <source>Welcome</source>
+        <translation>Willkommen</translation>
+    </message>
     <message numerus="yes">
         <source>%n GB of free space available</source>
         <translation type="unfinished">
@@ -1339,6 +1368,13 @@
     <message>
         <source>&amp;Copy</source>
         <translation>&amp;Kopieren</translation>
+    </message>
+    </context>
+<context>
+    <name>ResearcherWizardSummaryPage</name>
+    <message>
+        <source>&amp;Projects</source>
+        <translation>&amp;Projekte</translation>
     </message>
     </context>
 <context>
@@ -2019,6 +2055,10 @@
         <translation>Hilfe zu einem Befehl erhalten</translation>
     </message>
     <message>
+        <source>Yes/No/Abstain</source>
+        <translation>Ja/Nein/Enthaltung</translation>
+    </message>
+    <message>
         <source>Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction.</source>
         <translation>Warnung: -paytxfee ist auf einen sehr hohen Wert festgelegt! Dies ist die Gebühr die beim Senden einer Transaktion fällig wird.</translation>
     </message>
@@ -2185,10 +2225,6 @@ Falls die Konfigurationsdatei nicht existiert, erzeugen Sie diese mit Leserechte
     <message>
         <source>Loading wallet...</source>
         <translation>Lade Wallet...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Wallet kann nicht auf eine ältere Version herabgestuft werden</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

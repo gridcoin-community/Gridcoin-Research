@@ -1885,10 +1885,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>S'està carregant el moneder...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>No es pot reduir la versió del moneder</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>No es pot escriure l'adreça per defecte</translation>
     </message>

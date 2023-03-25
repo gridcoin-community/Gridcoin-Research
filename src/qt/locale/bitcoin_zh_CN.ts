@@ -2104,10 +2104,6 @@ rpcpassword=&lt;password&gt;
         <translation>正在加载钱包...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>无法降级钱包</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>无法写入缺省地址</translation>
     </message>

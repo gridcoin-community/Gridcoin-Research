@@ -1353,10 +1353,6 @@ Se la dosiero ne ekzistas, kreu ?in kun permeso "nur posedanto rajtas legi".</tr
         <translation>Ŝargado de monujo...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Ne eblas malpromocii monujon</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Ne eblas skribi defaŭltan adreson</translation>
     </message>

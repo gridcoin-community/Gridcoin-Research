@@ -1875,10 +1875,6 @@ Dac? fi?ierul nu exist?, creeaz?-l cu permisiuni de citire doar de c?tre proprie
         <translation>Încărcare portofel...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nu se poate retrograda portofelul</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nu se poate scrie adresa implicită</translation>
     </message>

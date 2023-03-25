@@ -1230,10 +1230,6 @@
         <translation>正在載入錢包資料...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>沒辦法把錢包格式降級</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>沒辦法把預設位址寫進去</translation>
     </message>
