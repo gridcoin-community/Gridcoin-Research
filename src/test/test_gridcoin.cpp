@@ -29,8 +29,6 @@ extern leveldb::Options GetOptions();
 extern void InitLogging();
 
 struct TestingSetup {
-    ECCVerifyHandle globalVerifyHandle;
-
     TestingSetup() {
         fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
         fUseFastIndex = true; // Don't verify block hashes when loading
