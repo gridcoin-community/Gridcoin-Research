@@ -106,7 +106,14 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , nWeight(0)
 {
     QSettings settings;
-    if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
+
+    QString window_geometry_key = "MainWindowGeometry";
+
+    if (GetDataDir() != GetDefaultDataDir()) {
+        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
+    }
+
+    if (!restoreGeometry(settings.value(window_geometry_key).toByteArray())) {
         // Restore failed (perhaps missing setting), center the window
         setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size()
                                         * 0.4,QDesktopWidget().availableGeometry(this)));
@@ -236,7 +243,14 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 BitcoinGUI::~BitcoinGUI()
 {
     QSettings settings;
-    settings.setValue("MainWindowGeometry", saveGeometry());
+
+    QString window_geometry_key = "MainWindowGeometry";
+
+    if (GetDataDir() != GetDefaultDataDir()) {
+        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
+    }
+
+    settings.setValue(window_geometry_key, saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
 #ifdef Q_OS_MAC
