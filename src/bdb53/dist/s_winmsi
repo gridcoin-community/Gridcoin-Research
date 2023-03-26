@@ -1,0 +1,94 @@
+#!/bin/bash -
+############################################################
+# Build Windows Binary Distribution for BDB 11gR2
+#
+# Assumes current dir is db/dist inside a clean, unzipped 
+# tree from a source distribution package
+#
+# Usage:  bash s_winmsi []
+# 
+# Steps:
+#  1. Build release and debug binaries (including java and php)
+#  2. Build additional included languages (perl, python)
+#  3. Build, or check .wxs file (uses Python)
+#  4. Build .msi
+#
+# db-version.msi ends up in $PRODUCT_BLDDIR/wix
+#
+# Options:
+#  TBD -- add some
+############################################################
+
+#
+# Get utility functions
+#
+. winmsi/s_winmsi.fcn
+
+ERRORLOG=winmsi.log
+SetupErrorLog
+
+# Do this before parsing options, we need the version number
+. ./RELEASE
+dbver=db-$DB_VERSION
+
+# Set variables used by functions to customize this installer
+PRODUCT_NAME=`printf "Berkeley DB %d%sR%d" $DB_VERSION_FAMILY $DB_VERSION_LETTER $DB_VERSION_RELEASE`
+PRODUCT_VERSION="$DB_VERSION"
+PRODUCT_VERSION_MAJOR="$DB_VERSION_MAJOR"
+PRODUCT_VERSION_MINOR="$DB_VERSION_MINOR"
+PRODUCT_VERSION_PATCH="$DB_VERSION_PATCH"
+PRODUCT_STAGE=`pwd`/..
+PRODUCT_LICENSEDIR="${PRODUCT_STAGE}"
+PRODUCT_BLDDIR="${PRODUCT_STAGE}"
+REG_KEY_NAME="Berkeley DB"
+REG_KEY_VERSION="$PRODUCT_VERSION_MAJOR.$PRODUCT_VERSION_MINOR.$PRODUCT_VERSION_PATCH"
+DIST_DIR=`pwd`
+MSI_DIR=winmsi
+
+Progress "s_winmsi starting, errors to $ERRORLOG"
+
+SetProductDir
+
+Progress "Building from $PRODUCT_BLDDIR, $dbver is $PRODUCT_SUB_BLDDIR"
+
+RequireCygwin
+RequireJava
+RequireWix
+RequirePython
+RequireXQilla
+
+#
+# Stage source files such as examples, etc *before*
+# the build to avoid build artifacts.
+#
+StageSourceComponents
+
+#
+# Build from source
+#
+BuildProduct
+
+#
+# Stage runtime files in a directory tree that looks like
+# bin, lib, include, etc
+#
+StageRuntimeComponents
+
+#
+# Build the license file as rtf
+#
+CreateLicenseRtf ../LICENSE License.rtf
+
+#
+# Build runtime .wxs files
+#
+CreateRuntimeComponents
+
+#
+# Create the .msi
+#
+CreateMsi
+
+Progress "s_winmsi finished, $OPT_OUTFILE created."
+exit 0
+

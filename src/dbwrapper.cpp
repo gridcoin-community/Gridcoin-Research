@@ -4,6 +4,7 @@
 // file license.txt or https://opensource.org/licenses/mit-license.php.
 
 #include <map>
+#include <stdexcept>
 
 #include <leveldb/env.h>
 #include <leveldb/cache.h>

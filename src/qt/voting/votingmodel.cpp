@@ -14,6 +14,7 @@
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/payloads.h"
 #include "logging.h"
+#include "main.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
@@ -43,6 +44,8 @@ void NewPollReceived(VotingModel* model, int64_t poll_time)
 
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     const PollReference& ref = iter->Ref();
     const PollResultOption result = PollResult::BuildFor(ref);
 
@@ -113,6 +116,7 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
         item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
     }
 
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     return item;
 }
 } // Anonymous namespace
@@ -237,16 +241,81 @@ QStringList VotingModel::getActiveProjectUrls() const
 
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
 {
+    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, __func__);
+
     std::vector<PollItem> items;
 
-    LOCK(cs_main);
+    m_registry.registry_traversal_in_progress = true;
 
-    for (const auto& iter : m_registry.Polls().Where(flags)) {
-        if (std::optional<PollItem> item = BuildPollItem(iter)) {
-            items.push_back(std::move(*item));
+    bool fork_reorg_during_run = false;
+
+    // We do up to three tries if there was a reorg/fork during the middle of the run. This is more than enough.
+    for (unsigned int i = 0; i < 3; ++i)
+    {
+        for (const auto& iter : WITH_LOCK(m_registry.cs_poll_registry, return m_registry.Polls().Where(flags))) {
+            // Note that we are implementing a coarse-grained fork/rollback detector here.
+            // We do this because we have eliminated the cs_main lock to free up the GUI.
+            // Instead we have reversed the locking scheme and have the contract actions (add/delete)
+            // place a lock on cs_poll_registry when they make an update. This preserves the integrity
+            // of the registry itself. It also will preserve the integrity of transaction access in leveldb,
+            // PROVIDED that a rollback/reorg has not happened during this run. The main state
+            // will not change during the individual BuildPollItem calls, because BuildPollItem places
+            // a lock on cs_poll_registry for its duration. This means a contract change from the
+            // contract interface handler will block on it, given that it also puts a lock on
+            // cs_poll_registry. I am a little worried about holding up main for this, but that was happening
+            // on a recursive lock on cs_main before for the ENTIRE run, and this is certainly better.
+            // Transactions that have not been rolled back by a reorg can be safely accessed for reading
+            // by another thread as we are doing here.
+
+            try {
+                if (std::optional<PollItem> item = BuildPollItem(iter)) {
+                    items.push_back(std::move(*item));
+                }
+            } catch (InvalidDuetoReorgFork& e) {
+                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.",
+                         __func__);
+            }
+
+            // This must be AFTER BuildPollItem. If a reorg occurred during reg traversal that could invalidate
+            // a Ref pointed to by the sequence, the increment of the iterator to the next position must be
+            // prevented to avoid a segfault. A new Sequence must be formed and the loop started over.
+
+            if (m_registry.reorg_occurred_during_reg_traversal) {
+                items.clear();
+                fork_reorg_during_run = true;
+
+                g_timer.GetTimes(std::string{"Restart due to reorg "} + std::string{__func__}, __func__);
+
+                // Break from the poll registry traversal loop
+                break;
+            }
         }
+
+        // exit retry loop if no fork/reorg during run
+        if (!fork_reorg_during_run) break;
+
+        // Periodically recheck until reorg/fork has cleared. The reorg_occurred_during_reg_traversal will
+        // be cleared by the DetectReorg function as soon as the g_reorg_in_progress is cleared by the caller of
+        // ReorganizeChain. If ReorganizeChain returns a fatal error, but does not directly end program execution,
+        // then g_reorg_in_progress may remain set. The call chain will eventually end program execution in that case,
+        // in which this thread will be interrupted on the MilliSleep call. We do not want to attempt to resume
+        // the tally if a reorganize is unsuccessful.
+        while (m_registry.reorg_occurred_during_reg_traversal) {
+            // Return here is for thread interrupt during shutdown.
+            if (!MilliSleep(1000)) return items;
+
+            m_registry.PollRegistry::DetectReorg();
+        }
+
+        // If the fork_reorg_during_run was set (true), then this run through the loop is invalid due to a
+        // fork/reorg. Now that reorg_occurred_during_reg_traversal has cleared, reset to false for another try.
+        fork_reorg_during_run = false;
     }
 
+    m_registry.registry_traversal_in_progress = false;
+
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, __func__);
     return items;
 }
 

@@ -67,7 +67,6 @@ QT_TS = \
   qt/locale/bitcoin_uk.ts \
   qt/locale/bitcoin_ur_PK.ts \
   qt/locale/bitcoin_vi.ts \
-  qt/locale/bitcoin_vi_VN.ts \
   qt/locale/bitcoin_zh_CN.ts \
   qt/locale/bitcoin_zh_TW.ts
 
@@ -663,10 +662,14 @@ else
   qt_gridcoinresearch_LDADD += $(LIBGRIDCOIN_UTIL)
 endif
 qt_gridcoinresearch_LDADD += $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBGRIDCOIN_CRYPTO) $(LIBMEMENV) \
-  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)\
+  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(PROTOBUF_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS)\
   $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(CURL_LIBS) $(LIBZIP_LIBS) $(LIBSECP256K1)
 qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 qt_gridcoinresearch_LIBTOOLFLAGS = $(AM_LIBTOOLFLAGS) --tag CXX
+
+if ENABLE_WALLET
+qt_gridcoinresearch_LDADD += $(LIBDB)
+endif
 
 
 #locale/foo.ts -> locale/foo.qm

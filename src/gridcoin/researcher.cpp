@@ -229,13 +229,15 @@ std::optional<std::string> ReadClientStateXml()
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
-    uiInterface.ThreadSafeMessageBox(strprintf("Could not access BOINC data directory \"%s\". "
-                                               "Please check that the directory exists and check the directory "
-                                               "and client_state.xml file permissions.",
-                                               path.string()),
-                                     "", CClientUIInterface::ICON_ERROR
-                                     | CClientUIInterface::BTN_OK
-                                     | CClientUIInterface::MODAL);
+    if (!path.empty()) {
+        uiInterface.ThreadSafeMessageBox(strprintf("Could not access BOINC data directory \"%s\". "
+                                                   "Please check that the directory exists and check the directory "
+                                                   "and client_state.xml file permissions.",
+                                                   path.string()),
+                                         "Error", CClientUIInterface::ICON_ERROR
+                                         | CClientUIInterface::BTN_OK
+                                         | CClientUIInterface::MODAL);
+    }
 
     return std::nullopt;
 }
@@ -1325,6 +1327,24 @@ CAmount Researcher::Accrual() const
     LOCK(cs_main);
 
     return Tally::GetAccrual(*cpid, now, pindexBest);
+}
+
+std::optional<CAmount> Researcher::AccrualNearLimit() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+    std::optional<CAmount> near_limit_accrual;
+
+    if (!cpid || !pindexBest) {
+        return std::nullopt;
+    }
+
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+
+    LOCK(cs_main);
+
+    near_limit_accrual = Tally::AccrualNearLimit(*cpid, now, pindexBest);
+
+    return near_limit_accrual;
 }
 
 ResearcherStatus Researcher::Status() const

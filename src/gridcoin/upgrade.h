@@ -8,6 +8,7 @@
 #include <string>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <iomanip>
 #include <vector>
 

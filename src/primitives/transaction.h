@@ -11,6 +11,8 @@
 #include "script.h"
 #include "serialize.h"
 
+#include <stdexcept>
+
 /** An inpoint - a combination of a transaction and an index n into its vin */
 class CInPoint
 {

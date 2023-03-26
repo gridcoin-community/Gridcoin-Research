@@ -1,0 +1,143 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"> 
+  <Product Id='*' UpgradeCode='2df79540-9c19-11df-b5e4-00262db1b537'
+   Name='@PRODUCT_NAME@' Version='@PROD_WIX_VERSION@'
+   Manufacturer='Oracle' Language='1033'>
+
+    <!-- Store files as a compressed 'cabinet' embedded in the .MSI file. -->
+    <!-- Let WiX generate guid for us. -->
+    <Package Id='*'
+     Keywords="Embedded Database Datastore"
+     Description='@PRODUCT_NAME@ @PROD_WIX_VERSION@'
+     Comments='includes sources and binaries' InstallerVersion='300'
+     Compressed='yes' Platform="x86"
+     Languages="1033" SummaryCodepage="1252" />
+    <!-- The upgrade id should be the same to the UpgradeCode of the previous version you want upgrade -->
+    <Upgrade Id='529068a1-2ba8-11df-8e8e-00262db1b537'>
+    <UpgradeVersion OnlyDetect="yes" 
+			Minimum="@PROD_WIX_VERSION@" 
+			Property="NEWERFOUND" 
+			IncludeMinimum="no" 
+			Language='1033'/>
+    <UpgradeVersion OnlyDetect="no" 
+			Minimum="@PROD_WIX_VERSION_MIN@" 
+			Maximum="@PROD_WIX_VERSION@" 
+			Property="UPGRADEDFOUND" 
+			IncludeMinimum="yes" 
+			IncludeMaximum="no" 
+			Language='1033'/>
+   </Upgrade>
+
+    <Media Id='1' Cabinet='dbcore.cab' EmbedCab='yes' />
+    <Property Id="ApplicationUsers"><![CDATA[AnyUser]]></Property>
+    <Property Id="LicenseType"><![CDATA[Open]]></Property>
+
+    <!-- The ARP* properties affect the Add/Remove Programs dialog -->
+    <Property Id="ARPURLINFOABOUT"><![CDATA[http://www.oracle.com]]></Property>
+    <Property Id="ARPCONTACT"><![CDATA[berkeleydb-info_us@oracle.com]]></Property>
+    <Property Id="ARPNOMODIFY"><![CDATA[1]]></Property>
+    <Property Id="ARPNOREPAIR"><![CDATA[1]]></Property>
+    <Property Id="INSTALLLEVEL"><![CDATA[200]]></Property>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="DesktopFolder" Name="." />
+      <Directory Id="FavoritesFolder" Name="." />
+      <Directory Id="ProgramFilesFolder" Name=".">
+        <Directory Id="OracleFolder" Name="Oracle">
+          <Directory Id="INSTALLDIR"
+                   Name="@PRODUCT_NAME@ @PROD_WIX_VERSION@">
+            <Directory Id="INSTALLUTIL" Name="installutil">
+            </Directory>
+	  </Directory> <!-- installdir -->
+        </Directory> <!-- folder -->
+      </Directory> <!-- ProgramFilesFolder -->
+      <Directory Id="ProgramMenuFolder" Name=".">
+        <Directory Id="BerkeleyDbMenu"
+         Name="@PRODUCT_NAME@ @PROD_WIX_VERSION@" />
+      </Directory>
+    </Directory>
+    <!-- template for location of Visual Studio Merge Modules.  This
+     is in C:\Program Files\Common Files\Merge Modules\....  See 
+     the FindMergeModules function in s_winmsi.fcn for how this is 
+     found.
+     NOTE: this results in warnings in "light.exe" that are documented
+     in the WiX manual and can be safely ignored.  Errors cannot be 
+     ignored.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Merge Id="VCRedist" SourceFile="@MERGE_MODULES_LOCATION@" DiskId="1" Language="0"/>
+    </DirectoryRef>
+    <!-- Features:
+	o required stuff
+	o doc	
+	o runtime (includes C++)
+	o java runtime
+	o BDB SQL runtime
+	o STL runtime
+	o C# runtime
+	o C/C++ devo
+	o examples
+    -->
+    <Feature Id="Complete" Title="@PRODUCT_NAME@ @PROD_WIX_VERSION@" Description="Complete installation"
+	      Display="expand" Level="1" ConfigurableDirectory="INSTALLDIR">
+
+    <Feature Id="AlwaysInstall" Title="Always Install"
+	 Description="@PRODUCT_NAME@" Display="hidden" Level="1"
+	 AllowAdvertise="no"
+	 Absent="disallow" ConfigurableDirectory="INSTALLDIR">
+	      <ComponentGroupRef Id="db_required"/>
+    </Feature>
+    <Feature Id="CoreRuntime" Title="Core Runtime" Description="Release build of C and C++ runtime libraries and utilities." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_runtime" Primary="yes"/>
+	<MergeRef Id="VCRedist"/>
+    </Feature>
+    <Feature Id="CoreDevo" Title="C Development files" Description="C header and library files required for development of C applications.  This option includes the Core Runtime." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_devo" Primary="yes"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    <Feature Id="Documentation" Title="Documentation" Description="@PRODUCT_NAME@ Documentation." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_doc"/>
+	<ComponentRef Id="ondisk_doc"/>
+    </Feature>
+    <Feature Id="JavaRuntime" Title="Java runtime and development files" Description="Java .jar files required for development and running of Java applications.  This option includes the Core Runtime." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_java"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    <Feature Id="STLRuntime" Title="STL runtime and development files" Description="STL libraries and header files required for development and running of applications using BDB's C++ Standard Template Library (STL) interface.  This option includes the Core Runtime." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_cxx"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    <Feature Id="CSharpRuntime" Title="C# runtime and development files" Description="C# libraries required for development and running of applications using BDB's C# interface.  This option includes the Core Runtime." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_csharp"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    <Feature Id="SQLRuntime" Title="SQL runtime and development files" Description="Libraries and header files required for development and running of applications using BDB's SQL interface.  This option includes the Core Runtime." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_sql"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    <Feature Id="Examples" Title="Examples (all languages)" Description="@PRODUCT_NAME@ examples for all language interfaces." AllowAdvertise="no" Display="expand" Level="1" InstallDefault="source" ConfigurableDirectory="INSTALLDIR">
+	<ComponentGroupRef Id="group_examples"/>
+	<ComponentGroupRef Id="group_devo"/>
+	<ComponentGroupRef Id="group_runtime"/>
+    </Feature>
+    </Feature> <!-- end of all Features -->
+
+    <!-- UI: reference the Wix library -->
+    <!-- WixUI_FeatureTree is a canned UI that goes directly to
+         a custom install without "typical" and "full" options -->
+    <UIRef Id="WixUI_FeatureTree" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <!-- Use our own End User License Agreement (EULA) -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf"/>
+
+    <CustomAction Id='PreventDowngrade' Error='A later version of @PRODUCT_NAME@ is already installed. If you want to downgrade, you need to uninstall it first.' />
+
+    <InstallExecuteSequence>
+      <Custom Action='PreventDowngrade' After='FindRelatedProducts'>NEWERFOUND</Custom>
+      <RemoveExistingProducts After='InstallInitialize' />
+    </InstallExecuteSequence>
+
+    <InstallUISequence>
+      <Custom Action='PreventDowngrade' After='FindRelatedProducts'>NEWERFOUND</Custom>
+    </InstallUISequence>
+  </Product>
+</Wix>

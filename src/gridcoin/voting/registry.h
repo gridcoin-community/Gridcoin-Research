@@ -8,12 +8,25 @@
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
+#include "sync.h"
 #include "uint256.h"
+#include <atomic>
 #include <map>
 
 class CTxDB;
 
 namespace GRC {
+
+//!
+//! \brief Thrown when a reorg/fork occurs during a poll registry traversal.
+//!
+class InvalidDuetoReorgFork : public std::exception
+{
+public:
+    InvalidDuetoReorgFork()
+    {
+    }
+};
 
 class Contract;
 class PollRegistry;
@@ -162,10 +175,11 @@ public:
     void UnlinkVote(const uint256 txid);
 
 private:
-    const uint256* m_ptxid;       //!< Hash of the poll transaction.
+    uint256 m_txid;               //!< Hash of the poll transaction.
     uint32_t m_payload_version;   //!< Version of the poll (payload).
     PollType m_type;              //!< Type of the poll.
-    const std::string* m_ptitle;  //!< Title of the poll.
+    const std::string* m_ptitle;  //!< Title of the poll for indexing/mapping purposes.
+    std::string m_title;          //!< Original title of the poll for display purposes.
     int64_t m_timestamp;          //!< Timestamp of the poll transaction.
     uint32_t m_duration_days;     //!< Number of days the poll remains active.
     std::vector<uint256> m_votes; //!< Hashes of the linked vote transactions.
@@ -183,6 +197,8 @@ class PollRegistry : public IContractHandler
 public:
     using PollMapByTitle = std::map<std::string, PollReference>;
     using PollMapByTxid = std::map<uint256, PollReference*>;
+
+    CCriticalSection cs_poll_registry;  //!< Lock for poll registry.
 
     //!
     //! \brief A traversable, immutable sequence of the polls in the registry.
@@ -267,10 +283,10 @@ public:
             bool operator!=(const Iterator& other) const;
 
         private:
-            BaseIterator m_iter; //!< The current position.
-            BaseIterator m_end;  //!< Element after the end of the sequence.
-            FilterFlag m_flags;  //!< Attributes to filter polls by.
-            int64_t m_now;       //!< Current time in seconds.
+            BaseIterator m_iter GUARDED_BY(cs_poll_registry); //!< The current position.
+            BaseIterator m_end GUARDED_BY(cs_poll_registry);  //!< Element after the end of the sequence.
+            FilterFlag m_flags GUARDED_BY(cs_poll_registry);  //!< Attributes to filter polls by.
+            int64_t m_now GUARDED_BY(cs_poll_registry);       //!< Current time in seconds.
 
             //!
             //! \brief Advance the iterator to the next item that matches the
@@ -314,8 +330,8 @@ public:
         Iterator end() const;
 
     private:
-        const PollMapByTitle& m_polls; //!< Poll references in the registry.
-        FilterFlag m_flags;            //!< Attributes to filter polls by.
+        const PollMapByTitle& m_polls GUARDED_BY(cs_poll_registry) ; //!< Poll references in the registry.
+        FilterFlag m_flags GUARDED_BY(cs_poll_registry) ;            //!< Attributes to filter polls by.
     }; // Sequence
 
     //!
@@ -407,10 +423,18 @@ public:
     //!
     void Delete(const ContractContext& ctx) override;
 
+    //!
+    //! \brief Detect reorganizations that would affect registry traversal.
+    //!
+    void DetectReorg();
+
+    std::atomic<bool> registry_traversal_in_progress = false;      //!< Boolean that registry traversal is in progress.
+    std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
+
 private:
-    PollMapByTitle m_polls;             //!< Poll references keyed by title.
-    PollMapByTxid m_polls_by_txid;      //!< Poll references keyed by TXID.
-    const PollReference* m_latest_poll; //!< Cache for the most recent poll.
+    PollMapByTitle m_polls GUARDED_BY(cs_poll_registry);             //!< Poll references keyed by title.
+    PollMapByTxid m_polls_by_txid GUARDED_BY(cs_poll_registry);      //!< Poll references keyed by TXID.
+    const PollReference* m_latest_poll GUARDED_BY(cs_poll_registry); //!< Cache for the most recent poll.
 
     //!
     //! \brief Get the poll with the specified title.

@@ -31,6 +31,7 @@
 #include <script.h>
 
 #include <queue>
+#include <stdexcept>
 
 using namespace GRC;
 using namespace std;

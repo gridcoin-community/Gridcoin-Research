@@ -6,7 +6,7 @@
 #include "qspinbox.h"
 #include "sync.h"
 #include "mrcrequestpage.h"
-#include "ui_mrcrequestpage.h"
+#include "forms/ui_mrcrequestpage.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
@@ -149,8 +149,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->show();
             ui->ErrorIconLabel->hide();
@@ -165,8 +168,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
@@ -181,8 +187,11 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
             ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
             ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
 
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
@@ -198,11 +207,17 @@ void MRCRequestPage::updateMRCStatus()
             ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
             if (m_mrc_model->getMRCReward() > m_mrc_model->getMRCQueuePayLimitFee()) {
+                ui->mrcFeeBoostLabel->show();
                 ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(true);
                 ui->mrcFeeBoostRaiseToMinimumButton->show();
+                ui->mrcFeeBoostSpinBox->setEnabled(true);
+                ui->mrcFeeBoostSpinBox->show();
             } else {
+                ui->mrcFeeBoostLabel->hide();
                 ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
                 ui->mrcFeeBoostRaiseToMinimumButton->hide();
+                ui->mrcFeeBoostSpinBox->setEnabled(false);
+                ui->mrcFeeBoostSpinBox->hide();
             }
 
             ui->SubmittedIconLabel->hide();
@@ -218,6 +233,12 @@ void MRCRequestPage::updateMRCStatus()
 
             ui->mrcMinimumSubmitFee->setText(tr("N/A"));
 
+            ui->mrcFeeBoostLabel->hide();
+            ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
+            ui->mrcFeeBoostRaiseToMinimumButton->hide();
+            ui->mrcFeeBoostSpinBox->setEnabled(false);
+            ui->mrcFeeBoostSpinBox->hide();
+
             ui->SubmittedIconLabel->hide();
             ui->ErrorIconLabel->show();
             ui->ErrorIconLabel->setToolTip(message);
@@ -232,8 +253,11 @@ void MRCRequestPage::updateMRCStatus()
 
         ui->mrcMinimumSubmitFee->setText(BitcoinUnits::formatWithUnit(display_unit, m_mrc_model->getMRCMinimumSubmitFee()));
 
+        ui->mrcFeeBoostLabel->hide();
         ui->mrcFeeBoostRaiseToMinimumButton->setEnabled(false);
         ui->mrcFeeBoostRaiseToMinimumButton->hide();
+        ui->mrcFeeBoostSpinBox->setEnabled(false);
+        ui->mrcFeeBoostSpinBox->hide();
 
         ui->mrcSubmitButton->setEnabled(true);
         ui->mrcSubmitButton->setToolTip(message);
@@ -266,6 +290,11 @@ void MRCRequestPage::showMRCStatus(const MRCModel::ModelStatus& status) {
     case MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT:
         ui->waitForBlockUpdateLabel->setText(tr("A block update must have occurred after wallet start or sync to submit "
                                                 "MRCs."));
+        ui->waitForNextBlockUpdateFrame->show();
+        ui->mrcStatusSubmitFrame->hide();
+        return;
+    case MRCModel::ModelStatus::INSUFFICIENT_MATURE_FUNDS:
+        ui->waitForBlockUpdateLabel->setText(tr("You must have a mature balance of at least 1 GRC to submit an MRC."));
         ui->waitForNextBlockUpdateFrame->show();
         ui->mrcStatusSubmitFrame->hide();
         return;

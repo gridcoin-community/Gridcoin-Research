@@ -1173,10 +1173,6 @@ Si plica non existat, crea eam cum permissionibus ut solus eius dominus eam lege
         <translation>Legens cassidile...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Non posse cassidile regredi</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Non posse scribere praedefinitam inscriptionem</translation>
     </message>

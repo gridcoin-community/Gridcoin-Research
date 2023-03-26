@@ -7,12 +7,6 @@ qt_linux_packages:=qt expat libxcb xcb_proto libXau xproto freetype fontconfig l
 qt_darwin_packages=qt
 qt_mingw32_packages=qt
 
-ifeq ($(BDB_53),1)
-wallet_packages=bdb53
-else
-wallet_packages=bdb
-endif
-
 upnp_packages=miniupnpc
 
 darwin_native_packages = native_ds_store native_mac_alias

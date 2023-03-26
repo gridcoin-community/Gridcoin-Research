@@ -101,12 +101,13 @@ public:
     bool hasSplitCpid() const;
     bool needsBeaconAuth() const;
 
+    std::optional<CAmount> accrualNearLimit() const;
     CAmount getAccrual() const;
 
     QString email() const;
     QString formatCpid() const;
     QString formatMagnitude() const;
-    QString formatAccrual(const int display_unit) const;
+    QString formatAccrual(const int display_unit, bool& near_limit) const;
     QString formatStatus() const;
     QString formatBoincPath() const;
 
@@ -115,6 +116,7 @@ public:
     QString formatBeaconStatus() const;
     QString formatBeaconAge() const;
     QString formatTimeToBeaconExpiration() const;
+    QString formatTimeToPendingBeaconExpiration() const;
     QString formatBeaconAddress() const;
     QString formatBeaconVerificationCode() const;
 

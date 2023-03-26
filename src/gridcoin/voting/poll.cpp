@@ -325,11 +325,11 @@ const std::vector<Poll::PollTypeRules> Poll::POLL_TYPE_RULES = {
     // also require the weight type of BALANCE_AND_MAGNITUDE, so therefore the
     // only poll type that can actually use BALANCE is SURVEY. All other WeightTypes are deprecated.
     {  7,  0, {} },                                // PollType::SURVEY
-    { 21, 40, { "project_name", "project_url" } }, // PollType::PROJECT
-    { 42, 50, {} },                                // PollType::DEVELOPMENT
-    { 21, 20, {} },                                // PollType::GOVERNANCE
-    { 21, 40, {} },                                // PollType::MARKETING
-    { 21, 40, {} },                                // PollType::OUTREACH
+    { 21, 20, { "project_name", "project_url" } }, // PollType::PROJECT
+    { 42, 35, {} },                                // PollType::DEVELOPMENT
+    { 21, 15, {} },                                // PollType::GOVERNANCE
+    { 21, 20, {} },                                // PollType::MARKETING
+    { 21, 20, {} },                                // PollType::OUTREACH
     { 21, 10, {} }                                 // PollType::COMMUNITY
 };
 

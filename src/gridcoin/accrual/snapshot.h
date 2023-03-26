@@ -20,6 +20,7 @@
 #include "streams.h"
 #include "tinyformat.h"
 
+#include <stdexcept>
 #include <unordered_map>
 
 class CBlockIndex;
@@ -359,6 +360,16 @@ public:
     CAmount PaymentPerDayLimit() const override
     {
         return MaxReward();
+    }
+
+    CAmount NearRewardLimit() const override
+    {
+        // This returns MaxReward() - 2 * ExpectedDaily() or 1/2 of MaxReward(), whichever
+        // is greater
+
+        CAmount threshold = std::max(MaxReward() / 2, MaxReward() - 2 * ExpectedDaily());
+
+        return threshold;
     }
 
     bool ExceededRecentPayments() const override

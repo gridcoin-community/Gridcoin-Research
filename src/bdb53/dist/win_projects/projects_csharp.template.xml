@@ -1,0 +1,292 @@
+<!-- 
+  * This file drives construction of Windows Visual Studio project files for 
+  * BDB C# API and tests.
+  *
+  * This file is not used directly by the XQuery script that creates projects.
+  * It is pre-processed first to perform variable substitution for variable names
+  * surrounded by '@' characters.  These variables names change from release to
+  * release, and this substitution makes it possible to keep the XQuery script more
+  * static.  The variables are replaced using lib_paths.sed
+  * It'd be simple enough to perform the variable substitutions using XQuery as well,
+  * but the lib_paths.sed mechanism already exists and works.
+  *
+  * TBD: describe format in more detail
+  -->
+<projects>
+  <!-- db_dotnet.vsproj -->
+  <project name="db_dotnet" guid="4696FB1E-1E5F-40B9-BD8C-A54D3BDA00F6">
+    <type>dll</type>
+    <AssemblyName>libdb_dotnet@DB_VERSION_MAJOR@@DB_VERSION_MINOR@</AssemblyName>
+    <DocumentationFile>doc\libdb_dotnet@DB_VERSION_MAJOR@@DB_VERSION_MINOR@.XML</DocumentationFile>
+    <files path="">
+      <file name="AckPolicy.cs" />
+      <file name="ActiveTransaction.cs" />
+      <file name="BaseCursor.cs" />
+      <file name="BackupOptions.cs" />
+      <file name="BTreeCursor.cs" />
+      <file name="BTreeDatabase.cs" />
+      <file name="BTreeDatabaseConfig.cs" />
+      <file name="BTreeStats.cs" />
+      <file name="ByteOrder.cs" />
+      <file name="CacheInfo.cs" />
+      <file name="CachePriority.cs" />
+      <file name="CompactConfig.cs" />
+      <file name="BaseDatabase.cs" />
+      <file name="CompactData.cs" />
+      <file name="MultipleKeyDatabaseEntry.cs" />
+      <file name="DatabaseEntry.cs" />
+      <file name="DbChannel.cs" />
+      <file name="DbSite.cs" />
+      <file name="DbSiteConfig.cs" />
+      <file name="DbThreadID.cs" />
+      <file name="DeadlockPolicy.cs" />
+      <file name="Enums.cs" />
+      <file name="ErrorCodes.cs" />
+      <file name="HashStats.cs" />
+      <file name="IBackup.cs" />
+      <file name="Internal\DB_CHANNEL.cs" />
+      <file name="Internal\DB_LOCKREQ.cs" />
+      <file name="Internal\DB_PREPLIST.cs" />
+      <file name="Internal\DB_REPMGR_SITE.cs" />
+      <file name="Internal\DB_SEQUENCE.cs" />
+      <file name="Internal\libdb_csharp.cs" />
+      <file name="Internal\libdb_csharpPINVOKE.cs" />
+      <file name="Internal\StatStructs.cs" />
+      <file name="LockingConfig.cs" />
+      <file name="LockOperation.cs" />
+      <file name="DatabaseException.cs" />
+      <file name="Delegates.cs" />
+      <file name="Internal\db_lockop_t.cs" />
+      <file name="LockRequest.cs" />
+      <file name="LockStats.cs" />
+      <file name="LogConfig.cs" />
+      <file name="LogStats.cs" />
+      <file name="LogVerifyConfig.cs" />
+      <file name="MPoolConfig.cs" />
+      <file name="MPoolFileStats.cs" />
+      <file name="MPoolStats.cs" />
+      <file name="MultipleDatabaseEntry.cs" />
+      <file name="Mutex.cs" />
+      <file name="MutexConfig.cs" />
+      <file name="MutexStats.cs" />
+      <file name="PreparedTransaction.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+      <file name="QueueStats.cs" />
+      <file name="RecnoStats.cs" />
+      <file name="ReplicationConfig.cs" />
+      <file name="ReplicationHostAddress.cs" />
+      <file name="ReplicationStats.cs" />
+      <file name="RepMgrSite.cs" />
+      <file name="RepMgrStats.cs" />
+      <file name="RepProcMsgResult.cs" />
+      <file name="SecondaryBTreeDatabase.cs" />
+      <file name="SecondaryHashDatabase.cs" />
+      <file name="SecondaryHashDatabaseConfig.cs" />
+      <file name="SecondaryQueueDatabase.cs" />
+      <file name="SecondaryQueueDatabaseConfig.cs" />
+      <file name="SecondaryRecnoDatabase.cs" />
+      <file name="SecondaryRecnoDatabaseConfig.cs" />
+      <file name="CursorConfig.cs" />
+      <file name="RecnoCursor.cs" />
+      <file name="HashCursor.cs" />
+      <file name="Cursor.cs" />
+      <file name="Database.cs" />
+      <file name="DatabaseConfig.cs" />
+      <file name="DatabaseEnvironment.cs" />
+      <file name="DatabaseEnvironmentConfig.cs" />
+      <file name="DatabaseType.cs" />
+      <file name="HashDatabase.cs" />
+      <file name="HashDatabaseConfig.cs" />
+      <file name="HeapDatabase.cs" />
+      <file name="HeapDatabaseConfig.cs" />
+      <file name="HeapRecordId.cs" />
+      <file name="HeapStats.cs" />
+      <file name="Internal\DB.cs" />
+      <file name="Internal\DBC.cs" />
+      <file name="Internal\DbConstants.cs" />
+      <file name="Internal\DBT.cs" />
+      <file name="Internal\DBTYPE.cs" />
+      <file name="Internal\DB_COMPACT.cs" />
+      <file name="Internal\DB_ENV.cs" />
+      <file name="Internal\DB_KEY_RANGE.cs" />
+      <file name="Internal\DB_LOCK.cs" />
+      <file name="Internal\db_lockmode_t.cs" />
+      <file name="Internal\DB_LSN.cs" />
+      <file name="Internal\db_recops.cs" />
+      <file name="Internal\DB_SITE.cs" />
+      <file name="Internal\DB_TXN.cs" />
+      <file name="Internal\DB_TXN_TOKEN.cs" />
+      <file name="Internal\Delegates.cs" />
+      <file name="JoinCursor.cs" />
+      <file name="KeyRange.cs" />
+      <file name="Lock.cs" />
+      <file name="LockingInfo.cs" />
+      <file name="LockMode.cs" />
+      <file name="LSN.cs" />
+      <file name="QueueDatabase.cs" />
+      <file name="QueueDatabaseConfig.cs" />
+      <file name="RecnoDatabase.cs" />
+      <file name="RecnoDatabaseConfig.cs" />
+      <file name="SecondaryBTreeDatabaseConfig.cs" />
+      <file name="SecondaryCursor.cs" />
+      <file name="SecondaryDatabase.cs" />
+      <file name="SecondaryDatabaseConfig.cs" />
+      <file name="Sequence.cs" />
+      <file name="SequenceConfig.cs" />
+      <file name="SequenceStats.cs" />
+      <file name="Transaction.cs" />
+      <file name="TransactionConfig.cs" />
+      <file name="TransactionStats.cs" />
+      <file name="VerboseMessages.cs" />
+    </files>
+  </project>
+
+  <!-- Global ProjectReference setting for examples/apps -->
+  <ProjectReference
+    Include="..\..\..\lang\csharp\src\db_dotnet.csproj"
+    ProjectUID="4696FB1E-1E5F-40B9-BD8C-A54D3BDA00F6"
+    ProjectName="db_dotnet"
+  />
+
+  <!-- Examples -->
+  <project name="excs_access" guid="B7250534-4FB1-450D-865C-59231820EAB5">
+    <type>app</type>
+    <files path="">
+      <file name="excs_access.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_btrec" guid="657FB9CC-16ED-4BAE-97AD-1A359D133F25">
+    <type>app</type>
+    <files path="">
+      <file name="excs_btrec.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_bulk" guid="90740BD6-C91B-4259-B6E9-C361A06791BA">
+    <type>app</type>
+    <files path="">
+      <file name="excs_bulk.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_env" guid="617FF132-0566-4F6D-932D-2A1BA3C6A93E">
+    <type>app</type>
+    <files path="">
+      <file name="excs_env.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_getting_started" guid="A8813939-DA91-4036-9BE4-B0FB44051A06">
+    <type>app</type>
+    <files path="">
+      <file name="DatabaseExample.cs" />
+      <file name="DatabaseLoader.cs" />
+      <file name="DatabaseReader.cs" />
+      <file name="Inventory.cs" />
+      <file name="MyDbs.cs" />
+      <file name="Vendor.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_lock" guid="BE804FB8-EF18-4ED6-B1EC-035D2564ED9F">
+    <type>app</type>
+    <files path="">
+      <file name="excs_lock.cs" />
+      <file name="Properties\AssemblyInfo.cs" />
+    </files>
+  </project>
+  <project name="excs_repquote" guid="7BA3D41C-2B70-405E-BEDB-A5A72509D2ED">
+    <type>app</type>
+    <files path="">
+      <file name="Properties\AssemblyInfo.cs" />
+      <file name="RepConfig.cs" />
+      <file name="RepQuoteEnvironment.cs" />
+      <file name="RepQuoteExample.cs" />
+    </files>
+  </project>
+  <project name="excs_sequence" guid="DC306DCB-F42C-4038-91FA-B553FD37CB2E">
+    <type>app</type>
+    <files path="">
+      <file name="Properties\AssemblyInfo.cs" />
+      <file name="excs_sequence.cs" />
+    </files>
+  </project>
+  <project name="excs_txn" guid="D3EEDB47-F622-4E8A-A218-076B49C269F1">
+    <type>app</type>
+    <files path="">
+      <file name="Properties\AssemblyInfo.cs" />
+      <file name="PayloadData.cs" />
+      <file name="excs_txn.cs" />
+    </files>
+  </project>
+
+  <!-- Tests -->
+  <project name="DotNetTest" guid="08D940C7-AAF5-413A-95E3-58A46880DC4D">
+    <type>test</type>
+    <ProjectReference
+      Include="..\..\lang\csharp\src\db_dotnet.csproj"
+      ProjectUID="4696FB1E-1E5F-40B9-BD8C-A54D3BDA00F6"
+      ProjectName="db_dotnet"
+    />
+    <files path="">
+      <file name="BTreeCursorTest.cs" />
+      <file name="BTreeDatabaseConfigTest.cs" />
+      <file name="BTreeDatabaseTest.cs" />
+      <file name="Configuration.cs" />
+      <file name="CSharpTestFixture.cs" />
+      <file name="CursorConfigTest.cs" />
+      <file name="CursorTest.cs" />
+      <file name="DatabaseConfigTest.cs" />
+      <file name="DatabaseEnvironmentConfigTest.cs" />
+      <file name="DatabaseEnvironmentTest.cs" />
+      <file name="DatabaseExceptionTest.cs" />
+      <file name="DatabaseTest.cs" />
+      <file name="ForeignKeyTest.cs" />
+      <file name="HashCursorTest.cs" />
+      <file name="HashDatabaseConfigTest.cs" />
+      <file name="HashDatabaseTest.cs" />
+      <file name="HeapDatabaseConfigTest.cs" />
+      <file name="HeapDatabaseTest.cs" />
+      <file name="JoinCursorTest.cs" />
+      <file name="LockingConfigTest.cs" />
+      <file name="LockTest.cs" SubType="Code" />
+      <file name="LogConfigTest.cs" />
+      <file name="MPoolConfigTest.cs" />
+      <file name="MutexConfigTest.cs" />
+      <file name="QueueDatabaseConfigTest.cs" />
+      <file name="QueueDatabaseTest.cs" />
+      <file name="RecnoCursorTest.cs" />
+      <file name="RecnoDatabaseConfigTest.cs" />
+      <file name="RecnoDatabaseTest.cs" />
+      <file name="ReplicationConfigTest.cs" />
+      <file name="ReplicationTest.cs" />
+      <file name="SecondaryBTreeDatabaseConfigTest.cs" />
+      <file name="SecondaryBTreeDatabaseTest.cs" />
+      <file name="SecondaryCursorTest.cs" />
+      <file name="SecondaryDatabaseConfigTest.cs" />
+      <file name="SecondaryDatabaseTest.cs" />
+      <file name="SecondaryHashDatabaseConfigTest.cs" />
+      <file name="SecondaryHashDatabaseTest.cs" />
+      <file name="SecondaryQueueDatabaseConfigTest.cs" />
+      <file name="SecondaryQueueDatabaseTest.cs" />
+      <file name="SecondaryRecnoDatabaseConfigTest.cs" />
+      <file name="SecondaryRecnoDatabaseTest.cs" />
+      <file name="SequenceConfigTest.cs" />
+      <file name="SequenceTest.cs" />
+      <file name="TestException.cs" />
+      <file name="TransactionCommitTokenTest.cs" />
+      <file name="TransactionConfigTest.cs" />
+      <file name="TransactionTest.cs" />
+      <file name="XMLReader.cs" />
+    </files>
+    <PreBuildEvent><![CDATA[
+IF $(ConfigurationName) == Debug SET LIBEXT=d
+IF $(ConfigurationName) == Release SET LIBEXT
+
+copy /B "$(SolutionDir)Win32\$(ConfigurationName)\libdb@DB_VERSION_MAJOR@@DB_VERSION_MINOR@%25LIBEXT%25.dll" "$(TargetDir)"
+copy /B "$(SolutionDir)Win32\$(ConfigurationName)\libdb_csharp@DB_VERSION_MAJOR@@DB_VERSION_MINOR@%25LIBEXT%25.dll" "$(TargetDir)"
+copy "$(ProjectDir)AllTestData.xml" "$(TargetDir)"
+]]></PreBuildEvent>
+  </project>
+</projects>

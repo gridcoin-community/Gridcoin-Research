@@ -1,0 +1,110 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"> 
+  <Fragment>
+    <ComponentGroup Id='db_required'>
+      <ComponentRef Id='RequiredFiles' />
+      <ComponentRef Id='license_readme' />
+      <ComponentRef Id='RequiredRegistry' />
+      <ComponentRef Id='RequiredLinks' />
+      <ComponentRef Id='RequiredShortcuts' />
+    </ComponentGroup>
+    <DirectoryRef Id='INSTALLDIR' >
+      <Component
+        DiskId='1'
+        Guid='0ACC1E98-359A-4020-B563-7C96F297150E'
+        Id='RequiredFiles'
+        KeyPath='yes'
+        Location='either'
+        SharedDllRefCount='yes'
+      >
+        <RegistryValue
+          Action='write'
+          Id='RootDir.RegistryVal'
+          Key='SOFTWARE\Oracle\@REG_KEY_NAME@\@REG_KEY_VERSION@'
+          Name='RootDirectory'
+          Root='HKLM'
+          Type='string'
+          Value='[INSTALLDIR]'
+         />
+        <CreateFolder />
+      </Component>
+      <Component
+        DiskId='1'
+        Guid='c567ab91-2ba8-11df-9ee7-00262db1b537'
+        Id='RequiredRegistry'
+        KeyPath='yes'
+        Location='either'
+        SharedDllRefCount='yes'
+      >
+        <RegistryValue
+          Action='write'
+          Id='Ext.Registry'
+          Key='.bdbsc'
+          Root='HKCR'
+          Type='string'
+          Value='Oracle.InformationalShortcut'
+         />
+        <RegistryValue
+          Action='write'
+          Id='Name.Registry'
+          Key='Oracle.InformationalShortcut'
+          Root='HKCR'
+          Type='string'
+          Value='Oracle Corporation Informational Shortcut'
+         />
+        <RegistryValue
+          Action='write'
+          Id='Tip.Registry'
+          Key='Oracle.InformationalShortcut'
+          Name='InfoTip'
+          Root='HKCR'
+          Type='string'
+          Value='Oracle Corporation Informational Shortcut'
+         />
+        <RegistryKey
+          Action='createAndRemoveOnUninstall'
+          Id='NoShow.Registry'
+          Key='Oracle.InformationalShortcut'
+          Root='HKCR'
+         />
+        <RegistryValue
+          Action='write'
+          Id='Icon.Registry'
+          Key='Oracle.InformationalShortcut\DefaultIcon'
+          Root='HKCR'
+          Type='string'
+          Value='[INSTALLDIR]\links\webicon.ico'
+         />
+        <RegistryValue
+          Action='write'
+          Id='Command.Registry'
+          Key='Oracle.InformationalShortcut\shell\open\command'
+          Root='HKCR'
+          Type='string'
+          Value='rundll32.exe shdocvw.dll,OpenURL %1'
+         />
+        <RegistryKey
+          Action='createAndRemoveOnUninstall'
+          Id='Explore.Registry'
+          Key='Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.bdbsc\OpenWithProgIds\Oracle.InformationalShortcut'
+          Root='HKCR'
+         />
+        <RegistryValue
+          Action='write'
+          Id='HklmExt.Registry'
+          Key='Software\Classes\.bdbsc'
+          Root='HKLM'
+          Type='string'
+          Value='Oracle.InformationalShortcut'
+         />
+        <RegistryValue
+          Action='write'
+          Id='HklmCommand.Registry'
+          Key='Software\Classes\Oracle.InformationalShortcut\shell\open\command'
+          Root='HKLM'
+          Type='string'
+          Value='rundll32.exe shdocvw.dll,OpenURL %1'
+         />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

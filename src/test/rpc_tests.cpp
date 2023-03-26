@@ -10,6 +10,8 @@
 
 #include <univalue.h>
 
+#include <stdexcept>
+
 using namespace std;
 
 BOOST_AUTO_TEST_SUITE(rpc_tests)

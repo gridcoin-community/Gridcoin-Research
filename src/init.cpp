@@ -5,6 +5,7 @@
 
 
 #include "chainparams.h"
+#include "gridcoin/support/block_finder.h"
 #include "util.h"
 #include "util/threadnames.h"
 #include "net.h"
@@ -448,11 +449,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::RESEARCHER);
 
     // Wallet
-    argsman.AddArg("-upgradewallet", "Upgrade wallet to latest format",
-                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
-    argsman.AddArg("-keypool=<n>", "Set key pool size to <n> (default: 100)",
+    argsman.AddArg("-keypool=<n>", strprintf("Set key pool size to <n> (default: %u for HD, %u for pre-HD wallets)", DEFAULT_KEYPOOL_SIZE, DEFAULT_KEYPOOL_SIZE_PRE_HD),
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-rescan", "Rescan the block chain for missing wallet transactions",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-rescanmrcrequests", "Rescan the block chain for missing mrc request transactions",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-salvagewallet", "Attempt to recover private keys from a corrupt wallet.dat",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
@@ -617,6 +618,8 @@ void SetupServerArgs()
 
     // This is hidden because it defaults to true and should NEVER be changed unless you know what you are doing.
     hidden_args.emplace_back("-flushwallet");
+
+    hidden_args.emplace_back("-upgradewallet");
 
     SetupChainParamsBaseOptions(argsman);
 
@@ -1082,7 +1085,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     CService addrProxy;
     bool fProxy = false;
     if (gArgs.IsArgSet("-proxy")) {
-        addrProxy = CService(gArgs.GetArg("-proxy", ""), 9050);
+        CService addrProxy(LookupNumeric(gArgs.GetArg("-proxy", "").c_str(), 9050));
         if (!addrProxy.IsValid())
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), gArgs.GetArg("-proxy", "")));
 
@@ -1091,17 +1094,17 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (!IsLimited(NET_IPV6))
             SetProxy(NET_IPV6, addrProxy);
         SetNameProxy(addrProxy);
-        
         fProxy = true;
     }
 
     // -tor can override normal proxy, -notor disables Tor entirely
     if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
-        CService addrOnion;
-        if (!gArgs.IsArgSet("-tor"))
+        proxyType addrOnion;
+        if (!gArgs.IsArgSet("-tor")) {
             addrOnion = addrProxy;
-        else
-            addrOnion = CService(gArgs.GetArg("-tor", ""), 9050);
+        } else {
+            CService addrProxy(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
+        }
         if (!addrOnion.IsValid())
             return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
         SetProxy(NET_TOR, addrOnion);
@@ -1144,10 +1147,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     {
         for (auto const& strAddr : gArgs.GetArgs("-externalip"))
         {
-            CService addrLocal(strAddr, GetListenPort(), fNameLookup);
-            if (!addrLocal.IsValid())
+            CService addrLocal;
+            if (Lookup(strAddr.c_str(), addrLocal, GetListenPort(), fNameLookup) && addrLocal.IsValid())
+                AddLocal(addrLocal, LOCAL_MANUAL);
+            else
                 return InitError(strprintf(_("Cannot resolve -externalip address: '%s'"), strAddr));
-            AddLocal(CService(strAddr, GetListenPort(), fNameLookup), LOCAL_MANUAL);
         }
     }
 
@@ -1272,26 +1276,17 @@ bool AppInit2(ThreadHandlerPtr threads)
             strErrors << _("Error loading wallet.dat") << "\n";
     }
 
-    if (gArgs.GetBoolArg("-upgradewallet", fFirstRun))
-    {
-        int nMaxVersion = gArgs.GetArg("-upgradewallet", 0);
-        if (nMaxVersion == 0) // the -upgradewallet without argument case
-        {
-            LogPrintf("Performing wallet upgrade to %i", FEATURE_LATEST);
-            nMaxVersion = CLIENT_VERSION;
-            pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
-        }
-        else
-            LogPrintf("Allowing wallet upgrade up to %i", nMaxVersion);
-        if (nMaxVersion < pwalletMain->GetVersion())
-            strErrors << _("Cannot downgrade wallet") << "\n";
-        pwalletMain->SetMaxVersion(nMaxVersion);
-    }
-
     if (fFirstRun)
     {
         // So Clang doesn't complain, even though we are really essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
+
+        pwalletMain->SetMinVersion(wallet::FEATURE_LATEST);
+
+        // generate a new master key
+        CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
+        if (!pwalletMain->SetHDMasterKey(masterPubKey))
+            throw std::runtime_error(std::string(__func__) + ": Storing master key failed");
 
         // Create new keyUser and set as default key
         CPubKey newDefaultKey;
@@ -1326,16 +1321,59 @@ bool AppInit2(ThreadHandlerPtr threads)
     RegisterWallet(pwalletMain);
 
     CBlockIndex *pindexRescan = pindexBest;
+    bool mrc_request_correction_scan_complete = false;
+
     if (gArgs.GetBoolArg("-rescan"))
         pindexRescan = pindexGenesisBlock;
     else
     {
         CWalletDB walletdb(walletFileName.string());
+
         CBlockLocator locator;
-        if (walletdb.ReadBestBlock(locator))
+        if (walletdb.ReadBestBlock(locator)) {
             pindexRescan = locator.GetBlockIndex();
+        }
+
+        walletdb.ReadAttribute("mrc_request_correction_scan_complete", mrc_request_correction_scan_complete);
     }
-    if (pindexBest != pindexRescan && pindexBest && pindexRescan && pindexBest->nHeight > pindexRescan->nHeight)
+
+    // If rescan is NOT specified and mrc_request_correction_scan_complete is false and the wallet best height
+    // is greater than the V12 height, where MRC requests became possible, then perform a correction rescan for
+    // MRC requests from the BlockV12Height block to the wallet best height - 1. From the wallet best height to
+    // the block chain height will be handled by the normal rescan block below.
+    // -rescanmrcrequests can be specified as a startup parameter regardless of the state of the
+    // mrc_request_correction_scan_complete flag.
+    if (!gArgs.GetBoolArg("-rescan")
+            && (!mrc_request_correction_scan_complete || gArgs.GetBoolArg("-rescanmrcrequests"))
+            && pindexRescan->nHeight > Params().GetConsensus().BlockV12Height) {
+        CBlockIndex *pindexMRCRequestRescan = GRC::BlockFinder::FindByHeight(Params().GetConsensus().BlockV12Height);
+        uiInterface.InitMessage(_("Rescanning for MRC requests..."));
+        LogPrintf("INFO: %s: Rescanning from block height %i to %i for missing MRC request transactions",
+                 __func__, pindexMRCRequestRescan->nHeight, pindexRescan->nHeight - 1);
+
+        g_timer.GetTimes("mrc request correction scan start", "init");
+
+        int mrc_requests_added = 0;
+
+        pwalletMain->ScanForMRCRequests(pindexMRCRequestRescan, pindexRescan, true);
+
+        LogPrintf("INFO: %u: %i missing MRC request transactions added to wallet.",
+                  __func__, mrc_requests_added);
+
+        g_timer.GetTimes("mrc request correction scan complete", "init");
+
+        CWalletDB walletdb(walletFileName.string());
+        mrc_request_correction_scan_complete = true;
+        if (!walletdb.WriteAttribute("mrc_request_correction_scan_complete", mrc_request_correction_scan_complete)) {
+            error("%s: Unable to update mrc request correction scan attribute in wallet db.", __func__);
+        }
+    }
+
+    // If -rescan was not requested, but the wallet height is less than the block database height, then we
+    // must rescan from the wallet height to the block database height anyway to catch the wallet up. If rescan
+    // was requested, then this starts from genesis. If the pindexRescan->nHeight (i.e. wallet best height was
+    // less than or equal to the BlockV12Height, then the MRC request rescan above did not occur.
+    if (pindexBest && pindexRescan && pindexBest != pindexRescan && pindexBest->nHeight > pindexRescan->nHeight)
     {
         uiInterface.InitMessage(_("Rescanning..."));
         LogPrintf("Rescanning last %i blocks (from block %i)...", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);

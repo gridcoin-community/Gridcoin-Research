@@ -1,0 +1,53 @@
+#!/bin/sh -
+#
+# $Id$
+#
+# Check all source files for proper copyright notices.
+
+d=../..
+[ -f $d/LICENSE ] || {
+	echo 'FAIL: cannot find source distribution directory.'
+	exit 1
+}
+
+t1=__1
+t2=__2
+
+# create regex for Copyright notice using current year
+COPYEXP='Copyright.*'`date +%C%y`'.*affiliates'
+echo $COPYEXP
+
+(cd $d && find . -name '*.[chys]' -o -name '*.cpp' -o -name '*.tcl'  \
+             -o -name '*.java' -o -name '*.cs' -o -name '*.hpp' \
+	     -o -name '*.src' | xargs egrep -l  $COPYEXP) > $t1
+ 
+# use sed to remove the files we do not care about, these are the ones
+# from 3rd parties that are included in our distribution
+
+(cd $d && find . -name '*.[chys]' -o -name '*.cpp' -o -name '*.tcl'  \
+             -o -name '*.java' -o -name '*.cs' -o -name '*.hpp') | tee /tmp/o |
+   sed -e '/crypto\//d' \
+       -e '/dbinc_auto\//d' \
+       -e '/lang\/csharp\/src\/Internal\//d'\
+       -e '/lang\/java\/src\/com\/sleepycat\/db\/internal\//d' \
+       -e '/lang\/sql\/generated\//d' \
+       -e '/db_csharp_wrap.c$/d' \
+       -e '/db_java_wrap.c$/d' \
+       -e '/perl\//d' \
+       -e '/sha1.c$/d' \
+       -e '/sleepycat\/asm\//d' \
+       -e '/sqlite\//d' \
+       -e '/test\/stl\//d' > $t2
+
+
+if diff $t1 $t2 > /dev/null; then
+        exit 0
+else
+        echo "<<< source tree >>> missing copyright notices"
+        diff $t1 $t2 | grep '>' | awk '{print $2}'
+        exit 1
+fi
+
+rm -f $t1 $t2
+
+exit 0

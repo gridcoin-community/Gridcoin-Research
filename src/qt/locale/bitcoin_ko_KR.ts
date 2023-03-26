@@ -974,10 +974,6 @@
         <translation>지갑을 불러오는 중...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>지갑을 다운그레이드 할 수 없습니다</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>기본 계좌에 기록할 수 없습니다</translation>
     </message>

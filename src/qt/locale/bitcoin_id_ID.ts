@@ -1314,10 +1314,6 @@ Jika berkas tidak ada, buatlah dengan permisi berkas hanya-dapat-dibaca-oleh-pem
         <translation>Memuat dompet...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Tidak dapat menurunkan versi dompet</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Tidak dapat menyimpan alamat standar</translation>
     </message>

@@ -1,0 +1,52 @@
+#!/bin/sh -
+#
+# $Id$
+#
+# Check to make sure we haven't forgotten to add any files to the list
+# of source files Windows uses to build its dsp files.
+#
+# ALEXG: This is no longer a reasonable test, Windows uses a different
+# mechanism to include files now, and the platforms still using srcfiles.in
+# don't support all of the source code. Not sure if there is a reasonable
+# alternative check here?
+
+d=../..
+[ -f $d/LICENSE ] || {
+	echo 'FAIL: cannot find source distribution directory.'
+	exit 1
+}
+
+f=$d/dist/srcfiles.in
+t1=__1
+t2=__2
+
+sed -e '/^[ 	#]/d' \
+    -e '/^examples\/c\/csv\/csv_local.c/d' \
+    -e '/^$/d' < $f |
+    awk '{print $1}' > $t1
+find $d -type f |
+    sed -e 's/^\.\.\/\.\.\/\.\.\///' \
+        -e '/^build[^_]/d' \
+	-e '/^dist\//d' \
+        -e '/^lang\/java\/libdb_java\/java_stat_auto.c/d' \
+        -e '/^lang\/perl\//d' \
+        -e '/^lang\/php_db4\//d' \
+        -e '/^test\//d' \
+	-e '/^test\/erlang/d' \
+	-e '/^test\/repmgr/d' \
+	-e '/^test\/stl/d' \
+        -e '/^test\/server/d' \
+        -e '/^test_thread/d' \
+        -e '/^test\/vxworks/d' |
+    egrep '\.c$|\.cpp$|\.def$|\.rc$' |
+    sort > $t2
+
+cmp $t1 $t2 > /dev/null || {
+    echo "<<< srcfiles.in >>> existing files"
+    diff $t1 $t2
+    exit 1
+}
+
+rm -f $t1 $t2
+
+exit 0

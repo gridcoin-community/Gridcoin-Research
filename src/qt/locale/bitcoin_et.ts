@@ -1351,10 +1351,6 @@ Kui seda faili ei ole, loo see ainult-omanikule-lugemiseks faili õigustes.</tra
         <translation>Rahakoti laadimine...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Rahakoti vanandamine ebaõnnestus</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Tõrge vaikimisi aadressi kirjutamisel</translation>
     </message>

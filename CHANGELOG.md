@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.2.0] 2023-03-26, leisure, "LaVerne"
+
+### Added
+ - [3/3] key, wallet: HD wallets #2540 (@div72)
+ - ARMv8 SHA2 Intrinsics #2612 (@barton2526)
+ - build: vendor bdb 5.3 #2620 (@div72)
+ - scraper, gui: Add external adapter projects indication #2625 (@jamescowens)
+ - gui: implement INSUFFICIENT_MATURE_FUNDS status for the mrcmodel #2628 (@jamescowens)
+ - gui, accrual: Implement accrual limit warning #2636 (@jamescowens)
+ - rpc: add `getnodeaddresses` #2646 (@Pythonix)
+ - consensus: Add new checkpoints #2651 (@barton2526)
+
+### Changed
+ - voting: Optimize poll locks #2619 (@jamescowens)
+ - util: move threadinterrupt.{cpp,h} to util #2613 (@Pythonix)
+ - gui, voting: Update pool cpids and avw rules #2624 (@jamescowens)
+ - ci: bump python and setup-python action version #2626 (@div72)
+ - gui: Change text from username to name (real name or nickname) #2633 (@jamescowens)
+ - locale: Translation update, phase 1 #2637 (@jamescowens)
+ - gui: Change MRC too soon to submit error to be less confusing #2645 (@jamescowens)
+ - locale: Update translations prior to release (phase 2/2) #2658 (@jamescowens)
+ - gui: Enhance MRC request form to avoid fee boost field confusion #2659 (@jamescowens)
+
+### Removed
+none
+
+### Fixed
+ - net: Turn net structures into dumb storage classes (backport) #2561 (@Pythonix)
+ - build: Include native_X.mk before X.mk #2609 (@barton2526)
+ - depends: fix OpenSSL for Darwin builds #2610 (@div72)
+ - build: Change actions runner image to Focal, Force Lint to use 22.04, Change cd runner version #2611 (@barton2526)
+ - gui: don't show datadir error msgbox if arg isn't specified #2617 (@div72)
+ - rpc: Repair auditsnapshotaccrual rpc function #2621 (@jamescowens)
+ - gui: Correct updateBeaconIcon() function in bitcoingui.cpp #2622 (@jamescowens)
+ - wallet: Strengthen CWalletTx::RevalidateTransactions #2627 (@jamescowens)
+ - test: Fix Wambiguous-reversed-operator compiler warning, drop boost::assign #2632 (@barton2526)
+ - gui: Fix wallet overview displaying lower-case poll name #2640 (@delta1513)
+ - Fix and optimize ResendWalletTransactions #2642 (@jamescowens)
+ - build(nsis): Write registry keys to HKLM instead of HKCU, Install shortcuts for all users, Fix INSTALLDIR removal bug #2643 (@sitiom)
+ - gui: Fix TransactionRecord::decomposeTransaction to properly display self-sidestake #2647 (@jamescowens)
+ - rpc: Fixed the RPC error when running `help voting` while syncing #2649 (@delta1513)
+ - build: Fix compilation with GCC 13 #2653 (@theMarix)
+ - rpc: Formatting - typo correction rpc help for listresearcheraccounts #2654 (@PrestackI)
+
 ## [5.4.1.0] 2022-11-27, leisure
 
 ### Added

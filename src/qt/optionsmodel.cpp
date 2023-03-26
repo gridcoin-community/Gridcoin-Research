@@ -7,6 +7,7 @@
 #include "bitcoinunits.h"
 #include "guiutil.h"
 #include "init.h"
+
 #include "miner.h"
 #include "wallet/walletdb.h"
 
@@ -19,7 +20,10 @@ OptionsModel::OptionsModel(QObject *parent) :
 bool static ApplyProxySettings()
 {
     QSettings settings;
-    CService addrProxy(settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString());
+    int port = 9050;
+    std::string hostname = "";
+    SplitHostPort(settings.value("addrProxy", "127.0.0.1:9050").toString().toStdString(), port, hostname);
+    CService addrProxy(LookupNumeric(hostname.c_str(), port));
     if (!settings.value("fUseProxy", false).toBool()) {
         addrProxy = CService();
         return false;
@@ -219,10 +223,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             break;
         case ProxyIP: {
             proxyType proxy;
-            proxy = CService("127.0.0.1", 9050);
+            proxy = LookupNumeric("127.0.0.1", 9050);
             GetProxy(NET_IPV4, proxy);
 
-            CNetAddr addr(value.toString().toStdString());
+            CNetAddr addr;
+            LookupHost(value.toString().toStdString().c_str(), addr, false);
             proxy.SetIP(addr);
             settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
             successful = ApplyProxySettings();
@@ -230,9 +235,8 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         break;
         case ProxyPort: {
             proxyType proxy;
-            proxy = CService("127.0.0.1", 9050);
+            proxy = LookupNumeric("127.0.0.1", 9050);
             GetProxy(NET_IPV4, proxy);
-
             proxy.SetPort(value.toInt());
             settings.setValue("addrProxy", proxy.ToStringIPPort().c_str());
             successful = ApplyProxySettings();

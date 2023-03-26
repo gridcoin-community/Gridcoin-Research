@@ -5,11 +5,13 @@
 #include "clientversion.h"
 #include "fs.h"
 #include "init.h" // for pwalletMain
+#include <key_io.h>
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #include "node/ui_interface.h"
 #include "base58.h"
 
+#include <stdexcept>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -201,6 +203,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
     int64_t nTimeBegin = pindexBest->nTime;
 
     bool fGood = true;
+    bool found_hd_seed = false;
 
     while (file.good()) {
         std::string line;
@@ -236,6 +239,9 @@ UniValue importwallet(const UniValue& params, bool fHelp)
                 fLabel = false;
             if (vstr[nStr] == "reserve=1")
                 fLabel = false;
+            if (vstr[nStr] == "hdmaster=1") {
+                found_hd_seed = true;
+            }
             if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
                 strLabel = DecodeDumpString(vstr[nStr].substr(6));
                 fLabel = true;
@@ -267,6 +273,11 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 
     if (!fGood)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
+
+    if (found_hd_seed) {
+        return "Warning: Encountered and imported inactive HD seed during the import. Use the 'sethdseed false <key>'"
+               "RPC command if you wish to activate it.";
+    }
 
     return NullUniValue;
 }
@@ -368,6 +379,20 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
     file << strprintf("# * Best block at time of backup was %i (%s),\n", nBestHeight, hashBestChain.ToString());
     file << strprintf("#   mined on %s\n", EncodeDumpTime(pindexBest->nTime));
     file << "\n";
+
+    // add the base58check encoded extended master if the wallet uses HD
+    CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
+    if (!masterKeyID.IsNull())
+    {
+        CKey key;
+        if (pwalletMain->GetKey(masterKeyID, key))
+        {
+            CExtKey masterKey;
+            masterKey.SetSeed(key);
+
+            file << "# extended private masterkey: " << EncodeExtKey(masterKey) << "\n\n";
+        }
+    }
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
         const CKeyID &keyid = it->second;
         std::string strTime = EncodeDumpTime(it->first);
@@ -376,13 +401,17 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {
             CSecret secret(key.begin(), key.end());
+            file << strprintf("%s %s ", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime);
             if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("%s %s label=%s # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid]), strAddr);
+                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid]));
+            } else if (keyid == masterKeyID) {
+                file << "hdmaster=1";
             } else if (setKeyPool.count(keyid)) {
-                file << strprintf("%s %s reserve=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
+                file << "reserve=1";
             } else {
-                file << strprintf("%s %s change=1 # addr=%s\n", CBitcoinSecret(secret, key.IsCompressed()).ToString(), strTime, strAddr);
+                file << "change=1";
             }
+            file << strprintf(" # addr=%s%s\n", strAddr, (pwalletMain->mapKeyMetadata[keyid].hdKeypath.size() > 0 ? " hdkeypath="+pwalletMain->mapKeyMetadata[keyid].hdKeypath : ""));
         }
     }
     file << "\n";

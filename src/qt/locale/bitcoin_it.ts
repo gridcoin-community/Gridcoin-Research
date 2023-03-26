@@ -2020,10 +2020,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Caricamento portamonete...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Non è possibile effettuare il downgrade del portamonete</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Non è possibile scrivere l'indirizzo predefinito</translation>
     </message>

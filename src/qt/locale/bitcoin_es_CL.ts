@@ -1081,10 +1081,6 @@
         <translation>Cargando cartera...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>No es posible desactualizar la billetera</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>No se pudo escribir la dirección por defecto</translation>
     </message>

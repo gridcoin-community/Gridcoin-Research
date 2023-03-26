@@ -1135,10 +1135,6 @@ Ja fails neeksist?, izveidojiet to ar at?auju las?šanai tikai ?pašniekam.</tra
         <translation>Ielādē maciņu...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nevar maciņa formātu padarīt vecāku</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nevar ierakstīt adresi pēc noklusēšanas</translation>
     </message>

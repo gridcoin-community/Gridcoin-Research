@@ -1,0 +1,551 @@
+declare variable $xmlversion := "1.0";
+declare variable $xmlencoding := "utf-8";
+declare variable $msbversion := "4.0";
+declare variable $msbdefprops := '$(VCTargetsPath)\Microsoft.Cpp.Default.props';
+declare variable $msbprops := '$(VCTargetsPath)\Microsoft.Cpp.props';
+declare variable $msbtargets := "$(VCTargetsPath)\Microsoft.Cpp.targets";
+declare variable $projectList := "@PROJECT_INPUT@";
+declare variable $mobile := xs:boolean(doc($projectList)/projects/variable[@name="mobile"]);
+declare variable $debugOptLevel := "Disabled";
+declare variable $releaseOptLevel := "MaxSpeed";
+declare variable $warnLevel := "Level3";
+declare variable $debugInfo := "ProgramDatabase";
+declare variable $sourcePath := doc($projectList)/projects/variable[@name="sourcePath"];
+declare variable $vsversion := "@VISUAL_STUDIO_VERSION@";
+declare variable $dllType := "dll";
+declare variable $appType := "Application";
+declare variable $special_file := "src/crypto/crypto.c;src/crypto/aes_method.c";
+
+declare function local:genImportProperty($project)
+{
+  let $libprop :=  if ($project/type/text() eq "library") then "library.props"
+		   else "application.props"
+  return 
+  (local:indent(2),<ImportGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    {local:indent(4)}<Import Project="{$libprop}"/>
+  {local:indent(2)}</ImportGroup>)
+};
+
+declare function local:indent($n) 
+{
+  concat("&#xa;",string-join(for $i in (1 to $n) return " ", ""))
+};
+
+declare function local:getPlatforms($version) 
+{
+  if ($version eq "7.10") then ("Win32")
+  else ("Win32", "x64")
+};
+
+declare function local:getGuid($project)
+{
+  concat("{",$project/@guid,"}")
+};
+
+declare function local:generateProjectConfigurations($project)
+{
+  local:indent(2),<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Label="ProjectConfigurations">
+  {for $config in local:getConfiguration($project) return 
+    for $platform in local:getPlatforms($vsversion) return 
+       (local:indent(4),<ProjectConfiguration Include="{concat($config, "|",$platform)}">
+       {local:indent(6)}<Configuration>{$config}</Configuration>
+       {local:indent(6)}<Platform>{$platform}</Platform>
+       {local:indent(4)}</ProjectConfiguration>)
+  }
+  {local:indent(2)}</ItemGroup>
+};
+
+declare function local:generateGlobalProperty($project)
+{
+  local:indent(2),<PropertyGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Label="Globals">
+    {local:indent(2)}<ProjectGuid>{local:getGuid($project)}</ProjectGuid> 	
+  {local:indent(2)}</PropertyGroup>
+};
+
+declare function local:getProjects()
+{
+  doc($projectList)/projects/project[@name="@PROJECT_NAME@"]
+};
+
+declare function local:configurationType($project, $config)
+{
+  if ($project/type eq "library") then if (contains($config,"Static")) then
+    "StaticLibrary" else "DynamicLibrary"
+  else if ($project/type eq "app") then "Application"
+  else error(QName("","xqilla"),"configurationType:unkown project type")
+};
+
+declare function local:generateConfigurations($project)
+{
+  for $platform in local:getPlatforms($vsversion) return
+    for $config in local:getConfiguration($project) 
+      let $configType := local:configurationType($project,$config)	    
+      return 
+      (local:indent(2),<PropertyGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" 
+                        Condition="'$(Configuration)|$(Platform)'=={concat("'",$config,"|",$platform,"'")}"
+			Label="Configuration">
+        {local:indent(4)}<ConfigurationType>{$configType}</ConfigurationType>
+	{local:indent(4)}<UseOfMfc>false</UseOfMfc>
+	{local:indent(4)}<CharacterSet>MultiByte</CharacterSet>
+      {local:indent(2)}</PropertyGroup>
+      )
+};
+
+declare function local:genExtensionSettings()
+{
+  local:indent(2),<ImportGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Label="ExtensionSettings">
+  {local:indent(2)}</ImportGroup>
+};
+
+declare function local:genExtensionTargets()
+{
+  local:indent(2),<ImportGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Label="ExtensionTargets">
+  {local:indent(2)}</ImportGroup>
+};
+
+declare variable $msbuserprops := "$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props";
+declare variable $msbuserpropsexit := "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')";
+
+
+declare function local:genPropertySheets($project)
+{
+  local:indent(2),<ImportGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  {local:indent(4)}<Import xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
+                     Project="{$msbuserprops}" Condition="{$msbuserpropsexit}" Label="LocalAppDataPlatform" />
+  {local:indent(4)}</ImportGroup>	     
+};
+
+declare function local:windowsPath($path) as xs:string
+{
+  translate($path,"/","\\")
+};
+
+
+declare function local:getLibName($name, $config)
+{
+  doc($projectList)/projects/library[@name=$name]/libname[@config=$config]/text()
+};
+
+declare function local:genMacros($project)
+{ 
+    local:genDynamicMacros($project)
+};  
+
+declare function local:genTargetName($project,$config)
+{
+  if ($project/type eq "library") then 
+     local:getLibName($project/@name, $config)
+  else
+     if (not(empty($project/@output))) then data($project/@output) else data($project/@name)
+};
+
+declare function local:genTargetExt($project, $config)
+{
+  if ($project/type eq "library") then 
+    if (contains($config, "Static")) then ".lib"
+    else ".dll"
+  else ".exe"
+};
+
+(: no static variable usage now :)
+
+declare function local:genDynamicMacros($project)
+{
+  let $projType := $project/type return(
+  local:indent(2),<PropertyGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    {local:indent(4)}<_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+      {if ( not(empty($project/@output))) then
+	 if ( $projType eq "library") then 
+	   for $platform in local:getPlatforms($vsversion) return
+             for $config in local:getConfiguration($project) return
+	       (local:indent(4),<TargetName xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
+                               Condition="'$(Configuration)|$(Platform)'=={concat("'",$config,"|",$platform,"'")}">{local:genTargetName($project,$config)}</TargetName>)
+         else (local:indent(4),<TargetName xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{local:genTargetName($project,"null")}</TargetName>)
+       else () 
+      }
+  {local:indent(2)}</PropertyGroup>
+)
+};
+
+
+declare function local:isDebug($config) as xs:boolean
+{
+  contains($config,"Debug")
+};
+
+declare function local:isRelease($config) as xs:boolean
+{
+  contains($config,"Release")
+};
+
+declare function local:optLevel($config)
+{
+  if (local:isDebug($config)) then $debugOptLevel
+  else $releaseOptLevel
+};
+
+declare function local:addIncludeDirectories($project,$config)
+{
+  let $incref := for $inc in $project/include[@type="ref"] return 
+	if ($inc/text() eq "all") then ()
+	else doc($projectList)/projects/include[@name=$inc]
+  let $increl := $project/include[@type="rel"]
+  return 
+    if ($incref or $increl) then (
+    local:indent(6), <AdditionalIncludeDirectories xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    {translate(concat(string-join($incref,";"),
+		     if (not(empty($increl)) and not(empty($incref))) then ";" else "",
+			    string-join($increl,";"),";","%(AdditionalIncludeDirectories)"),",",";")}</AdditionalIncludeDirectories>)
+    else ()
+};
+
+declare function local:getProjectType($project, $config)
+{ 
+  if ($project/type eq "library") then if (contains($config,"Static")) then "static_lib"
+    else "dll"
+  else if ($project/type eq "app") then if (contains($config,"Static")) then "static_app"
+    else "app"
+  else error(QName("","dbxml"),"getProjectType:unkown project type")
+};
+
+declare function local:generateCompilerPreprocessorDefs($project,$config) 
+{ 
+  let $ptype := local:getProjectType($project, $config)
+  let $proj := $project/preprocessor[@config="all" or @config=$config]
+  let $projType := $project/preprocessor[@config=$ptype]
+  return 
+    if ($proj or $projType) then
+ 	(local:indent(6),<PreprocessorDefinitions xmlns="http://schemas.microsoft.com/developer/msbuild/2003">   
+         {concat(string-join(($proj,$projType),";"),";","%(PreprocessorDefinitions)")}</PreprocessorDefinitions>
+	)
+    else ()
+};
+
+declare function local:runtimeLibrary($config)
+{
+  if (local:isDebug($config)) then
+    if (contains($config,"Static")) then "MultiThreadedDebug" else "MultiThreadedDebugDLL"
+  else 
+    if (contains($config,"Static")) then "MultiThreaded" else "MultiThreadedDLL"
+};
+
+declare function local:makeObjectFile($project,$config)
+{
+  concat("$(OutDir)", if (not(empty($project/@output))) then $project/@output else $project/@name,"/")
+};
+
+declare function local:addDebugInformation($config)
+{
+   local:indent(6),<DebugInformationFormat xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{$debugInfo}</DebugInformationFormat>,
+   if (local:isDebug($config)) then (local:indent(6),<BasicRuntimeChecks xmlns="http://schemas.microsoft.com/developer/msbuild/2003">EnableFastChecks</BasicRuntimeChecks>) else ()
+};
+
+declare function local:addCompileOptions($project, $platform, $config)
+{
+  if ($project/options/compile[contains(@platform,$platform)]) then
+	let $opt := string-join(($project/options/compile[contains(@platform, $platform)]), " ")
+	return (
+	  if ($opt) then (local:indent(6),<AdditionalOptions xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{string-join(($opt,"%(AdditionalOptions)")," ")}</AdditionalOptions> )
+	  else ())
+  else ()
+};
+
+declare function local:addLinkOptions($project, $platform, $config)
+{
+  if ($project/options/link[contains(@config,$config)]) then 
+  	let $opt := string-join(($project/options/link[contains(@config,$config)])," ") 
+  	return ( 
+	  if ($opt) then (local:indent(6),<AdditionalOptions xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{string-join(($opt,"%(AdditionalOptions)")," ")}</AdditionalOptions> )
+          else ())
+  else ()
+};
+
+declare function local:addLibraryDependencies($project,$config)
+{
+
+  let $libdep := (
+  if (contains($project/type, "lib")) then 
+    string-join(for $dep in $project/depends return concat(local:getLibName($dep,$config),".lib"), ";")
+  else (
+    string-join(for $dep in $project/depends return (
+       if (not($dep/text() eq "db")) then  
+    	concat(local:getLibName($dep,$config),".lib")
+       else ()
+    ), ";")
+  )) return 
+    if ($libdep and not($libdep eq ";")) then (
+      local:indent(6),<AdditionalDependencies xmlns="http://schemas.microsoft.com/developer/msbuild/2003"> 
+      {$libdep};%(AdditionalDependencies)</AdditionalDependencies>
+    )
+    else ()
+};
+
+
+declare function local:addProjectDependencies($project)
+{	
+   for $mydep in $project/references
+	   let $mytemp := lower-case(concat("{",doc($projectList)/projects/project[@name=$mydep]/@guid,"}"))
+	   return
+	   (local:indent(4), <ProjectReference Condition="exists('{concat($mydep,".vcxproj")}')" Include="{concat($mydep,".vcxproj")}" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	    {local:indent(6)}<Project>{$mytemp}</Project>
+	    {local:indent(6)}<ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+           {local:indent(4)}</ProjectReference>)
+};
+
+declare function local:makeLibraryDirectory($lib,$platform,$config)
+{
+  for $dir in $lib/platform[contains(@name,$platform)]/config[$config=./@type]/libdir
+    return 
+      if (not(empty($lib/libbase[@vsver=$vsversion]))) then 
+        concat($lib/libbase[@vsver=$vsversion],"/",$dir)
+      else $dir
+};
+
+declare function local:addLibraryDirectories($project, $platform, $config)
+{
+  string-join((for $dep in $project/depends return local:makeLibraryDirectory(doc($projectList)/projects/library[@name=$dep],$platform,$config),"../../lib"),";")
+};
+
+declare function local:makeOutputPDBFile($project,$config)
+{
+  if ($project/type eq "library") then
+    concat("$(OutDir)",local:getLibName($project/@name,$config),".pdb")
+  else
+    concat("$(OutDir)",if (not(empty($project/@output))) then $project/@output else $project/@name,".pdb")
+};
+
+declare function local:makeImportLibrary($project,$config)
+{
+  if ($project/type eq "library" and not(contains($config,"Static"))) then
+    (local:indent(6),<ImportLibrary xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{concat("$(OutDir)",local:getLibName($project/@name,$config),".lib")}</ImportLibrary>)
+  else ()
+};
+
+declare function local:makeModuleDefinition($project,$config)
+{
+  if (not(empty($project/moddef))) then
+    let $temp := concat($sourcePath,$project/moddef/@file)
+    return
+    (local:indent(6),<ModuleDefinitionFile xmlns="http://schemas.microsoft.com/developer/msbuild/2003">{local:windowsPath($temp)}</ModuleDefinitionFile>)
+  else ()
+};
+
+declare function local:generateCustomBuildTool($project,$config)
+{ 
+    if (not(empty($project/event[@name="custom"]))) then 
+        let $commandtext := $project/event[@name="custom"]/command[contains(@config,$config)]/text()
+        let $outputs := concat($project/event[@name="custom"]/output,";%(Outputs)")
+        return (	  
+            local:indent(4),<CustomBuildStep xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	    {local:indent(6)}<Command>{$commandtext}</Command>
+	    {local:indent(6)}<Outputs>{$outputs}</Outputs>
+	    {local:indent(4)}</CustomBuildStep>)
+    else if (not(empty($project/event[@name="postbuild"]))) then 
+	let $commandtext := $project/event[@name="postbuild"]/command[contains(@config,$config)]/text()
+        let $message := $project/event[@name="postbuild"]/description
+        return (
+	    local:indent(4),<PostBuildEvent xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	    {local:indent(6)}<Command>{$commandtext}</Command>
+	    {local:indent(6)}<Message>{$message}</Message>
+	    {local:indent(4)}</PostBuildEvent>)
+    else if (not(empty($project/event[@name="prebuild"]))) then 
+	let $commandtext := $project/event[@name="prebuild"]/command[contains(@config,$config)]/text()
+        let $message := $project/event[@name="prebuild"]/description
+        return (
+	    local:indent(4),<PreBuildEvent xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	    {local:indent(6)}<Command>{$commandtext}</Command>
+	    {local:indent(6)}<Message>{$message}</Message>
+	    {local:indent(4)}</PreBuildEvent>)
+     else ()
+};
+
+
+declare function local:genDefinition($project)
+{
+    local:genDynamicDefinition($project)
+};
+
+
+declare function local:generateConfigCompiler($project,$platform,$config)
+{
+          let $clcompile := <ClCompile xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	  {local:addCompileOptions($project,$platform,$config)}
+	  {local:addIncludeDirectories($project,$config)}
+	  {local:generateCompilerPreprocessorDefs($project,$config)}
+	  {local:indent(4)}</ClCompile> 
+          return
+	    if ($clcompile//*) then (local:indent(4),$clcompile)
+	    else ()
+};
+declare function local:generateDynamicLink($project, $platform, $config)
+{
+	let $dynlink := <Link xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	{local:addLinkOptions($project,$platform,$config)}
+	{local:addLibraryDependencies($project,$config)}
+	{local:makeModuleDefinition($project,$config)}
+	{local:indent(4)}</Link>
+	return 
+	  if ($dynlink//*) then (local:indent(4),$dynlink)
+	  else ()
+};
+declare function local:generateConfigLibrarian($project,$platform,$config)
+{ let $linkoptions := local:addLinkOptions($project,$platform,$config) return
+  if ($linkoptions) then 
+  (local:indent(4),<Lib xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
+  {$linkoptions}
+  {local:indent(4)}</Lib>)
+  else ()
+};
+
+
+declare function local:generateStaticLink($project,$platform,$config)
+{ 
+  if (contains($project/type,"lib")) then
+    local:generateConfigLibrarian($project,$platform,$config)
+  else 
+    local:generateDynamicLink($project,$platform,$config)
+};
+
+declare function local:genDynamicDefinition($project)
+{
+  for $platform in local:getPlatforms($vsversion) return
+    for $config in local:getConfiguration($project) 
+    let $static := contains($config, "Static")
+    return
+    (
+      let $mynode := <ItemDefinitionGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
+                           Condition="'$(Configuration)|$(Platform)'=={concat("'",$config,"|",$platform,"'")}"> 
+	{local:generateConfigCompiler($project,$platform,$config)}
+        {if ($static) then local:generateStaticLink($project,$platform,$config)
+        else local:generateDynamicLink($project,$platform,$config)}
+	{local:generateCustomBuildTool($project,$config)}
+        {local:indent(2)}</ItemDefinitionGroup>
+      return
+	if ($mynode//*) then (local:indent(2),$mynode)
+	else ()
+    )
+};
+
+declare function local:genStaticDefinition($project)
+{
+  for $platform in local:getPlatforms($vsversion) return
+    for $config in local:getConfiguration($project) return
+    (
+      local:indent(2),<ItemDefinitionGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
+                           Condition="'$(Configuration)|$(Platform)'=={concat("'",$config,"|",$platform,"'")}"> 
+	{local:generateConfigCompiler($project,$platform,$config)}
+	{local:generateStaticLink($project,$platform,$config)}
+	{local:generateCustomBuildTool($project,$config)}
+      {local:indent(2)}</ItemDefinitionGroup>
+    )
+};
+
+declare function local:generateIncFilesNoFilter($project)
+{ let $incfile := 
+  (for $file in $project/files//file return
+    if (ends-with($file/@name,".h") or ends-with($file/@name,".hpp")) then 
+      (local:indent(4),<ClInclude xmlns="http://schemas.microsoft.com/developer/msbuild/2003" Include="{local:windowsPath(concat($sourcePath,$file/@name))}" />)
+    else ()
+  ) return 
+    if (empty($incfile)) then ()
+    else (local:indent(2),<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  			{$incfile}
+			{local:indent(2)}</ItemGroup>)
+};
+
+declare function local:generateSrcFilesNoFilter($project)
+{ let $srcfile :=
+  (for $file in $project/files//file return
+      if (ends-with($file/@name,".rc") or ends-with($file/@name,".def") or ends-with($file/@name,".h") or ends-with($file/@name,".hpp")) then ()
+      else ( 
+        if (contains($special_file, $file/@name)) then 
+	  (local:indent(4),<ClCompile xmlns="http://schemas.microsoft.com/developer/msbuild/2003" 
+                                      Condition="exists('{local:windowsPath(concat($sourcePath,$file/@name))}')"
+                                      Include="{local:windowsPath(concat($sourcePath,$file/@name))}"/>)		 
+        else  
+	  (local:indent(4),<ClCompile xmlns="http://schemas.microsoft.com/developer/msbuild/2003" 
+                                      Include="{local:windowsPath(concat($sourcePath,$file/@name))}"/>)		 
+      )
+  ) return
+    if (empty($srcfile)) then ()
+    else (local:indent(2),<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003" > 
+            {$srcfile}
+           {local:indent(2)}</ItemGroup>)
+};
+
+
+declare function local:generateRcFilesNoFilter($project)
+{
+  for $file in $project/files//file return
+       if (ends-with($file/@name,".rc")) then
+	    (local:indent(2),<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	       {local:indent(4)}<ResourceCompile Include="{local:windowsPath(concat($sourcePath,$file/@name))}">
+	       {for $platform in local:getPlatforms($vsversion) return
+	          for $config in local:getConfiguration($project) return(
+		    local:indent(6), <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=={concat("'",$config,"|",$platform,"'")}">{concat(if ($config="Debug") then "_DEBUG" else "NDEBUG",";","$(NoInherit))",";%(PreprocessorDefinitions)")}</PreprocessorDefinitions>)
+	       }
+	       {local:indent(4)}</ResourceCompile> 
+	    {local:indent(2)}</ItemGroup>	    
+	    )
+	else ()
+	
+ 
+};
+	
+
+declare function local:generateDefFilesNoFilter($project)
+{
+  for $file in $project/files//file return
+    if (ends-with($file/@name,".def")) then 
+      (
+         local:indent(2),<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	   {local:indent(4)}<None Include="../{substring-after($file/@name,"/")}" />
+	 {local:indent(2)}</ItemGroup>
+      )
+    else ()
+};
+
+declare function local:generateFilesWithFilter($project,$filter)
+{
+<a/>
+};
+
+declare function local:genFiles($project)
+{
+    local:generateIncFilesNoFilter($project),
+    local:generateSrcFilesNoFilter($project),
+    local:generateDefFilesNoFilter($project),
+    local:generateRcFilesNoFilter($project)
+};
+
+
+declare function local:getConfiguration($project)
+{
+  for $compType in ("Debug", "Release") return
+    for $config in $project/configuration return
+      concat($config, $compType)    
+};
+
+
+for $project in local:getProjects() 
+return 
+('<?xml version="1.0" encoding="utf-8" ?>',
+<Project DefaultTargets="Build" ToolsVersion="{$msbversion}" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  {local:generateProjectConfigurations($project)}
+  {local:generateGlobalProperty($project)}
+  {local:indent(2)}<Import Project="{$msbdefprops}" />
+  {local:generateConfigurations($project)}
+  {local:indent(2)}<Import Project="{$msbprops}" />
+  {local:genExtensionSettings()}
+  {local:genPropertySheets($project)}
+  {local:genImportProperty($project)}
+  {local:indent(2)}<PropertyGroup Label="UserMacros" />
+  {local:genMacros($project)}
+  {local:genDefinition($project)}
+  {local:genFiles($project)}
+  {local:indent(2)}<Import Project="{$msbtargets}" />
+  {local:genExtensionTargets()}
+  {local:indent(2)}<ItemGroup xmlns="http://schemas.microsoft.com/developer/msbuild/2003">	
+  {local:addProjectDependencies($project)}
+  {local:indent(2)}</ItemGroup>
+{local:indent(0)}</Project>)

@@ -1211,10 +1211,6 @@
         <translation>Načítavam peňaženku...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nie je možné prejsť na nižšiu verziu peňaženky</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>Nie je možné zapísať predvolenú adresu.</translation>
     </message>

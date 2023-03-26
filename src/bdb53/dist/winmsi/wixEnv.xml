@@ -1,0 +1,17 @@
+<!-- simple file to drive creation of WiX Environment elements 
+  System - "yes" means set these for the system, not just current user
+  Permanent - "no" means make sure they are removed on uninstall
+  Part - "last" means add it to the end of the current value
+-->
+
+<envVars>
+  <env name="jar" group="group_java">
+    <Environment Id="classpathdb" Name="CLASSPATH" Action="set" System="yes" Part="last" Permanent="no" Value="[INSTALLDIR]jar\db.jar" />
+  </env>
+  <env name="jar" group="group_sql">
+    <Environment Id="classpathjdbc" Name="CLASSPATH" Action="set" System="yes" Part="last" Permanent="no" Value="[INSTALLDIR]jar\jdbc.jar" />
+  </env>
+  <env name="bin" group="group_runtime">
+    <Environment Id="path1" Name="PATH" Action="set" System="yes" Part="last" Permanent="no" Value="[INSTALLDIR]bin" />
+  </env>
+</envVars>

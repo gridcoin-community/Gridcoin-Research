@@ -14,6 +14,7 @@
 #include "util/system.h"
 
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 typedef std::map<int, uint256> MapCheckpoints;
@@ -39,6 +40,9 @@ public:
     enum Base58Type {
         PUBKEY_ADDRESS,
         SCRIPT_ADDRESS,
+        SECRET_KEY,
+        EXT_PUBLIC_KEY,
+        EXT_SECRET_KEY,
 
         MAX_BASE58_TYPES
     };
@@ -64,7 +68,7 @@ public:
     uint64_t AssumedBlockchainSize() const { return m_assumed_blockchain_size; }
     /** Return the network string */
     std::string NetworkIDString() const { return strNetworkID; }
-    const unsigned char& Base58Prefix(Base58Type type) const { return base58Prefix[type]; }
+    const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
 protected:
     CChainParams() {}
@@ -73,7 +77,7 @@ protected:
     CMessageHeader::MessageStartChars pchMessageStart;
     int nDefaultPort;
     uint64_t m_assumed_blockchain_size;
-    unsigned char base58Prefix[MAX_BASE58_TYPES];
+    std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     std::string strNetworkID;
     // CBlock genesis;
     bool m_is_test_chain;

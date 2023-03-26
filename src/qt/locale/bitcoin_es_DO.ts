@@ -1354,10 +1354,6 @@ Si el archivo no existe, créelo con permiso de lectura solamente del propietari
         <translation>Cargando monedero...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>No se puede rebajar el monedero</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>No se puede escribir la dirección predeterminada</translation>
     </message>

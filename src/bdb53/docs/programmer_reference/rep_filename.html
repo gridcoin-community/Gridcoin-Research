@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Managing Replication Files</title>
+    <link rel="stylesheet" href="gettingStarted.css" type="text/css" />
+    <meta name="generator" content="DocBook XSL Stylesheets V1.73.2" />
+    <link rel="start" href="index.html" title="Berkeley DB Programmer's Reference Guide" />
+    <link rel="up" href="rep.html" title="Chapter 12.  Berkeley DB Replication" />
+    <link rel="prev" href="group_membership.html" title="Managing Replication Manager Group Membership" />
+    <link rel="next" href="rep_mgrmulti.html" title="Running Replication Manager in multiple processes" />
+  </head>
+  <body>
+    <div xmlns="" class="navheader">
+      <div class="libver">
+        <p>Library Version 11.2.5.3</p>
+      </div>
+      <table width="100%" summary="Navigation header">
+        <tr>
+          <th colspan="3" align="center">Managing Replication Files</th>
+        </tr>
+        <tr>
+          <td width="20%" align="left"><a accesskey="p" href="group_membership.html">Prev</a> </td>
+          <th width="60%" align="center">Chapter 12. 
+		Berkeley DB Replication
+        </th>
+          <td width="20%" align="right"> <a accesskey="n" href="rep_mgrmulti.html">Next</a></td>
+        </tr>
+      </table>
+      <hr />
+    </div>
+    <div class="sect1" lang="en" xml:lang="en">
+      <div class="titlepage">
+        <div>
+          <div>
+            <h2 class="title" style="clear: both"><a id="rep_filename"></a>Managing Replication Files</h2>
+          </div>
+        </div>
+      </div>
+      <p>
+        Whether you use the Base API or the Replication Manager,
+        replication creates a set of internal files that are normally stored
+        on-disk in your environment home directory. These files contain
+        metadata which is necessary for replication operations, and so you
+        should never delete these files.
+    </p>
+      <p>
+        You can cause these files to not be stored on disk, but instead to
+        be held entirely in-memory, by specifying the <a href="../api_reference/C/repconfig.html#config_DB_REP_CONF_INMEM" class="olink">DB_REP_CONF_INMEM</a>
+        flag to the <a href="../api_reference/C/repconfig.html" class="olink">DB_ENV-&gt;rep_set_config()</a> method. Doing this can improve your
+        application's data throughput by avoiding the disk I/O associated
+        with these metadata files. However, in the event that your
+        application is shut down, the contents of these files are lost. This
+        results in some loss of functionality, including an increased
+        chance that elections will fail, or that the wrong site will win an
+        election. See the <a href="../api_reference/C/repconfig.html#config_DB_REP_CONF_INMEM" class="olink">DB_REP_CONF_INMEM</a> flag description for more
+        information.
+    </p>
+      <p>
+        Note that turning on <a href="../api_reference/C/repconfig.html#config_DB_REP_CONF_INMEM" class="olink">DB_REP_CONF_INMEM</a> means that Replication
+        Manager cannot store group membership changes persistently. This is
+        because Replication Manager stores group membership information in
+        an internal database, which is held in memory when
+        <a href="../api_reference/C/repconfig.html#config_DB_REP_CONF_INMEM" class="olink">DB_REP_CONF_INMEM</a> is turned on. For this reason, if your
+        Replication Manager application requires replication metadata to be
+        stored in memory, then you must manually identify all the sites in
+        your replication group using the <code class="literal">DB_LEGACY</code> site
+        configuration attribute. Be aware that this configuration needs to
+        be made permanent. (Normally, <code class="literal">DB_LEGACY</code> is used
+        only on a temporary basis for the purpose of upgrading old
+        Replication Manager applications.) 
+    </p>
+      <p>
+        Do the following:
+    </p>
+      <div class="orderedlist">
+        <ol type="1">
+          <li>
+            <p>
+                Shut down all the sites in your replication group.
+            </p>
+          </li>
+          <li>
+            <p>
+                For every site in your replication group:
+            </p>
+            <div class="orderedlist">
+              <ol type="a">
+                <li>
+                  <p>
+                        Configure a <a href="../api_reference/C/db_site.html" class="olink">DB_SITE</a> handle for the local site.
+                        Use <a href="../api_reference/C/dbsite_set_config.html" class="olink">DB_SITE-&gt;set_config()</a> to indicate that this
+                        is a legacy site by setting the
+                        <code class="literal">DB_LEGACY</code> parameter.
+                    </p>
+                </li>
+                <li>
+                  <p>
+                        Configure a <a href="../api_reference/C/db_site.html" class="olink">DB_SITE</a> handle for <span class="emphasis"><em>every
+                            other site</em></span> in the replication
+                        group. Set the <code class="literal">DB_LEGACY</code>
+                        parameter for each of these handles.
+                    </p>
+                  <p>
+                        Please pay careful attention to this step. To
+                        repeat: a <a href="../api_reference/C/db_site.html" class="olink">DB_SITE</a> handle MUST be configured
+                        for EVERY site in the replication group.
+                    </p>
+                </li>
+              </ol>
+            </div>
+          </li>
+          <li>
+            <p>
+                Restart all the sites in the replication group.
+            </p>
+          </li>
+        </ol>
+      </div>
+      <p>
+        Alternatively, you can store persistent environment metadata files,
+        including those required by replication, in a location other than
+        your environment home directory.  Doing so can help improve I/O
+        throughput by placing these files on a spindle that is not being
+        used for other environment data I/O.  You do this using the
+        <a href="../api_reference/C/envset_metadata_dir.html" class="olink">DB_ENV-&gt;set_metadata_dir()</a> method.
+    </p>
+      <p>
+        Note that you must configure the handling of your environment 
+        metadata consistently across your entire replication group. That
+        is, if you place your replication metadata in-memory on one
+        site, then it must be placed in-memory on all the sites in the
+        group. Similarly, if you place your replication metadata files in a
+        non-standard directory location on one site, then they must be
+        placed in the exact same directory location on all the sites in
+        your group.
+    </p>
+    </div>
+    <div class="navfooter">
+      <hr />
+      <table width="100%" summary="Navigation footer">
+        <tr>
+          <td width="40%" align="left"><a accesskey="p" href="group_membership.html">Prev</a> </td>
+          <td width="20%" align="center">
+            <a accesskey="u" href="rep.html">Up</a>
+          </td>
+          <td width="40%" align="right"> <a accesskey="n" href="rep_mgrmulti.html">Next</a></td>
+        </tr>
+        <tr>
+          <td width="40%" align="left" valign="top">Managing Replication Manager Group Membership </td>
+          <td width="20%" align="center">
+            <a accesskey="h" href="index.html">Home</a>
+          </td>
+          <td width="40%" align="right" valign="top"> Running Replication Manager in multiple processes</td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>

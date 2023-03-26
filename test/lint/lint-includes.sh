@@ -9,7 +9,7 @@
 # Check includes: Check for duplicate includes. Enforce bracket syntax includes.
 
 export LC_ALL=C
-IGNORE_REGEXP="/(leveldb|secp256k1|univalue|crc32c)/"
+IGNORE_REGEXP="/(leveldb|secp256k1|univalue|crc32c|bdb53)/"
 
 # cd to root folder of git repo for git ls-files to work properly
 cd "$(dirname $0)/../.." || exit 1
@@ -63,9 +63,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/asio/ssl.hpp
     boost/asio/system_timer.hpp
     boost/assert.hpp
-    boost/assign/list_inserter.hpp
     boost/assign/list_of.hpp
-    boost/assign/std/vector.hpp
     boost/bind/bind.hpp
     boost/date_time.hpp
     boost/date_time/gregorian/greg_date.hpp

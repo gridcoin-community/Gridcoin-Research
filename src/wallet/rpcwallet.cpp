@@ -21,6 +21,7 @@
 #include "wallet/diagnose.h"
 
 #include <regex>
+#include <stdexcept>
 #include <univalue.h>
 #include <variant>
 
@@ -157,6 +158,10 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
         if (pwalletMain->IsCrypted())
             res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+
+        CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
+        if (!masterKeyID.IsNull())
+            res.pushKV("masterkeyid", masterKeyID.GetHex());
     }
 
     res.pushKV("staking", g_miner_status.StakingActive());
@@ -2074,14 +2079,15 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    unsigned int default_size = pwalletMain->IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+    unsigned int nSize = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");
         nSize = (unsigned int) params[0].get_int();
     }
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
@@ -2387,7 +2393,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
     StartShutdown();
-    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
 }
 
 class DescribeAddressVisitor
@@ -2454,6 +2460,12 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         }
         if (pwalletMain->mapAddressBook.count(dest))
             ret.pushKV("account", pwalletMain->mapAddressBook[dest]);
+        CKeyID keyID;
+        if (pwalletMain && address.GetKeyID(keyID) && pwalletMain->mapKeyMetadata.count(keyID) && !pwalletMain->mapKeyMetadata[keyID].hdKeypath.empty())
+        {
+            ret.pushKV("hdkeypath", pwalletMain->mapKeyMetadata[keyID].hdKeypath);
+            ret.pushKV("hdmasterkeyid", pwalletMain->mapKeyMetadata[keyID].hdMasterKeyID.GetHex());
+        }
     }
     return ret;
 }
@@ -2656,4 +2668,99 @@ UniValue burn(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     return wtx.GetHash().GetHex();
+}
+
+UniValue sethdseed(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2) {
+        throw std::runtime_error(
+            "sethdseed ( \"newkeypool\" \"seed\" )\n"
+            "\nSet or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. Wallets that are already\n"
+            "HD will have a new HD seed set so that new keys added to the keypool will be derived from this new seed.\n"
+            "\nNote that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.\n"
+            "\nArguments:\n"
+            "1. \"newkeypool\"         (boolean, optional, default=true) Whether to flush old unused addresses, including change addresses, from the keypool and regenerate it.\n"
+            "                             If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed.\n"
+            "                             If false, addresses (including change addresses if the wallet already had HD Chain Split enabled) from the existing\n"
+            "                             keypool will be used until it has been depleted.\n"
+            "2. \"seed\"               (string, optional) The WIF private key to use as the new HD seed; if not provided a random seed will be used.\n"
+            "                             The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1\n"
+        );
+    }
+
+    if (IsInitialBlockDownload()) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Do not do anything to non-HD wallets
+    if (!pwalletMain->IsHDEnabled()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Start with -upgradewallet in order to upgrade a non-HD wallet to HD");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    bool flush_key_pool = true;
+    if (!params[0].isNull()) {
+        flush_key_pool = params[0].get_bool();
+    }
+
+    CPubKey master_pub_key;
+    if (params[1].isNull()) {
+        master_pub_key = pwalletMain->GenerateNewHDMasterKey();
+    } else {
+        CKey key;
+        CBitcoinSecret vchSecret;
+
+        if (!vchSecret.SetString(params[1].get_str())) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        bool fCompressed;
+        CSecret secret = vchSecret.GetSecret(fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
+
+        if (!key.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        if (false && HaveKey(*pwalletMain, key)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Already have this key (either as an HD seed or as a loose private key)");
+        }
+
+        master_pub_key = pwalletMain->DeriveNewMasterHDKey(key);
+    }
+
+    pwalletMain->SetHDMasterKey(master_pub_key);
+    if (flush_key_pool) pwalletMain->NewKeyPool();
+
+    return NullUniValue;
+}
+
+UniValue upgradewallet(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1) {
+        throw std::runtime_error(
+                "upgradewallet [version]\n"
+                "\n"
+                "Upgrade the wallet. Upgrades to the latest version if no version number is specified\n"
+                "New keys may be generated and a new wallet backup will need to be made.\n"
+                "\n"
+                "[version] - The version number to upgrade to. Default is the latest wallet version."
+        );
+    }
+
+    EnsureWalletIsUnlocked();
+
+    int version = 0;
+    if (!params[0].isNull()) {
+        version = params[0].get_int();
+    }
+
+    std::string error;
+    if (!pwalletMain->UpgradeWallet(version, error)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+    }
+    return error;
 }

@@ -12,6 +12,7 @@
 
 #include <assert.h>
 
+#include <stdexcept>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
@@ -93,8 +94,11 @@ public:
         assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
 
 
-        base58Prefix[PUBKEY_ADDRESS] = 62;
-        base58Prefix[SCRIPT_ADDRESS] = 85;
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,62);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,85);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,0); // TODO: What should be the exact value here? 128 + PUBKEY_ADDRESS as 4 bytes?
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
         m_is_test_chain = false;
         m_is_mockable_chain = false;
@@ -137,6 +141,9 @@ public:
                 {2000000,  uint256S("0x2e1252a6ed6d0e7e556d4d0377b10f4b542ae5d6c9822cb08d68490a2a0bb706")},
                 {2054000,  uint256S("0xfa1342b4076ca65be64abd7f9cea50cbbdb6247a6937f1f02d6e76494aab20bf")},
                 {2200000,  uint256S("0x6e834d0f49cc8c2a76452db9cf72961d44d86a80c6d604aad4a720f38673a93e")},
+                {2400000,  uint256S("0xf67b595e02e22a02498dfab853e2fabe6e74298a8d83ddc6115c37eaa5808bf6")},
+                {2600000,  uint256S("0xc86624a7f4dde5046d9b62aa2e177a46c60845684702ea3fd49ff40f4f2418f6")},
+                {2800000,  uint256S("0x09af79c7da8880f7aa56687baf59f35a9d489037f3271938f85b3317d08a8476")},
             }
         };
 
@@ -190,8 +197,11 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713"));
         assert(genesis.hashMerkleRoot == uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f")); */
 
-        base58Prefix[PUBKEY_ADDRESS] = 111;
-        base58Prefix[SCRIPT_ADDRESS] = 196;
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,0); // TODO: What should be the exact value here? 128 + PUBKEY_ADDRESS as 4 bytes?
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         m_is_test_chain = true;
         m_is_mockable_chain = false;

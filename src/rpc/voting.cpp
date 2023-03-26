@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "init.h"
 #include "main.h"
 #include "gridcoin/contract/contract.h"
@@ -13,7 +15,7 @@
 using namespace GRC;
 
 namespace {
-const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
+const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     PollRegistry& registry = GetPollRegistry();
 
@@ -22,7 +24,7 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
 
         // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
         // the load is successful.
-        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
+        if (const PollReference* ref = WITH_LOCK(cs_main, return registry.TryByTxidWithAddHistoricalPollAndVotes(txid))) {
             return ref;
         }
     }
@@ -107,12 +109,16 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     json.pushKV("poll_title", poll_ref.Title());
     json.pushKV("poll_expired", poll_ref.Expired(GetAdjustedTime()));
 
-    if (auto start_height = poll_ref.GetStartingHeight()) {
-        json.pushKV("starting_block_height", *start_height);
-    }
+    {
+        LOCK(cs_main);
 
-    if (auto end_height = poll_ref.GetEndingHeight()) {
-        json.pushKV("ending_block_height", *end_height);
+        if (auto start_height = poll_ref.GetStartingHeight()) {
+            json.pushKV("starting_block_height", *start_height);
+        }
+
+        if (auto end_height = poll_ref.GetEndingHeight()) {
+            json.pushKV("ending_block_height", *end_height);
+        }
     }
 
     json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
@@ -160,9 +166,21 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
 
 UniValue PollResultToJson(const PollReference& poll_ref)
 {
-    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-        return PollResultToJson(*result, poll_ref);
+    GetPollRegistry().registry_traversal_in_progress = true;
+
+    try {
+         if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+            GetPollRegistry().registry_traversal_in_progress = false;
+
+            return PollResultToJson(*result, poll_ref);
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        GetPollRegistry().registry_traversal_in_progress = false;
+
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
+
+    GetPollRegistry().registry_traversal_in_progress = false;
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
 }
@@ -201,8 +219,12 @@ UniValue VoteDetailsToJson(const PollResult& result)
 
 UniValue VoteDetailsToJson(const PollReference& poll_ref)
 {
-    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-        return VoteDetailsToJson(*result);
+    try {
+        if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+            return VoteDetailsToJson(*result);
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
@@ -279,6 +301,8 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Note that a lock on cs_poll_registry does NOT need to be taken here.
+        // This lock will be taken by the contract handler.
         result_pair = SendContract(builder.BuildContractTx(pwalletMain));
     }
 
@@ -315,10 +339,6 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     std::vector<PollType> valid_poll_types;
 
     {
-        if (OutOfSyncByAge()) {
-            throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
-        }
-
         LOCK(cs_main);
 
         payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
@@ -361,9 +381,13 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         throw std::runtime_error(e);
     }
 
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
+    }
+
     std::string type_string = ToLower(params[0].get_str());
 
-    PollType poll_type;
+    PollType poll_type = PollType::UNKNOWN;
 
     bool valid_type_parameter = false;
 
@@ -481,6 +505,8 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Note that a lock on cs_poll_registry does NOT need to be taken here.
+        // This lock will be taken by the contract handler.
         result_pair = SendContract(builder.BuildContractTx(pwalletMain));
     }
 
@@ -508,7 +534,7 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
-    LOCK(cs_main);
+    LOCK(GetPollRegistry().cs_poll_registry);
 
     for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
         if (const PollOption poll = iter->TryPollFromDisk()) {
@@ -527,13 +553,17 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the results for the specified poll.\n");
+                "Display the results for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the poll, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(cs_main);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return PollResultToJson(*ref);
     }
 
@@ -609,7 +639,7 @@ UniValue vote(const UniValue& params, bool fHelp)
     PollOption poll;
 
     {
-        LOCK(cs_main);
+        LOCK(GetPollRegistry().cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
             poll = ref->TryReadFromDisk();
@@ -646,7 +676,7 @@ UniValue votebyid(const UniValue& params, bool fHelp)
     PollOption poll;
 
     {
-        LOCK(cs_main);
+        LOCK(GetPollRegistry().cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
             poll = ref->TryReadFromDisk();
@@ -676,13 +706,17 @@ UniValue votedetails(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the vote details for the specified poll.\n");
+                "Display the vote details for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the vote details, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(cs_main);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return VoteDetailsToJson(*ref);
     }
 

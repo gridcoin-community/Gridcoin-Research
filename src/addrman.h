@@ -171,9 +171,6 @@ private:
     // critical section to protect the inner data structures
     mutable CCriticalSection cs;
 
-    //! secret key to randomize bucket select with
-    uint256 nKey;
-
     //! last used nId
     int nIdCount;
 
@@ -199,6 +196,12 @@ private:
     int vvNew[ADDRMAN_NEW_BUCKET_COUNT][ADDRMAN_BUCKET_SIZE];
 
 protected:
+
+    //! secret key to randomize bucket select with
+    uint256 nKey;
+
+    //! Source of random numbers for randomization in inner loops
+    FastRandomContext insecure_rand;
 
     // Find an entry.
     CAddrInfo* Find(const CNetAddr& addr, int* pnId = nullptr);
@@ -228,8 +231,11 @@ protected:
     // Mark an entry as attempted to connect.
     void Attempt_(const CService &addr, int64_t nTime);
 
-    //! Select an address to connect to.
-    CAddress Select_();
+    //! Select an address to connect to, if newOnly is set to true, only the new table is selected from.
+    CAddrInfo Select_(bool newOnly);
+
+    //! Wraps GetRandInt to allow tests to override RandomInt and make it determinismistic.
+    virtual int RandomInt(int nMax);
 
 #ifdef DEBUG_ADDRMAN
     // Perform consistency check. Returns an error code or zero.
@@ -241,6 +247,9 @@ protected:
 
     // Mark an entry as currently-connected-to.
     void Connected_(const CService &addr, int64_t nTime);
+
+    //! Update an entry's service bits.
+    void SetServices_(const CService &addr, ServiceFlags nServices);
 
 public:
     /**
@@ -458,7 +467,7 @@ public:
     }
 
     //! Return the number of (unique) addresses in all tables.
-    int size()
+    size_t size()
     {
         LOCK(cs); // TODO: Cache this in an atomic to avoid this overhead
         return vRandom.size();
@@ -522,14 +531,16 @@ public:
         Check();
     }
 
-    //! Choose an address to connect to.
-    CAddress Select()
+    /**
+     * Choose an address to connect to.
+     */
+    CAddrInfo Select(bool newOnly = false)
     {
-        CAddress addrRet;
+        CAddrInfo addrRet;
         {
             LOCK(cs);
             Check();
-            addrRet = Select_();
+            addrRet = Select_(newOnly);
             Check();
         }
         return addrRet;
@@ -554,6 +565,14 @@ public:
         LOCK(cs);
         Check();
         Connected_(addr, nTime);
+        Check();
+    }
+
+    void SetServices(const CService &addr, ServiceFlags nServices)
+    {
+        LOCK(cs);
+        Check();
+        SetServices_(addr, nServices);
         Check();
     }
 

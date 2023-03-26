@@ -11,6 +11,7 @@
 #include "gridcoin/support/block_finder.h"
 
 #include <univalue.h>
+#include <stdexcept>
 
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern ConvergedScraperStats ConvergedScraperStatsCache;

@@ -753,10 +753,6 @@
         <translation>הארנק בטעינה…</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>לא ניתן להחזיר את גרסת הארנק</translation>
-    </message>
-    <message>
         <source>Cannot write default address</source>
         <translation>לא ניתן לכתוב את כתובת בררת המחדל</translation>
     </message>

@@ -856,10 +856,6 @@
         <translation>Загружаем гаманец...</translation>
     </message>
     <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Немагчыма рэгрэсаваць гаманец</translation>
-    </message>
-    <message>
         <source>Rescanning...</source>
         <translation>Перасканаванне...</translation>
     </message>

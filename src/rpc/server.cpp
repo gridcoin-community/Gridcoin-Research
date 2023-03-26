@@ -25,6 +25,7 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
+#include <stdexcept>
 
 #include <memory>
 
@@ -337,9 +338,11 @@ static const CRPCCommand vRPCCommands[] =
     { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
     { "sendtoaddress",           &sendtoaddress,           cat_wallet        },
     { "setaccount",              &setaccount,              cat_wallet        },
+    { "sethdseed",               &sethdseed,               cat_wallet        },
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
+    { "upgradewallet",           &upgradewallet,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
     { "verifymessage",           &verifymessage,           cat_wallet        },
@@ -417,6 +420,7 @@ static const CRPCCommand vRPCCommands[] =
     { "clearbanned",             &clearbanned,             cat_network       },
     { "currenttime",             &currenttime,             cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
+    { "getnodeaddresses",        &getnodeaddresses,        cat_network       },
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },

@@ -1,0 +1,34 @@
+#!/bin/sh -
+#
+# $Id$
+#
+# Check to make sure all of the error values have corresponding error
+# message strings in db_strerror().
+
+d=../..
+[ -f $d/LICENSE ] || {
+	echo 'FAIL: cannot find source distribution directory.'
+	exit 1
+}
+
+s=$d/src
+t1=__1
+t2=__2
+
+egrep -- "define.*DB_.*-309" $s/dbinc/db.in | awk '{print $2}' > $t1
+sed -e '/^db_strerror/,/^}/{' \
+    -e '/	case DB_/{' \
+    -e 's/:.*//' \
+    -e 's/.* //' \
+    -e p \
+    -e '}' \
+    -e '}' \
+    -e d \
+    < $s/common/db_err.c > $t2
+
+cmp $t1 $t2 > /dev/null ||
+(echo "<<< db.h >>> db_strerror" && diff $t1 $t2 && exit 1)
+
+rm -f $t1 $t2
+
+exit 0

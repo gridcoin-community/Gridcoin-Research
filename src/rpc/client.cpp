@@ -24,6 +24,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <stdexcept>
 
 #include <memory>
 
@@ -181,8 +182,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendmany"               , 2 },
     { "sendtoaddress"          , 1 },
     { "settxfee"               , 0 },
+    { "sethdseed"              , 0 },
     { "signrawtransaction"     , 1 },
     { "signrawtransaction"     , 2 },
+    { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
 
@@ -225,6 +228,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
 
     // Network
     { "getaddednodeinfo"       , 0 },
+    { "getnodeaddresses"       , 0 },
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },

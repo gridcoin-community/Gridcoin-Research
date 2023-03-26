@@ -2,7 +2,7 @@
 #include <QListView>
 
 #include "overviewpage.h"
-#include "ui_overviewpage.h"
+#include "forms/ui_overviewpage.h"
 
 #ifndef Q_MOC_RUN
 #include "qt/decoration.h"
@@ -153,6 +153,10 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->stakingGridLayout->setVerticalSpacing(verticalSpacing);
     ui->researcherGridLayout->setVerticalSpacing(verticalSpacing);
 
+    // scale warning icon
+    int warning_icon_size = GRC::ScalePx(this, 21);
+    ui->accrualLimitWarningIconlabel->setMaximumSize(QSize(warning_icon_size, warning_icon_size));
+
     // Recent Transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -285,6 +289,7 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
     ui->immatureTextLabel->setVisible(showImmature);
+
 }
 
 void OverviewPage::setHeight(int height, int height_of_peers, bool in_sync)
@@ -501,7 +506,14 @@ void OverviewPage::updatePendingAccrual()
         unit = walletModel->getOptionsModel()->getDisplayUnit();
     }
 
-    ui->accrualLabel->setText(researcherModel->formatAccrual(unit));
+    bool near_limit = false;
+
+    ui->accrualLabel->setText(researcherModel->formatAccrual(unit, near_limit));
+    if (near_limit) {
+        ui->accrualLimitWarningIconlabel->show();
+    } else {
+        ui->accrualLimitWarningIconlabel->hide();
+    }
 }
 
 void OverviewPage::updateResearcherAlert()
