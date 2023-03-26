@@ -10,6 +10,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper.h"
 #include "node/ui_interface.h"
 
 #include "qt/bitcoinunits.h"
@@ -42,6 +43,16 @@ void ResearcherChanged(ResearcherModel* model)
         "resetResearcher",
         Qt::QueuedConnection,
         Q_ARG(GRC::ResearcherPtr, Researcher::Get()));
+}
+
+//!
+//! \brief Model callback bound to the \c AccrualChangedFromStakeOrMRC core signal.
+//!
+void AccrualChangedFromStakeOrMRC(ResearcherModel* model)
+{
+    LogPrint(LogFlags::QT, "GUI: received ResearcherChanged() core signal");
+
+    QMetaObject::invokeMethod(model, "accrualChanged", Qt::QueuedConnection);
 }
 
 //!
@@ -87,6 +98,8 @@ ResearcherModel::ResearcherModel()
     , m_configured_for_investor_mode(false)
     , m_wizard_open(false)
     , m_out_of_sync(true)
+    , m_split_cpid(false)
+    , m_privacy_enabled(false)
     , m_theme_suffix("_dark")
 {
     qRegisterMetaType<ResearcherPtr>("GRC::ResearcherPtr");
@@ -271,6 +284,11 @@ bool ResearcherModel::hasRenewableBeacon() const
     return m_beacon && m_beacon->Renewable(GetAdjustedTime());
 }
 
+bool ResearcherModel::beaconExpired() const
+{
+    return m_beacon && m_beacon->Expired(GetAdjustedTime());
+}
+
 bool ResearcherModel::hasMagnitude() const
 {
     return m_researcher->Magnitude() != 0;
@@ -297,6 +315,16 @@ bool ResearcherModel::needsBeaconAuth() const
     }
 
     return m_beacon->m_public_key != m_pending_beacon->m_public_key;
+}
+
+std::optional<CAmount> ResearcherModel::accrualNearLimit() const
+{
+    return m_researcher->AccrualNearLimit();
+}
+
+CAmount ResearcherModel::getAccrual() const
+{
+    return m_researcher->Accrual();
 }
 
 QString ResearcherModel::email() const
@@ -330,15 +358,27 @@ QString ResearcherModel::formatMagnitude() const
     return text;
 }
 
-QString ResearcherModel::formatAccrual(const int display_unit) const
+QString ResearcherModel::formatAccrual(const int display_unit, bool& near_limit) const
 {
     QString text;
+
+    // We only do the actual accrual calculation once. The AccrualNearLimit() is lighter.
+    CAmount accrual = m_researcher->Accrual();
+    std::optional<CAmount> near_limit_accrual = accrualNearLimit();
+
+    if (near_limit_accrual && accrual >= *near_limit_accrual) {
+        near_limit = true;
+    } else {
+        near_limit = false;
+    }
 
     if (outOfSync()) {
         text = "...";
     } else {
-        text = BitcoinUnits::formatWithPrivacy(display_unit, m_researcher->Accrual(), m_privacy_enabled);
+        text = BitcoinUnits::formatWithPrivacy(display_unit, accrual, m_privacy_enabled);
     }
+
+
 
     return text;
 }
@@ -391,6 +431,15 @@ QString ResearcherModel::formatTimeToBeaconExpiration() const
     return GUIUtil::formatDurationStr(Beacon::MAX_AGE - m_beacon->Age(GetAdjustedTime()));
 }
 
+QString ResearcherModel::formatTimeToPendingBeaconExpiration() const
+{
+    if (!m_pending_beacon) {
+        return QString();
+    }
+
+    return GUIUtil::formatDurationStr(PendingBeacon::RETENTION_AGE - m_pending_beacon->Age(GetAdjustedTime()));
+}
+
 QString ResearcherModel::formatBeaconAddress() const
 {
     if (!m_beacon) {
@@ -422,6 +471,13 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
     //
 
     const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+
+    // This is temporary implementation of the suppression of "not attached" for projects that
+    // are whitelisted that require an external adapter, and so will not be attached as a native
+    // BOINC project. This will be replaced by a field in the Projects class at the next mandatory
+    // (5.5.0.0).
+    std::vector<std::string> external_adapter_projects = GetProjectsExternalAdapterRequired();
+
     std::vector<ExplainMagnitudeProject> explain_mag;
     std::map<std::string, ProjectRow> rows;
 
@@ -461,6 +517,8 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
                 }
             }
 
+            row.m_gdpr_controls = whitelist_project->HasGDPRControls();
+
             rows.emplace(whitelist_project->m_name, std::move(row));
         } else {
             row.m_whitelisted = false;
@@ -483,10 +541,18 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         }
 
         ProjectRow row;
+        row.m_gdpr_controls = project.HasGDPRControls();
         row.m_whitelisted = true;
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
-        row.m_error = tr("Not attached");
+
+        if (std::find(external_adapter_projects.begin(),
+                      external_adapter_projects.end(),
+                      project.m_name) == external_adapter_projects.end()) {
+            row.m_error = tr("Not attached");
+        } else {
+            row.m_error = tr("Uses external adapter");
+        }
 
         for (const auto& explain_mag_project : explain_mag) {
             if (explain_mag_project.m_name == project.m_name) {
@@ -640,6 +706,7 @@ void ResearcherModel::subscribeToCoreSignals()
 {
     // Connect signals to client
     uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
+    uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this));
     uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
 }
 

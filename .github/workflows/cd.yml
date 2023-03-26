@@ -18,14 +18,18 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      - name: current time for cache
+        run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
       - name: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
               ./depends/built
               ./ci/scratch/.ccache
-          key: ${{ runner.os }}-${{ matrix.script-id }}
+          key: ${{ runner.os }}-${{ matrix.script-id }}-${{ env.TIMESTAMP }}
+          restore-keys: |
+              ${{ runner.os }}-${{ matrix.script-id }}-
       - name: build
         run: |
           ./cd/run_all.sh

@@ -5,6 +5,7 @@
 #include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <vector>
+#include <stdexcept>
 #include <string>
 
 #include "crypter.h"
@@ -142,7 +143,6 @@ bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned ch
     if (vchSecret.size() != 32)
         return false;
 
-    key.SetPubKey(vchPubKey);
-    key.SetSecret(vchSecret);
-    return (key.GetPubKey() == vchPubKey);
+    key.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+    return key.VerifyPubKey(vchPubKey);
 }

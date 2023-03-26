@@ -1,4 +1,4 @@
-<TS language="id_ID" version="2.1">
+<TS language="id_ID" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -8,10 +8,6 @@
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Klik dua-kali untuk mengubah alamat atau label</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Buat alamat baru</translation>
@@ -65,10 +61,6 @@
         <translation>&amp;Ubah</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>File CSV (*.csv)</translation>
-    </message>
-    <message>
         <source>Could not write to file %1.</source>
         <translation>Penulisan data ke file gagal %1</translation>
     </message>
@@ -119,14 +111,6 @@
         <translation>Buka dompet</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Operasi ini memerlukan kata kunci dompet Anda untuk mendekripsi dompet ini.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Men-dekripsikan dompet</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Ubah kata kunci</translation>
     </message>
@@ -143,12 +127,12 @@
         <translation>Apakah Anda yakin untuk mengenkripsi dompet Anda?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin akan ditutup untuk menyelesaikan proses enkripsi. Ingat bahwa dompet Anda tidak bisa di lindungi dengan enkripsi sepenuhny dari pencurian melalui infeksi malware di komputer Anda.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Dompet terenkripsi</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin akan ditutup untuk menyelesaikan proses enkripsi. Ingat bahwa dompet Anda tidak bisa di lindungi dengan enkripsi sepenuhny dari pencurian melalui infeksi malware di komputer Anda.</translation>
     </message>
     <message>
         <source>Wallet encryption failed</source>
@@ -171,10 +155,6 @@
         <translation>Kata kunci yang dimasukkan untuk dekripsi dompet tidak cocok.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Dekripsi dompet gagal</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Passphrase dompet telah berhasil diubah.</translation>
     </message>
@@ -186,8 +166,12 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Pesan &amp;penanda...</translation>
+        <source>Gridcoin</source>
+        <translation>Gridcoin (CoinHitam)</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Dompet</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -198,8 +182,28 @@
         <translation>Tampilkan gambaran umum dompet Anda</translation>
     </message>
     <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Kirim</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Kirim koin ke alamat Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Menerima</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Tampilkan daftar alamat untuk menerima pembayaran</translation>
+    </message>
+    <message>
         <source>Browse transaction history</source>
         <translation>Lihat riwayat transaksi</translation>
+    </message>
+    <message>
+        <source>Edit the list of stored addresses and labels</source>
+        <translation>Mengedit daftar alamat-alamat dan label</translation>
     </message>
     <message>
         <source>E&amp;xit</source>
@@ -210,8 +214,24 @@
         <translation>Keluar dari aplikasi</translation>
     </message>
     <message>
+        <source>&amp;About Gridcoin</source>
+        <translation>&amp;Tentang Gridcoin</translation>
+    </message>
+    <message>
+        <source>Show information about Gridcoin</source>
+        <translation>Tunjukkan informasi tentang Gridcoin</translation>
+    </message>
+    <message>
         <source>&amp;Options...</source>
         <translation>&amp;Pilihan...</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Memodifikasi opsi aturan untuk Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Tampilkan / Sembunyikan</translation>
     </message>
     <message>
         <source>&amp;Encrypt Wallet...</source>
@@ -224,102 +244,6 @@
     <message>
         <source>Change the passphrase used for wallet encryption</source>
         <translation>Ubah kata kunci yang digunakan untuk enkripsi dompet</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Jendela Debug</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Buka konsol debug dan diagnosa</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Verifikasi pesan...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Dompet</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Kirim</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Menerima</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Tampilkan / Sembunyikan</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Berkas</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Pengaturan</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Bantuan</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>%n blok dari riwayat transaksi diproses.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Terbaru</translation>
-    </message>
-    <message>
-        <source>Gridcoin</source>
-        <translation>Gridcoin (CoinHitam)</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Kirim koin ke alamat Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Tampilkan daftar alamat untuk menerima pembayaran</translation>
-    </message>
-    <message>
-        <source>Edit the list of stored addresses and labels</source>
-        <translation>Mengedit daftar alamat-alamat dan label</translation>
-    </message>
-    <message>
-        <source>&amp;About Gridcoin</source>
-        <translation>&amp;Tentang Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show information about Gridcoin</source>
-        <translation>Tunjukkan informasi tentang Gridcoin</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Memodifikasi opsi aturan untuk Gridcoin</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Mengenkripsi atau mendekripsi dompet</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -338,6 +262,14 @@
         <translation>Kunci dompet</translation>
     </message>
     <message>
+        <source>Sign &amp;message...</source>
+        <translation>Pesan &amp;penanda...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Verifikasi pesan...</translation>
+    </message>
+    <message>
         <source>&amp;Export...</source>
         <translation>&amp;Ekspor...</translation>
     </message>
@@ -346,20 +278,72 @@
         <translation>Mengekspor data dari tab saat ini ke dalam file</translation>
     </message>
     <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Jendela Debug</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Buka konsol debug dan diagnosa</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Berkas</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Pengaturan</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Bantuan</translation>
+    </message>
+    <message>
         <source>Gridcoin client</source>
         <translation>Klien Gridcoin</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Terbaru</translation>
     </message>
     <message>
         <source>Catching up...</source>
         <translation>Menyusul...</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Back-up Gagal</translation>
     </message>
     <message>
         <source>Sent transaction</source>
@@ -372,6 +356,10 @@
     <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Dompet saat ini &lt;b&gt;terenkripsi&lt;/b&gt; dan &lt;b&gt;terkunci&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Back-up Gagal</translation>
     </message>
     </context>
 <context>
@@ -394,10 +382,6 @@
     <message>
         <source>Fee:</source>
         <translation>Biaya:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritas:</translation>
     </message>
     <message>
         <source>After Fee:</source>
@@ -428,10 +412,6 @@
         <translation>Alamat</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Prioritas</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Salin alamat</translation>
     </message>
@@ -460,44 +440,12 @@
         <translation>Salinkan bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Salinkan prioritas</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Salinkan output rendah</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Salinkan perubahan</translation>
-    </message>
-    <message>
-        <source>highest</source>
-        <translation>tertinggi</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>tinggi</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>menengah-tinggi</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>menengah</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>rendah-menengah</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>rendah</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>terendah</translation>
     </message>
     <message>
         <source>yes</source>
@@ -571,6 +519,27 @@
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -591,14 +560,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Port proxy (cth. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>Versi &amp;SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Versi SOCKS proxy (cth. 5)</translation>
     </message>
     <message>
         <source>&amp;Display addresses in transaction list</source>
@@ -688,27 +649,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -733,11 +706,7 @@
         <source>Save QR Code</source>
         <translation>Simpan Code QR</translation>
     </message>
-    <message>
-        <source>PNG Images (*.png)</source>
-        <translation>Gambar PNG (*.png)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>RPCConsole</name>
     <message>
@@ -809,18 +778,6 @@
         <translation>Bersihkan konsol</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Ketik &lt;b&gt;help&lt;/b&gt; untuk menampilkan perintah tersedia.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Gunakan panah keatas dan kebawah untuk menampilkan sejarah, dan &lt;b&gt;Ctrl-L&lt;/b&gt; untuk bersihkan layar.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Tanggal pembuatan</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Perkiraan blok total</translation>
     </message>
@@ -832,7 +789,15 @@
         <source>Client name</source>
         <translation>Nama Klien</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Gunakan panah keatas dan kebawah untuk menampilkan sejarah, dan &lt;b&gt;Ctrl-L&lt;/b&gt; untuk bersihkan layar.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Ketik &lt;b&gt;help&lt;/b&gt; untuk menampilkan perintah tersedia.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -858,14 +823,6 @@
     <message>
         <source>Amount:</source>
         <translation>Nilai:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritas:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>menengah</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -935,7 +892,7 @@
         <source>(no label)</source>
         <translation>(tidak ada label)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -945,6 +902,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Kirim &amp;Ke:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Pesan:</translation>
     </message>
     <message>
         <source>Alt+A</source>
@@ -1022,7 +983,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1042,7 +1005,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1062,7 +1027,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Message</source>
@@ -1104,7 +1071,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1230,10 +1199,6 @@
         <translation>Tampilkan rincian transaksi</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Berkas CSV (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Terkonfirmasi</translation>
     </message>
@@ -1293,10 +1258,6 @@ Jika berkas tidak ada, buatlah dengan permisi berkas hanya-dapat-dibaca-oleh-pem
         <translation>Jumlah salah untuk -paytxfee=&lt;amount&gt;: '%s'</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Diminta versi proxy -socks tidak diketahui: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Alamat -proxy salah: '%s'</translation>
     </message>
@@ -1351,10 +1312,6 @@ Jika berkas tidak ada, buatlah dengan permisi berkas hanya-dapat-dibaca-oleh-pem
     <message>
         <source>Loading wallet...</source>
         <translation>Memuat dompet...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Tidak dapat menurunkan versi dompet</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

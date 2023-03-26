@@ -23,11 +23,14 @@ public:
 
         m_columns
             << tr("Title")
+            << tr("Poll Type")
+            << tr("Duration")
             << tr("Expiration")
             << tr("Weight Type")
             << tr("Votes")
             << tr("Total Weight")
             << tr("% of Active Vote Weight")
+            << tr("Validated")
             << tr("Top Answer");
     }
 
@@ -60,28 +63,42 @@ public:
                 switch (index.column()) {
                     case PollTableModel::Title:
                         return row->m_title;
+                    case PollTableModel::PollType:
+                        if (row->m_version >= 3) {
+                            return row->m_type_str;
+                        } else {
+                            return QString{};
+                        }
+                    case PollTableModel::Duration:
+                        return row->m_duration;
                     case PollTableModel::Expiration:
                         return GUIUtil::dateTimeStr(row->m_expiration);
                     case PollTableModel::WeightType:
-                        return row->m_weight_type;
+                        return row->m_weight_type_str;
                     case PollTableModel::TotalVotes:
                         return row->m_total_votes;
                     case PollTableModel::TotalWeight:
                         return QString::number(row->m_total_weight);
                     case PollTableModel::VotePercentAVW:
                         return QString::number(row->m_vote_percent_AVW, 'f', 4);
+                    case PollTableModel::Validated:
+                        return row->m_validated;
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
-                }
-                break;
+                } // no default case, so the compiler can warn about missing cases
+                assert(false);
 
             case Qt::TextAlignmentRole:
                 switch (index.column()) {
+                    case PollTableModel::Duration:
+                        // Pass-through case
                     case PollTableModel::TotalVotes:
                         // Pass-through case
                     case PollTableModel::TotalWeight:
                         // Pass-through case
                     case PollTableModel::VotePercentAVW:
+                        // Pass-through case
+                    case PollTableModel::Validated:
                         return QVariant(Qt::AlignRight | Qt::AlignVCenter);
                 }
                 break;
@@ -90,20 +107,26 @@ public:
                 switch (index.column()) {
                     case PollTableModel::Title:
                         return row->m_title;
+                    case PollTableModel::PollType:
+                        return row->m_type_str;
+                    case PollTableModel::Duration:
+                        return row->m_duration;
                     case PollTableModel::Expiration:
                         return row->m_expiration;
                     case PollTableModel::WeightType:
-                        return row->m_weight_type;
+                        return row->m_weight_type_str;
                     case PollTableModel::TotalVotes:
                         return row->m_total_votes;
                     case PollTableModel::TotalWeight:
                         return QVariant::fromValue(row->m_total_weight);
                     case PollTableModel::VotePercentAVW:
                         return QVariant::fromValue(row->m_vote_percent_AVW);
+                    case PollTableModel::Validated:
+                        return row->m_validated;
                     case PollTableModel::TopAnswer:
                         return row->m_top_answer;
-                }
-                break;
+                } // no default case, so the compiler can warn about missing cases
+                assert(false);
         }
 
         return QVariant();

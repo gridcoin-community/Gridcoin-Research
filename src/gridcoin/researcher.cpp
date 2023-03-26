@@ -212,20 +212,31 @@ bool IsPoolUsername(const std::string& username)
 std::optional<std::string> ReadClientStateXml()
 {
     const fs::path path = GetBoincDataDir();
-    std::string contents = GetFileContents(path / "client_state.xml");
+    std::string contents;
 
-    if (contents != "-1") {
+    bool access_error = false;
+
+    try {
+        contents = GetFileContents(path / "client_state.xml");
+    } catch (boost::filesystem::filesystem_error& e) {
+        error("%s: %s", __func__, e.what());
+        access_error = true;
+    }
+
+    if (!access_error && contents != "-1") {
         return std::make_optional(std::move(contents));
     }
 
     LogPrintf("WARNING: Unable to obtain BOINC CPIDs.");
 
-    if (!gArgs.GetArg("-boincdatadir", "").empty()) {
-        LogPrintf("Could not access configured BOINC data directory %s", path.string());
-    } else {
-        LogPrintf(
-            "BOINC data directory is not installed in the default location.\n"
-            "Please specify its current location in gridcoinresearch.conf.");
+    if (!path.empty()) {
+        uiInterface.ThreadSafeMessageBox(strprintf("Could not access BOINC data directory \"%s\". "
+                                                   "Please check that the directory exists and check the directory "
+                                                   "and client_state.xml file permissions.",
+                                                   path.string()),
+                                         "Error", CClientUIInterface::ICON_ERROR
+                                         | CClientUIInterface::BTN_OK
+                                         | CClientUIInterface::MODAL);
     }
 
     return std::nullopt;
@@ -1316,6 +1327,24 @@ CAmount Researcher::Accrual() const
     LOCK(cs_main);
 
     return Tally::GetAccrual(*cpid, now, pindexBest);
+}
+
+std::optional<CAmount> Researcher::AccrualNearLimit() const
+{
+    const CpidOption cpid = m_mining_id.TryCpid();
+    std::optional<CAmount> near_limit_accrual;
+
+    if (!cpid || !pindexBest) {
+        return std::nullopt;
+    }
+
+    const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
+
+    LOCK(cs_main);
+
+    near_limit_accrual = Tally::AccrualNearLimit(*cpid, now, pindexBest);
+
+    return near_limit_accrual;
 }
 
 ResearcherStatus Researcher::Status() const

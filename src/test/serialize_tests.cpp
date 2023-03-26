@@ -40,13 +40,13 @@ public:
         READWRITE(txval);
     }
 
-    bool operator==(const CSerializeMethodsTestSingle& rhs)
+    bool operator==(const CSerializeMethodsTestSingle& rhs) const
     {
-        return  intval == rhs.intval && \
-                boolval == rhs.boolval && \
-                stringval == rhs.stringval && \
-                strcmp(charstrval, rhs.charstrval) == 0 && \
-                txval == rhs.txval;
+        return intval == rhs.intval &&
+               boolval == rhs.boolval &&
+               stringval == rhs.stringval &&
+               strcmp(charstrval, rhs.charstrval) == 0 &&
+               txval == rhs.txval;
     }
 };
 
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(floats)
     for (int i = 0; i < 1000; i++) {
         ss << float(i);
     }
-    BOOST_CHECK(Hash(ss.begin(), ss.end()) == uint256S("8e8b4cf3e4df8b332057e3e23af42ebc663b61e0495d5e7e32d85099d7f3fe0c"));
+    BOOST_CHECK(Hash(ss) == uint256S("8e8b4cf3e4df8b332057e3e23af42ebc663b61e0495d5e7e32d85099d7f3fe0c"));
 
     // decode
     for (int i = 0; i < 1000; i++) {
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(doubles)
     for (int i = 0; i < 1000; i++) {
         ss << double(i);
     }
-    BOOST_CHECK(Hash(ss.begin(), ss.end()) == uint256S("43d0c82591953c4eafe114590d392676a01585d25b25d433557f0d7878b23f96"));
+    BOOST_CHECK(Hash(ss) == uint256S("43d0c82591953c4eafe114590d392676a01585d25b25d433557f0d7878b23f96"));
 
     // decode
     for (int i = 0; i < 1000; i++) {
@@ -275,81 +275,33 @@ BOOST_AUTO_TEST_CASE(noncanonical)
     std::vector<char>::size_type n;
 
     // zero encoded with three bytes:
-    ss.write("\xfd\x00\x00", 3);
+    ss.write(MakeByteSpan("\xfd\x00\x00").first(3));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
 
     // 0xfc encoded with three bytes:
-    ss.write("\xfd\xfc\x00", 3);
+    ss.write(MakeByteSpan("\xfd\xfc\x00").first(3));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
 
     // 0xfd encoded with three bytes is OK:
-    ss.write("\xfd\xfd\x00", 3);
+    ss.write(MakeByteSpan("\xfd\xfd\x00").first(3));
     n = ReadCompactSize(ss);
     BOOST_CHECK(n == 0xfd);
 
     // zero encoded with five bytes:
-    ss.write("\xfe\x00\x00\x00\x00", 5);
+    ss.write(MakeByteSpan("\xfe\x00\x00\x00\x00").first(5));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
 
     // 0xffff encoded with five bytes:
-    ss.write("\xfe\xff\xff\x00\x00", 5);
+    ss.write(MakeByteSpan("\xfe\xff\xff\x00\x00").first(5));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
 
     // zero encoded with nine bytes:
-    ss.write("\xff\x00\x00\x00\x00\x00\x00\x00\x00", 9);
+    ss.write(MakeByteSpan("\xff\x00\x00\x00\x00\x00\x00\x00\x00").first(9));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
 
     // 0x01ffffff encoded with nine bytes:
-    ss.write("\xff\xff\xff\xff\x01\x00\x00\x00\x00", 9);
+    ss.write(MakeByteSpan("\xff\xff\xff\xff\x01\x00\x00\x00\x00").first(9));
     BOOST_CHECK_EXCEPTION(ReadCompactSize(ss), std::ios_base::failure, isCanonicalException);
-}
-
-BOOST_AUTO_TEST_CASE(insert_delete)
-{
-    // Test inserting/deleting bytes.
-    CDataStream ss(SER_DISK, 0);
-    BOOST_CHECK_EQUAL(ss.size(), 0U);
-
-    ss.write("\x00\x01\x02\xff", 4);
-    BOOST_CHECK_EQUAL(ss.size(), 4U);
-
-    char c = (char)11;
-
-    // Inserting at beginning/end/middle:
-    ss.insert(ss.begin(), c);
-    BOOST_CHECK_EQUAL(ss.size(), 5U);
-    BOOST_CHECK_EQUAL(ss[0], c);
-    BOOST_CHECK_EQUAL(ss[1], 0);
-
-    ss.insert(ss.end(), c);
-    BOOST_CHECK_EQUAL(ss.size(), 6U);
-    BOOST_CHECK_EQUAL(ss[4], (char)0xff);
-    BOOST_CHECK_EQUAL(ss[5], c);
-
-    ss.insert(ss.begin()+2, c);
-    BOOST_CHECK_EQUAL(ss.size(), 7U);
-    BOOST_CHECK_EQUAL(ss[2], c);
-
-    // Delete at beginning/end/middle
-    ss.erase(ss.begin());
-    BOOST_CHECK_EQUAL(ss.size(), 6U);
-    BOOST_CHECK_EQUAL(ss[0], 0);
-
-    ss.erase(ss.begin()+ss.size()-1);
-    BOOST_CHECK_EQUAL(ss.size(), 5U);
-    BOOST_CHECK_EQUAL(ss[4], (char)0xff);
-
-    ss.erase(ss.begin()+1);
-    BOOST_CHECK_EQUAL(ss.size(), 4U);
-    BOOST_CHECK_EQUAL(ss[0], 0);
-    BOOST_CHECK_EQUAL(ss[1], 1);
-    BOOST_CHECK_EQUAL(ss[2], 2);
-    BOOST_CHECK_EQUAL(ss[3], (char)0xff);
-
-    // Make sure GetAndClear does the right thing:
-    CSerializeData d;
-    ss.GetAndClear(d);
-    BOOST_CHECK_EQUAL(ss.size(), 0U);
 }
 
 BOOST_AUTO_TEST_CASE(class_methods)

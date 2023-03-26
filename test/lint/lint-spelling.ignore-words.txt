@@ -22,3 +22,7 @@ fo
 dout
 nin
 inout
+smoe
+sur
+clen
+siz

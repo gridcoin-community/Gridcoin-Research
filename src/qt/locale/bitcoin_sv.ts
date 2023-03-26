@@ -1,4 +1,4 @@
-<TS language="sv" version="2.1">
+<TS language="sv" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -8,10 +8,6 @@
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Dubbelklicka för att ändra adressen eller etiketten</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Skapa ny adress</translation>
@@ -71,10 +67,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Redigera</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Kommaseparerad fil (*.csv)</translation>
     </message>
     <message>
         <source>Export Address Book Data</source>
@@ -147,14 +139,6 @@
         <translation>Lås upp plånbok</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Denna operation behöver din plånboks lösenord för att dekryptera plånboken.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Dekryptera plånbok</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Ändra lösenord</translation>
     </message>
@@ -175,12 +159,12 @@
         <translation>Är du säker på att du vill kryptera din plånbok?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Gridcoin plånboken kommer nu att stängas för att slutföra krypteringen: Kom ihåg att även en krypterad plånboks säkerhet kan äventyras genom keyloggers eller dylika malwares.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Plånbok krypterad</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Gridcoin plånboken kommer nu att stängas för att slutföra krypteringen: Kom ihåg att även en krypterad plånboks säkerhet kan äventyras genom keyloggers eller dylika malwares.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -207,10 +191,6 @@
         <translation>Lösenordet för dekryptering av plånboken var felaktig.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Dekryptering av plånbok misslyckades</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Plånbokens lösenord har ändrats.</translation>
     </message>
@@ -222,8 +202,12 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Signera &amp;meddelande...</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Ett fatalt fel uppstod. Gridcoin kan inte fortsätta och stänger programmet.</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Plånbok</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -234,92 +218,36 @@
         <translation>Visa generell översikt av plånboken</translation>
     </message>
     <message>
-        <source>Browse transaction history</source>
-        <translation>Bläddra i transaktionshistorik</translation>
-    </message>
-    <message>
-        <source>E&amp;xit</source>
-        <translation>&amp;Avsluta</translation>
-    </message>
-    <message>
-        <source>Quit application</source>
-        <translation>Avsluta programmet</translation>
-    </message>
-    <message>
-        <source>&amp;Options...</source>
-        <translation>&amp;Alternativ...</translation>
-    </message>
-    <message>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;Kryptera plånbok...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Byt lösenord...</translation>
-    </message>
-    <message>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Byt lösenfras för kryptering av plånbok</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Debug-fönster</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Öppna debug- och diagnostikkonsolen</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Verifiera meddelande...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Plånbok</translation>
-    </message>
-    <message>
         <source>&amp;Send</source>
         <translation>&amp;Skicka</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Ta emot</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Visa / Göm</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Arkiv</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Inställningar</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Hjälp</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>Bearbetade %n block av transaktionshistoriken.</numerusform><numerusform>Bearbetade %n block av transaktionshistoriken.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Uppdaterad</translation>
     </message>
     <message>
         <source>Send coins to a Gridcoin address</source>
         <translation>Skicka coins till en Gridcoin-adress</translation>
     </message>
     <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Ta emot</translation>
+    </message>
+    <message>
         <source>Show the list of addresses for receiving payments</source>
         <translation>Visa adresslista för att mottaga betalningar</translation>
     </message>
     <message>
+        <source>Browse transaction history</source>
+        <translation>Bläddra i transaktionshistorik</translation>
+    </message>
+    <message>
         <source>Edit the list of stored addresses and labels</source>
         <translation>Editera listan över sparade adresser och deras namn</translation>
+    </message>
+    <message>
+        <source>&amp;Voting</source>
+        <translation>&amp;Röstning</translation>
+    </message>
+    <message>
+        <source>Voting</source>
+        <translation>Röstning</translation>
     </message>
     <message>
         <source>&amp;Block Explorer</source>
@@ -354,86 +282,20 @@
         <translation>Gridcoin belönar distribuerade beräkningar genom BOINC</translation>
     </message>
     <message>
+        <source>E&amp;xit</source>
+        <translation>&amp;Avsluta</translation>
+    </message>
+    <message>
+        <source>Quit application</source>
+        <translation>Avsluta programmet</translation>
+    </message>
+    <message>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;Om Gridcoin</translation>
     </message>
     <message>
         <source>Show information about Gridcoin</source>
         <translation>Visa information om Gridcoin</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation>ingen</translation>
-    </message>
-    <message>
-        <source>Scraper: waiting on wallet to sync.</source>
-        <translation>Scraper: Väntar på plånbokssynkronisering.</translation>
-    </message>
-    <message>
-        <source>Scraper: superblock not needed - inactive.</source>
-        <translation>Scraper: Superblock behövs ej - inaktiv.</translation>
-    </message>
-    <message>
-        <source>Scraper: downloading and processing stats.</source>
-        <translation>Scraper: Laddar ner och bearbetar statistik.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation><numerusform>%n sekund sedan</numerusform><numerusform>%n sekunder sedan</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation><numerusform>%n minut sedan</numerusform><numerusform>%n minuter sedan</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation><numerusform>%n timme sedan</numerusform><numerusform>%n timmar sedan</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation><numerusform>%n dag sedan</numerusform><numerusform>%n dagar sedan</numerusform></translation>
-    </message>
-    <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4</source>
-        <translation>Datum: %1
-Belopp: %2
-Typ: %3
-Adress: %4</translation>
-    </message>
-    <message>
-        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Varning: Att avbryta efter steg 2 kommer resultera i synkronisering från 0 eller korrupta blockchain-filer.</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
-        <translation>Plånboken är &lt;b&gt;krypterad&lt;/b&gt; och för tillfället %1 </translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
-        <translation>&lt;b&gt;upplåst endast för staking&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
-        <translation>&lt;b&gt;helt upplåst&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Backup Config</source>
-        <translation>Säkerhetskopiera Inställningar</translation>
-    </message>
-    <message>
-        <source>Wallet Config (*.conf)</source>
-        <translation>Plånboksinställningar (*.conf)</translation>
-    </message>
-    <message>
-        <source>&amp;Voting</source>
-        <translation>&amp;Röstning</translation>
-    </message>
-    <message>
-        <source>Voting</source>
-        <translation>Röstning</translation>
     </message>
     <message>
         <source>&amp;Diagnostics</source>
@@ -444,6 +306,10 @@ Adress: %4</translation>
         <translation>Diagnostik</translation>
     </message>
     <message>
+        <source>&amp;Options...</source>
+        <translation>&amp;Alternativ...</translation>
+    </message>
+    <message>
         <source>Modify configuration options for Gridcoin</source>
         <translation>Modifiera konfigurations-alternativ för Gridcoin</translation>
     </message>
@@ -452,8 +318,12 @@ Adress: %4</translation>
         <translation>Öppna konfigureringsfilen i din standard textredigerare</translation>
     </message>
     <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Kryptera eller avkryptera plånbok</translation>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Visa / Göm</translation>
+    </message>
+    <message>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>&amp;Kryptera plånbok...</translation>
     </message>
     <message>
         <source>&amp;Backup Wallet/Config...</source>
@@ -462,6 +332,14 @@ Adress: %4</translation>
     <message>
         <source>Backup wallet/config to another location</source>
         <translation>Säkerhetskopiera plånbok/inställningar till annan plats</translation>
+    </message>
+    <message>
+        <source>&amp;Change Passphrase...</source>
+        <translation>&amp;Byt lösenord...</translation>
+    </message>
+    <message>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Byt lösenfras för kryptering av plånbok</translation>
     </message>
     <message>
         <source>&amp;Unlock Wallet...</source>
@@ -480,6 +358,14 @@ Adress: %4</translation>
         <translation>Lås plånbok</translation>
     </message>
     <message>
+        <source>Sign &amp;message...</source>
+        <translation>Signera &amp;meddelande...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Verifiera meddelande...</translation>
+    </message>
+    <message>
         <source>&amp;Export...</source>
         <translation>&amp;Exportera...</translation>
     </message>
@@ -488,8 +374,28 @@ Adress: %4</translation>
         <translation>Exportera datan i tabben till en fil</translation>
     </message>
     <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Debug-fönster</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Öppna debug- och diagnostikkonsolen</translation>
+    </message>
+    <message>
         <source>&amp;Snapshot Download</source>
         <translation>Ladda ner &amp;Snapshot</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Arkiv</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Inställningar</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Hjälp</translation>
     </message>
     <message>
         <source>Gridcoin client</source>
@@ -497,7 +403,49 @@ Adress: %4</translation>
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Uppdaterad</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -514,6 +462,76 @@ Adress: %4</translation>
     <message>
         <source>Confirm transaction fee</source>
         <translation>Bekräfta transaktionsavgiften</translation>
+    </message>
+    <message>
+        <source>Sent transaction</source>
+        <translation>Transaktion skickad</translation>
+    </message>
+    <message>
+        <source>Incoming transaction</source>
+        <translation>Inkommande transaktion</translation>
+    </message>
+    <message>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4</source>
+        <translation>Datum: %1
+Belopp: %2
+Typ: %3
+Adress: %4</translation>
+    </message>
+    <message>
+        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
+        <translation>Varning: Att avbryta efter steg 2 kommer resultera i synkronisering från 0 eller korrupta blockchain-filer.</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>URI-hantering</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig Gridcoin-adress eller felaktiga URI parametrar.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation>Plånboken är &lt;b&gt;krypterad&lt;/b&gt; och för tillfället %1 </translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation>&lt;b&gt;upplåst endast för staking&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation>&lt;b&gt;helt upplåst&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Denna plånbok är &lt;b&gt;krypterad&lt;/b&gt; och för närvarande &lt;b&gt;låst&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Wallet</source>
+        <translation>Säkerhetskopiera plånbok</translation>
+    </message>
+    <message>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Plånboksdata (*.dat)</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Säkerhetskopieringen misslyckades</translation>
+    </message>
+    <message>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>Ett fel uppstod vid sparandet av plånboken till den nya platsen.</translation>
+    </message>
+    <message>
+        <source>Backup Config</source>
+        <translation>Säkerhetskopiera Inställningar</translation>
+    </message>
+    <message>
+        <source>Wallet Config (*.conf)</source>
+        <translation>Plånboksinställningar (*.conf)</translation>
     </message>
     <message>
         <source>not available</source>
@@ -540,46 +558,22 @@ Adress: %4</translation>
         <translation>%1 gånger per %2</translation>
     </message>
     <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI:n kan inte tolkas! Detta kan bero på en ogiltig Gridcoin-adress eller felaktiga URI parametrar.</translation>
+        <source>none</source>
+        <translation>ingen</translation>
     </message>
     <message>
-        <source>URI handling</source>
-        <translation>URI-hantering</translation>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation>Scraper: Väntar på plånbokssynkronisering.</translation>
     </message>
     <message>
-        <source>Backup Wallet</source>
-        <translation>Säkerhetskopiera plånbok</translation>
+        <source>Scraper: superblock not needed - inactive.</source>
+        <translation>Scraper: Superblock behövs ej - inaktiv.</translation>
     </message>
     <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Plånboksdata (*.dat)</translation>
+        <source>Scraper: downloading and processing stats.</source>
+        <translation>Scraper: Laddar ner och bearbetar statistik.</translation>
     </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Säkerhetskopieringen misslyckades</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Ett fel uppstod vid sparandet av plånboken till den nya platsen.</translation>
-    </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation>Transaktion skickad</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation>Inkommande transaktion</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Denna plånbok är &lt;b&gt;krypterad&lt;/b&gt; och för närvarande &lt;b&gt;låst&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>Ett fatalt fel uppstod. Gridcoin kan inte fortsätta och stänger programmet.</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>ClientModel</name>
     <message>
@@ -608,10 +602,6 @@ Adress: %4</translation>
     <message>
         <source>Coin Control</source>
         <translation>Coin-kontroll</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritet:</translation>
     </message>
     <message>
         <source>Low Output:</source>
@@ -658,10 +648,6 @@ Adress: %4</translation>
         <translation>Adress</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Prioritet</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Kopiera adress</translation>
     </message>
@@ -694,10 +680,6 @@ Adress: %4</translation>
         <translation>Kopiera bytes</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopiera prioritet</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Kopiera låg utskrift</translation>
     </message>
@@ -706,28 +688,8 @@ Adress: %4</translation>
         <translation>Kopiera förändringarna</translation>
     </message>
     <message>
-        <source>highest</source>
-        <translation>högst</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>hög</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>medium-hög</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>låg-medium</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>låg</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>lägsta</translation>
+        <source>DUST</source>
+        <translation>STOFT</translation>
     </message>
     <message>
         <source>yes</source>
@@ -736,10 +698,6 @@ Adress: %4</translation>
     <message>
         <source>no</source>
         <translation>nej</translation>
-    </message>
-    <message>
-        <source>DUST</source>
-        <translation>STOFT</translation>
     </message>
     <message>
         <source>This label turns red, if the transaction size is bigger than 10000 bytes.
@@ -752,18 +710,6 @@ Adress: %4</translation>
  Detta betyder att en avgift på %1 per kb måste betalas.
 
  Kan variera +/- 1 Byte per ingång.</translation>
-    </message>
-    <message>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than "medium".
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Transaktioner med en högre prioritet har en större sannolikhet att bli adderat till ett block.
-
-Denna label blir röd, om prioriteten är lägre än "medium".
-
-Detta betyder att en avgift på minst %1 krävs.</translation>
     </message>
     <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
@@ -852,25 +798,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <source>Failed</source>
         <translation>Underkänt</translation>
     </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Godkända: Antal = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Underkända: Antal = %1</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Varning: Ny version av klienten är tillgänglig:
- %1</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Varning: Kan inte ansluta till NTP-server</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
@@ -938,6 +866,30 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -976,24 +928,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Öppna automatiskt Gridcoin-klientens port på routern. Detta fungerar endast om din router stödjer UPnP och det är aktiverat.</translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Anslut till Gridcoin-nätverket via en SOCKS proxy (t.ex. när du ansluter genom Tor).</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Anslut genom en SOCKS proxy:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>Proxyns IP-adress (t.ex. 127.0.0.1)</translation>
     </message>
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Proxyns port (t.ex. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>SOCKS version av proxyn (t.ex. 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -1076,12 +1016,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>standard</translation>
     </message>
     <message>
-        <source>Light</source>
-        <translation>Ljus</translation>
-    </message>
-    <message>
         <source>Dark</source>
         <translation>Mörk</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>Ljus</translation>
     </message>
     <message>
         <source>Warning</source>
@@ -1206,27 +1146,45 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>None</source>
@@ -1275,11 +1233,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <source>Save QR Code</source>
         <translation>Spara QR-kod</translation>
     </message>
-    <message>
-        <source>PNG Images (*.png)</source>
-        <translation>PNG Bilder (*.png)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>RPCConsole</name>
     <message>
@@ -1383,38 +1337,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Rensa konsollen</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Skriv &lt;b&gt;help&lt;/b&gt; för en översikt av alla kommandon.</translation>
-    </message>
-    <message>
-        <source>Yes</source>
-        <translation>Ja</translation>
-    </message>
-    <message>
-        <source>No</source>
-        <translation>Nej</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Använd upp- och ner-pilarna för att navigera i historiken, och &lt;b&gt;Ctrl-L&lt;/b&gt; för att rensa skärmen.</translation>
-    </message>
-    <message>
-        <source>never</source>
-        <translation>aldrig</translation>
-    </message>
-    <message>
-        <source>Inbound</source>
-        <translation>Inkommande</translation>
-    </message>
-    <message>
-        <source>Outbound</source>
-        <translation>Utgående</translation>
-    </message>
-    <message>
-        <source>Unknown</source>
-        <translation>Okänd</translation>
-    </message>
-    <message>
         <source>Gridcoin - Debug Console</source>
         <translation>Gridcoin - Felsökningskonsol</translation>
     </message>
@@ -1425,10 +1347,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>Gridcoin Core:</source>
         <translation>Gridcoin-kärna:</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Kompileringsdatum</translation>
     </message>
     <message>
         <source>Network:</source>
@@ -1461,6 +1379,38 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>Client name</source>
         <translation>Klientnamn</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation>Ja</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation>Nej</translation>
+    </message>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Använd upp- och ner-pilarna för att navigera i historiken, och &lt;b&gt;Ctrl-L&lt;/b&gt; för att rensa skärmen.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Skriv &lt;b&gt;help&lt;/b&gt; för en översikt av alla kommandon.</translation>
+    </message>
+    <message>
+        <source>never</source>
+        <translation>aldrig</translation>
+    </message>
+    <message>
+        <source>Inbound</source>
+        <translation>Inkommande</translation>
+    </message>
+    <message>
+        <source>Outbound</source>
+        <translation>Utgående</translation>
+    </message>
+    <message>
+        <source>Unknown</source>
+        <translation>Okänd</translation>
     </message>
 </context>
 <context>
@@ -1618,14 +1568,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>0,00 GRC</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioritet:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>mellan</translation>
-    </message>
-    <message>
         <source>Fee:</source>
         <translation>Avgift:</translation>
     </message>
@@ -1706,10 +1648,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kopiera ändring</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopiera prioritet</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; till %2 (%3)</translation>
     </message>
@@ -1754,6 +1692,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Fel: Transaktionen nekades. Detta kan hända om vissa av mynten i din plånbok redan är använda, t.ex om du använder en kopia av wallet.dat och mynten redan var använda i kopia men inte markerade som använda här.</translation>
     </message>
     <message>
+        <source>(no label)</source>
+        <translation>(Ingen etikett)</translation>
+    </message>
+    <message>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>VARNING: Ogiltig Gridcoin-adress</translation>
     </message>
@@ -1761,11 +1703,7 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <source>WARNING: unknown change address</source>
         <translation>VARNING: okänd ändringsadress</translation>
     </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(Ingen etikett)</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -1775,6 +1713,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>Pay &amp;To:</source>
         <translation>Betala &amp;Till:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Meddelande:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -1791,6 +1733,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>Paste address from clipboard</source>
         <translation>Klistra in adress från Urklipp</translation>
+    </message>
+    <message>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation>Skicka ett meddelande till en Gridcoin-mottagare</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -1944,11 +1890,18 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Öppet för %n mer block</numerusform><numerusform>Öppet för %n mer block</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Öppet till %1</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>konflikt</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -1957,10 +1910,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1/obekräftade</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>konflikt</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -1972,7 +1921,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, sänd genom %n nod</numerusform><numerusform>, sänd genom %n noder</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -2012,7 +1964,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>mognar om %n block</numerusform><numerusform>mognar om %n fler block</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -2039,12 +1994,12 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Kommentar</translation>
     </message>
     <message>
-        <source>Transaction Data</source>
-        <translation>Transaktionsdata</translation>
-    </message>
-    <message>
         <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
         <translation>Gridcoin-genererade mynt måste mogna i 110 block innan de kan spenderas. När du skapade detta block skickades det ut på nätverket för att läggas till i blockkedjan. Om det misslyckas att läggas till kommer dess status ändras till "ej accepterad" och mynten kan inte spenderas. Detta kan hända om en annan nod skapar ett block inom några sekunder av ditt.</translation>
+    </message>
+    <message>
+        <source>Transaction Data</source>
+        <translation>Transaktionsdata</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -2094,7 +2049,10 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Öppet för %n mer block</numerusform><numerusform>Öppet för %n mer block</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -2248,10 +2206,6 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Exportera transaktionsdata</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Kommaseparerad fil (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Bekräftad</translation>
     </message>
@@ -2390,8 +2344,8 @@ Detta betyder att en avgift på minst %2 krävs.</translation>
         <translation>Omröstningen har redan avslutats.</translation>
     </message>
     <message>
-        <source>SHA256SUM of snapshot.zip does not match the server's SHA256SUM.</source>
-        <translation>SHA256SUM av snapshot.zip matchar inte serverns SHA256SUM.</translation>
+        <source>The wallet will now shutdown.</source>
+        <translation>Plånboken kommer nu att stängas.</translation>
     </message>
     <message>
         <source>Yes/No/Abstain</source>
@@ -2498,10 +2452,6 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
         <translation>Okänt</translation>
     </message>
     <message>
-        <source>The wallet will now shutdown.</source>
-        <translation>Plånboken kommer nu att stängas.</translation>
-    </message>
-    <message>
         <source>This update is </source>
         <translation>Den här uppdateringen är</translation>
     </message>
@@ -2536,10 +2486,6 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
     <message>
         <source>wallet.dat corrupt, salvage failed</source>
         <translation>wallet.dat korrupt, räddning misslyckades</translation>
-    </message>
-    <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Okänd -socks proxy version begärd: %i</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>
@@ -2580,10 +2526,6 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
     <message>
         <source>Error loading wallet.dat</source>
         <translation>Fel vid inläsning av plånboksfilen wallet.dat</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Importerar blockchain data fil.</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>
@@ -2648,10 +2590,6 @@ Om filen inte existerar, skapa den med filrättigheten endast läsbar för ägar
     <message>
         <source>Loading wallet...</source>
         <translation>Laddar plånbok...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Kan inte nedgradera plånboken</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

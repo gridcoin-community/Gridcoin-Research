@@ -4,6 +4,7 @@
 // file license.txt or https://opensource.org/licenses/mit-license.php.
 
 #include <map>
+#include <stdexcept>
 
 #include <leveldb/env.h>
 #include <leveldb/cache.h>
@@ -29,7 +30,9 @@ leveldb::DB *txdb; // global pointer for LevelDB object instance
 
 static leveldb::Options GetOptions() {
     leveldb::Options options;
-    int nCacheSizeMB = gArgs.GetArg("-dbcache", 25);
+
+    int nCacheSizeMB = std::clamp<int>(gArgs.GetArg("-txindexdbcache", nDefaultDbCache), nMinDbCache, nMaxTxIndexCache);
+
     options.block_cache = leveldb::NewLRUCache(nCacheSizeMB * 1048576);
     options.filter_policy = leveldb::NewBloomFilterPolicy(10);
     return options;
@@ -366,9 +369,9 @@ bool CTxDB::LoadBlockIndex()
     {
         // Unpack keys and values.
         CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-        ssKey.write(iterator->key().data(), iterator->key().size());
+        ssKey.write(MakeByteSpan(iterator->key()));
         CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-        ssValue.write(iterator->value().data(), iterator->value().size());
+        ssValue.write(MakeByteSpan(iterator->value()));
         string strType;
         ssKey >> strType;
         // Did we reach the end of the data to read?
@@ -396,6 +399,7 @@ bool CTxDB::LoadBlockIndex()
         pindexNew->nBits          = diskindex.nBits;
         pindexNew->nNonce         = diskindex.nNonce;
         pindexNew->m_researcher   = diskindex.m_researcher;
+        pindexNew->m_mrc_researchers = diskindex.m_mrc_researchers;
 
         nBlockCount++;
         // Watch for genesis block
@@ -475,7 +479,7 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        if (nCheckLevel>0 && !block.CheckBlock(pindex->nHeight, true, true, (nCheckLevel>6), true))
+        if (nCheckLevel>0 && !CheckBlock(block, pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
             pindexFork = pindex->pprev;

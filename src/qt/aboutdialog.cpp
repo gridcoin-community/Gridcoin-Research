@@ -8,7 +8,7 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
-    ui->copyrightLabel->setText("Copyright 2009-2021 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
+    ui->copyrightLabel->setText("Copyright 2009-2022 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
 
     resize(GRC::ScaleSize(this, width(), height()));
 }

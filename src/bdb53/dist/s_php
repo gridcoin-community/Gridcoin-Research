@@ -1,0 +1,23 @@
+#!/bin/sh -
+#	$Id$
+#
+# Build Windows include files.
+
+. ./RELEASE
+
+process()
+{
+    src=$1.in
+    tdest=$1.out
+    dest=$1
+
+    sed -e "s/@DB_VERSION_MAJOR@/$DB_VERSION_MAJOR/g" \
+	-e "s/@DB_VERSION_MINOR@/$DB_VERSION_MINOR/g" < $src > $tdest
+
+    cmp $tdest $dest > /dev/null 2>&1 || 
+    (echo "Building $dest" && rm -f $dest && cp $tdest $dest)
+    rm -f $tdest
+}
+
+process ../lang/php_db4/config.m4
+process ../lang/php_db4/config.w32

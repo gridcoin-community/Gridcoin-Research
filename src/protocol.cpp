@@ -12,34 +12,84 @@
 # include <arpa/inet.h>
 #endif
 
+namespace NetMsgType {
+    const char *VERSION="version";
+    const char *VERACK="verack";
+    const char *ADDR="addr";
+    const char *INV="inv";
+    const char *GETDATA="getdata";
+    const char *GETBLOCKS="getblocks";
+    const char *GETHEADERS="getheaders";
+    const char *TX="tx";
+    const char *HEADERS="headers";
+    const char *BLOCK="block";
+    const char *GETADDR="getaddr";
+    const char *MEMPOOL="mempool";
+    const char *PING="ping";
+    const char *PONG="pong";
+    const char *ALERT="alert";
+
+    // Gridcoin aliases (to be removed)
+    const char *ENCRYPT="encrypt";
+    const char *GRIDADDR="gridaddr";
+    const char *ARIES="aries";
+
+    // Gridcoin specific
+    const char *SCRAPERINDEX="scraperindex";
+    const char *PART="part";
+}
+
 static const char* ppszTypeName[] =
 {
-    "ERROR",
-    "tx",
-    "block",
-    "part",
-    "scraperindex",
+    "ERROR", // Should never occur
+    NetMsgType::TX,
+    NetMsgType::BLOCK,
+    NetMsgType::PART,
+    NetMsgType::SCRAPERINDEX,
 };
 
-CMessageHeader::CMessageHeader()
-{
-    memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
-    memset(pchCommand, 0, sizeof(pchCommand));
-    memset(pchChecksum, 0, CHECKSUM_SIZE);
-}
+/** All known message types. Keep this in the same order as the list of
+ * messages above and in protocol.h.
+ */
+const static std::string allNetMessageTypes[] = {
+    NetMsgType::VERSION,
+    NetMsgType::VERACK,
+    NetMsgType::ADDR,
+    NetMsgType::INV,
+    NetMsgType::GETDATA,
+    NetMsgType::GETBLOCKS,
+    NetMsgType::GETHEADERS,
+    NetMsgType::TX,
+    NetMsgType::HEADERS,
+    NetMsgType::BLOCK,
+    NetMsgType::GETADDR,
+    NetMsgType::MEMPOOL,
+    NetMsgType::PING,
+    NetMsgType::PONG,
+    NetMsgType::ALERT,
+
+    // Gridcoin aliases (to be removed)
+    NetMsgType::ENCRYPT,
+    NetMsgType::GRIDADDR,
+    NetMsgType::ARIES,
+
+    // Gridcoin specific
+    NetMsgType::SCRAPERINDEX,
+    NetMsgType::PART,
+};
+
+const static std::vector<std::string> allNetMessageTypesVec(std::begin(allNetMessageTypes), std::end(allNetMessageTypes));
 
 CMessageHeader::CMessageHeader(const char* pszCommand, unsigned int nMessageSizeIn)
 {
     memcpy(pchMessageStart, Params().MessageStart(), CMessageHeader::MESSAGE_START_SIZE);
 
-    // Copy the command name, zero-padding to COMMAND_SIZE bytes
+    // Copy the command name
     size_t i = 0;
     for (; i < COMMAND_SIZE && pszCommand[i] != 0; ++i) pchCommand[i] = pszCommand[i];
     assert(pszCommand[i] == 0); // Assert that the command name passed in is not longer than COMMAND_SIZE
-    for (; i < COMMAND_SIZE; ++i) pchCommand[i] = 0;
 
     nMessageSize = nMessageSizeIn;
-    memset(pchChecksum, 0, CHECKSUM_SIZE);
 }
 
 std::string CMessageHeader::GetCommand() const
@@ -131,3 +181,7 @@ void CInv::print() const
     LogPrintf("CInv(%s)", ToString());
 }
 
+const std::vector<std::string> &getAllNetMessageTypes()
+{
+    return allNetMessageTypesVec;
+}

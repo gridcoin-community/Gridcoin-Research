@@ -1329,7 +1329,7 @@ private: // SuperblockValidator methods
                 const uint256& manifest_hash = hashes.second.first;
                 const uint256& content_hash = hashes.second.second;
 
-                if (content_hash.GetUint64() >> 32 == m_superblock->m_manifest_content_hint) {
+                if (content_hash.GetUint64(0) >> 32 == m_superblock->m_manifest_content_hint) {
                     if (!content_hash_tally.emplace(content_hash, 1).second) {
                         content_hash_tally[content_hash]++;
                     }
@@ -1478,7 +1478,7 @@ private: // SuperblockValidator methods
         LOCK(CSplitBlob::cs_mapParts);
 
         for (const auto& part_pair : CSplitBlob::mapParts) {
-            const uint32_t hint = part_pair.first.GetUint64() >> m_hint_shift;
+            const uint32_t hint = part_pair.first.GetUint64(0) >> m_hint_shift;
             const auto hint_range = hints.equal_range(hint);
 
             for (auto i = hint_range.first; i != hint_range.second; ++i) {
@@ -1642,11 +1642,11 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     CreateSuperblock();
 
     const std::string cpid_str = cpid.ToString();
-    const Span<const char> cpid_span = MakeSpan(cpid_str);
+    const Span<const char> cpid_span = Span{cpid_str};
 
     // Compare the stats entry CPID and return the project name if it matches:
     const auto try_item = [&](const std::string& object_id) {
-        const Span<const char> id_span = MakeSpan(object_id);
+        const Span<const char> id_span = Span{object_id};
         const Span<const char> cpid_subspan = id_span.last(32);
 
         if (cpid_subspan != cpid_span) {

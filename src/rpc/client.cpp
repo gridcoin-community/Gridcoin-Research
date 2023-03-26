@@ -24,6 +24,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
+#include <stdexcept>
 
 #include <memory>
 
@@ -133,6 +134,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "consolidatemsunspent"   , 4 },
     { "consolidateunspent"     , 3 },
     { "consolidateunspent"     , 4 },
+    { "dumpprivkey"            , 1 },
     { "getbalance"             , 1 },
     { "getbalance"             , 2 },
     { "getbalancedetail"       , 0 },
@@ -180,18 +182,26 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendmany"               , 2 },
     { "sendtoaddress"          , 1 },
     { "settxfee"               , 0 },
+    { "sethdseed"              , 0 },
     { "signrawtransaction"     , 1 },
     { "signrawtransaction"     , 2 },
+    { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
 
     // Staking
     { "advertisebeacon"        , 0 },
     { "beaconreport"           , 0 },
+    { "createmrcrequest"       , 0 },
+    { "createmrcrequest"       , 1 },
+    { "getmrcinfo"             , 0 },
+    { "getmrcinfo"             , 2 },
+    { "getmrcinfo"             , 3 },
     { "superblocks"            , 0 },
     { "superblocks"            , 1 },
 
     // Developer
+    { "addkey"                 , 4 },
     { "auditsnapshotaccrual"   , 1 },
     { "auditsnapshotaccruals"  , 0 },
     { "convergencereport"      , 0 },
@@ -218,6 +228,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
 
     // Network
     { "getaddednodeinfo"       , 0 },
+    { "getnodeaddresses"       , 0 },
     { "getblock"               , 1 },
     { "getblockbynumber"       , 0 },
     { "getblockbynumber"       , 1 },
@@ -231,9 +242,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "showblock"              , 0 },
 
     // Voting
-    { "addpoll"                , 1 },
-    { "addpoll"                , 4 },
+    { "addpoll"                , 2 },
     { "addpoll"                , 5 },
+    { "addpoll"                , 6 },
     { "listpolls"              , 0 },
     { "votebyid"               , 1 },
     { "votebyid"               , 2 },

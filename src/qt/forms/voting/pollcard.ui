@@ -59,56 +59,59 @@
       <property name="bottomMargin">
        <number>0</number>
       </property>
-      <item alignment="Qt::AlignTop">
-       <widget class="QLabel" name="titleLabel">
-        <property name="text">
-         <string notr="true">Title</string>
-        </property>
-        <property name="textFormat">
-         <enum>Qt::PlainText</enum>
-        </property>
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-       </widget>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QLabel" name="titleLabel">
+          <property name="text">
+           <string notr="true">Title</string>
+          </property>
+          <property name="textFormat">
+           <enum>Qt::PlainText</enum>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_3">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QLabel" name="typeLabel">
+          <property name="text">
+           <string>Poll Type</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
        <layout class="QGridLayout" name="gridLayout" columnstretch="0,10000,0,10000,0,10000">
         <property name="verticalSpacing">
          <number>3</number>
         </property>
-        <item row="1" column="4">
-         <widget class="QLabel" name="votePercentAVWTextLabel">
+        <item row="1" column="2">
+         <widget class="QLabel" name="totalWeightTextLabel">
           <property name="text">
-           <string>% of AVW:</string>
+           <string>Total Weight:</string>
           </property>
          </widget>
         </item>
-        <item row="0" column="2">
-         <widget class="QLabel" name="voteCountTextLabel">
+        <item row="1" column="5">
+         <widget class="QLabel" name="votePercentAVWLabel">
           <property name="text">
-           <string>Votes:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QLabel" name="expirationLabel">
-          <property name="text">
-           <string notr="true"/>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="expirationTextLabel">
-          <property name="text">
-           <string>Expiration:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="3">
-         <widget class="QLabel" name="totalWeightLabel">
-          <property name="text">
-           <string notr="true"/>
+           <string/>
           </property>
          </widget>
         </item>
@@ -125,17 +128,10 @@
           </property>
          </widget>
         </item>
-        <item row="0" column="3">
-         <widget class="QLabel" name="voteCountLabel">
+        <item row="1" column="0">
+         <widget class="QLabel" name="topAnswerTextLabel">
           <property name="text">
-           <string notr="true"/>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
-         <widget class="QLabel" name="totalWeightTextLabel">
-          <property name="text">
-           <string>Total Weight:</string>
+           <string>Top Answer:</string>
           </property>
          </widget>
         </item>
@@ -146,10 +142,45 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="topAnswerTextLabel">
+        <item row="1" column="4">
+         <widget class="QLabel" name="votePercentAVWTextLabel">
           <property name="text">
-           <string>Top Answer:</string>
+           <string>% of AVW:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLabel" name="voteCountTextLabel">
+          <property name="text">
+           <string>Votes:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLabel" name="totalWeightLabel">
+          <property name="text">
+           <string notr="true"/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="expirationTextLabel">
+          <property name="text">
+           <string>Expiration:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QLabel" name="voteCountLabel">
+          <property name="text">
+           <string notr="true"/>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="expirationLabel">
+          <property name="text">
+           <string notr="true"/>
           </property>
          </widget>
         </item>
@@ -160,8 +191,43 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="5">
-         <widget class="QLabel" name="votePercentAVWLabel">
+        <item row="2" column="1">
+         <widget class="QLabel" name="myLastVoteAnswerLabel">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="myLastVoteAnswerTextLabel">
+          <property name="text">
+           <string>Your Last Vote:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QLabel" name="myVoteWeightTextLabel">
+          <property name="text">
+           <string>Your Vote Weight:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QLabel" name="myVoteWeightLabel">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="4">
+         <widget class="QLabel" name="myPercentAVWTextLabel">
+          <property name="text">
+           <string>Your % of AVW:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="5">
+         <widget class="QLabel" name="myPercentAVWLabel">
           <property name="text">
            <string/>
           </property>
@@ -206,16 +272,43 @@
        <number>0</number>
       </property>
       <item alignment="Qt::AlignVCenter">
-       <widget class="QLabel" name="magnitudeLabel">
+       <widget class="QLabel" name="balanceLabel">
         <property name="text">
          <string>Balance</string>
         </property>
        </widget>
       </item>
       <item alignment="Qt::AlignVCenter">
-       <widget class="QLabel" name="balanceLabel">
+       <widget class="QLabel" name="magnitudeLabel">
         <property name="text">
          <string>Magnitude</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="validatedLabel">
+        <property name="text">
+         <string>Validated</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="invalidLabel">
+        <property name="text">
+         <string>Invalid</string>
         </property>
        </widget>
       </item>

@@ -1,12 +1,18 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2009-2021 The Bitcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
+
 #ifndef BITCOIN_INIT_H
 #define BITCOIN_INIT_H
 
 #include "wallet/wallet.h"
 #include <boost/thread.hpp>
+
+//! Default value for -daemon option
+static constexpr bool DEFAULT_DAEMON = false;
+//! Default value for -daemonwait option
+static constexpr bool DEFAULT_DAEMONWAIT = false;
 
 extern CWallet* pwalletMain;
 

@@ -1,4 +1,4 @@
-<TS language="et" version="2.1">
+<TS language="et" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -8,10 +8,6 @@
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Tee topeltklõps aadressi või märgise muutmiseks</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Loo uus aadress</translation>
@@ -59,10 +55,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Muuda</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Komadega eraldatud väärtuste fail (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -115,14 +107,6 @@
         <translation>Ava rahakoti lukk</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Antud operatsioon vajab rahakoti dekrüpteerimiseks salafraasi.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Dekrüpteeri rahakott</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Vaheta salafraasi</translation>
     </message>
@@ -167,10 +151,6 @@
         <translation>Rahakoti dekrüpteerimiseks sisestatud salafraas ei ole õige.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Rahakoti dekrüpteerimine ebaõnnestus</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Rahakoti salafraas on edukalt vahetatud.</translation>
     </message>
@@ -182,8 +162,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Signeeri &amp;sõnum</translation>
+        <source>Wallet</source>
+        <translation>Rahakott</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -192,6 +172,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Kuva rahakoti üld-ülevaade</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Saada</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Võta vastu</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -210,6 +198,10 @@
         <translation>&amp;Valikud...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Näita / Peida</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>&amp;Krüpteeri Rahakott</translation>
     </message>
@@ -222,32 +214,20 @@
         <translation>Rahakoti krüpteerimise salafraasi muutmine</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Silumise aken</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Ava debugimise ja diagnostika konsool</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Signeeri &amp;sõnum</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Kontrolli sõnumit...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Rahakott</translation>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Silumise aken</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Saada</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Võta vastu</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Näita / Peida</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Ava debugimise ja diagnostika konsool</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -262,32 +242,50 @@
         <translation>&amp;Abi</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>Töödeldud %n plokk transaktsioonide ajaloost.</numerusform><numerusform>Töödeldud %n plokki transaktsioonide ajaloost.</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Ajakohane</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -452,6 +450,30 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -472,14 +494,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Proxi port (nt 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>Turva proxi SOCKS &amp;Version:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Turva proxi SOCKS versioon (nt 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -553,27 +567,45 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -623,22 +655,6 @@
         <translation>Puhasta konsool</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Ülevaateks võimalikest käsklustest trüki &lt;b&gt;help&lt;/b&gt;.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Ajaloo sirvimiseks kasuta üles ja alla nooli, ekraani puhastamiseks &lt;b&gt;Ctrl-L&lt;/b&gt;.</translation>
-    </message>
-    <message>
-        <source>%1 KB</source>
-        <translation>%1 B</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Valmistusaeg</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Ligikaudne plokkide kogus</translation>
     </message>
@@ -646,7 +662,19 @@
         <source>Client name</source>
         <translation>Kliendi nimi</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Ajaloo sirvimiseks kasuta üles ja alla nooli, ekraani puhastamiseks &lt;b&gt;Ctrl-L&lt;/b&gt;.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Ülevaateks võimalikest käsklustest trüki &lt;b&gt;help&lt;/b&gt;.</translation>
+    </message>
+    <message>
+        <source>%1 KB</source>
+        <translation>%1 B</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -753,7 +781,7 @@
         <source>(no label)</source>
         <translation>(märgis puudub)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -763,6 +791,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Maksa &amp;:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Sõnum:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -884,7 +916,10 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -912,7 +947,10 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, levita läbi %n node'i</numerusform><numerusform>, levita läbi %n node'i</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -948,7 +986,10 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>aegub %n bloki pärast</numerusform><numerusform>aegub %n bloki pärast</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1018,7 +1059,10 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Avaneb %n bloki pärast</numerusform><numerusform>Avaneb %n bloki pärast</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1148,10 +1192,6 @@
         <translation>Kuva tehingu detailid</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Komadega eraldatud väärtuste fail (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Kinnitatud</translation>
     </message>
@@ -1247,10 +1287,6 @@ Kui seda faili ei ole, loo see ainult-omanikule-lugemiseks faili õigustes.</tra
         <translation>wallet.dat fail on katki, päästmine ebaõnnestus</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Küsitud tundmatu -socks proxi versioon: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Vigane -proxi aadress: '%s'</translation>
     </message>
@@ -1313,10 +1349,6 @@ Kui seda faili ei ole, loo see ainult-omanikule-lugemiseks faili õigustes.</tra
     <message>
         <source>Loading wallet...</source>
         <translation>Rahakoti laadimine...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Rahakoti vanandamine ebaõnnestus</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

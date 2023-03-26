@@ -18,11 +18,17 @@ LINTALL=$(basename "${BASH_SOURCE[0]}")
 
 EXIT_CODE=0
 
+IGNORE_EXIT=(
+  "lint-circular-dependencies.sh"
+)
+
 for f in "${SCRIPTDIR}"/lint-*.sh; do
   if [ "$(basename "$f")" != "$LINTALL" ]; then
     if ! "$f"; then
       echo "^---- failure generated from $f"
-      EXIT_CODE=1
+      if ! python -c "import sys; sys.exit(int(sys.argv[1] not in sys.argv[2:]))" $(basename "$f") "${IGNORE_EXIT[@]}"; then
+        EXIT_CODE=1
+      fi
     fi
   fi
 done

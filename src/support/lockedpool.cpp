@@ -23,6 +23,7 @@
 #endif
 
 #include <algorithm>
+#include <stdexcept>
 
 LockedPoolManager* LockedPoolManager::_instance = nullptr;
 std::once_flag LockedPoolManager::init_flag;
@@ -200,7 +201,10 @@ void Win32LockedPageAllocator::FreeLocked(void* addr, size_t len)
 
 size_t Win32LockedPageAllocator::GetLimit()
 {
-    // TODO is there a limit on Windows, how to get it?
+    SIZE_T min, max;
+    if(GetProcessWorkingSetSize(GetCurrentProcess(), &min, &max) != 0) {
+        return (size_t)min;
+    }
     return std::numeric_limits<size_t>::max();
 }
 #endif
@@ -249,6 +253,11 @@ void *PosixLockedPageAllocator::AllocateLocked(size_t len, bool *lockingSuccess)
     }
     if (addr) {
         *lockingSuccess = mlock(addr, len) == 0;
+#if defined(MADV_DONTDUMP) // Linux
+        madvise(addr, len, MADV_DONTDUMP);
+#elif defined(MADV_NOCORE) // FreeBSD
+        madvise(addr, len, MADV_NOCORE);
+#endif
     }
     return addr;
 }

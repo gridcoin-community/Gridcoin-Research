@@ -60,7 +60,6 @@
         <file alias="uk">locale/bitcoin_uk.qm</file>
         <file alias="ur_PK">locale/bitcoin_ur_PK.qm</file>
         <file alias="vi">locale/bitcoin_vi.qm</file>
-        <file alias="vi_VN">locale/bitcoin_vi_VN.qm</file>
         <file alias="zh_CN">locale/bitcoin_zh_CN.qm</file>
         <file alias="zh_TW">locale/bitcoin_zh_TW.qm</file>
     </qresource>

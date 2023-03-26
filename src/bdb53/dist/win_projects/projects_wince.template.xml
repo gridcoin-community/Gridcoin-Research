@@ -1,0 +1,603 @@
+<!-- 
+  * This file drives construction of Windows Visual Studio project files for BDB XML
+  * This file is not used directly by the XQuery script that creates projects.
+  * It is pre-processed first to perform variable substitution for variable names
+  * surrounded by '@' characters.  These variables names change from release to
+  * release, and this substitution makes it possible to keep the XQuery script more
+  * static.  The variables are replaced using lib_paths.sed
+  * It'd be simple enough to perform the variable substitutions using XQuery as well,
+  * but the lib_paths.sed mechanism already exists and works.
+  *
+  * TBD: describe format in more detail
+  -->
+<projects>
+  <variable name="sourcePath">../../</variable>
+  <variable name="outputBase.7.10">../../build_wince/</variable>
+  <variable name="outputBase.8.00">../../build_wince/</variable>
+  <variable name="mobile">true</variable>
+  
+  <preprocessor config="all">DB_WIN32;DB_WINCE;_WIN32_WCE=$(CEVER);$(CePlatform);ARM;_ARM_;ARMV4;UNDER_CE=$(CEVER);UNICODE;_UNICODE;__NO_SYSTEM_INCLUDES</preprocessor>
+  <preprocessor config="rc_all">_WIN32_WCE=$(CEVER);$(CePlatform);ARM,_ARM_,ARMV4;UNDER_CE=$(CEVER);UNICODE;_UNICODE;</preprocessor>
+  <preprocessor config="Debug">DEBUG</preprocessor>
+  <preprocessor config="Release">NDEBUG</preprocessor>
+  <preprocessor config="dll">_USRDLL</preprocessor>
+  <preprocessor config="app">POCKETPC2003_UI_MODEL</preprocessor>
+  <preprocessor config="static_lib">_LIB;</preprocessor>
+  <preprocessor config="static_app"></preprocessor>
+ 
+  <!-- Project libraries --> 
+  <library name="db_small">
+    <libname config="Debug">libdb_small@DB_VERSION_MAJOR@@DB_VERSION_MINOR@d</libname>
+    <libname config="Release">libdb_small@DB_VERSION_MAJOR@@DB_VERSION_MINOR@</libname>
+    <libname config="Static Debug">libdb_small@DB_VERSION_MAJOR@@DB_VERSION_MINOR@sd</libname>
+    <libname config="Static Release">libdb_small@DB_VERSION_MAJOR@@DB_VERSION_MINOR@s</libname>
+  </library>
+  
+  <library name="db">
+    <libname config="Debug">libdb@DB_VERSION_MAJOR@@DB_VERSION_MINOR@d</libname>
+    <libname config="Release">libdb@DB_VERSION_MAJOR@@DB_VERSION_MINOR@</libname>
+    <libname config="Static Debug">libdb@DB_VERSION_MAJOR@@DB_VERSION_MINOR@sd</libname>
+    <libname config="Static Release">libdb@DB_VERSION_MAJOR@@DB_VERSION_MINOR@s</libname>
+  </library>
+
+  <library name="db_sql">
+    <libname config="Debug">libdb_sql@DB_VERSION_MAJOR@@DB_VERSION_MINOR@d</libname>
+    <libname config="Release">libdb_sql@DB_VERSION_MAJOR@@DB_VERSION_MINOR@</libname>
+    <libname config="Static Debug">libdb_sql@DB_VERSION_MAJOR@@DB_VERSION_MINOR@sd</libname>
+    <libname config="Static Release">libdb_sql@DB_VERSION_MAJOR@@DB_VERSION_MINOR@s</libname>
+  </library>
+  
+  <!-- Project includes -->
+  <include name="all">../../build_wince,../../src</include>
+  <include name="db_sql_src">../../lang/sql/generated,../../lang/sql/adapter,../../lang/sql/sqlite/src</include>
+  <include name="sql_app">../../lang/sql/generated</include>
+  
+  
+  <!-- db library projects -->
+  <project name="db" guid="CDE1C264-5E6C-11DF-AC8B-D58FDFD72085">
+    <type>library</type>
+    <configuration>Static </configuration>
+    <include type="ref">all</include>
+    <moddef file="build_windows/libdb.def"/>
+    <preprocessor config="dll">DB_CREATE_DLL</preprocessor>
+    <preprocessor config="Debug">DIAGNOSTIC;CONFIG_TEST</preprocessor>
+    <preprocessor config="Static Debug">DIAGNOSTIC;</preprocessor>
+    <files>
+      <file name="src\btree\bt_compact.c"/>
+      <file name="src\btree\bt_compare.c"/>
+      <file name="src\btree\bt_conv.c"/>
+      <file name="src\btree\bt_curadj.c"/>
+      <file name="src\btree\bt_cursor.c"/>
+      <file name="src\btree\bt_delete.c"/>
+      <file name="src\btree\bt_method.c"/>
+      <file name="src\btree\bt_open.c"/>
+      <file name="src\btree\bt_put.c"/>
+      <file name="src\btree\bt_rec.c"/>
+      <file name="src\btree\bt_reclaim.c"/>
+      <file name="src\btree\bt_recno.c"/>
+      <file name="src\btree\bt_rsearch.c"/>
+      <file name="src\btree\bt_search.c"/>
+      <file name="src\btree\bt_split.c"/>
+      <file name="src\btree\bt_stat.c"/>
+      <file name="src\btree\btree_auto.c"/>
+      <file name="src\btree\bt_verify.c"/>
+      <file name="src\clib\bsearch.c"/>
+      <file name="src\clib\strdup.c"/>
+      <file name="src\clib\strerror.c"/>
+      <file name="src\clib\strsep.c"/>
+      <file name="src\clib\time.c"/>
+      <file name="src\common\clock.c"/>
+      <file name="src\common\db_byteorder.c"/>
+      <file name="src\common\db_compint.c"/>
+      <file name="src\common\db_err.c"/>
+      <file name="src\common\db_getlong.c"/>
+      <file name="src\common\db_idspace.c"/>
+      <file name="src\common\db_log2.c"/>
+      <file name="src\common\db_shash.c"/>
+      <file name="src\common\dbt.c"/>
+      <file name="src\common\mkpath.c"/>
+      <file name="src\common\util_cache.c"/>
+      <file name="src\common\util_log.c"/>
+      <file name="src\common\zerofill.c"/>
+      <file name="src\crypto\aes_method.c"/>
+      <file name="src\crypto\crypto.c"/>
+      <file name="src\crypto\mersenne\mt19937db.c"/>
+      <file name="src\crypto\rijndael\rijndael-alg-fst.c"/>
+      <file name="src\crypto\rijndael\rijndael-api-fst.c"/>
+      <file name="src\db\crdel_auto.c"/>
+      <file name="src\db\crdel_rec.c"/>
+      <file name="src\db\db.c"/>
+      <file name="src\db\db_am.c"/>
+      <file name="src\db\db_auto.c"/>
+      <file name="src\db\db_backup.c"/>
+      <file name="src\db\db_cam.c"/>
+      <file name="src\db\db_cds.c"/>
+      <file name="src\db\db_compact.c"/>
+      <file name="src\db\db_conv.c"/>
+      <file name="src\db\db_copy.c"/>
+      <file name="src\db\db_dispatch.c"/>
+      <file name="src\db\db_dup.c"/>
+      <file name="src\db\db_iface.c"/>
+      <file name="src\db\db_join.c"/>
+      <file name="src\db\db_meta.c"/>
+      <file name="src\db\db_method.c"/>
+      <file name="src\db\db_open.c"/>
+      <file name="src\db\db_overflow.c"/>
+      <file name="src\db\db_ovfl_vrfy.c"/>
+      <file name="src\db\db_pr.c"/>
+      <file name="src\db\db_rec.c"/>
+      <file name="src\db\db_reclaim.c"/>
+      <file name="src\db\db_remove.c"/>
+      <file name="src\db\db_rename.c"/>
+      <file name="src\db\db_ret.c"/>
+      <file name="src\db\db_setid.c"/>
+      <file name="src\db\db_setlsn.c"/>
+      <file name="src\db\db_sort_multiple.c"/>
+      <file name="src\db\db_stati.c"/>
+      <file name="src\db\db_truncate.c"/>
+      <file name="src\db\db_upg.c"/>
+      <file name="src\db\db_vrfy.c"/>
+      <file name="src\db\db_vrfyutil.c"/>
+      <file name="src\db\partition.c"/>
+      <file name="src\dbreg\dbreg.c"/>
+      <file name="src\dbreg\dbreg_auto.c"/>
+      <file name="src\dbreg\dbreg_rec.c"/>
+      <file name="src\dbreg\dbreg_stat.c"/>
+      <file name="src\dbreg\dbreg_util.c"/>
+      <file name="src\env\env_alloc.c"/>
+      <file name="src\env\env_backup.c"/>
+      <file name="src\env\env_config.c"/>
+      <file name="src\env\env_failchk.c"/>
+      <file name="src\env\env_file.c"/>
+      <file name="src\env\env_globals.c"/>
+      <file name="src\env\env_method.c"/>
+      <file name="src\env\env_name.c"/>
+      <file name="src\env\env_open.c"/>
+      <file name="src\env\env_recover.c"/>
+      <file name="src\env\env_region.c"/>
+      <file name="src\env\env_register.c"/>
+      <file name="src\env\env_sig.c"/>
+      <file name="src\env\env_stat.c"/>
+      <file name="src\fileops\fileops_auto.c"/>
+      <file name="src\fileops\fop_basic.c"/>
+      <file name="src\fileops\fop_rec.c"/>
+      <file name="src\fileops\fop_util.c"/>
+      <file name="src\hash\hash.c"/>
+      <file name="src\hash\hash_auto.c"/>
+      <file name="src\hash\hash_compact.c"/>
+      <file name="src\hash\hash_conv.c"/>
+      <file name="src\hash\hash_dup.c"/>
+      <file name="src\hash\hash_func.c"/>
+      <file name="src\hash\hash_meta.c"/>
+      <file name="src\hash\hash_method.c"/>
+      <file name="src\hash\hash_open.c"/>
+      <file name="src\hash\hash_page.c"/>
+      <file name="src\hash\hash_rec.c"/>
+      <file name="src\hash\hash_reclaim.c"/>
+      <file name="src\hash\hash_stat.c"/>
+      <file name="src\hash\hash_verify.c"/>
+      <file name="src/heap/heap.c"/>
+      <file name="src/heap/heap_auto.c"/>
+      <file name="src/heap/heap_backup.c"/>
+      <file name="src/heap/heap_conv.c"/>
+      <file name="src/heap/heap_method.c"/>
+      <file name="src/heap/heap_open.c"/>
+      <file name="src/heap/heap_rec.c"/>
+      <file name="src/heap/heap_reclaim.c"/>
+      <file name="src/heap/heap_stat.c"/>
+      <file name="src/heap/heap_verify.c"/>
+      <file name="src\hmac\hmac.c"/>
+      <file name="src\hmac\sha1.c"/>
+      <file name="src\lock\lock.c"/>
+      <file name="src\lock\lock_deadlock.c"/>
+      <file name="src\lock\lock_failchk.c"/>
+      <file name="src\lock\lock_id.c"/>
+      <file name="src\lock\lock_list.c"/>
+      <file name="src\lock\lock_method.c"/>
+      <file name="src\lock\lock_region.c"/>
+      <file name="src\lock\lock_stat.c"/>
+      <file name="src\lock\lock_timer.c"/>
+      <file name="src\lock\lock_util.c"/>
+      <file name="src\log\log.c"/>
+      <file name="src\log\log_archive.c"/>
+      <file name="src\log\log_compare.c"/>
+      <file name="src\log\log_debug.c"/>
+      <file name="src\log\log_get.c"/>
+      <file name="src\log\log_method.c"/>
+      <file name="src\log\log_put.c"/>
+      <file name="src\log\log_stat.c"/>
+      <file name="src\log\log_verify.c"/>
+      <file name="src\log\log_verify_auto.c"/>
+      <file name="src\log\log_verify_int.c"/>
+      <file name="src\log\log_verify_util.c"/>
+      <file name="src\mp\mp_alloc.c"/>
+      <file name="src\mp\mp_backup.c"/>
+      <file name="src\mp\mp_bh.c"/>
+      <file name="src\mp\mp_fget.c"/>
+      <file name="src\mp\mp_fmethod.c"/>
+      <file name="src\mp\mp_fopen.c"/>
+      <file name="src\mp\mp_fput.c"/>
+      <file name="src\mp\mp_fset.c"/>
+      <file name="src\mp\mp_method.c"/>
+      <file name="src\mp\mp_mvcc.c"/>
+      <file name="src\mp\mp_region.c"/>
+      <file name="src\mp\mp_register.c"/>
+      <file name="src\mp\mp_resize.c"/>
+      <file name="src\mp\mp_stat.c"/>
+      <file name="src\mp\mp_sync.c"/>
+      <file name="src\mp\mp_trickle.c"/>
+      <file name="src\mutex\mut_alloc.c"/>
+      <file name="src\mutex\mut_failchk.c"/>
+      <file name="src\mutex\mut_method.c"/>
+      <file name="src\mutex\mut_region.c"/>
+      <file name="src\mutex\mut_stat.c"/>
+      <file name="src\mutex\mut_win32.c"/>
+      <file name="src\os\os_abort.c"/>
+      <file name="src\os\os_alloc.c"/>
+      <file name="src\os\os_path.c"/>
+      <file name="src\os\os_pid.c"/>
+      <file name="src\os\os_root.c"/>
+      <file name="src\os\os_rpath.c"/>
+      <file name="src\os\os_stack.c"/>
+      <file name="src\os\os_tmpdir.c"/>
+      <file name="src\os\os_uid.c"/>
+      <file name="src\os_windows\ce_ctime.c"/>
+      <file name="src\os_windows\os_abs.c"/>
+      <file name="src\os_windows\os_clock.c"/>
+      <file name="src\os_windows\os_config.c"/>
+      <file name="src\os_windows\os_cpu.c"/>
+      <file name="src\os_windows\os_dir.c"/>
+      <file name="src\os_windows\os_errno.c"/>
+      <file name="src\os_windows\os_fid.c"/>
+      <file name="src\os_windows\os_flock.c"/>
+      <file name="src\os_windows\os_fsync.c"/>
+      <file name="src\os_windows\os_getenv.c"/>
+      <file name="src\os_windows\os_handle.c"/>
+      <file name="src\os_windows\os_map.c"/>
+      <file name="src\os_windows\os_mkdir.c"/>
+      <file name="src\os_windows\os_open.c"/>
+      <file name="src\os_windows\os_rename.c"/>
+      <file name="src\os_windows\os_rw.c"/>
+      <file name="src\os_windows\os_seek.c"/>
+      <file name="src\os_windows\os_stat.c"/>
+      <file name="src\os_windows\os_truncate.c"/>
+      <file name="src\os_windows\os_unlink.c"/>
+      <file name="src\os_windows\os_yield.c"/>
+      <file name="src\qam\qam.c"/>
+      <file name="src\qam\qam_auto.c"/>
+      <file name="src\qam\qam_conv.c"/>
+      <file name="src\qam\qam_files.c"/>
+      <file name="src\qam\qam_method.c"/>
+      <file name="src\qam\qam_open.c"/>
+      <file name="src\qam\qam_rec.c"/>
+      <file name="src\qam\qam_stat.c"/>
+      <file name="src\qam\qam_upgrade.c"/>
+      <file name="src\qam\qam_verify.c"/>
+      <file name="src\rep\rep_stub.c"/>
+      <file name="src\repmgr\repmgr_stub.c"/>
+      <file name="src\sequence\seq_stat.c"/>
+      <file name="src\sequence\sequence.c"/>
+      <file name="src\txn\txn.c"/>
+      <file name="src\txn\txn_auto.c"/>
+      <file name="src\txn\txn_chkpt.c"/>
+      <file name="src\txn\txn_failchk.c"/>
+      <file name="src\txn\txn_method.c"/>
+      <file name="src\txn\txn_rec.c"/>
+      <file name="src\txn\txn_recover.c"/>
+      <file name="src\txn\txn_region.c"/>
+      <file name="src\txn\txn_stat.c"/>
+      <file name="src\txn\txn_util.c"/>
+    </files>
+  </project>
+  
+  <project name="db_small" guid="XXX-NOT-USED-XXX">
+    <type>library</type>
+    <configuration>Static </configuration>
+    <include type="ref">all</include>
+    <preprocessor config="all">HAVE_SMALLBUILD</preprocessor>
+    <preprocessor config="dll">DB_CREATE_DLL</preprocessor>
+    <preprocessor config="Debug">DIAGNOSTIC</preprocessor>
+    <preprocessor config="Static Debug">DIAGNOSTIC</preprocessor>
+    <files>
+      <file name="src\btree\bt_compact.c"/>
+      <file name="src\btree\bt_compare.c"/>
+      <file name="src\btree\bt_conv.c"/>
+      <file name="src\btree\bt_curadj.c"/>
+      <file name="src\btree\bt_cursor.c"/>
+      <file name="src\btree\bt_delete.c"/>
+      <file name="src\btree\bt_method.c"/>
+      <file name="src\btree\bt_open.c"/>
+      <file name="src\btree\bt_put.c"/>
+      <file name="src\btree\bt_rec.c"/>
+      <file name="src\btree\bt_reclaim.c"/>
+      <file name="src\btree\bt_recno.c"/>
+      <file name="src\btree\bt_rsearch.c"/>
+      <file name="src\btree\bt_search.c"/>
+      <file name="src\btree\bt_split.c"/>
+      <file name="src\btree\bt_stat.c"/>
+      <file name="src\btree\btree_auto.c"/>
+      <file name="src\clib\bsearch.c"/>
+      <file name="src\clib\strdup.c"/>
+      <file name="src\clib\strerror.c"/>
+      <file name="src\clib\strsep.c"/>
+      <file name="src\clib\time.c"/>
+      <file name="src\common\clock.c"/>
+      <file name="src\common\crypto_stub.c"/>
+      <file name="src\common\db_byteorder.c"/>
+      <file name="src\common\db_compint.c"/>
+      <file name="src\common\db_err.c"/>
+      <file name="src\common\db_getlong.c"/>
+      <file name="src\common\db_idspace.c"/>
+      <file name="src\common\db_log2.c"/>
+      <file name="src\common\db_shash.c"/>
+      <file name="src\common\dbt.c"/>
+      <file name="src\common\mkpath.c"/>
+      <file name="src\common\util_cache.c"/>
+      <file name="src\common\util_log.c"/>
+      <file name="src\common\zerofill.c"/>
+      <file name="src\db\crdel_auto.c"/>
+      <file name="src\db\crdel_rec.c"/>
+      <file name="src\db\db.c"/>
+      <file name="src\db\db_am.c"/>
+      <file name="src\db\db_auto.c"/>
+      <file name="src\db\db_backup.c"/>
+      <file name="src\db\db_cam.c"/>
+      <file name="src\db\db_cds.c"/>
+      <file name="src\db\db_compact.c"/>
+      <file name="src\db\db_conv.c"/>
+      <file name="src\db\db_copy.c"/>
+      <file name="src\db\db_dispatch.c"/>
+      <file name="src\db\db_dup.c"/>
+      <file name="src\db\db_iface.c"/>
+      <file name="src\db\db_join.c"/>
+      <file name="src\db\db_meta.c"/>
+      <file name="src\db\db_method.c"/>
+      <file name="src\db\db_open.c"/>
+      <file name="src\db\db_overflow.c"/>
+      <file name="src\db\db_pr.c"/>
+      <file name="src\db\db_rec.c"/>
+      <file name="src\db\db_reclaim.c"/>
+      <file name="src\db\db_remove.c"/>
+      <file name="src\db\db_rename.c"/>
+      <file name="src\db\db_ret.c"/>
+      <file name="src\db\db_setid.c"/>
+      <file name="src\db\db_setlsn.c"/>
+      <file name="src\db\db_sort_multiple.c"/>
+      <file name="src\db\db_stati.c"/>
+      <file name="src\db\db_truncate.c"/>
+      <file name="src\db\db_upg.c"/>
+      <file name="src\db\db_vrfy_stub.c"/>
+      <file name="src\db\partition.c"/>
+      <file name="src\dbreg\dbreg.c"/>
+      <file name="src\dbreg\dbreg_auto.c"/>
+      <file name="src\dbreg\dbreg_rec.c"/>
+      <file name="src\dbreg\dbreg_stat.c"/>
+      <file name="src\dbreg\dbreg_util.c"/>
+      <file name="src\env\env_alloc.c"/>
+      <file name="src\env\env_backup.c"/>
+      <file name="src\env\env_config.c"/>
+      <file name="src\env\env_failchk.c"/>
+      <file name="src\env\env_file.c"/>
+      <file name="src\env\env_globals.c"/>
+      <file name="src\env\env_method.c"/>
+      <file name="src\env\env_name.c"/>
+      <file name="src\env\env_open.c"/>
+      <file name="src\env\env_recover.c"/>
+      <file name="src\env\env_region.c"/>
+      <file name="src\env\env_register.c"/>
+      <file name="src\env\env_sig.c"/>
+      <file name="src\env\env_stat.c"/>
+      <file name="src\fileops\fileops_auto.c"/>
+      <file name="src\fileops\fop_basic.c"/>
+      <file name="src\fileops\fop_rec.c"/>
+      <file name="src\fileops\fop_util.c"/>
+      <file name="src\hash\hash_func.c"/>
+      <file name="src\hash\hash_stub.c"/>
+      <file name="src\heap\heap_stub.c"/>
+      <file name="src\hmac\hmac.c"/>
+      <file name="src\hmac\sha1.c"/>
+      <file name="src\lock\lock.c"/>
+      <file name="src\lock\lock_deadlock.c"/>
+      <file name="src\lock\lock_failchk.c"/>
+      <file name="src\lock\lock_id.c"/>
+      <file name="src\lock\lock_list.c"/>
+      <file name="src\lock\lock_method.c"/>
+      <file name="src\lock\lock_region.c"/>
+      <file name="src\lock\lock_stat.c"/>
+      <file name="src\lock\lock_timer.c"/>
+      <file name="src\lock\lock_util.c"/>
+      <file name="src\log\log.c"/>
+      <file name="src\log\log_archive.c"/>
+      <file name="src\log\log_compare.c"/>
+      <file name="src\log\log_debug.c"/>
+      <file name="src\log\log_get.c"/>
+      <file name="src\log\log_method.c"/>
+      <file name="src\log\log_put.c"/>
+      <file name="src\log\log_stat.c"/>
+      <file name="src\log\log_verify_stub.c"/>
+      <file name="src\mp\mp_alloc.c"/>
+      <file name="src\mp\mp_backup.c"/>
+      <file name="src\mp\mp_bh.c"/>
+      <file name="src\mp\mp_fget.c"/>
+      <file name="src\mp\mp_fmethod.c"/>
+      <file name="src\mp\mp_fopen.c"/>
+      <file name="src\mp\mp_fput.c"/>
+      <file name="src\mp\mp_fset.c"/>
+      <file name="src\mp\mp_method.c"/>
+      <file name="src\mp\mp_mvcc.c"/>
+      <file name="src\mp\mp_region.c"/>
+      <file name="src\mp\mp_register.c"/>
+      <file name="src\mp\mp_resize.c"/>
+      <file name="src\mp\mp_stat.c"/>
+      <file name="src\mp\mp_sync.c"/>
+      <file name="src\mp\mp_trickle.c"/>
+      <file name="src\mutex\mut_alloc.c"/>
+      <file name="src\mutex\mut_failchk.c"/>
+      <file name="src\mutex\mut_method.c"/>
+      <file name="src\mutex\mut_region.c"/>
+      <file name="src\mutex\mut_stat.c"/>
+      <file name="src\mutex\mut_win32.c"/>
+      <file name="src\os\os_abort.c"/>
+      <file name="src\os\os_alloc.c"/>
+      <file name="src\os\os_ctime.c"/>
+      <file name="src\os\os_path.c"/>
+      <file name="src\os\os_pid.c"/>
+      <file name="src\os\os_root.c"/>
+      <file name="src\os\os_rpath.c"/>
+      <file name="src\os\os_stack.c"/>
+      <file name="src\os\os_tmpdir.c"/>
+      <file name="src\os\os_uid.c"/>
+      <file name="src\os_windows\os_abs.c"/>
+      <file name="src\os_windows\os_clock.c"/>
+      <file name="src\os_windows\os_config.c"/>
+      <file name="src\os_windows\os_cpu.c"/>
+      <file name="src\os_windows\os_dir.c"/>
+      <file name="src\os_windows\os_errno.c"/>
+      <file name="src\os_windows\os_fid.c"/>
+      <file name="src\os_windows\os_flock.c"/>
+      <file name="src\os_windows\os_fsync.c"/>
+      <file name="src\os_windows\os_getenv.c"/>
+      <file name="src\os_windows\os_handle.c"/>
+      <file name="src\os_windows\os_map.c"/>
+      <file name="src\os_windows\os_mkdir.c"/>
+      <file name="src\os_windows\os_open.c"/>
+      <file name="src\os_windows\os_rename.c"/>
+      <file name="src\os_windows\os_rw.c"/>
+      <file name="src\os_windows\os_seek.c"/>
+      <file name="src\os_windows\os_stat.c"/>
+      <file name="src\os_windows\os_truncate.c"/>
+      <file name="src\os_windows\os_unlink.c"/>
+      <file name="src\os_windows\os_yield.c"/>
+      <file name="src\qam\qam_stub.c"/>
+      <file name="src\rep\rep_stub.c"/>
+      <file name="src\repmgr\repmgr_stub.c"/>
+      <file name="src\sequence\seq_stat.c"/>
+      <file name="src\sequence\sequence.c"/>
+      <file name="src\txn\txn.c"/>
+      <file name="src\txn\txn_auto.c"/>
+      <file name="src\txn\txn_chkpt.c"/>
+      <file name="src\txn\txn_failchk.c"/>
+      <file name="src\txn\txn_method.c"/>
+      <file name="src\txn\txn_rec.c"/>
+      <file name="src\txn\txn_recover.c"/>
+      <file name="src\txn\txn_region.c"/>
+      <file name="src\txn\txn_stat.c"/>
+      <file name="src\txn\txn_util.c"/>
+    </files>
+  </project>
+  
+  <project name="db_sql" guid="ACE41B30-04BB-11DF-8A39-0800200C9A66">
+    <type>library</type>
+    <configuration></configuration>
+    <configuration>Static </configuration>
+    <include type="ref">all</include>
+    <include type="ref">db_sql_src</include>
+    <preprocessor config="all">SQLITE_EXPORTS;SQLITE_CORE;SQLITE_THREADSAFE=1;BDBSQL_SINGLE_PROCESS;SQLITE_OMIT_WAL</preprocessor>
+    <preprocessor config="dll">SQLITE_API=__declspec(dllexport)</preprocessor>
+    <preprocessor config="Debug">SQLITE_TEST;SQLITE_DEBUG;SQLITE_MEMDEBUG</preprocessor>
+    <preprocessor config="Static Debug">SQLITE_TEST;SQLITE_DEBUG;SQLITE_MEMDEBUG</preprocessor>
+    <files>
+      <file name="lang\sql\sqlite\src\alter.c"/>
+      <file name="lang\sql\sqlite\src\analyze.c"/>
+      <file name="lang\sql\sqlite\src\attach.c"/>
+      <file name="lang\sql\sqlite\src\auth.c"/>
+      <file name="lang\sql\adapter\backup.c"/>
+      <file name="lang\sql\sqlite\src\bitvec.c"/>
+      <file name="lang\sql\adapter\btmutex.c"/>
+      <file name="lang\sql\adapter\btree.c"/>
+      <file name="lang\sql\sqlite\src\build.c"/>
+      <file name="lang\sql\sqlite\src\callback.c"/>
+      <file name="lang\sql\sqlite\src\complete.c"/>
+      <file name="lang\sql\sqlite\src\ctime.c"/>
+      <file name="lang\sql\sqlite\src\date.c"/>
+      <file name="lang\sql\adapter\db_encrypt.c"/>
+      <file name="lang\sql\adapter\db_pragma.c"/>
+      <file name="lang\sql\adapter\db_shell.c"/>
+      <file name="lang\sql\adapter\db_sequence.c"/>
+      <file name="lang\sql\sqlite\src\delete.c"/>
+      <file name="lang\sql\sqlite\src\expr.c"/>
+      <file name="lang\sql\sqlite\src\fault.c"/>
+      <file name="lang\sql\sqlite\src\fkey.c"/>
+      <file name="lang\sql\sqlite\src\func.c"/>
+      <file name="lang\sql\sqlite\src\global.c"/>
+      <file name="lang\sql\sqlite\src\hash.c"/>
+      <file name="lang\sql\sqlite\src\insert.c"/>
+      <file name="lang\sql\sqlite\src\journal.c"/>
+      <file name="lang\sql\sqlite\src\legacy.c"/>
+      <file name="lang\sql\sqlite\src\loadext.c"/>
+      <file name="lang\sql\sqlite\src\main.c"/>
+      <file name="lang\sql\sqlite\src\malloc.c"/>
+      <file name="lang\sql\sqlite\src\mem0.c"/>
+      <file name="lang\sql\sqlite\src\mem1.c"/>
+      <file name="lang\sql\sqlite\src\mem2.c"/>
+      <file name="lang\sql\sqlite\src\memjournal.c"/>
+      <file name="lang\sql\sqlite\src\mutex.c"/>
+      <file name="lang\sql\sqlite\src\mutex_noop.c"/>
+      <file name="lang\sql\sqlite\src\mutex_w32.c"/>
+      <file name="lang\sql\sqlite\src\notify.c"/>
+      <file name="lang\sql\generated\opcodes.c"/>
+      <file name="lang\sql\sqlite\src\os.c"/>
+      <file name="lang\sql\sqlite\src\os_win.c"/>
+      <file name="lang\sql\adapter\pager.c"/>
+      <file name="lang\sql\generated\parse.c"/>
+      <file name="lang\sql\adapter\pcache.c"/>
+      <file name="lang\sql\adapter\pcache1.c"/>
+      <file name="lang\sql\sqlite\src\pragma.c"/>
+      <file name="lang\sql\sqlite\src\prepare.c"/>
+      <file name="lang\sql\sqlite\src\printf.c"/>
+      <file name="lang\sql\sqlite\src\random.c"/>
+      <file name="lang\sql\sqlite\src\resolve.c"/>
+      <file name="lang\sql\sqlite\src\rowset.c"/>
+      <file name="lang\sql\sqlite\src\select.c"/>
+      <file name="lang\sql\sqlite\src\status.c"/>
+      <file name="lang\sql\sqlite\src\table.c"/>
+      <file name="lang\sql\sqlite\src\tokenize.c"/>
+      <file name="lang\sql\sqlite\src\trigger.c"/>
+      <file name="lang\sql\sqlite\src\update.c"/>
+      <file name="lang\sql\sqlite\src\utf.c"/>
+      <file name="lang\sql\sqlite\src\util.c"/>
+      <file name="lang\sql\adapter\vacuum.c"/>
+      <file name="lang\sql\sqlite\src\vdbe.c"/>
+      <file name="lang\sql\sqlite\src\vdbeapi.c"/>
+      <file name="lang\sql\sqlite\src\vdbeaux.c"/>
+      <file name="lang\sql\sqlite\src\vdbeblob.c"/>
+      <file name="lang\sql\sqlite\src\vdbemem.c"/>
+      <file name="lang\sql\sqlite\src\vdbetrace.c"/>
+      <file name="lang\sql\sqlite\src\vtab.c"/>
+      <file name="lang\sql\adapter\wal.c"/>
+      <file name="lang\sql\sqlite\src\walker.c"/>
+      <file name="lang\sql\sqlite\src\where.c"/>
+    </files>
+  </project>
+  
+  <!-- Applications -->
+  <project name="wce_sql" guid="75DF98AA-25DF-4183-A022-024CF918480D">
+    <type>app</type>
+    <configuration></configuration>
+    <include type="ref">all</include>
+    <include type="ref">sql_app</include>
+    <files>
+      <file name="examples/sql/wce_sql/excxx_wce_sql.cpp"/>
+      <file name="examples/sql/wce_sql/excxx_wce_sqlDlg.cpp"/>
+      <file name="examples/sql/wce_sql/stdafx.cpp"/>
+      <file name="examples/sql/wce_sql/excxx_wce_sql.h"/>
+      <file name="examples/sql/wce_sql/excxx_wce_sqlDlg.h"/>
+      <file name="examples/sql/wce_sql/Resourceppc.h"/>
+      <file name="examples/sql/wce_sql/stdafx.h"/>
+      <file name="examples/sql/wce_sql/excxx_wce_sql.ico"/>
+      <file name="examples/sql/wce_sql/excxx_wce_sqlppc.rc"/>
+    </files>
+  </project>
+  
+  <project name="wce_tpcb" guid="F2CE670A-ABAE-414A-9A17-8079AB58613F">
+    <type>app</type>
+    <configuration></configuration>
+    <include type="ref">all</include>
+    <files>
+      <file name="examples/cxx/wce_tpcb/TpcbExample.cpp"/>
+      <file name="examples/cxx/wce_tpcb/TpcbUI.cpp"/>
+      <file name="examples/cxx/wce_tpcb/wce_tpcb.rc"/>
+    </files>
+  </project>
+  
+</projects>

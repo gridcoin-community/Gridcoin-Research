@@ -5,17 +5,14 @@
 
 export LC_ALL=C
 KNOWN_VIOLATIONS=(
-    "src/util/strencodings.cpp:.*atoi"
-    "src/util/strencodings.cpp:.*strtol"
-    "src/util/strencodings.cpp:.*strtoul"
-    "src/util/strencodings.h:.*atoi"
+    "src/util/strencodings.cpp:.*strtoll"
     "src/logging.h:.*strftime"
     "src/gridcoin/backup.cpp:.*strftime"
     "src/rpc/protocol.cpp:.*strftime"
     "src/rpc/rawtransaction.cpp:.*strftime"
 )
 
-REGEXP_IGNORE_EXTERNAL_DEPENDENCIES="^src/(crypto/ctaes/|leveldb/|secp256k1/|tinyformat.h|univalue/)"
+REGEXP_IGNORE_EXTERNAL_DEPENDENCIES="^src/(crypto/ctaes/|leveldb/|secp256k1/|tinyformat.h|univalue/|bdb53/)"
 
 LOCALE_DEPENDENT_FUNCTIONS=(
     alphasort    # LC_COLLATE (via strcoll)

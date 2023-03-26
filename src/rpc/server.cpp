@@ -25,6 +25,7 @@
 #include <boost/shared_ptr.hpp>
 #include <list>
 #include <algorithm>
+#include <stdexcept>
 
 #include <memory>
 
@@ -337,23 +338,28 @@ static const CRPCCommand vRPCCommands[] =
     { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
     { "sendtoaddress",           &sendtoaddress,           cat_wallet        },
     { "setaccount",              &setaccount,              cat_wallet        },
+    { "sethdseed",               &sethdseed,               cat_wallet        },
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
+    { "upgradewallet",           &upgradewallet,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
     { "verifymessage",           &verifymessage,           cat_wallet        },
     { "walletlock",              &walletlock,              cat_wallet        },
     { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
+    { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
 
   // Staking commands
     { "advertisebeacon",         &advertisebeacon,         cat_staking        },
     { "beaconconvergence",       &beaconconvergence,       cat_staking        },
     { "beaconreport",            &beaconreport,            cat_staking        },
     { "beaconstatus",            &beaconstatus,            cat_staking        },
+    { "createmrcrequest",        &createmrcrequest,        cat_staking        },
     { "explainmagnitude",        &explainmagnitude,        cat_staking        },
     { "getlaststake",            &getlaststake,            cat_staking        },
+    { "getmrcinfo",              &getmrcinfo,              cat_staking        },
     { "getstakinginfo",          &getstakinginfo,          cat_staking        },
     { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
     { "lifetime",                &lifetime,                cat_staking        },
@@ -377,6 +383,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
     { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
+    { "listalerts",              &listalerts,              cat_developer     },
     { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
     { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
@@ -413,6 +420,7 @@ static const CRPCCommand vRPCCommands[] =
     { "clearbanned",             &clearbanned,             cat_network       },
     { "currenttime",             &currenttime,             cat_network       },
     { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
+    { "getnodeaddresses",        &getnodeaddresses,        cat_network       },
     { "getbestblockhash",        &getbestblockhash,        cat_network       },
     { "getblock",                &getblock,                cat_network       },
     { "getblockbynumber",        &getblockbynumber,        cat_network       },

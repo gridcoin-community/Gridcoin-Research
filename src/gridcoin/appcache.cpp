@@ -7,6 +7,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <array>
+#include <stdexcept>
 #include <type_traits>
 
 namespace

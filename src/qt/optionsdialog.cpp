@@ -374,9 +374,10 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
     {
         if (object == ui->proxyIp)
         {
-            CService addr;
+            CService serv(LookupNumeric(ui->proxyIp->text().toStdString().c_str(), 9050));
+            proxyType addrProxy = proxyType(serv, true);
             /* Check proxyIp for a valid IPv4/IPv6 address and emit the proxyIpValid signal */
-            emit proxyIpValid(ui->proxyIp, LookupNumeric(ui->proxyIp->text().toStdString().c_str(), addr));
+            emit proxyIpValid(ui->proxyIp, addrProxy.IsValid());
         }
 
         if (object == ui->stakingEfficiency)

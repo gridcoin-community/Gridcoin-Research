@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "init.h"
 #include "main.h"
 #include "gridcoin/contract/contract.h"
@@ -13,7 +15,7 @@
 using namespace GRC;
 
 namespace {
-const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
+const PollReference* TryPollByTitleOrId(const std::string& title_or_id) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     PollRegistry& registry = GetPollRegistry();
 
@@ -22,7 +24,7 @@ const PollReference* TryPollByTitleOrId(const std::string& title_or_id)
 
         // This will return a ref to the poll in the registry if found, or, try and load it and return the ref if
         // the load is successful.
-        if (const PollReference* ref = registry.TryByTxidWithAddHistoricalPollAndVotes(txid)) {
+        if (const PollReference* ref = WITH_LOCK(cs_main, return registry.TryByTxidWithAddHistoricalPollAndVotes(txid))) {
             return ref;
         }
     }
@@ -51,6 +53,23 @@ UniValue PollChoicesToJson(const Poll::ChoiceList& choices)
     return json;
 }
 
+UniValue PollAdditionalFieldsToJson(const Poll::AdditionalFieldList fields)
+{
+    UniValue json(UniValue::VARR);
+
+    for (size_t i = 0; i < fields.size(); ++i) {
+        UniValue field(UniValue::VOBJ);
+
+        field.pushKV("name", fields.At(i)->m_name);
+        field.pushKV("value", fields.At(i)->m_value);
+        field.pushKV("required", fields.At(i)->m_required);
+
+        json.push_back(field);
+    }
+
+    return json;
+}
+
 UniValue PollToJson(const Poll& poll, const uint256 txid)
 {
     UniValue json(UniValue::VOBJ);
@@ -59,9 +78,13 @@ UniValue PollToJson(const Poll& poll, const uint256 txid)
     json.pushKV("id", txid.ToString());
     json.pushKV("question", poll.m_question);
     json.pushKV("url", poll.m_url);
-    json.pushKV("sharetype", poll.WeightTypeToString());
-    json.pushKV("weight_type", (int)poll.m_weight_type.Raw());
-    json.pushKV("response_type", (int)poll.m_response_type.Raw());
+    json.pushKV("additional_fields", PollAdditionalFieldsToJson(poll.AdditionalFields()));
+    json.pushKV("poll_type", poll.PollTypeToString());
+    json.pushKV("poll_type_id", (int)poll.m_type.Raw());
+    json.pushKV("weight_type", poll.WeightTypeToString());
+    json.pushKV("weight_type_id", (int)poll.m_weight_type.Raw());
+    json.pushKV("response_type", poll.ResponseTypeToString());
+    json.pushKV("response_type_id", (int)poll.m_response_type.Raw());
     json.pushKV("duration_days", (int)poll.m_duration_days);
     json.pushKV("expiration", TimestampToHRDate(poll.Expiration()));
     json.pushKV("timestamp", TimestampToHRDate(poll.m_timestamp));
@@ -86,21 +109,32 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
     json.pushKV("poll_title", poll_ref.Title());
     json.pushKV("poll_expired", poll_ref.Expired(GetAdjustedTime()));
 
-    if (auto start_height = poll_ref.GetStartingHeight()) {
-        json.pushKV("starting_block_height", *start_height);
-    }
+    {
+        LOCK(cs_main);
 
-    if (auto end_height = poll_ref.GetEndingHeight()) {
-        json.pushKV("ending_block_height", *end_height);
+        if (auto start_height = poll_ref.GetStartingHeight()) {
+            json.pushKV("starting_block_height", *start_height);
+        }
+
+        if (auto end_height = poll_ref.GetEndingHeight()) {
+            json.pushKV("ending_block_height", *end_height);
+        }
     }
 
     json.pushKV("votes", (uint64_t)poll_ref.Votes().size());
     json.pushKV("invalid_votes", (uint64_t)result.m_invalid_votes);
     json.pushKV("total_weight", ValueFromAmount(result.m_total_weight));
 
-    if (auto active_vote_weight = poll_ref.GetActiveVoteWeight()) {
-        json.pushKV("active_vote_weight", ValueFromAmount(*active_vote_weight));
-        json.pushKV("vote_percent_avw", (double) result.m_total_weight / (double) *active_vote_weight * 100.0);
+    if (result.m_active_vote_weight) {
+        json.pushKV("active_vote_weight", ValueFromAmount(*result.m_active_vote_weight));
+    }
+
+    if (result.m_vote_percent_avw) {
+        json.pushKV("vote_percent_avw", *result.m_vote_percent_avw);
+    }
+
+    if (result.m_poll_results_validated) {
+        json.pushKV("poll_results_validated", *result.m_poll_results_validated);
     }
 
     if (!result.m_votes.empty()) {
@@ -132,9 +166,21 @@ UniValue PollResultToJson(const PollResult& result, const PollReference& poll_re
 
 UniValue PollResultToJson(const PollReference& poll_ref)
 {
-    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-        return PollResultToJson(*result, poll_ref);
+    GetPollRegistry().registry_traversal_in_progress = true;
+
+    try {
+         if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+            GetPollRegistry().registry_traversal_in_progress = false;
+
+            return PollResultToJson(*result, poll_ref);
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        GetPollRegistry().registry_traversal_in_progress = false;
+
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
+
+    GetPollRegistry().registry_traversal_in_progress = false;
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
 }
@@ -173,8 +219,12 @@ UniValue VoteDetailsToJson(const PollResult& result)
 
 UniValue VoteDetailsToJson(const PollReference& poll_ref)
 {
-    if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-        return VoteDetailsToJson(*result);
+    try {
+        if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+            return VoteDetailsToJson(*result);
+        }
+    } catch (InvalidDuetoReorgFork& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
@@ -184,7 +234,7 @@ UniValue AddressClaimToJson(const AddressClaim& claim)
 {
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("public_key", claim.m_public_key.ToString());
+    json.pushKV("public_key", HexStr(claim.m_public_key));
     json.pushKV("signature", HexStr(claim.m_signature));
 
     UniValue outpoints(UniValue::VARR);
@@ -251,6 +301,8 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Note that a lock on cs_poll_registry does NOT need to be taken here.
+        // This lock will be taken by the contract handler.
         result_pair = SendContract(builder.BuildContractTx(pwalletMain));
     }
 
@@ -283,41 +335,178 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 7)
-        throw std::runtime_error(
-                "addpoll <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url>\n"
-                "\n"
-                "<title> --------> Title for the poll\n"
-                "<days> ---------> Number of days that the poll will run\n"
-                "<question> -----> Prompt that voters shall answer\n"
-                "<answers> ------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
-                "<weighttype> ---> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
-                "<responsetype> -> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
-                "<url> ----------> Discussion web page URL for the poll\n"
-                "\n"
-                "Add a poll to the network.\n"
-                "Requires 100K GRC balance. Costs 50 GRC.\n"
-                "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n");
+    uint32_t payload_version = 0;
+    std::vector<PollType> valid_poll_types;
+
+    {
+        LOCK(cs_main);
+
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
+    }
+
+    std::stringstream types_ss;
+
+    for (const auto& type : valid_poll_types) {
+        if (types_ss.str() != std::string{}) {
+            types_ss << ", ";
+        }
+
+        types_ss << ToLower(Poll::PollTypeToString(type, false));
+    }
+
+    if (params.size() == 0) {
+        std::string e = strprintf(
+                    "addpoll <type> <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url> "
+                    "<required_field_name1=value1;required_field_name2=value2...>\n"
+                    "\n"
+                    "<type> -----------> Type of poll. Valid types are: %s.\n"
+                    "<title> ----------> Title for the poll\n"
+                    "<days> -----------> Number of days that the poll will run\n"
+                    "<question> -------> Prompt that voters shall answer\n"
+                    "<answers> --------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
+                    "<weighttype> -----> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
+                    "<responsetype> ---> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
+                    "<url> ------------> Discussion web page URL for the poll\n"
+                    "<required fields>-> Required additional field(s) if any (see below)\n"
+                    "\n"
+                    "Add a poll to the network.\n"
+                    "Requires 100K GRC balance. Costs 50 GRC.\n"
+                    "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
+                    "Certain poll types may require additional fields. You can see these with addpoll <type> \n"
+                    "with no other parameters.",
+                    types_ss.str());
+
+        throw std::runtime_error(e);
+    }
+
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
+    }
+
+    std::string type_string = ToLower(params[0].get_str());
+
+    PollType poll_type = PollType::UNKNOWN;
+
+    bool valid_type_parameter = false;
+
+    for (const auto& type : valid_poll_types) {
+        if (ToLower(Poll::PollTypeToString(type, false)) == type_string) {
+            poll_type = type;
+            valid_type_parameter = true;
+            break;
+        }
+    }
+
+    if (!valid_type_parameter) {
+        std::string e = strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str());
+
+        throw JSONRPCError(RPC_INVALID_PARAMETER, e);
+    }
+
+    const std::vector<std::string>& required_fields = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
+    std::stringstream required_fields_ss;
+
+    for (const auto& required_field : required_fields) {
+        if (required_fields_ss.str() != std::string{}) {
+            required_fields_ss << ", ";
+        }
+
+        required_fields_ss << required_field;
+    }
+
+    if (params.size() == 1) {
+        std::string e = strprintf(
+                    "For addpoll %s, the required fields are the following: %s.\n",
+                    ToLower(params[0].get_str()),
+                    required_fields.empty() ? "none" : required_fields_ss.str());
+
+        throw std::runtime_error(e);
+    }
+
+    size_t required_number_of_params = required_fields.empty() ? 8 : 9;
+
+    if (fHelp || params.size() < required_number_of_params) {
+        std::string e = strprintf(
+                    "addpoll <type> <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url> "
+                    "<required_field_name1=value1;required_field_name2=value2...>\n"
+                    "\n"
+                    "<type> -----------> Type of poll. Valid types are: %s.\n"
+                    "<title> ----------> Title for the poll\n"
+                    "<days> -----------> Number of days that the poll will run\n"
+                    "<question> -------> Prompt that voters shall answer\n"
+                    "<answers> --------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
+                    "<weighttype> -----> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
+                    "<responsetype> ---> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
+                    "<url> ------------> Discussion web page URL for the poll\n"
+                    "<required fields>-> Required additional field(s) if any (see below)\n"
+                    "\n"
+                    "Add a poll to the network.\n"
+                    "Requires 100K GRC balance. Costs 50 GRC.\n"
+                    "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
+                    "Certain poll types may require additional fields. You can see these with addpoll <type> \n"
+                    "with no other parameters.",
+                    types_ss.str());
+
+        throw std::runtime_error(e);
+    }
 
     EnsureWalletIsUnlocked();
 
     PollBuilder builder = PollBuilder()
-        .SetType(PollType::SURVEY)
-        .SetTitle(params[0].get_str())
-        .SetDuration(params[1].get_int())
-        .SetQuestion(params[2].get_str())
-        .SetWeightType(params[4].get_int() + 1)
-        .SetResponseType(params[5].get_int())
-        .SetUrl(params[6].get_str());
+        .SetPayloadVersion(payload_version)
+        .SetType(poll_type)
+        .SetTitle(params[1].get_str())
+        .SetDuration(params[2].get_int())
+        .SetQuestion(params[3].get_str())
+        .SetWeightType(params[5].get_int() + 1)
+        .SetResponseType(params[6].get_int())
+        .SetUrl(params[7].get_str());
 
-    if (!params[3].isNull() && !params[3].get_str().empty()) {
-        builder = builder.SetChoices(split(params[3].get_str(), ";"));
+    if (!params[4].isNull() && !params[4].get_str().empty()) {
+        builder = builder.SetChoices(split(params[4].get_str(), ";"));
+    }
+
+    if (params.size() == 9 && !params[8].isNull() && !params[8].get_str().empty()) {
+        std::vector<std::string> name_value_pairs = split(params[8].get_str(), ";");
+        Poll::AdditionalFieldList fields;
+
+        for (const auto& name_value_pair : name_value_pairs) {
+            std::vector v_field = split(name_value_pair, "=");
+            bool required = true;
+
+            if (v_field.size() != 2) {
+                throw std::runtime_error("Required fields parameter for poll is malformed.");
+            }
+
+            std::string field_name = TrimString(v_field[0]);
+            std::string field_value = TrimString(v_field[1]);
+
+            if (std::find(required_fields.begin(), required_fields.end(), field_name) == required_fields.end()) {
+                required = false;
+            }
+
+            Poll::AdditionalField field(field_name, field_value, required);
+
+            fields.Add(field);
+        }
+
+        // TODO: Extend Wellformed to do a duplicate check on the field name? This is done in the builder anyway. This
+        // makes sure that at least the required fields have been provided and that they are well formed.
+        if (!fields.WellFormed(poll_type)) {
+            throw std::runtime_error("Required field list is malformed.");
+        }
+
+        builder = builder.AddAdditionalFields(fields);
     }
 
     std::pair<CWalletTx, std::string> result_pair;
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Note that a lock on cs_poll_registry does NOT need to be taken here.
+        // This lock will be taken by the contract handler.
         result_pair = SendContract(builder.BuildContractTx(pwalletMain));
     }
 
@@ -345,7 +534,7 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
 
-    LOCK(cs_main);
+    LOCK(GetPollRegistry().cs_poll_registry);
 
     for (const auto& iter : GetPollRegistry().Polls().OnlyActive(active)) {
         if (const PollOption poll = iter->TryPollFromDisk()) {
@@ -364,13 +553,17 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the results for the specified poll.\n");
+                "Display the results for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the poll, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(cs_main);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return PollResultToJson(*ref);
     }
 
@@ -446,7 +639,7 @@ UniValue vote(const UniValue& params, bool fHelp)
     PollOption poll;
 
     {
-        LOCK(cs_main);
+        LOCK(GetPollRegistry().cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTitle(title)) {
             poll = ref->TryReadFromDisk();
@@ -483,7 +676,7 @@ UniValue votebyid(const UniValue& params, bool fHelp)
     PollOption poll;
 
     {
-        LOCK(cs_main);
+        LOCK(GetPollRegistry().cs_poll_registry);
 
         if (const PollReference* ref = GetPollRegistry().TryByTxid(poll_id)) {
             poll = ref->TryReadFromDisk();
@@ -513,13 +706,17 @@ UniValue votedetails(const UniValue& params, bool fHelp)
                 "\n"
                 "<poll_title_or_id> --> Title or ID of the poll.\n"
                 "\n"
-                "Display the vote details for the specified poll.\n");
+                "Display the vote details for the specified poll.\n"
+                "\n"
+                "Note that in the small chance that a blockchain reorg occurs during\n"
+                "the tally for the vote details, this call will return an error. Retrying\n"
+                "should succeed.");
 
     const std::string title_or_id = params[0].get_str();
 
-    LOCK(cs_main);
-
-    if (const PollReference* ref = TryPollByTitleOrId(title_or_id)) {
+    // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
+    // throw.
+    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return VoteDetailsToJson(*ref);
     }
 

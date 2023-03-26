@@ -26,7 +26,7 @@ namespace {
 //!
 bool SelectMasterInputOutput(CCoinControl& coin_control)
 {
-    const CTxDestination master_address = CWallet::MasterAddress().Get();
+    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight).Get();
 
     // Send change back to the master address:
     coin_control.destChange = master_address;

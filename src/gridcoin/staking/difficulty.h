@@ -8,6 +8,7 @@
 
 class CBlockIndex;
 class CWallet;
+#include <cmath>
 
 namespace GRC {
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of

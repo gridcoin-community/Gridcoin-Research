@@ -13,6 +13,7 @@
 #include <chainparamsbase.h>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <stdexcept>
 #include <thread>
 #include <typeinfo>
 #include <univalue.h>
@@ -54,16 +55,14 @@ ArgsManager gArgs;
 /**
  * Interpret a string argument as a boolean.
  *
- * The definition of atoi() requires that non-numeric string values like "foo",
- * return 0. This means that if a user unintentionally supplies a non-integer
- * argument here, the return value is always false. This means that -foo=false
- * does what the user probably expects, but -foo=true is well defined but does
- * not do what they probably expected.
+ * The definition of LocaleIndependentAtoi<int>() requires that non-numeric string values
+ * like "foo", return 0. This means that if a user unintentionally supplies a
+ * non-integer argument here, the return value is always false. This means that
+ * -foo=false does what the user probably expects, but -foo=true is well defined
+ * but does not do what they probably expected.
  *
- * The return value of atoi() is undefined when given input not representable as
- * an int. On most systems this means string value between "-2147483648" and
- * "2147483647" are well defined (this method will return true). Setting
- * -txindex=2147483648 on most systems, however, is probably undefined.
+ * The return value of LocaleIndependentAtoi<int>(...) is zero when given input not
+ * representable as an int.
  *
  * For a more extensive discussion of this topic (and a wide range of opinions
  * on the Right Way to change this code), see PR12713.
@@ -73,9 +72,9 @@ static bool InterpretBool(const std::string& strValue)
     if (strValue.empty())
         return true;
 
-    // Maintaining the behavior as described above, but replacing the atoi with ParseInt.
+    // Maintaining the behavior as described above, but replacing the atoi with ParseInt32.
     int value = 0;
-    if (!ParseInt(strValue, &value)) {
+    if (!ParseInt32(strValue, &value)) {
         // Do nothing. The value will remain at zero if not parseable. This is to prevent
         // a warning on [[nodiscard]]
     }
@@ -272,15 +271,16 @@ bool ArgsManager::ParseParameters(int argc, const char* const argv[], std::strin
         m_settings.command_line_options[key].push_back(value);
     }
 
-    // we do not allow -includeconf from command line
-    bool success = true;
+    // we do not allow -includeconf from command line, only -noincludeconf
     if (auto* includes = util::FindKey(m_settings.command_line_options, "includeconf")) {
-        for (const auto& include : util::SettingsSpan(*includes)) {
-            error += "-includeconf cannot be used from commandline; -includeconf=" + include.get_str() + "\n";
-            success = false;
+        const util::SettingsSpan values{*includes};
+        // Range may be empty if -noincludeconf was passed
+        if (!values.empty()) {
+            error = "-includeconf cannot be used from commandline; -includeconf=" + values.begin()->write();
+            return false; // pick first value as example
         }
     }
-    return success;
+    return true;
 }
 
 std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) const
@@ -491,6 +491,11 @@ std::string ArgsManager::GetArg(const std::string& strArg, const std::string& st
 {
     const util::SettingsValue value = GetSetting(strArg);
     return value.isNull() ? strDefault : value.isFalse() ? "0" : value.isTrue() ? "1" : value.get_str();
+}
+
+int64_t ArgsManager::GetIntArg(const std::string& strArg, int64_t nDefault) const
+{
+    return GetArg(strArg, nDefault);
 }
 
 int64_t ArgsManager::GetArg(const std::string& strArg, int64_t nDefault) const
@@ -1192,7 +1197,7 @@ void SetupEnvironment()
 #endif
     // On most POSIX systems (e.g. Linux, but not BSD) the environment's locale
     // may be invalid, in which case the "C.UTF-8" locale is used as fallback.
-#if !defined(WIN32) && !defined(MAC_OSX) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
+#if !defined(WIN32) && !defined(MAC_OSX) && !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
     try {
         std::locale(""); // Raises a runtime error if current locale is invalid
     } catch (const std::runtime_error&) {

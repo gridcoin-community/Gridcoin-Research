@@ -51,7 +51,7 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
         [want_boost="yes"]
 	)
 
-	if test "x$want_boost" = "xyes"; then
+	if test "$want_boost" = "yes"; then
         AC_REQUIRE([AC_PROG_CC])
 		CPPFLAGS_SAVED="$CPPFLAGS"
 		CPPFLAGS="$CPPFLAGS $BOOST_CPPFLAGS"
@@ -70,11 +70,11 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
                    ax_cv_boost_unit_test_framework=yes, ax_cv_boost_unit_test_framework=no)
          AC_LANG_POP([C++])
 		])
-		if test "x$ax_cv_boost_unit_test_framework" = "xyes"; then
+		if test "$ax_cv_boost_unit_test_framework" = "yes"; then
 			AC_DEFINE(HAVE_BOOST_UNIT_TEST_FRAMEWORK,,[define if the Boost::Unit_Test_Framework library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`
 
-            if test "x$ax_boost_user_unit_test_framework_lib" = "x"; then
+            if test "$ax_boost_user_unit_test_framework_lib" = ""; then
 			saved_ldflags="${LDFLAGS}"
                 for monitor_library in `ls $BOOSTLIBDIR/libboost_unit_test_framework*.so* $BOOSTLIBDIR/libboost_unit_test_framework*.dylib* $BOOSTLIBDIR/libboost_unit_test_framework*.a* 2>/dev/null` ; do
                     if test -r $monitor_library ; then
@@ -85,13 +85,13 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
                        link_unit_test_framework="no"
                     fi
 
-			    if test "x$link_unit_test_framework" = "xyes"; then
+			    if test "$link_unit_test_framework" = "yes"; then
                       BOOST_UNIT_TEST_FRAMEWORK_LIB="-l$ax_lib"
                       AC_SUBST(BOOST_UNIT_TEST_FRAMEWORK_LIB)
 					  break
 				    fi
                 done
-                if test "x$link_unit_test_framework" != "xyes"; then
+                if test "$link_unit_test_framework" != "yes"; then
                 for libextension in `ls $BOOSTLIBDIR/boost_unit_test_framework*.dll* $BOOSTLIBDIR/boost_unit_test_framework*.a* 2>/dev/null  | sed 's,.*/,,' | sed -e 's;^\(boost_unit_test_framework.*\)\.dll.*$;\1;' -e 's;^\(boost_unit_test_framework.*\)\.a.*$;\1;'` ; do
                      ax_lib=${libextension}
 				    AC_CHECK_LIB($ax_lib, exit,
@@ -103,7 +103,7 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
                 link_unit_test_framework="no"
 			saved_ldflags="${LDFLAGS}"
                 for ax_lib in boost_unit_test_framework-$ax_boost_user_unit_test_framework_lib $ax_boost_user_unit_test_framework_lib ; do
-                   if test "x$link_unit_test_framework" = "xyes"; then
+                   if test "$link_unit_test_framework" = "yes"; then
                       break;
                    fi
                    for unittest_library in `ls $BOOSTLIBDIR/lib${ax_lib}.so* $BOOSTLIBDIR/lib${ax_lib}.a* 2>/dev/null` ; do
@@ -115,7 +115,7 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
                        link_unit_test_framework="no"
                     fi
 
-				if test "x$link_unit_test_framework" = "xyes"; then
+				if test "$link_unit_test_framework" = "yes"; then
                         BOOST_UNIT_TEST_FRAMEWORK_LIB="-l$ax_lib"
                         AC_SUBST(BOOST_UNIT_TEST_FRAMEWORK_LIB)
 					    break
@@ -123,10 +123,10 @@ AC_DEFUN([AX_BOOST_UNIT_TEST_FRAMEWORK],
                   done
                done
             fi
-            if test "x$ax_lib" = "x"; then
+            if test "$ax_lib" = ""; then
                 AC_MSG_ERROR(Could not find a version of the Boost::Unit_Test_Framework library!)
             fi
-			if test "x$link_unit_test_framework" != "xyes"; then
+			if test "$link_unit_test_framework" != "yes"; then
 				AC_MSG_ERROR(Could not link against $ax_lib !)
 			fi
 		fi

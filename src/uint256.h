@@ -1,10 +1,13 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2021 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_UINT256_H
 #define BITCOIN_UINT256_H
+
+#include <crypto/common.h>
+#include <span.h>
 
 #include <assert.h>
 #include <cstring>
@@ -18,29 +21,30 @@ class base_blob
 {
 protected:
     static constexpr int WIDTH = BITS / 8;
-    uint8_t data[WIDTH];
+    uint8_t m_data[WIDTH];
 public:
-    base_blob()
-    {
-        memset(data, 0, sizeof(data));
-    }
+    /* construct 0 value by default */
+    constexpr base_blob() : m_data() {}
+
+    /* constructor for constants between 1 and 255 */
+    constexpr explicit base_blob(uint8_t v) : m_data{v} {}
 
     explicit base_blob(const std::vector<unsigned char>& vch);
 
     bool IsNull() const
     {
         for (int i = 0; i < WIDTH; i++)
-            if (data[i] != 0)
+            if (m_data[i] != 0)
                 return false;
         return true;
     }
 
     void SetNull()
     {
-        memset(data, 0, sizeof(data));
+        memset(m_data, 0, sizeof(m_data));
     }
 
-    inline int Compare(const base_blob& other) const { return memcmp(data, other.data, sizeof(data)); }
+    inline int Compare(const base_blob& other) const { return memcmp(m_data, other.m_data, sizeof(m_data)); }
 
     friend inline bool operator==(const base_blob& a, const base_blob& b) { return a.Compare(b) == 0; }
     friend inline bool operator!=(const base_blob& a, const base_blob& b) { return a.Compare(b) != 0; }
@@ -51,59 +55,49 @@ public:
     void SetHex(const std::string& str);
     std::string ToString() const;
 
-    const uint32_t *GetDataPtr() const
-    {
-        return (const uint32_t *)data;
-    }
+    const unsigned char* data() const { return m_data; }
+    unsigned char* data() { return m_data; }
 
     unsigned char* begin()
     {
-        return &data[0];
+        return &m_data[0];
     }
 
     unsigned char* end()
     {
-        return &data[WIDTH];
+        return &m_data[WIDTH];
     }
 
     const unsigned char* begin() const
     {
-        return &data[0];
+        return &m_data[0];
     }
 
     const unsigned char* end() const
     {
-        return &data[WIDTH];
+        return &m_data[WIDTH];
     }
 
-    unsigned int size() const
+    static constexpr unsigned int size()
     {
-        return sizeof(data);
+        return sizeof(m_data);
     }
 
-    uint64_t GetUint64(int pos = 0) const
+    uint64_t GetUint64(int pos) const
     {
-        const uint8_t* ptr = data + pos * 8;
-        return ((uint64_t)ptr[0]) | \
-               ((uint64_t)ptr[1]) << 8 | \
-               ((uint64_t)ptr[2]) << 16 | \
-               ((uint64_t)ptr[3]) << 24 | \
-               ((uint64_t)ptr[4]) << 32 | \
-               ((uint64_t)ptr[5]) << 40 | \
-               ((uint64_t)ptr[6]) << 48 | \
-               ((uint64_t)ptr[7]) << 56;
+        return ReadLE64(m_data + pos * 8);
     }
 
     template<typename Stream>
     void Serialize(Stream& s) const
     {
-        s.write((char*)data, sizeof(data));
+        s.write(MakeByteSpan(m_data));
     }
 
     template<typename Stream>
     void Unserialize(Stream& s)
     {
-        s.read((char*)data, sizeof(data));
+        s.read(MakeWritableByteSpan(m_data));
     }
 };
 
@@ -113,7 +107,7 @@ public:
  */
 class uint160 : public base_blob<160> {
 public:
-    uint160() {}
+    constexpr uint160() {}
     explicit uint160(const std::vector<unsigned char>& vch) : base_blob<160>(vch) {}
 };
 
@@ -124,8 +118,11 @@ public:
  */
 class uint256 : public base_blob<256> {
 public:
-    uint256() {}
+    constexpr uint256() {}
+    constexpr explicit uint256(uint8_t v) : base_blob<256>(v) {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
+    static const uint256 ZERO;
+    static const uint256 ONE;
 };
 
 /* uint256 from const char *.

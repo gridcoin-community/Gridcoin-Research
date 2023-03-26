@@ -6,6 +6,7 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "consensus/merkle.h"
+#include "gridcoin/voting/registry.h"
 #include "util.h"
 #include "net.h"
 #include "streams.h"
@@ -16,6 +17,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
@@ -62,8 +64,6 @@ CCriticalSection cs_main;
 
 CTxMemPool mempool;
 
-extern double CoinToDouble(double surrogate);
-
 ///////////////////////MINOR VERSION////////////////////////////////
 
 extern int64_t GetCoinYearReward(int64_t nTime);
@@ -88,6 +88,7 @@ uint256 hashBestChain;
 CBlockIndex* pindexBest = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
+std::atomic<bool> g_reorg_in_progress = false;
 CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
 
 
@@ -123,9 +124,6 @@ std::string    msMiningErrors;
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;
 
-int64_t nGenesisSupply = 340569880;
-
-bool fColdBoot = true;
 bool fEnforceCanonical = true;
 bool fUseFastIndex = false;
 
@@ -134,10 +132,8 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-namespace {
 GRC::SeenStakes g_seen_stakes;
 GRC::ChainTrustCache g_chain_trust;
-} // Anonymous namespace
 
 //!
 //! \brief Re-exports chain trust values for reporting.
@@ -220,7 +216,7 @@ void static SetBestChain(const CBlockLocator& loc)
 }
 
 // notify wallets about an updated transaction
-void static UpdatedTransaction(const uint256& hashTx)
+void UpdatedTransaction(const uint256& hashTx)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->UpdatedTransaction(hashTx);
@@ -394,16 +390,83 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         return error("AcceptToMemoryPool : nonstandard transaction type");
 
     // Perform contextual validation for any contracts:
-    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx)) {
-        return tx.DoS(25, error("%s: invalid contract in tx %s",
-            __func__,
-            tx.GetHash().ToString()));
+
+    int DoS = 0;
+    if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
+        return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+                                 __func__,
+                                 tx.GetHash().ToString(),
+                                 DoS));
     }
 
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
     if (pool.exists(hash))
         return false;
+
+    // is there already a transaction in the mempool that has a MRC contract with the same CPID?
+    //
+    // Note: I really hate this check because it has to iterate over the entire mempool to look for an offender,
+    // but I am sufficiently concerned about MRC DoS that it is necessary to stop duplicate MRC request transactions
+    // from the same CPID in the accept to memory pool stage.
+    //
+    // We have implemented a bloom filter to help with the overhead.
+    bool tx_contains_valid_mrc = false;
+
+    for (const auto& contract : tx.GetContracts()) {
+        if (contract.m_type == GRC::ContractType::MRC) {
+            GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+            GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
+            // A small bloom filter based on the last and first byte of CPID.
+            uint64_t k = 1 << (cpid.Raw().front() & 0x3F);
+            k |= 1 << (cpid.Raw().back() & 0x3F);
+
+            if ((mempool.m_mrc_bloom & k) != k) {
+                // The cpid definitely does not exist in the mempool.
+                mempool.m_mrc_bloom |= k;
+                tx_contains_valid_mrc = true;
+
+                continue;
+            }
+            // The cpid might exist in the mempool.
+
+            if (mempool.m_mrc_bloom_dirty) {
+                mempool.m_mrc_bloom = 0;
+            }
+
+            bool found{false};
+            for (const auto& [_, pool_tx] : mempool.mapTx) {
+                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                        GRC::Cpid other_cpid = *(pool_tx_mrc.m_mining_id.TryCpid());
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().front() & 0x3F);
+                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().back() & 0x3F);
+
+                        // A transaction already in the mempool already has the same CPID as the incoming transaction.
+                        // Reject and put a stiff DoS...
+                        if (!found && cpid == other_cpid) {
+                            found = true;
+                            tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                             "in the memory pool, %s.",
+                                             __func__,
+                                             tx.GetHash().ToString(),
+                                             pool_tx.GetHash().ToString()));
+
+                            if (!mempool.m_mrc_bloom_dirty) return false;
+                        }
+                    }
+                }
+            }
+
+            mempool.m_mrc_bloom_dirty = false;
+            if (found) return false;
+
+            tx_contains_valid_mrc = true;
+        }
+    }
 
     // Check for conflicts with in-memory transactions
     CTransaction* ptxOld = nullptr;
@@ -473,33 +536,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          hash.ToString().c_str(),
                          nFees, txMinFee, nSize);
 
-        // Continuously rate-limit free transactions
-        // This mitigates 'penny-flooding' -- sending thousands of free transactions just to
-        // be annoying or make others' transactions take longer to confirm.
-        if (nFees < GetBaseFee(tx, GMF_RELAY))
-        {
-            static CCriticalSection cs;
-            static double dFreeCount;
-            static int64_t nLastTime;
-            int64_t nNow =  GetAdjustedTime();
-
-            {
-                LOCK(pool.cs);
-                // Use an exponentially decaying ~10-minute window:
-                dFreeCount *= pow(1.0 - 1.0/600.0, (double)(nNow - nLastTime));
-                nLastTime = nNow;
-                // -limitfreerelay unit is thousand-bytes-per-minute
-                // At default rate it would take over a month to fill 1GB
-                if (dFreeCount > gArgs.GetArg("-limitfreerelay", 15)*10*1000 && !IsFromMe(tx))
-                    return error("AcceptToMemoryPool : free transaction rejected by rate limiter");
-
-                LogPrint(BCLog::LogFlags::MEMPOOL, "Rate limit dFreeCount: %g => %g", dFreeCount, dFreeCount+nSize);
-                dFreeCount += nSize;
-            }
-        }
-
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs)) {
+        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
             return false;
         }
 
@@ -512,6 +550,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                      hash.ToString().c_str());
 
             return false;
+        }
+
+        // If we accepted a transaction with a valid mrc contract, then signal MRC changed.
+        if (tx_contains_valid_mrc) {
+            uiInterface.MRCChanged();
         }
     }
 
@@ -551,6 +594,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, CTransaction &tx)
 
 bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transaction from memory pool
     {
         LOCK(cs);
@@ -574,6 +618,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 
 bool CTxMemPool::removeConflicts(const CTransaction &tx)
 {
+    m_mrc_bloom_dirty = true;
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
     for (auto const &txin : tx.vin)
@@ -781,38 +826,6 @@ bool OutOfSyncByAge()
     return GetAdjustedTime() - g_previous_block_time >= maxAge;
 }
 
-
-bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
-{
-    // Disconnect in reverse order
-    bool bDiscTxFailed = false;
-    for (int i = vtx.size()-1; i >= 0; i--)
-    {
-        if (!DisconnectInputs(vtx[i], txdb))
-        {
-            bDiscTxFailed = true;
-        }
-    }
-
-    // Update block index on disk without changing it in memory.
-    // The memory index structure will be changed after the db commits.
-    // Brod: I do not like this...
-    if (pindex->pprev)
-    {
-        CDiskBlockIndex blockindexPrev(pindex->pprev);
-        blockindexPrev.hashNext.SetNull();
-        if (!txdb.WriteBlockIndex(blockindexPrev))
-            return error("DisconnectBlock() : WriteBlockIndex failed");
-    }
-
-    // ppcoin: clean up wallet after disconnecting coinstake
-    for (auto const& tx : vtx)
-        SyncWithWallets(tx, this, false, false);
-
-    if (bDiscTxFailed) return error("DisconnectBlock(): Failed");
-    return true;
-}
-
 const GRC::Claim& CBlock::GetClaim() const
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
@@ -855,673 +868,6 @@ GRC::SuperblockPtr CBlock::GetSuperblock(const CBlockIndex* const pindex) const
     return superblock;
 }
 
-//
-// Gridcoin-specific ConnectBlock() routines:
-//
-namespace {
-int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
-{
-    if (pindexcurrent->pprev)
-    {
-        // If previous exists, and previous money supply > Genesis, OK to use it:
-        if (pindexcurrent->pprev->nHeight > 11 && pindexcurrent->pprev->nMoneySupply > nGenesisSupply)
-        {
-            return pindexcurrent->pprev->nMoneySupply;
-        }
-    }
-    // Special case where block height < 12, use standard old logic:
-    if (pindexcurrent->nHeight < 12)
-    {
-        return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : 0);
-    }
-    // At this point, either the last block pointer was nullptr, or the client erased the money supply previously, fix it:
-    CBlockIndex* pblockIndex = pindexcurrent;
-    CBlockIndex* pblockMemory = pindexcurrent;
-    int nMinDepth = (pindexcurrent->nHeight)-140000;
-    if (nMinDepth < 12) nMinDepth=12;
-    while (pblockIndex->nHeight > nMinDepth)
-    {
-        pblockIndex = pblockIndex->pprev;
-        LogPrintf("Money Supply height %d", pblockIndex->nHeight);
-
-        if (pblockIndex == nullptr || !pblockIndex->IsInMainChain()) continue;
-        if (pblockIndex == pindexGenesisBlock)
-        {
-            return nGenesisSupply;
-        }
-        if (pblockIndex->nMoneySupply > nGenesisSupply)
-        {
-            //Set index back to original pointer
-            pindexcurrent = pblockMemory;
-            //Return last valid money supply
-            return pblockIndex->nMoneySupply;
-        }
-    }
-    // At this point, we fall back to the old logic with a minimum of the genesis supply (should never happen - if it did, blockchain will need rebuilt anyway due to other fields being invalid):
-    pindexcurrent = pblockMemory;
-    return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
-}
-
-bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age)
-{
-    out_coin_age = 0;
-
-    // ppcoin: coin stake tx earns reward instead of paying fee
-    //
-    // With block version 10, Gridcoin switched to constant block rewards
-    // that do not depend on coin age, so we can avoid reading the blocks
-    // and transactions from the disk. The CheckProofOfStake*() functions
-    // of the kernel verify the transaction timestamp and that the staked
-    // inputs exist in the main chain.
-    //
-    if (block.nVersion <= 9 && !GetCoinAge(block.vtx[1], txdb, out_coin_age)) {
-        return error("ConnectBlock[] : %s unable to get coin age for coinstake",
-            block.vtx[1].GetHash().ToString().substr(0,10));
-    }
-
-    return true;
-}
-
-//!
-//! \brief Checks reward claims in generated blocks.
-//!
-class ClaimValidator
-{
-public:
-    ClaimValidator(
-        const CBlock& block,
-        const CBlockIndex* const pindex,
-        const int64_t total_claimed,
-        const int64_t fees,
-        const uint64_t coin_age)
-        : m_block(block)
-        , m_pindex(pindex)
-        , m_claim(block.GetClaim())
-        , m_total_claimed(total_claimed)
-        , m_fees(fees)
-        , m_coin_age(coin_age)
-    {
-    }
-
-    bool Check() const
-    {
-        return m_claim.HasResearchReward()
-            ? CheckResearcherClaim()
-            : CheckInvestorClaim();
-    }
-
-private:
-    const CBlock& m_block;
-    const CBlockIndex* const m_pindex;
-    const GRC::Claim& m_claim;
-    const int64_t m_total_claimed;
-    const int64_t m_fees;
-    const uint64_t m_coin_age;
-
-    bool CheckReward(const int64_t research_owed, int64_t& out_stake_owed) const
-    {
-        out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
-
-        if (m_block.nVersion >= 11) {
-            return m_total_claimed <= research_owed + out_stake_owed + m_fees;
-        }
-
-        // Blocks version 10 and below represented rewards as floating-point
-        // values and needed to accommodate floating-point errors so we'll do
-        // the same rounding on the floating-point representations:
-        //
-        double subsidy = ((double)research_owed / COIN) * 1.25;
-        subsidy += (double)out_stake_owed / COIN;
-
-        int64_t max_owed = roundint64(subsidy * COIN) + m_fees;
-
-        // Block version 9 and below allowed a 1 GRC wiggle.
-        if (m_block.nVersion <= 9) {
-            max_owed += 1 * COIN;
-        }
-
-        return m_total_claimed <= max_owed;
-    }
-
-    bool CheckInvestorClaim() const
-    {
-        int64_t out_stake_owed;
-        if (CheckReward(0, out_stake_owed)) {
-            return true;
-        }
-
-        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
-            LogPrintf(
-                "WARNING: ConnectBlock[%s]: ignored bad investor claim on block %s",
-                __func__,
-                m_pindex->GetBlockHash().ToString());
-
-            return true;
-        }
-
-        return m_block.DoS(10, error(
-            "ConnectBlock[%s]: investor claim %s exceeds %s. Expected %s, fees %s",
-            __func__,
-            FormatMoney(m_total_claimed),
-            FormatMoney(out_stake_owed + m_fees),
-            FormatMoney(out_stake_owed),
-            FormatMoney(m_fees)));
-    }
-
-    bool CheckResearcherClaim() const
-    {
-        // For version 11 blocks and higher, just validate the reward and check
-        // the signature. No need for the rest of these shenanigans.
-        //
-        if (m_block.nVersion >= 11) {
-            return CheckResearchReward() && CheckBeaconSignature();
-        }
-
-        if (!CheckResearchRewardLimit()) {
-            return false;
-        }
-
-        if (!CheckResearchRewardDrift()) {
-            return false;
-        }
-
-        if (m_block.nVersion <= 8) {
-            return true;
-        }
-
-        if (!CheckClaimMagnitude()) {
-            return false;
-        }
-
-        if (!CheckBeaconSignature()) {
-            return false;
-        }
-
-        if (!CheckResearchReward()) {
-            return false;
-        }
-
-        return true;
-    }
-
-    bool CheckResearchRewardLimit() const
-    {
-        // TODO: determine max reward from accrual computer implementation:
-        const int64_t max_reward = 12750 * COIN;
-
-        return m_claim.m_research_subsidy <= max_reward
-            || m_block.DoS(1, error(
-                "ConnectBlock[%s]: research claim %s exceeds max %s. CPID %s",
-                __func__,
-                FormatMoney(m_claim.m_research_subsidy),
-                FormatMoney(max_reward),
-                m_claim.m_mining_id.ToString()));
-    }
-
-    bool CheckResearchRewardDrift() const
-    {
-        // ResearchAge: Since the best block may increment before the RA is
-        // connected but After the RA is computed, the ResearchSubsidy can
-        // sometimes be slightly smaller than we calculate here due to the
-        // RA timespan increasing.  So we will allow for time shift before
-        // rejecting the block.
-        const int64_t reward_claimed = m_total_claimed - m_fees;
-        int64_t drift_allowed = m_claim.m_research_subsidy * 0.15;
-
-        if (drift_allowed < 10 * COIN) {
-            drift_allowed = 10 * COIN;
-        }
-
-        return m_claim.TotalSubsidy() + drift_allowed >= reward_claimed
-            || m_block.DoS(20, error(
-                "ConnectBlock[%s]: reward claim %s exceeds allowed %s. CPID %s",
-                __func__,
-                FormatMoney(reward_claimed),
-                FormatMoney(m_claim.TotalSubsidy() + drift_allowed),
-                m_claim.m_mining_id.ToString()));
-    }
-
-    bool CheckClaimMagnitude() const
-    {
-        // Magnitude as of the last superblock:
-        const double mag = GRC::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
-
-        return m_claim.m_magnitude <= (mag * 1.25)
-            || m_block.DoS(20, error(
-                "ConnectBlock[%s]: magnitude claim %f exceeds superblock %f. CPID %s",
-                __func__,
-                m_claim.m_magnitude,
-                mag,
-                m_claim.m_mining_id.ToString()));
-    }
-
-    bool CheckBeaconSignature() const
-    {
-        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
-
-        if (!cpid) {
-            // Investor claims are not signed by a beacon key.
-            return false;
-        }
-
-        // The legacy beacon functions determined beacon expiration by the time
-        // of the previous block. For block version 11+, compute the expiration
-        // threshold from the current block:
-        //
-        const int64_t now = m_block.nVersion >= 11 ? m_block.nTime : m_pindex->pprev->nTime;
-
-        if (const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, now)) {
-            if (m_claim.VerifySignature(
-                beacon->m_public_key,
-                m_pindex->pprev->GetBlockHash(),
-                m_block.vtx[1]))
-            {
-                return true;
-            }
-        }
-
-        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
-            LogPrintf(
-                "WARNING: ConnectBlock[%s]: ignored invalid signature in %s",
-                __func__,
-                m_pindex->GetBlockHash().ToString());
-
-            return true;
-        }
-
-        // An old bug caused some nodes to sign research reward claims with a
-        // previous beacon key (beaconalt). Mainnet declares block exceptions
-        // for this problem. To avoid declaring exceptions for the 55 testnet
-        // blocks, the following check ignores beaconalt verification failure
-        // for the range of heights that include these blocks:
-        //
-        if (fTestNet
-            && (m_pindex->nHeight >= 495352 && m_pindex->nHeight <= 600876))
-        {
-            LogPrintf(
-                "WARNING: %s: likely testnet beaconalt signature ignored in %s",
-                __func__,
-                m_pindex->GetBlockHash().ToString());
-
-            return true;
-        }
-
-        return m_block.DoS(20, error(
-            "ConnectBlock[%s]: signature verification failed. CPID %s, LBH %s",
-            __func__,
-            m_claim.m_mining_id.ToString(),
-            m_pindex->pprev->GetBlockHash().ToString()));
-    }
-
-    bool CheckResearchReward() const
-    {
-        int64_t research_owed = 0;
-
-        const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
-
-        if (cpid) {
-            research_owed = GRC::Tally::GetAccrual(*cpid, m_block.nTime, m_pindex);
-        }
-
-        int64_t out_stake_owed;
-        if (CheckReward(research_owed, out_stake_owed)) {
-            return true;
-        } else if (m_pindex->nHeight >= GetOrigNewbieSnapshotFixHeight()) {
-            // The below is required to deal with a conditional application in historical rewards for
-            // research newbies after the original newbie fix height that already made it into the chain.
-            // Please see the extensive commentary in the below function.
-            CAmount newbie_correction = GRC::Tally::GetNewbieSuperblockAccrualCorrection(*cpid,
-                                                                                         GRC::Quorum::CurrentSuperblock());
-            research_owed += newbie_correction;
-
-            if (CheckReward(research_owed, out_stake_owed)) {
-                LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
-                          "Total calculated research with correction matches claim of %s in %s.",
-                          __func__,
-                          FormatMoney(newbie_correction),
-                          FormatMoney(m_total_claimed),
-                          m_pindex->GetBlockHash().ToString());
-
-                return true;
-            }
-        }
-
-
-        // Testnet contains some blocks with bad interest claims that were masked
-        // by research age short 10-block-span pending accrual:
-        if (fTestNet
-            && m_block.nVersion <= 9
-            && !CheckReward(0, out_stake_owed))
-        {
-            LogPrintf(
-                "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
-                __func__,
-                m_pindex->GetBlockHash().ToString());
-
-            return true;
-        }
-
-        if (GRC::GetBadBlocks().count(m_pindex->GetBlockHash())) {
-            LogPrintf(
-                "WARNING: ConnectBlock[%s]: ignored bad research claim in %s",
-                __func__,
-                m_pindex->GetBlockHash().ToString());
-
-            return true;
-        }
-
-        return m_block.DoS(10, error(
-            "ConnectBlock[%s]: researcher claim %s exceeds %s for CPID %s. "
-            "Expected research %s, stake %s, fees %s. "
-            "Claimed research %s, stake %s",
-            __func__,
-            FormatMoney(m_total_claimed),
-            FormatMoney(research_owed + out_stake_owed + m_fees),
-            m_claim.m_mining_id.ToString(),
-            FormatMoney(research_owed),
-            FormatMoney(out_stake_owed),
-            FormatMoney(m_fees),
-            FormatMoney(m_claim.m_research_subsidy),
-            FormatMoney(m_claim.m_block_subsidy)));
-    }
-}; // ClaimValidator
-
-bool TryLoadSuperblock(
-    CBlock& block,
-    const CBlockIndex* const pindex,
-    const GRC::Claim& claim)
-{
-    GRC::SuperblockPtr superblock = block.GetSuperblock(pindex);
-
-    // TODO: find the invalid historical superblocks so we can remove
-    // the fColdBoot condition that skips this check when syncing the
-    // initial chain:
-    //
-    if ((!fColdBoot || block.nVersion >= 11)
-        && !GRC::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
-    {
-        return block.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
-    }
-
-    // Block versions 11+ calculate research rewards from snapshots of
-    // accrual taken at each superblock:
-    //
-    if (block.nVersion >= 11) {
-        if (!GRC::Tally::ApplySuperblock(superblock)) {
-            return false;
-        }
-
-        GRC::GetBeaconRegistry().ActivatePending(
-                    superblock->m_verified_beacons.m_verified,
-                    superblock.m_timestamp,
-                    block.GetHash(),
-                    pindex->nHeight);
-
-        // Notify the GUI if present that beacons have changed.
-        uiInterface.BeaconChanged();
-    }
-
-    GRC::Quorum::PushSuperblock(std::move(superblock));
-
-    return true;
-}
-
-bool GridcoinConnectBlock(
-    CBlock& block,
-    CBlockIndex* const pindex,
-    CTxDB& txdb,
-    const int64_t total_claimed,
-    const int64_t fees)
-{
-    const GRC::Claim& claim = block.GetClaim();
-
-    if (pindex->nHeight > nGrandfather) {
-        uint64_t out_coin_age;
-        if (!GetCoinstakeAge(txdb, block, out_coin_age)) {
-            return false;
-        }
-
-        if (!ClaimValidator(block, pindex, total_claimed, fees, out_coin_age).Check()) {
-            return false;
-        }
-
-        if (claim.ContainsSuperblock()) {
-            if (!TryLoadSuperblock(block, pindex, claim)) {
-                return false;
-            }
-
-            pindex->MarkAsSuperblock();
-        } else if (block.nVersion <= 10) {
-            // Block versions 11+ validate superblocks from scraper convergence
-            // instead of the legacy quorum system so we only record votes from
-            // version 10 blocks and below:
-            //
-            GRC::Quorum::RecordVote(claim.m_quorum_hash, claim.m_quorum_address, pindex);
-        }
-    }
-
-    bool found_contract;
-
-    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-
-    int beacon_db_height = beacons.GetDBHeight();
-
-    GRC::ApplyContracts(block, pindex, beacon_db_height, found_contract);
-
-    if (found_contract) {
-        pindex->MarkAsContract();
-    }
-
-    double magnitude = 0;
-
-    if (block.nVersion >= 11
-        && claim.m_mining_id.Which() == GRC::MiningId::Kind::CPID)
-    {
-        magnitude = GRC::Quorum::GetMagnitude(claim.m_mining_id).Floating();
-    } else {
-        magnitude = claim.m_magnitude;
-    }
-
-    pindex->SetResearcherContext(claim.m_mining_id, claim.m_research_subsidy, magnitude);
-
-    GRC::Tally::RecordRewardBlock(pindex);
-    GRC::Researcher::Refresh();
-
-    return true;
-}
-} // Anonymous namespace
-
-bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
-{
-    // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
-    {
-        LogPrintf("ConnectBlock::Failed - ");
-        return false;
-    }
-
-    unsigned int nTxPos;
-    if (fJustCheck) {
-        // FetchInputs treats CDiskTxPos(1,1,1) as a special "refer to memorypool" indicator
-        // Since we're just checking the block and not actually connecting it, it might not (and probably shouldn't) be on the disk to get the transaction from
-        nTxPos = 1;
-    } else {
-        nTxPos = pindex->nBlockPos
-            + ::GetSerializeSize<CBlockHeader>(*this, SER_DISK, CLIENT_VERSION)
-            + GetSizeOfCompactSize(vtx.size());
-    }
-
-    map<uint256, CTxIndex> mapQueuedChanges;
-    int64_t nFees = 0;
-    int64_t nValueIn = 0;
-    int64_t nValueOut = 0;
-    int64_t nStakeReward = 0;
-    unsigned int nSigOps = 0;
-
-    bool bIsDPOR = false;
-
-    if (nVersion >= 8 && pindex->nStakeModifier == 0)
-    {
-        uint256 tmp_hashProof;
-        if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, *this, /*generated_by_me*/ false, tmp_hashProof))
-            return error("ConnectBlock(): check proof-of-stake failed");
-    }
-
-    for (auto &tx : vtx)
-    {
-        uint256 hashTx = tx.GetHash();
-
-        // Do not allow blocks that contain transactions which 'overwrite' older transactions,
-        // unless those are already completely spent.
-        // If such overwrites are allowed, coinbases and transactions depending upon those
-        // can be duplicated to remove the ability to spend the first instance -- even after
-        // being sent to another address.
-        // See BIP30 and http://r6.ca/blog/20120206T005236Z.html for more information.
-        // This logic is not necessary for memory pool transactions, as AcceptToMemoryPool
-        // already refuses previously-known transaction ids entirely.
-        // This rule was originally applied all blocks whose timestamp was after March 15, 2012, 0:00 UTC.
-        // Now that the whole chain is irreversibly beyond that time it is applied to all blocks except the
-        // two in the chain that violate it. This prevents exploiting the issue against nodes in their
-        // initial block download.
-        CTxIndex txindexOld;
-        if (txdb.ReadTxIndex(hashTx, txindexOld)) {
-            for (auto const& pos : txindexOld.vSpent)
-                if (pos.IsNull())
-                    return false;
-        }
-
-        nSigOps += GetLegacySigOpCount(tx);
-        if (nSigOps > MAX_BLOCK_SIGOPS)
-            return DoS(100, error("ConnectBlock[] : too many sigops"));
-
-        CDiskTxPos posThisTx(pindex->nFile, pindex->nBlockPos, nTxPos);
-        if (!fJustCheck)
-            nTxPos += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
-
-        MapPrevTx mapInputs;
-        if (tx.IsCoinBase())
-        {
-            nValueOut += tx.GetValueOut();
-        }
-        else
-        {
-            bool fInvalid;
-            if (!FetchInputs(tx, txdb, mapQueuedChanges, true, false, mapInputs, fInvalid))
-                return false;
-
-            // Add in sigops done by pay-to-script-hash inputs;
-            // this is to prevent a "rogue miner" from creating
-            // an incredibly-expensive-to-validate block.
-            nSigOps += GetP2SHSigOpCount(tx, mapInputs);
-            if (nSigOps > MAX_BLOCK_SIGOPS)
-                return DoS(100, error("ConnectBlock[] : too many sigops"));
-
-            CAmount nTxValueIn = GetValueIn(tx, mapInputs);
-            CAmount nTxValueOut = tx.GetValueOut();
-            nValueIn += nTxValueIn;
-            nValueOut += nTxValueOut;
-            if (!tx.IsCoinStake())
-                nFees += nTxValueIn - nTxValueOut;
-            if (tx.IsCoinStake())
-            {
-                nStakeReward = nTxValueOut - nTxValueIn;
-                if (tx.vout.size() > 3 && pindex->nHeight > nGrandfather) bIsDPOR = true;
-                // ResearchAge: Verify vouts cannot contain any other payments except coinstake: PASS (GetValueOut returns the sum of all spent coins in the coinstake)
-                if (LogInstance().WillLogCategory(BCLog::LogFlags::NOISY))
-                {
-                    int64_t nTotalCoinstake = 0;
-                    for (unsigned int i = 0; i < tx.vout.size(); i++)
-                    {
-                        nTotalCoinstake += tx.vout[i].nValue;
-                    }
-                    LogPrint(BCLog::LogFlags::NOISY, " nHeight %d; nTCS %f; nTxValueOut %f",
-                                              pindex->nHeight,CoinToDouble(nTotalCoinstake),CoinToDouble(nTxValueOut));
-                }
-
-                if (pindex->nVersion >= 10)
-                {
-                    if (tx.vout.size() > 8)
-                        return DoS(100,error("Too many coinstake outputs"));
-                }
-                else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
-                {
-                    // Old rules, does not make sense
-                    // Verify no recipients exist after coinstake (Recipients start at output position 3 (0=Coinstake flag, 1=coinstake amount, 2=splitstake amount)
-                    for (unsigned int i = 3; i < tx.vout.size(); i++)
-                    {
-                        double      Amount    = CoinToDouble(tx.vout[i].nValue);
-                        if (Amount > 0)
-                        {
-                            return DoS(50,error("Coinstake output %u forbidden", i));
-                        }
-                    }
-                }
-            }
-
-            // Validate any contracts published in the transaction:
-            if (!tx.GetContracts().empty()) {
-                if (!CheckContracts(tx, mapInputs)) {
-                    return false;
-                }
-
-                if (nVersion >= 11 && !GRC::ValidateContracts(tx)) {
-                    return tx.DoS(25, error("%s: invalid contract in tx %s",
-                        __func__,
-                        tx.GetHash().ToString()));
-                }
-            }
-
-            if (!ConnectInputs(tx, txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
-                return false;
-        }
-
-        mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
-    }
-
-    if (IsResearchAgeEnabled(pindex->nHeight)
-        && !GridcoinConnectBlock(*this, pindex, txdb, nStakeReward, nFees))
-    {
-        return false;
-    }
-
-    pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
-
-    if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
-        return error("Connect() : WriteBlockIndex for pindex failed");
-
-    if (!OutOfSyncByAge())
-    {
-        fColdBoot = false;
-    }
-
-    if (fJustCheck)
-        return true;
-
-    // Write queued txindex changes
-    for (map<uint256, CTxIndex>::iterator mi = mapQueuedChanges.begin(); mi != mapQueuedChanges.end(); ++mi)
-    {
-        if (!txdb.UpdateTxIndex(mi->first, mi->second))
-            return error("ConnectBlock[] : UpdateTxIndex failed");
-    }
-
-    // Update block index on disk without changing it in memory.
-    // The memory index structure will be changed after the db commits.
-    if (pindex->pprev)
-    {
-        CDiskBlockIndex blockindexPrev(pindex->pprev);
-        blockindexPrev.hashNext = pindex->GetBlockHash();
-        if (!txdb.WriteBlockIndex(blockindexPrev))
-            return error("ConnectBlock[] : WriteBlockIndex failed");
-    }
-
-    // Watch for transactions paying to me
-    for (auto const& tx : vtx)
-        SyncWithWallets(tx, this, true);
-
-    return true;
-}
-
-
 bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew);
 bool ForceReorganizeToHash(uint256 NewHash)
 {
@@ -1529,39 +875,51 @@ bool ForceReorganizeToHash(uint256 NewHash)
     CTxDB txdb;
 
     auto mapItem = mapBlockIndex.find(NewHash);
-    if(mapItem == mapBlockIndex.end())
-        return error("ForceReorganizeToHash: failed to find requested block in block index");
+    if (mapItem == mapBlockIndex.end()) {
+        return error("%s: failed to find requested block in block index", __func__);
+    }
 
     CBlockIndex* pindexCur = pindexBest;
     CBlockIndex* pindexNew = mapItem->second;
-    LogPrintf("** Force Reorganize **");
-    LogPrintf(" Current best height %i hash %s", pindexCur->nHeight,pindexCur->GetBlockHash().GetHex());
-    LogPrintf(" Target height %i hash %s", pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
+    LogPrintf("INFO: %s: current best height %i hash %s "
+              " Target height %i hash %s",
+              __func__,
+              pindexCur->nHeight,pindexCur->GetBlockHash().GetHex(),
+              pindexNew->nHeight,pindexNew->GetBlockHash().GetHex());
 
     CBlock blockNew;
-    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus()))
-    {
-        LogPrintf("ForceReorganizeToHash: Fatal Error while reading new best block.");
-        return false;
+    if (!ReadBlockFromDisk(blockNew, pindexNew, Params().GetConsensus())) {
+        return error("%s: Fatal Error while reading new best block.", __func__);
     }
 
     const arith_uint256 previous_chain_trust = g_chain_trust.Best();
-    unsigned cnt_dis=0;
-    unsigned cnt_con=0;
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
     bool success = false;
 
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if(g_chain_trust.Best() < previous_chain_trust)
-        LogPrintf("WARNING ForceReorganizeToHash: Chain trust is now less than before!");
+    if (g_chain_trust.Best() < previous_chain_trust) {
+        LogPrintf("WARN: %s: Chain trust is now less than before!", __func__);
+    }
 
-    if (!success)
-    {
-        return error("ForceReorganizeToHash: Fatal Error while setting best chain.");
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller. It is debatable whether this should
+    // be cleared here if g_chain_trust.Best() < previous_chain_trust.
+    g_reorg_in_progress = false;
+
+    if (!success) {
+        return error("%s: Fatal Error while setting best chain.", __func__);
     }
 
     AskForOutstandingBlocks(uint256());
-    LogPrintf("ForceReorganizeToHash: success! height %d hash %s", pindexBest->nHeight,pindexBest->GetBlockHash().GetHex());
+    LogPrintf("INFO %s: success! height %d hash %s",
+              __func__,
+              pindexBest->nHeight,
+              pindexBest->GetBlockHash().GetHex());
+
     return true;
 }
 
@@ -1569,6 +927,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 {
     set<string> vRereadCPIDs;
     GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+    GRC::PollRegistry& polls = GRC::GetPollRegistry();
 
     while(pindexBest != pcommon)
     {
@@ -1580,7 +939,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         CBlock block;
         if (!ReadBlockFromDisk(block, pindexBest, Params().GetConsensus()))
             return error("DisconnectBlocksBatch: ReadFromDisk for disconnect failed"); /*fatal*/
-        if (!block.DisconnectBlock(txdb, pindexBest))
+        if (!DisconnectBlock(block, txdb, pindexBest))
             return error("DisconnectBlocksBatch: DisconnectBlock %s failed", pindexBest->GetBlockHash().ToString().c_str()); /*fatal*/
 
         // disconnect from memory
@@ -1590,12 +949,13 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
         // Queue memory transactions to resurrect.
         // We only do this for blocks after the last checkpoint (reorganisation before that
-        // point should only happen with -reindex/-loadblock, or a misbehaving peer.
+        // point should only happen with -reindex/-loadblock, or a misbehaving peer).
         for (auto const& tx : boost::adaptors::reverse(block.vtx))
             if (!(tx.IsCoinBase() || tx.IsCoinStake()) && pindexBest->nHeight > Params().Checkpoints().GetHeight())
                 vResurrect.push_front(tx);
 
-        if(pindexBest->IsUserCPID()) {
+        // TODO: Implement flag in CBlockIndex for mrcs?
+        if (pindexBest->IsUserCPID() || !pindexBest->m_mrc_researchers.empty()) {
             // The user has no longer staked this block.
             GRC::Tally::ForgetRewardBlock(pindexBest);
         }
@@ -1620,7 +980,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
-        // Delete beacons from contracts in disconnected blocks.
+        // Delete beacons, polls and votes from contracts in disconnected blocks.
         if (pindexBest->IsContract())
         {
             // Skip coinbase and coinstake transactions:
@@ -1635,6 +995,12 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
 
                        beacons.Revert(contract_context);
+                    }
+
+                    if (contract.m_type == GRC::ContractType::POLL || contract.m_type == GRC::ContractType::VOTE) {
+                        const GRC::ContractContext contract_context(contract, *tx, pindexBest);
+
+                        polls.Revert(contract_context);
                     }
                 }
             }
@@ -1655,7 +1021,7 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     }
 
     /* fix up after disconnecting, prepare for new blocks */
-    if(cnt_dis>0)
+    if (cnt_dis > 0)
     {
         // Resurrect memory transactions that were in the disconnected branch
         for( CTransaction& tx : vResurrect)
@@ -1680,17 +1046,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     return true;
 }
 
-bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     assert(pindexNew);
-    //assert(!pindexNew->pnext);
-    //assert(pindexBest || hashBestChain == pindexBest->GetBlockHash());
-    //assert(nBestHeight == pindexBest->nHeight && nBestChainTrust == pindexBest->nChainTrust);
-    //assert(!pindexBest->pnext);
     assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
     /* note: it was already determined that this chain is better than current best */
     /* assert(pindexNew->nChainTrust > nBestChainTrust); but may be overridden by command */
-    assert( !pindexGenesisBlock == !pindexBest );
+    assert(!pindexGenesisBlock == !pindexBest);
 
     list<CTransaction> vResurrect;
     list<CBlockIndex*> vConnect;
@@ -1698,50 +1061,57 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
     /* find fork point */
     CBlockIndex* pcommon = nullptr;
-    if(pindexGenesisBlock)
-    {
+
+    if (pindexGenesisBlock) {
         pcommon = pindexNew;
+        // The trivial reorg that most often happens here is where pcommon IS pindexBest, which
+        // means effectively we are simply adding a new block to the end of the current chain.
+        // Notice the logic of the while statement allows one traversal in that case... When
+        // pcommon = pindexNew then pcommon->pnext will be nullptr. It will also satisfy
+        // pcommon != pindexBest. Then the pointer moves back one block, which in the trivial
+        // case will be pindexBest and the while loop ends with pcommon = pindexBest.
         while (pcommon->pnext == nullptr && pcommon != pindexBest) {
             pcommon = pcommon->pprev;
 
-            if(!pcommon)
-                return error("ReorganizeChain: unable to find fork root");
+            if (!pcommon) {
+                return error("%s: unable to find fork root", __func__);
+            }
         }
 
         // Blocks version 11+ do not use the legacy tally system triggered by
         // block height intervals:
         //
-        if (pcommon->nVersion <= 10 && pcommon != pindexBest)
-        {
+        if (pcommon->nVersion <= 10 && pcommon != pindexBest) {
             pcommon = GRC::Tally::FindLegacyTrigger(pcommon);
-            if(!pcommon)
-                return error("ReorganizeChain: unable to find fork root with tally point");
+
+            if (!pcommon) {
+                return error("%s: unable to find fork root with tally point", __func__);
+            }
         }
 
-        if (pcommon!=pindexBest || pindexNew->pprev!=pcommon)
-        {
-            LogPrintf("ReorganizeChain: from {%s %d}\n"
-                     "ReorganizeChain: comm {%s %d}\n"
-                     "ReorganizeChain: to   {%s %d}\n"
-                     "REORGANIZE: disconnect %d, connect %d blocks"
-                ,pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight
-                ,pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight
-                ,pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight
-                ,pindexBest->nHeight - pcommon->nHeight
-                ,pindexNew->nHeight - pcommon->nHeight);
+        if (pcommon != pindexBest || pindexNew->pprev != pcommon) {
+            // This is set for the benefit of other threads, such as the GUI or rpc for the poll registry,
+            // that do work while not locking cs_main.
+            g_reorg_in_progress = true;
+
+            LogPrintf("INFO: %s: from {%s %d}, common {%s %d}, to {%s %d}, disconnecting %d, connecting %d blocks",
+                      __func__,
+                      pindexBest->GetBlockHash().GetHex().c_str(), pindexBest->nHeight,
+                      pcommon->GetBlockHash().GetHex().c_str(), pcommon->nHeight,
+                      pindexNew->GetBlockHash().GetHex().c_str(), pindexNew->nHeight,
+                      pindexBest->nHeight - pcommon->nHeight,
+                      pindexNew->nHeight - pcommon->nHeight);
         }
     }
 
-    /* disconnect blocks */
-    if(pcommon!=pindexBest)
-    {
-        if (!txdb.TxnBegin())
-            return error("ReorganizeChain: TxnBegin failed");
-        if(!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon))
-        {
-            error("ReorganizeChain: DisconnectBlocksBatch() failed");
-            LogPrintf("This is fatal error. Chain index may be corrupt. Aborting.\n"
-                      "Please Reindex the chain and Restart.");
+    /* disconnect blocks (in non-trivial condition) */
+    if (pcommon != pindexBest) {
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
+        if (!DisconnectBlocksBatch(txdb, vResurrect, cnt_dis, pcommon)) {
+            error("%s: DisconnectBlocksBatch() failed. This is a fatal error. The chain index may be corrupt. Aborting. "
+                  "Please reindex the chain and restart.", __func__);
             exit(1); //todo
         }
 
@@ -1750,78 +1120,123 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
         pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) LogPrintf("ReorganizeChain: disconnected %d blocks",cnt_dis);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && cnt_dis > 0) {
 
-    for(CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev)
+        LogPrintf("INFO: %s: disconnected %d blocks", __func__, cnt_dis);
+    }
+
+    for (CBlockIndex *p = pindexNew; p != pcommon; p=p->pprev) {
         vConnect.push_front(p);
+    }
 
     /* Connect blocks */
-    for(auto const pindex : vConnect)
-    {
+    for (auto const pindex : vConnect) {
         CBlock block_load;
         CBlock &block = (pindex==pindexNew)? blockNew : block_load;
 
-        if(pindex!=pindexNew)
-        {
-            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-                return error("ReorganizeChain: ReadFromDisk for connect failed");
+        if (pindex != pindexNew) {
+            if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+                return error("%s: ReadFromDisk for connect failed", __func__);
+            }
+
             assert(pindex->GetBlockHash()==block.GetHash(true));
-        }
-        else
-        {
-            assert(pindex==pindexNew);
-            assert(pindexNew->GetBlockHash()==block.GetHash(true));
-            assert(pindexNew->GetBlockHash()==blockNew.GetHash(true));
+        } else {
+            assert(pindex == pindexNew);
+            assert(pindexNew->GetBlockHash() == block.GetHash(true));
+            assert(pindexNew->GetBlockHash() == blockNew.GetHash(true));
         }
 
         uint256 hash = block.GetHash(true);
 
-        LogPrint(BCLog::LogFlags::VERBOSE, "ReorganizeChain: connect %s",hash.ToString());
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: connect %s", __func__, hash.ToString());
 
-        if (!txdb.TxnBegin())
-            return error("ReorganizeChain: TxnBegin failed");
+        if (!txdb.TxnBegin()) {
+            return error("%s: TxnBegin failed", __func__);
+        }
 
         if (pindexGenesisBlock == nullptr) {
-            if(hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
-            {
+            if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
                 txdb.TxnAbort();
-                return error("ReorganizeChain: genesis block hash does not match");
+                return error("%s: genesis block hash does not match", __func__);
             }
+
             pindexGenesisBlock = pindex;
         } else {
             assert(pindex->GetBlockHash()==block.GetHash(true));
             assert(pindex->pprev == pindexBest);
-            if (!block.ConnectBlock(txdb, pindex, false))
-            {
+
+            if (!ConnectBlock(block, txdb, pindex, false)) {
                 txdb.TxnAbort();
-                error("ReorganizeChain: ConnectBlock %s failed", hash.ToString().c_str());
-                LogPrintf("Previous block %s",pindex->pprev->GetBlockHash().ToString());
+                error("%s: ConnectBlock %s failed, Previous block %s",
+                      __func__,
+                      hash.ToString().c_str(),
+                      pindex->pprev->GetBlockHash().ToString());
                 InvalidChainFound(pindex);
                 return false;
             }
         }
 
         // Delete redundant memory transactions
-        for (auto const& tx : block.vtx)
-        {
+        for (auto const& tx : block.vtx) {
             mempool.remove(tx);
             mempool.removeConflicts(tx);
         }
 
-        if (!txdb.WriteHashBestChain(pindex->GetBlockHash()))
-        {
+        // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
+        // AcceptToMemoryPool. Here we just need to do a staleness check.
+        std::vector<CTransaction> to_be_erased;
+
+        for (const auto& [_, pool_tx] : mempool.mapTx) {
+            for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                    GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
+
+                    if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
+                        to_be_erased.push_back(pool_tx);
+                    }
+                }
+            }
+        }
+
+        // TODO: Additional mempool removals for generic transactions based on txns...
+        // that satisfy lock time requirements,
+        // that are at least 30m old,
+        // that have been broadcast at least once min 5m ago,
+        // that had at least 45s to go in to the last block,
+        // and are still not in the txdb? (for the wallet itself, not mempool.)
+
+        for (const auto& tx : to_be_erased) {
+            LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
+            mempool.remove(tx);
+            // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+            if (pwalletMain->EraseFromWallet(tx.GetHash())) {
+                pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+            }
+        }
+
+        // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+        // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+        // repairwallet rpc, this is silent.
+        if (!to_be_erased.empty()) {
+            int nMisMatchFound = 0;
+            CAmount nBalanceInQuestion = 0;
+
+            pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
+        }
+
+        if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
             txdb.TxnAbort();
-            return error("ReorganizeChain: WriteHashBestChain failed");
+            return error("%s: WriteHashBestChain failed", __func__);
         }
 
         // Make sure it's successfully written to disk before changing memory structure
-        if (!txdb.TxnCommit())
-            return error("ReorganizeChain: TxnCommit failed");
+        if (!txdb.TxnCommit()) {
+            return error("%s: TxnCommit failed", __func__);
+        }
 
         // Add to current best branch
-        if(pindex->pprev)
-        {
-            assert( !pindex->pprev->pnext );
+        if (pindex->pprev) {
+            assert(!pindex->pprev->pnext);
             pindex->pprev->pnext = pindex;
         }
 
@@ -1836,66 +1251,83 @@ bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &
 
         if (IsV9Enabled_Tally(nBestHeight)
             && !IsV11Enabled(nBestHeight)
-            && GRC::Tally::IsLegacyTrigger(nBestHeight))
-        {
+            && GRC::Tally::IsLegacyTrigger(nBestHeight)) {
+
             GRC::Tally::LegacyRecount(pindexBest);
         }
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1))
-        LogPrintf("ReorganizeChain: Disconnected %d and Connected %d blocks.",cnt_dis,cnt_con);
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && (cnt_dis > 0 || cnt_con > 1)) {
+        LogPrintf("INFO %s: Disconnected %d and connected %d blocks.",__func__, cnt_dis, cnt_con);
+    }
 
     return true;
 }
 
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    unsigned cnt_dis=0;
-    unsigned cnt_con=0;
+    unsigned cnt_dis = 0;
+    unsigned cnt_con = 0;
     bool success = false;
     const auto origBestIndex = pindexBest;
     const arith_uint256 previous_chain_trust = g_chain_trust.Best();
 
+    // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
+    // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
+    // want the flag to be set.
     success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
 
-    if (previous_chain_trust > g_chain_trust.Best())
-    {
-        LogPrintf("SetBestChain: Reorganize caused lower chain trust than before. Reorganizing back.");
+    if (previous_chain_trust > g_chain_trust.Best()) {
+        LogPrintf("INFO: %s: Reorganize caused lower chain trust than before. Reorganizing back.", __func__);
+
         CBlock origBlock;
-        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus()))
-            return error("SetBestChain: Fatal Error while reading original best block");
+
+        if (!ReadBlockFromDisk(origBlock, origBestIndex, Params().GetConsensus())) {
+            return error("%s: Fatal Error while reading original best block", __func__);
+        }
+
         success = ReorganizeChain(txdb, cnt_dis, cnt_con, origBlock, origBestIndex);
     }
 
-    if(!success)
+    if (!success) {
         return false;
+    }
+
+    // g_reorg_in_progress is set in ReorganizeChain, but cleared by the caller, because as above it can
+    // be called more than once as part of what is really a single reorg.
+    g_reorg_in_progress = false;
 
     /* Fix up after block connecting */
 
     // Update best block in wallet (so we can detect restored wallets)
     bool fIsInitialDownload = IsInitialBlockDownload();
-    if (!fIsInitialDownload)
-    {
+
+    if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
         ::SetBestChain(locator);
     }
 
-    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
-    {
-        LogPrintf("{SBC} {%s %d}  trust=%s  date=%s",
-               hashBestChain.ToString(), nBestHeight,
-               g_chain_trust.Best().ToString(),
-               DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+    if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
+        LogPrintf("INFO: %s: new best block {%s %d}, trust=%s, date=%s",
+                  __func__,
+                  hashBestChain.ToString(), nBestHeight,
+                  g_chain_trust.Best().ToString(),
+                  DateTimeStrFormat("%x %H:%M:%S", pindexBest->GetBlockTime()));
+    } else {
+        LogPrintf("INFO: %s: new best block {%s %d}",
+                  __func__,
+                  hashBestChain.ToString(),
+                  nBestHeight);
     }
-    else
-        LogPrintf("{SBC} new best {%s %d} ; ",hashBestChain.ToString(), nBestHeight);
 
+    #if HAVE_SYSTEM
     std::string strCmd = gArgs.GetArg("-blocknotify", "");
     if (!fIsInitialDownload && !strCmd.empty())
     {
         boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
+    #endif
 
     uiInterface.NotifyBlocksChanged(
         fIsInitialDownload,
@@ -1905,382 +1337,6 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 
     return GridcoinServices();
 }
-
-
-bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof)
-{
-    // Check for duplicate
-    uint256 hash = GetHash(true);
-    if (mapBlockIndex.count(hash))
-        return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,20).c_str());
-
-    // Construct new block index object
-    CBlockIndex* pindexNew = GRC::BlockIndexPool::GetNextBlockIndex();
-    *pindexNew = CBlockIndex(nFile, nBlockPos, *this);
-
-    if (!pindexNew)
-        return error("AddToBlockIndex() : new CBlockIndex failed");
-    pindexNew->phashBlock = &hash;
-    BlockMap::iterator miPrev = mapBlockIndex.find(hashPrevBlock);
-    if (miPrev != mapBlockIndex.end())
-    {
-        pindexNew->pprev = miPrev->second;
-        pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
-    }
-
-    // ppcoin: compute stake entropy bit for stake modifier
-    if (!pindexNew->SetStakeEntropyBit(GetStakeEntropyBit()))
-        return error("AddToBlockIndex() : SetStakeEntropyBit() failed");
-
-    // Record proof hash value
-    pindexNew->hashProof = hashProof;
-
-    // ppcoin: compute stake modifier
-    uint64_t nStakeModifier = 0;
-    bool fGeneratedStakeModifier = false;
-    if (!GRC::ComputeNextStakeModifier(pindexNew->pprev, nStakeModifier, fGeneratedStakeModifier))
-    {
-        LogPrintf("AddToBlockIndex() : ComputeNextStakeModifier() failed");
-    }
-    pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
-
-    // Add to mapBlockIndex
-    BlockMap::iterator mi = mapBlockIndex.insert(make_pair(hash, pindexNew)).first;
-    pindexNew->phashBlock = &(mi->first);
-
-    // Write to disk block index
-    CTxDB txdb;
-    if (!txdb.TxnBegin())
-        return false;
-    txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
-    if (!txdb.TxnCommit())
-        return false;
-
-    LOCK(cs_main);
-
-    // New best
-    if (g_chain_trust.Favors(pindexNew))
-        if (!SetBestChain(txdb, *this, pindexNew))
-            return false;
-
-    if (pindexNew == pindexBest)
-    {
-        // Notify UI to display prev block's coinbase if it was ours
-        static uint256 hashPrevBestCoinBase;
-        UpdatedTransaction(hashPrevBestCoinBase);
-        hashPrevBestCoinBase = vtx[0].GetHash();
-    }
-
-    return true;
-}
-
-bool CBlock::CheckBlock(int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex) const
-{
-    // Allow the genesis block to pass.
-    if(hashPrevBlock.IsNull() &&
-       GetHash(true) == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
-        return true;
-
-    if (fChecked)
-        return true;
-
-    // These are checks that are independent of context
-    // that can be verified before saving an orphan block.
-
-    // Size limits
-    if (vtx.empty()
-        || vtx.size() > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(*this, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
-        || ::GetSerializeSize(GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
-    {
-        return DoS(100, error("CheckBlock[] : size limits failed"));
-    }
-
-    // Check proof of work matches claimed amount
-    if (fCheckPOW && IsProofOfWork() && !CheckProofOfWork(GetHash(true), nBits, Params().GetConsensus()))
-        return DoS(50, error("CheckBlock[] : proof of work failed"));
-
-    //Reject blocks with diff that has grown to an extraordinary level (should never happen)
-    double blockdiff = GRC::GetBlockDifficulty(nBits);
-    if (height1 > nGrandfather && blockdiff > 10000000000000000)
-    {
-       return DoS(1, error("CheckBlock[] : Block Bits larger than 10000000000000000."));
-    }
-
-    // First transaction must be coinbase, the rest must not be
-    if (vtx.empty() || !vtx[0].IsCoinBase())
-        return DoS(100, error("CheckBlock[] : first tx is not coinbase"));
-    for (unsigned int i = 1; i < vtx.size(); i++)
-        if (vtx[i].IsCoinBase())
-            return DoS(100, error("CheckBlock[] : more than one coinbase"));
-
-    // Version 11+ blocks store the Gridcoin claim context as a contract in the
-    // coinbase transaction instead of the hashBoinc field.
-    //
-    if (nVersion >= 11) {
-        if (vtx[0].vContracts.empty()) {
-            return DoS(100, error("%s: missing claim contract", __func__));
-        }
-
-        if (vtx[0].vContracts.size() > 1) {
-            return DoS(100, error("%s: too many coinbase contracts", __func__));
-        }
-
-        if (vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
-            return DoS(100, error("%s: unexpected coinbase contract", __func__));
-        }
-
-        if (!vtx[0].vContracts[0].WellFormed()) {
-            return DoS(100, error("%s: malformed claim contract", __func__));
-        }
-
-        if (vtx[0].vContracts[0].m_version <= 1 || GetClaim().m_version <= 1) {
-            return DoS(100, error("%s: legacy claim", __func__));
-        }
-
-        if (!fTestNet && GetClaim().m_version == 2) {
-            return DoS(100, error("%s: testnet-only claim", __func__));
-        }
-    }
-
-    // Gridcoin: check proof-of-stake block signature
-    if (IsProofOfStake() && height1 > nGrandfather)
-    {
-        if (fCheckSig && !CheckBlockSignature())
-            return DoS(100, error("CheckBlock[] : bad proof-of-stake block signature"));
-    }
-
-    // End of Proof Of Research
-    if (IsProofOfStake())
-    {
-        // Coinbase output should be empty if proof-of-stake block
-        if (vtx[0].vout.size() != 1 || !vtx[0].vout[0].IsEmpty())
-            return DoS(100, error("CheckBlock[] : coinbase output not empty for proof-of-stake block"));
-
-        // Second transaction must be coinstake, the rest must not be
-        if (vtx.empty() || !vtx[1].IsCoinStake())
-            return DoS(100, error("CheckBlock[] : second tx is not coinstake"));
-
-        for (unsigned int i = 2; i < vtx.size(); i++)
-        {
-            if (vtx[i].IsCoinStake())
-            {
-                LogPrintf("Found more than one coinstake in coinbase at location %d", i);
-                return DoS(100, error("CheckBlock[] : more than one coinstake"));
-            }
-        }
-    }
-
-    // Check transactions
-    for (auto const& tx : vtx)
-    {
-        if (!CheckTransaction(tx))
-            return DoS(tx.nDoS, error("CheckBlock[] : CheckTransaction failed"));
-
-        // ppcoin: check transaction timestamp
-        if (GetBlockTime() < (int64_t)tx.nTime)
-            return DoS(50, error("CheckBlock[] : block timestamp earlier than transaction timestamp"));
-    }
-
-    // Check for duplicate txids. This is caught by ConnectInputs(),
-    // but catching it earlier avoids a potential DoS attack:
-    set<uint256> uniqueTx;
-    for (auto const& tx : vtx)
-    {
-        uniqueTx.insert(tx.GetHash());
-    }
-    if (uniqueTx.size() != vtx.size())
-        return DoS(100, error("CheckBlock[] : duplicate transaction"));
-
-    unsigned int nSigOps = 0;
-    for (auto const& tx : vtx)
-    {
-        nSigOps += GetLegacySigOpCount(tx);
-    }
-    if (nSigOps > MAX_BLOCK_SIGOPS)
-        return DoS(100, error("CheckBlock[] : out-of-bounds SigOpCount"));
-
-    // Check merkle root
-    if (fCheckMerkleRoot) {
-        bool mutated;
-        uint256 hashMerkleRoot2 = BlockMerkleRoot(*this, &mutated);
-        if (hashMerkleRoot != hashMerkleRoot2)
-            return DoS(100, error("CheckBlock[] : hashMerkleRoot mismatch"));
-
-        // Check for merkle tree malleability (CVE-2012-2459): repeating sequences
-        // of transactions in a block without affecting the merkle root of a block,
-        // while still invalidating it.
-        if (mutated)
-            return DoS(100, error("%s: duplicate transaction", __func__));
-    }
-
-    if (fCheckPOW && fCheckMerkleRoot && fCheckSig)
-        fChecked = true;
-
-    return true;
-}
-
-bool CBlock::AcceptBlock(bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    AssertLockHeld(cs_main);
-
-    if (nVersion > CURRENT_VERSION)
-        return DoS(100, error("AcceptBlock() : reject unknown block version %d", nVersion));
-
-    // Check for duplicate
-    uint256 hash = GetHash(true);
-    if (mapBlockIndex.count(hash))
-        return error("AcceptBlock() : block already in mapBlockIndex");
-
-    // Get prev block index
-    BlockMap::iterator mi = mapBlockIndex.find(hashPrevBlock);
-    if (mi == mapBlockIndex.end())
-        return DoS(10, error("AcceptBlock() : prev block not found"));
-    CBlockIndex* pindexPrev = mi->second;
-    const int nHeight = pindexPrev->nHeight + 1;
-    const int checkpoint_height = Params().Checkpoints().GetHeight();
-
-    // Ignore blocks that connect at a height below the hardened checkpoint. We
-    // use a cheaper condition than IsInitialBlockDownload() to skip the checks
-    // during initial sync:
-    if (nBestHeight > checkpoint_height && nHeight <= checkpoint_height) {
-        return DoS(25, error("%s: rejected height below checkpoint", __func__));
-    }
-
-    // The block height at which point we start rejecting v7 blocks and
-    // start accepting v8 blocks.
-    if(       (IsProtocolV2(nHeight) && nVersion < 7)
-              || (IsV8Enabled(nHeight) && nVersion < 8)
-              || (IsV9Enabled(nHeight) && nVersion < 9)
-              || (IsV10Enabled(nHeight) && nVersion < 10)
-              || (IsV11Enabled(nHeight) && nVersion < 11)
-              )
-        return DoS(20, error("AcceptBlock() : reject too old nVersion = %d", nVersion));
-    else if( (!IsProtocolV2(nHeight) && nVersion >= 7)
-             ||(!IsV8Enabled(nHeight) && nVersion >= 8)
-             ||(!IsV9Enabled(nHeight) && nVersion >= 9)
-             ||(!IsV10Enabled(nHeight) && nVersion >= 10)
-             ||(!IsV11Enabled(nHeight) && nVersion >= 11)
-             )
-        return DoS(100, error("AcceptBlock() : reject too new nVersion = %d", nVersion));
-
-    if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
-        return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
-
-    if (nHeight > nGrandfather)
-    {
-        // Check coinbase timestamp
-        if (GetBlockTime() > FutureDrift((int64_t)vtx[0].nTime, nHeight))
-        {
-            return DoS(80, error("AcceptBlock() : coinbase timestamp is too early"));
-        }
-        // Check timestamp against prev
-        if (GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(GetBlockTime(), nHeight) < pindexPrev->GetBlockTime())
-            return DoS(60, error("AcceptBlock() : block's timestamp is too early"));
-        // Check proof-of-work or proof-of-stake
-        if (nBits != GRC::GetNextTargetRequired(pindexPrev))
-            return DoS(100, error("AcceptBlock() : incorrect %s", IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
-    }
-
-    for (auto const& tx : vtx)
-    {
-        // Mandatory switch to binary contracts (tx version 2):
-        if (nVersion >= 11 && tx.nVersion < 2) {
-            // Disallow tx version 1 after the mandatory block to prohibit the
-            // use of legacy string contracts:
-            return DoS(100, error("%s: legacy transaction", __func__));
-        }
-
-        // Check that all transactions are finalized
-        if (!IsFinalTx(tx, nHeight, GetBlockTime()))
-            return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
-    }
-
-    // Check that the block chain matches the known block chain up to a checkpoint
-    if (!Checkpoints::CheckHardened(nHeight, hash))
-        return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
-
-    uint256 hashProof;
-
-    if (nVersion >= 8)
-    {
-        //must be proof of stake
-        //no grandfather exceptions
-        //if (IsProofOfStake())
-        CTxDB txdb("r");
-        if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, *this, generated_by_me, hashProof))
-        {
-            return error("%s: invalid proof-of-stake for block %s, prev %s",
-                __func__,
-                hash.ToString(),
-                pindexPrev->GetBlockHash().ToString());
-        }
-
-        if (g_seen_stakes.ContainsProof(hashProof)
-            && mapOrphanBlocksByPrev.find(hash) == mapOrphanBlocksByPrev.end())
-        {
-            return error(
-                "%s: ignored duplicate proof-of-stake (%s) for block %s",
-                __func__,
-                hashProof.ToString(),
-                hash.ToString());
-        }
-
-        g_seen_stakes.Remember(hashProof);
-    }
-    else if (nVersion == 7 && (nHeight >= 999000 || nHeight > nGrandfather))
-    {
-        // Calculate a proof hash for these version 7 blocks for the block index
-        // so we can carry the stake modifier into version 8+:
-        //
-        // mainnet: block 999000 to version 8 (1010000)
-        // testnet: nGrandfather (196551) to version 8 (311999)
-        //
-        CTxDB txdb("r");
-        if (!GRC::CalculateLegacyV3HashProof(txdb, *this, nNonce, hashProof)) {
-            return error("AcceptBlock(): Failed to carry v7 proof hash.");
-        }
-    }
-
-    // PoW is checked in CheckBlock[]
-    if (IsProofOfWork())
-    {
-        hashProof = GetHash(true);
-    }
-
-    //Grandfather
-    if (nHeight > nGrandfather)
-    {
-        // Enforce rule that the coinbase starts with serialized block height
-        CScript expect = CScript() << nHeight;
-        if (vtx[0].vin[0].scriptSig.size() < expect.size() ||
-                !std::equal(expect.begin(), expect.end(), vtx[0].vin[0].scriptSig.begin()))
-            return DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
-    }
-
-    // Write block to history file
-    if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
-        return error("AcceptBlock() : out of disk space");
-    unsigned int nFile = -1;
-    unsigned int nBlockPos = 0;
-    if (!WriteBlockToDisk(*this, nFile, nBlockPos, Params().MessageStart()))
-        return error("AcceptBlock() : WriteToDisk failed");
-    if (!AddToBlockIndex(nFile, nBlockPos, hashProof))
-        return error("AcceptBlock() : AddToBlockIndex failed");
-
-    // Relay inventory, but don't relay old inventory during initial block download
-    int nBlockEstimate = Params().Checkpoints().GetHeight();
-    if (hashBestChain == hash)
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            if (nBestHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
-                pnode->PushInventory(CInv(MSG_BLOCK, hash));
-    }
-
-    return true;
-}
-
 
 arith_uint256 CBlockIndex::GetBlockTrust() const
 {
@@ -2415,7 +1471,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Preliminary checks
-    if (!pblock->CheckBlock(pindexBest->nHeight + 1))
+    if (!CheckBlock(*pblock, pindexBest->nHeight + 1))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
@@ -2471,7 +1527,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Store to disk
-    if (!pblock->AcceptBlock(generated_by_me))
+    if (!AcceptBlock(*pblock, generated_by_me))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one
@@ -2485,7 +1541,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
              ++mi)
         {
             CBlock* pblockOrphan = mi->second;
-            if (pblockOrphan->AcceptBlock(generated_by_me))
+            if (AcceptBlock(*pblockOrphan, generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash(true));
             mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
             g_seen_stakes.ForgetOrphan(pblockOrphan->vtx[1]);
@@ -2495,34 +1551,6 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     return true;
-}
-
-
-bool CBlock::CheckBlockSignature() const
-{
-    if (IsProofOfWork())
-        return vchBlockSig.empty();
-
-    vector<valtype> vSolutions;
-    txnouttype whichType;
-
-    const CTxOut& txout = vtx[1].vout[1];
-
-    if (!Solver(txout.scriptPubKey, whichType, vSolutions))
-        return false;
-
-    if (whichType == TX_PUBKEY)
-    {
-        valtype& vchPubKey = vSolutions[0];
-        CKey key;
-        if (!key.SetPubKey(vchPubKey))
-            return false;
-        if (vchBlockSig.empty())
-            return false;
-        return key.Verify(GetHash(true), vchBlockSig);
-    }
-
-    return false;
 }
 
 bool CheckDiskSpace(uint64_t nAdditionalBytes)
@@ -2697,14 +1725,14 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(block.CheckBlock(1));
+        assert(CheckBlock(block, 1));
 
         // Start new block file
         unsigned int nFile;
         unsigned int nBlockPos;
         if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
-        if (!block.AddToBlockIndex(nFile, nBlockPos, hashGenesisBlock))
+        if (!AddToBlockIndex(block, nFile, nBlockPos, hashGenesisBlock))
             return error("LoadBlockIndex() : genesis block not accepted");
     }
 
@@ -2741,36 +1769,44 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         CBlockIndex* pindex = vStack.back().second;
         vStack.pop_back();
 
+        std::stringstream output;
+
         // print split or gap
         if (nCol > nPrevCol)
         {
-            for (int i = 0; i < nCol-1; i++)
-                LogPrintf("| ");
-            LogPrintf("|\\");
+            for (int i = 0; i < nCol-1; i++) {
+                output << "| \n";
+            }
+
+            output << "|\\\n";
         }
         else if (nCol < nPrevCol)
         {
-            for (int i = 0; i < nCol; i++)
-                LogPrintf("| ");
-            LogPrintf("|");
-       }
+            for (int i = 0; i < nCol; i++) {
+                output << "| \n";
+            }
+
+            output << "|\n";
+        }
         nPrevCol = nCol;
 
         // print columns
-        for (int i = 0; i < nCol; i++)
-            LogPrintf("| ");
+        for (int i = 0; i < nCol; i++) {
+            output << "| \n";
+        }
 
-        // print item
+        // print item (and also prepend above formatting)
         CBlock block;
         ReadBlockFromDisk(block, pindex, Params().GetConsensus());
-        LogPrintf("%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
-            pindex->nHeight,
-            pindex->nFile,
-            pindex->nBlockPos,
-            block.GetHash(true).ToString().c_str(),
-            block.nBits,
-            DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
-            block.vtx.size());
+        LogPrintf("%s%d (%u,%u) %s  %08x  %s  tx %" PRIszu "",
+                  output.str(),
+                  pindex->nHeight,
+                  pindex->nFile,
+                  pindex->nBlockPos,
+                  block.GetHash(true).ToString().c_str(),
+                  block.nBits,
+                  DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
+                  block.vtx.size());
 
         PrintWallets(block);
 
@@ -2954,7 +1990,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 {
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
-    if (strCommand == "aries")
+    if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::VERSION)
     {
         // Each connection can only send one version message
         if (pfrom->nVersion != 0)
@@ -2996,7 +2032,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION)
+        // Note the std::max is there to deal with the rollover of BlockV12Height + DISCONNECT_GRACE_PERIOD if
+        // BlockV12Height is set to std::numeric_limits<int>::max() which is the case during testing.
+        if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
+                || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
+                    && pfrom->nVersion < PROTOCOL_VERSION
+                    && pindexBest->nHeight > std::max(Params().GetConsensus().BlockV12Height,
+                                                      Params().GetConsensus().BlockV12Height + DISCONNECT_GRACE_PERIOD)))
         {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
@@ -3048,7 +2090,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // record my external IP reported by peer
-        if (addrFrom.IsRoutable() && addrMe.IsRoutable())
+        if (addrMe.IsRoutable())
             addrSeenByPeer = addrMe;
 
         // Be shy and don't send version until we hear
@@ -3064,7 +2106,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             AddTimeData(pfrom->addr, nOffsetSample);
 
         // Change version
-        pfrom->PushMessage("verack");
+        pfrom->PushMessage(NetMsgType::VERACK);
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
 
 
@@ -3077,17 +2119,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Get recent addresses
-            pfrom->PushMessage("getaddr");
+            pfrom->PushMessage(NetMsgType::GETADDR);
             pfrom->fGetAddr = true;
             addrman.Good(pfrom->addr);
-        }
-        else
-        {
-            if (((CNetAddr)pfrom->addr) == (CNetAddr)addrFrom)
-            {
-                addrman.Add(addrFrom, addrFrom);
-                addrman.Good(addrFrom);
-            }
         }
 
 
@@ -3129,13 +2163,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         pfrom->fDisconnect=true;
         return false;
     }
-    else if (strCommand == "verack")
+    else if (strCommand == NetMsgType::VERACK)
     {
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
     }
-    else if (strCommand == "gridaddr")
+    else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
     {
-        //addr->gridaddr
         vector<CAddress> vAddr;
         vRecv >> vAddr;
 
@@ -3173,14 +2206,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         hashSalt = UintToArith256(GetRandHash());
                     uint64_t hashAddr = addr.GetHash();
                     uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60)));
-                    hashRand = Hash(hashRand.begin(), hashRand.end());
+                    hashRand = Hash(hashRand);
                     multimap<uint256, CNode*> mapMix;
                     for (auto const& pnode : vNodes)
                     {
                         unsigned int nPointer;
                         memcpy(&nPointer, &pnode, sizeof(nPointer));
                         uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
-                        hashKey = Hash(hashKey.begin(), hashKey.end());
+                        hashKey = Hash(hashKey);
                         mapMix.insert(make_pair(hashKey, pnode));
                     }
                     int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
@@ -3199,7 +2232,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->fDisconnect = true;
     }
 
-    else if (strCommand == "inv")
+    else if (strCommand == NetMsgType::INV)
     {
         vector<CInv> vInv;
         vRecv >> vInv;
@@ -3272,7 +2305,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "getdata")
+    else if (strCommand == NetMsgType::GETDATA)
     {
         vector<CInv> vInv;
         vRecv >> vInv;
@@ -3306,7 +2339,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     CBlock block;
                     ReadBlockFromDisk(block, mi->second, Params().GetConsensus());
 
-                    pfrom->PushMessage("encrypt", block);
+                    pfrom->PushMessage(NetMsgType::ENCRYPT, block);
 
                     // Trigger them to send a getblocks request for the next batch of inventory
                     if (inv.hash == pfrom->hashContinue)
@@ -3316,7 +2349,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         // wait for other stuff first.
                         vector<CInv> vInv;
                         vInv.push_back(CInv(MSG_BLOCK, hashBestChain));
-                        pfrom->PushMessage("inv", vInv);
+                        pfrom->PushMessage(NetMsgType::INV, vInv);
                         pfrom->hashContinue.SetNull();
                     }
                 }
@@ -3339,7 +2372,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                         ss.reserve(1000);
                         ss << tx;
-                        pfrom->PushMessage("tx", ss);
+                        pfrom->PushMessage(NetMsgType::TX, ss);
                     }
                 }
                 else if(!pushed && inv.type == MSG_PART) {
@@ -3404,7 +2437,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
     }
 
-    else if (strCommand == "getblocks")
+    else if (strCommand == NetMsgType::GETBLOCKS)
     {
         CBlockLocator locator;
         uint256 hashStop;
@@ -3443,7 +2476,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
     }
-    else if (strCommand == "getheaders")
+    else if (strCommand == NetMsgType::GETHEADERS)
     {
         CBlockLocator locator;
         uint256 hashStop;
@@ -3477,9 +2510,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (--nLimit <= 0 || pindex->GetBlockHash() == hashStop)
                 break;
         }
-        pfrom->PushMessage("headers", vHeaders);
+        pfrom->PushMessage(NetMsgType::HEADERS, vHeaders);
     }
-    else if (strCommand == "tx")
+    else if (strCommand == NetMsgType::TX)
     {
         vector<uint256> vWorkQueue;
         vector<uint256> vEraseQueue;
@@ -3536,7 +2569,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             AddOrphanTx(tx);
 
-            // DoS prevention: do not allow mapOrphanTransactions to grow unbounded
+            // DoS prevention: do not allow mapOrphanTransactions to grow unbounded (see CVE-2012-3789)
             unsigned int nEvicted = LimitOrphanTxSize(MAX_ORPHAN_TRANSACTIONS);
             if (nEvicted > 0)
                 LogPrintf("mapOrphan overflow, removed %u tx", nEvicted);
@@ -3545,7 +2578,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "encrypt")
+    else if (strCommand == NetMsgType::ENCRYPT || strCommand == NetMsgType::BLOCK)
     {
         //Response from getblocks, message = block
 
@@ -3576,7 +2609,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "getaddr")
+    else if (strCommand == NetMsgType::GETADDR)
     {
         // Don't return addresses older than nCutOff timestamp
         int64_t nCutOff =  GetAdjustedTime() - (nNodeLifespan * 24 * 60 * 60);
@@ -3588,7 +2621,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
 
 
-    else if (strCommand == "mempool")
+    else if (strCommand == NetMsgType::MEMPOOL)
     {
         LOCK(cs_main);
 
@@ -3602,9 +2635,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     break;
         }
         if (vInv.size() > 0)
-            pfrom->PushMessage("inv", vInv);
+            pfrom->PushMessage(NetMsgType::INV, vInv);
     }
-    else if (strCommand == "ping")
+    else if (strCommand == NetMsgType::PING)
     {
         uint64_t nonce = 0;
         vRecv >> nonce;
@@ -3620,9 +2653,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // it, if the remote node sends a ping once per second and this node takes 5
         // seconds to respond to each, the 5th ping the remote sends would appear to
         // return very quickly.
-        pfrom->PushMessage("pong", nonce);
+        pfrom->PushMessage(NetMsgType::PONG, nonce);
     }
-    else if (strCommand == "pong")
+    else if (strCommand == NetMsgType::PONG)
     {
         int64_t pingUsecEnd = GetTimeMicros();
         uint64_t nonce = 0;
@@ -3677,7 +2710,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             pfrom->nPingNonceSent = 0;
         }
     }
-    else if (strCommand == "alert")
+    else if (strCommand == NetMsgType::ALERT)
     {
         CAlert alert;
         vRecv >> alert;
@@ -3707,11 +2740,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
     }
 
-    else if (strCommand == "scraperindex")
+    else if (strCommand == NetMsgType::SCRAPERINDEX)
     {
         CScraperManifest::RecvManifest(pfrom, vRecv);
     }
-    else if (strCommand == "part")
+    else if (strCommand == NetMsgType::PART)
     {
         CSplitBlob::RecvPart(pfrom, vRecv);
     }
@@ -3733,7 +2766,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     // Update the last seen time for this node's address
     if (pfrom->fNetworkNode)
-        if (strCommand == "aries" || strCommand == "gridaddr" || strCommand == "inv" || strCommand == "getdata" || strCommand == "ping")
+        if (strCommand == NetMsgType::ARIES || strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::INV || strCommand == NetMsgType::GETDATA || strCommand == NetMsgType::PING || strCommand == NetMsgType::VERSION || strCommand == NetMsgType::ADDR)
             AddressCurrentlyConnected(pfrom->addr);
 
     return true;
@@ -3794,7 +2827,7 @@ bool ProcessMessages(CNode* pfrom)
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
-        uint256 hash = Hash(vRecv.begin(), vRecv.begin() + nMessageSize);
+        uint256 hash = Hash(Span<std::byte>{(std::byte*)&vRecv.begin()[0], nMessageSize});
 
         // We just received a message off the wire, harvest entropy from the time (and the message checksum)
         RandAddEvent(ReadLE32(hash.begin()));
@@ -3901,7 +2934,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->nPingUsecStart = GetTimeMicros();
         pto->nPingNonceSent = nonce;
 
-        pto->PushMessage("ping", nonce);
+        pto->PushMessage(NetMsgType::PING, nonce);
     }
 
     // Resend wallet transactions that haven't gotten in a block yet
@@ -3939,14 +2972,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 // receiver rejects addr messages larger than 1000
                 if (vAddr.size() >= 1000)
                 {
-                    pto->PushMessage("gridaddr", vAddr);
+                    pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
                     vAddr.clear();
                 }
             }
         }
         pto->vAddrToSend.clear();
         if (!vAddr.empty())
-            pto->PushMessage("gridaddr", vAddr);
+            pto->PushMessage(NetMsgType::GRIDADDR, vAddr);
     }
 
 
@@ -3972,7 +3005,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (hashSalt == 0)
                     hashSalt = UintToArith256(GetRandHash());
                 uint256 hashRand = ArithToUint256(UintToArith256(inv.hash) ^ hashSalt);
-                hashRand = Hash(hashRand.begin(), hashRand.end());
+                hashRand = Hash(hashRand);
                 bool fTrickleWait = ((UintToArith256(hashRand) & 3) != 0);
 
                 // always trickle our own transactions
@@ -3997,7 +3030,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vInv.push_back(inv);
                 if (vInv.size() >= 1000)
                 {
-                    pto->PushMessage("inv", vInv);
+                    pto->PushMessage(NetMsgType::INV, vInv);
                     vInv.clear();
                 }
             }
@@ -4005,7 +3038,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->vInventoryToSend = vInvWait;
     }
     if (!vInv.empty())
-        pto->PushMessage("inv", vInv);
+        pto->PushMessage(NetMsgType::INV, vInv);
 
 
     //
@@ -4045,7 +3078,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             vGetData.push_back(inv);
             if (vGetData.size() >= 1000)
             {
-                pto->PushMessage("getdata", vGetData);
+                pto->PushMessage(NetMsgType::GETDATA, vGetData);
                 vGetData.clear();
             }
 
@@ -4054,7 +3087,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }
     if (!vGetData.empty())
-        pto->PushMessage("getdata", vGetData);
+        pto->PushMessage(NetMsgType::GETDATA, vGetData);
 
     return true;
 }
@@ -4105,4 +3138,47 @@ GRC::MintSummary CBlock::GetMint() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     return mint;
+}
+
+GRC::MRCFees CBlock::GetMRCFees() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    GRC::MRCFees mrc_fees;
+    unsigned int mrc_output_limit = GetMRCOutputLimit(nVersion, false);
+
+    // Return zeroes for mrc fees if MRC not allowed. (This could have also been done
+    // by block version check, but this is more correct.)
+    if (!mrc_output_limit) {
+        return mrc_fees;
+    }
+
+    Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
+
+    const GRC::Claim claim = GetClaim();
+
+    CAmount mrc_total_fees = 0;
+
+    // This is similar to the code in CheckMRCRewards in the Validator class, but with the validation removed because
+    // the block has already been validated. We also only need the MRC fee calculation portion.
+    for (const auto& tx: vtx) {
+        for (const auto& mrc : claim.m_mrc_tx_map) {
+            if (mrc.second == tx.GetHash() && !tx.GetContracts().empty()) {
+                // An MRC contract must be the first and only contract on a transaction by protocol.
+                GRC::Contract contract = tx.GetContracts()[0];
+
+                if (contract.m_type != GRC::ContractType::MRC) continue;
+
+                GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
+
+                mrc_fees.m_mrc_minimum_calc_fees += mrc.ComputeMRCFee();
+
+                mrc_total_fees += mrc.m_fee;
+                mrc_fees.m_mrc_foundation_fees += mrc.m_fee * foundation_fee_fraction.GetNumerator()
+                                                            / foundation_fee_fraction.GetDenominator();
+            }
+        }
+    }
+
+    mrc_fees.m_mrc_staker_fees = mrc_total_fees - mrc_fees.m_mrc_foundation_fees;
+
+    return mrc_fees;
 }

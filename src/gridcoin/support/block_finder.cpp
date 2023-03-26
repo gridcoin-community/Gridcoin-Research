@@ -5,13 +5,7 @@
 #include "main.h"
 #include "gridcoin/support/block_finder.h"
 
-#include <cstdlib>
-
 using namespace GRC;
-
-BlockFinder::BlockFinder()
-    : cache(nullptr)
-{}
 
 CBlockIndex* BlockFinder::FindByHeight(int height)
 {
@@ -23,21 +17,17 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
 
     if(index != nullptr)
     {
-        // Use the cache if it's closer to the target than the current
-        // start block.
-        if (cache && abs(height - index->nHeight) > std::abs(height - cache->nHeight))
-            index = cache;
-
         // Traverse towards the tail.
-        while (index && index->pprev && index->nHeight > height)
+        while (index && index->pprev && index->nHeight > height) {
             index = index->pprev;
+        }
 
         // Traverse towards the head.
-        while (index && index->pnext && index->nHeight < height)
+        while (index && index->pnext && index->nHeight < height) {
             index = index->pnext;
+        }
     }
 
-    cache = index;
     return index;
 }
 
@@ -50,27 +40,34 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
             ? pindexBest
             : pindexGenesisBlock;
 
-    if(index != nullptr)
+    if (index != nullptr)
     {
-        // If we have a cache that's closer to target than our current index,
-        // use it.
-        if(cache && abs(time - index->nTime) > abs(time - int64_t(cache->nTime)))
-            index = cache;
-
         // Move back until the previous block is no longer younger than "time".
-        while(index && index->pprev && index->pprev->nTime > time)
+        while (index && index->pprev && index->pprev->nTime > time) {
             index = index->pprev;
+        }
 
         // Move forward until the current block is younger than "time".
-        while(index && index->pnext && index->nTime < time)
+        while (index && index->pnext && index->nTime < time) {
             index = index->pnext;
+        }
     }
 
-    cache = index;
     return index;
 }
 
-void BlockFinder::Reset()
+// The arguments are passed by value on purpose.
+CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* index)
 {
-    cache = nullptr;
+    // If no starting index is provided (i.e. second parameter is omitted or nullptr is passed in,
+    // then start at the Genesis Block. This is in general expensive and should be avoided.
+    if (!index) {
+        index = pindexGenesisBlock;
+    }
+
+    while (index && index->pnext && index->nTime < time) {
+        index = index->pnext;
+    }
+
+    return index;
 }

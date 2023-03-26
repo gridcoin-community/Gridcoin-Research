@@ -1,10 +1,6 @@
-<TS language="eo" version="2.1">
+<TS language="eo" version="2.0">
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Duoble-klaku por redakti adreson a? etikedon</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Krei novan adreson</translation>
@@ -36,10 +32,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>&amp;Redakti</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Perkome disigita dosiero (*.csv)</translation>
     </message>
     </context>
 <context>
@@ -88,14 +80,6 @@
         <translation>Mal?losi la monujon</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>?i tiu operacio bezonas vian monujan pasfrazon, por mal?ifri la monujon.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Mal?ifri la monujon</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>?an?i la pasfrazon</translation>
     </message>
@@ -140,10 +124,6 @@
         <translation>La pasfrazo enigita por ?ifrado de monujo ne ?ustas.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Mal?ifrado de la monujo fiaskis</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Vi sukcese ?an?is la pasfrazon de la monujo.</translation>
     </message>
@@ -155,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Subskribi &amp;mesaĝon...</translation>
+        <source>Wallet</source>
+        <translation>Monujo</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -165,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>Vidigi ĝeneralan superrigardon de la monujo</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Sendi</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Ricevi</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -183,6 +171,10 @@
         <translation>&amp;Agordoj...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Montri / Kaŝi</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>Ĉifri &amp;Monujon...</translation>
     </message>
@@ -195,32 +187,20 @@
         <translation>Ŝanĝi la pasfrazon por ĉifri la monujon</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>Sen&amp;cimiga fenestro</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Malfermi konzolon de sencimigo kaj diagnozo</translation>
+        <source>Sign &amp;message...</source>
+        <translation>Subskribi &amp;mesaĝon...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>&amp;Kontroli mesaĝon...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>Monujo</translation>
+        <source>&amp;Debug window</source>
+        <translation>Sen&amp;cimiga fenestro</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Sendi</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Ricevi</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Montri / Kaŝi</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Malfermi konzolon de sencimigo kaj diagnozo</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -235,32 +215,44 @@
         <translation>&amp;Helpo</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>Ĝisdata</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -305,10 +297,6 @@
         <translation>Krompago:</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Prioritato:</translation>
-    </message>
-    <message>
         <source>Low Output:</source>
         <translation>Malalta Eligo:</translation>
     </message>
@@ -339,10 +327,6 @@
     <message>
         <source>Address</source>
         <translation>Adreso</translation>
-    </message>
-    <message>
-        <source>Priority</source>
-        <translation>Prioritato</translation>
     </message>
     <message>
         <source>Copy address</source>
@@ -377,44 +361,12 @@
         <translation>Kopii bajtojn</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopii prioritaton</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Kopii malaltan eligon</translation>
     </message>
     <message>
         <source>Copy change</source>
         <translation>Kopii restmonon</translation>
-    </message>
-    <message>
-        <source>highest</source>
-        <translation>plej alta</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>alta</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>mezalta</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>meza</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>mezmalalta</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>malalta</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>plej malalta</translation>
     </message>
     <message>
         <source>yes</source>
@@ -481,6 +433,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -505,14 +478,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>la pordo de la prokurilo (ekz. 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>Versio de SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>la versio de SOCKS ?e la prokurilo (ekz. 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -598,27 +563,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -692,18 +669,6 @@
         <translation>Malplenigi konzolon</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Tajpu &lt;b&gt;help&lt;/b&gt; por superrigardo de la disponeblaj komandoj.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Uzu la sagojn supran kaj malsupran por esplori la historion, kaj &lt;b&gt;stir-L&lt;/b&gt; por malplenigi la ekranon.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Dato de kompilado</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Supozita totalo da blokoj</translation>
     </message>
@@ -711,7 +676,15 @@
         <source>Client name</source>
         <translation>Nomo de kliento</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Uzu la sagojn supran kaj malsupran por esplori la historion, kaj &lt;b&gt;stir-L&lt;/b&gt; por malplenigi la ekranon.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Tajpu &lt;b&gt;help&lt;/b&gt; por superrigardo de la disponeblaj komandoj.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -737,10 +710,6 @@
     <message>
         <source>Amount:</source>
         <translation>Sumo:</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Prioritato:</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -803,10 +772,6 @@
         <translation>Kopii restmonon</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Kopii prioritaton</translation>
-    </message>
-    <message>
         <source>Confirm send coins</source>
         <translation>Konfirmi sendon de bitmono</translation>
     </message>
@@ -834,7 +799,7 @@
         <source>(no label)</source>
         <translation>(neniu etikedo)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -844,6 +809,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>&amp;Ricevonto:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Mesaĝo:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -965,7 +934,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -993,7 +964,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, elsendita(j) tra %n nodo</numerusform><numerusform>, elsendita(j) tra %n nodoj</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1029,7 +1002,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>maturi?os post %n bloko</numerusform><numerusform>maturi?os post %n blokoj</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1099,7 +1074,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Malferma dum ankora? %n bloko</numerusform><numerusform>Malferma dum ankora? %n blokoj</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1237,10 +1214,6 @@
         <translation>Montri detalojn de transakcio</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Perkome disigita dosiero (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Konfirmita</translation>
     </message>
@@ -1332,10 +1305,6 @@ Se la dosiero ne ekzistas, kreu ?in kun permeso "nur posedanto rajtas legi".</tr
         <translation>wallet.dat estas difektita, riparo malsukcesis</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Nekonata versio de -socks petita: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Nevalid adreso -proxy: '%s'</translation>
     </message>
@@ -1382,10 +1351,6 @@ Se la dosiero ne ekzistas, kreu ?in kun permeso "nur posedanto rajtas legi".</tr
     <message>
         <source>Loading wallet...</source>
         <translation>Ŝargado de monujo...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Ne eblas malpromocii monujon</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

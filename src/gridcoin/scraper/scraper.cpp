@@ -34,6 +34,7 @@
 #include <boost/date_time/gregorian/greg_date.hpp>
 #include <util/strencodings.h>
 #include <random>
+#include <stdexcept>
 #include <util/string.h>
 
 using namespace GRC;
@@ -167,6 +168,8 @@ unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE GUARDED_BY(cs_ScraperGlobals) = 0
 bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP GUARDED_BY(cs_ScraperGlobals) = false;
 /** Default team whitelist. Remember this will be overridden by appcache entries. */
 std::string TEAM_WHITELIST GUARDED_BY(cs_ScraperGlobals) = "Gridcoin";
+/** This is a short term place to hold projects that require an external adapter for the scrapers.*/
+std::string EXTERNAL_ADAPTER_PROJECTS GUARDED_BY(cs_ScraperGlobals) = std::string{};
 /** This is the period after the deauthorizing of a scraper in seconds before the nodes will start
  * to assign banscore to nodes sending unauthorized manifests.
  */
@@ -271,6 +274,32 @@ template<typename T>
  * @param result
  */
 void ApplyCache(const std::string& key, T& result);
+
+
+const std::string GetTextForstatsobjecttype(statsobjecttype StatsObjType)
+{
+    return vstatsobjecttypestrings[static_cast<int>(StatsObjType)];
+}
+
+const std::string GetTextForscraperSBvalidationtype(scraperSBvalidationtype ScraperSBValidationType)
+{
+    return scraperSBvalidationtypestrings[static_cast<int>(ScraperSBValidationType)];
+}
+
+double MagRound(double dMag)
+{
+    return round(dMag / MAG_ROUND) * MAG_ROUND;
+}
+
+unsigned int NumScrapersForSupermajority(unsigned int nScraperCount)
+{
+    LOCK(cs_ScraperGlobals);
+
+    unsigned int nRequired = std::max(SCRAPER_CONVERGENCE_MINIMUM,
+                                      (unsigned int)std::ceil(SCRAPER_CONVERGENCE_RATIO * nScraperCount));
+
+    return nRequired;
+}
 
 // Internal functions for scraper/subscriber operation.
 /**
@@ -425,7 +454,7 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
  * @param mScraperStats
  * @return bool true if successful
  */
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData, const double& projectmag,
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData, const double& projectmag,
                                     ScraperStats& mScraperStats);
 /**
  * @brief Computes statistics from a provided project data stream. This is used by LoadProjectFileToStatsByCPID.
@@ -571,11 +600,9 @@ const CBlockIndex* GetBeaconConsensusHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
-    static BlockFinder block_finder;
-
     // Use 4 times the BLOCK_GRANULARITY which moves the consensus block every hour.
     // TODO: Make the mod a function of SCRAPER_CMANIFEST_RETENTION_TIME in scraper.h.
-    return block_finder.FindByHeight(
+    return BlockFinder::FindByHeight(
         (nBestHeight - CONSENSUS_LOOKBACK)
             - (nBestHeight - CONSENSUS_LOOKBACK) % (BLOCK_GRANULARITY * 4));
 }
@@ -1014,7 +1041,7 @@ void _log(logattribute eType, const std::string& sCall, const std::string& sMess
         return;
     }
 
-    sOut = tfm::format("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
+    sOut = tfm::strformat("%s [%s] <%s> : %s", DateTimeStrFormat("%x %H:%M:%S", GetAdjustedTime()), sType, sCall, sMessage);
 
     // This snoops the SCRAPER category setting from the main logger, and uses it as a conditional for the scraper log output.
     // Logs will be posted to the scraper log when the category is set OR it is not an INFO level... (i.e. critical, warning,
@@ -1128,6 +1155,13 @@ std::vector<std::string> GetTeamWhiteList()
     return split(TEAM_WHITELIST, delimiter);
 }
 
+std::vector<std::string> GetProjectsExternalAdapterRequired()
+{
+    LOCK(cs_ScraperGlobals);
+
+    return split(EXTERNAL_ADAPTER_PROJECTS, "|");
+}
+
 
 /** Username and password data utility class for accessing project stats that have implemented usernam and password
  * protection for stats downloads to satisfy GDPR requirements
@@ -1199,7 +1233,7 @@ public:
         std::string outfile = project + "_auth.dat";
         fs::path poutfile = GetDataDir() / outfile;
 
-        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::app);
+        oauthdata.open(poutfile, std::ios_base::out | std::ios_base::trunc);
 
         if (!oauthdata.is_open())
             _log(logattribute::CRITICAL, "auth_data", "Failed to open auth data file");
@@ -1291,7 +1325,7 @@ void ApplyCache(const std::string& key, T& result)
         {
             unsigned int out = 0;
 
-            if (!ParseUInt(entry.value, &out))
+            if (!ParseUInt32(entry.value, &out))
             {
                 throw std::invalid_argument("Argument is not parseable as an unsigned int.");
             }
@@ -1320,7 +1354,7 @@ void ApplyCache(const std::string& key, T& result)
     }
     catch (const std::exception&)
     {
-        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::format("Ignoring bad AppCache entry for %s.", key));
+        _log(logattribute::ERR, "ScraperApplyAppCacheEntries", tfm::strformat("Ignoring bad AppCache entry for %s.", key));
     }
 }
 
@@ -1367,6 +1401,7 @@ void ScraperApplyAppCacheEntries()
         ApplyCache("SCRAPER_MISBEHAVING_NODE_BANSCORE", SCRAPER_MISBEHAVING_NODE_BANSCORE);
         ApplyCache("REQUIRE_TEAM_WHITELIST_MEMBERSHIP", REQUIRE_TEAM_WHITELIST_MEMBERSHIP);
         ApplyCache("TEAM_WHITELIST", TEAM_WHITELIST);
+        ApplyCache("EXTERNAL_ADAPTER_PROJECTS", EXTERNAL_ADAPTER_PROJECTS);
         ApplyCache("SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD", SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD);
 
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
@@ -1406,6 +1441,8 @@ void ScraperApplyAppCacheEntries()
              "REQUIRE_TEAM_WHITELIST_MEMBERSHIP = " + ToString(REQUIRE_TEAM_WHITELIST_MEMBERSHIP));
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
              "TEAM_WHITELIST = " + TEAM_WHITELIST);
+        _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
+             "EXTERNAL_ADAPTER_PROJECTS = " + EXTERNAL_ADAPTER_PROJECTS);
         _log(logattribute::INFO, "ScraperApplyAppCacheEntries",
              "SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD = " + ToString(SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD));
     }
@@ -2384,7 +2421,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap)
 
             if (!ParseInt64(sTeamID, &nTeamID))
             {
-                _log(logattribute::ERR, __func__, tfm::format("Ignoring bad team id for team %s.", sTeamName));
+                _log(logattribute::ERR, __func__, tfm::strformat("Ignoring bad team id for team %s.", sTeamName));
                 continue;
             }
 
@@ -2892,7 +2929,7 @@ uint256 GetFileHash(const fs::path& inputfile)
     // read data and checksum from file
     try
     {
-        filein.read((char *)&vchData[0], dataSize);
+        filein.read(MakeWritableByteSpan(vchData));
     }
     catch (std::exception &e)
     {
@@ -2903,7 +2940,7 @@ uint256 GetFileHash(const fs::path& inputfile)
 
     CDataStream ssFile(vchData, SER_DISK, CLIENT_VERSION);
 
-    nHash = Hash(ssFile.begin(), ssFile.end());
+    nHash = Hash(ssFile);
 
     return nHash;
 }
@@ -2934,7 +2971,7 @@ uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperF
         //}
      }
 
-    nHash = Hash(ss.begin(), ss.end());
+    nHash = Hash(ss);
 
     return nHash;
 }
@@ -3356,10 +3393,10 @@ bool LoadScraperFileManifest(const fs::path& file)
         nhash.SetHex(vline[0].c_str());
         LoadEntry.hash = nhash;
 
-        // We will use the ParseUInt from strencodings to avoid the locale specific stoi.
+        // We will use the ParseUInt32 from strencodings to avoid the locale specific stoi.
         unsigned int parsed_current = 0;
 
-        if (!ParseUInt(vline[1], &parsed_current))
+        if (!ParseUInt32(vline[1], &parsed_current))
         {
             _log(logattribute::ERR, __func__, "The \"current\" field not parsed correctly for a manifest entry. Skipping.");
             continue;
@@ -3382,7 +3419,7 @@ bool LoadScraperFileManifest(const fs::path& file)
             // are to be maintained, such as team and host files.
             unsigned int parsed_exclude = 0;
 
-            if (!ParseUInt(vline[5], &parsed_exclude))
+            if (!ParseUInt32(vline[5], &parsed_exclude))
             {
                 // This shouldn't happen given the conditional above, but to be thorough...
                 _log(logattribute::ERR, __func__, "The \"excludefromcsmanifest\" field not parsed correctly for a manifest "
@@ -3583,10 +3620,10 @@ bool LoadProjectFileToStatsByCPID(const std::string& project, const fs::path& fi
     return bResult;
 }
 
-bool LoadProjectObjectToStatsByCPID(const std::string& project, const CSerializeData& ProjectData,
+bool LoadProjectObjectToStatsByCPID(const std::string& project, const SerializeData& ProjectData,
                                     const double& projectmag, ScraperStats& mScraperStats)
 {
-    boostio::basic_array_source<char> input_source(&ProjectData[0], ProjectData.size());
+    boostio::basic_array_source<char> input_source((const char*)&ProjectData[0], ProjectData.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
 
     boostio::filtering_istream in;
@@ -4499,7 +4536,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
         // read data from file
         try
         {
-            filein.read((char *)&vchData[0], dataSize);
+            filein.read(MakeWritableByteSpan(vchData));
         }
         catch (std::exception &e)
         {
@@ -4588,7 +4625,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             // read data from file
             try
             {
-                filein.read((char *)&vchData[0], dataSize);
+                filein.read(MakeWritableByteSpan(vchData));
             }
             catch (std::exception &e)
             {
@@ -4722,7 +4759,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperConvergedManifest_ptr->cs_manifest)
 
     ss << CScraperConvergedManifest_ptr->ConsensusBlock;
 
-    nContentHashCheck = Hash(ss.begin(), ss.end());
+    nContentHashCheck = Hash(ss);
 
     if (nContentHashCheck != CScraperConvergedManifest_ptr->nContentHash)
     {
@@ -4744,7 +4781,7 @@ void ConvergedManifest::ComputeConvergedContentHash()
         ss << iter.second->data;
     }
 
-    nContentHash = Hash(ss.begin(), ss.end());
+    nContentHash = Hash(ss);
 }
 
 // ------------------------------------ This an out parameter.
@@ -5117,7 +5154,7 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
                     iPart = CSplitBlob::mapParts.find(std::get<0>(iter.second));
                 }
 
-                uint256 nContentHashCheck = Hash(iPart->second.data.begin(), iPart->second.data.end());
+                uint256 nContentHashCheck = Hash(iPart->second.data);
 
                 if (nContentHashCheck != iPart->first)
                 {
@@ -5515,7 +5552,7 @@ bool LoadBeaconListFromConvergedManifest(const ConvergedManifest& StructConverge
         return false;
     }
 
-    boostio::basic_array_source<char> input_source(&iter->second->data[0], iter->second->data.size());
+    boostio::basic_array_source<char> input_source((char*)&iter->second->data[0], iter->second->data.size());
     boostio::stream<boostio::basic_array_source<char>> ingzss(input_source);
 
     boostio::filtering_istream in;
@@ -6240,7 +6277,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         Superblock RandomPastSB = Superblock::FromStats(RandomPastSBStatsAndVerifiedBeacons);
 
         // This should really be done in the superblock class as an overload on Superblock::FromConvergence.
-        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64() >> 32;
+        RandomPastSB.m_convergence_hint = RandomPastConvergedManifest.nContentHash.GetUint64(0) >> 32;
 
         if (RandomPastConvergedManifest.bByParts)
         {
@@ -6260,7 +6297,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         else
         {
             RandomPastSB.m_manifest_content_hint =
-                    RandomPastConvergedManifest.nUnderlyingManifestContentHash.GetUint64() >> 32;
+                    RandomPastConvergedManifest.nUnderlyingManifestContentHash.GetUint64(0) >> 32;
         }
 
         //

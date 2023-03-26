@@ -12,6 +12,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/voting/result.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
 #include "txdb.h"
@@ -51,6 +52,92 @@ public:
     {
     }
 };
+
+class PollValidator
+{
+public:
+    explicit PollValidator(const PollPayload& payload, const CTransaction& tx) : m_payload(payload), m_tx(tx)
+    {
+    }
+
+    bool Validate(int& DoS)
+    {
+        if (m_payload.m_version < 2) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
+            return false;
+        }
+
+        // WellFormed() checks:
+        // m_type is not UNKNOWN or OUT_OF_BOUND
+        // m_weight_type is not UNKNOWN or OUT_OF_BOUND
+        // m_response_type is not UNKNOWN or OUT_OF_BOUND
+        // m_duration_days is inclusive between MIN_DURATION_DAYS and MAX_DURATION_DAYS
+        // m_title is not empty
+        // m_url is not empty
+        // m_choices are well formed based on the response type
+        // For version 2+
+        // m_weight type is only BALANCE and BALANCE_AND_MAGNITUDE
+        if (!m_payload.m_poll.WellFormed(m_payload.m_version)) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll that is not well formed", __func__);
+            return false;
+        }
+
+        // Make sure poll type is valid for the version of the poll payload.
+        // The only valid type for v2 polls is SURVEY.
+        // The valid types for v3 polls are SURVEY, PROJECT, DEVELOPMENT, GOVERNANCE, MARKETING, OUTREACH,
+        // and COMMUNITY.
+        std::vector<PollType> valid_poll_types = GRC::PollPayload::GetValidPollTypes(m_payload.m_version);
+
+        if (std::find(valid_poll_types.begin(), valid_poll_types.end(), m_payload.m_poll.m_type.Value())
+                == valid_poll_types.end()) {
+            DoS = 25;
+            LogPrint(LogFlags::CONTRACT, "%s: rejected poll payload with improper type", __func__);
+            return false;
+        }
+
+        // Poll payload v3+ validations which depend on poll type
+        if (m_payload.m_version >= 3) {
+            // Select the rules for the poll type in the payload.
+            Poll::PollTypeRules poll_type_rules = Poll::POLL_TYPE_RULES[m_payload.m_poll.m_type.Raw()];
+
+            // v3 polls must meet the by type minimum duration requirements as well as the global requirements above.
+            if (m_payload.m_poll.m_duration_days < poll_type_rules.m_mininum_duration) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with duration %i, less than the required "
+                                             "minimum %i",
+                         __func__,
+                         m_payload.m_poll.m_duration_days,
+                         poll_type_rules.m_mininum_duration);
+                return false;
+            }
+
+            // v3 polls must be balance + magnitude for the weight type if the by poll type rule specifies a minimum
+            // vote weight % of AVW greater than zero.
+            if (poll_type_rules.m_min_vote_percent_AVW
+                    && m_payload.m_poll.m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "%s: rejected v3 poll payload with wrong weight type %s for given poll type %s "
+                                             "requiring %u vote weight percent of active vote weight for validation.",
+                         __func__,
+                         m_payload.m_poll.WeightTypeToString(),
+                         m_payload.m_poll.PollTypeToString(),
+                         poll_type_rules.m_min_vote_percent_AVW);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+private:
+    const PollPayload& m_payload;
+    CTransaction m_tx;
+};
+
+
+
 
 //!
 //! \brief Verifies a participant's eligibility to create a poll.
@@ -209,7 +296,7 @@ PollRegistry& GRC::GetPollRegistry()
 
 std::string GRC::GetCurrentPollTitle()
 {
-    LOCK(cs_main);
+    LOCK(GetPollRegistry().cs_poll_registry);
 
     if (const PollReference* poll_ref = GetPollRegistry().TryLatestActive()) {
         return poll_ref->Title();
@@ -236,12 +323,14 @@ ClaimMessage GRC::PackPollMessage(const Poll& poll, const CTransaction& tx)
 // -----------------------------------------------------------------------------
 // Class: PollReference
 // -----------------------------------------------------------------------------
-
 PollReference::PollReference()
-    : m_ptxid(nullptr)
+    : m_txid(uint256{})
+    , m_payload_version(0)
+    , m_type(PollType::UNKNOWN)
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
+    , m_votes({})
 {
 }
 
@@ -249,7 +338,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
 {
     CTransaction tx;
 
-    if (!txdb.ReadDiskTx(*m_ptxid, tx)) {
+    if (!txdb.ReadDiskTx(m_txid, tx)) {
         error("%s: failed to read poll tx from disk", __func__);
         return std::nullopt;
     }
@@ -277,11 +366,17 @@ PollOption PollReference::TryReadFromDisk() const
 
 uint256 PollReference::Txid() const
 {
-    if (!m_ptxid) {
-        return uint256();
-    }
+    return m_txid;
+}
 
-    return *m_ptxid;
+uint32_t PollReference::GetPollPayloadVersion() const
+{
+    return m_payload_version;
+}
+
+PollType PollReference::GetPollType() const
+{
+    return m_type;
 }
 
 const std::string& PollReference::Title() const
@@ -291,7 +386,7 @@ const std::string& PollReference::Title() const
         return empty;
     }
 
-    return *m_ptitle;
+    return m_title;
 }
 
 const std::vector<uint256>& PollReference::Votes() const
@@ -323,30 +418,43 @@ int64_t PollReference::Expiration() const
     return m_timestamp + (int64_t) (m_duration_days * 86400);
 }
 
-CBlockIndex* PollReference::GetStartingBlockIndexPtr() const
+CBlockIndex* PollReference::GetStartingBlockIndexPtr() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 block_hash;
     CTransaction tx;
 
-    GetTransaction(*m_ptxid, tx, block_hash);
+    GetTransaction(m_txid, tx, block_hash);
 
-    return mapBlockIndex[block_hash];
+    auto iter = mapBlockIndex.find(block_hash);
+
+    if (iter == mapBlockIndex.end()) {
+        return nullptr;
+    }
+
+    return iter->second;
 }
 
-CBlockIndex* PollReference::GetEndingBlockIndexPtr() const
+CBlockIndex* PollReference::GetEndingBlockIndexPtr(CBlockIndex* pindex_start) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    if (!pindex_start) {
+        pindex_start = GetStartingBlockIndexPtr();
+
+        // If there is still no pindex_start, there cannot be an end either.
+        if (!pindex_start) {
+            return nullptr;
+        }
+    }
+
     // Has poll ended?
     if (Expired(GetAdjustedTime())) {
-        GRC::BlockFinder blockfinder;
-
         // Find and return the last block that contains valid votes for the poll.
-        return blockfinder.FindByMinTime(Expiration());
+        return GRC::BlockFinder::FindByMinTimeFromGivenIndex(Expiration(), pindex_start);
     }
 
     return nullptr;
 }
 
-std::optional<int> PollReference::GetStartingHeight() const
+std::optional<int> PollReference::GetStartingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CBlockIndex* pindex = GetStartingBlockIndexPtr();
 
@@ -357,7 +465,7 @@ std::optional<int> PollReference::GetStartingHeight() const
     return std::nullopt;
 }
 
-std::optional<int> PollReference::GetEndingHeight() const
+std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex* pindex = GetEndingBlockIndexPtr();
 
@@ -368,17 +476,22 @@ std::optional<int> PollReference::GetEndingHeight() const
     return std::nullopt;
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight() const
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
 
+    // Unfortunately, cs_main must be locked for the duration of this method, because it uses the chain index pointers.
+    LOCK(cs_main);
+
     // Get the start and end of the poll.
     CBlockIndex* const pindex_start = GetStartingBlockIndexPtr();
-    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr();
 
     // If pindex_start is a nullptr, this is a degenerate poll reference. Return std::nullopt.
     if (pindex_start == nullptr) return std::nullopt;
+
+    const CBlockIndex* pindex_end = GetEndingBlockIndexPtr(pindex_start);
+
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
@@ -392,6 +505,28 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
     } else {
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll end height = %i.",
                  __func__, pindex_end->nHeight);
+    }
+
+    // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
+    // vote contribute to the magnitude correction for pools.
+    std::vector<MiningPool> pools_not_voting;
+    const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: %u out of %u pool cpids voted.",
+             __func__,
+             result->m_pools_voted.size(),
+             mining_pools.size());
+
+    for (const auto& pool : mining_pools) {
+        if (result && std::find(result->m_pools_voted.begin(), result->m_pools_voted.end(),
+                                pool.m_cpid) == result->m_pools_voted.end()) {
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: pool with cpid %s did not vote and will be removed from magnitude "
+                                            "in the AVW calculation.",
+                     __func__,
+                     pool.m_cpid.ToString());
+
+            pools_not_voting.push_back(pool);
+        }
     }
 
     // Since this calculation by its very nature is going to be heavyweight, we are going to
@@ -439,7 +574,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
 
                 superblock_well_formed = superblock.WellFormed();
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 
@@ -489,7 +624,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight() const
             if (claim && claim->ContainsSuperblock()) {
                 const GRC::Superblock& superblock = *claim->m_superblock;
 
-                for (const auto& pool : g_mining_pools.GetMiningPools()) {
+                for (const auto& pool : pools_not_voting) {
                     scaled_pool_magnitude += superblock.m_cpids.MagnitudeOf(pool.m_cpid).Scaled();
                 }
 
@@ -595,13 +730,14 @@ void PollReference::UnlinkVote(const uint256 txid)
 // -----------------------------------------------------------------------------
 // Class: PollRegistry
 // -----------------------------------------------------------------------------
-
 const PollRegistry::Sequence PollRegistry::Polls() const
 {
+    LOCK(GetPollRegistry().cs_poll_registry);
+
     return Sequence(m_polls);
 }
 
-const PollReference* PollRegistry::TryLatestActive() const
+const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int64_t now = GetAdjustedTime();
 
@@ -628,7 +764,7 @@ const PollReference* PollRegistry::TryLatestActive() const
     return latest_not_expired;
 }
 
-const PollReference* PollRegistry::TryByTxid(const uint256 txid) const
+const PollReference* PollRegistry::TryByTxid(const uint256 txid) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     const auto iter = m_polls_by_txid.find(txid);
 
@@ -639,12 +775,12 @@ const PollReference* PollRegistry::TryByTxid(const uint256 txid) const
     return iter->second;
 }
 
-PollReference* PollRegistry::TryBy(const uint256 txid)
+PollReference* PollRegistry::TryBy(const uint256 txid) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return const_cast<PollReference*>(TryByTxid(txid));
 }
 
-const PollReference* PollRegistry::TryByTitle(const std::string& title) const
+const PollReference* PollRegistry::TryByTitle(const std::string& title) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     const auto iter = m_polls.find(title);
 
@@ -655,12 +791,13 @@ const PollReference* PollRegistry::TryByTitle(const std::string& title) const
     return &iter->second;
 }
 
-PollReference* PollRegistry::TryBy(const std::string& title)
+PollReference* PollRegistry::TryBy(const std::string& title) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return const_cast<PollReference*>(TryByTitle(title));
 }
 
 const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const uint256 txid)
+EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     // Check and see if it is already in the registry and return the existing ref immediately if found. (This is
     // the equivalent of the plain TryByTxid() functionality.)
@@ -747,12 +884,16 @@ const PollReference* PollRegistry::TryByTxidWithAddHistoricalPollAndVotes(const 
 
 void PollRegistry::Reset()
 {
+    LOCK(cs_poll_registry);
+
     m_polls.clear();
     m_polls_by_txid.clear();
     m_latest_poll = nullptr;
+    registry_traversal_in_progress = false;
+    reorg_occurred_during_reg_traversal = false;
 }
 
-bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) const
+bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
 {
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:
@@ -767,29 +908,61 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx) co
         return true;
     }
 
+    // V2+ validations
     const auto payload = contract.SharePayloadAs<PollPayload>();
 
-    if (payload->m_version < 2) {
-        LogPrint(LogFlags::CONTRACT, "%s: rejected legacy poll", __func__);
-        return false;
-    }
+    if (!PollValidator(*payload, tx).Validate(DoS)) return false;
 
     CTxDB txdb("r");
 
-    return PollClaimValidator(txdb).Validate(*payload, tx);
+    if (!PollClaimValidator(txdb).Validate(*payload, tx)) {
+        DoS = 25;
+        return false;
+    }
+
+    return true;
 }
 
-void PollRegistry::Add(const ContractContext& ctx)
+bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 {
+    // Vote contract claims do not affect consensus. Vote claim validation
+    // occurs on-demand while computing the results of the poll:
+    //
+    if (ctx.m_contract.m_type == ContractType::VOTE) {
+        return true;
+    }
+
+    const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    // This is why we had to introduce BlockValidate, and this is critical
+    // to ensure that v2 poll payloads are not allowed in blocks for the v3
+    // height and beyond.
+    if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+        return false;
+    }
+
+    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+}
+
+void PollRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
     if (ctx->m_type == ContractType::VOTE) {
         AddVote(ctx);
     } else {
         AddPoll(ctx);
     }
-}
+ }
 
-void PollRegistry::Delete(const ContractContext& ctx)
+void PollRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    LOCK(cs_poll_registry);
+
+    DetectReorg();
+
     if (ctx->m_type == ContractType::VOTE) {
         DeleteVote(ctx);
     } else {
@@ -797,38 +970,50 @@ void PollRegistry::Delete(const ContractContext& ctx)
     }
 }
 
-void PollRegistry::AddPoll(const ContractContext& ctx)
+void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    // In a contract replay inserts may overlap what was already inserted. Check to see if poll already exists, and
+    // if so skip this add.
+    if (m_polls_by_txid.find(ctx.m_tx.GetHash()) != m_polls_by_txid.end()) {
+        return;
+    }
     std::string poll_title = payload->m_poll.m_title;
 
     // The title used as the key for the m_poll map keyed by title, and also checked for duplicates, should
     // not be case-sensitive, regardless of whether v1 or v2+. We should not be allowing the insertion of two v2 polls
     // with the same title except for a difference in case.
-    poll_title = ToLower(poll_title);
-
-    auto result_pair = m_polls.emplace(std::move(poll_title), PollReference());
+    auto result_pair = m_polls.emplace(ToLower(poll_title), PollReference());
 
     if (result_pair.second) {
         const std::string& title = result_pair.first->first;
 
         PollReference& poll_ref = result_pair.first->second;
         poll_ref.m_ptitle = &title;
+        poll_ref.m_title = poll_title;
+        poll_ref.m_payload_version = payload->m_version;
+        poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
 
         m_latest_poll = &poll_ref;
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
-        poll_ref.m_ptxid = &result_pair.first->first;
+        poll_ref.m_txid = result_pair.first->first;
 
         if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());
         }
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added poll %s to the registry, m_polls.size() = %u.",
+                 __func__,
+                 *poll_ref.m_ptitle,
+                 m_polls.size());
     }
 }
 
-void PollRegistry::AddVote(const ContractContext& ctx)
+void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     if (ctx->m_version >= 2) {
         const auto vote = ctx->SharePayloadAs<Vote>();
@@ -841,7 +1026,22 @@ void PollRegistry::AddVote(const ContractContext& ctx)
                     ctx.m_tx.GetHash().ToString(),
                     poll_ref->Txid().ToString());
             } else {
+                // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
+                // if so skip this add. This gets expensive as the number of votes increases.
+                // TODO: consider changing Votes to a map.
+                auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
+                if (existing_vote != poll_ref->Votes().end()) {
+                    return;
+                }
+
                 poll_ref->LinkVote(ctx.m_tx.GetHash());
+
+                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Added vote %s to poll %s, poll_ref->Votes().size() = %u.",
+                         __func__,
+                         ctx.m_tx.GetHash().GetHex(),
+                         *poll_ref->m_ptitle,
+                         poll_ref->Votes().size());
+
             }
         }
 
@@ -856,31 +1056,46 @@ void PollRegistry::AddVote(const ContractContext& ctx)
     }
 
     if (PollReference* poll_ref = TryBy(title)) {
+        // In a contract replay inserts may overlap what was already inserted. Check to see if vote already exists, and
+        // if so skip this add. This gets expensive as the number of votes increases.
+        // TODO: consider changing Votes to a map.
+        auto existing_vote = std::find(poll_ref->Votes().begin(), poll_ref->Votes().end(), ctx.m_tx.GetHash());
+        if (existing_vote != poll_ref->Votes().end()) {
+            return;
+        }
         poll_ref->LinkVote(ctx.m_tx.GetHash());
     }
 }
 
-void PollRegistry::DeletePoll(const ContractContext& ctx)
+void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    if (ctx->m_version >= 2) {
-        m_polls.erase(payload->m_poll.m_title);
-    } else {
-        m_polls.erase(boost::to_lower_copy(payload->m_poll.m_title));
-    }
+    m_polls.erase(ToLower(payload->m_poll.m_title));
 
     m_polls_by_txid.erase(ctx.m_tx.GetHash());
     m_latest_poll = nullptr;
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted poll %s to the registry, m_polls.size() = %u.",
+             __func__,
+             payload->m_poll.m_title,
+             m_polls.size());
+
 }
 
-void PollRegistry::DeleteVote(const ContractContext& ctx)
+void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     if (ctx->m_version >= 2) {
         const auto vote = ctx->SharePayloadAs<Vote>();
 
         if (PollReference* poll_ref = TryBy(vote->m_poll_txid)) {
             poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Deleted vote %s from poll %s, poll_ref->Votes().size() = %u.",
+                     __func__,
+                     ctx.m_tx.GetHash().GetHex(),
+                     *poll_ref->m_ptitle,
+                     poll_ref->Votes().size());
         }
 
         return;
@@ -898,23 +1113,43 @@ void PollRegistry::DeleteVote(const ContractContext& ctx)
     }
 }
 
+void PollRegistry::DetectReorg()
+{
+    // Reorg detector
+    // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
+    // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
+    // these handlers are only triggered by those two contract types.
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, ",
+             __func__,
+             registry_traversal_in_progress,
+             reorg_occurred_during_reg_traversal
+             );
+
+    if (registry_traversal_in_progress && g_reorg_in_progress) {
+        reorg_occurred_during_reg_traversal = true;
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to true.", __func__);
+    } else {
+        reorg_occurred_during_reg_traversal = false;
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to false.", __func__);
+    }
+}
 // -----------------------------------------------------------------------------
 // Class: PollRegistry::Sequence
 // -----------------------------------------------------------------------------
 
 using Sequence = PollRegistry::Sequence;
 
-Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags)
+Sequence::Sequence(const PollMapByTitle& polls, const FilterFlag flags) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     : m_polls(polls), m_flags(flags)
 {
 }
 
-Sequence Sequence::Where(const FilterFlag flags) const
+Sequence Sequence::Where(const FilterFlag flags) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return Sequence(m_polls, flags);
 }
 
-Sequence Sequence::OnlyActive(const bool active_only) const
+Sequence Sequence::OnlyActive(const bool active_only) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int flags = m_flags;
 
@@ -925,7 +1160,7 @@ Sequence Sequence::OnlyActive(const bool active_only) const
     return Sequence(m_polls, static_cast<FilterFlag>(flags));
 }
 
-Sequence::Iterator Sequence::begin() const
+Sequence::Iterator Sequence::begin() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     int64_t now = 0;
 
@@ -936,7 +1171,7 @@ Sequence::Iterator Sequence::begin() const
     return Iterator(m_polls.begin(), m_polls.end(), m_flags, now);
 }
 
-Sequence::Iterator Sequence::end() const
+Sequence::Iterator Sequence::end() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return Iterator(m_polls.end());
 }
@@ -964,12 +1199,12 @@ Iterator::Iterator(BaseIterator end) : m_iter(end), m_end(end)
 {
 }
 
-const PollReference& Iterator::Ref() const
+const PollReference& Iterator::Ref() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter->second;
 }
 
-PollOption Iterator::TryPollFromDisk() const
+PollOption Iterator::TryPollFromDisk() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter->second.TryReadFromDisk();
 }
@@ -984,7 +1219,7 @@ Iterator::pointer Iterator::operator->() const
     return this;
 }
 
-Iterator& Iterator::operator++()
+Iterator& Iterator::operator++() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     ++m_iter;
     SeekNextMatch();
@@ -992,7 +1227,7 @@ Iterator& Iterator::operator++()
     return *this;
 }
 
-Iterator Iterator::operator++(int)
+Iterator Iterator::operator++(int) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     Iterator copy(*this);
     ++(*this);
@@ -1000,17 +1235,17 @@ Iterator Iterator::operator++(int)
     return copy;
 }
 
-bool Iterator::operator==(const Iterator& other) const
+bool Iterator::operator==(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter == other.m_iter;
 }
 
-bool Iterator::operator!=(const Iterator& other) const
+bool Iterator::operator!=(const Iterator& other) const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     return m_iter != other.m_iter;
 }
 
-void Iterator::SeekNextMatch()
+void Iterator::SeekNextMatch() EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
 {
     if (m_flags == FilterFlag::NO_FILTER) {
         return;

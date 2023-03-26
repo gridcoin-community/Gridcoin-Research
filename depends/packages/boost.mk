@@ -1,8 +1,8 @@
 package=boost
 GCCFLAGS?=
-$(package)_version=1_73_0
-$(package)_download_path=https://boostorg.jfrog.io/artifactory/main/release/$(subst _,.,$($(package)_version))/source/
-$(package)_file_name=$(package)_$($(package)_version).tar.bz2
+$(package)_version=1.73.0
+$(package)_download_path=https://boostorg.jfrog.io/artifactory/main/release/$($(package)_version)/source/
+$(package)_file_name=boost_$(subst .,_,$($(package)_version)).tar.bz2
 $(package)_sha256_hash=4eb3b8d442b426dc35346235c8733b5ae35ba431690e38c6a8263dce9fcbb402
 $(package)_dependencies=zlib
 
@@ -28,7 +28,7 @@ ifneq (,$(findstring clang,$($(package)_cxx)))
 endif
 $(package)_archiver_$(host_os)=$($(package)_ar)
 $(package)_config_libraries=filesystem,system,thread,test,iostreams
-$(package)_cxxflags=-std=c++17 -fvisibility=hidden
+$(package)_cxxflags+=-std=c++17
 $(package)_cxxflags_linux=-fPIC
 $(package)_cxxflags_android=-fPIC
 endef
@@ -46,5 +46,5 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  ./b2 -d0 -j4 --prefix=$($(package)_staging_prefix_dir) $($(package)_config_opts) toolset=$($(package)_toolset_$(host_os)) install
+  ./b2 -d0 -j4 --prefix=$($(package)_staging_prefix_dir) $($(package)_config_opts) toolset=$($(package)_toolset_$(host_os)) --no-cmake-config install
 endef

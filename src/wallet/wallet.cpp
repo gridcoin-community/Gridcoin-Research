@@ -21,11 +21,13 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
 #include "policy/fees.h"
 #include "node/blockstorage.h"
 
+#include <stdexcept>
 
 using namespace std;
 
@@ -35,6 +37,8 @@ extern MilliTimer g_timer;
 bool fConfChange;
 unsigned int nDerivationMethodIndex;
 extern std::atomic<int64_t> g_nTimeBestReceived;
+
+const uint32_t BIP32_HARDENED_KEY_LIMIT = 0x80000000;
 
 namespace {
 struct CompareValueOnly
@@ -51,38 +55,19 @@ struct CompareValueOnly
 // Class: CWallet
 // -----------------------------------------------------------------------------
 
-const CPubKey& CWallet::MasterPublicKey()
-{
-    // If the master key changes, add a conditional entry to this method that
-    // returns the new key for the appropriate height.
-
-    // 049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a
-    // 6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a
-    static const CPubKey since_block_0({
-        0x04, 0x9a, 0xc0, 0x03, 0xb3, 0x31, 0x8d, 0x9f, 0xe2, 0x8b, 0x28,
-        0x30, 0xf6, 0xa9, 0x5a, 0x26, 0x24, 0xce, 0x2a, 0x69, 0xfb, 0x0c,
-        0x0c, 0x7a, 0xc0, 0xb5, 0x13, 0xef, 0xcc, 0x1e, 0x93, 0xa6, 0xa6,
-        0xe8, 0xeb, 0xa8, 0x44, 0x81, 0x15, 0x5d, 0xd8, 0x2f, 0x2f, 0x11,
-        0x04, 0xe0, 0xff, 0x62, 0xc6, 0x9d, 0x66, 0x2b, 0x00, 0x94, 0x63,
-        0x9b, 0x71, 0x06, 0xab, 0xc5, 0xd8, 0x4f, 0x94, 0x8c, 0x0a
-    });
-
-    return since_block_0;
-}
-
-const CBitcoinAddress CWallet::MasterAddress()
+const CBitcoinAddress CWallet::MasterAddress(int height)
 {
     CBitcoinAddress master_address;
-    master_address.Set(MasterPublicKey().GetID());
+    master_address.Set(CPubKey(Params().MasterKey(height)).GetID());
 
     return master_address;
 }
 
-CKey CWallet::MasterPrivateKey() const
+CKey CWallet::MasterPrivateKey(int height) const
 {
     CKey key_out;
 
-    GetKey(MasterPublicKey().GetID(), key_out);
+    GetKey(CPubKey(Params().MasterKey(height)).GetID(), key_out);
 
     return key_out;
 }
@@ -90,26 +75,70 @@ CKey CWallet::MasterPrivateKey() const
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
-    bool fCompressed = CanSupportFeature(FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
+    bool fCompressed = CanSupportFeature(wallet::FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
-    CKey key;
-    key.MakeNewKey(fCompressed);
+    CKey secret;
+
+    // Create new metadata
+    int64_t nCreationTime = GetAdjustedTime();
+    CKeyMetadata metadata(nCreationTime);
+
+    // use HD key derivation if HD was enabled during wallet creation
+    if (IsHDEnabled()) {
+        // for now we use a fixed keypath scheme of m/0'/0'/k
+        CKey key;                      //master key seed (256bit)
+        CExtKey masterKey;             //hd master key
+        CExtKey accountKey;            //key at m/0'
+        CExtKey externalChainChildKey; //key at m/0'/0'
+        CExtKey childKey;              //key at m/0'/0'/<n>'
+
+        // try to get the master key
+        if (!GetKey(hdChain.masterKeyID, key))
+            throw std::runtime_error("CWallet::GenerateNewKey(): Master key not found");
+
+        masterKey.SetSeed(key);
+
+        // derive m/0'
+        // use hardened derivation (child keys >= 0x80000000 are hardened after bip32)
+        masterKey.Derive(accountKey, BIP32_HARDENED_KEY_LIMIT);
+
+        // derive m/0'/0'
+        accountKey.Derive(externalChainChildKey, BIP32_HARDENED_KEY_LIMIT);
+
+        // derive child key at next index, skip keys already known to the wallet
+        do
+        {
+            // always derive hardened keys
+            // childIndex | BIP32_HARDENED_KEY_LIMIT = derive childIndex in hardened child-index-range
+            // example: 1 | BIP32_HARDENED_KEY_LIMIT == 0x80000001 == 2147483649
+            externalChainChildKey.Derive(childKey, hdChain.nExternalChainCounter | BIP32_HARDENED_KEY_LIMIT);
+            metadata.hdKeypath     = "m/0'/0'/" + ToString(hdChain.nExternalChainCounter) + "'";
+            metadata.hdMasterKeyID = hdChain.masterKeyID;
+            // increment childkey index
+            hdChain.nExternalChainCounter++;
+        } while(HaveKey(childKey.key.GetPubKey().GetID()));
+        secret = childKey.key;
+
+        // update the chain model in the database
+        if (!CWalletDB(strWalletFile).WriteHDChain(hdChain))
+            throw std::runtime_error("CWallet::GenerateNewKey(): Writing HD chain model failed");
+    } else {
+        secret.MakeNewKey(fCompressed);
+    }
 
     // Compressed public keys were introduced in version 0.6.0
     if (fCompressed)
-        SetMinVersion(FEATURE_COMPRPUBKEY);
+        SetMinVersion(wallet::FEATURE_COMPRPUBKEY);
 
-    CPubKey pubkey = key.GetPubKey();
+    CPubKey pubkey = secret.GetPubKey();
 
-    // Create new metadata
-    int64_t nCreationTime =  GetAdjustedTime();
-    mapKeyMetadata[pubkey.GetID()] = CKeyMetadata(nCreationTime);
+    mapKeyMetadata[pubkey.GetID()] = metadata;
     if (!nTimeFirstKey || nCreationTime < nTimeFirstKey)
         nTimeFirstKey = nCreationTime;
 
-    if (!AddKey(key))
+    if (!AddKey(secret))
         throw std::runtime_error("CWallet::GenerateNewKey() : AddKey failed");
-    return key.GetPubKey();
+    return pubkey;
 }
 
 bool CWallet::AddKey(const CKey& key) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
@@ -265,20 +294,13 @@ void CWallet::SetBestChain(const CBlockLocator& loc)
     walletdb.WriteBestBlock(loc);
 }
 
-bool CWallet::SetMinVersion(enum WalletFeature nVersion, CWalletDB* pwalletdbIn, bool fExplicit)
+bool CWallet::SetMinVersion(enum wallet::WalletFeature nVersion, CWalletDB* pwalletdbIn)
 {
     LOCK(cs_wallet); // nWalletVersion
     if (nWalletVersion >= nVersion)
         return true;
 
-    // when doing an explicit upgrade, if we pass the max version permitted, upgrade all the way
-    if (fExplicit && nVersion > nWalletMaxVersion)
-            nVersion = FEATURE_LATEST;
-
     nWalletVersion = nVersion;
-
-    if (nVersion > nWalletMaxVersion)
-        nWalletMaxVersion = nVersion;
 
     if (fFileBacked)
     {
@@ -288,18 +310,6 @@ bool CWallet::SetMinVersion(enum WalletFeature nVersion, CWalletDB* pwalletdbIn,
         if (!pwalletdbIn)
             delete pwalletdb;
     }
-
-    return true;
-}
-
-bool CWallet::SetMaxVersion(int nVersion)
-{
-    LOCK(cs_wallet); // nWalletVersion, nWalletMaxVersion
-    // cannot downgrade below current version
-    if (nWalletVersion > nVersion)
-        return false;
-
-    nWalletMaxVersion = nVersion;
 
     return true;
 }
@@ -357,7 +367,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         // Encryption was introduced in version 0.4.0
-        SetMinVersion(FEATURE_WALLETCRYPT, pwalletdbEncryption, true);
+        SetMinVersion(wallet::FEATURE_WALLETCRYPT, pwalletdbEncryption);
 
         if (fFileBacked)
         {
@@ -370,6 +380,15 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         Lock();
         Unlock(strWalletPassphrase);
+
+        // if we are using HD, replace the HD master key (seed) with a new one
+        if (IsHDEnabled()) {
+            CKey key;
+            CPubKey masterPubKey = GenerateNewHDMasterKey();
+            if (!SetHDMasterKey(masterPubKey))
+                return false;
+        }
+
         NewKeyPool();
         Lock();
 
@@ -556,12 +575,14 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
         NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
 
         // notify an external script when a wallet transaction comes in or is updated
+        #if HAVE_SYSTEM
         std::string strCmd = gArgs.GetArg("-walletnotify", "");
         if (!strCmd.empty())
         {
             boost::replace_all(strCmd, "%s", hash.GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free
         }
+        #endif
 
     }
     return true;
@@ -599,14 +620,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 
 bool CWallet::EraseFromWallet(uint256 hash)
 {
-    if (!fFileBacked)
-        return false;
-    {
-        LOCK(cs_wallet);
-        if (mapWallet.erase(hash))
-            CWalletDB(strWalletFile).EraseTx(hash);
-    }
-    return true;
+    LOCK(cs_wallet);
+
+    return fFileBacked && mapWallet.erase(hash) && CWalletDB(strWalletFile).EraseTx(hash);
 }
 
 
@@ -660,6 +676,72 @@ bool CWallet::IsChange(const CTxOut& txout) const
             return true;
     }
     return false;
+}
+
+CPubKey CWallet::GenerateNewHDMasterKey()
+{
+    CKey key;
+    key.MakeNewKey(true);
+    return DeriveNewMasterHDKey(key);
+}
+
+CPubKey CWallet::DeriveNewMasterHDKey(const CKey& key)
+{
+    int64_t nCreationTime = GetTime();
+    CKeyMetadata metadata(nCreationTime);
+
+    // calculate the pubkey
+    CPubKey pubkey = key.GetPubKey();
+    assert(key.VerifyPubKey(pubkey));
+
+    // set the hd keypath to "m" -> Master, refers the masterkeyid to itself
+    metadata.hdKeypath     = "m";
+    metadata.hdMasterKeyID = pubkey.GetID();
+
+    {
+        LOCK(cs_wallet);
+
+        // mem store the metadata
+        mapKeyMetadata[pubkey.GetID()] = metadata;
+
+        // write the key&metadata to the database
+        if (!AddKey(key))
+            throw std::runtime_error(std::string(__func__)+": AddKeyPubKey failed");
+    }
+
+    return pubkey;
+}
+
+bool CWallet::SetHDMasterKey(const CPubKey& pubkey)
+{
+    LOCK(cs_wallet);
+
+    // ensure this wallet.dat can only be opened by clients supporting HD
+    SetMinVersion(wallet::FEATURE_HD);
+
+    // store the keyid (hash160) together with
+    // the child index counter in the database
+    // as a hdchain object
+    CHDChain newHdChain;
+    newHdChain.masterKeyID = pubkey.GetID();
+    SetHDChain(newHdChain, false);
+
+    return true;
+}
+
+bool CWallet::SetHDChain(const CHDChain& chain, bool memonly)
+{
+    LOCK(cs_wallet);
+    if (!memonly && !CWalletDB(strWalletFile).WriteHDChain(chain))
+        throw runtime_error("SetHDChain(): writing chain failed");
+
+    hdChain = chain;
+    return true;
+}
+
+bool CWallet::IsHDEnabled() const
+{
+    return !hdChain.masterKeyID.IsNull();
 }
 
 int64_t CWalletTx::GetTxTime() const
@@ -1032,6 +1114,48 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
     return ret;
 }
 
+// Scan the block chain (starting in pindexStart) for MRC request transactions.
+// If fUpdate is true, found transactions that already exist in the wallet will be updated.
+// This restores MRC request transactions to the wallet that may have been removed
+// do to an overly aggressive ResendWalletTransactions in 5.4.1.0. Note the MRC
+// payment transactions were not affected. The change in effective balance due to this
+// is very small, since a successful MRC request costs 0.011 GRC.
+int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate)
+{
+    int ret = 0;
+
+    {
+        LOCK2(cs_main, cs_wallet);
+        for(CBlockIndex* pindex = pindexStart; pindex && pindex->nHeight < pindexEnd->nHeight;)
+        {
+            // no need to read and scan block, if block was created before
+            // our wallet birthday (as adjusted for block time variability)
+            if (nTimeFirstKey && (pindex->nTime < (nTimeFirstKey - 7200))) {
+                pindex = pindex->pnext;
+                continue;
+            }
+
+            if (pindex->ResearchMRCSubsidy() > 0) {
+                // If at pindex there were MRC payment(s), then pindex->pprev there
+                // were MRC requests.
+                CBlock block;
+                ReadBlockFromDisk(block, pindex->pprev, Params().GetConsensus());
+                for (auto const& tx : block.vtx)
+                {
+                    if (!tx.GetContracts().empty()
+                            && tx.GetContracts()[0].m_type == GRC::ContractType::MRC
+                            && AddToWalletIfInvolvingMe(tx, &block, fUpdate))
+                        ret++;
+                }
+            }
+
+            pindex = pindex->pnext;
+        }
+    }
+    return ret;
+}
+
+
 void CWallet::ReacceptWalletTransactions()
 {
     CTxDB txdb("r");
@@ -1097,35 +1221,6 @@ void CWallet::ReacceptWalletTransactions()
 
 void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
-    // Nodes erase version 1 transactions from the mempool at the
-    // block version 11 threshold to prepare for version 2. If we
-    // still have unconfirmed version 1 transactions removed from
-    // the pool when the transition occurred, we can't switch the
-    // format to version 2 because we need to re-sign these which
-    // may change the properties of the transaction in a way that
-    // requires the consent of the user. Log a message instead so
-    // that the user can take action if needed:
-    //
-    if (nVersion == 1)
-    {
-        if (IsCoinBase() || IsCoinStake())
-        {
-            return;
-        }
-
-        const uint256 hash = GetHash();
-
-        if (!txdb.ContainsTx(hash))
-        {
-            LogPrintf(
-                "WARNING: %s: unable to resend legacy version 1 tx %s",
-                __func__,
-                hash.ToString());
-        }
-
-        return;
-    }
-
     for (auto const& tx : vtxPrev)
     {
         if (!(tx.IsCoinBase() || tx.IsCoinStake()))
@@ -1158,12 +1253,20 @@ void CWallet::ResendWalletTransactions(bool fForce)
     if (!fForce)
     {
         // Do this infrequently and randomly to avoid giving away
-        // that these are our transactions.
+        // that these are our transactions. Also only do if the wallet
+        // is in sync. During initial block loads, etc. using a transferred
+        // wallet.dat file, the unconfirmed status of the transactions may not be correct.
+        if (IsInitialBlockDownload() || OutOfSyncByAge()) {
+            return;
+        }
+
         static int64_t nNextTime;
         if ( GetAdjustedTime() < nNextTime)
             return;
         bool fFirst = (nNextTime == 0);
-        nNextTime =  GetAdjustedTime() + GetRand(30 * 60);
+
+        // Choose a random time up to about 10 blocks at target spacing.
+        nNextTime =  GetAdjustedTime() + GetRand(GetTargetSpacing(nBestHeight) * 10);
         if (fFirst)
             return;
 
@@ -1174,33 +1277,137 @@ void CWallet::ResendWalletTransactions(bool fForce)
         nLastTime =  GetAdjustedTime();
     }
 
-    // Rebroadcast any of our txes that aren't in a block yet
+    std::map<uint256, CTransaction> to_be_erased;
+
+    unsigned int txns_relayed = 0;
+    unsigned int txns_failed_validation = 0;
+    unsigned int txns_erased_from_wallet = 0;
+
     CTxDB txdb("r");
     {
         LOCK(cs_wallet);
-        // Sort them in chronological order
+        // Sort them in chronological order.
         multimap<unsigned int, CWalletTx*> mapSorted;
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: mapWallet.size() = %u.",
+                 __func__,
+                 mapWallet.size());
+
         for (auto &item : mapWallet)
         {
             CWalletTx& wtx = item.second;
-            // Don't rebroadcast until it's had plenty of time that
-            // it should have gotten in already by now.
-            if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > 5 * 60)
-                mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
+
+            // Resend only if hashBlock is null AND not in the mainchain AND not in the mempool (this is depth = -1).
+            if (wtx.hashBlock.IsNull() && wtx.GetDepthInMainChain() == -1) {
+                // Don't rebroadcast until it's had plenty of time that it should have gotten in already by now.
+                // Here we are using time of approximately 5 blocks at target spacing.
+                if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > GetTargetSpacing(nBestHeight) * 5)
+                    mapSorted.insert(make_pair(wtx.nTimeReceived, &wtx));
+            }
         }
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Candidate transactions for sending: mapSorted.size() = %u",
+                 __func__,
+                 mapSorted.size());
+
         for (auto const &item : mapSorted)
         {
             CWalletTx& wtx = *item.second;
-            if (CheckTransaction(wtx)) {
+
+            if (wtx.RevalidateTransaction(txdb)) {
+                // Transaction is valid for relaying.
                 wtx.RelayWalletTransaction(txdb);
+
+                ++txns_relayed;
             } else {
-                LogPrintf("ResendWalletTransactions() : CheckTransaction failed for transaction %s", wtx.GetHash().ToString());
+                LogPrintf("WARNING: %s: CheckTransaction failed for transaction %s. Transaction will be "
+                          "erased.",
+                          __func__,
+                          wtx.GetHash().ToString());
+
+                to_be_erased.insert(std::make_pair(wtx.GetHash(), wtx));
+
+                ++txns_failed_validation;
             }
         }
     }
+
+    if (to_be_erased.size()) {
+        LogPrint(BCLog::LogFlags::VERBOSE, "WARNING: %s: to_be_erased.size() = %u", __func__, to_be_erased.size());
+    }
+
+    for (const auto& wtx : to_be_erased) {
+
+        const CTransaction& tx = wtx.second;
+
+        if (EraseFromWallet(wtx.first)) {
+            LogPrintf("WARNING %s: Erased invalid transaction %s from the wallet.", __func__, wtx.first.ToString());
+
+            ++txns_erased_from_wallet;
+        } else {
+            LogPrintf("WARNING %s: Unable to erase invalid transaction %s from the wallet.",
+                      __func__, wtx.first.ToString());
+        }
+
+        NotifyTransactionChanged(this, tx.GetHash(), CT_DELETED);
+    }
+
+    LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: %u transactions relayed, %u transactions failed validation, "
+                                       "%u transactions erased from wallet.",
+             __func__,
+             txns_relayed,
+             txns_failed_validation,
+             txns_erased_from_wallet);
 }
 
+bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
+{
+    CTransaction tx = (CTransaction) *this;
 
+    // Redo basic transaction check
+    if (!CheckTransaction(tx)) return false;
+
+    // Do a subset of the AcceptToMemoryPool transaction checks. Here we are going to check and see if the inputs exist
+    // and also do the vanilla contract and GRC specific contract checks.
+    MapPrevTx mapInputs;
+    map<uint256, CTxIndex> mapUnused;
+    bool fInvalid = false;
+    if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+    {
+        if (fInvalid) {
+            return error("%s: FetchInputs found invalid tx %s", __func__, tx.GetHash().ToString());
+        }
+        return error("%s: FetchInputs unable to fetch all inputs for tx %s", __func__, tx.GetHash().ToString());
+    }
+
+    // Validate any contracts published in the transaction:
+
+    if (!tx.GetContracts().empty()) {
+        if (!CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+            return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
+        }
+
+        int DoS = 0;
+        if (!GRC::ValidateContracts(tx, DoS)) {
+            return error("%s: GRC::ValidateContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
+        }
+    }
+
+    // At this point we should not be relaying any version 1 transactions, since we are WAY
+    // past the block v11 transition, which was also the transition from tx version 1 to 2.
+    // Further any version 1 transactions in the wallet that have not been sent MUST be invalid
+    // and should be deleted from both the wallet and the mempool.
+    if (nVersion == 1 && !(IsCoinBase() || IsCoinStake()) && !txdb.ContainsTx(GetHash())) {
+        LogPrintf("WARNING: %s: Invalid unsent version 1 tx %s will be erased from wallet.",
+                  __func__,
+                  GetHash().ToString()
+                  );
+
+        return false;
+    }
+
+    return true;
+}
 
 
 
@@ -1739,7 +1946,7 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
             if (LogInstance().WillLogCategory(BCLog::LogFlags::MINER) && fMiner)
             {
                 LogPrintf("SelectCoinsForStaking: UTXO=%s (BalanceToConsider=%.8f >= Value=%.8f)",
-                          pcoin->vout[i].GetHash().ToString(),
+                          pcoin->GetHash().ToString(),
                           BalanceToConsider / (double) COIN,
                           pcoin->vout[i].nValue / (double) COIN);
             }
@@ -1815,8 +2022,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 wtxNew.fFromMe = true;
 
                 int64_t nTotalValue = nValueOut + nFeeRet;
-                // dPriority is not currently used. Commented out.
-                //double dPriority = 0;
 
                 // vouts to the payees
                 for (auto const& s : vecSend)
@@ -1867,23 +2072,13 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                   FormatMoney(setcoins_total));
                     }
 
-                    // Compute dPriority on automatically selected coins.
-                    /*
-                    for (auto const& input : setCoins_out)
-                    {
-                        int64_t nCredit = input.first->vout[input.second].nValue;
-                        dPriority += (double) nCredit * input.first->GetDepthInMainChain();
-                    }
-                    */
                 }
                 else
                 {
-                    // Add up input value for the provided set of coins, and also compute dPriority. (dPriority is
-                    // commented out because it is not actually used right now.
+                    // Add up input value for the provided set of coins.
                     for (auto const& input : setCoins_in)
                     {
                         int64_t nCredit = input.first->vout[input.second].nValue;
-                        //dPriority += (double) nCredit * input.first->GetDepthInMainChain();
                         nValueIn += nCredit;
                     }
                 }
@@ -2028,9 +2223,6 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 if (nBytes >= MAX_STANDARD_TX_SIZE) {
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }
-
-                // dPriority is not currently used.
-                //dPriority /= nBytes;
 
                 // Check that enough fee is included
                 int64_t nPayFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
@@ -2356,7 +2548,8 @@ bool CWallet::NewKeyPool()
         if (IsLocked())
             return false;
 
-        int64_t nKeys = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
+        unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+        int64_t nKeys = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
         for (int i = 0; i < nKeys; i++)
         {
             int64_t nIndex = i+1;
@@ -2380,10 +2573,12 @@ bool CWallet::TopUpKeyPool(unsigned int nSize)
 
         // Top up key pool
         unsigned int nTargetSize;
-        if (nSize > 0)
+        if (nSize > 0) {
             nTargetSize = nSize;
-        else
-            nTargetSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
+        } else {
+            unsigned int default_size = IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+            nTargetSize = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
+        }
 
         while (setKeyPool.size() < (nTargetSize + 1))
         {
@@ -2792,7 +2987,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                bool IsCompressed;
                 CKey vchSecret;
                 if (!GetKey(keyID, vchSecret))
                 {
@@ -2800,8 +2994,8 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
                 }
                 else
                 {
-                    CSecret secret = vchSecret.GetSecret(IsCompressed);
-                    CBitcoinSecret privateKey(secret, IsCompressed);
+                    CSecret secret(vchSecret.begin(), vchSecret.end());
+                    CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                     res.push_back(std::make_pair(address, privateKey));
                 }
             }
@@ -2825,7 +3019,6 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
         }
         else
         {
-            bool IsCompressed;
             CKey vchSecret;
             //CSecret vchSecret;
             if (!GetKey(keyID, vchSecret))
@@ -2834,9 +3027,9 @@ std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> CWallet::GetAllPrivateKe
             }
             else
             {
-                CSecret secret = vchSecret.GetSecret(IsCompressed);
+                CSecret secret(vchSecret.begin(), vchSecret.end());
                 CBitcoinAddress address(keyID);
-                CBitcoinSecret privateKey(secret, IsCompressed);
+                CBitcoinSecret privateKey(secret, vchSecret.IsCompressed());
                 res.push_back(std::make_pair(address, privateKey));
             }
         }
@@ -2866,7 +3059,7 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXC
             mapKeyBirth[it->first] = it->second.nCreateTime;
 
     // map in which we'll infer heights of other keys
-    CBlockIndex *pindexMax = GRC::BlockFinder().FindByHeight(std::max(0, nBestHeight - 144)); // the tip can be reorganised; use a 144-block safety margin
+    CBlockIndex *pindexMax = GRC::BlockFinder::FindByHeight(nBestHeight);
     std::map<CKeyID, CBlockIndex*> mapKeyFirstBlock;
     std::set<CKeyID> setKeys;
     GetKeys(setKeys);
@@ -2963,6 +3156,10 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         bool fIsCoinStakeMine = (wallet->IsMine(wallettx.vout[1]) != ISMINE_NO) ? true : false;
         bool fIsOutputMine = (wallet->IsMine(wallettx.vout[vout]) != ISMINE_NO) ? true : false;
 
+        // This will be at an index value one unit beyond the end of the vector is m_mrc_researchers.size()
+        // in the claim is zero.
+        unsigned int mrc_index_start = wallettx.vout.size() - blkindex->m_mrc_researchers.size();
+
         // If output 1 is mine and the pubkey (address) for the output is the same as
         // output 1, it is a split stake return from my stake.
         if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
@@ -2987,27 +3184,32 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                         return MinedType::POR_SIDE_STAKE_RCV;
                 }
                 // ... or the output is not mine, then this must be a
-                // sidestake sent to someone else.
+                // sidestake sent to someone else or an MRC payment.
                 else
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_SEND;
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_SEND;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_SEND;
+                    }
                 }
             }
             // otherwise, the coinstake return is not mine... (i.e. someone else...)
             else
             {
                 // ... but the output is mine, then this must be a
-                // received sidestake from the staker.
+                // received sidestake or mrc payment from the staker.
                 if (fIsOutputMine)
                 {
-                    if (blkindex->ResearchSubsidy() == 0)
+                    if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
                         return MinedType::POS_SIDE_STAKE_RCV;
-
-                    else
+                    } else if (vout >= mrc_index_start) {
+                        return MinedType::MRC_RCV;
+                    } else {
                         return MinedType::POR_SIDE_STAKE_RCV;
+                    }
                 }
 
                 // the asymmetry is that the case when neither the first coinstake output
@@ -3017,4 +3219,45 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
     }
 
     return MinedType::UNKNOWN;
+}
+
+bool CWallet::UpgradeWallet(int version, std::string& error)
+{
+    int prev_version = GetVersion();
+    if (version == 0) {
+        LogPrintf("Performing wallet upgrade to %i", wallet::FEATURE_LATEST);
+        version = wallet::FEATURE_LATEST;
+    } else {
+        LogPrintf("Allowing wallet upgrade up to %i", version);
+    }
+    if (version < prev_version) {
+        error = strprintf("Cannot downgrade wallet from version %i to version %i. Wallet version unchanged.", prev_version, version);
+        return false;
+    }
+
+    LOCK(cs_wallet);
+
+    // Permanently upgrade to the version
+    SetMinVersion(wallet::GetClosestWalletFeature(version));
+
+    bool hd_upgrade = false;
+    if (wallet::IsFeatureSupported(version, wallet::FEATURE_HD) && !IsHDEnabled()) {
+        LogPrintf("Upgrading wallet to HD");
+
+        CPubKey masterPubKey = GenerateNewHDMasterKey();
+        if (!SetHDMasterKey(masterPubKey)) {
+            error = "Storing master key failed";
+            return false;
+        }
+        hd_upgrade = true;
+    }
+
+    if (hd_upgrade) {
+        if (!NewKeyPool()) {
+            error = "Unable to generate keys";
+            return false;
+        }
+    }
+
+    return true;
 }

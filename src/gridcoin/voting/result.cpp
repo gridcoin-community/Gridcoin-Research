@@ -10,8 +10,11 @@
 #include "gridcoin/voting/result.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/vote.h"
+#include "gridcoin/researcher.h"
 #include "txdb.h"
 #include "util/reverse_iterator.h"
+#include "wallet/wallet.h"
+#include "init.h"
 
 #include <optional>
 #include <queue>
@@ -22,6 +25,8 @@ using LogFlags = BCLog::LogFlags;
 using ResponseDetail = PollResult::ResponseDetail;
 using VoteDetail = PollResult::VoteDetail;
 using Weight = PollResult::Weight;
+
+extern MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -47,7 +52,7 @@ struct OutPointHasher
 {
     size_t operator()(const COutPoint& outpoint) const
     {
-        return outpoint.hash.GetUint64() + outpoint.n;
+        return outpoint.hash.GetUint64(0) + outpoint.n;
     }
 };
 
@@ -95,6 +100,16 @@ public:
     {
         assert(IsLegacy());
         return m_payload.As<GRC::LegacyVote>();
+    }
+
+    //!
+    //! \brief returns IsMine flag on transaction containing vote contract
+    //!
+    isminetype IsMine() const
+    {
+        LOCK(pwalletMain->cs_wallet);
+
+        return pwalletMain->IsMine(m_tx);
     }
 
     //!
@@ -154,17 +169,21 @@ public:
     //!
     VoteDetail Resolve(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         const Vote& vote = candidate.Vote();
         const ClaimMessage message = candidate.PackMessage();
 
         VoteDetail detail;
         detail.m_amount = Resolve(vote.m_claim.m_balance_claim, message);
+        detail.m_ismine = candidate.IsMine();
 
         if (m_poll.IncludesMagnitudeWeight()) {
             detail.m_mining_id = vote.m_claim.m_magnitude_claim.m_mining_id;
             detail.m_magnitude = Resolve(vote.m_claim.m_magnitude_claim, message);
         }
 
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
         return detail;
     }
 
@@ -786,29 +805,42 @@ public:
     //!
     void CountVotes(PollResult& result, const std::vector<uint256>& vote_txids)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         m_votes.reserve(vote_txids.size());
 
         for (const auto& txid : reverse_iterate(vote_txids)) {
             try {
                 ProcessVoteCandidate(FetchVoteCandidate(txid));
             } catch (const InvalidVoteError& e) {
-                LogPrint(LogFlags::VOTE, "%s: skipped invalid vote: %s",
+                LogPrint(LogFlags::VOTE, "INFO: %s: skipped invalid vote: %s",
                     __func__,
                     txid.ToString());
 
                 ++result.m_invalid_votes;
+            } catch (const InvalidDuetoReorgFork& e) {
+                LogPrint(LogFlags::VOTE, " INFO: %s: aborted vote count due to reorg/fork",
+                         __func__);
+
+                g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
+                throw InvalidDuetoReorgFork();
             }
         }
 
         for (auto& vote : m_votes) {
             result.TallyVote(std::move(vote));
         }
+
+        result.m_pools_voted = m_pools_voted;
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
 private:
     CTxDB& m_txdb;
     const Poll& m_poll;
     std::vector<VoteDetail> m_votes;
+    std::vector<Cpid> m_pools_voted;
     Weight m_magnitude_factor;
     VoteResolver m_resolver;
     LegacyVoteCounterContext m_legacy;
@@ -871,6 +903,10 @@ private:
     //!
     void ProcessVoteCandidate(const VoteCandidate& candidate)
     {
+        if (GetPollRegistry().reorg_occurred_during_reg_traversal) {
+            throw InvalidDuetoReorgFork();
+        }
+
         if (!candidate.IsLegacy()) {
             ProcessVote(candidate);
             return;
@@ -894,6 +930,8 @@ private:
     //!
     void ProcessVote(const VoteCandidate& candidate)
     {
+        g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
         VoteDetail detail = m_resolver.Resolve(candidate);
 
         if (detail.Empty()) {
@@ -912,7 +950,27 @@ private:
 
         CalculateWeight(detail, m_magnitude_factor);
 
+        const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+
+        // Record if a pool votes
+        if (detail.m_mining_id.TryCpid()) {
+            for (const auto& pool : mining_pools) {
+                if (detail.m_mining_id == pool.m_cpid) {
+                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Pool with CPID %s voted on poll %s.",
+                             __func__,
+                             detail.m_mining_id.TryCpid()->ToString(),
+                             m_poll.m_title);
+
+                    m_pools_voted.push_back(*detail.m_mining_id.TryCpid());
+
+                    break;
+                }
+            }
+        }
+
         m_votes.emplace_back(std::move(detail));
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     }
 
     //!
@@ -920,7 +978,7 @@ private:
     //!
     //! \param vote Contains the vote contract to resolve.
     //!
-    void ProcessLegacyVote(const LegacyVote& vote)
+    void ProcessLegacyVote(const LegacyVote& vote) EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
     {
         if (m_legacy.SeenKey(vote.m_key)) {
             LogPrint(LogFlags::VOTE, "%s: skipped duplicate key", __func__);
@@ -1083,13 +1141,21 @@ PollResult::PollResult(Poll poll)
     : m_poll(std::move(poll))
     , m_total_weight(0)
     , m_invalid_votes(0)
-    , m_finished(poll.Expired(GetAdjustedTime()))
+    , m_pools_voted({})
+    , m_active_vote_weight()
+    , m_vote_percent_avw()
+    , m_poll_results_validated()
+    , m_finished(m_poll.Expired(GetAdjustedTime()))
+    , m_self_voted(false)
+    , m_self_vote_detail()
 {
     m_responses.resize(m_poll.Choices().size());
 }
 
 PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     if (PollOption poll = poll_ref.TryReadFromDisk()) {
         CTxDB txdb("r");
         PollResult result(std::move(*poll));
@@ -1101,10 +1167,36 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
                 ResolveMoneySupplyForPoll(result.m_poll));
         }
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
+                 __func__, poll_ref.Votes().size(), result.m_poll.m_title);
+
         counter.CountVotes(result, poll_ref.Votes());
+
+        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
+            result.m_active_vote_weight = active_vote_weight;
+
+            result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;
+
+            // For purposes of validation, integer arithmetic is used.
+            uint32_t vote_percent_avw_for_validation = (uint32_t)((int64_t) result.m_total_weight * (int64_t) 100
+                                                                  / (int64_t) *result.m_active_vote_weight);
+
+            // For v1 and v2 polls, there is only one type, SURVEY, that was used on the blockchain for all polls, so this
+            // can only be done for v3+.
+            if (poll_ref.GetPollPayloadVersion() > 2) {
+                uint32_t min_vote_percent_avw_for_validation
+                        = Poll::POLL_TYPE_RULES[(int) poll_ref.GetPollType()].m_min_vote_percent_AVW;
+
+                result.m_poll_results_validated = (vote_percent_avw_for_validation >= min_vote_percent_avw_for_validation);
+            }
+        }
+
+        g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
         return result;
     }
+
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
 
     return std::nullopt;
 }
@@ -1125,6 +1217,11 @@ void PollResult::TallyVote(VoteDetail detail)
 {
     if (detail.m_responses.empty()) {
         return;
+    }
+
+    if (detail.m_ismine != ISMINE_NO) {
+        m_self_voted = true;
+        m_self_vote_detail = detail;
     }
 
     for (const auto& response_pair : detail.m_responses) {
@@ -1151,7 +1248,7 @@ ResponseDetail::ResponseDetail() : m_weight(0), m_votes(0)
 // Class: PollResult::VoteDetail
 // -----------------------------------------------------------------------------
 
-VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero())
+VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero()), m_ismine(ISMINE_NO)
 {
 }
 
@@ -1159,3 +1256,5 @@ bool VoteDetail::Empty() const
 {
     return m_amount == 0 && m_magnitude == 0;
 }
+
+VoteDetail& VoteDetail::operator=(const VoteDetail& b) = default;

@@ -18,7 +18,10 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/ismine.h"
+#include "wallet/diagnose.h"
 
+#include <regex>
+#include <stdexcept>
 #include <univalue.h>
 #include <variant>
 
@@ -155,6 +158,10 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
         if (pwalletMain->IsCrypted())
             res.pushKV("unlocked_until", nWalletUnlockTime / 1000);
+
+        CKeyID masterKeyID = pwalletMain->GetHDChain().masterKeyID;
+        if (!masterKeyID.IsNull())
+            res.pushKV("masterkeyid", masterKeyID.GetHex());
     }
 
     res.pushKV("staking", g_miner_status.StakingActive());
@@ -188,9 +195,8 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
     CKeyID keyID = newKey.GetID();
 
     pwalletMain->SetAddressBookName(keyID, strAccount);
-    vector<unsigned char> vchPubKey = newKey.Raw();
 
-    return HexStr(vchPubKey.begin(), vchPubKey.end());
+    return HexStr(newKey);
 }
 
 
@@ -459,7 +465,7 @@ UniValue signmessage(const UniValue& params, bool fHelp)
 
     CBitcoinAddress addr(strAddress);
     if (!addr.IsValid())
-        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
@@ -474,7 +480,7 @@ UniValue signmessage(const UniValue& params, bool fHelp)
     ss << strMessage;
 
     vector<unsigned char> vchSig;
-    if (!key.SignCompact(Hash(ss.begin(), ss.end()), vchSig))
+    if (!key.SignCompact(Hash(ss), vchSig))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sign failed");
 
     return EncodeBase64(&vchSig[0], vchSig.size());
@@ -496,7 +502,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
 
     CBitcoinAddress addr(strAddress);
     if (!addr.IsValid())
-        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
     CKeyID keyID;
     if (!addr.GetKeyID(keyID))
@@ -506,17 +512,17 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
     vector<unsigned char> vchSig = DecodeBase64(strSign.c_str(), &fInvalid);
 
     if (fInvalid)
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
+        throw JSONRPCError(RPC_TYPE_ERROR, "Malformed base64 encoding");
 
     CDataStream ss(SER_GETHASH, 0);
     ss << strMessageMagic;
     ss << strMessage;
 
-    CKey key;
-    if (!key.SetCompactSignature(Hash(ss.begin(), ss.end()), vchSig))
+    CPubKey pubkey;
+    if (!pubkey.RecoverCompact(Hash(ss), vchSig))
         return false;
 
-    return (key.GetPubKey().GetID() == keyID);
+    return pubkey.GetID() == keyID;
 }
 
 
@@ -1120,8 +1126,8 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 
     if (keys.size() > 16)       throw runtime_error("Number of addresses involved in the multisignature address creation > 16\nReduce the number");
 
-    std::vector<CKey> pubkeys;
-    pubkeys.resize(keys.size());
+    std::vector<CPubKey> pubkeys;
+    pubkeys.reserve(keys.size());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1141,16 +1147,18 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
             if (!pwalletMain->GetPubKey(keyID, vchPubKey))
                 throw runtime_error(
                     strprintf("no full public key for address %s",ks));
-            if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
+            if (!vchPubKey.IsValid())
                 throw runtime_error(" Invalid public key: "+ks);
+            pubkeys.push_back(vchPubKey);
         }
 
         // Case 2: hex public key
         else if (IsHex(ks))
         {
             CPubKey vchPubKey(ParseHex(ks));
-            if (!vchPubKey.IsValid() || !pubkeys[i].SetPubKey(vchPubKey))
+            if (!vchPubKey.IsValid())
                 throw runtime_error(" Invalid public key: "+ks);
+            pubkeys.push_back(vchPubKey);
         }
         else
         {
@@ -1429,14 +1437,15 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 
                 switch (gentype)
                 {
-                    case MinedType::POR                 :    entry.pushKV("Type", "POR");                     break;
-                    case MinedType::POS                 :    entry.pushKV("Type", "POS");                     break;
-                    case MinedType::ORPHANED            :    entry.pushKV("Type", "ORPHANED");                break;
-                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POS SIDE STAKE RECEIVED"); break;
-                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
-                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
-                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
-                    default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
+                    case MinedType::POR                 :    entry.pushKV("type", "POR");                     break;
+                    case MinedType::POS                 :    entry.pushKV("type", "POS");                     break;
+                    case MinedType::ORPHANED            :    entry.pushKV("type", "ORPHANED");                break;
+                    case MinedType::POS_SIDE_STAKE_RCV  :    entry.pushKV("type", "POS SIDE STAKE RECEIVED"); break;
+                    case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("type", "POR SIDE STAKE RECEIVED"); break;
+                    case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("type", "POS SIDE STAKE SENT");     break;
+                    case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("type", "POR SIDE STAKE SENT");     break;
+                    case MinedType::MRC_SEND            :    entry.pushKV("type", "MRC PAYMENT SENT");        break;
+                    default                             :    entry.pushKV("type", "UNKNOWN");                 break;
                 }
             }
             else
@@ -1496,6 +1505,8 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
                         case MinedType::POR_SIDE_STAKE_RCV  :    entry.pushKV("Type", "POR SIDE STAKE RECEIVED"); break;
                         case MinedType::POS_SIDE_STAKE_SEND :    entry.pushKV("Type", "POS SIDE STAKE SENT");     break;
                         case MinedType::POR_SIDE_STAKE_SEND :    entry.pushKV("Type", "POR SIDE STAKE SENT");     break;
+                        case MinedType::MRC_RCV             :    entry.pushKV("Type", "MRC PAYMENT RECEIVED");    break;
+                        case MinedType::MRC_SEND            :    entry.pushKV("Type", "MRC PAYMENT SENT");        break;
                         default                             :    entry.pushKV("Type", "UNKNOWN");                 break;
                     }
 
@@ -1961,7 +1972,7 @@ UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << static_cast<const CTransaction&>(iter->second);
 
-    return HexStr(ssTx.begin(), ssTx.end());
+    return HexStr(ssTx);
 }
 
 
@@ -2068,14 +2079,15 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp)
                 "Fills the keypool.\n"
                 + HelpRequiringPassphrase());
 
-    unsigned int nSize = max(gArgs.GetArg("-keypool", 100), (int64_t)0);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    unsigned int default_size = pwalletMain->IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
+    unsigned int nSize = max(gArgs.GetArg("-keypool", default_size), (int64_t)0);
     if (params.size() > 0) {
         if (params[0].get_int() < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected valid size");
         nSize = (unsigned int) params[0].get_int();
     }
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
@@ -2240,6 +2252,88 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+/**
+ * Run the walled diagnose checks
+ */
+UniValue walletdiagnose(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "walletdiagnose\n"
+                "\n"
+                "Runs several tests to diagnose issues in the wallet.");
+
+    std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
+    //Construct the tests needed.
+    //If need to add a test m just add it to the below set.
+    //Check Diagnose.h for the base class to create tests.
+    testSet.insert(make_pair(std::string("check_connection_count"),
+                             std::make_unique<DiagnoseLib::CheckConnectionCount>()));
+    testSet.insert(make_pair(std::string("check_outbound_connection_count"),
+                             std::make_unique<DiagnoseLib::CheckOutboundConnectionCount>()));
+    testSet.insert(make_pair(std::string("verify_wallet_is_synced"),
+                             std::make_unique<DiagnoseLib::VerifyWalletIsSynced>()));
+    testSet.insert(make_pair(std::string("check_client_version"),
+                             std::make_unique<DiagnoseLib::CheckClientVersion>()));
+    testSet.insert(make_pair(std::string("verify_boinc_path"),
+                             std::make_unique<DiagnoseLib::VerifyBoincPath>()));
+    testSet.insert(make_pair(std::string("verify_cpid_has_rac"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDHasRAC>()));
+    testSet.insert(make_pair(std::string("verify_cpid_is_Active"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDIsActive>()));
+    testSet.insert(make_pair(std::string("verify_cpid_valid"),
+                             std::make_unique<DiagnoseLib::VerifyCPIDValid>()));
+    testSet.insert(make_pair(std::string("verify_clock"),
+                             std::make_unique<DiagnoseLib::VerifyClock>()));
+    testSet.insert(make_pair(std::string("verify_tcp_port"),
+                             std::make_unique<DiagnoseLib::VerifyTCPPort>()));
+    testSet.insert(make_pair(std::string("check_difficulty"),
+                             std::make_unique<DiagnoseLib::CheckDifficulty>()));
+    testSet.insert(make_pair(std::string("check_etts"),
+                             std::make_unique<DiagnoseLib::CheckETTS>()));
+
+    UniValue obj(UniValue::VOBJ);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    for (auto& i : testSet) {
+        auto& diagnosetest = i.second;
+        auto diagnoselabel = i.first;
+        UniValue diff(UniValue::VOBJ);
+        diagnosetest->runCheck();
+        std::string tooltip = diagnosetest->getResultsTip();
+        std::string result = diagnosetest->getResultsString();
+        int k = 1;
+        for (auto& j : diagnosetest->getTipArgs()) {
+            std::stringstream ss;
+            ss.imbue(std::locale::classic());
+            ss << "%" << k++;
+            tooltip = std::regex_replace(tooltip, std::regex(ss.str()), j);
+        }
+        k = 1;
+        for (auto& j : diagnosetest->getStringArgs()) {
+            std::stringstream ss;
+            ss.imbue(std::locale::classic());
+            ss << "%" << k++;
+            result = std::regex_replace(result, std::regex(ss.str()), j);
+        }
+
+
+        if (diagnosetest->getResults() == DiagnoseLib::Diagnose::NONE) {
+            diff.pushKV("result", "NA");
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::FAIL) {
+            diff.pushKV("result", "FAIL");
+        } else if (diagnosetest->getResults() == DiagnoseLib::Diagnose::WARNING) {
+            diff.pushKV("result", "WARNING");
+        } else {
+            diff.pushKV("result", "PASS");
+        }
+        diff.pushKV("desc", result);
+        diff.pushKV("info", tooltip);
+        obj.pushKV(diagnoselabel, diff);
+    }
+
+    return obj;
+}
 
 UniValue walletlock(const UniValue& params, bool fHelp)
 {
@@ -2299,7 +2393,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     // slack space in .dat files; that is bad if the old data is
     // unencrypted private keys. So:
     StartShutdown();
-    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet.  The keypool has been flushed, you need to make a new backup.";
+    return "wallet encrypted; Gridcoin server stopping, restart to run with encrypted wallet. The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
 }
 
 class DescribeAddressVisitor
@@ -2312,7 +2406,7 @@ public:
         CPubKey vchPubKey;
         pwalletMain->GetPubKey(keyID, vchPubKey);
         obj.pushKV("isscript", false);
-        obj.pushKV("pubkey", HexStr(vchPubKey.Raw()));
+        obj.pushKV("pubkey", HexStr(vchPubKey));
         obj.pushKV("iscompressed", vchPubKey.IsCompressed());
         return obj;
     }
@@ -2327,7 +2421,7 @@ public:
         int nRequired;
         ExtractDestinations(subscript, whichType, addresses, nRequired);
         obj.pushKV("script", GetTxnOutputType(whichType));
-        obj.pushKV("hex", HexStr(subscript.begin(), subscript.end()));
+        obj.pushKV("hex", HexStr(subscript));
         UniValue a(UniValue::VARR);
         for (auto const& addr : addresses)
             a.push_back(CBitcoinAddress(addr).ToString());
@@ -2366,6 +2460,12 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
         }
         if (pwalletMain->mapAddressBook.count(dest))
             ret.pushKV("account", pwalletMain->mapAddressBook[dest]);
+        CKeyID keyID;
+        if (pwalletMain && address.GetKeyID(keyID) && pwalletMain->mapKeyMetadata.count(keyID) && !pwalletMain->mapKeyMetadata[keyID].hdKeypath.empty())
+        {
+            ret.pushKV("hdkeypath", pwalletMain->mapKeyMetadata[keyID].hdKeypath);
+            ret.pushKV("hdmasterkeyid", pwalletMain->mapKeyMetadata[keyID].hdMasterKeyID.GetHex());
+        }
     }
     return ret;
 }
@@ -2531,10 +2631,9 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
     CKey key;
     key.MakeNewKey(false);
 
-    CPrivKey vchPrivKey = key.GetPrivKey();
     UniValue result(UniValue::VOBJ);
-    result.pushKV("PrivateKey", HexStr<CPrivKey::iterator>(vchPrivKey.begin(), vchPrivKey.end()));
-    result.pushKV("PublicKey", HexStr(key.GetPubKey().Raw()));
+    result.pushKV("PrivateKey", HexStr(key.GetPrivKey()));
+    result.pushKV("PublicKey", HexStr(key.GetPubKey()));
     return result;
 }
 
@@ -2569,4 +2668,99 @@ UniValue burn(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     return wtx.GetHash().GetHex();
+}
+
+UniValue sethdseed(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2) {
+        throw std::runtime_error(
+            "sethdseed ( \"newkeypool\" \"seed\" )\n"
+            "\nSet or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. Wallets that are already\n"
+            "HD will have a new HD seed set so that new keys added to the keypool will be derived from this new seed.\n"
+            "\nNote that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.\n"
+            "\nArguments:\n"
+            "1. \"newkeypool\"         (boolean, optional, default=true) Whether to flush old unused addresses, including change addresses, from the keypool and regenerate it.\n"
+            "                             If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed.\n"
+            "                             If false, addresses (including change addresses if the wallet already had HD Chain Split enabled) from the existing\n"
+            "                             keypool will be used until it has been depleted.\n"
+            "2. \"seed\"               (string, optional) The WIF private key to use as the new HD seed; if not provided a random seed will be used.\n"
+            "                             The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1\n"
+        );
+    }
+
+    if (IsInitialBlockDownload()) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Do not do anything to non-HD wallets
+    if (!pwalletMain->IsHDEnabled()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot set a HD seed on a non-HD wallet. Start with -upgradewallet in order to upgrade a non-HD wallet to HD");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    bool flush_key_pool = true;
+    if (!params[0].isNull()) {
+        flush_key_pool = params[0].get_bool();
+    }
+
+    CPubKey master_pub_key;
+    if (params[1].isNull()) {
+        master_pub_key = pwalletMain->GenerateNewHDMasterKey();
+    } else {
+        CKey key;
+        CBitcoinSecret vchSecret;
+
+        if (!vchSecret.SetString(params[1].get_str())) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        bool fCompressed;
+        CSecret secret = vchSecret.GetSecret(fCompressed);
+        key.Set(secret.begin(), secret.end(), fCompressed);
+
+        if (!key.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+
+        if (false && HaveKey(*pwalletMain, key)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Already have this key (either as an HD seed or as a loose private key)");
+        }
+
+        master_pub_key = pwalletMain->DeriveNewMasterHDKey(key);
+    }
+
+    pwalletMain->SetHDMasterKey(master_pub_key);
+    if (flush_key_pool) pwalletMain->NewKeyPool();
+
+    return NullUniValue;
+}
+
+UniValue upgradewallet(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1) {
+        throw std::runtime_error(
+                "upgradewallet [version]\n"
+                "\n"
+                "Upgrade the wallet. Upgrades to the latest version if no version number is specified\n"
+                "New keys may be generated and a new wallet backup will need to be made.\n"
+                "\n"
+                "[version] - The version number to upgrade to. Default is the latest wallet version."
+        );
+    }
+
+    EnsureWalletIsUnlocked();
+
+    int version = 0;
+    if (!params[0].isNull()) {
+        version = params[0].get_int();
+    }
+
+    std::string error;
+    if (!pwalletMain->UpgradeWallet(version, error)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+    }
+    return error;
 }

@@ -57,6 +57,11 @@ public:
         return 0;
     }
 
+    CAmount NearRewardLimit() const override
+    {
+        return 0;
+    }
+
     bool ExceededRecentPayments() const override
     {
         return false;

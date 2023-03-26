@@ -62,3 +62,11 @@ void ReceiveCoinsPage::updateIcons(const QString& theme)
 {
     filterLineEditIconAction->setIcon(QIcon(":/icons/" + theme + "_search"));
 }
+
+
+void ReceiveCoinsPage::resizeTableColumns()
+{
+    if (addressBookPage) {
+        addressBookPage->resizeTableColumns();
+    }
+}

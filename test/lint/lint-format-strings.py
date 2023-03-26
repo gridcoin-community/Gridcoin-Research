@@ -23,6 +23,7 @@ FALSE_POSITIVES = [
     ("src/wallet/scriptpubkeyman.h",  "WalletLogPrintf(std::string fmt, Params... parameters)"),
     ("src/wallet/scriptpubkeyman.h", "LogPrintf((\"%s \" + fmt).c_str(), m_storage.GetDisplayName(), parameters...)"),
     ("src/logging.h", "LogPrintf(const char* fmt, const Args&... args)"),
+    ("src/logging.h", "LogPrint(Category category, const char* format, TINYFORMAT_VARARGS(n))"),
     ("src/wallet/scriptpubkeyman.h", "WalletLogPrintf(const std::string& fmt, const Params&... parameters)"),
 ]
 

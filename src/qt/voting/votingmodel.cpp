@@ -5,13 +5,16 @@
 #include <optional>
 
 #include "hash.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "gridcoin/voting/payloads.h"
 #include "logging.h"
+#include "main.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
@@ -25,6 +28,7 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern CCriticalSection cs_main;
+extern int nBestHeight;
 
 namespace {
 //!
@@ -40,6 +44,8 @@ void NewPollReceived(VotingModel* model, int64_t poll_time)
 
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
 {
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
+
     const PollReference& ref = iter->Ref();
     const PollResultOption result = PollResult::BuildFor(ref);
 
@@ -51,25 +57,33 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
 
     PollItem item;
     item.m_id = QString::fromStdString(iter->Ref().Txid().ToString());
+    item.m_version = ref.GetPollPayloadVersion();
     item.m_title = QString::fromStdString(poll.m_title).replace("_", " ");
+    item.m_type_str = QString::fromStdString(poll.PollTypeToString());
     item.m_question = QString::fromStdString(poll.m_question).replace("_", " ");
     item.m_url = QString::fromStdString(poll.m_url).trimmed();
     item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
     item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
-    item.m_weight_type = QString::fromStdString(poll.WeightTypeToString());
+    item.m_duration = poll.m_duration_days;
+    item.m_weight_type = poll.m_weight_type.Raw();
+    item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
     item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
     item.m_total_votes = result->m_votes.size();
     item.m_total_weight = result->m_total_weight / COIN;
 
-    if (auto active_vote_weight = ref.GetActiveVoteWeight()) {
-        item.m_active_weight = *active_vote_weight / COIN;
-    } else {
-        item.m_active_weight = 0;
+    item.m_active_weight = 0;
+    if (result->m_active_vote_weight) {
+        item.m_active_weight = *result->m_active_vote_weight / COIN;
     }
 
     item.m_vote_percent_AVW = 0;
-    if (item.m_active_weight > 0) {
-        item.m_vote_percent_AVW = (double) item.m_total_weight / (double) item.m_active_weight * 100.0;
+    if (result->m_vote_percent_avw) {
+        item.m_vote_percent_AVW = *result->m_vote_percent_avw;
+    }
+
+    item.m_validated = QString{};
+    if (result->m_poll_results_validated) {
+        item.m_validated = *result->m_poll_results_validated;
     }
 
     item.m_finished = result->m_finished;
@@ -79,6 +93,13 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
         item.m_url.prepend("http://");
     }
 
+    for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+        item.m_additional_field_entries.emplace_back(
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_name),
+                    QString::fromStdString(poll.AdditionalFields().At(i)->m_value),
+                    poll.AdditionalFields().At(i)->m_required);
+    }
+
     for (size_t i = 0; i < result->m_responses.size(); ++i) {
         item.m_choices.emplace_back(
             QString::fromStdString(poll.Choices().At(i)->m_label),
@@ -86,10 +107,16 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
             result->m_responses[i].m_weight / COIN);
     }
 
+    item.m_self_voted = result->m_self_voted;
+    if (result->m_self_voted) {
+        item.m_self_vote_detail = result->m_self_vote_detail;
+    }
+
     if (!result->m_votes.empty()) {
         item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
     }
 
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     return item;
 }
 } // Anonymous namespace
@@ -200,18 +227,95 @@ QStringList VotingModel::getActiveProjectNames() const
     return names;
 }
 
-std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
+QStringList VotingModel::getActiveProjectUrls() const
 {
-    std::vector<PollItem> items;
+    QStringList Urls;
 
-    LOCK(cs_main);
-
-    for (const auto& iter : m_registry.Polls().Where(flags)) {
-        if (std::optional<PollItem> item = BuildPollItem(iter)) {
-            items.push_back(std::move(*item));
-        }
+    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
+        Urls << QString::fromStdString(project.m_url);
     }
 
+    return Urls;
+
+}
+
+std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
+{
+    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
+    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, __func__);
+
+    std::vector<PollItem> items;
+
+    m_registry.registry_traversal_in_progress = true;
+
+    bool fork_reorg_during_run = false;
+
+    // We do up to three tries if there was a reorg/fork during the middle of the run. This is more than enough.
+    for (unsigned int i = 0; i < 3; ++i)
+    {
+        for (const auto& iter : WITH_LOCK(m_registry.cs_poll_registry, return m_registry.Polls().Where(flags))) {
+            // Note that we are implementing a coarse-grained fork/rollback detector here.
+            // We do this because we have eliminated the cs_main lock to free up the GUI.
+            // Instead we have reversed the locking scheme and have the contract actions (add/delete)
+            // place a lock on cs_poll_registry when they make an update. This preserves the integrity
+            // of the registry itself. It also will preserve the integrity of transaction access in leveldb,
+            // PROVIDED that a rollback/reorg has not happened during this run. The main state
+            // will not change during the individual BuildPollItem calls, because BuildPollItem places
+            // a lock on cs_poll_registry for its duration. This means a contract change from the
+            // contract interface handler will block on it, given that it also puts a lock on
+            // cs_poll_registry. I am a little worried about holding up main for this, but that was happening
+            // on a recursive lock on cs_main before for the ENTIRE run, and this is certainly better.
+            // Transactions that have not been rolled back by a reorg can be safely accessed for reading
+            // by another thread as we are doing here.
+
+            try {
+                if (std::optional<PollItem> item = BuildPollItem(iter)) {
+                    items.push_back(std::move(*item));
+                }
+            } catch (InvalidDuetoReorgFork& e) {
+                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.",
+                         __func__);
+            }
+
+            // This must be AFTER BuildPollItem. If a reorg occurred during reg traversal that could invalidate
+            // a Ref pointed to by the sequence, the increment of the iterator to the next position must be
+            // prevented to avoid a segfault. A new Sequence must be formed and the loop started over.
+
+            if (m_registry.reorg_occurred_during_reg_traversal) {
+                items.clear();
+                fork_reorg_during_run = true;
+
+                g_timer.GetTimes(std::string{"Restart due to reorg "} + std::string{__func__}, __func__);
+
+                // Break from the poll registry traversal loop
+                break;
+            }
+        }
+
+        // exit retry loop if no fork/reorg during run
+        if (!fork_reorg_during_run) break;
+
+        // Periodically recheck until reorg/fork has cleared. The reorg_occurred_during_reg_traversal will
+        // be cleared by the DetectReorg function as soon as the g_reorg_in_progress is cleared by the caller of
+        // ReorganizeChain. If ReorganizeChain returns a fatal error, but does not directly end program execution,
+        // then g_reorg_in_progress may remain set. The call chain will eventually end program execution in that case,
+        // in which this thread will be interrupted on the MilliSleep call. We do not want to attempt to resume
+        // the tally if a reorganize is unsuccessful.
+        while (m_registry.reorg_occurred_during_reg_traversal) {
+            // Return here is for thread interrupt during shutdown.
+            if (!MilliSleep(1000)) return items;
+
+            m_registry.PollRegistry::DetectReorg();
+        }
+
+        // If the fork_reorg_during_run was set (true), then this run through the loop is invalid due to a
+        // fork/reorg. Now that reorg_occurred_during_reg_traversal has cleared, reset to false for another try.
+        fork_reorg_during_run = false;
+    }
+
+    m_registry.registry_traversal_in_progress = false;
+
+    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, __func__);
     return items;
 }
 
@@ -222,25 +326,55 @@ CAmount VotingModel::estimatePollFee() const
 }
 
 VotingResult VotingModel::sendPoll(
-    const QString& title,
-    const int duration_days,
-    const QString& question,
-    const QString& url,
-    const int weight_type,
-    const int response_type,
-    const QStringList& choices) const
+        const PollType& type,
+        const QString& title,
+        const int duration_days,
+        const QString& question,
+        const QString& url,
+        const int weight_type,
+        const int response_type,
+        const QStringList& choices,
+        const std::vector<AdditionalFieldEntry>& additional_field_entries) const
 {
+    // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
+    // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
+    // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
+    uint32_t payload_version = 0;
+    PollType type_by_poll_payload_version;
+
+    {
+        LOCK(cs_main);
+
+        bool v3_enabled = IsPollV3Enabled(nBestHeight);
+
+        payload_version = v3_enabled ? 3 : 2;
+
+        // This is slightly different than what is in the rpc addpoll, because the types have already been constrained
+        // by the GUI code.
+        type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
+    }
+
+    std::vector<Poll::AdditionalField> additional_fields;
+
+    for (const auto& field : additional_field_entries) {
+        additional_fields.push_back(Poll::AdditionalField(field.m_name.toStdString(),
+                                                          field.m_value.toStdString(),
+                                                          field.m_required));
+    }
+
     PollBuilder builder = PollBuilder();
 
     try {
         builder = builder
-            .SetType(PollType::SURVEY)
+            .SetPayloadVersion(payload_version)
+            .SetType(type_by_poll_payload_version)
             .SetTitle(title.toStdString())
             .SetDuration(duration_days)
             .SetQuestion(question.toStdString())
             .SetWeightType(weight_type)
             .SetResponseType(response_type)
-            .SetUrl(url.toStdString());
+            .SetUrl(url.toStdString())
+            .SetAdditionalFields(additional_fields);
 
         for (const auto& choice : choices) {
             builder = builder.AddChoice(choice.toStdString());
@@ -321,6 +455,16 @@ void VotingModel::handleNewPoll(int64_t poll_time)
     m_last_poll_time = poll_time;
 
     emit newPollReceived();
+}
+
+// -----------------------------------------------------------------------------
+// Class: AdditionalFieldEntry
+// -----------------------------------------------------------------------------
+AdditionalFieldEntry::AdditionalFieldEntry(QString name, QString value, bool required)
+    : m_name(name)
+    , m_value(value)
+    , m_required(required)
+{
 }
 
 // -----------------------------------------------------------------------------

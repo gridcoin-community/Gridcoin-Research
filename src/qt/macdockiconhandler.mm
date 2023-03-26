@@ -8,6 +8,8 @@
 #undef slots
 #include <Cocoa/Cocoa.h>
 
+extern bool fRequestShutdown;
+
 @interface DockIconClickEventHandler : NSObject
 {
     MacDockIconHandler* dockIconHandler;
@@ -43,6 +45,23 @@
 }
 
 @end
+
+MacDockShutdownHandler::MacDockShutdownHandler() {
+    Class delClass = (Class)[[[NSApplication sharedApplication] delegate] class];
+    SEL closeHandle = sel_registerName("applicationShouldTerminate:");
+    if (class_getInstanceMethod(delClass, closeHandle)) {
+        class_replaceMethod(delClass, closeHandle, (IMP)MacDockShutdownHandler::handleShutdown, "B@:");
+    } else {
+        class_addMethod(delClass, closeHandle, (IMP)MacDockShutdownHandler::handleShutdown,"B@:");
+    }
+}
+
+int MacDockShutdownHandler::handleShutdown(id self, SEL _cmd, ...) {
+    // Proper shutdown is possible, if MacOS does not decide to
+    // instantly send us to the shadow realm.
+    fRequestShutdown = true;
+    return false;
+}
 
 MacDockIconHandler::MacDockIconHandler() : QObject()
 {

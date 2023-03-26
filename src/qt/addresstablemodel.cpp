@@ -178,42 +178,35 @@ QVariant AddressTableModel::data(const QModelIndex &index, int role) const
 
     AddressTableEntry *rec = static_cast<AddressTableEntry*>(index.internalPointer());
 
-    if(role == Qt::DisplayRole || role == Qt::EditRole)
-    {
-        switch(index.column())
-        {
+    const auto column = static_cast<ColumnIndex>(index.column());
+    if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        switch (column) {
         case Label:
-            if(rec->label.isEmpty() && role == Qt::DisplayRole)
-            {
+            if (rec->label.isEmpty() && role == Qt::DisplayRole) {
                 return tr("(no label)");
-            }
-            else
-            {
+            } else {
                 return rec->label;
             }
         case Address:
             return rec->address;
-        }
-    }
-    else if (role == Qt::FontRole)
-    {
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
+    } else if (role == Qt::FontRole) {
         QFont font;
         if(index.column() == Address)
         {
             font = GUIUtil::bitcoinAddressFont();
         }
         return font;
-    }
-    else if (role == TypeRole)
-    {
+    } else if (role == TypeRole) {
         switch(rec->type)
         {
         case AddressTableEntry::Sending:
             return Send;
         case AddressTableEntry::Receiving:
             return Receive;
-        default: break;
-        }
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     }
     return QVariant();
 }

@@ -1,4 +1,4 @@
-<TS language="zh_TW" version="2.1">
+<TS language="zh_TW" version="2.0">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -32,10 +32,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>編輯</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>逗點分隔資料檔(*.csv)</translation>
     </message>
     </context>
 <context>
@@ -88,14 +84,6 @@
         <translation>解鎖錢包</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>這個動作需要你的錢包密碼來把錢包解密。</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>解密錢包</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>改變密碼</translation>
     </message>
@@ -136,10 +124,6 @@
         <translation>輸入要用來解密錢包的密碼不對。</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>錢包解密失敗</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>錢包密碼改成功了。</translation>
     </message>
@@ -151,8 +135,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>簽署訊息...</translation>
+        <source>Wallet</source>
+        <translation>錢包</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -161,6 +145,14 @@
     <message>
         <source>Show general overview of wallet</source>
         <translation>顯示錢包一般總覽</translation>
+    </message>
+    <message>
+        <source>&amp;Send</source>
+        <translation>付款</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>收款</translation>
     </message>
     <message>
         <source>Browse transaction history</source>
@@ -179,6 +171,10 @@
         <translation>選項...</translation>
     </message>
     <message>
+        <source>&amp;Show / Hide</source>
+        <translation>顯示或隱藏</translation>
+    </message>
+    <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>加密錢包...</translation>
     </message>
@@ -191,32 +187,20 @@
         <translation>改變錢包加密用的密碼</translation>
     </message>
     <message>
-        <source>&amp;Debug window</source>
-        <translation>除錯視窗</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>開啓除錯和診斷主控台</translation>
+        <source>Sign &amp;message...</source>
+        <translation>簽署訊息...</translation>
     </message>
     <message>
         <source>&amp;Verify message...</source>
         <translation>驗證訊息...</translation>
     </message>
     <message>
-        <source>Wallet</source>
-        <translation>錢包</translation>
+        <source>&amp;Debug window</source>
+        <translation>除錯視窗</translation>
     </message>
     <message>
-        <source>&amp;Send</source>
-        <translation>付款</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>收款</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>顯示或隱藏</translation>
+        <source>Open debugging and diagnostic console</source>
+        <translation>開啓除錯和診斷主控台</translation>
     </message>
     <message>
         <source>&amp;File</source>
@@ -231,32 +215,44 @@
         <translation>說明</translation>
     </message>
     <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>已經處理了 %n 個區塊的交易紀錄。</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Up to date</source>
         <translation>最新狀態</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /></translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -418,6 +414,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -523,27 +540,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -617,12 +646,12 @@
         <translation>清主控台</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>請打 &lt;b&gt;help&lt;/b&gt; 來看可用指令的簡介。</translation>
-    </message>
-    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>請用上下游標鍵來瀏覽先前指令的紀錄，並用 &lt;b&gt;Ctrl-L&lt;/b&gt; 來清畫面。</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>請打 &lt;b&gt;help&lt;/b&gt; 來看可用指令的簡介。</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -743,7 +772,7 @@
         <source>(no label)</source>
         <translation>(無標記)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -753,6 +782,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>付給:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>訊息:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -866,7 +899,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>到下 %n 個區塊生出來前可修改</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -894,7 +929,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>，已公告給 %n 個節點</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -930,7 +967,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>再等 %n 個區塊生出來後成熟</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -988,7 +1027,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>到下 %n 個區塊生出來前可修改</numerusform></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1126,10 +1167,6 @@
         <translation>顯示交易明細</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>逗點分隔資料檔(*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>已確認</translation>
     </message>
@@ -1191,10 +1228,6 @@
     <message>
         <source>Loading wallet...</source>
         <translation>正在載入錢包資料...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>沒辦法把錢包格式降級</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

@@ -1,0 +1,64 @@
+#!/bin/sh -
+#	$Id$
+#
+# Build tags files.
+
+cd tagdir
+files=`echo ../../src/dbinc/*.h \
+	../../src/dbinc/*.in \
+	../../src/btree/*.[ch] \
+	../../src/clib/*.[ch] \
+	../../src/common/*.[ch] \
+	../../src/crypto/*.[ch] \
+	../../src/crypto/mersenne/*.[ch] \
+	../../src/crypto/rijndael/*.[ch] \
+	../../src/db/*.[ch] \
+	../../lang/db185/*.[ch] \
+	../../lang/dbm/*.[ch] \
+	../../src/dbreg/*.[ch] \
+	../../src/env/*.[ch] \
+	../../src/fileops/*.[ch] \
+	../../src/hash/*.[ch] \
+	../../src/hmac/*.[ch] \
+	../../src/hsearch/*.[ch] \
+	../../src/lock/*.[ch] \
+	../../src/log/*.[ch] \
+	../../src/mp/*.[ch] \
+	../../src/mutex/*.[ch] \
+	../../src/os/*.[ch] \
+	../../src/os_qnx/*.[ch] \
+	../../src/qam/*.[ch] \
+	../../src/rep/*.[ch] \
+	../../src/repmgr/*.[ch] \
+	../../src/sequence/*.[ch] \
+	../../lang/tcl/*.[ch] \
+	../../src/txn/*.[ch] \
+	../../src/xa/*.[ch] \
+	../../lang/cxx/*.cpp \
+	../../lang/java/libdb_java/*.[ch] | sed 's/[^ ]*stub.c//g'`
+
+f=tags
+echo "Building $f"
+rm -f $f
+
+# Figure out what flags this ctags accepts.
+flags=""
+if ctags -d ../../src/db/db.c 2>/dev/null; then
+	flags="-d $flags"
+fi
+if ctags -t ../../src/db/db.c 2>/dev/null; then
+	flags="-t $flags"
+fi
+if ctags -w ../../src/db/db.c 2>/dev/null; then
+	flags="-w $flags"
+fi
+
+ctags $flags $files 2>/dev/null
+
+for i in test/perf testrrepmgr testrserver; do
+	test -d ../../$i || continue
+
+	f=../../$i/tags
+	echo "Building $f"
+	(cd ../../$i && ctags $flags *.[ch] 2>/dev/null)
+done

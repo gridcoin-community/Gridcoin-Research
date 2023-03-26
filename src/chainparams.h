@@ -10,11 +10,15 @@
 #include "consensus/params.h"
 #include "protocol.h"
 
+// system.h included only for temporary V12 fork point overrides for testing.
+#include "util/system.h"
+
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
-
 typedef std::map<int, uint256> MapCheckpoints;
+typedef std::map<int, std::vector<unsigned char>> MapMasterKeys;
 
 struct CCheckpointData {
     MapCheckpoints mapCheckpoints;
@@ -36,6 +40,9 @@ public:
     enum Base58Type {
         PUBKEY_ADDRESS,
         SCRIPT_ADDRESS,
+        SECRET_KEY,
+        EXT_PUBLIC_KEY,
+        EXT_SECRET_KEY,
 
         MAX_BASE58_TYPES
     };
@@ -43,6 +50,13 @@ public:
     const Consensus::Params& GetConsensus() const { return consensus; }
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
     const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
+    const std::vector<unsigned char>& MasterKey(int height) const {
+        for (auto it = masterkeys.rbegin(); it != masterkeys.rend(); ++it) {
+            if (it->first <= height) return it->second;
+        }
+
+        assert(false && "No master key specified or height is negative.");
+    }
     int GetDefaultPort() const { return nDefaultPort; }
 
     // const CBlock& GenesisBlock() const { return genesis; }
@@ -54,22 +68,23 @@ public:
     uint64_t AssumedBlockchainSize() const { return m_assumed_blockchain_size; }
     /** Return the network string */
     std::string NetworkIDString() const { return strNetworkID; }
-    const unsigned char& Base58Prefix(Base58Type type) const { return base58Prefix[type]; }
+    const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
 protected:
     CChainParams() {}
 
     Consensus::Params consensus;
     CMessageHeader::MessageStartChars pchMessageStart;
-    std::vector<unsigned char> vAlertPubKey;
     int nDefaultPort;
     uint64_t m_assumed_blockchain_size;
-    unsigned char base58Prefix[MAX_BASE58_TYPES];
+    std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     std::string strNetworkID;
     // CBlock genesis;
     bool m_is_test_chain;
     bool m_is_mockable_chain;
     CCheckpointData checkpointData;
+    std::vector<unsigned char> vAlertPubKey;
+    MapMasterKeys masterkeys;
 };
 
 /**
@@ -129,6 +144,21 @@ inline bool IsV10Enabled(int nHeight)
 inline bool IsV11Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().BlockV11Height;
+}
+
+inline bool IsV12Enabled(int nHeight)
+{
+    return nHeight >= Params().GetConsensus().BlockV12Height;
+}
+
+inline bool IsPollV3Enabled(int nHeight)
+{
+    return nHeight >= Params().GetConsensus().PollV3Height;
+}
+
+inline bool IsProjectV2Enabled(int nHeight)
+{
+    return nHeight >= Params().GetConsensus().ProjectV2Height;
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)

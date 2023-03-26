@@ -1,4 +1,4 @@
-<TS language="hu" version="2.1">
+<TS language="hu" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -12,10 +12,6 @@
     </context>
 <context>
     <name>AddressBookPage</name>
-    <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Kattints duplán a cím vagy címke szerkesztéséhez</translation>
-    </message>
     <message>
         <source>Create a new address</source>
         <translation>Új cím létrehozása</translation>
@@ -75,10 +71,6 @@
     <message>
         <source>&amp;Edit</source>
         <translation>Sz&amp;erkesztés</translation>
-    </message>
-    <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Vesszővel elválasztott fájl (*.csv)</translation>
     </message>
     <message>
         <source>Export Address Book Data</source>
@@ -147,14 +139,6 @@
         <translation>Tárca feloldása</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Ez a művelet a tárcád jelszavának megadását igényli annak dekódolásához.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Tárca dekódolása</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Jelszó megváltoztatása</translation>
     </message>
@@ -203,10 +187,6 @@
         <translation>Hibás jelszó.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Dekódolás sikertelen.</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Jelszó megváltoztatva.</translation>
     </message>
@@ -218,8 +198,8 @@
 <context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Üzenet aláírása...</translation>
+        <source>Wallet</source>
+        <translation>Tárca</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -230,88 +210,24 @@
         <translation>Tárca általános áttekintése</translation>
     </message>
     <message>
-        <source>&amp;History</source>
-        <translation>&amp;Előzmények</translation>
-    </message>
-    <message>
-        <source>Browse transaction history</source>
-        <translation>Tranzakciós előzmények megtekintése</translation>
-    </message>
-    <message>
-        <source>E&amp;xit</source>
-        <translation>&amp;Kilépés</translation>
-    </message>
-    <message>
-        <source>Quit application</source>
-        <translation>Kilépés az alkalmazásból</translation>
-    </message>
-    <message>
-        <source>&amp;Options...</source>
-        <translation>&amp;Opciók...</translation>
-    </message>
-    <message>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>Tárca &amp;titkosítása...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation>Jelszó &amp;megváltoztatása...</translation>
-    </message>
-    <message>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Tárca-titkosító jelszó megváltoztatása</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Debug ablak</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Hibakereső és diagnosztikai konzol megnyitása</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>Üzenet &amp;valódiságának ellenőrzése</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Tárca</translation>
-    </message>
-    <message>
         <source>&amp;Send</source>
         <translation>&amp;Küldés</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Coinok küldése egy Gridcoin címre</translation>
     </message>
     <message>
         <source>&amp;Receive</source>
         <translation>&amp;Fogadás</translation>
     </message>
     <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Mutat / Elrejt</translation>
+        <source>&amp;History</source>
+        <translation>&amp;Előzmények</translation>
     </message>
     <message>
-        <source>&amp;File</source>
-        <translation>&amp;Fájl</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Beállítások</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Súgó</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Naprakész</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Coinok küldése egy Gridcoin címre</translation>
+        <source>Browse transaction history</source>
+        <translation>Tranzakciós előzmények megtekintése</translation>
     </message>
     <message>
         <source>&amp;Favorites</source>
@@ -350,28 +266,64 @@
         <translation>A Gridcoin jutalmazza a BOINC-on végzett elosztott számítást</translation>
     </message>
     <message>
+        <source>E&amp;xit</source>
+        <translation>&amp;Kilépés</translation>
+    </message>
+    <message>
+        <source>Quit application</source>
+        <translation>Kilépés az alkalmazásból</translation>
+    </message>
+    <message>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;A Gridcoinról</translation>
     </message>
     <message>
-        <source>Scraper: waiting on wallet to sync.</source>
-        <translation>Scraper: várakozás tárca szinkronizációra.</translation>
+        <source>&amp;Options...</source>
+        <translation>&amp;Opciók...</translation>
     </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Mutat / Elrejt</translation>
     </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    <message>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>Tárca &amp;titkosítása...</translation>
     </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    <message>
+        <source>&amp;Change Passphrase...</source>
+        <translation>Jelszó &amp;megváltoztatása...</translation>
     </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+    <message>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Tárca-titkosító jelszó megváltoztatása</translation>
+    </message>
+    <message>
+        <source>Sign &amp;message...</source>
+        <translation>Üzenet aláírása...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>Üzenet &amp;valódiságának ellenőrzése</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Debug ablak</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Hibakereső és diagnosztikai konzol megnyitása</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Fájl</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Beállítások</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Súgó</translation>
     </message>
     <message>
         <source>[testnet]</source>
@@ -383,7 +335,43 @@
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to the Gridcoin network</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Naprakész</translation>
     </message>
     <message>
         <source>Catching up...</source>
@@ -400,6 +388,10 @@
     <message>
         <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
         <translation>Tárca &lt;b&gt;kódolva&lt;/b&gt; és jelenleg &lt;b&gt;zárva&lt;/b&gt;.</translation>
+    </message>
+    <message>
+        <source>Scraper: waiting on wallet to sync.</source>
+        <translation>Scraper: várakozás tárca szinkronizációra.</translation>
     </message>
     </context>
 <context>
@@ -482,12 +474,6 @@
         <source>Check client version</source>
         <translation>Kliens verzió ellenőrzése</translation>
     </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Figyelmeztetés: Új kliens elérhető:
-%1</translation>
-    </message>
     </context>
 <context>
     <name>EditAddressDialog</name>
@@ -533,6 +519,27 @@
     </message>
 </context>
 <context>
+    <name>Intro</name>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
+    </message>
+</context>
+<context>
     <name>OptionsDialog</name>
     <message>
         <source>Options</source>
@@ -553,14 +560,6 @@
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Proxy portja (pl.: 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>SOCKS &amp;Verzió:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>A proxy SOCKS verziója  (pl. 5)</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -646,27 +645,39 @@
     <name>QObject</name>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     </context>
 <context>
@@ -740,18 +751,6 @@
         <translation>Konzol törlése</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Írd be azt, hogy &lt;b&gt;help&lt;/b&gt; az elérhető parancsok áttekintéséhez.</translation>
-    </message>
-    <message>
-        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
-        <translation>Navigálhat a fel és le nyilakkal, és &lt;b&gt;Ctrl-L&lt;/b&gt; -vel törölheti a képernyőt.</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Fordítás dátuma</translation>
-    </message>
-    <message>
         <source>Estimated total blocks</source>
         <translation>Becsült összes blokk</translation>
     </message>
@@ -759,7 +758,15 @@
         <source>Client name</source>
         <translation>Kliens neve</translation>
     </message>
-</context>
+    <message>
+        <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
+        <translation>Navigálhat a fel és le nyilakkal, és &lt;b&gt;Ctrl-L&lt;/b&gt; -vel törölheti a képernyőt.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Írd be azt, hogy &lt;b&gt;help&lt;/b&gt; az elérhető parancsok áttekintéséhez.</translation>
+    </message>
+    </context>
 <context>
     <name>SendCoinsDialog</name>
     <message>
@@ -850,7 +857,7 @@
         <source>(no label)</source>
         <translation>(nincs címke)</translation>
     </message>
-</context>
+    </context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -860,6 +867,10 @@
     <message>
         <source>Pay &amp;To:</source>
         <translation>Címzett:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Üzenet:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -954,7 +965,9 @@
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -978,7 +991,9 @@
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -1010,7 +1025,9 @@
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -1080,7 +1097,9 @@
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation type="unfinished"><numerusform /><numerusform /></translation>
+        <translation type="unfinished">
+            <numerusform />
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -1210,10 +1229,6 @@
         <translation>Tranzakciós részletek megjelenítése</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Vesszővel elválasztott fájl (*.csv)</translation>
-    </message>
-    <message>
         <source>Confirmed</source>
         <translation>Megerősítve</translation>
     </message>
@@ -1295,10 +1310,6 @@ Ha a fájl nem létezik, hozd létre 'csak a felhasználó által olvasható' f�
         <translation>Étvénytelen -paytxfee=&lt;összeg&gt; összeg: '%s'</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>Ismeretlen -socks proxy kérése: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Érvénytelen -proxy cím: '%s'</translation>
     </message>
@@ -1345,10 +1356,6 @@ Ha a fájl nem létezik, hozd létre 'csak a felhasználó által olvasható' f�
     <message>
         <source>Loading wallet...</source>
         <translation>Tárca betöltése...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Nem sikerült a Tárca visszaállítása a korábbi verzióra</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

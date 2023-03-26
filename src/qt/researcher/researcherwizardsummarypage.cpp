@@ -94,7 +94,9 @@ void ResearcherWizardSummaryPage::refreshSummary()
     ui->cpidLabel->setText(m_researcher_model->formatCpid());
     ui->statusLabel->setText(m_researcher_model->formatStatus());
     ui->magnitudeLabel->setText(m_researcher_model->formatMagnitude());
-    ui->accrualLabel->setText(m_researcher_model->formatAccrual(unit));
+
+    bool near_limit = false;
+    ui->accrualLabel->setText(m_researcher_model->formatAccrual(unit, near_limit));
     ui->reviewBeaconAuthButton->setVisible(m_researcher_model->needsBeaconAuth());
 
     ui->beaconDetailsIconLabel->setPixmap(

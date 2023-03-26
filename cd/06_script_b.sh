@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2021 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 
 export LC_ALL=C.UTF-8
 
@@ -16,7 +16,7 @@ if [[ $HOST = *-apple-* ]]; then
 	done
 fi
 
-cd /tmp/release/
+cd /tmp/release/ || { echo "Failure"; exit 1; }
 for f in *; do
     sha256sum $f > $f.SHA256
 done

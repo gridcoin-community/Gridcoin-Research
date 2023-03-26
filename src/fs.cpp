@@ -1,4 +1,9 @@
+// Copyright (c) 2017-2022 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
 #include <fs.h>
+#include <util/syserror.h>
 
 #ifndef WIN32
 #include <fcntl.h>
@@ -34,7 +39,7 @@ fs::path AbsPathJoin(const fs::path& base, const fs::path& path)
 #ifndef WIN32
 
 static std::string GetErrorReason() {
-    return std::strerror(errno);
+    return SysErrorString(errno);
 }
 
 FileLock::FileLock(const fs::path& file)
@@ -118,7 +123,7 @@ bool FileLock::TryLock()
     if (hFile == INVALID_HANDLE_VALUE) {
         return false;
     }
-    _OVERLAPPED overlapped = {0};
+    _OVERLAPPED overlapped = {};
     if (!LockFileEx(hFile, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, std::numeric_limits<DWORD>::max(), std::numeric_limits<DWORD>::max(), &overlapped)) {
         reason = GetErrorReason();
         return false;

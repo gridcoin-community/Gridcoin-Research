@@ -45,6 +45,11 @@ public slots:
     void done(int retval);
     void exportClicked();
     void changeFilter(const QString& needle);
+    void resizeTableColumns(const bool& neighbor_pair_adjust = false, const int& index = 0,
+                            const int& old_size = 0, const int& new_size = 0);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     Ui::AddressBookPage *ui;
@@ -58,6 +63,10 @@ private:
     QMenu *contextMenu;
     QAction *deleteAction;
     QString newAddressToSelect;
+
+    std::vector<int> m_table_column_sizes;
+    bool m_init_column_sizes_set;
+    bool m_resize_columns_in_progress;
 
 private slots:
     void on_deleteButton_clicked();
@@ -78,6 +87,9 @@ private slots:
 
     /** New entry/entries were added to address table */
     void selectNewAddress(const QModelIndex &parent, int begin, int end);
+
+    /** Resize address book table columns based on incoming signal */
+    void addressBookSectionResized(int index, int old_size, int new_size);
 
 signals:
     void signMessage(QString addr);

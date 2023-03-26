@@ -38,11 +38,16 @@ QT_TRANSLATE_NOOP("bitcoin-core", ""
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Cannot obtain a lock on data directory %s. %s is probably already running."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Check that BOINC is installed and that you have the correct path in the "
+"config file if you installed it to a nonstandard location."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Due to the failure to delete the blockchain data you will be required to "
 "manually delete the data before starting your wallet."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Error initializing database environment %s! To recover, BACKUP THAT "
 "DIRECTORY, then remove everything from it except for wallet.dat."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Error: Clock skew is 5 minutes or greater. Please check your clock settings."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Error: The transaction was rejected.  This might happen if some of the coins "
 "in your wallet were already spent, such as if you used a copy of wallet.dat "
@@ -66,14 +71,82 @@ QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Failure to do so will result in undefined behaviour or failure to start "
 "wallet."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
+"For initiatives related to the Gridcoin community not covered by other poll "
+"types."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"For polls about community representation, public relations, and "
+"communications."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Please check your network and also check the config file and ensure your "
+"addnode entries are up-to-date. If you recently started the wallet, you may "
+"want to wait another few minutes for connections to build up and test again. "
+"Please see https://gridcoin.us/wiki/config-file.html and https://addnodes."
+"cycy.me/."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Please ensure that you have followed the process to advertise and verify "
+"your beacon. You can use the research wizard (the beacon button on the "
+"overview screen)."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Poll additional field value \"%s\" for field name \"%s\" exceeds %s "
+"characters."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Proposals related to Gridcoin management like poll requirements and funding."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Propose additions or removals of computing projects for research reward "
+"eligibility."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The IP for the port test site is unable to be resolved. This could mean your "
+"DNS is not working correctly. The wallet may operate without DNS, but it "
+"could be severely degraded, especially if the wallet is new and a database "
+"of prior successful connections has not been built up. Please check your "
+"computer and ensure name resolution is operating correctly."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The connection to the port test site was refused. This could be a transient "
+"problem with the port test site, but could also be an issue with your "
+"firewall. If you are also failing the connection test, your firewall is most "
+"likely blocking network communications from the Gridcoin client."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The network has experienced a low-level error and this probably means your "
+"IP address or other network connection parameters are not configured "
+"correctly. Please check your network configuration on your computer."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The network is reporting an unspecified socket error. If you also are "
+"failing the connection test, then please check your computer's network "
+"configuration."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The port test site is closed on port. This could be a transient problem with "
+"the port test site, but could also be an issue with your firewall. If you "
+"are also failing the connection test, your firewall is most likely blocking "
+"network communications from the Gridcoin client."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"The wallet has less than five connections to the network and is unable to "
+"connect to an NTP server to check your computer clock. This is not "
+"necessarily a problem. You can wait a few minutes and try the test again."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
 "The wallet will now shutdown. Please start your wallet to begin sync from "
 "zero"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"There is a new leisure version available and you should upgrade as soon as "
+"practical."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"There is a new mandatory version available and you should upgrade as soon as "
+"possible to ensure your wallet remains in consensus with the network."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Unable to bind to %s on this computer. Gridcoin is probably already running."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Unable to download a snapshot, as the wallet has detected that a new "
 "mandatory version is available for install. The mandatory upgrade must be "
 "installed before the snapshot can be downloaded and applied."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Verify (1) that you have BOINC installed correctly, (2) that you have "
+"attached at least one whitelisted project, (3) that you advertised your "
+"beacon with the same email as you use for your BOINC project(s), and (4) "
+"that the CPID on the overview screen matches the CPID when you login to your "
+"BOINC project(s) online."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Verify that you have actually completed workunits for the projects you have "
+"attached and that you have authorized the export of statistics. Please see "
+"https://gridcoin.us/guides/whitelist.htm."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
 "WARNING: A mandatory release is available. Please upgrade as soon as "
 "possible."),
@@ -93,6 +166,14 @@ QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Warning: -paytxfee is set very high! This is the transaction fee you will "
 "pay if you send a transaction."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Warning: Clock skew is between 3 and 5 minutes. Please check your clock "
+"settings."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Warning: ETTS is > 90 days. It will take a very long time to receive your "
+"research rewards by staking - increase balance or use MRC"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Warning: ETTS is infinite. No coins to stake - increase balance or use MRC"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Warning: Ending this process after Stage 2 will result in syncing from 0 or "
 "an incomplete/corrupted blockchain."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
@@ -106,10 +187,82 @@ QT_TRANSLATE_NOOP("bitcoin-core", ""
 "wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect "
 "you should restore from a backup."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
+"You have no balance and will be unable to retrieve your research rewards "
+"when solo crunching by staking. You can use MRC to retrieve your rewards, or "
+"you should acquire GRC to stake so you can retrieve your research rewards. "
+"Please see https://gridcoin.us/guides/boinc-install.htm."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
 "You must set rpcpassword=<password> in the configuration file:\n"
 "%s\n"
 "If the file does not exist, create it with owner-readable-only file "
 "permissions."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"You will not be able to stake because you have less than %1 connection(s). "
+"Please check your network and also check the config file and ensure your "
+"addnode entries are up-to-date. If you recently started the wallet, you may "
+"want to wait another few minutes for connections to build up and then test "
+"again. Please see https://gridcoin.us/wiki/config-file.html and https://"
+"addnodes.cycy.me/."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your balance is low given the current network difficulty to stake in a "
+"reasonable period of time to retrieve your research rewards when solo "
+"crunching. You should consider acquiring more GRC to stake more often, or "
+"else use MRC to retrieve your rewards."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your balance is too low given the current network difficulty to stake in a "
+"reasonable period of time to retrieve your research rewards when solo "
+"crunching. You can use MRC  to retrieve your rewards, or you should acquire "
+"more GRC to stake more often."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your clock in your computer is significantly off from UTC or network time "
+"and this may seriously degrade the operation of the wallet, including "
+"maintaining connection to the network. You should check your time and time "
+"zone settings for your computer. A very common problem is the off by one "
+"hour caused by a time zone issue or problems with daylight savings time."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your difficulty is extremely low and your wallet is almost certainly forked. "
+"Please ensure you are running the latest version and try removing the "
+"blockchain database and resyncing from genesis using the menu option. (Note "
+"this will take 2-4 hours.)"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your difficulty is low but your wallet is still in initial sync. Please "
+"recheck it later to see if this passes."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your difficulty is very low and your wallet is probably forked. Please "
+"ensure you are running the latest version and try removing the blockchain "
+"database and resyncing from genesis using the menu option. (Note this will "
+"take 2-4 hours.)"),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your outbound connection count is critically low. Please check your the "
+"config file and ensure your addnode entries are up-to-date. If you recently "
+"started the wallet, you may want to wait another few minutes for connections "
+"to build up and then test again. Please see https://gridcoin.us/wiki/config-"
+"file.html and https://addnodes.cycy.me/."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your outbound connection count is low. Please check your the config file and "
+"ensure your addnode entries are up-to-date. If you recently started the "
+"wallet, you may want to wait another few minutes for connections to build up "
+"and then test again. Please see https://gridcoin.us/wiki/config-file.html "
+"and https://addnodes.cycy.me/."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your wallet is not in sync and has not previously been in sync during this "
+"run, please wait for the wallet to sync and retest. If there are other "
+"failures preventing the wallet from syncing, please correct those items and "
+"retest to see if this test passes."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your wallet is out of sync with the network but was in sync before. If this "
+"fails there is likely a severe problem that is preventing the wallet from "
+"syncing. If the lack of sync is due to network connection issues, you will "
+"see failures on the network connection test(s). If the network connections "
+"pass, but your wallet fails this test, and continues to fail this test on "
+"repeated attempts with a few minutes in between, this could indicate a more "
+"serious issue. In that case you should check the debug log to see if it "
+"sheds light on the cause for no sync."),
+QT_TRANSLATE_NOOP("bitcoin-core", ""
+"Your wallet is still in initial sync. If this is a sync from the beginning "
+"(genesis), the sync process can take from 2 to 4 hours, or longer on a slow "
+"computer. If you have synced your wallet before but you just started the "
+"wallet up, then wait a few more minutes and retry the diagnostics again."),
 QT_TRANSLATE_NOOP("bitcoin-core", "A poll choice cannot be empty."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Are you sure you want to cancel the snapshot operation?"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Balance too low to create a contract."),
@@ -126,19 +279,20 @@ QT_TRANSLATE_NOOP("bitcoin-core", "CPID count polls are not supported."),
 QT_TRANSLATE_NOOP("bitcoin-core", "CPID"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cancel snapshot operation?"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cancel"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Cannot downgrade wallet"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cannot resolve -bind address: '%s'"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cannot resolve -externalip address: '%s'"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cannot write default address"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cannot write to data directory '%s'; check permissions."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Click \"Show Details\" to view changes in latest update."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Client Version"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Community"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Could not create transaction. See debug.log."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Datadir: "),
 QT_TRANSLATE_NOOP("bitcoin-core", "Difficulty"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Directories:"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Disabled by configuration"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Done loading"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Duplicate poll additional field: %s"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Duplicate poll choice: %s"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Duplicate response for poll choice: %s"),
 QT_TRANSLATE_NOOP("bitcoin-core", "ERROR"),
@@ -160,12 +314,16 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Exceeded the number of choices in the poll: %
 QT_TRANSLATE_NOOP("bitcoin-core", "Failed to download snapshot.zip; See debug.log"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Failed to listen on any port. Use -listen=0 if you want this."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Failed to rename bootstrap file to .old for backup purposes."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Failed: 80 block difficulty is less than"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Failed: Count ="),
 QT_TRANSLATE_NOOP("bitcoin-core", "Fees Collected"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Files:"),
+QT_TRANSLATE_NOOP("bitcoin-core", "For opinion or casual polls without any particular requirements."),
 QT_TRANSLATE_NOOP("bitcoin-core", "GB)"),
 QT_TRANSLATE_NOOP("bitcoin-core", "GB/"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Get help for a command"),
 QT_TRANSLATE_NOOP("bitcoin-core", "GitHub version: "),
+QT_TRANSLATE_NOOP("bitcoin-core", "Governance"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Gridcoin Update Available"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Gridcoin version"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Gridcoin"),
@@ -204,6 +362,7 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Magnitude"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Magnitude+Balance"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Magnitude-only polls are not supported."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Malformed CPID"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Marketing"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Multiple Choice"),
 QT_TRANSLATE_NOOP("bitcoin-core", "N/A"),
 QT_TRANSLATE_NOOP("bitcoin-core", "No UTXOs available due to reserve balance"),
@@ -215,12 +374,20 @@ QT_TRANSLATE_NOOP("bitcoin-core", "No mature coins"),
 QT_TRANSLATE_NOOP("bitcoin-core", "No wallet available."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Offline"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Organization"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Outbound communication to TCP port %1 appears to be blocked. "),
+QT_TRANSLATE_NOOP("bitcoin-core", "Outbound communication to TCP port"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Outreach"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Participant Count"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Participant count polls are not supported."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Passed: 80 block difficulty is"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Passed: Count ="),
+QT_TRANSLATE_NOOP("bitcoin-core", "Passed: ETTS ="),
 QT_TRANSLATE_NOOP("bitcoin-core", "Please enter a poll discussion website URL."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Please enter a poll title."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Please enter at least one response."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Please enter at least two poll choices."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Poll additional field name \"%s\" exceeds %s characters."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Poll cannot contain more than %s additional fields"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Poll cannot contain more than %s choices."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Poll choice \"%s\" exceeds %s characters."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Poll discussion URL cannot exceed %s characters."),
@@ -233,7 +400,11 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Poll signature failed. See debug.log."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Poll title cannot exceed %s characters."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Poll with that title already exists. Please choose another title."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Pool"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Project Listing"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Project email mismatch"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Propose a change to Gridcoin at the protocol level."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Propose marketing initiatives like ad campaigns."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Protocol Development"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Quorum Hash"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Reindexing blockchain from on disk block data files..."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Replaying contracts..."),
@@ -263,15 +434,22 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Staking Only - No Eligible Research Projects"
 QT_TRANSLATE_NOOP("bitcoin-core", "Staking Only - No active beacon"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Staking Only - Pool Detected"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Superblock Binary Size"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Survey"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Testnet-only version"),
+QT_TRANSLATE_NOOP("bitcoin-core", "The field is not well-formed."),
+QT_TRANSLATE_NOOP("bitcoin-core", "The field list is not well-formed."),
 QT_TRANSLATE_NOOP("bitcoin-core", "The wallet is now shutting down. Please restart your wallet."),
 QT_TRANSLATE_NOOP("bitcoin-core", "The wallet will now shutdown."),
 QT_TRANSLATE_NOOP("bitcoin-core", "This update is "),
+QT_TRANSLATE_NOOP("bitcoin-core", "This wallet is almost certainly forked."),
+QT_TRANSLATE_NOOP("bitcoin-core", "This wallet is probably forked."),
 QT_TRANSLATE_NOOP("bitcoin-core", "To use the %s option"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unable to bind to %s on this computer (bind returned error %d, %s)"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Unable to create the PID file '%s': %s"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown error"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown network specified in -onlynet: '%s'"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown poll response type."),
+QT_TRANSLATE_NOOP("bitcoin-core", "Unknown poll type. This should never happen."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown poll type."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown poll weight type."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Unknown"),
@@ -282,10 +460,17 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Vote signature failed. See debug.log."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Wallet %s resides outside data directory %s."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Wallet locked"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Wallet needed to be rewritten: restart Gridcoin to complete"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Warning: 45 days < ETTS ="),
+QT_TRANSLATE_NOOP("bitcoin-core", "Warning: 80 block difficulty is less than"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Cannot connect to NTP server"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Count ="),
 QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Disk space is low!"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Wrong Payload version specified for current block height."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Yes/No/Abstain"),
+QT_TRANSLATE_NOOP("bitcoin-core", "You should check your time and time zone settings for your computer."),
 QT_TRANSLATE_NOOP("bitcoin-core", "You will need to delete the following."),
 QT_TRANSLATE_NOOP("bitcoin-core", "\"%s\" is not a valid poll choice."),
+QT_TRANSLATE_NOOP("bitcoin-core", "appears to be blocked."),
 QT_TRANSLATE_NOOP("bitcoin-core", "leisure"),
 QT_TRANSLATE_NOOP("bitcoin-core", "mandatory"),
 QT_TRANSLATE_NOOP("bitcoin-core", "unknown"),

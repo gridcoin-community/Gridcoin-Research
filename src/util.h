@@ -79,8 +79,6 @@ extern int GetDayOfYear(int64_t timestamp);
 extern bool fPrintToConsole;
 extern bool fRequestShutdown;
 extern std::atomic<bool> fShutdown;
-extern bool fDaemon;
-extern bool fServer;
 extern bool fCommandLine;
 extern bool fTestNet;
 extern bool fNoListen;
@@ -100,9 +98,6 @@ bool TryCreateDirectories(const fs::path& p);
 
 std::string TimestampToHRDate(double dtm);
 
-#ifndef WIN32
-void CreatePidFile(const fs::path &path, pid_t pid);
-#endif
 bool DirIsWritable(const fs::path& directory);
 bool LockDirectory(const fs::path& directory, const std::string lockfile_name, bool probe_only=false);
 bool TryCreateDirectories(const fs::path& p);
@@ -119,7 +114,9 @@ std::string GetFileContents(const fs::path filepath);
 int64_t GetTimeOffset();
 int64_t GetAdjustedTime();
 void AddTimeData(const CNetAddr& ip, int64_t nOffsetSample);
+#if HAVE_SYSTEM
 void runCommand(std::string strCommand);
+#endif
 
 //!
 //! \brief Round double value to N decimal places.
@@ -162,6 +159,44 @@ inline int64_t abs64(int64_t n)
 {
     return (n >= 0 ? n : -n);
 }
+
+// Small class to represent fractions. We could do more sophisticated things like reduction using GCD, and overloaded
+// multiplication, but we don't need it, because this is used in very limited places, and we actually in many of the
+// algorithms where this needs to be used need to carefully control the order of multiplication and division using the
+// numerator and denominator.
+class Fraction {
+public:
+    Fraction() {}
+
+    Fraction(const int64_t& numerator,
+             const int64_t& denominator)
+        : m_numerator(numerator)
+        , m_denominator(denominator)
+    {
+        if (m_denominator == 0) {
+            throw std::out_of_range("denominator specified is zero");
+        }
+    }
+
+    bool isNonZero()
+    {
+        return m_denominator != 0 && m_numerator != 0;
+    }
+
+    constexpr int64_t GetNumerator() const
+    {
+        return m_numerator;
+    }
+
+    constexpr int64_t GetDenominator() const
+    {
+        return m_denominator;
+    }
+
+private:
+    int64_t m_numerator = 0;
+    int64_t m_denominator = 1;
+};
 
 inline std::string leftTrim(std::string src, char chr)
 {

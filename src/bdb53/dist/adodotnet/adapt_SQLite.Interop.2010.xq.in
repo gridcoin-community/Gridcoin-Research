@@ -1,0 +1,89 @@
+(:
+*  This template is only for changing SQLite.Interop/SQLite.Interop.vcproj
+*  of ADO.NET
+:)
+declare variable $WINDOWS_PROJ_URL := '@BDB_PATH@/build_windows/VS10/db.vcxproj';
+declare variable $WINDOWS_FILES := fn:document($WINDOWS_PROJ_URL)/Project/ItemGroup/ClCompile/parent::*;
+
+(: Copy File List and adapt it :)
+declare function local:getFileList($fileList)
+{
+  copy $newFileList := $fileList
+  modify (
+    (: Remove useless lang files from the list, e.g.: lang\cxx :)
+    delete node $newFileList//ClCompile[fn:contains(@Include, '..\lang')],
+    (: Change file path :)
+    for $filePath in ($newFileList//ClCompile/@Include, $newFileList//ClCompile/@Condition)
+    return replace value of node $filePath
+      with fn:replace($filePath, '..\\..\\src', $WIN_SRC)
+  )
+  return $newFileList
+};
+
+let $root := Project
+let $fileList := $WINDOWS_FILES
+let $cflags := $WINDOWS_FLAGS
+let $includes := fn:replace($WINDOWS_INCLUDE, ',', ';') (: VS2010 use ';' as separator :)
+let $inputLib := fn:concat($WINDOWS_INPUT_LIB, ';advapi32.lib')
+return
+(
+  (: Add BDB Files :)
+  (
+    let $newFileList := local:getFileList($fileList)
+    for $fileEntry in $root
+      for $fileItem in $newFileList
+        (:return $fileEntry:)
+        return insert node $fileItem as last into $fileEntry
+        (:return $fileItem:)
+  ),
+
+  (: Update PreprocessorDefinitions :)
+  (
+    for $node in $root//PreprocessorDefinitions[fn:contains(string(), 'WIN32;')]
+    let $additionalFlags := 
+      if (fn:contains($node/../../@Condition, 'Debug')) then (
+        $DEBUG_ADDITIONAL_FLAGS
+      ) else ()
+    let $combinedFlags := fn:concat($node/string(), $cflags, $additionalFlags)
+    return replace value of node $node with $combinedFlags
+  ),
+
+  (: Update/add AdditionalIncludeDirectories after PreprocessorDefinitions :)
+  (
+    for $node in $root//PreprocessorDefinitions[fn:contains(string(), 'WIN32;')]
+    let $ClCompile := $node/parent::*
+    let $AdditionalIncludeDirectories := $ClCompile/AdditionalIncludeDirectories
+    return
+      if (exists($AdditionalIncludeDirectories)) then (
+        replace value of node $AdditionalIncludeDirectories
+        with fn:concat($AdditionalIncludeDirectories/string(), ' ', $includes)
+      ) else (
+        insert node <AdditionalIncludeDirectories>{$includes}</AdditionalIncludeDirectories>
+        into $ClCompile
+      )
+  ),
+
+  (: Update AdditionalDependencies :)
+  (
+    for $node in $root//ItemDefinitionGroup/Link
+    let $dependcies := $node/AdditionalDependencies
+    let $group := $node/parent::*
+    return
+      if (fn:contains($group/@Condition, "Win32") or
+          fn:contains($group/@Condition, "x64")) then (
+        if (exists($dependcies)) then (
+          replace value of node $dependcies with fn:concat($inputLib, ';', $dependcies/string())
+        ) else (
+          insert node <AdditionalDependencies>{$inputLib}</AdditionalDependencies>
+          into $node
+        )
+      ) else ()
+  ),
+
+  (: Update WarningLevel :)
+  (
+    for $node in $root//WarningLevel
+    return replace value of node $node with "Level3"
+  )
+)
+

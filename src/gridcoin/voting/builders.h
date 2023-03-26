@@ -5,9 +5,10 @@
 #ifndef GRIDCOIN_VOTING_BUILDERS_H
 #define GRIDCOIN_VOTING_BUILDERS_H
 
-#include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/poll.h"
 
 #include <memory>
+#include <vector>
 
 class CWallet;
 class CWalletTx;
@@ -42,6 +43,13 @@ public:
     //! \brief Move assignment operator.
     //!
     PollBuilder& operator=(PollBuilder&& builder);
+
+    //!
+    //! \brief SetPayloadVersion
+    //!
+    //! \throws VotingError If the version is not valid for the current wallet height.
+    //!
+    PollBuilder SetPayloadVersion(uint32_t version);
 
     //!
     //! \brief Set the type of the poll.
@@ -159,6 +167,56 @@ public:
     PollBuilder AddChoice(std::string label);
 
     //!
+    //! \brief Set the set of additional fields for the poll. SetType() should be called beforehand.
+    //!
+    //! \param field A set of AdditionalFields to set.
+    //!
+    //! \throws VotingError If any of the fields are malformed, if the set of fields
+    //! contains a duplicate name, or the required boolean(s) are improperly set.
+    //!
+    PollBuilder SetAdditionalFields(std::vector<Poll::AdditionalField> fields);
+
+    //!
+    //! \brief Set the set of additional fields for the poll. SetType() should be called beforehand.
+    //!
+    //! \param fields A set of AdditionalFields to set.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate name, or the required boolean(s) are improperly set.
+    //!
+    PollBuilder SetAdditionalFields(Poll::AdditionalFieldList fields);
+
+    //!
+    //! \brief Add a set of additional fields for the poll. SetType() should be called beforehand.
+    //!
+    //! \param fields A set of AdditionalFields to add.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate name, or the required boolean(s) are improperly set.
+    //!
+    PollBuilder AddAdditionalFields(std::vector<Poll::AdditionalField> fields);
+
+    //!
+    //! \brief Add a set of additional fields for the poll. SetType() should be called beforehand.
+    //!
+    //! \param fields A set of AdditionalFields to add.
+    //!
+    //! \throws VotingError If any of the fields are malformed, or if the set of fields
+    //! contains a duplicate name, or the required boolean(s) are improperly set.
+    //!
+    PollBuilder AddAdditionalFields(Poll::AdditionalFieldList fields);
+
+    //!
+    //! \brief Add an additional field for the poll.
+    //!
+    //! \param field The additional field name-value to add.
+    //!
+    //! \throws VotingError If the field is malformed, or if the set of fields
+    //! contains a duplicate name.
+    //!
+    PollBuilder AddAdditionalField(Poll::AdditionalField field);
+
+    //!
     //! \brief Generate a poll contract transaction with the constructed poll.
     //!
     //! \param pwallet Points to a wallet instance to generate the claim from.
@@ -170,7 +228,8 @@ public:
     CWalletTx BuildContractTx(CWallet* const pwallet);
 
 private:
-    std::unique_ptr<Poll> m_poll; //!< The poll under construction.
+    std::unique_ptr<Poll> m_poll;    //!< The poll under construction.
+    uint32_t m_poll_payload_version; //!< The poll payload version appropriate for the current block height
 }; // PollBuilder
 
 //!

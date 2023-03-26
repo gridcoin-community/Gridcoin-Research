@@ -6,6 +6,7 @@
 #ifndef BITCOIN_WALLET_WALLET_H
 #define BITCOIN_WALLET_WALLET_H
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <set>
@@ -23,6 +24,7 @@
 #include <util/string.h>
 #include "wallet/generated_type.h"
 #include "wallet/walletdb.h"
+#include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
 extern bool fWalletUnlockStakingOnly;
@@ -35,14 +37,8 @@ class CCoinControl;
 
 MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 
-/** (client) version numbers for particular wallet features */
-enum WalletFeature
-{
-    FEATURE_BASE = 10500, // the earliest version new wallets supports (only useful for getinfo's clientversion output)
-    FEATURE_WALLETCRYPT = 40000, // wallet encryption
-    FEATURE_COMPRPUBKEY = 60000, // compressed public keys
-    FEATURE_LATEST = 60000
-};
+static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
+static const unsigned int DEFAULT_KEYPOOL_SIZE_PRE_HD = 1000;
 
 /** A key pool entry */
 class CKeyPool
@@ -92,8 +88,8 @@ private:
     // the current wallet version: clients below this version are not able to load the wallet
     int nWalletVersion GUARDED_BY(cs_wallet);
 
-    // the maximum wallet format version: memory-only variable that specifies to what version this wallet may be upgraded
-    int nWalletMaxVersion GUARDED_BY(cs_wallet);
+    /* the HD chain data model (external chain counters) */
+    CHDChain hdChain;
 
 public:
     /// Main wallet lock.
@@ -132,24 +128,14 @@ public:
     }
 
     //!
-    //! \brief Get the public key used to verify administrative contracts.
-    //!
-    //! The wallet embeds the master public key so that every node can verify
-    //! the authenticity of administrative contracts like a project whitelist
-    //! addition or removal. The master key holders must import a private key
-    //! that corresponds to this public key before they can sign contracts.
-    //!
-    //! \return A \c CPubKey object containing the master public key.
-    //!
-    static const CPubKey& MasterPublicKey();
-
-    //!
     //! \brief Get the output address controlled by the master private key used
     //! to verify administrative contracts.
     //!
+    //! \param height The block height which the master key is valid for.
+    //!
     //! \return Address as calculated from the master public key.
     //!
-    static const CBitcoinAddress MasterAddress();
+    static const CBitcoinAddress MasterAddress(int height);
 
     //!
     //! \brief Get the imported master private key used to sign administrative
@@ -169,14 +155,15 @@ public:
     //! Note that this private key differs from the wallet keystore's "master"
     //! key which the wallet uses to encrypt the private keys in storage.
     //!
+    //! \param height The block height which the master key is valid for.
+    //!
     //! \return An empty key when no master key imported.
     //!
-    CKey MasterPrivateKey() const;
+    CKey MasterPrivateKey(int height) const;
 
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        nWalletVersion = FEATURE_BASE;
-        nWalletMaxVersion = FEATURE_BASE;
+        nWalletVersion = wallet::FEATURE_BASE;
         fFileBacked = false;
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = nullptr;
@@ -194,10 +181,10 @@ public:
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
     // check whether we are allowed to upgrade (or already support) to the named feature
-    bool CanSupportFeature(enum WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    bool CanSupportFeature(enum wallet::WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         AssertLockHeld(cs_wallet);
-        return nWalletMaxVersion >= wf;
+        return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
@@ -224,7 +211,6 @@ public:
     {
         AssertLockHeld(cs_wallet);
         nWalletVersion = nVersion;
-        nWalletMaxVersion = std::max(nWalletMaxVersion, nVersion);
         return true;
     }
 
@@ -262,7 +248,17 @@ public:
     bool EraseFromWallet(uint256 hash);
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
+    int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
     void ReacceptWalletTransactions();
+
+
+    //!
+    //! \brief This method resends wallet transactions that have not been confirmed on the chain. The original implementation
+    //! was based on old Bitcoin code and was really bad. This new revision adapts some of the ideas from the Bitcoin Core
+    //! current master (~v22), but to straighten everything out requires a full port of the newer Bitcoin wallet code.
+    //!
+    //! \param fForce
+    //!
     void ResendWalletTransactions(bool fForce = false);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;
@@ -394,11 +390,8 @@ public:
 
     bool SetDefaultKey(const CPubKey &vchPubKey);
 
-    // signify that a particular wallet feature is now used. this may change nWalletVersion and nWalletMaxVersion if those are lower
-    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = nullptr, bool fExplicit = false);
-
-    // change which version we're allowed to upgrade to (note that this does not immediately imply upgrading to that format)
-    bool SetMaxVersion(int nVersion);
+    // signify that a particular wallet feature is now used.
+    bool SetMinVersion(enum wallet::WalletFeature, CWalletDB* pwalletdbIn = nullptr);
 
     // get the current wallet format (the oldest client version guaranteed to understand this wallet)
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
@@ -430,6 +423,25 @@ public:
      * @note called with lock cs_wallet held.
      */
     boost::signals2::signal<void (CWallet *wallet, const uint256 &hashTx, ChangeType status)> NotifyTransactionChanged;
+
+    /* Set the HD chain model (chain child index counters) */
+    bool SetHDChain(const CHDChain& chain, bool memonly);
+    const CHDChain& GetHDChain() { return hdChain; }
+
+    /* Returns true if HD is enabled */
+    bool IsHDEnabled() const;
+
+    /* Generates a new HD master key (will not be activated) */
+    CPubKey GenerateNewHDMasterKey();
+
+    /* Derives a new HD master key (will not be activated) */
+    CPubKey DeriveNewMasterHDKey(const CKey& key);
+
+    /* Set the current HD master key (will reset the chain child index counters) */
+    bool SetHDMasterKey(const CPubKey& key);
+
+    /** Upgrade the wallet */
+    bool UpgradeWallet(int version, std::string& error);
 };
 
 /** A key allocated from the key pool. */
@@ -623,7 +635,7 @@ public:
 
             ReadOrderPos(nOrderPos, mapValue);
 
-            if (!mapValue.count("timesmart") || !ParseUInt(mapValue["timesmart"], &nTimeSmart)) {
+            if (!mapValue.count("timesmart") || !ParseUInt32(mapValue["timesmart"], &nTimeSmart)) {
                 nTimeSmart = 0;
             }
         }
@@ -874,6 +886,8 @@ public:
     void RelayWalletTransaction(CTxDB& txdb);
     void RelayWalletTransaction();
 
+    bool RevalidateTransaction(CTxDB& txdb);
+
     MinedType GetGeneratedType(uint32_t vout_offset) const
     {
         return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
@@ -1034,9 +1048,9 @@ public:
 
             if (!(mapValue.empty() && _ssExtra.empty())) {
                 CDataStream ss(s.GetType(), nVersion);
-                ss.insert(ss.begin(), '\0');
+                ss.write(AsBytes(Span<const char>{"\0", 1}));
                 ss << mapValue;
-                ss.insert(ss.end(), _ssExtra.begin(), _ssExtra.end());
+                ss.write(MakeByteSpan(_ssExtra));
                 me.strComment.append(ss.str());
             }
         }
@@ -1050,12 +1064,12 @@ public:
 
             if (std::string::npos != nSepPos) {
                 CDataStream ss(
-                    std::vector<char>(strComment.begin() + nSepPos + 1, strComment.end()),
+                    Span((std::byte*)&(strComment.begin() + nSepPos + 1)[0], (std::byte*)&strComment.end()[0]),
                     s.GetType(),
                     nVersion);
 
                 ss >> me.mapValue;
-                me._ssExtra = std::vector<char>(ss.begin(), ss.end());
+                me._ssExtra = std::vector<char>((char*)&ss.begin()[0], (char*)&ss.end()[0]);
             }
 
             ReadOrderPos(me.nOrderPos, me.mapValue);

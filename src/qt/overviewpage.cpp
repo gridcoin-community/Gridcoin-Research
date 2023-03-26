@@ -2,13 +2,14 @@
 #include <QListView>
 
 #include "overviewpage.h"
-#include "ui_overviewpage.h"
+#include "forms/ui_overviewpage.h"
 
 #ifndef Q_MOC_RUN
 #include "qt/decoration.h"
 #include "main.h"
 #endif
 #include "researcher/researchermodel.h"
+#include "mrcmodel.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
@@ -120,6 +121,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
     researcherModel(nullptr),
+    m_mrc_model(nullptr),
     walletModel(nullptr),
     currentBalance(-1),
     currentStake(0),
@@ -151,6 +153,10 @@ OverviewPage::OverviewPage(QWidget *parent) :
     ui->stakingGridLayout->setVerticalSpacing(verticalSpacing);
     ui->researcherGridLayout->setVerticalSpacing(verticalSpacing);
 
+    // scale warning icon
+    int warning_icon_size = GRC::ScalePx(this, 21);
+    ui->accrualLimitWarningIconlabel->setMaximumSize(QSize(warning_icon_size, warning_icon_size));
+
     // Recent Transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -165,6 +171,8 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     // start with displaying the "out of sync" warnings
     showOutOfSyncWarning(true);
+
+    showHideMRCToolButton();
 }
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
@@ -281,6 +289,7 @@ void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBa
     bool showImmature = immatureBalance != 0;
     ui->immatureLabel->setVisible(showImmature);
     ui->immatureTextLabel->setVisible(showImmature);
+
 }
 
 void OverviewPage::setHeight(int height, int height_of_peers, bool in_sync)
@@ -357,12 +366,32 @@ void OverviewPage::setResearcherModel(ResearcherModel *researcherModel)
         return;
     }
 
+
     updateResearcherStatus();
+    showHideMRCToolButton();
+
     connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::updateResearcherStatus);
     connect(researcherModel, &ResearcherModel::magnitudeChanged, this, &OverviewPage::updateMagnitude);
     connect(researcherModel, &ResearcherModel::accrualChanged, this, &OverviewPage::updatePendingAccrual);
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::updateResearcherAlert);
+
+    // Show or hide the MRC request tool button based on the researcher and beacon status.
+    connect(researcherModel, &ResearcherModel::researcherChanged, this, &OverviewPage::showHideMRCToolButton);
+    connect(researcherModel, &ResearcherModel::beaconChanged, this, &OverviewPage::showHideMRCToolButton);
+
+
     connect(ui->researcherConfigToolButton, &QAbstractButton::clicked, this, &OverviewPage::onBeaconButtonClicked);
+}
+
+void OverviewPage::setMRCModel(MRCModel *mrcModel)
+{
+    m_mrc_model = mrcModel;
+
+    if (!mrcModel) {
+        return;
+    }
+
+    connect(ui->mrcRequestToolButton, &QAbstractButton::clicked, this, &OverviewPage::onMRCRequestClicked);
 }
 
 void OverviewPage::setWalletModel(WalletModel *model)
@@ -477,7 +506,14 @@ void OverviewPage::updatePendingAccrual()
         unit = walletModel->getOptionsModel()->getDisplayUnit();
     }
 
-    ui->accrualLabel->setText(researcherModel->formatAccrual(unit));
+    bool near_limit = false;
+
+    ui->accrualLabel->setText(researcherModel->formatAccrual(unit, near_limit));
+    if (near_limit) {
+        ui->accrualLimitWarningIconlabel->show();
+    } else {
+        ui->accrualLimitWarningIconlabel->hide();
+    }
 }
 
 void OverviewPage::updateResearcherAlert()
@@ -501,6 +537,32 @@ void OverviewPage::onBeaconButtonClicked()
     }
 
     researcherModel->showWizard(walletModel);
+}
+
+void OverviewPage::onMRCRequestClicked()
+{
+    if (!m_mrc_model) {
+        return;
+    }
+
+    m_mrc_model->showMRCDialog();
+}
+
+void OverviewPage::showHideMRCToolButton()
+{
+    if (!researcherModel) {
+        ui->mrcRequestToolButton->hide();
+        return;
+    }
+
+    if (!researcherModel->hasActiveBeacon()
+            || researcherModel->configuredForInvestorMode()
+            || researcherModel->detectedPoolMode()) {
+        ui->mrcRequestToolButton->hide();
+        return;
+    }
+
+    ui->mrcRequestToolButton->show();
 }
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)

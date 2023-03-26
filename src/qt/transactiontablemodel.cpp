@@ -420,6 +420,10 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
                 return tr("PoS Side Stake Sent");
             case MinedType::POR_SIDE_STAKE_SEND:
                 return tr("PoS+RR Side Stake Sent");
+            case MinedType::MRC_RCV:
+                return tr("MRC Payment Received");
+            case MinedType::MRC_SEND:
+                return tr("MRC Payment Sent");
             case MinedType::SUPERBLOCK:
                 return tr("Mined - Superblock");
             default:
@@ -432,6 +436,8 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
         return tr("Poll");
     case TransactionRecord::Vote:
         return tr("Vote");
+    case TransactionRecord::MRC:
+        return tr("Manual Rewards Claim Request");
     case TransactionRecord::Message:
         return tr("Message");
     default:
@@ -462,6 +468,10 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
             return QIcon(":/icons/tx_pos_ss_sent");
         case MinedType::POR_SIDE_STAKE_SEND:
             return QIcon(":/icons/tx_por_ss_sent");
+        case MinedType::MRC_RCV:
+            return QIcon(":/icons/tx_por_ss");
+        case MinedType::MRC_SEND:
+            return QIcon(":/icons/tx_por_ss_sent");
         case MinedType::SUPERBLOCK:
             return QIcon(":/icons/superblock");
         default:
@@ -479,6 +489,8 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Poll:
     case TransactionRecord::Vote:
         return QIcon(":/icons/tx_contract_voting");
+    case TransactionRecord::MRC:
+        return QIcon(":/icons/tx_contract_mrc");
     case TransactionRecord::Message:
         return QIcon(":/icons/message");
     default:
@@ -593,20 +605,22 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return QVariant();
     TransactionRecord *rec = static_cast<TransactionRecord*>(index.internalPointer());
 
-    switch(role)
-    {
+    const auto column = static_cast<ColumnIndex>(index.column());
+    switch (role) {
     case Qt::DecorationRole:
-        switch(index.column())
-        {
+        switch (column) {
         case Status:
             return txStatusDecoration(rec);
+        case Date: return {};
+        case Type: return {};
         case ToAddress:
             return txAddressDecoration(rec);
-        }
-        break;
+        case Amount: return {};
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     case Qt::DisplayRole:
-        switch(index.column())
-        {
+        switch (column) {
+        case Status: return {};
         case Date:
             return formatTxDate(rec);
         case Type:
@@ -615,12 +629,11 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
             return formatTxToAddress(rec, false);
         case Amount:
             return formatTxAmount(rec);
-        }
-        break;
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     case Qt::EditRole:
         // Edit role is used for sorting, so return the unformatted values
-        switch(index.column())
-        {
+        switch (column) {
         case Status:
             return QString::fromStdString(rec->status.sortKey);
         case Date:
@@ -631,8 +644,8 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
             return formatTxToAddress(rec, true);
         case Amount:
             return rec->credit + rec->debit;
-        }
-        break;
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     case Qt::ToolTipRole:
         return formatTooltip(rec);
     case Qt::TextAlignmentRole:

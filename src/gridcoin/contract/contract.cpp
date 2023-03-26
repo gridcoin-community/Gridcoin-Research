@@ -7,6 +7,7 @@
 #include "main.h"
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/beacon.h"
@@ -157,7 +158,12 @@ public:
         ClearCache(Section::SCRAPER);
     }
 
-    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -194,7 +200,12 @@ public:
         // Nothing to do.
     }
 
-    bool Validate(const Contract& contract, const CTransaction& tx) const override
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
+    {
+        return true; // No contextual validation needed yet
+    }
+
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
     {
         return true; // No contextual validation needed yet
     }
@@ -245,7 +256,9 @@ public:
     {
         // Don't reset the beacon registry as it is now backed by a database.
         // GetBeaconRegistry().Reset();
-        GetPollRegistry().Reset();
+
+        // Don't reset the poll registry as reorgs are properly handled.
+        // GetPollRegistry().Reset();
         GetWhitelist().Reset();
         m_appcache_handler.Reset();
     }
@@ -278,12 +291,35 @@ public:
     //!
     //! \param contract Contract to validate.
     //! \param tx       Transaction that contains the contract.
+    //! \param DoS      Misbehavior score out.
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx)
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
     {
-        return GetHandler(contract.m_type.Value()).Validate(contract, tx);
+        return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
+    }
+
+    //!
+    //! \brief Perform contextual validation for the provided contract including block context. This is used
+    //! in ConnectBlock.
+    //!
+    //! \param ctx ContractContext to validate.
+    //! \param DoS Misbehavior score out.
+    //!
+    //! \return \c false If the contract fails validation.
+    //!
+    bool BlockValidate(const ContractContext& ctx, int& DoS)
+    {
+        if (!GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS)) {
+            error("%s: Contract of type %s failed validation.",
+                  __func__,
+                  ctx.m_contract.m_type.ToString());
+
+            return false;
+        }
+
+        return true;
     }
 
     //!
@@ -304,6 +340,7 @@ public:
 
 private:
     AppCacheContractHandler m_appcache_handler; //<! Temporary.
+    MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
     //!
@@ -324,6 +361,7 @@ private:
             case ContractType::PROTOCOL:   return m_appcache_handler;
             case ContractType::SCRAPER:    return m_appcache_handler;
             case ContractType::VOTE:       return GetPollRegistry();
+            case ContractType::MRC:        return m_mrc_contract_handler;
             default:                       return m_unknown_handler;
         }
     }
@@ -347,7 +385,7 @@ Dispatcher g_dispatcher;
 //!
 //! \return \c true if the contract passes validation.
 //!
-bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
+bool CheckLegacyContract(const Contract& contract, const CTransaction& tx, int block_height)
 {
     if (!contract.WellFormed()) {
         return false;
@@ -378,18 +416,9 @@ bool CheckLegacyContract(const Contract& contract, const CTransaction& tx)
     const ContractPayload payload = contract.m_body.AssumeLegacy();
     const auto& body = static_cast<const LegacyPayload&>(*payload);
 
-    const uint256 body_hash = Hash(
-        type_string.begin(),
-        type_string.end(),
-        body.m_key.begin(),
-        body.m_key.end(),
-        body.m_value.begin(),
-        body.m_value.end());
+    const uint256 body_hash = Hash(type_string, body.m_key, body.m_value);
 
-    CKey key;
-    key.SetPubKey(CWallet::MasterPublicKey());
-
-    return key.Verify(body_hash, sig);
+    return CPubKey(Params().MasterKey(block_height)).Verify(body_hash, sig);
 }
 } // anonymous namespace
 
@@ -415,8 +444,6 @@ Contract GRC::MakeLegacyContract(
 
 void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 {
-    static BlockFinder blockFinder;
-
     CBlockIndex*& pindex = pindex_start;
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
@@ -424,7 +451,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
     // when the beacon database in LevelDB has not already been populated.
     if (!pindex)
     {
-        pindex = blockFinder.FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
     }
 
     if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
@@ -433,7 +460,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
 
-    // This no longer includes beacons.
+    // This no longer includes beacons or polls.
     g_dispatcher.ResetHandlers();
 
     BeaconRegistry& beacons = GetBeaconRegistry();
@@ -573,7 +600,7 @@ void GRC::ApplyContracts(
         }
 
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
             continue;
         }
 
@@ -593,6 +620,8 @@ void GRC::ApplyContracts(
             }
         }
 
+        // Note that for polls and votes, this rescan could overlap contracts already recorded. The handlers for polls/votes
+        // check for the existence of contracts already recorded and will prevent a double application.
         g_dispatcher.Apply({ contract, tx, pindex });
 
         // Don't track transaction message contracts in the block index:
@@ -600,10 +629,21 @@ void GRC::ApplyContracts(
     }
 }
 
-bool GRC::ValidateContracts(const CTransaction& tx)
+bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
 {
     for (const auto& contract : tx.GetContracts()) {
-        if (!g_dispatcher.Validate(contract, tx)) {
+        if (!g_dispatcher.Validate(contract, tx, DoS)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS)
+{
+    for (const auto& contract: tx.GetContracts()) {
+        if (!g_dispatcher.BlockValidate({ contract, tx, pindex }, DoS)) {
             return false;
         }
     }
@@ -616,7 +656,7 @@ void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pinde
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
         // V2 contracts are checked upon receipt:
-        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx)) {
+        if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
             continue;
         }
 
@@ -765,6 +805,7 @@ Contract::Type Contract::Type::Parse(std::string input)
     // Ordered by frequency:
     if (input == "claim")          return ContractType::CLAIM;
     if (input == "beacon")         return ContractType::BEACON;
+    if (input == "mrc")            return ContractType::MRC;
     if (input == "vote")           return ContractType::VOTE;
     if (input == "poll")           return ContractType::POLL;
     if (input == "project")        return ContractType::PROJECT;
@@ -780,6 +821,7 @@ std::string Contract::Type::ToString() const
     switch (m_value) {
         case ContractType::BEACON:     return "beacon";
         case ContractType::CLAIM:      return "claim";
+        case ContractType::MRC:        return "mrc";
         case ContractType::MESSAGE:    return "message";
         case ContractType::POLL:       return "poll";
         case ContractType::PROJECT:    return "project";
@@ -856,6 +898,9 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             // Claims can only exist in a coinbase transaction and have no
             // legacy representation as a contract:
             assert(false && "Attempted to convert legacy claim contract.");
+        case ContractType::MRC:
+            // MRCs have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy MRC contract.");
         case ContractType::MESSAGE:
             // The contract system does not map legacy transaction messages
             // stored in the CTransaction::hashBoinc field:
@@ -891,11 +936,18 @@ void Contract::Body::ResetType(const ContractType type)
         case ContractType::CLAIM:
             m_payload.Reset(new Claim());
             break;
+        case ContractType::MRC:
+            m_payload.Reset(new MRC());
+            break;
         case ContractType::MESSAGE:
             m_payload.Reset(new TxMessage());
             break;
         case ContractType::POLL:
-            m_payload.Reset(new PollPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROJECT:
             m_payload.Reset(new Project());

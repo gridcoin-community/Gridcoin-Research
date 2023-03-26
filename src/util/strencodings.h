@@ -10,10 +10,14 @@
 #define BITCOIN_UTIL_STRENCODINGS_H
 
 #include <attributes.h>
+#include <span.h>
+#include <util/string.h>
 
 #include <cassert>
+#include <charconv>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -54,9 +58,33 @@ std::string EncodeBase32(const unsigned char* pch, size_t len);
 std::string EncodeBase32(const std::string& str);
 
 void SplitHostPort(std::string in, int &portOut, std::string &hostOut);
-int64_t atoi64(const char* psz);
-int64_t atoi64(const std::string& str);
-int atoi(const std::string& str);
+
+// LocaleIndependentAtoi is provided for backwards compatibility reasons.
+//
+// New code should use the ParseInt64/ParseUInt64/ParseInt32/ParseUInt32 functions
+// which provide parse error feedback.
+//
+// The goal of LocaleIndependentAtoi is to replicate the exact defined behaviour
+// of atoi and atoi64 as they behave under the "C" locale.
+template <typename T>
+T LocaleIndependentAtoi(const std::string& str)
+{
+    static_assert(std::is_integral<T>::value);
+    T result;
+    // Emulate atoi(...) handling of white space and leading +/-.
+    std::string s = TrimString(str);
+    if (!s.empty() && s[0] == '+') {
+        if (s.length() >= 2 && s[1] == '-') {
+            return 0;
+        }
+        s = s.substr(1);
+    }
+    auto [_, error_condition] = std::from_chars(s.data(), s.data() + s.size(), result);
+    if (error_condition != std::errc{}) {
+        return 0;
+    }
+    return result;
+}
 
 /**
  * Tests if the given character is a decimal digit.
@@ -84,6 +112,24 @@ constexpr inline bool IsSpace(char c) noexcept {
 }
 
 /**
+ * Convert string to integral type T.
+ *
+ * @returns std::nullopt if the entire string could not be parsed, or if the
+ *   parsed value is not in the range representable by the type T.
+ */
+template <typename T>
+std::optional<T> ToIntegral(const std::string& str)
+{
+    static_assert(std::is_integral<T>::value);
+    T result;
+    const auto [first_nonmatching, error_condition] = std::from_chars(str.data(), str.data() + str.size(), result);
+    if (first_nonmatching != str.data() + str.size() || error_condition != std::errc{}) {
+        return std::nullopt;
+    }
+    return {result};
+}
+
+/**
  * Convert string to signed integer with strict parse error feedback.
  * @returns true if the entire string could be parsed as valid integer,
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
@@ -103,13 +149,6 @@ constexpr inline bool IsSpace(char c) noexcept {
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
 [[nodiscard]] bool ParseInt64(const std::string& str, int64_t *out);
-
-/**
- * Convert decimal string to unsigned integer with strict parse error feedback.
- * @returns true if the entire string could be parsed as valid integer,
- *   false if not the entire string could be parsed or when overflow or underflow occurred.
- */
-[[nodiscard]] bool ParseUInt(const std::string& str, unsigned int *out);
 
 /**
  * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
@@ -132,30 +171,12 @@ constexpr inline bool IsSpace(char c) noexcept {
  */
 [[nodiscard]] bool ParseDouble(const std::string& str, double *out);
 
-template<typename T>
-std::string HexStr(const T itbegin, const T itend)
-{
-    std::string rv(std::distance(itbegin, itend) * 2, '\0');
-
-    static const char hexmap[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-
-    auto rvit = rv.begin();
-    for (T it = itbegin; it < itend; ++it)
-    {
-        unsigned char val = (unsigned char)(*it);
-        *rvit++ = hexmap[val >> 4];
-        *rvit++ = hexmap[val & 15];
-    }
-    assert(rvit == rv.end());
-    return rv;
-}
-
-template<typename T>
-inline std::string HexStr(const T& vch)
-{
-    return HexStr(vch.begin(), vch.end());
-}
+/**
+ * Convert a span of bytes to a lower-case hexadecimal string.
+ */
+std::string HexStr(const Span<const uint8_t> s);
+inline std::string HexStr(const Span<const char> s) { return HexStr(MakeUCharSpan(s)); }
+inline std::string HexStr(const Span<const std::byte> s) { return HexStr(MakeUCharSpan(s)); }
 
 /**
  * Format a paragraph of text to a fixed width, adding spaces for

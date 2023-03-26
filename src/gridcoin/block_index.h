@@ -30,6 +30,15 @@ public:
     Cpid m_cpid;
     int64_t m_research_subsidy;
     double m_magnitude;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(m_cpid);
+        READWRITE(m_research_subsidy);
+        READWRITE(m_magnitude);
+    }
 };
 
 //!

@@ -20,6 +20,7 @@
 #include "streams.h"
 #include "tinyformat.h"
 
+#include <stdexcept>
 #include <unordered_map>
 
 class CBlockIndex;
@@ -359,6 +360,16 @@ public:
     CAmount PaymentPerDayLimit() const override
     {
         return MaxReward();
+    }
+
+    CAmount NearRewardLimit() const override
+    {
+        // This returns MaxReward() - 2 * ExpectedDaily() or 1/2 of MaxReward(), whichever
+        // is greater
+
+        CAmount threshold = std::max(MaxReward() / 2, MaxReward() - 2 * ExpectedDaily());
+
+        return threshold;
     }
 
     bool ExceededRecentPayments() const override
@@ -867,7 +878,15 @@ public:
             CURRENT_VERSION);
 
         if (!registry_file.IsNull()) {
-            Unserialize(registry_file);
+            try {
+                Unserialize(registry_file);
+            } catch (const std::ios_base::failure& e) {
+                if (feof(registry_file.Get())) {
+                    throw SnapshotStateError("unexpected eof while loading the registry.");
+                }
+
+                throw;
+            }
         } else {
             m_entries.clear();
         }
@@ -1044,14 +1063,14 @@ public:
     //!
     //! TODO: encapsulate this
     //!
-    void write(const char* pch, size_t size)
+    void write(Span<const std::byte> src)
     {
         if (!m_file) {
             throw std::ios_base::failure(
                 strprintf("%s: file handle is nullptr", __func__));
         }
 
-        if (fwrite(pch, 1, size, m_file) != size) {
+        if (fwrite(src.data(), 1, src.size(), m_file) != src.size()) {
             throw std::ios_base::failure(
                 strprintf("%s: write failed", __func__));
         }

@@ -4,6 +4,212 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.2.0] 2023-03-26, leisure, "LaVerne"
+
+### Added
+ - [3/3] key, wallet: HD wallets #2540 (@div72)
+ - ARMv8 SHA2 Intrinsics #2612 (@barton2526)
+ - build: vendor bdb 5.3 #2620 (@div72)
+ - scraper, gui: Add external adapter projects indication #2625 (@jamescowens)
+ - gui: implement INSUFFICIENT_MATURE_FUNDS status for the mrcmodel #2628 (@jamescowens)
+ - gui, accrual: Implement accrual limit warning #2636 (@jamescowens)
+ - rpc: add `getnodeaddresses` #2646 (@Pythonix)
+ - consensus: Add new checkpoints #2651 (@barton2526)
+
+### Changed
+ - voting: Optimize poll locks #2619 (@jamescowens)
+ - util: move threadinterrupt.{cpp,h} to util #2613 (@Pythonix)
+ - gui, voting: Update pool cpids and avw rules #2624 (@jamescowens)
+ - ci: bump python and setup-python action version #2626 (@div72)
+ - gui: Change text from username to name (real name or nickname) #2633 (@jamescowens)
+ - locale: Translation update, phase 1 #2637 (@jamescowens)
+ - gui: Change MRC too soon to submit error to be less confusing #2645 (@jamescowens)
+ - locale: Update translations prior to release (phase 2/2) #2658 (@jamescowens)
+ - gui: Enhance MRC request form to avoid fee boost field confusion #2659 (@jamescowens)
+
+### Removed
+none
+
+### Fixed
+ - net: Turn net structures into dumb storage classes (backport) #2561 (@Pythonix)
+ - build: Include native_X.mk before X.mk #2609 (@barton2526)
+ - depends: fix OpenSSL for Darwin builds #2610 (@div72)
+ - build: Change actions runner image to Focal, Force Lint to use 22.04, Change cd runner version #2611 (@barton2526)
+ - gui: don't show datadir error msgbox if arg isn't specified #2617 (@div72)
+ - rpc: Repair auditsnapshotaccrual rpc function #2621 (@jamescowens)
+ - gui: Correct updateBeaconIcon() function in bitcoingui.cpp #2622 (@jamescowens)
+ - wallet: Strengthen CWalletTx::RevalidateTransactions #2627 (@jamescowens)
+ - test: Fix Wambiguous-reversed-operator compiler warning, drop boost::assign #2632 (@barton2526)
+ - gui: Fix wallet overview displaying lower-case poll name #2640 (@delta1513)
+ - Fix and optimize ResendWalletTransactions #2642 (@jamescowens)
+ - build(nsis): Write registry keys to HKLM instead of HKCU, Install shortcuts for all users, Fix INSTALLDIR removal bug #2643 (@sitiom)
+ - gui: Fix TransactionRecord::decomposeTransaction to properly display self-sidestake #2647 (@jamescowens)
+ - rpc: Fixed the RPC error when running `help voting` while syncing #2649 (@delta1513)
+ - build: Fix compilation with GCC 13 #2653 (@theMarix)
+ - rpc: Formatting - typo correction rpc help for listresearcheraccounts #2654 (@PrestackI)
+
+## [5.4.1.0] 2022-11-27, leisure
+
+### Added
+ - net: Add and document network messages in protocol.h (backport) #2533 (@Pythonix)
+ - Define MAX_DIGITS_BTC for magic number in BitcoinUnits::format #2555 (@barton2526)
+ - rpc: Implementation of getmrcinfo #2570 (@jamescowens)
+ - init: Add init error message if -printtoconsole and -daemon specified simultaneously #2571 (@jamescowens)
+ - rpc: getmrcinfo part 2 - add calculated minimum fees and fee boosting and by CPID reporting #2575 (@jamescowens)
+ - fs: fully initialize `_OVERLAPPED` for win32 #2587 (@div72)
+ - util: Diagnose Lib Version #1 #2573 (@MinaFarhan)
+ - util: Implement core diagnostics #2 (@jamescowens)
+ - util: modify Win32LockedPageAllocator to query windows for limit. #2536 (@div72)
+ - gui, voting: Implement information for wallet holder's votes on poll info cards #2605 (@jamescowens)
+
+### Changed
+ - scripted-diff: Drop Darwin version for better maintainability #2557 (@barton2526)
+ - build: Require gcc8 on Ubuntu Bionic to enable C++17 features #2579 (@barton2526)
+ - util: Replace use of locale dependent atoi(…) with locale-independent std::from_chars(…) (C++17) #2564 (@barton2526)
+ - translation: Translation updates #2581 (@jamescowens)
+ - depends: update urls for dmg tools #2583 (@div72)
+ - Use ReadLE64 in uint256::GetUint64 instead of duplicating logic #2586 (@div72)
+ - util: Make Parse{Int,UInt}{32,64} use locale independent std::from_chars(…) (C++17) instead of locale dependent strto{l,ll,ul,ull} #2592 (@barton2526)
+ - build: don't set PORT=no in config.site #2593 (@barton2526)
+ - build: Replace `which` command with `command -v` #2595 (@barton2526)
+ - build: update ax_cxx_compile_stdcxx to serial 14 #2596 (@barton2526)
+ - gui: Changed the unlocked for staking only icons to green #2598 (@delta1513)
+ - gui: Translation updates #2599 (@jamescowens)
+ - build: update CI for linter and actions version #2606 (@jamescowens)
+ - gui: Update translations #2608 (@jamescowens)
+ 
+### Removed
+ - refactor: remove unused c-string variant of atoi64() #2562 (@barton2526)
+ - refactor: Remove unused CDataStream::rdbuf method #2585 (@div72)
+
+### Fixed
+ - net: Fix some benign races (backport) #2532 (@Pythonix)
+ - rpc: fix invalid parameter error codes for {sign,verify}message RPCs #2556 (@barton2526)
+ - build: Fix x86_64 <-> arm64 cross-compiling for macOS #2560 (@barton2526)
+ - rpc, mrc: Fix field name and initialization of mrc_fees_to_staker #2567 (@jamescowens)
+ - gui: Add missing resizeTableColumns to fix send address book column widths #2569 (@jamescowens)
+ - accrual: rebuild snapshot registry on corruption instead of crashing #2577 (@div72)
+ - doc: Fix link to MurmurHash3.cpp (moved from Google Code to Github) #2584 (@div72)
+ - fix help text for `revokebeacon` command #2591 (@Pythonix)
+ - util: Fix spelling error in gridcoinresearchd.cpp #2590 (@jamescowens)
+ - depends: always use correct ar for win qt build #2588 (@div72)
+ - util: Fix some bugs due to new implementation and change in BOINC dir handling (@jamescowens)
+ - util: Diagnose lib - Implement changes to solve crash on some Boost 1.66 machines #2597 (@jamescowens)
+ - contrib: Check for `patch` command, Check for `wget` command #2594 (@barton2526)
+ - build: Check std::system for -[alert|block|wallet]notify #2582 (@barton2526)
+ - gui: Changed the wording on the tooltip for the address book #2602 (@delta1513)
+ - build: pass win32-dll to LT_INIT() #2601 (@barton2526)
+ - build: minor cleanups to native_clang package #2600 (@barton2526)
+ - util: restore translations to diagnostics #2603 (@jamescowens)
+ - refactor: Fix problems found by valgrind #2607 (@jamescowens)
+
+## [5.4.0.0] 2022-08-01, mandatory, "Kermit's Mom"
+
+### Added
+ - test: Add TrimString(...) tests #2447 (@barton2526)
+ - test: Add dead code detection #2449 (@barton2526)
+ - test: Add explicit references to related CVE's in comments #2467 (@barton2526)
+ - test: Add testing of ParseInt/ParseUInt edge cases with leading +/-/0:s #2470 (@barton2526)
+ - consensus, contract, mining, researcher, rpc, staking, gui: Implementation of MRC - baseline functionality #2425 (@jamescowens)
+ - consensus: MRC mandatory implementation code #2471 (@jamescowens)
+ - test: Add upstream sync_tests.cpp #2481 (@barton2526)
+ - net: Countermeasures against eclipse attacks #2454 (@Pythonix)
+ - lint: add script to check for https violations #2491 (@div72)
+ - util: Add flatpath BOINC data directory path resolution for Linux #2499 (@jamescowens)
+ - gui: Add beaconExpired() to researchermodel #2498 (@jamescowens)
+ - consensus: Add missing block nVersion check for v12 blocks in AcceptBlock #2502 (@jamescowens)
+ - gui, util: Add AccrualChangedFromStakeOrMRC core signal #2503 (@jamescowens)
+ - util: Change default -dbcache to 100 MB and also implement -txindexdbcache #2507 (@jamescowens)
+ - rpc, util, consensus: Implement exception handling framework for MRC and fix ValidateMRC to deal with testnet consensus issue #2508 (@jamescowens)
+ - gui: Initial implementation of GUI MRC submission form #2513 (@jamescowens)
+ - build: Port over Bitcoin's translation docs #2439 (@jamescowens)
+ - [2/3] build: integrate libsecp256k1 #2492 (@div72)
+ - gui: New MRC request icon #2526 (@jamescowens)
+ - mandatory, voting: Implement poll type validation in protocol #2522 (@jamescowens)
+ - gui, voting: Implement poll additional fields gui components #2525 (@jamescowens)
+ - gui, researcher: Add GDPR protection display #2527 (@jamescowens)
+ - consensus, rpc: Kermit's mom hardfork (2671700) #2551 (@jamescowens)
+
+### Changed
+ - net: Hard Coded Seed Node Cleanup #2427 (@barton2526)
+ - script: Add More Generated Files to Gitignore #2435 (@RoboticMind)
+ - gui: Update copyright year to 2022 for Gridcoin About dialog box #2443 (@jamescowens)
+ - rpc: Change type field in ListTransactions to lower case #2441 (@jamescowens)
+ - refactor: Replace memset calls with array initialization #2452 (@barton2526)
+ - refactor: Changed some parameters from pass by value to pass by reference #2455 (@Pythonix)
+ - ci, cd: improve caching #2461 (@div72)
+ - contrib: port recent macdeployqtplus changes #2465 (@div72)
+ - test: Test for expected return values when calling functions returning a success code #2464 (@barton2526)
+ - build: Improve error message when pkg-config is not installed #2460 (@barton2526)
+ - test: Bump shellcheck, mypy versions #2463 (@barton2526)
+ - build: Update depends packages (expat, fontconfig, freetype, libXau, libxcb, xcb_proto, xproto) #2466 (@barton2526)
+ - lint: run mypy over contrib/devtools #2475 (@barton2526)
+ - build, lint: Remove x-prefix's from comparisons, Fix some shell script issues the linter complains about, Re-enable boost include checks #2478 (@barton2526)
+ - test: Avoid copies of CTransaction #2479 (@barton2526)
+ - ci: change windows CI to Focal, modify wrap_wine to use wine64 for 64bit binaries #2484 (@barton2526)
+ - build: Qt 5.15.2 #2486 (@barton2526)
+ - net: No longer send local address in addrMe #2459 (@Pythonix)
+ - voting, gui, rpc: Enhance PollResult and AVW calculation to improve pool handling #2489 (@jamescowens)
+ - [1/3] refactor: port some misc changes from upstream #2485 (@div72)
+ - build: Try posix-specific CXX first for mingw32 host, Fix Windows cross-compiling with Qt 5.15 #2494 (@barton2526)
+ - Improve upon scanforunspent rpc #2468 (@iFoggz)
+ - rpc: Change tail_fee and head_fee to display in GRC rather than Halfords in createmrcrequest #2501 (@jamescowens)
+ - scripted-diff: change http to https in copyright text #2504 (@div72)
+ - qt, refactor: Use enum type as switch argument in *TableModel #2496 (@barton2526)
+ - build, qt: bump Qt5 version to 5.15.3 #2510 (@barton2526)
+ - utils: run commands using utf-8 string on Windows #2514 (@barton2526)
+ - prevector: enforce is_trivially_copyable_v #2516 (@div72)
+ - crypto: Unroll the ChaCha20 inner loop for performance #2515 (@div72)
+ - gui: Modify VerifyTCPPort to use the status of CheckOutboundConnectionCount #2506 (@jamescowens)
+ - gui: Fix transaction history table column size behavior #2520 (@jamescowens)
+ - log: Use consistent wording in random.cpp log #2538 (@div72)
+ - lint: Use newer versions of our lint packages, remove yq #2541 (@barton2526)
+ - [1/2] validation: move CBlock validation methods to validation.cpp #2539 (@div72)
+ - gui: Implement proportional column resizing for Addressbook with memory #2543 (@jamescowens)
+ - build: remove redundant warning flags #2546 (@barton2526)
+ - qt: Prefix makefile variables with QT_ #2547 (@barton2526)
+ - build: remove build stubs for external leveldb #2550 (@barton2526)
+ - build, refactor: Improve package version usage #2549 (@barton2526)
+ - build: minor boost tidyups #2548 (@barton2526)
+
+### Removed
+ - rpc, util: Remove caching from BlockFinder #2490 (@jamescowens)
+ - test: remove obsolete check sig test #2552 (@div72)
+
+### Fixed
+ - build: fix unoptimized libraries in depends #2428 (@barton2526)
+ - build: don't use deprecated brew package names #2429 (@barton2526)
+ - qt: fix shutdown on MacOS #2440 (@div72)
+ - net: Do not add random inbound peers to addrman #2451 (@barton2526)
+ - util: skip trying to set the locale on NetBSD #2448 (@barton2526)
+ - build: change bundle id #2462 (@div72)
+ - net: Do not propagate obviously poor addresses onto the network #2453 (@Pythonix)
+ - ci: Fix CI build title to reflect that we are building for bionic, not xenial #2469 (@barton2526)
+ - lint: Fix misc typos #2472 (@barton2526)
+ - util: Fix crash when parsing command line with -noincludeconf=0, Properly handle -noincludeconf on command line #2473 (@barton2526)
+ - build: Fix several minor linter errors #2476 (@jamescowens)
+ - tests: Don't access out of bounds array index: array[sizeof(array)] #2480 (@barton2526)
+ - script: Fix and Minify Icon SVG #2488 (@RoboticMind)
+ - gui: Add missing null pointer check for m_beacon #2500 (@jamescowens)
+ - util: Fix BN_zero macro in key.cpp for OpenSSL 3.0 #2497 (@jamescowens)
+ - rpc, contract: Adjust ValidateMRC, CreateMRC, and createmrcrequest to correct provided fee handling #2505 (@jamescowens)
+ - consensus: Move DoS into contract validators to allow variability of DoS based on context and further fixes to ValidateMRC #2512 (@jamescowens)
+ - lockedpool: When possible, use madvise to avoid including sensitive information in core dumps #2509 (@barton2526)
+ - refactor: Fix some minor linter complaints #2517 (@jamescowens)
+ - miner: Miner Logger bug fix #2518 (@iFoggz)
+ - key: properly parse short DER private keys #2519 (@div72)
+ - researcher: Fix ReadClientStateXml() crash on wrong BOINC directory permissions #2524 (@jamescowens)
+ - init: fix daemon forking #2521 (@div72)
+ - scraper: Change open mode from append to truncate for auth file #2528 (@jamescowens)
+ - gui: New mrc contract icon try #2 #2529 (@jamescowens)
+ - gui: Remove white outlines on MRC icon #2530 (@a123b)
+ - voting: Change m_additional_fields serialization #2531 (@jamescowens)
+ - build, qt: Fix `QMAKE_CXXFLAGS` expression for `mingw32` host #2537 (@div72)
+ - logging: fix logging empty thread name #2535 (@div72)
+ - trivial: fix comment in account header guard #2542 (@div72)
+ - build: Restrict check for CRC32C intrinsic to aarch64 #2544 (@barton2526)
+ - build: force CRCCheck in Windows installer #2545 (@barton2526)
+
 ## [5.3.3.0] 2022-02-27, leisure, "Janice"
 
 ### Added
@@ -208,7 +414,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - wallet: simplify nTimeSmart calculation #2144 (@div72)
  - gui: Refresh checkbox and radio button styles #2170 (@cyrossignol)
  - build: Bump libevent to 2.1.11 #2172 (@barton2526)
- - build: Update native_mac_alias, Remove big sur patch file in qt recipe #2173 (@barton2526)
+ - build: Update native_mac_alias, Remove Big Sur patch file in qt recipe #2173 (@barton2526)
  - docs: Misc Grammar #2176 (@barton2526)
  - build: miniupnpc 2.2.2 #2179 (@barton2526)
  - rpc: Refresh rainbymagnitude #2163 (@jamescowens)
@@ -933,7 +1139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
    Fork is set to trigger at block 1420000.
  - Raise coinstake output count limit to 8 #1261 (@tomasbrod).
  - Port of Bitcoin hash implementation #1208 (@jamescowens).
- - Minor canges for the build documentation #1091 (@Lenni).
+ - Minor changes for the build documentation #1091 (@Lenni).
  - Allow sendmany to be used without an account specified #1158 (@Foggyx420).
 ### Fixed
  - Fix `cpids` and `validcpids` not returning the correct data #1233
@@ -967,7 +1173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - Compatibility with boost-1.67 (@denravonska)
  - Calculations to reduce network time offset (@jamescowens)
  - Feedback for addnode RPC command (@tomasbrod)
- - Added data acquisiton commands (@tomasbrod):
+ - Added data acquisition commands (@tomasbrod):
     - getrecentblocks
     - exportstats1
     - getsupervotes
@@ -1302,7 +1508,7 @@ Internal test version used to sort out the forks.
 
 ### Fixed
  - High CPU usage #349 (@tomasbrod)
- - Repetetive block signing #295 (@tomasbrod)
+ - Repetitive block signing #295 (@tomasbrod)
  - Staking creates 1 cent output #311 (@tomasbrod)
  - Client no longer has to be restarted for a beacon to activate #253
    (@Foggyx420).

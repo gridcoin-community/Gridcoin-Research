@@ -16,21 +16,6 @@ pkg_add autoconf # (select highest version, e.g. 2.71)
 pkg_add automake # (select highest version, e.g. 1.16)
 pkg_add python # (select highest version, e.g. 3.10)
 ```
-### Building BerkeleyDB
-
-It is recommended to use Berkeley DB 4.8. 
-If you have to build it yourself, you can use [the installation script included
-in contrib/](/contrib/install_db4.sh) like so:
-
-```bash
-./contrib/install_db4.sh `pwd`
-```
-
-from the root of the repository. Then set `BDB_PREFIX` for the next section:
-
-```bash
-export BDB_PREFIX="$PWD/db4"
-```
 
 Resource limits
 -------------------
@@ -70,21 +55,15 @@ export AUTOMAKE_VERSION=1.16
 ./autogen.sh
 ```
 
-Make sure `BDB_PREFIX` is set to the appropriate paths from the above steps.
-
 To configure with gridcoinresearchd:
 ```bash
 ./configure --with-gui=no \
-    BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" \
-    BDB_CFLAGS="-I${BDB_PREFIX}/include" \
     MAKE=gmake
 ```
 
 To configure with GUI:
 ```bash
 ./configure --with-gui=yes \
-    BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" \
-    BDB_CFLAGS="-I${BDB_PREFIX}/include" \
     MAKE=gmake
 ```
 

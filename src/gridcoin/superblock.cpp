@@ -352,7 +352,7 @@ public:
         , m_averages(ExtractXML(packed, "<AVERAGES>", "</AVERAGES>"))
         , m_zero_mags(0)
     {
-        if (!ParseInt(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
+        if (!ParseInt32(ExtractXML(packed, "<ZERO>", "</ZERO>"), &m_zero_mags)) {
             error("%s: Failed to parse zero mag CPIDs.", __func__);
         }
     }
@@ -548,7 +548,7 @@ struct QuorumHashToStringVisitor
     //!
     std::string operator()(const QuorumHash::Md5Sum& legacy_hash) const
     {
-        return HexStr(legacy_hash.begin(), legacy_hash.end());
+        return HexStr(legacy_hash);
     }
 };
 } // anonymous namespace
@@ -577,11 +577,11 @@ Superblock Superblock::FromConvergence(
 {
     Superblock superblock = Superblock::FromStats(GetScraperStatsAndVerifiedBeacons(stats), version);
 
-    superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64() >> 32;
+    superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64(0) >> 32;
 
     if (!stats.Convergence.bByParts) {
         superblock.m_manifest_content_hint
-            = stats.Convergence.nUnderlyingManifestContentHash.GetUint64() >> 32;
+            = stats.Convergence.nUnderlyingManifestContentHash.GetUint64(0) >> 32;
 
         return superblock;
     }
@@ -973,8 +973,8 @@ void Superblock::ProjectIndex::SetHint(
         return;
     }
 
-    const uint256 part_hash = Hash(part_data_ptr->data.begin(), part_data_ptr->data.end());
-    iter->second.m_convergence_hint = part_hash.GetUint64() >> 32;
+    const uint256 part_hash = Hash(part_data_ptr->data);
+    iter->second.m_convergence_hint = part_hash.GetUint64(0) >> 32;
 
     m_converged_by_project = true;
 }

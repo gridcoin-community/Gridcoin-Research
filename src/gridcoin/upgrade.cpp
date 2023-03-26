@@ -7,6 +7,7 @@
 #include "init.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <univalue.h>
 #include <vector>
 #include <boost/thread.hpp>
@@ -130,7 +131,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
         {
             int github_version = 0;
 
-            if (!ParseInt(GithubVersion[x], &github_version))
+            if (!ParseInt32(GithubVersion[x], &github_version))
             {
                 throw std::invalid_argument("Failed to parse GitHub version from official GitHub project repo.");
             }

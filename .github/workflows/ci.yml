@@ -7,7 +7,7 @@ env:
 jobs:
     test-linux:
         name: ${{ matrix.name }}
-        runs-on: ubuntu-18.04
+        runs-on: ubuntu-20.04
         strategy:
             matrix:
                 include:
@@ -21,7 +21,7 @@ jobs:
                     script-id: linux_i386
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [focal]  [no depends]
                     script-id: native
-                  - name: x86_64 Linux  [GOAL install]  [GUI]  [xenial]  [no depends]
+                  - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
                     script-id: native_old
                   - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
@@ -30,20 +30,24 @@ jobs:
             OS_NAME: linux
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v2
+          uses: actions/cache@v3
           with:
             path: |
                 ./depends/built
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}-${{ matrix.script-id }}
+            key: ${{ runner.os }}-${{ matrix.script-id }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-${{ matrix.script-id }}-
         - name: test
           run: |
             ./ci/test_run_all.sh
     test-macos:
-        name: macOS 10.15 native  [GOAL install]  [GUI]  [no depends]
-        runs-on: macos-10.15
+        name: macOS 11 native  [GOAL install]  [GUI]  [no depends]
+        runs-on: macos-11
         env:
             DANGER_RUN_CI_ON_HOST: true
             CI_USE_APT_INSTALL: no
@@ -51,42 +55,34 @@ jobs:
             OS_NAME: macos
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
+        - name: current time for cache
+          run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v2
+          uses: actions/cache@v3
           with:
             path: |
                 ./ci/scratch/.ccache
-            key: ${{ runner.os }}
+            key: ${{ runner.os }}-${{ env.TIMESTAMP }}
+            restore-keys: |
+                ${{ runner.os }}-
         - name: install-packages
-          # We run the contrib/install_db4.sh script rather than installing the
-          # Homebrew berkeley-db4 formula to add the Berkeley DB 4.8 dependency
-          # to avoid a quirk with macOS on GitHub Actions. This script compiles
-          # BDB with the "--disable-replication" flag. The tests failed because
-          # BDB complained that "replication requires locking support".
-          #
-          # As of Xcode 12, Clang fails by default for functions called without
-          # an explicit declaration. This breaks the mutex detection in the BDB
-          # configure script so we switch it back to a warning:
           run: |
             brew install autoconf automake boost miniupnpc qrencode ccache leveldb librsvg libtool libzip openssl@1.1 pkg-config python qt@5 xquartz
-            CFLAGS="-Wno-error=implicit-function-declaration" contrib/install_db4.sh .
         - name: test
           run: |
             ./ci/test_run_all.sh
     lint:
         name: Lint
-        runs-on: ubuntu-latest
-        continue-on-error: true
+        runs-on: ubuntu-22.04
         steps:
         - name: checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
         - name: setup-python
-          uses: actions/setup-python@v2
+          uses: actions/setup-python@v4
           with:
-            python-version: 3.6
+            python-version: 3.11
         - name: lint
-          continue-on-error: true
           run: |
             set -o errexit; source ./ci/lint/04_install.sh
             set -o errexit; source ./ci/lint/05_before_script.sh

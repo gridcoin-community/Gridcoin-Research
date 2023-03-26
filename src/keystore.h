@@ -10,6 +10,7 @@
 #include <boost/signals2/signal.hpp>
 
 class CScript;
+class CScriptID;
 
 /** A virtual base class for key stores */
 class CKeyStore
@@ -39,7 +40,7 @@ public:
         CKey key;
         if (!GetKey(address, key))
             return false;
-        vchSecret = key.GetSecret(fCompressed);
+        vchSecret.assign(key.begin(), key.end());
         return true;
     }
 };
@@ -85,8 +86,7 @@ public:
             KeyMap::const_iterator mi = mapKeys.find(address);
             if (mi != mapKeys.end())
             {
-                keyOut.Reset();
-                keyOut.SetSecret(mi->second.first, mi->second.second);
+                keyOut.Set(mi->second.first.begin(), mi->second.first.end(), mi->second.second);
                 return true;
             }
         }
@@ -124,7 +124,9 @@ protected:
     bool Unlock(const CKeyingMaterial& vMasterKeyIn);
 
 public:
-    CCryptoKeyStore() : fUseCrypto(false)
+    CCryptoKeyStore()
+        : fUseCrypto(false)
+        , fDecryptionThoroughlyChecked(false)
     {
     }
 
@@ -182,5 +184,8 @@ public:
      */
     boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
 };
+
+/** Checks if a CKey is in the given CKeyStore compressed or otherwise*/
+bool HaveKey(const CKeyStore& store, const CKey& key);
 
 #endif

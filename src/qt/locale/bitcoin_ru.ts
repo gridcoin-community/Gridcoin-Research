@@ -1,4 +1,4 @@
-<TS language="ru" version="2.1">
+<TS language="ru" version="2.0">
 <context>
     <name>AboutDialog</name>
     <message>
@@ -21,11 +21,22 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
 </context>
 <context>
-    <name>AddressBookPage</name>
+    <name>AdditionalFieldsTableDataModel</name>
     <message>
-        <source>Double-click to edit address or label</source>
-        <translation>Дважды кликните, чтобы изменить адрес или метку</translation>
+        <source>Name</source>
+        <translation>Имя</translation>
     </message>
+    <message>
+        <source>Value</source>
+        <translation>Значение</translation>
+    </message>
+    <message>
+        <source>Required</source>
+        <translation>Необходимый</translation>
+    </message>
+</context>
+<context>
+    <name>AddressBookPage</name>
     <message>
         <source>Create a new address</source>
         <translation>Создать новый адрес</translation>
@@ -75,6 +86,10 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Здесь ваши адреса Gridcoin для приема платежей. Вы можете дать каждому отправителю разный адрес, чтобы вы могли отслеживать, кто вам платит.</translation>
     </message>
     <message>
+        <source>Double-click to edit label</source>
+        <translation>Двойной щелчок для изменения метки</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Удалить</translation>
     </message>
@@ -87,12 +102,13 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>&amp;Редактировать</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Файл с разделителями-запятыми (*.csv)</translation>
-    </message>
-    <message>
         <source>Export Address Book Data</source>
         <translation>Экспортировать Данные Адресной Книги</translation>
+    </message>
+    <message>
+        <source>Comma separated file</source>
+        <comment>Name of CSV file format</comment>
+        <translation>Файл с разделителями-запятыми</translation>
     </message>
     <message>
         <source>Error exporting</source>
@@ -138,7 +154,7 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
     <message>
         <source>Serves to disable the trivial sendmoney when OS account compromised. Provides no real security.</source>
-        <translation>Служит для отключения тривиальных sendmoney, когда скомпрометирована учетная запись ОС. Не обеспечивает реальной безопасности.</translation>
+        <translation>Служит для отключения тривиальной отправки денег при компрометации учетной записи ОС. Не обеспечивает реальной безопасности.</translation>
     </message>
     <message>
         <source>For staking only</source>
@@ -161,14 +177,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Разблокировать кошелёк</translation>
     </message>
     <message>
-        <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Для выполнения операции требуется пароль вашего кошелька.</translation>
-    </message>
-    <message>
-        <source>Decrypt wallet</source>
-        <translation>Расшифровать кошелёк</translation>
-    </message>
-    <message>
         <source>Change passphrase</source>
         <translation>Сменить пароль</translation>
     </message>
@@ -189,12 +197,12 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Вы уверены, что хотите зашифровать ваш кошелёк?</translation>
     </message>
     <message>
-        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
-        <translation>Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего кошелька не может полностью защитить ваши средства от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
-    </message>
-    <message>
         <source>Wallet encrypted</source>
         <translation>Кошелёк зашифрован</translation>
+    </message>
+    <message>
+        <source>Gridcoin will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your coins from being stolen by malware infecting your computer.</source>
+        <translation>Сейчас программа закроется для завершения процесса шифрования. Помните, что шифрование вашего кошелька не может полностью защитить ваши средства от кражи с помощью инфицирования вашего компьютера вредоносным ПО.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -221,10 +229,6 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Неверный пароль для расшифровки кошелька.</translation>
     </message>
     <message>
-        <source>Wallet decryption failed</source>
-        <translation>Расшифровка кошелька не удалась</translation>
-    </message>
-    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation>Пароль кошелька успешно изменён.</translation>
     </message>
@@ -234,10 +238,25 @@ This product includes software developed by the OpenSSL Project for use in the O
     </message>
 </context>
 <context>
+    <name>BanTableModel</name>
+    <message>
+        <source>IP/Netmask</source>
+        <translation>IP/Маска подсети</translation>
+    </message>
+    <message>
+        <source>Banned Until</source>
+        <translation>Заблокирован До</translation>
+    </message>
+</context>
+<context>
     <name>BitcoinGUI</name>
     <message>
-        <source>Sign &amp;message...</source>
-        <translation>Подпись &amp;sсообщения...</translation>
+        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
+        <translation>Произошла неисправимая ошибка. Gridcoin не может безопасно продолжать работу и будет закрыт.</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Кошелёк</translation>
     </message>
     <message>
         <source>&amp;Overview</source>
@@ -248,6 +267,22 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Показать общий обзор кошелька</translation>
     </message>
     <message>
+        <source>&amp;Send</source>
+        <translation>&amp;Отправить</translation>
+    </message>
+    <message>
+        <source>Send coins to a Gridcoin address</source>
+        <translation>Отправить монеты на адрес Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Receive</source>
+        <translation>&amp;Получить</translation>
+    </message>
+    <message>
+        <source>Show the list of addresses for receiving payments</source>
+        <translation>Показать список адресов для приема платежей</translation>
+    </message>
+    <message>
         <source>&amp;History</source>
         <translation>&amp;История</translation>
     </message>
@@ -256,92 +291,20 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Показать историю транзакций</translation>
     </message>
     <message>
-        <source>E&amp;xit</source>
-        <translation>В&amp;ыход</translation>
-    </message>
-    <message>
-        <source>Quit application</source>
-        <translation>Закрыть приложение</translation>
-    </message>
-    <message>
-        <source>&amp;Options...</source>
-        <translation>&amp;Параметры...</translation>
-    </message>
-    <message>
-        <source>&amp;Encrypt Wallet...</source>
-        <translation>&amp;Зашифровать кошелёк...</translation>
-    </message>
-    <message>
-        <source>&amp;Change Passphrase...</source>
-        <translation>&amp;Изменить Пароль...</translation>
-    </message>
-    <message>
-        <source>Change the passphrase used for wallet encryption</source>
-        <translation>Изменить пароль, используемый для шифрования кошелька</translation>
-    </message>
-    <message>
-        <source>&amp;Debug window</source>
-        <translation>&amp;Окно отладки</translation>
-    </message>
-    <message>
-        <source>Open debugging and diagnostic console</source>
-        <translation>Открыть консоль отладки и диагностики</translation>
-    </message>
-    <message>
-        <source>&amp;Verify message...</source>
-        <translation>&amp;Проверить сообщение...</translation>
-    </message>
-    <message>
-        <source>Wallet</source>
-        <translation>Кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Send</source>
-        <translation>&amp;Отправить</translation>
-    </message>
-    <message>
-        <source>&amp;Receive</source>
-        <translation>&amp;Получить</translation>
-    </message>
-    <message>
-        <source>&amp;Show / Hide</source>
-        <translation>&amp;Показать / Скрыть</translation>
-    </message>
-    <message>
-        <source>&amp;File</source>
-        <translation>&amp;Файл</translation>
-    </message>
-    <message>
-        <source>&amp;Settings</source>
-        <translation>&amp;Настройки</translation>
-    </message>
-    <message>
-        <source>&amp;Help</source>
-        <translation>&amp;Помощь</translation>
-    </message>
-    <message numerus="yes">
-        <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>Обработано %n блоков истории транзакций.</numerusform><numerusform>Обработано %n блоков истории транзакций.</numerusform><numerusform>Обработано %n блоков истории транзакций.</numerusform><numerusform>Обработано %n блоков истории транзакций.</numerusform></translation>
-    </message>
-    <message>
-        <source>Up to date</source>
-        <translation>Синхронизировано</translation>
-    </message>
-    <message>
-        <source>Send coins to a Gridcoin address</source>
-        <translation>Отправить монеты на адрес Gridcoin</translation>
-    </message>
-    <message>
-        <source>Show the list of addresses for receiving payments</source>
-        <translation>Показать список адресов для приема платежей</translation>
-    </message>
-    <message>
         <source>&amp;Favorites</source>
         <translation>&amp;Избранное</translation>
     </message>
     <message>
         <source>Edit the list of stored addresses and labels</source>
         <translation>Редактирование списка сохраненных адресов и меток</translation>
+    </message>
+    <message>
+        <source>&amp;Voting</source>
+        <translation>&amp;Голосование</translation>
+    </message>
+    <message>
+        <source>Voting</source>
+        <translation>Голосование</translation>
     </message>
     <message>
         <source>&amp;Block Explorer</source>
@@ -376,12 +339,382 @@ This product includes software developed by the OpenSSL Project for use in the O
         <translation>Gridcoin вознаграждает распределенные вычисления выполняемые для BOINC</translation>
     </message>
     <message>
+        <source>E&amp;xit</source>
+        <translation>В&amp;ыход</translation>
+    </message>
+    <message>
+        <source>Quit application</source>
+        <translation>Закрыть приложение</translation>
+    </message>
+    <message>
         <source>&amp;About Gridcoin</source>
         <translation>&amp;О Gridcoin</translation>
     </message>
     <message>
         <source>Show information about Gridcoin</source>
         <translation>Показать информацию о Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Diagnostics</source>
+        <translation>&amp;Диагностика</translation>
+    </message>
+    <message>
+        <source>Diagnostics</source>
+        <translation>Диагностика</translation>
+    </message>
+    <message>
+        <source>&amp;Options...</source>
+        <translation>&amp;Параметры...</translation>
+    </message>
+    <message>
+        <source>Modify configuration options for Gridcoin</source>
+        <translation>Изменение параметров конфигурации Gridcoin</translation>
+    </message>
+    <message>
+        <source>Open config &amp;file...</source>
+        <translation>Открыть &amp;файл конфигурации ...</translation>
+    </message>
+    <message>
+        <source>Open the config file in your standard editor</source>
+        <translation>Открыть файл конфигурации в вашем стандартном редакторе</translation>
+    </message>
+    <message>
+        <source>&amp;Researcher Wizard...</source>
+        <translation>&amp;Мастер Исследования...</translation>
+    </message>
+    <message>
+        <source>Open BOINC and beacon settings for Gridcoin</source>
+        <translation>Откройте настройки BOINC и маяка для Gridcoin</translation>
+    </message>
+    <message>
+        <source>&amp;Show / Hide</source>
+        <translation>&amp;Показать / Скрыть</translation>
+    </message>
+    <message>
+        <source>&amp;Encrypt Wallet...</source>
+        <translation>&amp;Зашифровать кошелёк...</translation>
+    </message>
+    <message>
+        <source>Encrypt wallet</source>
+        <translation>Зашифровать кошелёк</translation>
+    </message>
+    <message>
+        <source>&amp;Backup Wallet/Config...</source>
+        <translation>&amp;Бэкап Кошелька/Настроек...</translation>
+    </message>
+    <message>
+        <source>Backup wallet/config to another location</source>
+        <translation>Бэкап кошелька/настроек в другое место</translation>
+    </message>
+    <message>
+        <source>&amp;Change Passphrase...</source>
+        <translation>&amp;Изменить Пароль...</translation>
+    </message>
+    <message>
+        <source>Change the passphrase used for wallet encryption</source>
+        <translation>Изменить пароль, используемый для шифрования кошелька</translation>
+    </message>
+    <message>
+        <source>&amp;Unlock Wallet...</source>
+        <translation>&amp;Разблокировать Кошелёк...</translation>
+    </message>
+    <message>
+        <source>Unlock wallet</source>
+        <translation>Разблокировать кошелёк</translation>
+    </message>
+    <message>
+        <source>&amp;Lock Wallet</source>
+        <translation>&amp;Заблокировать Кошелёк</translation>
+    </message>
+    <message>
+        <source>Lock wallet</source>
+        <translation>Заблокировать кошелёк</translation>
+    </message>
+    <message>
+        <source>Sign &amp;message...</source>
+        <translation>Подпись &amp;sсообщения...</translation>
+    </message>
+    <message>
+        <source>&amp;Verify message...</source>
+        <translation>&amp;Проверить сообщение...</translation>
+    </message>
+    <message>
+        <source>&amp;Export...</source>
+        <translation>&amp;Экспорт...</translation>
+    </message>
+    <message>
+        <source>Export the data in the current tab to a file</source>
+        <translation>Экспорт данных из текущей вкладки в файл</translation>
+    </message>
+    <message>
+        <source>&amp;Debug window</source>
+        <translation>&amp;Окно отладки</translation>
+    </message>
+    <message>
+        <source>Open debugging and diagnostic console</source>
+        <translation>Открыть консоль отладки и диагностики</translation>
+    </message>
+    <message>
+        <source>&amp;Reset blockchain data</source>
+        <translation>&amp;Сбросить данные блокчейна</translation>
+    </message>
+    <message>
+        <source>Remove blockchain data and start chain from zero</source>
+        <translation>Удалите данные блокчейна и начните цепочку с нуля</translation>
+    </message>
+    <message>
+        <source>&amp;Mask values</source>
+        <translation>&amp;Замаскировать значения</translation>
+    </message>
+    <message>
+        <source>Mask the values in the Overview screen</source>
+        <translation>Маскирует значения на Обзорном экране.</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Файл</translation>
+    </message>
+    <message>
+        <source>&amp;Settings</source>
+        <translation>&amp;Настройки</translation>
+    </message>
+    <message>
+        <source>&amp;Community</source>
+        <translation>&amp;Сообщество</translation>
+    </message>
+    <message>
+        <source>&amp;Help</source>
+        <translation>&amp;Помощь</translation>
+    </message>
+    <message>
+        <source>Open menu.</source>
+        <translation>Открыть меню.</translation>
+    </message>
+    <message>
+        <source>Toggle light/dark mode.</source>
+        <translation>Переключить светлый/темный режим.</translation>
+    </message>
+    <message>
+        <source>Not staking: Miner is not initialized.</source>
+        <translation>Без стекинга: Майнер не инициализирован.</translation>
+    </message>
+    <message>
+        <source>Not staking: Disabled by configuration.</source>
+        <translation>Без стекинга: отключено настройкой.</translation>
+    </message>
+    <message>
+        <source>[testnet]</source>
+        <translation>[тестовая сеть]</translation>
+    </message>
+    <message>
+        <source>Gridcoin client</source>
+        <translation>Gridcoin клиент</translation>
+    </message>
+    <message>
+        <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
+        <translation>Нет активных подключений к сети Gridcoin. Если это продолжается более пары минут, проверьте свои настройки и подключение к сети.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n active connection(s) to the Gridcoin network</source>
+        <translation>
+            <numerusform>%n активное подключение к сети Gridcoin</numerusform>
+            <numerusform>%n активных подключения к сети Gridcoin</numerusform>
+            <numerusform>%n активных подключений к сети Gridcoin</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Sync: no connections.</source>
+        <translation>Синхронизация: нет подключений.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed %n block(s) of transaction history.</source>
+        <translation>
+            <numerusform>Обработано %n блок(ов) истории транзакций.</numerusform>
+            <numerusform>Обработано %n блок(ов) истории транзакций.</numerusform>
+            <numerusform>Обработано %n блок(ов) истории транзакций.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n second(s) ago</source>
+        <translation>
+            <numerusform>%n секунд(у) назад</numerusform>
+            <numerusform>%n секунд(у) назад</numerusform>
+            <numerusform>%n секунд(у) назад</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s) ago</source>
+        <translation>
+            <numerusform>%n минут(у) назад</numerusform>
+            <numerusform>%n минут(у) назад</numerusform>
+            <numerusform>%n минут(у) назад</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hour(s) ago</source>
+        <translation>
+            <numerusform>%n час(ов) назад</numerusform>
+            <numerusform>%n час(ов) назад</numerusform>
+            <numerusform>%n час(ов) назад</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n day(s) ago</source>
+        <translation>
+            <numerusform>%n день назад</numerusform>
+            <numerusform>%n дней назад</numerusform>
+            <numerusform>%n дней назад</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Up to date</source>
+        <translation>Синхронизировано</translation>
+    </message>
+    <message>
+        <source>Catching up...</source>
+        <translation>Синхронизируется...</translation>
+    </message>
+    <message>
+        <source>Last received block was generated %1.</source>
+        <translation>Последний полученный блок был сгенерирован %1.</translation>
+    </message>
+    <message>
+        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
+        <translation>Транзакция превышает разрешенный лимит. Вы можете отправить её за комиссию в размере %1, которая отправляется узлам, обрабатывающим вашу транзакцию, и помогает поддерживать сеть. Вы хотите заплатить комиссию?</translation>
+    </message>
+    <message>
+        <source>Confirm transaction fee</source>
+        <translation>Подтвердите комиссию за транзакцию</translation>
+    </message>
+    <message>
+        <source>Sent transaction</source>
+        <translation>Исходящая транзакция</translation>
+    </message>
+    <message>
+        <source>Incoming transaction</source>
+        <translation>Входящая транзакция</translation>
+    </message>
+    <message>
+        <source>Date: %1
+Amount: %2
+Type: %3
+Address: %4</source>
+        <translation>Дата: %1
+Сумма: %2
+Тип: %3
+Адрес: %4</translation>
+    </message>
+    <message>
+        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
+        <translation>Вы хотите загрузить и применить последний снимок состояния? Если да, кошелек отключится и выполнит задачу.</translation>
+    </message>
+    <message>
+        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
+        <translation>Внимание: отмена после этапа 2 приведет к синхронизации с 0 или поврежденными файлами цепочки блоков.</translation>
+    </message>
+    <message>
+        <source>Do you want to delete blockchain data and sync from zero?</source>
+        <translation>Вы хотите удалить данные блокчейна и выполнить синхронизацию с нуля?</translation>
+    </message>
+    <message>
+        <source>Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing.</source>
+        <translation>Внимание: после удаления данных блокчейна кошелек отключится, а при перезапуске начнется синхронизация с нуля. Ваш баланс временно будет отображаться как 0 GRC пока синхронизируется.</translation>
+    </message>
+    <message>
+        <source>Close Confirmation</source>
+        <translation>Подтверждение Закрытия</translation>
+    </message>
+    <message>
+        <source>Exit the Gridcoin wallet?</source>
+        <translation>Выйти из Gridcoin кошелька?</translation>
+    </message>
+    <message>
+        <source>URI handling</source>
+        <translation>Обработка URI</translation>
+    </message>
+    <message>
+        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
+        <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;not encrypted&lt;/b&gt;!</source>
+        <translation>Кошелёк &lt;b&gt;не зашифрован&lt;/b&gt;!</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
+        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и сейчас %1 </translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
+        <translation>&lt;b&gt;разблокирован только для стейкинга&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
+        <translation>&lt;b&gt;полностью разблокирован&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
+        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <source>Backup Wallet</source>
+        <translation>Бэкап Кошелька</translation>
+    </message>
+    <message>
+        <source>Wallet Data (*.dat)</source>
+        <translation>Данные Кошелька (*.dat)</translation>
+    </message>
+    <message>
+        <source>Backup Failed</source>
+        <translation>Резервное копирование не удалось</translation>
+    </message>
+    <message>
+        <source>There was an error trying to save the wallet data to the new location.</source>
+        <translation>Произошла ошибка при попытке сохранить данные кошелька в новом месте.</translation>
+    </message>
+    <message>
+        <source>Backup Config</source>
+        <translation>Бэкап Конфигурации</translation>
+    </message>
+    <message>
+        <source>Wallet Config (*.conf)</source>
+        <translation>Конфигурация Кошелька (*.conf)</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>недоступно</translation>
+    </message>
+    <message>
+        <source>year</source>
+        <translation>год</translation>
+    </message>
+    <message>
+        <source>month</source>
+        <translation>месяц</translation>
+    </message>
+    <message>
+        <source>day</source>
+        <translation>день</translation>
+    </message>
+    <message>
+        <source>hour</source>
+        <translation>час</translation>
+    </message>
+    <message>
+        <source>%1 times per %2</source>
+        <translation>%1 раз за %2</translation>
+    </message>
+    <message>
+        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
+        <translation>Стейкинг.&lt;br&gt;Ваш вес %1&lt;br&gt;Вес сети %2&lt;br&gt;&lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %3.</translation>
+    </message>
+    <message>
+        <source>Unable to stake: %1</source>
+        <translation>Невозможно стейкить: %1</translation>
+    </message>
+    <message>
+        <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
+        <translation>В настоящее время нет стейка: %1, &lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %2.</translation>
     </message>
     <message>
         <source>Scraper: waiting on wallet to sync.</source>
@@ -417,239 +750,21 @@ Scraper(ов) не публикуются: %5.</translation>
         <source>Scraper: No convergence able to be achieved. Will retry in a few minutes.</source>
         <translation>Scraper: Невозможно достичь схождения. Повторная попытка через несколько минут.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n second(s) ago</source>
-        <translation><numerusform>%n секунду назад</numerusform><numerusform>%n секунд назад</numerusform><numerusform>%n секунд назад</numerusform><numerusform>%n секунд назад</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n minute(s) ago</source>
-        <translation><numerusform>%n минуту назад</numerusform><numerusform>%n минут назад</numerusform><numerusform>%n минут назад</numerusform><numerusform>%n минут назад</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n hour(s) ago</source>
-        <translation><numerusform>%n час назад</numerusform><numerusform>%n часов назад</numerusform><numerusform>%n часов назад</numerusform><numerusform>%n часов назад</numerusform></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n day(s) ago</source>
-        <translation><numerusform>%n день назад</numerusform><numerusform>%n дней назад</numerusform><numerusform>%n дней назад</numerusform><numerusform>%n дней назад</numerusform></translation>
+    <message>
+        <source>CPID: %1
+Time left to activate: %2%3</source>
+        <translation>CPID: %1
+Осталось времени для активации: %2%3</translation>
     </message>
     <message>
-        <source>Date: %1
-Amount: %2
-Type: %3
-Address: %4</source>
-        <translation>Дата: %1
-Сумма: %2
-Тип: %3
-Адрес: %4</translation>
-    </message>
-    <message>
-        <source>Do you wish to download and apply the latest snapshot? If yes the wallet will shutdown and perform the task.</source>
-        <translation>Вы хотите загрузить и применить последний снимок состояния? Если да, кошелек отключится и выполнит задачу.</translation>
-    </message>
-    <message>
-        <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Внимание: отмена после этапа 2 приведет к синхронизации с 0 или поврежденными файлами цепочки блоков.</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently %1 </source>
-        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и сейчас %1 </translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;unlocked for staking only&lt;/b&gt;</source>
-        <translation>&lt;b&gt;разблокирован только для стейкинга&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>&lt;b&gt;fully unlocked&lt;/b&gt;</source>
-        <translation>&lt;b&gt;полностью разблокирован&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>Backup Config</source>
-        <translation>Бэкап Конфигурации</translation>
-    </message>
-    <message>
-        <source>Wallet Config (*.conf)</source>
-        <translation>Конфигурация Кошелька (*.conf)</translation>
-    </message>
-    <message>
-        <source>&amp;Voting</source>
-        <translation>&amp;Голосование</translation>
-    </message>
-    <message>
-        <source>Voting</source>
-        <translation>Голосование</translation>
-    </message>
-    <message>
-        <source>&amp;Diagnostics</source>
-        <translation>&amp;Диагностика</translation>
-    </message>
-    <message>
-        <source>Diagnostics</source>
-        <translation>Диагностика</translation>
-    </message>
-    <message>
-        <source>Modify configuration options for Gridcoin</source>
-        <translation>Изменение параметров конфигурации Gridcoin</translation>
-    </message>
-    <message>
-        <source>Open config &amp;file...</source>
-        <translation>Открыть &amp;файл конфигурации ...</translation>
-    </message>
-    <message>
-        <source>Open the config file in your standard editor</source>
-        <translation>Открыть файл конфигурации в вашем стандартном редакторе</translation>
-    </message>
-    <message>
-        <source>&amp;Researcher Wizard...</source>
-        <translation>&amp;Мастер Исследования...</translation>
-    </message>
-    <message>
-        <source>Open BOINC and beacon settings for Gridcoin</source>
-        <translation>Откройте настройки BOINC и маяка для Gridcoin</translation>
-    </message>
-    <message>
-        <source>Encrypt or decrypt wallet</source>
-        <translation>Зашифровать или расшифровывать кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Backup Wallet/Config...</source>
-        <translation>&amp;Бэкап Кошелька/Настроек...</translation>
-    </message>
-    <message>
-        <source>Backup wallet/config to another location</source>
-        <translation>Бэкап кошелька/настроек в другое место</translation>
-    </message>
-    <message>
-        <source>&amp;Unlock Wallet...</source>
-        <translation>&amp;Разблокировать Кошелёк...</translation>
-    </message>
-    <message>
-        <source>Unlock wallet</source>
-        <translation>Разблокировать кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Lock Wallet</source>
-        <translation>&amp;Заблокировать Кошелёк</translation>
-    </message>
-    <message>
-        <source>Lock wallet</source>
-        <translation>Заблокировать кошелёк</translation>
-    </message>
-    <message>
-        <source>&amp;Export...</source>
-        <translation>&amp;Экспорт...</translation>
-    </message>
-    <message>
-        <source>Export the data in the current tab to a file</source>
-        <translation>Экспорт данных из текущей вкладки в файл</translation>
-    </message>
-    <message>
-        <source>&amp;Reset blockchain data</source>
-        <translation>&amp;Сбросить данные блокчейна</translation>
-    </message>
-    <message>
-        <source>Remove blockchain data and start chain from zero</source>
-        <translation>Удалите данные блокчейна и начните цепочку с нуля</translation>
-    </message>
-    <message>
-        <source>&amp;Community</source>
-        <translation>&amp;Сообщество</translation>
-    </message>
-    <message>
-        <source>Open menu.</source>
-        <translation>Открыть меню.</translation>
-    </message>
-    <message>
-        <source>Toggle light/dark mode.</source>
-        <translation>Переключить светлый/темный режим.</translation>
-    </message>
-    <message>
-        <source>Not staking: Miner is not initialized.</source>
-        <translation>Без стекинга: Майнер не инициализирован.</translation>
-    </message>
-    <message>
-        <source>Not staking: Disabled by configuration.</source>
-        <translation>Без стекинга: отключено настройкой.</translation>
-    </message>
-    <message>
-        <source>[testnet]</source>
-        <translation>[тестовая сеть]</translation>
-    </message>
-    <message>
-        <source>Gridcoin client</source>
-        <translation>Gridcoin клиент</translation>
-    </message>
-    <message>
-        <source>No active connections to the Gridcoin network. If this persists more than a few minutes, please check your configuration and your network connectivity.</source>
-        <translation>Нет активных подключений к сети Gridcoin. Если это продолжается более пары минут, проверьте свои настройки и подключение к сети.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n active connection(s) to the Gridcoin network</source>
-        <translation><numerusform>%n активное подключение к сети Gridcoin</numerusform><numerusform>%n активных подключения к сети Gridcoin</numerusform><numerusform>%n активных подключений к сети Gridcoin</numerusform><numerusform>%n активных подключений к сети Gridcoin</numerusform></translation>
-    </message>
-    <message>
-        <source>Sync: no connections.</source>
-        <translation>Синхронизация: нет подключений.</translation>
-    </message>
-    <message>
-        <source>Catching up...</source>
-        <translation>Синхронизируется...</translation>
-    </message>
-    <message>
-        <source>Last received block was generated %1.</source>
-        <translation>Последний полученный блок был сгенерирован %1.</translation>
-    </message>
-    <message>
-        <source>This transaction is over the size limit.  You can still send it for a fee of %1, which goes to the nodes that process your transaction and helps to support the network.  Do you want to pay the fee?</source>
-        <translation>Транзакция превышает разрешенный лимит. Вы можете отправить её за комиссию в размере %1, которая отправляется узлам, обрабатывающим вашу транзакцию, и помогает поддерживать сеть. Вы хотите заплатить комиссию?</translation>
-    </message>
-    <message>
-        <source>Confirm transaction fee</source>
-        <translation>Подтвердите комиссию за транзакцию</translation>
-    </message>
-    <message>
-        <source>Do you want to delete blockchain data and sync from zero?</source>
-        <translation>Вы хотите удалить данные блокчейна и выполнить синхронизацию с нуля?</translation>
-    </message>
-    <message>
-        <source>Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing.</source>
-        <translation>Внимание: после удаления данных блокчейна кошелек отключится, а при перезапуске начнется синхронизация с нуля. Ваш баланс временно будет отображаться как 0 GRC пока синхронизируется.</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;not encrypted&lt;/b&gt;!</source>
-        <translation>Кошелёк &lt;b&gt;не зашифрован&lt;/b&gt;!</translation>
-    </message>
-    <message>
-        <source>not available</source>
-        <translation>недоступно</translation>
-    </message>
-    <message>
-        <source>year</source>
-        <translation>год</translation>
-    </message>
-    <message>
-        <source>month</source>
-        <translation>месяц</translation>
-    </message>
-    <message>
-        <source>day</source>
-        <translation>день</translation>
-    </message>
-    <message>
-        <source>hour</source>
-        <translation>час</translation>
-    </message>
-    <message>
-        <source>Staking.&lt;br&gt;Your weight is %1&lt;br&gt;Network weight is %2&lt;br&gt;&lt;b&gt;Estimated&lt;/b&gt; staking frequency is %3.</source>
-        <translation>Стейкинг.&lt;br&gt;Ваш вес %1&lt;br&gt;Вес сети %2&lt;br&gt;&lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %3.</translation>
-    </message>
-    <message>
-        <source>Unable to stake: %1</source>
-        <translation>Невозможно стейкить: %1</translation>
-    </message>
-    <message>
-        <source>Not staking currently: %1, &lt;b&gt;Estimated&lt;/b&gt; staking frequency is %2.</source>
-        <translation>В настоящее время нет стейка: %1, &lt;b&gt;Примерная&lt;/b&gt; частота стейкинга %2.</translation>
+        <source>CPID: %1
+Beacon age: %2
+Current beacon expired!
+%3</source>
+        <translation>CPID: %1
+Возраст маяка: %2
+Текущий маяк просрочен!
+%3</translation>
     </message>
     <message>
         <source>CPID: %1
@@ -668,46 +783,6 @@ Expires: %3
     <message>
         <source>A new poll is available. Open Gridcoin to vote.</source>
         <translation>Доступен новый опрос. Откройте Gridcoin для голосования.</translation>
-    </message>
-    <message>
-        <source>URI can not be parsed! This can be caused by an invalid Gridcoin address or malformed URI parameters.</source>
-        <translation>URI не может быть проанализирован! Это может быть вызвано неправильным адресом Gridcoin или неправильными параметрами URI.</translation>
-    </message>
-    <message>
-        <source>URI handling</source>
-        <translation>Обработка URI</translation>
-    </message>
-    <message>
-        <source>Backup Wallet</source>
-        <translation>Бэкап Кошелька</translation>
-    </message>
-    <message>
-        <source>Wallet Data (*.dat)</source>
-        <translation>Данные Кошелька (*.dat)</translation>
-    </message>
-    <message>
-        <source>Backup Failed</source>
-        <translation>Резервное копирование не удалось</translation>
-    </message>
-    <message>
-        <source>There was an error trying to save the wallet data to the new location.</source>
-        <translation>Произошла ошибка при попытке сохранить данные кошелька в новом месте.</translation>
-    </message>
-    <message>
-        <source>Sent transaction</source>
-        <translation>Исходящая транзакция</translation>
-    </message>
-    <message>
-        <source>Incoming transaction</source>
-        <translation>Входящая транзакция</translation>
-    </message>
-    <message>
-        <source>Wallet is &lt;b&gt;encrypted&lt;/b&gt; and currently &lt;b&gt;locked&lt;/b&gt;</source>
-        <translation>Кошелёк &lt;b&gt;зашифрован&lt;/b&gt; и в настоящее время &lt;b&gt;заблокирован&lt;/b&gt;</translation>
-    </message>
-    <message>
-        <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
-        <translation>Произошла неисправимая ошибка. Gridcoin не может безопасно продолжать работу и будет закрыт.</translation>
     </message>
 </context>
 <context>
@@ -748,10 +823,6 @@ Expires: %3
         <translation>Управление монетами</translation>
     </message>
     <message>
-        <source>Priority:</source>
-        <translation>Приоритет:</translation>
-    </message>
-    <message>
         <source>Low Output:</source>
         <translation>Малый Выход:</translation>
     </message>
@@ -765,7 +836,7 @@ Expires: %3
     </message>
     <message>
         <source>Toggles between selecting all and selecting none.</source>
-        <translation>Переключение между выбором всего и отсутствием выбора.</translation>
+        <translation>Переключение между выбором всего и очисткой выбора.</translation>
     </message>
     <message>
         <source>Select All</source>
@@ -832,10 +903,6 @@ Expires: %3
         <translation>Адрес</translation>
     </message>
     <message>
-        <source>Priority</source>
-        <translation>Приоритет</translation>
-    </message>
-    <message>
         <source>Copy address</source>
         <translation>Копировать адрес</translation>
     </message>
@@ -868,10 +935,6 @@ Expires: %3
         <translation>Копировать байты</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Копировать приоритет</translation>
-    </message>
-    <message>
         <source>Copy low output</source>
         <translation>Копировать малый выход</translation>
     </message>
@@ -885,35 +948,11 @@ Expires: %3
     </message>
     <message>
         <source>Select None</source>
-        <translation>Очистить выбор</translation>
+        <translation>Очистить Выбор</translation>
     </message>
     <message>
-        <source>highest</source>
-        <translation>высший</translation>
-    </message>
-    <message>
-        <source>high</source>
-        <translation>высокий</translation>
-    </message>
-    <message>
-        <source>medium-high</source>
-        <translation>выше среднего</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>средний</translation>
-    </message>
-    <message>
-        <source>low-medium</source>
-        <translation>ниже среднего</translation>
-    </message>
-    <message>
-        <source>low</source>
-        <translation>низкий</translation>
-    </message>
-    <message>
-        <source>lowest</source>
-        <translation>низший</translation>
+        <source>DUST</source>
+        <translation>ПЫЛЬ</translation>
     </message>
     <message>
         <source>yes</source>
@@ -936,18 +975,6 @@ Expires: %3
  Может варьироваться +/- 1 байт на вход.</translation>
     </message>
     <message>
-        <source>Transactions with higher priority get more likely into a block.
-
-This label turns red, if the priority is smaller than "medium".
-
- This means a fee of at least %1 per kb is required.</source>
-        <translation>Транзакции с более высоким приоритетом с большей вероятностью попадут в блок.
-
-Эта метка становится красной, если приоритет меньше, чем "средний".
-
-Это означает, что требуется комиссия не менее %1 за килобайт.</translation>
-    </message>
-    <message>
         <source>This label turns red, if any recipient receives an amount smaller than %1.
 
  This means a fee of at least %2 is required. 
@@ -957,7 +984,7 @@ This label turns red, if the priority is smaller than "medium".
 
  Это означает, что требуется комиссия в размере не менее %2.
 
-Суммы ниже 0,546 раз минимальная плата за отправку показаны как DUST.</translation>
+Суммы, превышающие  в 0,546 раза минимальную комиссию за отправку, отображаются как ПЫЛЬ.</translation>
     </message>
     <message>
         <source>This label turns red, if the change is smaller than %1.
@@ -978,6 +1005,217 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>(change)</source>
         <translation>(сдача)</translation>
+    </message>
+</context>
+<context>
+    <name>ConsolidateUnspentDialog</name>
+    <message>
+        <source>Consolidate Unspent Outputs (UTXOs)</source>
+        <translation>Объединение Неизрасходованных Выводов (UTXO-ов)</translation>
+    </message>
+    <message>
+        <source>Select Destination Address for Consolidation</source>
+        <translation>Выберите Адрес Назначения для Объединения</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Метка</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Note: The number of inputs selected for consolidation has been limited to %1 to prevent a transaction failure due to too many inputs.</source>
+        <translation>Примечание: Количество поступлений, выбранных для объединения, ограничено %1 во избежание сбоя транзакции из-за слишком большого количества поступлений.</translation>
+    </message>
+</context>
+<context>
+    <name>ConsolidateUnspentWizard</name>
+    <message>
+        <source>Consolidate Unspent Transaction Outputs (UTXOs)</source>
+        <translation>Объединение Неизрасходованных Выводов Транзакции (UTXO-ов)</translation>
+    </message>
+</context>
+<context>
+    <name>ConsolidateUnspentWizardSelectDestinationPage</name>
+    <message>
+        <source>WizardPage</source>
+        <translation>СтраницаМастера</translation>
+    </message>
+    <message>
+        <source>Step 2: Select the destination address for the consolidation transaction. Note that all of the selected inputs will be consolidated to an output on this address. If there is a very small amount of change (due to uncertainty in the fee calculation), it will also be sent to this address. If you selected inputs only from a particular address on the previous page, then that address will already be selected by default.</source>
+        <translation>Шаг 2: Выберите адрес назначения для операции объединения. Обратите внимание, что все выбранные поступления будут объединены в вывод по этому адресу. Если сумма сдачи очень мала (из-за неопределенности в расчете комиссии), она также будет отправлена на этот адрес. Если на предыдущей странице вы выбрали поступления только с определенного адреса, то этот адрес уже будет выбран по умолчанию.</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Метка</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Currently selected:</source>
+        <translation>Выбрано:</translation>
+    </message>
+    <message>
+        <source>isComplete</source>
+        <translation>завершено</translation>
+    </message>
+</context>
+<context>
+    <name>ConsolidateUnspentWizardSelectInputsPage</name>
+    <message>
+        <source>WizardPage</source>
+        <translation>СтраницаМастера</translation>
+    </message>
+    <message>
+        <source>Step 1: Select the inputs to be consolidated. Remember that the inputs to the consolidation are your unspent outputs (UTXOs) in your wallet.</source>
+        <translation>Шаг 1: Выберите поступления для объединения. Помните, что поступлениями для объединения являются ваши неизрасходованные выводы (UTXO) в вашем кошельке.</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Выбрать Всё</translation>
+    </message>
+    <message>
+        <source>Tree Mode</source>
+        <translation>Режим Дерева</translation>
+    </message>
+    <message>
+        <source>List Mode</source>
+        <translation>Режим Списка</translation>
+    </message>
+    <message>
+        <source>Select inputs</source>
+        <translation>Выбор поступлений</translation>
+    </message>
+    <message>
+        <source>Filters the already selected inputs.</source>
+        <translation>Фильтрует уже выбранные поступления.</translation>
+    </message>
+    <message>
+        <source>Filter</source>
+        <translation>Фильтровать</translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation>Сумма</translation>
+    </message>
+    <message>
+        <source>Label</source>
+        <translation>Метка</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <source>Confirmations</source>
+        <translation>Подтверждения</translation>
+    </message>
+    <message>
+        <source>Confirmed</source>
+        <translation>Подтверждено</translation>
+    </message>
+    <message>
+        <source>Quantity</source>
+        <translation>Количество</translation>
+    </message>
+    <message>
+        <source>Fee</source>
+        <translation>Комиссия</translation>
+    </message>
+    <message>
+        <source>99.9999</source>
+        <translation>99,9999</translation>
+    </message>
+    <message>
+        <source>After Fee Amount</source>
+        <translation>Сумма После Комиссии</translation>
+    </message>
+    <message>
+        <source>999999999.9999</source>
+        <translation>999999999,9999</translation>
+    </message>
+    <message>
+        <source>isComplete</source>
+        <translation>Завершено</translation>
+    </message>
+    <message>
+        <source>Note: The number of inputs selected for consolidation has been limited to %1 to prevent a transaction failure due to too many inputs.</source>
+        <translation>Примечание: Количество поступлений, выбранных для объединения, ограничено %1 во избежание сбоя транзакции из-за слишком большого количества поступлений.</translation>
+    </message>
+    <message>
+        <source>Note: The number of inputs selected for consolidation is currently more than the limit of %1. Please use the filter or manual selection to reduce the number of inputs to %1 or less to prevent a transaction failure due to too many inputs.</source>
+        <translation>Примечание: Количество поступлений, выбранных для объединения, в настоящее время превышает ограничение %1. Пожалуйста, используйте фильтр или ручной выбор, чтобы уменьшить количество входных данных до %1 или меньше, чтобы предотвратить сбой транзакции из-за слишком большого количества поступлений.</translation>
+    </message>
+    <message>
+        <source>Select None</source>
+        <translation>Очистить Выбор</translation>
+    </message>
+    <message>
+        <source>(no label)</source>
+        <translation>(нет метки)</translation>
+    </message>
+    <message>
+        <source>change from %1 (%2)</source>
+        <translation>сдача с %1 (%2)</translation>
+    </message>
+    <message>
+        <source>(change)</source>
+        <translation>(сдача)</translation>
+    </message>
+</context>
+<context>
+    <name>ConsolidateUnspentWizardSendPage</name>
+    <message>
+        <source>WizardPage</source>
+        <translation>СтраницаМастера</translation>
+    </message>
+    <message>
+        <source>Step 3: Confirm Consolidation Transaction Details. Transaction will be ready to send when Finish is pressed.</source>
+        <translation>Шаг 3: Подтвердите детали транзакции объединения. Транзакция будет готова к отправке после нажатия кнопки "Завершить".</translation>
+    </message>
+    <message>
+        <source>Number of Inputs</source>
+        <translation>Количество Поступлений</translation>
+    </message>
+    <message>
+        <source>Transaction Fee</source>
+        <translation>Комиссия за Транзакцию</translation>
+    </message>
+    <message>
+        <source>99.9999</source>
+        <translation>99,9999</translation>
+    </message>
+    <message>
+        <source>Amount</source>
+        <translation>Сумма</translation>
+    </message>
+    <message>
+        <source>999999999.9999</source>
+        <translation>999999999,9999</translation>
+    </message>
+    <message>
+        <source>Destination Address</source>
+        <translation>Адрес Назначения</translation>
+    </message>
+    <message>
+        <source>address</source>
+        <translation>адрес</translation>
+    </message>
+    <message>
+        <source>Destination Address Label</source>
+        <translation>Метка Адреса Назначения</translation>
+    </message>
+    <message>
+        <source>label</source>
+        <translation>Метка</translation>
     </message>
 </context>
 <context>
@@ -1078,198 +1316,12 @@ This label turns red, if the priority is smaller than "medium".
         <source>All tests passed. Your wallet operation is normal.</source>
         <translation>Все тесты пройдены. Ваш кошелек работает нормально.</translation>
     </message>
-    <message>
-        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
-        <translation>Ваш кошелек все еще находится в начальной синхронизации. Если это синхронизация с самого начала (создания), то процесс синхронизации может занять от 2 до 4 часов, а на медленном компьютере дольше. Если вы уже синхронизировали свой кошелек раньше, но только что его запустили, подождите еще несколько минут и повторите попытку диагностики еще раз.</translation>
-    </message>
-    <message>
-        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
-        <translation>Ваш кошелек не синхронизирован с сетью, но синхронизировался раньше. Если это не удается, вероятно, возникла серьезная проблема, которая не позволяет кошельку синхронизоваться. Если отсутствие синхронизации связано с проблемами сетевого подключения, вы увидите сбои в тесте(ах) сетевого подключения. Если сетевые подключения проходят успешно, но ваш кошелек не проходит этот тест и продолжает не проходить этот тест при повторных попытках с интервалом в несколько минут, это может указывать на более серьезную проблему. В этом случае вы должны проверить debug.log, чтобы увидеть, указывает ли он на причину отсутствия синхронизации.</translation>
-    </message>
-    <message>
-        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока не установится соединение, и снова повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Вы не сможете стейкить, потому что у вас менее %1 соединения(ий). Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Ваше количество исходящих подключений критически мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
-        <translation>Ваше количество исходящих подключений мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установятся соединения, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
-    </message>
-    <message>
-        <source>You should check your time and time zone settings for your computer.</source>
-        <translation>Вам следует проверить настройки времени и часового пояса на вашем компьютере.</translation>
-    </message>
-    <message>
-        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
-        <translation>Внимание: Расхождение часов составляет от 3 до 5 минут. Пожалуйста, проверьте настройки часов.</translation>
-    </message>
-    <message>
-        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
-        <translation>Ваши часы на вашем компьютере значительно отличаются от UTC или сетевого времени, и это может серьезно ухудшить работу кошелька, включая подключения к сети. Вам следует проверить настройки времени и часового пояса на вашем компьютере. Очень распространенной проблемой является отклонение на один час из-за проблем с часовым поясом или с переходом на летнее время.</translation>
-    </message>
-    <message>
-        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
-        <translation>Ошибка: расхождение часов составляет 5 минут или больше. Пожалуйста, проверьте настройки часов.</translation>
-    </message>
-    <message>
-        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
-        <translation>Кошелек имеет менее пяти подключений к сети и не может подключиться к NTP-серверу, чтобы проверить часы вашего компьютера. Это не обязательно является проблемой. Вы можете подождать несколько минут и попробовать пройти тест еще раз.</translation>
-    </message>
-    <message>
-        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
-        <translation>Исходящий обмен данными с портом TCP %1 заблокирован.</translation>
-    </message>
-    <message>
-        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>В соединении с тестовым портом было отказано. Это может быть временная проблема с тестовым портом, но это также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
-        <translation>Тестовый порт не доступен. Это может быть временная проблема с тестовым портом, но также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, то ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
-    </message>
-    <message>
-        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
-        <translation>IP-адрес тестового порта не может быть определен. Это может означать, что ваш DNS работает неправильно. Кошелек может работать без DNS, но это может серьезно ухудшить его работу, особенно если кошелек новый и база данных предыдущих успешных подключений не была создана. Пожалуйста, проверьте свой компьютер и убедитесь, что обработка доменных имен работает правильно.</translation>
-    </message>
-    <message>
-        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
-        <translation>В сети произошла низкоуровневая ошибка, которая, вероятно, означает, что ваш IP-адрес или другие параметры сетевого подключения настроены неправильно. Пожалуйста, проверьте конфигурацию сети на вашем компьютере.</translation>
-    </message>
-    <message>
-        <source>Your network may be using a proxy server to communicate to public IP addresses on the Internet, and the wallet is not configured properly to use it. Please check the proxy settings under Options -&gt; Network -&gt; Connect through SOCKS proxy.</source>
-        <translation>Возможно, в вашей сети используется прокси-сервер для связи с общедоступными IP-адресами в Интернете, а кошелек не настроен должным образом для его использования. Проверьте настройки прокси-сервера в разделе Параметры -&gt; Сеть -&gt; Подключение через SOCKS-прокси.</translation>
-    </message>
-    <message>
-        <source>The network is reporting an SSL error. If you also failed or got a warning on your clock test, you should check your clock settings, including your time and time zone. If your clock is ok, please check your computer's network configuration.</source>
-        <translation>Сеть выдает ошибку SSL. Если вы также имеете ошибку или предупреждение при проверке часов, то проверьте настройки часов, включая время и часовой пояс. Если ваши часы в порядке, тогда проверьте сетевые настройки вашего компьютера.</translation>
-    </message>
-    <message>
-        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer's network configuration.</source>
-        <translation>Сеть сообщает о неизвестной ошибке сокета. Если вы также не проходите тест подключения, проверьте сетевую параметры вашего компьютера.</translation>
-    </message>
-    <message>
-        <source>Warning: 80 block difficulty is less than %1.</source>
-        <translation>Внимание: сложность 80 блоков меньше %1.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
-        <translation>Ваша сложность мала, но ваш кошелек все еще находится в начальной стадии синхронизации. Пожалуйста, повторите проверку позже, чтобы увидеть, пройдет ли этот пункт проверку.</translation>
-    </message>
-    <message>
-        <source>Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.</source>
-        <translation>Неудачно: сложность 80 блоков меньше %1. Этот кошелек почти наверняка разветвлен.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation>Ваша сложность чрезвычайно низка, и ваш кошелек скорее всего разветвлен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию с генезисом, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
-    </message>
-    <message>
-        <source>Warning: 80 block difficulty is less than %1. This wallet is probably forked.</source>
-        <translation>Внимание: сложность 80 блоков меньше %1. Этот кошелек, вероятно, разветвлен.</translation>
-    </message>
-    <message>
-        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
-        <translation>Ваша сложность очень низкая, и ваш кошелек, вероятно, разветвлен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию с генезисом, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
-    </message>
-    <message>
-        <source>Passed: 80 block difficulty is %1.</source>
-        <translation>Пройдено: сложность 80 блоков составляет %1.</translation>
-    </message>
-    <message>
-        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
-        <translation>Доступна новая обязательная версия, и вам следует обновить ее как можно скорее, чтобы обеспечить согласованность вашего кошелька с сетью.</translation>
-    </message>
-    <message>
-        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
-        <translation>Доступна новая версия, и вам следует обновить ее, как только у вас появится на это время.</translation>
-    </message>
-    <message>
-        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
-        <translation>Убедитесь, что BOINC установлен и указан правильный путь в конфигурационном файле, если вы установили его в нестандартное место.</translation>
-    </message>
-    <message>
-        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
-        <translation>Ваш кошелек не синхронизирован и не был синхронизирован ранее во время этого запуска, пожалуйста, дождитесь синхронизации кошелька и повторите проверку. Если есть другие сбои, препятствующие синхронизации кошелька, исправьте их и повторите проверку, чтобы убедиться, что эти проверки проходят успешно.</translation>
-    </message>
-    <message>
-        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
-        <translation>Убедитесь, что (1) у вас правильно установлен BOINC, (2) что вы прикрепили хотя бы один проект из белого списка, (3) что вы объявили свой маяк с помощью того же адреса электронной почты, который вы используете для своих проект(ов) BOINC, и (4), что CPID на главном экране совпадает с CPID при входе в проект(ы) BOINC.</translation>
-    </message>
-    <message>
-        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
-        <translation>Убедитесь, что вы действительно включили рабочие единицы для прикрепленных проектов и разрешили экспорт статистики. Пожалуйста, посмотрите https://gridcoin.us/guides/whitelist.htm.</translation>
-    </message>
-    <message>
-        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
-        <translation>Убедитесь, что вы выполнили процедуру объявления и проверки маяка. Вы можете использовать мастер исследований (кнопка маяка на обзорном экране).</translation>
-    </message>
-    <message>
-        <source>You have no balance and will be unable to retrieve your research rewards when solo mining. You should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
-        <translation>У вас пустой баланс, и вы не сможете получать свои награды за исследования при одиночном майнинге. Вы должны приобрести GRC для стейкинга, чтобы вы cмогли получать свои награды за исследования. Пожалуйста посмотрите https://gridcoin.us/guides/boinc-install.htm.</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is infinite. No coins to stake.</source>
-        <translation>Неудачно: ETTS бесконечен. Нет монет для стейкинга.</translation>
-    </message>
-    <message>
-        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo mining. You should acquire more GRC to stake more often.</source>
-        <translation>Ваш баланс слишком мал, учитывая текущую сложность сети, чтобы стейкить в течение разумного времени, чтобы получать вознаграждения за исследования при одиночном майнинге. Вам следует приобретать больше GRC, чтобы стейкить чаще.</translation>
-    </message>
-    <message>
-        <source>Failed: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards.</source>
-        <translation>Неудачно: ETTS &gt; 90 дней. Получение наград за исследования займет очень много времени.</translation>
-    </message>
-    <message>
-        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo mining. You should consider acquiring more GRC to stake more often.</source>
-        <translation>Ваш баланс низкий, учитывая текущую сложность сети, чтобы стейкить в разумный период времени, чтобы получать вознаграждения за исследования при одиночном майнинге. Вам следует подумать о приобретении большего количества GRC, чтобы стейкить чаще.</translation>
-    </message>
-    <message>
-        <source>Warning: 45 days &lt; ETTS = %1 &lt;= 90 days</source>
-        <translation>Внимание: 45 дней &lt; ETTS = %1 &lt;= 90 дней</translation>
-    </message>
-    <message>
-        <source>Passed: ETTS = %1 &lt;= 45 days</source>
-        <translation>Пройдено: ETTS = %1 &lt;= 45 days</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 3+)</source>
-        <translation>Внимание: Количество = %1 (Успешно = 3+)</translation>
-    </message>
-    <message>
-        <source>Passed: Count = %1</source>
-        <translation>Пройдено: Количество = %1</translation>
-    </message>
-    <message>
-        <source>Failed: Count = %1</source>
-        <translation>Неудачно: Количество = %1</translation>
-    </message>
-    <message>
-        <source>Warning: Count = %1 (Pass = 8+)</source>
-        <translation>Внимание: Количество = %1 (Успешно = 8+)</translation>
-    </message>
-    <message>
-        <source>Warning: New Client version available:
- %1</source>
-        <translation>Внимание: Доступна новая версия клиента:
-%1</translation>
-    </message>
-    <message>
-        <source>Warning: Cannot connect to NTP server</source>
-        <translation>Внимание: Невозможно подключиться к серверу времени.</translation>
-    </message>
 </context>
 <context>
     <name>EditAddressDialog</name>
     <message>
         <source>Edit Address</source>
-        <translation>Изменить адрес</translation>
+        <translation>Изменить Адрес</translation>
     </message>
     <message>
         <source>&amp;Label</source>
@@ -1332,6 +1384,32 @@ This label turns red, if the priority is smaller than "medium".
     </message>
 </context>
 <context>
+    <name>Form</name>
+    <message>
+        <source>Form</source>
+        <translation>Форма</translation>
+    </message>
+</context>
+<context>
+    <name>FreespaceChecker</name>
+    <message>
+        <source>A new data directory will be created.</source>
+        <translation>Будет создан новый каталог данных.</translation>
+    </message>
+    <message>
+        <source>Directory already exists. If this directory contains valid data, it will be used.</source>
+        <translation>Каталог уже существует. Если этот каталог содержит действительные данные, он будет использован.</translation>
+    </message>
+    <message>
+        <source>Path already exists, and is not a directory.</source>
+        <translation>Путь уже существует и не является каталогом.</translation>
+    </message>
+    <message>
+        <source>Cannot create data directory here.</source>
+        <translation>Невозможно здесь создать каталог данных.</translation>
+    </message>
+</context>
+<context>
     <name>GUIUtil::HelpMessageBox</name>
     <message>
         <source>version</source>
@@ -1346,6 +1424,215 @@ This label turns red, if the priority is smaller than "medium".
         <translation>опции командной строки</translation>
     </message>
     </context>
+<context>
+    <name>Intro</name>
+    <message>
+        <source>Welcome</source>
+        <translation>Добро пожаловать</translation>
+    </message>
+    <message>
+        <source>Welcome to %1.</source>
+        <translation>Добро пожаловать в %1.</translation>
+    </message>
+    <message>
+        <source>As this is the first time the program is launched, you can choose where %1 will store its data.</source>
+        <translation>Поскольку это первый запуск программы, вы можете выбрать, где %1 будет хранить свои данные.</translation>
+    </message>
+    <message>
+        <source>Use the default data directory</source>
+        <translation>Использовать каталог данных по умолчанию</translation>
+    </message>
+    <message>
+        <source>Use a custom data directory:</source>
+        <translation>Используйте настраиваемый каталог данных:</translation>
+    </message>
+    <message>
+        <source>When you click OK, %1 will begin to download and process the full %4 block chain (~%2GB), either from genesis in %3, or the last synchronized block, if this was a preexisting data directory.</source>
+        <translation>Когда вы нажмете OK, %1 начнет загружать и обрабатывать всю цепочку блоков %4 (~%2GB), либо из генезиса в %3, либо из последнего синхронизированного блока, если этот каталог уже существовал.</translation>
+    </message>
+    <message>
+        <source>The synchronization is very demanding, and may expose hardware problems with your computer that had previously gone unnoticed. Each time you run %1, it will continue downloading where it left off.</source>
+        <translation>Синхронизация очень требовательна и может выявить проблемы с оборудованием вашего компьютера, которые ранее оставались незамеченными. Каждый раз, когда вы запускаете %1, загрузка будет продолжаться с того места, где она была остановлена.</translation>
+    </message>
+    <message>
+        <source>Error: Specified data directory "%1" cannot be created.</source>
+        <translation>Ошибка: Невозможно создать указанный каталог "%1".</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n GB of free space available</source>
+        <translation>
+            <numerusform>%n ГБ доступно свободного места</numerusform>
+            <numerusform>%n ГБ доступно свободного места</numerusform>
+            <numerusform>%n ГБ доступно свободного места</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(of %n GB needed)</source>
+        <translation>
+            <numerusform>(необходимо %n ГБ)</numerusform>
+            <numerusform>(необходимо %n ГБ)</numerusform>
+            <numerusform>(необходимо %n ГБ)</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>(%n GB needed for full chain)</source>
+        <translation>
+            <numerusform>(для полной цепочки требуется %n ГБ)</numerusform>
+            <numerusform>(для полной цепочки требуется %n ГБ)</numerusform>
+            <numerusform>(для полной цепочки требуется %n ГБ)</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>MRCModel</name>
+    <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Чтобы отправить MRC, у вас должен быть зрелый баланс не менее 1 GRC.</translation>
+    </message>
+    <message>
+        <source>Too soon since your last research rewards payment.</source>
+        <translation>Слишком рано с момента вашей последней выплаты вознаграждения за исследование.</translation>
+    </message>
+    <message>
+        <source>The total fee (the minimum fee + fee boost) is greater than the rewards due.</source>
+        <translation>Общая сумма комиссии (минимальная комиссия + повышение комиссии) превышает причитающиеся вознаграждения.</translation>
+    </message>
+    <message>
+        <source>Your MRC was successfully submitted earlier but has now become stale without being bound to the just received block by a staker. This may be because your MRC was submitted just before the block was staked and the MRC didn't make it to the staker in time, or your MRC was pushed down in the queue past the pay limit. Please wait for the next block to clear the queue and try again.</source>
+        <translation>Ваш MRC был успешно отправлен ранее, но теперь устарел без привязки к только что полученному блоку стейкером. Это может быть связано с тем, что ваш MRC был отправлен непосредственно перед тем, как блок был поставлен, и MRC не дошел до стейкера вовремя, или ваш MRC был перемещен в очередь после превышения лимита выплат. Подождите, пока следующий блок очистит очередь, и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>You have a pending MRC request.</source>
+        <translation>У вас есть ожидающий запрос MRC.</translation>
+    </message>
+    <message>
+        <source>Your MRC was successfully submitted, but other MRCs with higher fees have pushed your MRC down in the queue past the pay limit, and your MRC will be canceled. Wait until the next block is received and the queue clears and try again. Your fee for the canceled MRC will be refunded.</source>
+        <translation>Ваш MRC был успешно отправлен, но другие MRC с более высокой оплатой отодвинули ваш MRC в очередь на превышение предела оплаты, и ваш MRC будет аннулирован. Подождите, пока не будет получен следующий блок и очередь не очистится, и повторите попытку. Плата за отмененный MRC будет возвращена.</translation>
+    </message>
+    <message>
+        <source>The MRC queue is full. You can try boosting your fee to put your MRC request in the queue and displace another MRC request.</source>
+        <translation>Очередь MRC заполнена. Вы можете попробовать увеличить свою плату, чтобы поместить свой запрос MRC в очередь и заменить другой запрос MRC.</translation>
+    </message>
+    <message>
+        <source>The wallet is locked.</source>
+        <translation>Кошелёк заблокирован.</translation>
+    </message>
+</context>
+<context>
+    <name>MRCRequestPage</name>
+    <message>
+        <source>MRC Requests</source>
+        <translation>Запросы MRC</translation>
+    </message>
+    <message>
+        <source>Please wait.</source>
+        <translation>Пожалуйста, подождите.</translation>
+    </message>
+    <message>
+        <source>MRC Fee @ Pay Limit Position in Queue</source>
+        <translation>Оплата MRC @ Позиция в Очереди с Ограничением по Оплате</translation>
+    </message>
+    <message>
+        <source>MRC Fee @ Tail of Queue</source>
+        <translation>Оплата MRC @ Хвост Очереди</translation>
+    </message>
+    <message>
+        <source>Your projected or actual position among MRCs in the memory pool ordered by MRC fee in descending order</source>
+        <translation>Ваша прогнозируемая или фактическая позиция среди MRC в пуле памяти, упорядоченная по плате MRC в порядке убывания</translation>
+    </message>
+    <message>
+        <source>Number of All MRC Requests in Queue</source>
+        <translation>Количество Всех Запросов MRC в Очереди</translation>
+    </message>
+    <message>
+        <source>The number of MRCs in the memory pool</source>
+        <translation>Количество MRC в пуле памяти</translation>
+    </message>
+    <message>
+        <source>Your Projected MRC Request Position in Queue</source>
+        <translation>Предполагаемая Позиция в Очереди Вашего Запроса MRC</translation>
+    </message>
+    <message>
+        <source>The MRC fee being paid by the MRC in the last position within the pay limit in the memory pool</source>
+        <translation>Комиссия MRC, уплачиваемая MRC на последней позиции в пределах лимита выплат в пуле памяти</translation>
+    </message>
+    <message>
+        <source>MRC Request Pay Limit per Block</source>
+        <translation>Лимит Запросов Оплат MRC за Блок</translation>
+    </message>
+    <message>
+        <source>Your MRC Calculated Minimum Fee</source>
+        <translation>Минимальная Расчетная Комиссия за Ваш MRC</translation>
+    </message>
+    <message>
+        <source>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</source>
+        <translation>Расчетная минимальная плата за MRC. Этого может быть недостаточно для отправки MRC, если очередь уже заполнена. В этом случае вам нужно использовать повышение комиссии MRC, чтобы поднять комиссию, чтобы ваш MRC оказался в очереди.</translation>
+    </message>
+    <message>
+        <source>The lowest MRC fee being paid of MRCs in the memory pool</source>
+        <translation>Самая низкая плата MRC, выплачиваемая MRC в пуле памяти.</translation>
+    </message>
+    <message>
+        <source>The maximum number of MRCs that can be paid per block</source>
+        <translation>Максимальное количество MRC, которые можно заплатить за блок</translation>
+    </message>
+    <message>
+        <source>The highest MRC fee being paid of MRCs in the memory pool</source>
+        <translation>Самая высокая комиссия MRC, выплачиваемая MRC в пуле памяти</translation>
+    </message>
+    <message>
+        <source>MRC Fee @ Head of Queue</source>
+        <translation>Оплата MRC @ Голова Очереди</translation>
+    </message>
+    <message>
+        <source>MRC Fee Boost</source>
+        <translation>Повышение Платы за MRC</translation>
+    </message>
+    <message>
+        <source>Raise to Minimum For Submit</source>
+        <translation>Увеличить Минимум Для Отправки</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Обновить</translation>
+    </message>
+    <message>
+        <source>Submit</source>
+        <translation>Отправить</translation>
+    </message>
+    <message>
+        <source>N/A</source>
+        <translation>Н/Д</translation>
+    </message>
+    <message>
+        <source>Your Submitted MRC Request Position in Queue</source>
+        <translation>Позиция в Очереди Вашего Отправленного Запроса MRC</translation>
+    </message>
+    <message>
+        <source>You must have an active beacon and the wallet must be in solo mode to submit MRCs.</source>
+        <translation>Для отправки MRC у вас должен быть активный маяк, а кошелёк находиться в одиночном режиме.</translation>
+    </message>
+    <message>
+        <source>The block version must be v12 or higher to submit MRCs.</source>
+        <translation>Версия блока должна быть v12 или выше, чтобы отправить MRC.</translation>
+    </message>
+    <message>
+        <source>The wallet must be in sync to submit MRCs.</source>
+        <translation>Для отправки MRC кошелёк должен быть синхронизирован.</translation>
+    </message>
+    <message>
+        <source>A block update must have occurred after wallet start or sync to submit MRCs.</source>
+        <translation>Обновление блока должно произойти после запуска кошелька или синхронизации для отправки MRC.</translation>
+    </message>
+    <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Чтобы отправить MRC, у вас должен быть зрелый баланс не менее 1 GRC.</translation>
+    </message>
+</context>
 <context>
     <name>NoResult</name>
     <message>
@@ -1363,6 +1650,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Loading...</source>
         <translation>Загрузка ...</translation>
+    </message>
+    <message>
+        <source>Privacy Enabled...</source>
+        <translation>Приватность Включена…</translation>
     </message>
 </context>
 <context>
@@ -1404,14 +1695,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Автоматически открывать клиентский порт Gridcoin на маршрутизаторе. Работает в том случае, если ваш маршрутизатор поддерживает UPnP и включен.</translation>
     </message>
     <message>
-        <source>Connect to the Gridcoin network through a SOCKS proxy (e.g. when connecting through Tor).</source>
-        <translation>Соединение к Gridcoin network через SOCKS proxy (e.g. when connecting through Tor).</translation>
-    </message>
-    <message>
-        <source>&amp;Connect through SOCKS proxy:</source>
-        <translation>&amp;Соединение через SOCKS proxy:</translation>
-    </message>
-    <message>
         <source>IP address of the proxy (e.g. 127.0.0.1)</source>
         <translation>Ip адресс прокси (например 127.0.0.1)</translation>
     </message>
@@ -1422,14 +1705,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
         <translation>Порт прокси-сервера (например, 9050)</translation>
-    </message>
-    <message>
-        <source>SOCKS &amp;Version:</source>
-        <translation>&amp;Версия SOCKS:</translation>
-    </message>
-    <message>
-        <source>SOCKS version of the proxy (e.g. 5)</source>
-        <translation>Версия SOCKS-прокси (например, 5)</translation>
     </message>
     <message>
         <source>Staking</source>
@@ -1460,12 +1735,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Допустимые значения находятся в диапазоне от 75 до 98 процентов. Обратите внимание, что изменение этого параметра навсегда переопределит файл конфигурации с записью в файле настроек.</translation>
     </message>
     <message>
+        <source>Min Post Split UTXO</source>
+        <translation>Позиция Мин. Деления UTXO</translation>
+    </message>
+    <message>
         <source>Valid values are 800 or greater. Note that a change to this setting will permanently override the config file with an entry in the settings file.</source>
         <translation>Допустимые значения: 800 или больше. Обратите внимание, что изменение этого параметра навсегда переопределит файл конфигурации с записью в файле настроек.</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
         <translation>Сворачивать вместо закрытия. Если данная опция будет выбрана — приложение закроется только после выбора соответствующего пункта в меню.</translation>
+    </message>
+    <message>
+        <source>&amp;Confirm on close</source>
+        <translation>&amp;Подтверждать при закрытии</translation>
     </message>
     <message>
         <source>Disable Transaction Notifications</source>
@@ -1520,6 +1803,18 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Отключить &amp;проверку обновлений</translation>
     </message>
     <message>
+        <source>Return change to an input address for contract transactions</source>
+        <translation>Возвращает изменение на входной адрес для транзакций контракта</translation>
+    </message>
+    <message>
+        <source>Connect to the Gridcoin network through a SOCKS5 proxy (e.g. when connecting through Tor).</source>
+        <translation>Подключитесь к сети Gridcoin через прокси-сервер SOCKS5 (например, при подключении через Tor).</translation>
+    </message>
+    <message>
+        <source>&amp;Connect through SOCKS5 proxy:</source>
+        <translation>&amp;Подключение через SOCKS5 прокси:</translation>
+    </message>
+    <message>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
         <translation>&amp;Cворачивать в системный лоток вместо панели задач</translation>
     </message>
@@ -1560,12 +1855,12 @@ This label turns red, if the priority is smaller than "medium".
         <translation>по умолчанию</translation>
     </message>
     <message>
-        <source>Light</source>
-        <translation>Лайт</translation>
-    </message>
-    <message>
         <source>Dark</source>
         <translation>Тёмный</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>Лайт</translation>
     </message>
     <message>
         <source>Warning</source>
@@ -1695,12 +1990,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Исследователь</translation>
     </message>
     <message>
+        <source>Open the Manual Reward Claim (MRC) request page</source>
+        <translation>Открыть страницу запроса на Ручное Получение Вознаграждения (MRC).</translation>
+    </message>
+    <message>
         <source>Magnitude:</source>
         <translation>Магнитуда:</translation>
     </message>
     <message>
         <source>Status:</source>
         <translation>Состояние:</translation>
+    </message>
+    <message>
+        <source>You are approaching the accrual limit of 16384 GRC. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</source>
+        <translation>Вы приближаетесь к лимиту накопления в 16384 GRC. Если у вас относительно низкий баланс, вам следует запросить оплату через MRC, чтобы не потерять заработанные вознаграждения.</translation>
     </message>
     <message>
         <source>Recent Transactions</source>
@@ -1724,6 +2027,29 @@ This label turns red, if the priority is smaller than "medium".
     </message>
 </context>
 <context>
+    <name>PeerTableModel</name>
+    <message>
+        <source>Node ID</source>
+        <translation>ID Узла</translation>
+    </message>
+    <message>
+        <source>Node/Service</source>
+        <translation>Узел/Сервис</translation>
+    </message>
+    <message>
+        <source>Ping</source>
+        <translation>Пинг</translation>
+    </message>
+    <message>
+        <source>Sent</source>
+        <translation>Отправлено</translation>
+    </message>
+    <message>
+        <source>Received</source>
+        <translation>Получено</translation>
+    </message>
+    </context>
+<context>
     <name>PollCard</name>
     <message>
         <source>Form</source>
@@ -1746,12 +2072,44 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Общий вес:</translation>
     </message>
     <message>
+        <source>Poll Type</source>
+        <translation>Тип Опроса</translation>
+    </message>
+    <message>
+        <source>% of AVW:</source>
+        <translation>% ВАГ:</translation>
+    </message>
+    <message>
+        <source>AVW:</source>
+        <translation>ВАГ:</translation>
+    </message>
+    <message>
+        <source>Your Last Vote:</source>
+        <translation>Ваш Последний Голос:</translation>
+    </message>
+    <message>
+        <source>Your Vote Weight:</source>
+        <translation>Вес Вашего Голоса:</translation>
+    </message>
+    <message>
+        <source>Your % of AVW:</source>
+        <translation>Ваш % AVW:</translation>
+    </message>
+    <message>
         <source>Balance</source>
         <translation>Баланс</translation>
     </message>
     <message>
         <source>Magnitude</source>
         <translation>Магнитуда</translation>
+    </message>
+    <message>
+        <source>Validated</source>
+        <translation>Подтверждён</translation>
+    </message>
+    <message>
+        <source>Invalid</source>
+        <translation>Недействительный</translation>
     </message>
     <message>
         <source>Voting finished.</source>
@@ -1778,6 +2136,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Form</source>
         <translation>Форма</translation>
+    </message>
+    <message>
+        <source>Additional Fields</source>
+        <translation>Дополнительные Поля</translation>
     </message>
     <message>
         <source>Top Answer:</source>
@@ -1836,6 +2198,14 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Заголовок</translation>
     </message>
     <message>
+        <source>Poll Type</source>
+        <translation>Тип Опроса</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation>Длительность</translation>
+    </message>
+    <message>
         <source>Expiration</source>
         <translation>Окончание</translation>
     </message>
@@ -1850,6 +2220,14 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Total Weight</source>
         <translation>Общий Вес</translation>
+    </message>
+    <message>
+        <source>% of Active Vote Weight</source>
+        <translation>% Веса Активных Голосов</translation>
+    </message>
+    <message>
+        <source>Validated</source>
+        <translation>Подтверждён</translation>
     </message>
     <message>
         <source>Top Answer</source>
@@ -1918,6 +2296,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Опрос с типом ответа "Yes/No/Abstain" не может включать какие-либо дополнительные настраиваемые варианты.</translation>
     </message>
     <message>
+        <source>Additional Fields:</source>
+        <translation>Дополнительные Поля:</translation>
+    </message>
+    <message>
         <source>Create Poll</source>
         <translation>Создать Опрос</translation>
     </message>
@@ -1957,8 +2339,8 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Удалить проект из списка</translation>
     </message>
     <message>
-        <source>Proposals must follow community guidelines for validation. Please review the wiki and verify that the prequisites have been fulfilled:</source>
-        <translation>Для проверки предложения должны соответствовать принципам сообщества. Просмотрите wiki и убедитесь, что выполнены предварительные условия:</translation>
+        <source>Proposals must follow community guidelines for validation. Please review the wiki and verify that the prerequisites have been fulfilled:</source>
+        <translation>Предложения должны соответствовать правилам сообщества для проверки. Пожалуйста, просмотрите вики и убедитесь, что выполнены предварительные требования:</translation>
     </message>
     <message>
         <source>Project Name:</source>
@@ -1969,16 +2351,12 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Этот проект соответствует критериям включения в список Gridcoin.</translation>
     </message>
     <message>
+        <source>Project URL</source>
+        <translation>URL проекта</translation>
+    </message>
+    <message>
         <source>Choose a project to delist:</source>
         <translation>Выберите проект для исключения:</translation>
-    </message>
-    <message>
-        <source>Add %1</source>
-        <translation>Добавить %1</translation>
-    </message>
-    <message>
-        <source>Remove %1</source>
-        <translation>Удалить %1</translation>
     </message>
 </context>
 <context>
@@ -2026,12 +2404,28 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Белый список</translation>
     </message>
     <message>
+        <source>Has GDPR Controls</source>
+        <translation>Есть Контроль GDPR</translation>
+    </message>
+    <message>
         <source>Magnitude</source>
         <translation>Магнитуда</translation>
+    </message>
+    <message>
+        <source>Avg. Credit</source>
+        <translation>Сред. Кредит</translation>
     </message>
     </context>
 <context>
     <name>QObject</name>
+    <message>
+        <source>Error: Cannot parse command line arguments. Please check the arguments and ensure they are valid and formatted correctly: 
+
+</source>
+        <translation>Ошибка: Невозможно проанализировать аргументы командной строки. Пожалуйста, проверьте аргументы и убедитесь, что они действительны и правильно отформатированы:
+
+</translation>
+    </message>
     <message>
         <source>Error: Cannot read configuration file. Please check the path and format of the file.</source>
         <translation>Ошибка: Не удается прочитать файл конфигурации. Пожалуйста, проверьте путь и формат файла.</translation>
@@ -2070,23 +2464,43 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>%n second(s)</source>
-        <translation><numerusform>%n секунда</numerusform><numerusform>%n секунд</numerusform><numerusform>%n секунд</numerusform><numerusform>%n секунд</numerusform></translation>
+        <translation>
+            <numerusform>%n секунд(у)</numerusform>
+            <numerusform>%n секунд(у)</numerusform>
+            <numerusform>%n секунд(у)</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n minute(s)</source>
-        <translation><numerusform>%n минута</numerusform><numerusform>%n минут</numerusform><numerusform>%n минут</numerusform><numerusform>%n минут</numerusform></translation>
+        <translation>
+            <numerusform>%n минут(у)</numerusform>
+            <numerusform>%n минут(у)</numerusform>
+            <numerusform>%n минут(у)</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n hour(s)</source>
-        <translation><numerusform>%n час</numerusform><numerusform>%n часов</numerusform><numerusform>%n часов</numerusform><numerusform>%n часов</numerusform></translation>
+        <translation>
+            <numerusform>%n час(ов)</numerusform>
+            <numerusform>%n час(ов)</numerusform>
+            <numerusform>%n час(ов)</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n day(s)</source>
-        <translation><numerusform>%n день</numerusform><numerusform>%n дней</numerusform><numerusform>%n дней</numerusform><numerusform>%n дней</numerusform></translation>
+        <translation>
+            <numerusform>%n день</numerusform>
+            <numerusform>%n дней</numerusform>
+            <numerusform>%n дней</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>%n week(s)</source>
-        <translation><numerusform>%n неделя</numerusform><numerusform>%n недель</numerusform><numerusform>%n недель</numerusform><numerusform>%n недель</numerusform></translation>
+        <translation>
+            <numerusform>%n неделю</numerusform>
+            <numerusform>%n недель</numerusform>
+            <numerusform>%n недель</numerusform>
+        </translation>
     </message>
     <message>
         <source>%1 and %2</source>
@@ -2094,7 +2508,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>%n year(s)</source>
-        <translation><numerusform>%n год</numerusform><numerusform>%n лет</numerusform><numerusform>%n лет</numerusform><numerusform>%n лет</numerusform></translation>
+        <translation>
+            <numerusform>%n год</numerusform>
+            <numerusform>%n лет</numerusform>
+            <numerusform>%n лет</numerusform>
+        </translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -2168,8 +2586,9 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Сохранить QR-код</translation>
     </message>
     <message>
-        <source>PNG Images (*.png)</source>
-        <translation>PNG Изображения (*.png)</translation>
+        <source>PNG Image</source>
+        <comment>Name of PNG file format</comment>
+        <translation>PNG Изображение</translation>
     </message>
 </context>
 <context>
@@ -2335,12 +2754,44 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Очистить консоль</translation>
     </message>
     <message>
-        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
-        <translation>Напишите &lt;b&gt;help&lt;/b&gt; для просмотра доступных команд.</translation>
+        <source>Gridcoin - Debug Console</source>
+        <translation>Gridcoin - Консоль отладки</translation>
     </message>
     <message>
-        <source>Welcome to the Gridcoin RPC console! </source>
-        <translation>Добро пожаловать в Gridcoin RPC консоль! </translation>
+        <source>Boost version</source>
+        <translation>Boost версия</translation>
+    </message>
+    <message>
+        <source>Network:</source>
+        <translation>Сеть:</translation>
+    </message>
+    <message>
+        <source>On testnet</source>
+        <translation>На тестовой сети</translation>
+    </message>
+    <message>
+        <source>Estimated total blocks</source>
+        <translation>Установленое число блоков</translation>
+    </message>
+    <message>
+        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
+        <translation>Откройте файл журнала отладки Gridcoin из текущего каталога данных. Может занять продолжительное время для больших файлов журнала.</translation>
+    </message>
+    <message>
+        <source>Command-line options</source>
+        <translation>Параметры командной строки</translation>
+    </message>
+    <message>
+        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
+        <translation>Показать сообщение справки Gridcoin чтобы получить возможный список комманд Gridcoin.</translation>
+    </message>
+    <message>
+        <source>OpenSSL version</source>
+        <translation>OpenSSL версия</translation>
+    </message>
+    <message>
+        <source>Client name</source>
+        <translation>Имя клиента</translation>
     </message>
     <message>
         <source>&amp;Disconnect</source>
@@ -2379,8 +2830,16 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Нет</translation>
     </message>
     <message>
+        <source>Welcome to the Gridcoin RPC console! </source>
+        <translation>Добро пожаловать в Gridcoin RPC консоль! </translation>
+    </message>
+    <message>
         <source>Use up and down arrows to navigate history, and &lt;b&gt;Ctrl-L&lt;/b&gt; to clear screen.</source>
         <translation>Используйте стрелки вверх и вниз для просмотра истории и &lt;b&gt;Ctrl-L&lt;/b&gt; для очистки экрана.</translation>
+    </message>
+    <message>
+        <source>Type &lt;b&gt;help&lt;/b&gt; for an overview of available commands.</source>
+        <translation>Напишите &lt;b&gt;help&lt;/b&gt; для просмотра доступных команд.</translation>
     </message>
     <message>
         <source>%1 B</source>
@@ -2433,50 +2892,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Unknown</source>
         <translation>Неизвестно</translation>
-    </message>
-    <message>
-        <source>Gridcoin - Debug Console</source>
-        <translation>Gridcoin - Консоль отладки</translation>
-    </message>
-    <message>
-        <source>Boost version</source>
-        <translation>Boost версия</translation>
-    </message>
-    <message>
-        <source>Build date</source>
-        <translation>Дата сборки</translation>
-    </message>
-    <message>
-        <source>Network:</source>
-        <translation>Сеть:</translation>
-    </message>
-    <message>
-        <source>On testnet</source>
-        <translation>На тестовой сети</translation>
-    </message>
-    <message>
-        <source>Estimated total blocks</source>
-        <translation>Установленое число блоков</translation>
-    </message>
-    <message>
-        <source>Open the Gridcoin debug log file from the current data directory. This can take a few seconds for large log files.</source>
-        <translation>Откройте файл журнала отладки Gridcoin из текущего каталога данных. Может занять продолжительное время для больших файлов журнала.</translation>
-    </message>
-    <message>
-        <source>Command-line options</source>
-        <translation>Параметры командной строки</translation>
-    </message>
-    <message>
-        <source>Show the Gridcoin help message to get a list with possible Gridcoin command-line options.</source>
-        <translation>Показать сообщение справки Gridcoin чтобы получить возможный список комманд Gridcoin.</translation>
-    </message>
-    <message>
-        <source>OpenSSL version</source>
-        <translation>OpenSSL версия</translation>
-    </message>
-    <message>
-        <source>Client name</source>
-        <translation>Имя клиента</translation>
     </message>
 </context>
 <context>
@@ -2552,6 +2967,10 @@ This label turns red, if the priority is smaller than "medium".
         <source>Not attached</source>
         <translation>Не прикреплен</translation>
     </message>
+    <message>
+        <source>Uses external adapter</source>
+        <translation>Использует внешний адаптер</translation>
+    </message>
 </context>
 <context>
     <name>ResearcherWizard</name>
@@ -2583,8 +3002,8 @@ This label turns red, if the priority is smaller than "medium".
         <translation>2. Посетите страницу настроек, чтобы сменить имя пользователя. Многие проекты помечают это как "other account info".</translation>
     </message>
     <message>
-        <source>3. Change your username to the following verification code:</source>
-        <translation>3. Измените ваше имя пользователя на следующий код подтверждения:</translation>
+        <source>3. Change your "name" (real name or nickname) to the following verification code:</source>
+        <translation>3. Измените свое "имя" (реальное или никнейм) на следующий код подтверждения:</translation>
     </message>
     <message>
         <source>Copy the verification code to the system clipboard</source>
@@ -2963,7 +3382,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Expires:</source>
-        <translation>Истекает:</translation>
+        <translation>Истекает через:</translation>
     </message>
     <message>
         <source>Address:</source>
@@ -2976,6 +3395,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>&amp;Projects</source>
         <translation>&amp;Проекты</translation>
+    </message>
+    <message>
+        <source>Email Address:</source>
+        <translation>Адрес Email:</translation>
     </message>
     <message>
         <source>BOINC Folder:</source>
@@ -3004,6 +3427,14 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Beacon renewal available.</source>
         <translation>Доступно обновление маяка.</translation>
+    </message>
+    <message>
+        <source>Split CPID or mismatched email.</source>
+        <translation>Разделенный CPID или несоответствующий адрес электронной почты.</translation>
+    </message>
+    <message>
+        <source>Your projects either refer to more than one CPID or your projects' email do not match what you used to configure Gridcoin here. Please ensure all of your projects are attached using the same email address, the email address matches what was configured here, and if you added a project recently, update that project and then all other projects using the update button in the BOINC manager, then restart the client and recheck.</source>
+        <translation>Ваши проекты либо ссылаются на несколько CPID, либо адреса электронной почты ваших проектов не соответствуют тому, что вы использовали здесь для настройки Gridcoin. Пожалуйста, убедитесь, что все ваши проекты прикреплены с использованием одного и того же адреса электронной почты, адрес электронной почты соответствует тому, что было настроено здесь, и если вы недавно добавили проект, обновите этот проект, а затем все остальные проекты, используя кнопку обновления в диспетчере BOINC, затем перезапустите клиент и перепроверьте.</translation>
     </message>
     <message>
         <source>Waiting for magnitude.</source>
@@ -3071,14 +3502,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>0.00 GRC</source>
         <translation>0,00 GRC</translation>
-    </message>
-    <message>
-        <source>Priority:</source>
-        <translation>Приоритет:</translation>
-    </message>
-    <message>
-        <source>medium</source>
-        <translation>средний</translation>
     </message>
     <message>
         <source>Fee:</source>
@@ -3161,10 +3584,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Копировать сдачу</translation>
     </message>
     <message>
-        <source>Copy priority</source>
-        <translation>Копировать приоритет</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;%1&lt;/b&gt; to %2 (%3)</source>
         <translation>&lt;b&gt;%1&lt;/b&gt; для %2 (%3)</translation>
     </message>
@@ -3209,6 +3628,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Ошибка: Транзакция отклонена. Это может произойти, если некоторые из монет в вашем кошельке уже были потрачены, например, если вы использовали старую копию wallet.dat и монеты были потрачены в копии, но не отмечены здесь как потраченные.</translation>
     </message>
     <message>
+        <source>(no label)</source>
+        <translation>(без метки)</translation>
+    </message>
+    <message>
         <source>WARNING: Invalid Gridcoin address</source>
         <translation>ВНИМАНИЕ: Неверный адрес Gridcoin</translation>
     </message>
@@ -3220,10 +3643,6 @@ This label turns red, if the priority is smaller than "medium".
         <source>Active</source>
         <translation>Активно</translation>
     </message>
-    <message>
-        <source>(no label)</source>
-        <translation>(без метки)</translation>
-    </message>
 </context>
 <context>
     <name>SendCoinsEntry</name>
@@ -3234,6 +3653,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Pay &amp;To:</source>
         <translation>&amp;Получатель:</translation>
+    </message>
+    <message>
+        <source>Message:</source>
+        <translation>Сообщение:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -3250,6 +3673,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Paste address from clipboard</source>
         <translation>Вставить адрес из буфера обмена</translation>
+    </message>
+    <message>
+        <source>Send Custom Message to a Gridcoin Recipient</source>
+        <translation>Отправить Пользовательское Сообщение Получателю Gridcoin</translation>
     </message>
     <message>
         <source>Choose address from address book</source>
@@ -3403,11 +3830,19 @@ This label turns red, if the priority is smaller than "medium".
     <name>TransactionDesc</name>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Открыт еще %n блок</numerusform><numerusform>Открыто еще %n блоков</numerusform><numerusform>Открыто еще %n блоков</numerusform><numerusform>Открыто еще %n блоков</numerusform></translation>
+        <translation>
+            <numerusform>Открыть еще на %n блок(ов)</numerusform>
+            <numerusform>Открыть еще на %n блок(ов)</numerusform>
+            <numerusform>Открыть еще на %n блок(ов)</numerusform>
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
         <translation>Открыто до %1</translation>
+    </message>
+    <message>
+        <source>conflicted</source>
+        <translation>в противоречии</translation>
     </message>
     <message>
         <source>%1/offline</source>
@@ -3416,10 +3851,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>%1/unconfirmed</source>
         <translation>%1/не подтверждено</translation>
-    </message>
-    <message>
-        <source>conflicted</source>
-        <translation>в противоречии</translation>
     </message>
     <message>
         <source>%1 confirmations</source>
@@ -3435,7 +3866,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation><numerusform>, передача через %n узел</numerusform><numerusform>, передача через %n узлов</numerusform><numerusform>, передача через %n узлов</numerusform><numerusform>, передача через %n узлов</numerusform></translation>
+        <translation>
+            <numerusform>, трансляция через %n узел (узлов)</numerusform>
+            <numerusform>, трансляция через %n узлов (узел)</numerusform>
+            <numerusform>, трансляция через %n узлов (узел)</numerusform>
+        </translation>
     </message>
     <message>
         <source>Date</source>
@@ -3460,6 +3895,30 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Mined - Orphaned</source>
         <translation>Майнер - Orphaned</translation>
+    </message>
+    <message>
+        <source>PoS Side Stake Received</source>
+        <translation>Побочная Ставка PoS Получена</translation>
+    </message>
+    <message>
+        <source>PoS+RR Side Stake Received</source>
+        <translation>Побочная Ставка PoS+RR Получена</translation>
+    </message>
+    <message>
+        <source>PoS Side Stake Sent</source>
+        <translation>Побочная Ставка PoS Отправлена</translation>
+    </message>
+    <message>
+        <source>PoS+RR Side Stake Sent</source>
+        <translation>Побочная Ставка PoS+RR Отправлена</translation>
+    </message>
+    <message>
+        <source>MRC Payment Received</source>
+        <translation>MRC Платёж Получен</translation>
+    </message>
+    <message>
+        <source>MRC Payment Sent</source>
+        <translation>MRC Платёж Отправлен</translation>
     </message>
     <message>
         <source>Mined - Superblock</source>
@@ -3495,7 +3954,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>matures in %n more block(s)</source>
-        <translation><numerusform>созревает еще в %n блоке</numerusform><numerusform>созревает еще в %n блоках</numerusform><numerusform>созревает еще в %n блоках</numerusform><numerusform>созревает еще в %n блоках</numerusform></translation>
+        <translation>
+            <numerusform>созревает еще %n блок(ов)</numerusform>
+            <numerusform>созревает еще %n блок(ов)</numerusform>
+            <numerusform>созревает еще %n блок(ов)</numerusform>
+        </translation>
     </message>
     <message>
         <source>not accepted</source>
@@ -3526,6 +3989,14 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Хэш Блока</translation>
     </message>
     <message>
+        <source>Transaction Stake Data</source>
+        <translation>Данные о Транзакциях</translation>
+    </message>
+    <message>
+        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
+        <translation>Сгенерированные гридкойн-монеты должны созреть до значения в 110 блоков, прежде чем их можно будет потратить. Когда вы сгенерировали блок, он будет передан в сеть для добавления в цепочку блоков. Если он не сможет попасть в цепочку, его состояние изменится на «не принято», в таком случае вы не сможете потратить монеты. Это может произойти, если другой узел генерирует блок в течение нескольких секунд после вашего.</translation>
+    </message>
+    <message>
         <source>Transaction Debits/Credits</source>
         <translation>Дебеты/Кредиты Транзакции</translation>
     </message>
@@ -3536,10 +4007,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Transaction Inputs</source>
         <translation>Входящие Транзакции</translation>
-    </message>
-    <message>
-        <source>Gridcoin generated coins must mature 110 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to "not accepted" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.</source>
-        <translation>Сгенерированные гридкойн-монеты должны созреть до значения в 110 блоков, прежде чем их можно будет потратить. Когда вы сгенерировали блок, он будет передан в сеть для добавления в цепочку блоков. Если он не сможет попасть в цепочку, его состояние изменится на «не принято», в таком случае вы не сможете потратить монеты. Это может произойти, если другой узел генерирует блок в течение нескольких секунд после вашего.</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -3589,7 +4056,11 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message numerus="yes">
         <source>Open for %n more block(s)</source>
-        <translation><numerusform>Открыто еще %n блок</numerusform><numerusform>Открыто еще %n блока</numerusform><numerusform>Открыто еще %n блоков</numerusform><numerusform>Открыто еще %n блоков</numerusform></translation>
+        <translation>
+            <numerusform>Открыто еще %n блок(ов)</numerusform>
+            <numerusform>Открыто еще %n блок(ов)</numerusform>
+            <numerusform>Открыто еще %n блок(ов)</numerusform>
+        </translation>
     </message>
     <message>
         <source>Open until %1</source>
@@ -3604,20 +4075,16 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Не подтверждено</translation>
     </message>
     <message>
-        <source>Confirmed (%1 confirmations)</source>
-        <translation>Подтверждено (%1 подтверждений)</translation>
-    </message>
-    <message>
         <source>Confirming (%1 of %2 recommended confirmations)&lt;br&gt;</source>
         <translation>Подтверждение (%1 из %2 гарантированных подтверждений)&lt;br&gt;</translation>
     </message>
     <message>
-        <source>Conflicted</source>
-        <translation>В противоречии</translation>
+        <source>Confirmed (%1 confirmations)</source>
+        <translation>Подтверждено (%1 подтверждений)</translation>
     </message>
     <message>
-        <source>Generated but not accepted</source>
-        <translation>Сгенерировано, но не принято</translation>
+        <source>Conflicted</source>
+        <translation>В противоречии</translation>
     </message>
     <message>
         <source>Immature (%1 confirmations, will be available after %2)&lt;br&gt;</source>
@@ -3626,6 +4093,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>This block was not received by any other nodes&lt;br&gt; and will probably not be accepted!</source>
         <translation>Этот блок не был получен никакими другими узлами и, вероятно, не будет принят!</translation>
+    </message>
+    <message>
+        <source>Generated but not accepted</source>
+        <translation>Сгенерировано, но не принято</translation>
     </message>
     <message>
         <source>Received with</source>
@@ -3652,6 +4123,34 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Майнер - PoS+RR</translation>
     </message>
     <message>
+        <source>Mined - Orphaned</source>
+        <translation>Майнер - Orphaned</translation>
+    </message>
+    <message>
+        <source>PoS Side Stake Received</source>
+        <translation>Побочная Ставка PoS Получена</translation>
+    </message>
+    <message>
+        <source>PoS+RR Side Stake Received</source>
+        <translation>Побочная Ставка PoS+RR Получена</translation>
+    </message>
+    <message>
+        <source>PoS Side Stake Sent</source>
+        <translation>Побочная Ставка PoS Отправлена</translation>
+    </message>
+    <message>
+        <source>PoS+RR Side Stake Sent</source>
+        <translation>Побочная Ставка PoS+RR Отправлена</translation>
+    </message>
+    <message>
+        <source>MRC Payment Received</source>
+        <translation>MRC Платёж Получен</translation>
+    </message>
+    <message>
+        <source>MRC Payment Sent</source>
+        <translation>MRC Платёж Отправлен</translation>
+    </message>
+    <message>
         <source>Mined - Superblock</source>
         <translation>Майнер - Суперблок</translation>
     </message>
@@ -3670,6 +4169,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Vote</source>
         <translation>Голос</translation>
+    </message>
+    <message>
+        <source>Manual Rewards Claim Request</source>
+        <translation>Ручной Запрос Заявки на Вознаграждение</translation>
     </message>
     <message>
         <source>Message</source>
@@ -3703,6 +4206,18 @@ This label turns red, if the priority is smaller than "medium".
 <context>
     <name>TransactionView</name>
     <message>
+        <source>Transaction History</source>
+        <translation>История Транзакций</translation>
+    </message>
+    <message>
+        <source>Search by address or label</source>
+        <translation>Поиск по адресу или метке</translation>
+    </message>
+    <message>
+        <source>All Time</source>
+        <translation>Всё Время</translation>
+    </message>
+    <message>
         <source>Today</source>
         <translation>Сегодня</translation>
     </message>
@@ -3727,6 +4242,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Диапазон...</translation>
     </message>
     <message>
+        <source>All Types</source>
+        <translation>Все Типы</translation>
+    </message>
+    <message>
         <source>Received with</source>
         <translation>Получено на</translation>
     </message>
@@ -3745,22 +4264,6 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Other</source>
         <translation>Другое</translation>
-    </message>
-    <message>
-        <source>Search by address or label</source>
-        <translation>Поиск по адресу или метке</translation>
-    </message>
-    <message>
-        <source>Transaction History</source>
-        <translation>История Транзакций</translation>
-    </message>
-    <message>
-        <source>All Time</source>
-        <translation>Все Время</translation>
-    </message>
-    <message>
-        <source>All Types</source>
-        <translation>Все Типы</translation>
     </message>
     <message>
         <source>Min amount</source>
@@ -3795,8 +4298,9 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Экспорт Данных Транзакции</translation>
     </message>
     <message>
-        <source>Comma separated file (*.csv)</source>
-        <translation>Текст, разделённый запятыми (*.csv)</translation>
+        <source>Comma separated file</source>
+        <comment>Name of CSV file format</comment>
+        <translation>Файл с разделителями-запятыми</translation>
     </message>
     <message>
         <source>Confirmed</source>
@@ -3837,6 +4341,21 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>to</source>
         <translation>до</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeQt</name>
+    <message>
+        <source>E&amp;xit</source>
+        <translation>В&amp;ыход</translation>
+    </message>
+    <message>
+        <source>Quit application</source>
+        <translation>Закрыть приложение</translation>
+    </message>
+    <message>
+        <source>&amp;File</source>
+        <translation>&amp;Файл</translation>
     </message>
 </context>
 <context>
@@ -3968,6 +4487,14 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Не удается заблокировать каталог данных %s. Вероятно %s уже используется.</translation>
     </message>
     <message>
+        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
+        <translation>Убедитесь, что BOINC установлен и что указан правильный путь в файле конфигурации, если вы установили его в нестандартное место.</translation>
+    </message>
+    <message>
+        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
+        <translation>Ошибка: расхождение часов составляет 5 минут или больше. Пожалуйста, проверьте настройки часов.</translation>
+    </message>
+    <message>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Ошибка: Транзакция отклонена. Это может произойти, если некоторые монеты в вашем кошельке уже были потрачены, например, если вы использовали копию wallet.dat, и монеты были потрачены в этой копии, но не отмечены здесь как потраченные.</translation>
     </message>
@@ -3976,12 +4503,148 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Ошибка: Эта транзакция требует комиссии за транзакцию в размере не менее %s из-за ее суммы, сложности или использования недавно полученных средств</translation>
     </message>
     <message>
+        <source>For initiatives related to the Gridcoin community not covered by other poll types.</source>
+        <translation>Для инициатив, связанных с сообществом Gridcoin, не охватываемых другими типами опросов.</translation>
+    </message>
+    <message>
+        <source>For polls about community representation, public relations, and communications.</source>
+        <translation>Для опросов о представлении сообщества, связях с общественностью и коммуникации.</translation>
+    </message>
+    <message>
+        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока не установится соединение, и снова повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
+        <translation>Убедитесь, что вы выполнили процедуру объявления и проверки маяка. Вы можете использовать мастер исследований (кнопка маяка на обзорном экране).</translation>
+    </message>
+    <message>
+        <source>Poll additional field value "%s" for field name "%s" exceeds %s characters.</source>
+        <translation>Значение дополнительного поля опроса "%s" для имени поля "%s" превышает %s символов.</translation>
+    </message>
+    <message>
+        <source>Proposals related to Gridcoin management like poll requirements and funding.</source>
+        <translation>Предложения, связанные с управлением Gridcoin, такие как требования к опросу и финансирование.</translation>
+    </message>
+    <message>
+        <source>Propose additions or removals of computing projects for research reward eligibility.</source>
+        <translation>Предлагайте добавления или удаления вычислительных проектов для получения награды за исследования.</translation>
+    </message>
+    <message>
+        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
+        <translation>Не возможно определить IP-адрес тестового порта. Это может означать, что ваш DNS работает неправильно. Кошелек может работать без DNS, но это может серьезно ухудшить его работу, особенно если кошелек новый и база данных предыдущих успешных подключений не была создана. Пожалуйста, проверьте свой компьютер и убедитесь, что обработка доменных имен работает правильно.</translation>
+    </message>
+    <message>
+        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>В соединении с тестовым портом было отказано. Это может быть временная проблема с тестовым портом, но это также может быть и с вашим брандмауэром. Если вы также не проходите проверку подключения, ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
+        <translation>В сети произошла низкоуровневая ошибка, которая, вероятно, означает, что ваш IP-адрес или другие параметры сетевого подключения настроены неправильно. Пожалуйста, проверьте конфигурацию сети на вашем компьютере.</translation>
+    </message>
+    <message>
+        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer's network configuration.</source>
+        <translation>Сеть сообщает о неизвестной ошибке сокета. Если вы также не проходите тест на подключение, проверьте сетевые параметры вашего компьютера.</translation>
+    </message>
+    <message>
+        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>Тестовый порт не доступен. Это может быть временная проблема с тестовым портом, но также может быть и с вашим брандмауэром. Если вы также не проходите проверку на подключение, то ваш брандмауэр, скорее всего, блокирует сетевые подключения от клиента Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
+        <translation>Кошелек имеет менее пяти подключений к сети и не может подключиться к NTP-серверу, чтобы проверить часы вашего компьютера. Это не обязательно является проблемой. Вы можете подождать несколько минут и попробовать пройти тест еще раз.</translation>
+    </message>
+    <message>
+        <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
+        <translation>Кошелек будет закрыт. Пожалуйста, запустите свой кошелек, чтобы начать синхронизацию с нуля</translation>
+    </message>
+    <message>
+        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
+        <translation>Доступна новая версия, и вам следует обновить её, как только у вас появится на это время.</translation>
+    </message>
+    <message>
+        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
+        <translation>Доступна новая обязательная версия, и вам следует обновить её как можно скорее, чтобы обеспечить согласованность вашего кошелька с сетью.</translation>
+    </message>
+    <message>
+        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
+        <translation>Убедитесь, что (1) у вас правильно установлен BOINC, (2) что вы прикрепили хотя бы один проект из белого списка, (3) что вы объявили свой маяк с помощью того же адреса электронной почты, который вы используете для своих проект(ов) BOINC, и (4), что CPID на главном экране совпадает с CPID при входе в проект(ы) BOINC.</translation>
+    </message>
+    <message>
+        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
+        <translation>Убедитесь, что вы действительно включили рабочие единицы для прикрепленных проектов и разрешили экспорт статистики. Пожалуйста, посмотрите https://gridcoin.us/guides/whitelist.htm.</translation>
+    </message>
+    <message>
         <source>WARNING: A mandatory release is available. Please upgrade as soon as possible.</source>
         <translation>ВНИМАНИЕ! Доступен обязательный выпуск. Пожалуйста, обновитесь как можно скорее.</translation>
     </message>
     <message>
+        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
+        <translation>Внимание: Расхождение часов составляет от 3 до 5 минут. Пожалуйста, проверьте настройки часов.</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards by staking - increase balance or use MRC</source>
+        <translation>Внимание: ETTS &gt; 90 дней. Получение вознаграждения за исследования путём стейкинга займет очень много времени — увеличьте баланс или используйте MRC.</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is infinite. No coins to stake - increase balance or use MRC</source>
+        <translation>Внимание: ETTS бесконечен. Нет монет для стейкинга - увеличьте баланс или используйте MRC</translation>
+    </message>
+    <message>
         <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
         <translation>Внимание: Завершение этого процесса после Этапа 2 приведет к синхронизации с 0 или неполной/поврежденной цепочке блоков.</translation>
+    </message>
+    <message>
+        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
+        <translation>У вас нулевой баланс и вы не сможете получать свои награды за исследования в одиночку. Вы можете использовать MRC для получения своих наград, или вам следует приобрести GRC, чтобы стейкать и для возможности получать свои награды за исследования. Смотрите https://gridcoin.us/guides/boinc-install.htm.</translation>
+    </message>
+    <message>
+        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Вы не сможете стейкать, потому что у вас менее %1 соединения(ий). Пожалуйста, проверьте свою сеть, а также проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторите тестирование. Пожалуйста посмотрите https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.</source>
+        <translation>Ваш баланс низкий, учитывая текущую сложность сети, чтобы стейкить в разумный период времени, для получения вознаграждений за исследования при одиночной работе. Вам следует подумать о приобретении большего количества GRC, чтобы стейкить чаще, или же использовать MRC для получения вознаграждения.</translation>
+    </message>
+    <message>
+        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You can use MRC  to retrieve your rewards, or you should acquire more GRC to stake more often.</source>
+        <translation>Ваш баланс слишком мал, учитывая текущую сложность сети, чтобы делать ставки в течение разумного периода времени, чтобы получить свои исследовательские награды при одиночной работе. Вы можете использовать MRC, чтобы получить свои награды, или вам следует приобретать больше GRC, чтобы стейкить чаще.</translation>
+    </message>
+    <message>
+        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
+        <translation>Ваши часы на вашем компьютере значительно отличаются от UTC или сетевого времени, и это может серьезно ухудшить работу кошелька, включая подключения к сети. Вам следует проверить настройки времени и часового пояса на вашем компьютере. Очень распространенной проблемой является отклонение на один час из-за проблем с часовым поясом или с переходом на летнее время.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>Ваша сложность чрезвычайно низка, и ваш кошелек скорее всего раздвоен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
+    </message>
+    <message>
+        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
+        <translation>Ваша сложность мала, но ваш кошелек все еще находится в начальной стадии синхронизации. Пожалуйста, повторите проверку позже, чтобы увидеть, пройдет ли этот пункт проверку.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>Ваша сложность очень низкая, и ваш кошелек, вероятно, раздвоен. Пожалуйста, убедитесь, что вы используете последнюю версию, и попробуйте удалить базу данных блокчейна и выполнить повторную синхронизацию, используя соответствующий пункт меню. (Обратите внимание, что это займет 2-4 часа.)</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Ваше количество исходящих подключений критически мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установится соединение, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Ваше количество исходящих подключений мало. Пожалуйста, проверьте файл конфигурации и убедитесь, что ваши записи надстроек обновлены. Если вы недавно запустили кошелек, вы можете подождать еще несколько минут, пока установятся соединения, а затем повторить проверку. Пожалуйста прочитайте https://gridcoin.us/wiki/config-file.html и https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
+        <translation>Ваш кошелек не синхронизирован и ранее не был синхронизирован во время этого запуска, пожалуйста, дождитесь синхронизации кошелька и повторите проверку. Если есть другие сбои, препятствующие синхронизации кошелька, исправьте их и повторите проверку,  чтобы увидеть, проходит ли этот тест.</translation>
+    </message>
+    <message>
+        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
+        <translation>Ваш кошелек не синхронизирован с сетью, но раньше был синхронизирован. Если это не удается, вероятно, возникла серьезная проблема, которая не позволяет кошельку синхронизоваться. Если отсутствие синхронизации связано с проблемами сетевого подключения, вы увидите сбои в тесте(ах) сетевого подключения. Если сетевые подключения проходят успешно, но ваш кошелек не проходит этот тест и продолжает не проходить этот тест при повторных попытках с интервалом в несколько минут, это может указывать на более серьезную проблему. В этом случае вы должны проверить debug.log, чтобы увидеть, указывает ли он на причину отсутствия синхронизации.</translation>
+    </message>
+    <message>
+        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
+        <translation>Ваш кошелек все еще находится в начальной синхронизации. Если это синхронизация с самого начала (создания), то процесс синхронизации может занять от 2 до 4 часов, а на медленном компьютере дольше. Если вы уже синхронизировали свой кошелек раньше, но только что его запустили, подождите еще несколько минут и повторите попытку диагностики еще раз.</translation>
     </message>
     <message>
         <source>A poll choice cannot be empty.</source>
@@ -4020,12 +4683,16 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Нажмите "Подробнее", чтобы просмотреть изменения в последнем обновлении.</translation>
     </message>
     <message>
-        <source>Could not clean up previous blockchain data.</source>
-        <translation>Не удалось очистить предыдущие данные блокчейна.</translation>
+        <source>Community</source>
+        <translation>Сообщество</translation>
     </message>
     <message>
         <source>Could not create transaction. See debug.log.</source>
         <translation>Не удалось создать транзакцию. Смотрите debug.log.</translation>
+    </message>
+    <message>
+        <source>Duplicate poll additional field: %s</source>
+        <translation>Повторяющееся дополнительное поле опроса: %s</translation>
     </message>
     <message>
         <source>Duplicate poll choice: %s</source>
@@ -4060,8 +4727,24 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Не удалось переименовать файл начальной загрузки в .old для резервного копирования.</translation>
     </message>
     <message>
+        <source>Failed: 80 block difficulty is less than</source>
+        <translation>Неудачно: сложность 80 блоков меньше</translation>
+    </message>
+    <message>
+        <source>Failed: Count =</source>
+        <translation>Неудачно: Количество =</translation>
+    </message>
+    <message>
+        <source>Fees Collected</source>
+        <translation>Сборы Собраны</translation>
+    </message>
+    <message>
         <source>Files:</source>
         <translation>Файлы:</translation>
+    </message>
+    <message>
+        <source>For opinion or casual polls without any particular requirements.</source>
+        <translation>Для опросов общественного мнения или случайных опросов без каких-либо особых требований.</translation>
     </message>
     <message>
         <source>GB)</source>
@@ -4076,8 +4759,8 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Получить помощь по команде</translation>
     </message>
     <message>
-        <source>Github version: </source>
-        <translation>Версия Github:</translation>
+        <source>Governance</source>
+        <translation>Управление</translation>
     </message>
     <message>
         <source>Gridcoin Update Available</source>
@@ -4104,10 +4787,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>КБ/с</translation>
     </message>
     <message>
-        <source>Latest Version github data response:</source>
-        <translation>Последняя Версия ответа данных github:</translation>
-    </message>
-    <message>
         <source>Loading beacon history...</source>
         <translation>Загрузка истории маяка...</translation>
     </message>
@@ -4132,6 +4811,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Опросы только по магнитуде не поддерживаются.</translation>
     </message>
     <message>
+        <source>Marketing</source>
+        <translation>Маркетинг</translation>
+    </message>
+    <message>
         <source>Multiple Choice</source>
         <translation>Множественный Выбор</translation>
     </message>
@@ -4152,6 +4835,10 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Нет монет</translation>
     </message>
     <message>
+        <source>No eligible outputs greater than 1 GRC.</source>
+        <translation>Нет подходящих выходов выше 1 GRC.</translation>
+    </message>
+    <message>
         <source>No mature coins</source>
         <translation>Нет зрелых монет</translation>
     </message>
@@ -4160,12 +4847,36 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Кошелек недоступен.</translation>
     </message>
     <message>
+        <source>Outbound communication to TCP port %1 appears to be blocked. </source>
+        <translation>Исходящая связь с TCP-портом %1, по-видимому, заблокирована.</translation>
+    </message>
+    <message>
+        <source>Outbound communication to TCP port</source>
+        <translation>Исходящая связь с TCP-портом</translation>
+    </message>
+    <message>
+        <source>Outreach</source>
+        <translation>Охват</translation>
+    </message>
+    <message>
         <source>Participant Count</source>
         <translation>Количество Участников</translation>
     </message>
     <message>
         <source>Participant count polls are not supported.</source>
         <translation>Опросы с подсчетом участников не поддерживаются.</translation>
+    </message>
+    <message>
+        <source>Passed: 80 block difficulty is</source>
+        <translation>Пройдено: сложность 80 блоков составляет</translation>
+    </message>
+    <message>
+        <source>Passed: Count =</source>
+        <translation>Пройдено: Количество =</translation>
+    </message>
+    <message>
+        <source>Passed: ETTS =</source>
+        <translation>Пройдено: ETTS =</translation>
     </message>
     <message>
         <source>Please enter a poll discussion website URL.</source>
@@ -4182,6 +4893,14 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Please enter at least two poll choices.</source>
         <translation>Введите не менее двух вариантов опроса.</translation>
+    </message>
+    <message>
+        <source>Poll additional field name "%s" exceeds %s characters.</source>
+        <translation>Имя дополнительного поля опроса "%s" содержит более %s символов.</translation>
+    </message>
+    <message>
+        <source>Poll cannot contain more than %s additional fields</source>
+        <translation>Опрос не может содержать более %s дополнительных полей</translation>
     </message>
     <message>
         <source>Poll cannot contain more than %s choices.</source>
@@ -4224,20 +4943,144 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Название опроса не может превышать %s символов.</translation>
     </message>
     <message>
+        <source>Poll with that title already exists. Please choose another title.</source>
+        <translation>Опрос с таким названием уже существует. Пожалуйста, выберите другое название.</translation>
+    </message>
+    <message>
         <source>Pool</source>
         <translation>Пул</translation>
     </message>
     <message>
-        <source>SHA256SUM of snapshot.zip does not match the server's SHA256SUM.</source>
-        <translation>SHA256SUM файла snapshot.zip не соответствует SHA256SUM сервера.</translation>
+        <source>Project Listing</source>
+        <translation>Список Проектов</translation>
+    </message>
+    <message>
+        <source>Propose a change to Gridcoin at the protocol level.</source>
+        <translation>Предложите изменение Gridcoin на уровне протокола.</translation>
+    </message>
+    <message>
+        <source>Propose marketing initiatives like ad campaigns.</source>
+        <translation>Предлагайте маркетинговые инициативы, такие как рекламные кампании.</translation>
+    </message>
+    <message>
+        <source>Protocol Development</source>
+        <translation>Разработка Протокола</translation>
+    </message>
+    <message>
+        <source>Reindexing blockchain from on disk block data files...</source>
+        <translation>Реиндексация блокчейна из блоков файлов на диске...</translation>
+    </message>
+    <message>
+        <source>Replaying contracts...</source>
+        <translation>Переигрывание контрактов...</translation>
+    </message>
+    <message>
+        <source>Reset Blockchain Data: Blockchain data removal failed.</source>
+        <translation>Сброс Данных Блокчейна: не удалось удалить данные Блокчейна.</translation>
+    </message>
+    <message>
+        <source>Reset Blockchain Data: Blockchain data removal was a success</source>
+        <translation>Сброс Данных Блокчейна: Удаление данных блокчейна прошло успешно</translation>
     </message>
     <message>
         <source>Send command to -server or gridcoinresearchd</source>
         <translation>Отправьте команду -server или gridcoinresearchd</translation>
     </message>
     <message>
+        <source>Snapshot extraction failed! Cleaning up any extracted data</source>
+        <translation>Не удалось извлечь снимок! Удаление извлеченных данных</translation>
+    </message>
+    <message>
+        <source>Snapshot operation canceled due to an invalid snapshot zip.</source>
+        <translation>Операция создания снимка отменена из-за неверного файла snapshot.zip.</translation>
+    </message>
+    <message>
+        <source>Snapshot operation canceled.</source>
+        <translation>Операция создания снимка отменена.</translation>
+    </message>
+    <message>
+        <source>Snapshot operation successful!</source>
+        <translation>Операция создания снимка прошла успешно!</translation>
+    </message>
+    <message>
+        <source>Stage (1/4): Downloading snapshot.zip: Speed </source>
+        <translation>Этап (1/4): Загрузка snapshot.zip: Скорость</translation>
+    </message>
+    <message>
+        <source>Stage (2/4): Verify SHA256SUM of snapshot.zip</source>
+        <translation>Этап (2/4): Проверка SHA256SUM snapshot.zip</translation>
+    </message>
+    <message>
+        <source>Stage (3/4): Cleanup blockchain data</source>
+        <translation>Стадия (3/4): Очистка данных блокчейна</translation>
+    </message>
+    <message>
+        <source>Stage (4/4): Extracting snapshot.zip</source>
+        <translation>Этап (4/4): Распаковка snapshot.zip</translation>
+    </message>
+    <message>
+        <source>Survey</source>
+        <translation>Опрос</translation>
+    </message>
+    <message>
+        <source>The field is not well-formed.</source>
+        <translation>Поле сформировано неправильно.</translation>
+    </message>
+    <message>
+        <source>The field list is not well-formed.</source>
+        <translation>Список полей сформирован неправильно.</translation>
+    </message>
+    <message>
+        <source>The wallet is now shutting down. Please restart your wallet.</source>
+        <translation>Сейчас кошелек закрывается. Пожалуйста, перезапустите свой кошелек.</translation>
+    </message>
+    <message>
+        <source>The wallet will now shutdown.</source>
+        <translation>Кошелек сейчас будет закрыт.</translation>
+    </message>
+    <message>
+        <source>This wallet is almost certainly forked.</source>
+        <translation>Этот кошелек скорее всего раздвоен.</translation>
+    </message>
+    <message>
+        <source>This wallet is probably forked.</source>
+        <translation>Этот кошелек, вероятно, раздвоен.</translation>
+    </message>
+    <message>
+        <source>Unable to create the PID file '%s': %s</source>
+        <translation>Не удалось создать PID файл '%s': %s</translation>
+    </message>
+    <message>
+        <source>Unknown poll type. This should never happen.</source>
+        <translation>Неизвестный тип опроса. Это никогда не должно случаться.</translation>
+    </message>
+    <message>
+        <source>Warning: 45 days &lt; ETTS =</source>
+        <translation>Внимание: 45 дней &lt; ETTS =</translation>
+    </message>
+    <message>
+        <source>Warning: 80 block difficulty is less than</source>
+        <translation>Внимание: сложность 80 блоков меньше</translation>
+    </message>
+    <message>
+        <source>Warning: Cannot connect to NTP server</source>
+        <translation>Внимание: Невозможно подключиться к NTP серверу</translation>
+    </message>
+    <message>
+        <source>Warning: Count =</source>
+        <translation>Внимание: Количество =</translation>
+    </message>
+    <message>
+        <source>Wrong Payload version specified for current block height.</source>
+        <translation>Неверная версия полезной нагрузки указана для текущей высоты блока.</translation>
+    </message>
+    <message>
         <source>Yes/No/Abstain</source>
         <translation>Да/Нет/Воздержаться</translation>
+    </message>
+    <message>
+        <source>You should check your time and time zone settings for your computer.</source>
+        <translation>Вам следует проверить настройки времени и часового пояса на вашем компьютере.</translation>
     </message>
     <message>
         <source>You will need to delete the following.</source>
@@ -4246,6 +5089,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>"%s" is not a valid poll choice.</source>
         <translation>"%s" не является допустимым выбором для опроса.</translation>
+    </message>
+    <message>
+        <source>appears to be blocked.</source>
+        <translation>похоже, что он заблокирован.</translation>
     </message>
     <message>
         <source>leisure</source>
@@ -4264,8 +5111,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Баланс</translation>
     </message>
     <message>
+        <source>The %s developers</source>
+        <translation>Разработчики %s</translation>
+    </message>
+    <message>
+        <source>Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported.</source>
+        <translation>Ошибка: найден неподдерживаемый аргумент -socks. Установка версии SOCKS больше невозможна, поддерживаются только SOCKS5 прокси.</translation>
+    </message>
+    <message>
         <source>Block Version</source>
         <translation>Версия Блока</translation>
+    </message>
+    <message>
+        <source>Block file load progress </source>
+        <translation>Заблокировать процесс загрузки файла</translation>
     </message>
     <message>
         <source>Block not in index</source>
@@ -4277,7 +5136,7 @@ This label turns red, if the priority is smaller than "medium".
     </message>
     <message>
         <source>Blocks Loaded</source>
-        <translation>Блоки Загружены</translation>
+        <translation>Блоков Загружено</translation>
     </message>
     <message>
         <source>Blocks Verified</source>
@@ -4320,8 +5179,20 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Ошибка: Кошелёк заблокирован, невозможно создать транзакцию.</translation>
     </message>
     <message>
+        <source>GitHub version: </source>
+        <translation>Версия на GitHub:</translation>
+    </message>
+    <message>
         <source>Height</source>
         <translation>Высота</translation>
+    </message>
+    <message>
+        <source>Importing blockchain data file(s).</source>
+        <translation>Импорт файла(ов) данных блокчейна.</translation>
+    </message>
+    <message>
+        <source>Interest</source>
+        <translation>Интерес</translation>
     </message>
     <message>
         <source>Invalid amount for -peertimeout=&lt;amount&gt;: '%s'</source>
@@ -4334,6 +5205,10 @@ This label turns red, if the priority is smaller than "medium".
     <message>
         <source>Is Superblock</source>
         <translation>Суперблок</translation>
+    </message>
+    <message>
+        <source>Latest Version GitHub data response:</source>
+        <translation>Ответ последней версии GitHub:</translation>
     </message>
     <message>
         <source>Loading Network Averages...</source>
@@ -4396,22 +5271,6 @@ This label turns red, if the priority is smaller than "medium".
         <translation>Процесс создания Снимка Начался.</translation>
     </message>
     <message>
-        <source>Snapshot extraction failed! Cleaning up any extracted data</source>
-        <translation>Не удалось извлечь снимок! Удаление извлеченных данных</translation>
-    </message>
-    <message>
-        <source>Snapshot operation canceled due to an invalid snapshot zip.</source>
-        <translation>Операция создания снимка отменена из-за неверного файла snapshot.zip.</translation>
-    </message>
-    <message>
-        <source>Snapshot operation canceled.</source>
-        <translation>Операция создания снимка отменена.</translation>
-    </message>
-    <message>
-        <source>Snapshot operation successful!</source>
-        <translation>Операция создания снимка прошла успешно!</translation>
-    </message>
-    <message>
         <source>To use the %s option</source>
         <translation>Чтобы использовать опцию %s</translation>
     </message>
@@ -4452,10 +5311,6 @@ rpcpassword=%s
         <translation>Невыполнение этого требования приведет к неопределенному поведению или невозможности запуска кошелька.</translation>
     </message>
     <message>
-        <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
-        <translation>Кошелек будет закрыт. Пожалуйста, запустите свой кошелек, чтобы начать синхронизацию с нуля</translation>
-    </message>
-    <message>
         <source>Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.</source>
         <translation>Не удалось загрузить снимок, так как кошелек обнаружил, что доступна новая обязательная версия для установки . Обязательное обновление должно быть установлено до загрузки и применения снимка.</translation>
     </message>
@@ -4494,32 +5349,20 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Gridcoin версия</translation>
     </message>
     <message>
+        <source>Resetting block chain index to prepare for reindexing...</source>
+        <translation>Сброс индекса цепочки блоков для подготовки к переиндексации...</translation>
+    </message>
+    <message>
         <source>Stage (1/4): Downloading snapshot.zip:         </source>
         <translation>Этап (1/4): Загрузка snapshot.zip:</translation>
-    </message>
-    <message>
-        <source>Stage (1/4): Downloading snapshot.zip: Speed </source>
-        <translation>Этап (1/4): Загрузка snapshot.zip: Скорость</translation>
-    </message>
-    <message>
-        <source>Stage (2/4): Verify SHA256SUM of snapshot.zip</source>
-        <translation>Этап (2/4): Проверка SHA256SUM snapshot.zip</translation>
     </message>
     <message>
         <source>Stage (2/4): Verify SHA256SUM of snapshot.zip: </source>
         <translation>Этап (2/4): Проверка SHA256SUM snapshot.zip:</translation>
     </message>
     <message>
-        <source>Stage (3/4): Cleanup blockchain data</source>
-        <translation>Стадия (3/4): Очистка данных блокчейна</translation>
-    </message>
-    <message>
         <source>Stage (3/4): Cleanup blockchain data:          </source>
         <translation>Стадия (3/4): Очистка данных блокчейна:</translation>
-    </message>
-    <message>
-        <source>Stage (4/4): Extracting snapshot.zip</source>
-        <translation>Этап (4/4): Распаковка snapshot.zip</translation>
     </message>
     <message>
         <source>Stage (4/4): Extracting snapshot.zip:          </source>
@@ -4556,14 +5399,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Superblock Binary Size</source>
         <translation>Двоичный Размер Суперблока</translation>
-    </message>
-    <message>
-        <source>The wallet is now shutting down. Please restart your wallet.</source>
-        <translation>Сейчас кошелек закрывается. Пожалуйста, перезапустите свой кошелек.</translation>
-    </message>
-    <message>
-        <source>The wallet will now shutdown.</source>
-        <translation>Кошелек сейчас будет закрыт.</translation>
     </message>
     <message>
         <source>This update is </source>
@@ -4614,10 +5449,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>wallet.dat повреждён, восстановление не удалось</translation>
     </message>
     <message>
-        <source>Unknown -socks proxy version requested: %i</source>
-        <translation>В параметре -socks запрошена неизвестная версия: %i</translation>
-    </message>
-    <message>
         <source>Invalid -proxy address: '%s'</source>
         <translation>Неверный адрес -proxy: '%s'</translation>
     </message>
@@ -4654,14 +5485,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
         <translation>Не в сети</translation>
     </message>
     <message>
-        <source>Reset Blockchain Data: Blockchain data removal was a failure</source>
-        <translation>Сброс Данных Блокчейна: Удаление данных блокчейна не удалось</translation>
-    </message>
-    <message>
-        <source>Reset Blockchain Data: Blockchain data removal was a success</source>
-        <translation>Сброс Данных Блокчейна: Удаление данных блокчейна прошло успешно</translation>
-    </message>
-    <message>
         <source>Verifying checkpoints...</source>
         <translation>Проверка контрольных точек...</translation>
     </message>
@@ -4676,10 +5499,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Error loading wallet.dat</source>
         <translation>Ошибка при загрузке wallet.dat</translation>
-    </message>
-    <message>
-        <source>Importing blockchain data file.</source>
-        <translation>Импорт файла блокчейн цепочки.</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>
@@ -4748,10 +5567,6 @@ If the file does not exist, create it with owner-readable-only file permissions.
     <message>
         <source>Loading wallet...</source>
         <translation>Загрузка кошелька...</translation>
-    </message>
-    <message>
-        <source>Cannot downgrade wallet</source>
-        <translation>Не удаётся понизить версию кошелька</translation>
     </message>
     <message>
         <source>Cannot write default address</source>

@@ -35,7 +35,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 4;
 
     //!
     //! \brief The maximum length of a serialized client version in a claim.
@@ -186,6 +186,12 @@ public:
     //! field.
     //!
     SuperblockPtr m_superblock;
+
+    //!
+    //! \brief A map of mrc transactions keyed by CPID. There can be only one MRC per CPID
+    //! in the claim.
+    //!
+    std::map<Cpid, uint256> m_mrc_tx_map;
 
     //!
     //! \brief Initialize an empty, invalid reward claim object.
@@ -393,6 +399,10 @@ public:
             && m_quorum_hash.Valid())
         {
             READWRITE(m_superblock);
+        }
+
+        if (m_version >= 4) {
+            READWRITE(m_mrc_tx_map);
         }
     }
 }; // Claim

@@ -3,6 +3,8 @@
 
 #include <QStringList>
 
+static constexpr auto MAX_DIGITS_BTC = 16;
+
 BitcoinUnits::BitcoinUnits(QObject *parent):
         QAbstractListModel(parent),
         unitlist(availableUnits())
@@ -99,7 +101,9 @@ QString BitcoinUnits::format(int unit, qint64 n, bool fPlus, bool justify)
     qint64 remainder = n_abs % coin;
     QString quotient_str = QString::number(quotient);
 
-    if (justify) quotient_str = quotient_str.rightJustified(16 - num_decimals, ' ');
+    if (justify) {
+        quotient_str = quotient_str.rightJustified(MAX_DIGITS_BTC - num_decimals, ' ');
+    }
 
     QString remainder_str = QString::number(remainder).rightJustified(num_decimals, '0');
 
