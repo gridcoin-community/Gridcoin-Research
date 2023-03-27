@@ -532,17 +532,19 @@ public:
          */
 
         const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-        const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid();
-        if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
-            if (!beacon->Expired(GetAdjustedTime())) {
-                return true;
-            }
-            for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
-                if (!beacon_ptr->Expired(GetAdjustedTime())) {
+        if (const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid()) {
+            if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
+                if (!beacon->Expired(GetAdjustedTime())) {
                     return true;
+                }
+                for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
+                    if (!beacon_ptr->Expired(GetAdjustedTime())) {
+                        return true;
+                    }
                 }
             }
         }
+
         return false;
     }
     void runCheck()
