@@ -168,6 +168,16 @@ Function .onInit
       Abort
     ${EndIf}
 !endif
+    loop:
+    ExpandEnvStrings $1 "%COMSPEC%"
+    ExecWait '$1 /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq @GRIDCOIN_GUI_NAME@@EXEEXT@$\" | $\"$SYSDIR\find.exe$\" /I $\"@GRIDCOIN_GUI_NAME@@EXEEXT@$\""' $0
+    StrCmp $0 0 0 notRunning_gui
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet (@GRIDCOIN_GUI_NAME@@EXEEXT@) is running. Please close before continuing.' IDOK loop IDCANCEL end
+    notRunning_gui:
+    ExecWait '$1 /C "$\"$SYSDIR\tasklist.exe$\" /NH /FI $\"IMAGENAME eq @GRIDCOIN_DAEMON_NAME@@EXEEXT@$\" | $\"$SYSDIR\find.exe$\" /I $\"@GRIDCOIN_DAEMON_NAME@@EXEEXT@$\""' $0
+    StrCmp $0 0 0 notRunning_daemon
+    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION 'The Gridcoin wallet daemon (@GRIDCOIN_DAEMON_NAME@@EXEEXT@) is running. Please close before continuing.' IDOK loop IDCANCEL end
+    notRunning_daemon:
     ; Check for HKCU Path registry and prompt for uninstallation if found
     ReadRegStr $0 HKCU "${REGKEY}" "Path"
     ${IfThen} $0 == "" ${|} Return ${|}
@@ -184,6 +194,8 @@ Function .onInit
     ${EndIf}
     ExecWait "$1 _?=$0" $0
     ${IfThen} $0 != 0 ${|} Abort ${|}
+    end:
+    Abort
 FunctionEnd
 
 # Uninstaller functions
