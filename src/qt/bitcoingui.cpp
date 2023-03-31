@@ -828,6 +828,15 @@ void BitcoinGUI::setResearcherModel(ResearcherModel *researcherModel)
 
     updateBeaconIcon();
     connect(researcherModel, &ResearcherModel::beaconChanged, this, &BitcoinGUI::updateBeaconIcon);
+
+    QTimer *beacon_status_update_timer = new QTimer(this);
+
+    // This timer trigger is to support updating the beacon age and time to expiration in the tooltip.
+    // Once a minute is sufficient.
+    connect(beacon_status_update_timer, &QTimer::timeout, this, &BitcoinGUI::updateBeaconIcon);
+
+    // Check every minute
+    beacon_status_update_timer->start(1000 * 60);
 }
 
 void BitcoinGUI::setMRCModel(MRCModel *mrcModel)
