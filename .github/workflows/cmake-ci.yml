@@ -1,0 +1,98 @@
+name: CMake CI
+on:
+    - push
+    - pull_request
+    - workflow_dispatch
+
+jobs:
+    test-linux:
+        runs-on: ubuntu-latest
+        env:
+            CCACHE_DIR: ${{github.workspace}}/ccache
+            CCACHE_MAXSIZE: 100M
+        strategy:
+            matrix:
+                tag:
+                    - minimal
+                    - no-asm
+                    - gui-full
+                    - system-libs
+                include:
+                    - tag: no-asm
+                      deps: null
+                      options: -DUSE_ASM=OFF
+                    - tag: gui-full
+                      deps: |
+                          libminiupnpc-dev
+                          libqrencode-dev
+                          qtbase5-dev
+                          qttools5-dev
+                      options: -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DENABLE_UPNP=ON -DUSE_DBUS=ON
+                    - tag: system-libs
+                      deps: |
+                          libdb5.3++-dev
+                          libleveldb-dev
+                          libsnappy-dev
+                          libsecp256k1-dev
+                          libunivalue-dev
+                          xxd
+                      options: -DSYSTEM_BDB=ON -DSYSTEM_LEVELDB=ON -DSYSTEM_UNIVALUE=ON
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+            - name: Install dependencies
+              uses: awalsh128/cache-apt-pkgs-action@latest
+              with:
+                  packages: |
+                      ${{matrix.deps}}
+                      ccache
+                      libcurl4-openssl-dev
+                      libzip-dev
+                      ninja-build
+                      zipcmp
+                      zipmerge
+                      ziptool
+                  version: ${{matrix.tag}}
+            - name: Install Boost dependencies
+              run: |
+                sudo apt-get install -y --no-install-recommends \
+                    libboost-dev \
+                    libboost-date-time-dev \
+                    libboost-exception-dev \
+                    libboost-filesystem-dev \
+                    libboost-iostreams-dev \
+                    libboost-serialization-dev \
+                    libboost-test-dev \
+                    libboost-thread-dev
+            - name: Configure
+              run: |
+                  cmake -B ${{github.workspace}}/build -G Ninja \
+                      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                      ${{matrix.options}} \
+                      -DENABLE_TESTS=ON
+            - name: Restore cache
+              uses: actions/cache/restore@v3
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-linux-${{matrix.tag}}-${{github.run_id}}
+                  restore-keys: |
+                      ccache-linux-${{matrix.tag}}-
+            - name: Build
+              run: |
+                  cmake --build ${{github.workspace}}/build -v -j $(nproc)
+            - name: Save cache
+              uses: actions/cache/save@v3
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-linux-${{matrix.tag}}-${{github.run_id}}
+            - name: Run tests
+              run: |
+                  ctest --test-dir ${{github.workspace}}/build -j $(nproc)
+            - name: Upload test logs
+              uses: actions/upload-artifact@v3
+              if: always()
+              with:
+                  name: testlog-linux-${{matrix.tag}}
+                  path: ${{github.workspace}}/build/Testing/Temporary/LastTest.log
+                  retention-days: 7
