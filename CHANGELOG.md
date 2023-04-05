@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.3.0] 2023-04-05, leisure
+
+### Added
+ - install: Enhance windows installer - detect running gridcoinresearch(d).exe and ask to close before continuing #2672 (@jamescowens)
+ - gui: Add one minute QTimer to update beacon age/expiration in tooltip #2671 (@jamescowens)
+
+### Changed
+none
+
+### Removed
+none
+
+### Fixed
+ - util: Implement workaround for backupwallet to deal with Boost 1.74 regression on copy_file #2669 (@jamescowens)
+ - banman: use GetPerformanceCounter instead of GetRandBytes #2668 (@div72)
+
 ## [5.4.2.0] 2023-03-26, leisure, "LaVerne"
 
 ### Added

@@ -8,6 +8,7 @@
 #include "wallet/wallet.h"
 #include "util.h"
 #include "util/time.h"
+#include <filesystem>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -117,11 +118,16 @@ bool GRC::BackupConfigFile(const std::string& strDest)
     fs::create_directories(ConfigTarget.parent_path());
     try
     {
-        #if BOOST_VERSION >= 107400
-            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
-        #else
-            fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
-        #endif
+#if BOOST_VERSION > 107400
+        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
+#elif BOOST_VERSION == 107400
+        // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
+        std::filesystem::path StdConfigSource = ConfigSource.wstring();
+        std::filesystem::path StdConfigTarget = strDest;
+        std::filesystem::copy_file(StdConfigSource, StdConfigTarget, std::filesystem::copy_options::overwrite_existing);
+#else
+        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
+#endif
         LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
         return true;
     }
@@ -156,8 +162,13 @@ bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)
             WalletTarget /= wallet.strWalletFile;
         try
         {
-#if BOOST_VERSION >= 107400
+#if BOOST_VERSION > 107400
             fs::copy_file(WalletSource, WalletTarget, fs::copy_options::overwrite_existing);
+#elif BOOST_VERSION == 107400
+            // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
+            std::filesystem::path StdWalletSource = WalletSource.wstring();
+            std::filesystem::path StdWalletTarget = strDest;
+            std::filesystem::copy_file(StdWalletSource, StdWalletTarget, std::filesystem::copy_options::overwrite_existing);
 #else
             fs::copy_file(WalletSource, WalletTarget, fs::copy_option::overwrite_if_exists);
 #endif
