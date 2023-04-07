@@ -30,7 +30,11 @@ qt_test_test_gridcoin_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LI
 qt_test_test_gridcoin_qt_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 qt_test_test_gridcoin_qt_LDADD += $(LIBDB)
+else
+qt_test_test_gridcoin_qt_LDADD += $(BDB_LIBS)
+endif
 endif
 
 CLEAN_GRIDCOIN_QT_TEST = $(TEST_QT_MOC_CPP) qt/test/*.gcda qt/test/*.gcno

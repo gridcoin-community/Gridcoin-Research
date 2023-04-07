@@ -668,7 +668,11 @@ qt_gridcoinresearch_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL
 qt_gridcoinresearch_LIBTOOLFLAGS = $(AM_LIBTOOLFLAGS) --tag CXX
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 qt_gridcoinresearch_LDADD += $(LIBDB)
+else
+qt_gridcoinresearch_LDADD += $(BDB_LIBS)
+endif
 endif
 
 

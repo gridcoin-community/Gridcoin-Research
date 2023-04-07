@@ -88,7 +88,11 @@ test_test_gridcoin_LDADD += $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGR
 test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 test_test_gridcoin_LDADD += $(LIBDB)
+else
+test_test_gridcoin_LDADD += $(BDB_LIBS)
+endif
 endif
 
 nodist_test_test_gridcoin_SOURCES = $(GENERATED_TEST_FILES)
