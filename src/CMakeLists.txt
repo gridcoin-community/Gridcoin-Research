@@ -23,6 +23,37 @@ endif()
 # Dependencies
 # ============
 
+if(SYSTEM_SECP256K1)
+    set(LIBSECP256K1 PkgConfig::SECP256K1)
+else()
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
+    set(SECP256K1_BUILD_SHARED OFF)
+    set(SECP256K1_BUILD_STATIC ON)
+    set(SECP256K1_ENABLE_MODULE_ECDH OFF)
+    set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
+    set(SECP256K1_ENABLE_MODULE_EXTRAKEYS OFF)
+    set(SECP256K1_ENABLE_MODULE_SCHNORRSIG OFF)
+    set(SECP256K1_VALGRIND OFF)
+
+    set(SECP256K1_BUILD_BENCHMARK OFF)
+    set(SECP256K1_BUILD_TESTS OFF)
+    set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+    set(SECP256K1_BUILD_CTIME_TESTS OFF)
+
+    if(USE_ASM)
+        set(SECP256K1_ASM "AUTO")
+    else()
+        set(SECP256K1_ASM "OFF")
+    endif()
+
+    add_subdirectory(secp256k1 EXCLUDE_FROM_ALL)
+    target_include_directories(secp256k1 PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/include"
+    )
+    set(LIBSECP256K1 secp256k1)
+endif()
+
 if(SYSTEM_UNIVALUE)
     set(LIBUNIVALUE PkgConfig::UNIVALUE)
 else()
@@ -155,12 +186,12 @@ target_include_directories(gridcoin_util PUBLIC
 )
 
 target_link_libraries(gridcoin_util PUBLIC
-    -lm ${ATOMICS_LIBRARIES} ${LIBUNIVALUE}
+    -lm ${ATOMICS_LIBRARIES}
+    ${LIBUNIVALUE} ${LIBSECP256K1}
     BerkeleyDB::CXX
     Boost::filesystem Boost::headers Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
-    PkgConfig::SECP256K1
     Threads::Threads
     leveldb::leveldb
     libzip::zip

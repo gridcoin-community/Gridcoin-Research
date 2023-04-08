@@ -75,6 +75,7 @@ option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
 option(SYSTEM_XXD       "Find system xxd binary" OFF)
+option(SYSTEM_SECP256K1 "Find system installation of libsecp256k1 with pkg-config" OFF)
 option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
 
 
@@ -93,10 +94,13 @@ find_package(Threads REQUIRED)
 find_package(leveldb REQUIRED)
 find_package(libzip REQUIRED)
 
-find_package(PkgConfig)
-pkg_check_modules(SECP256K1 REQUIRED IMPORTED_TARGET "libsecp256k1 >= 0.2.0")
+if(SYSTEM_SECP256K1)
+    find_package(PkgConfig)
+    pkg_check_modules(SECP256K1 REQUIRED IMPORTED_TARGET "libsecp256k1 >= 0.2.0")
+endif()
 
 if(SYSTEM_UNIVALUE)
+    find_package(PkgConfig)
     pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
 endif()
 
