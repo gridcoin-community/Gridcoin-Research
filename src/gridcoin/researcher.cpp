@@ -674,9 +674,9 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
 {
-    if (pwalletMain->IsLocked()) {
+    if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
         return BeaconError::WALLET_LOCKED;
     }
@@ -687,9 +687,23 @@ BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
     // TODO: refactor wallet so we can determine this dynamically. For now, we
     // require 1 GRC:
     //
-    if (pwalletMain->GetBalance() < COIN) {
+    if (wallet->GetBalance() < COIN) {
         LogPrintf("WARNING: %s: Insufficient funds.", __func__);
         return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    for (const auto& [_, pool_tx] : mempool.mapTx) {
+        for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+            if (pool_tx_contract.m_type == GRC::ContractType::BEACON) {
+                GRC::BeaconPayload pool_tx_beacon = pool_tx_contract.CopyPayloadAs<GRC::BeaconPayload>();
+
+                GRC::Cpid other_cpid = pool_tx_beacon.m_cpid;
+
+                if (cpid == other_cpid) {
+                   return BeaconError::ALEADY_IN_MEMPOOL;
+                }
+            }
+        }
     }
 
     return BeaconError::NONE;
@@ -710,7 +724,7 @@ AdvertiseBeaconResult SendBeaconContract(
     Beacon beacon,
     ContractAction action = ContractAction::ADD)
 {
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -749,7 +763,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -782,7 +796,7 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 
     LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
 
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;

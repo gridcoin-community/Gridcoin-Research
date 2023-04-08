@@ -306,6 +306,7 @@ enum class BeaconError
     PENDING,            //!< Not enough time elapsed for pending advertisement.
     TX_FAILED,          //!< Beacon contract transacton failed to send.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
+    ALEADY_IN_MEMPOOL   //!< A beacon contract for this CPID is already in the mempool.
 };
 
 //!

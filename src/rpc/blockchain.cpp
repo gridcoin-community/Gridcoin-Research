@@ -1445,6 +1445,10 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "Beacon transaction for this CPID is already in the mempool");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
@@ -1507,6 +1511,10 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "Beacon transaction for this CPID is already in the mempool");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
