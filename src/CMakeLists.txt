@@ -23,6 +23,13 @@ endif()
 # Dependencies
 # ============
 
+if(SYSTEM_BDB)
+    set(LIBBDB_CXX BerkeleyDB::CXX)
+else()
+    add_subdirectory(bdb53)
+    set(LIBBDB_CXX libdb_cxx)
+endif()
+
 if(SYSTEM_SECP256K1)
     set(LIBSECP256K1 PkgConfig::SECP256K1)
 else()
@@ -187,8 +194,7 @@ target_include_directories(gridcoin_util PUBLIC
 
 target_link_libraries(gridcoin_util PUBLIC
     -lm ${ATOMICS_LIBRARIES}
-    ${LIBUNIVALUE} ${LIBSECP256K1}
-    BerkeleyDB::CXX
+    ${LIBBDB_CXX} ${LIBUNIVALUE} ${LIBSECP256K1}
     Boost::filesystem Boost::headers Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL

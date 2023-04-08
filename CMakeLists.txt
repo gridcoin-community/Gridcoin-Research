@@ -75,6 +75,7 @@ option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
 option(SYSTEM_XXD       "Find system xxd binary" OFF)
+option(SYSTEM_BDB	    "Find system installation of Berkeley DB CXX 5.3" OFF)
 option(SYSTEM_SECP256K1 "Find system installation of libsecp256k1 with pkg-config" OFF)
 option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
 
@@ -86,13 +87,18 @@ set(BOOST_MINIMUM_VERSION 1.63.0)
 set(QT5_MINIMUM_VERSION 5.15.0)
 
 find_package(Atomics REQUIRED)
-find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
 find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS filesystem iostreams thread REQUIRED)
 find_package(CURL COMPONENTS HTTP HTTPS SSL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(leveldb REQUIRED)
 find_package(libzip REQUIRED)
+
+if(SYSTEM_BDB)
+    find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
+else()
+    find_program(MAKE_EXE NAMES gmake nmake make)
+endif()
 
 if(SYSTEM_SECP256K1)
     find_package(PkgConfig)
@@ -152,7 +158,7 @@ endif()
 # ==========
 
 # Detect whether PIE is supported by the current linker and environment
-check_pie_supported()
+check_pie_supported(OUTPUT_VARIABLE ENABLE_PIE)
 
 # Set endianness
 if(CMAKE_CXX_BYTE_ORDER EQUAL BIG_ENDIAN)
