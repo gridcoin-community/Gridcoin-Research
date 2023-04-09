@@ -30,6 +30,29 @@ else()
     set(LIBBDB_CXX libdb_cxx)
 endif()
 
+if(SYSTEM_LEVELDB)
+    set(LIBLEVELDB leveldb::leveldb)
+else()
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
+    set(LEVELDB_BUILD_TESTS ${ENABLE_TESTS})
+    set(LEVELDB_BUILD_BENCHMARKS OFF)
+    set(LEVELDB_INSTALL OFF)
+
+    set(HAVE_CRC32C OFF)
+    set(HAVE_SNAPPY OFF)
+    set(HAVE_TCMALLOC OFF)
+    set(HAVE_CLANG_THREAD_SAFETY OFF)
+
+    set(BUILD_SHARED_LIBS_ORIG ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
+
+    add_subdirectory(leveldb)
+    set(LIBLEVELDB leveldb)
+
+    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
+endif()
+
 if(SYSTEM_SECP256K1)
     set(LIBSECP256K1 PkgConfig::SECP256K1)
 else()
@@ -194,12 +217,11 @@ target_include_directories(gridcoin_util PUBLIC
 
 target_link_libraries(gridcoin_util PUBLIC
     -lm ${ATOMICS_LIBRARIES}
-    ${LIBBDB_CXX} ${LIBUNIVALUE} ${LIBSECP256K1}
+    ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
     Boost::filesystem Boost::headers Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
-    leveldb::leveldb
     libzip::zip
 )
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})

@@ -74,10 +74,11 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
-option(SYSTEM_XXD       "Find system xxd binary" OFF)
 option(SYSTEM_BDB	    "Find system installation of Berkeley DB CXX 5.3" OFF)
+option(SYSTEM_LEVELDB   "Find system installation of leveldb" OFF)
 option(SYSTEM_SECP256K1 "Find system installation of libsecp256k1 with pkg-config" OFF)
 option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
+option(SYSTEM_XXD       "Find system xxd binary" OFF)
 
 
 # Find dependencies
@@ -91,13 +92,16 @@ find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS filesystem iostreams thre
 find_package(CURL COMPONENTS HTTP HTTPS SSL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(leveldb REQUIRED)
 find_package(libzip REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
 else()
     find_program(MAKE_EXE NAMES gmake nmake make)
+endif()
+
+if(SYSTEM_LEVELDB)
+    find_package(leveldb REQUIRED)
 endif()
 
 if(SYSTEM_SECP256K1)
