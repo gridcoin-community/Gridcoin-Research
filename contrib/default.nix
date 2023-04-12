@@ -4,7 +4,7 @@ with pkgs.stdenv;
 with pkgs.stdenv.lib;
 
 pkgs.mkShell {
-  nativeBuildInputs = with pkgs.buildPackages; [ autoreconfHook libtool pkg-config qt5.wrapQtAppsHook ];
+  nativeBuildInputs = with pkgs.buildPackages; [ autoreconfHook cmake libtool pkg-config qt5.wrapQtAppsHook ];
   buildInputs = with pkgs; [ boost openssl libevent curl qt5.qttools libzip qrencode ];
 
   shellHook = ''
