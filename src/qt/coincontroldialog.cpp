@@ -4,6 +4,7 @@
 #include "init.h"
 #include "bitcoinunits.h"
 #include "addresstablemodel.h"
+#include <key_io.h>
 #include "optionsmodel.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
@@ -821,7 +822,7 @@ void CoinControlDialog::updateView()
             QString sAddress = "";
             if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, outputAddress))
             {
-                sAddress = CBitcoinAddress(outputAddress).ToString().c_str();
+                sAddress = EncodeDestination(outputAddress).c_str();
 
                 // if listMode or change => show bitcoin address. In tree mode, address is not shown again for direct wallet address outputs
                 if (!treeMode || (!(sAddress == sWalletAddress)))

@@ -94,7 +94,7 @@ AppCacheSectionExt GetExtendedScrapersCache();
 bool IsScraperAuthorized();
 /**
  * @brief Returns whether this node is authorized to broadcast statistics manifests to the network as a scraper.
- * @param AddressOut
+ * @param destination_out
  * @param KeyOut
  * @return bool
  *
@@ -116,7 +116,7 @@ bool IsScraperAuthorized();
  * modified to bypass this check, so messages sent will also be validated on receipt by the complement
  * to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
  */
-bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& destination_out, CKey& KeyOut);
 /**
  * @brief Returns whether the scraper with the input public key at the input time has exceeded the maximum allowable
  * manifest publishing rate. This is a DoS function and is used to issue misbehavior points, which could result in banning

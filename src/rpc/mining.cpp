@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
+#include <key_io.h>
 #include "main.h"
 #include "miner.h"
 #include "gridcoin/accrual/snapshot.h"
@@ -211,7 +212,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     CTxDestination dest;
 
     if (ExtractDestination(stake_tx->vout[1].scriptPubKey, dest)) {
-        json.pushKV("address", CBitcoinAddress(dest).ToString());
+        json.pushKV("address", EncodeDestination(dest));
     } else {
         json.pushKV("address", "");
     }

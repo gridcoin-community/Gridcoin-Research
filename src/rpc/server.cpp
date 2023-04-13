@@ -288,7 +288,6 @@ static const CRPCCommand vRPCCommands[] =
   // Wallet commands
     { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
     { "addredeemscript",         &addredeemscript,         cat_wallet        },
-    { "backupprivatekeys",       &backupprivatekeys,       cat_wallet        },
     { "backupwallet",            &backupwallet,            cat_wallet        },
     { "burn",                    &burn,                    cat_wallet        },
     { "checkwallet",             &checkwallet,             cat_wallet        },

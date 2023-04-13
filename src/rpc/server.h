@@ -103,7 +103,6 @@ extern std::vector<unsigned char> ParseHexV(const UniValue& v, std::string strNa
 // Wallet
 extern UniValue addmultisigaddress(const UniValue& params, bool fHelp);
 extern UniValue addredeemscript(const UniValue& params, bool fHelp);
-extern UniValue backupprivatekeys(const UniValue& params, bool fHelp);
 extern UniValue backupwallet(const UniValue& params, bool fHelp);
 extern UniValue burn(const UniValue& params, bool fHelp);
 extern UniValue checkwallet(const UniValue& params, bool fHelp);

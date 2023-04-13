@@ -6,6 +6,7 @@
 #include "checkpoints.h"
 #include "consensus/merkle.h"
 #include "dbwrapper.h"
+#include <key_io.h>
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
@@ -226,7 +227,7 @@ CAmount GetValueIn(const CTransaction& tx, const MapPrevTx& inputs)
 
 bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int block_height)
 {
-    const CTxDestination master_address = CWallet::MasterAddress(block_height).Get();
+    const CTxDestination master_address = CWallet::MasterAddress(block_height);
 
     for (const auto& input : tx.vin) {
         const CTxOut& prev_out = GetOutputFor(input, inputs);
@@ -618,20 +619,14 @@ Fraction FoundationSideStakeAllocation()
     return Fraction(4, 5);
 }
 
-CBitcoinAddress FoundationSideStakeAddress() {
-    CBitcoinAddress foundation_address;
-
+CTxDestination FoundationSideStakeAddress() {
     // If on testnet set foundation destination address to test wallet address
     if (fTestNet) {
-        foundation_address.SetString("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
-
-        return foundation_address;
+        return DecodeDestination("mfiy9sc2QEZZCK3WMUMZjNfrdRA6gXzRhr");
     }
 
     // Will get here if not on testnet. The below address is the current multisignature address for the foundation
-    foundation_address.SetString("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
-
-    return foundation_address;
+    return DecodeDestination("bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2");
 }
 
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake)
@@ -857,7 +852,7 @@ private:
                     }
 
                     // The sidestake destination must match that specified by FoundationSideStakeAddress().
-                    if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) {
+                    if (foundation_sidestake_destination != FoundationSideStakeAddress()) {
                         return error("%s: FAILED: foundation MRC sidestake destination does not match protocol",
                                      __func__);
                     }
@@ -1224,9 +1219,9 @@ private:
                                 const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(*cpid, mrc_index->nTime);
 
                                 if (beacon) {
-                                    CBitcoinAddress beacon_address = beacon->GetAddress();
+                                    CTxDestination beacon_address = beacon->GetAddress();
                                     CScript script_beacon_key;
-                                    script_beacon_key.SetDestination(beacon_address.Get());
+                                    script_beacon_key.SetDestination(beacon_address);
 
                                     // If an MRC fails validation no point in continuing. Return false immediately with an
                                     // appropriate DoS.
@@ -1245,7 +1240,7 @@ private:
                                     CAmount coinstake_mrc_reward = 0;
 
                                     CScript mrc_beacon_script_public_key;
-                                    mrc_beacon_script_public_key.SetDestination(beacon->GetAddress().Get());
+                                    mrc_beacon_script_public_key.SetDestination(beacon_address);
 
                                     // Start at the first actual MRC output. The MRC outputs come last in the coinstake.
                                     // We must exclude the other outputs, because it is possible, and allowed, for a

@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include <key_io.h>
 #include "main.h"
 #include "node/ui_interface.h"
 #include "random.h"
@@ -494,7 +495,7 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
  * @param Key
  * @return bool true if successful
  */
-bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key);
+bool ScraperSendFileManifestContents(CTxDestination& destination, CKey& Key);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination
@@ -1566,7 +1567,7 @@ void Scraper(bool bSingleShot)
 
         int64_t sbage = SuperblockAge();
         int64_t nScraperThreadStartTime = GetAdjustedTime();
-        CBitcoinAddress AddressOut;
+        CTxDestination destination_out;
         CKey KeyOut;
 
         // These are to ensure thread-safety of these globals and keep the locking scope to a minimum. These will go away
@@ -1631,7 +1632,7 @@ void Scraper(bool bSingleShot)
             _log(logattribute::ERR, "Scraper", "RPC error occurred, check logs");
 
         // This is the section to download statistics. Only do if authorized.
-        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        else if (IsScraperAuthorized() || IsScraperAuthorizedToBroadcastManifests(destination_out, KeyOut))
         {
             // Take a lock on cs_Scraper for the main activity portion of the loop.
             LOCK(cs_Scraper);
@@ -1702,7 +1703,7 @@ void Scraper(bool bSingleShot)
         }
 
         // This is the section to send out manifests. Only do if authorized.
-        if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+        if (IsScraperAuthorizedToBroadcastManifests(destination_out, KeyOut))
         {
             // This will push out a new CScraperManifest if the hash has changed of mScraperFileManifestHash.
             // The idea here is to run the scraper loop a number of times over a period of time approaching
@@ -1724,7 +1725,7 @@ void Scraper(bool bSingleShot)
                     _log(logattribute::INFO, "Scraper", "Publishing new CScraperManifest.");
 
                     // scraper key used for signing is the key returned by IsScraperAuthorizedToBroadcastManifests(KeyOut).
-                    if (ScraperSendFileManifestContents(AddressOut, KeyOut))
+                    if (ScraperSendFileManifestContents(destination_out, KeyOut))
                         uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW, {});
                 }
 
@@ -4189,7 +4190,7 @@ bool IsScraperAuthorized()
     return ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
 }
 
-bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut)
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& destination_out, CKey& KeyOut)
 {
 
     AppCacheSection mScrapers = GetScrapersCache();
@@ -4211,23 +4212,22 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
         {
             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Entry in appcache is enabled.");
 
-            CBitcoinAddress address(sScraperAddressFromConfig);
+            CTxDestination destination = DecodeDestination(sScraperAddressFromConfig);
             //CPubKey ScraperPubKey(ParseHex(sScraperAddressFromConfig));
 
-            CKeyID KeyID;
-            address.GetKeyID(KeyID);
+            CKeyID* KeyID = std::get_if<CKeyID>(&destination);
 
             // ... and the address is valid...
-            if (address.IsValid())
+            if (KeyID)
             {
                 _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
                 _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
-                     "(Doublecheck) The address is " + address.ToString());
+                     "(Doublecheck) The address is " + EncodeDestination(*KeyID));
 
                 // ... and it exists in the wallet...
                 LOCK(pwalletMain->cs_wallet);
 
-                if (pwalletMain->GetKey(KeyID, KeyOut))
+                if (pwalletMain->GetKey(*KeyID, KeyOut))
                 {
                     // ... and the key returned from the wallet is valid and matches the provided public key...
                     assert(KeyOut.IsValid());
@@ -4235,7 +4235,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                     _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
                          "The wallet key for the address is valid.");
 
-                    AddressOut = address;
+                    destination_out = destination;
 
                     // Note that KeyOut here will have the correct key to use by THIS node.
 
@@ -4262,9 +4262,9 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
 
         for (auto const& item : pwalletMain->mapAddressBook)
         {
-            const CBitcoinAddress& address = item.first;
+            const CTxDestination& destination = item.first;
 
-            std::string sScraperAddress = address.ToString();
+            std::string sScraperAddress = EncodeDestination(destination);
             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "Checking address " + sScraperAddress);
 
             entry = mScrapers.find(sScraperAddress);
@@ -4279,18 +4279,17 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                 {
                     _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "AppCache entry enabled");
 
-                    CKeyID KeyID;
-                    address.GetKeyID(KeyID);
+                    const CKeyID* KeyID = std::get_if<CKeyID>(&destination);
 
                     // ... and the address is valid...
-                    if (address.IsValid())
+                    if (KeyID)
                     {
                         _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests", "The address is valid.");
                         _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
-                             "(Doublecheck) The address is " + address.ToString());
+                             "(Doublecheck) The address is " + EncodeDestination(destination));
 
                         // ... and it exists in the wallet... (It SHOULD here... it came from the map...)
-                        if (pwalletMain->GetKey(KeyID, KeyOut))
+                        if (pwalletMain->GetKey(*KeyID, KeyOut))
                         {
                             // ... and the key returned from the wallet is valid ...
                             assert(KeyOut.IsValid());
@@ -4298,7 +4297,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& 
                             _log(logattribute::INFO, "IsScraperAuthorizedToBroadcastManifests",
                                  "The wallet key for the address is valid.");
 
-                            AddressOut = address;
+                            destination_out = destination;
 
                             // Note that KeyOut here will have the correct key to use by THIS node.
 
@@ -4337,11 +4336,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
     CKeyID ManifestKeyID = PubKey.GetID();
 
-    CBitcoinAddress ManifestAddress;
-    ManifestAddress.Set(ManifestKeyID);
-
     // This is the address corresponding to the manifest public key, and is the scraper ID key in the outer map.
-    std::string sManifestAddress = ManifestAddress.ToString();
+    std::string sManifestAddress = EncodeDestination(ManifestKeyID);
 
     const auto& iScraper = mMapCSManifestBinnedByScraper.find(sManifestAddress);
 
@@ -4484,7 +4480,7 @@ unsigned int ScraperDeleteUnauthorizedCScraperManifests()
     return nDeleted;
 }
 
-bool ScraperSendFileManifestContents(CBitcoinAddress& Address, CKey& Key)
+bool ScraperSendFileManifestContents(CTxDestination& destination, CKey& Key)
 EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest)
 {
     // This "broadcasts" the current ScraperFileManifest contents to the network.
@@ -4502,10 +4498,10 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
         LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
 
         // The manifest name is the authorized address of the scraper.
-        manifest->sCManifestName = Address.ToString();
+        manifest->sCManifestName = EncodeDestination(destination);
 
         // Also store local sCManifestName, because the manifest will be std::moved by addManifest.
-        sCManifestName = Address.ToString();
+        sCManifestName = EncodeDestination(destination);
 
         manifest->nTime = StructScraperFileManifest.timestamp;
 
@@ -5874,14 +5870,14 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
                 "Send a CScraperManifest object from the current ScraperFileManifest.\n"
                 );
 
-    CBitcoinAddress AddressOut;
+    CTxDestination destination_out;
     CKey KeyOut;
     bool ret;
-    if (IsScraperAuthorizedToBroadcastManifests(AddressOut, KeyOut))
+    if (IsScraperAuthorizedToBroadcastManifests(destination_out, KeyOut))
     {
         LOCK2(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 
-        ret = ScraperSendFileManifestContents(AddressOut, KeyOut);
+        ret = ScraperSendFileManifestContents(destination_out, KeyOut);
         uiInterface.NotifyScraperEvent(scrapereventtypes::Manifest, CT_NEW, {});
     }
     else
