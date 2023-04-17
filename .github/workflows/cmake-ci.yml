@@ -20,7 +20,7 @@ jobs:
                 include:
                     - tag: no-asm
                       deps: null
-                      options: -DUSE_ASM=OFF
+                      options: -DENABLE_PIE=ON -DUSE_ASM=OFF
                     - tag: gui-full
                       deps: |
                           libminiupnpc-dev

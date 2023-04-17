@@ -19,6 +19,10 @@ ccmake .
 
   `cmake .. -DENABLE_UPNP=ON -DDEFAULT_UPNP=ON`
 
+* Enable PIE and disable assembler routines:
+
+  `cmake .. -DENABLE_PIE=ON -DUSE_ASM=OFF`
+
 * Build tests and docs, run `lupdate`:
 
   `cmake .. -DENABLE_DOCS=ON -DENABLE_TESTS=ON -DLUPDATE=ON`

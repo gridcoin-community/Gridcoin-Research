@@ -23,12 +23,11 @@ set(COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers")
 # Toolchain configuration
 # =======================
 
-set(CMAKE_C_VISIBILITY_PRESET hidden)
-
 set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -70,6 +69,7 @@ option(ENABLE_ARM_SHANI "Build code that uses ARM SHA-NI intrinsics" ${HAS_ARM_S
 option(USE_ASM          "Enable assembly routines" ON)
 
 # Optional functionality
+option(ENABLE_PIE       "Build position-independent executables" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
 option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
@@ -161,8 +161,14 @@ endif()
 # Run probes
 # ==========
 
-# Detect whether PIE is supported by the current linker and environment
-check_pie_supported(OUTPUT_VARIABLE ENABLE_PIE)
+if(ENABLE_PIE)
+    check_pie_supported()
+    if(NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
+        message(FATAL_ERROR "PIE is not supported by the current linker")
+    endif()
+endif()
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 
 # Set endianness
 if(CMAKE_CXX_BYTE_ORDER EQUAL BIG_ENDIAN)
