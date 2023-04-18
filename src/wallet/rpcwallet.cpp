@@ -1104,6 +1104,8 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
     {
         string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
                      "\n"
+                     "Replace [account] with [labels] - We Need You!"
+                        //How? Please describe what must be done.
                      "Add a nrequired-to-sign multisignature address to the wallet\n"
                      "each key is a Gridcoin address or hex-encoded public key\n"
                      "If [account] is specified, assign address to [account].\n";
