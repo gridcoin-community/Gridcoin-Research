@@ -40,6 +40,7 @@ public:
         CKey key;
         if (!GetKey(address, key))
             return false;
+        fCompressed = key.IsCompressed();
         vchSecret.assign(key.begin(), key.end());
         return true;
     }

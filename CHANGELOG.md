@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.4.0] 2023-04-21, leisure
+
+### Added
+none
+
+### Changed
+none
+
+### Removed
+none
+
+### Fixed
+ - wallet, rpc: Add missing assignment of fCompressed in dumpprivkey #2680 (@jamescowens)
+
 ## [5.4.3.0] 2023-04-05, leisure
 
 ### Added
