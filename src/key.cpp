@@ -284,7 +284,7 @@ bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) 
 bool CKey::Load(const CPrivKey &seckey, const CPubKey &vchPubKey, bool fSkipCheck=false) {
     if (!ec_seckey_import_der(secp256k1_context_sign, (unsigned char*)begin(), seckey.data(), seckey.size()))
         return false;
-    fCompressed = vchPubKey.IsCompressed();
+    fCompressed = seckey.size() == CKey::COMPRESSED_SIZE;
     fValid = true;
 
     if (fSkipCheck)

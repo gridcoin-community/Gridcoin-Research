@@ -23,7 +23,7 @@ LIBUNIVALUE = $(UNIVALUE_LIBS)
 endif
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
-GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -I$(builddir)/bdb53 $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
+GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj -I$(srcdir)/secp256k1/include $(BDB_CFLAGS) -I$(builddir)/bdb53 $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
 
 LIBGRIDCOIN_UTIL=libgridcoin_util.a
 LIBGRIDCOINQT=qt/libgridcoinqt.a
@@ -429,7 +429,11 @@ gridcoinresearchd_LDADD = \
  $(LIBSECP256K1)
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 gridcoinresearchd_LDADD += $(LIBDB)
+else
+gridcoinresearchd_LDADD += $(BDB_LIBS)
+endif
 endif
 
 gridcoinresearchd_LDADD += $(CURL_LIBS) $(BOOST_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZIP_LIBS)
