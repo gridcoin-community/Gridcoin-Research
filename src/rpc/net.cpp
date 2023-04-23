@@ -490,7 +490,7 @@ UniValue sendalert(const UniValue& params, bool fHelp)
             "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
             "\n"
             "<message> ----> is the alert text message\n"
-            "<privatekey> -> is hex string of alert master private key\n"
+            "<privatekey> -> is WIF encoded alert master private key\n"
             "<minver> -----> is the minimum applicable internal client version\n"
             "<maxver> -----> is the maximum applicable internal client version\n"
             "<priority> ---> is integer priority number\n"
@@ -517,8 +517,20 @@ UniValue sendalert(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    vector<unsigned char> vchPrivKey = ParseHex(params[1].get_str());
-    key.Load(CPrivKey(vchPrivKey.begin(), vchPrivKey.end()), CPubKey(), true);
+    CBitcoinSecret vchSecret;
+
+    if (!vchSecret.SetString(params[0].get_str())) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    }
+
+    bool fCompressed;
+    CSecret secret = vchSecret.GetSecret(fCompressed);
+    key.Set(secret.begin(), secret.end(), fCompressed);
+
+    if (!key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    }
+
     if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");
@@ -551,7 +563,7 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
             //          0            1    2            3            4        5          6
             "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
             "\n"
-            "<privatekey> -> is hex string of alert master private key\n"
+            "<privatekey> -> is WIF encoded alert master private key\n"
             "<id> ---------> is the unique alert number\n"
             "<subverlist> -> comma separated list of versions warning applies to\n"
             "<cancellist> -> comma separated ids of alerts to cancel\n"
@@ -591,8 +603,20 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    vector<unsigned char> vchPrivKey = ParseHex(params[0].get_str());
-    key.Load(CPrivKey(vchPrivKey.begin(), vchPrivKey.end()), CPubKey(), true);
+    CBitcoinSecret vchSecret;
+
+    if (!vchSecret.SetString(params[0].get_str())) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    }
+
+    bool fCompressed;
+    CSecret secret = vchSecret.GetSecret(fCompressed);
+    key.Set(secret.begin(), secret.end(), fCompressed);
+
+    if (!key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    }
+
     if (!key.Sign(Hash(alert.vchMsg), alert.vchSig))
         throw runtime_error(
             "Unable to sign alert, check private key?\n");
