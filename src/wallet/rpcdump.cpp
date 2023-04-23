@@ -125,20 +125,17 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
 
     CBitcoinSecret vchSecret;
     CKey key;
-    bool fGood = vchSecret.SetString(strSecret);
 
-    // If CBitcoinSecret key decode failed, try to decode the key as hex
-    if(!fGood)
-    {
-        auto vecsecret = ParseHex(strSecret);
-        if (!key.Load(CPrivKey(vecsecret.begin(), vecsecret.end()), CPubKey(), /*fSkipCheck=*/true))
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+    if (!vchSecret.SetString(strSecret)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key.");
     }
-    else
-    {
-        bool fCompressed;
-        CSecret secret = vchSecret.GetSecret(fCompressed);
-        key.Set(secret.begin(), secret.end(), fCompressed);
+
+    bool fCompressed;
+    CSecret secret = vchSecret.GetSecret(fCompressed);
+    key.Set(secret.begin(), secret.end(), fCompressed);
+
+    if (!key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key.");
     }
 
     if (fWalletUnlockStakingOnly)

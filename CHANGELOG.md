@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.5.0] 2023-04-23, leisure
+
+### Added
+none
+
+### Changed
+none
+
+### Removed
+none
+
+### Fixed
+ - key, rpc: fix key parsing #2682 (@div72)
+
 ## [5.4.4.0] 2023-04-21, leisure
 
 ### Added
