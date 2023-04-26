@@ -133,7 +133,7 @@ ProjectTableModel::ProjectTableModel(ResearcherModel *model, const bool extended
         << tr("Whitelist")
         << tr("Has GDPR Controls")
         << tr("Magnitude")
-        << tr("Avg. Credit")
+        << tr("Recent Avg. Credit")
         << tr("CPID");
 }
 
