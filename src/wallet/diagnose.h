@@ -828,6 +828,7 @@ public:
                                   "period of time to retrieve your research rewards when solo crunching. You should consider "
                                   "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.");
                 m_results_string = _("Warning: 45 days < ETTS =") + " %1 <= 90 days";
+                m_results_string_arg.push_back(rounded_ETTS);
                 m_results = Diagnose::WARNING;
             } else {
                 m_results_string = _("Passed: ETTS =") + " %1 <= 45 days";
