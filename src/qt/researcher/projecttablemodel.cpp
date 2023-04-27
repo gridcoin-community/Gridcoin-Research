@@ -186,7 +186,7 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                 case Magnitude:
                     return row->m_magnitude;
                 case RecentAverageCredit:
-                    return row->m_rac;
+                    return QString::number(row->m_rac, 'f', 0);
             }
             break;
 
