@@ -374,6 +374,7 @@ static const CRPCCommand vRPCCommands[] =
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
     { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer     },
     { "addkey",                  &addkey,                  cat_developer     },
+    { "beaconaudit",             &beaconaudit,             cat_developer     },
     { "changesettings",          &changesettings,          cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },

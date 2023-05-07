@@ -188,6 +188,7 @@ extern UniValue superblocks(const UniValue& params, bool fHelp);
 extern UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
 extern UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
 extern UniValue addkey(const UniValue& params, bool fHelp);
+extern UniValue beaconaudit(const UniValue& params, bool fHelp);
 extern UniValue currentcontractaverage(const UniValue& params, bool fHelp);
 extern UniValue debug(const UniValue& params, bool fHelp);
 extern UniValue dumpcontracts(const UniValue& params, bool fHelp);

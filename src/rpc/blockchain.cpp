@@ -1773,6 +1773,203 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue beaconaudit(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2)
+        throw runtime_error(
+            "beaconaudit [errors only] [cpid]\n"
+            "\n"
+            "[errors only] -> Boolean to provide errors only. Defaults to true.\n"
+            "[cpid] -> Optional parameter of cpid. Defaults to current cpid. * means all active CPIDs.\n"
+            "\n"
+            "Conducts consistency audit for beacon contracts and beacon chain for given CPID.\n"
+            "This is currently limited to looking at multiple renewals for the same CPID in\n"
+            "the same block and reporting inconsistencies between the normal contract order\n"
+            "and the historical beacon entries (beacon chainlet) for the CPID.\n");
+
+    bool errors_only = true;
+    bool global = false;
+
+    GRC::MiningId mining_id;
+
+    if (params.size() > 0) {
+        errors_only = params[0].get_bool();
+    }
+
+    if (params.size() > 1) {
+        if (params[1].get_str() == "*") {
+            global = true;
+        } else {
+            mining_id = GRC::MiningId::Parse(params[1].get_str());
+        }
+    } else {
+        mining_id = GRC::Researcher::Get()->Id();
+    }
+
+    if (!global && !mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    const GRC::CpidOption cpid = mining_id.TryCpid();
+
+    if (!global && !cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for investor.");
+    }
+
+    // Only allow auditing when at or above block V11 threshold.
+    if (!IsV11Enabled(pindexBest->nHeight)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "This function cannot be called when the wallet height is below the block V11"
+                                                "threshold.");
+    }
+
+    // Find Fern starting block.
+    CBlockIndex* block_index = GRC::BlockFinder::FindByHeight(Params().GetConsensus().BlockV11Height);
+
+    std::set<GRC::Cpid> cpids;
+
+    typedef std::tuple<GRC::Contract, CTransaction, unsigned int, CBlockIndex*> BeaconContext;
+
+    std::multimap<GRC::Cpid, BeaconContext> beacon_contracts;
+
+    // This form of block index traversal starts at the first V11 block and continues to pIndexBest (inclusive).
+    while (block_index) {
+        CBlock block;
+
+        if (!ReadBlockFromDisk(block, block_index, Params().GetConsensus())) {
+            throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to read block from disk. Your blockchain files are corrupted.");
+        }
+
+        std::set<GRC::Cpid> cpids_in_block;
+        std::multimap<GRC::Cpid, BeaconContext> beacon_contracts_in_block;
+
+        for (unsigned int i = 0; i < block.vtx.size(); ++i) {
+
+            for (const auto& tx_contract: block.vtx[i].GetContracts()) {
+                if (tx_contract.m_type != GRC::ContractType::BEACON) continue;
+
+                GRC::BeaconPayload beacon_payload = tx_contract.CopyPayloadAs<GRC::BeaconPayload>();
+
+                // If not global (all cpids) and payload cpid does not match input parameter (specified cpid), continue.
+                if (!global && beacon_payload.m_cpid != *cpid) continue;
+
+                cpids_in_block.insert(beacon_payload.m_cpid);
+
+                BeaconContext beacon_context {tx_contract, block.vtx[i], i, block_index};
+
+                beacon_contracts_in_block.insert({ beacon_payload.m_cpid, beacon_context });
+            }
+        }
+
+        for (const auto& cpid_in_block : cpids_in_block) {
+            if (beacon_contracts_in_block.count(cpid_in_block) > 1) {
+                cpids.insert(cpid_in_block);
+
+                auto beacons_to_insert = beacon_contracts_in_block.equal_range(cpid_in_block);
+
+                for (auto iter = beacons_to_insert.first; iter != beacons_to_insert.second; ++iter) {
+                    beacon_contracts.insert({ iter->first, iter->second });
+                }
+            }
+        }
+
+        // If we are at pIndexBest (i.e. no pnext), then break.
+        if (block_index->pnext) {
+            block_index = block_index->pnext;
+        } else {
+            break;
+        }
+    }
+
+    LogPrintf("INFO: %s: number of cpids = %u, number of beacon contracts = %u",
+              __func__,
+              cpids.size(),
+              beacon_contracts.size());
+
+    UniValue res(UniValue::VOBJ);
+    UniValue beacons_to_output(UniValue::VARR);
+
+    GRC::BeaconRegistry& beacon_registry = GRC::GetBeaconRegistry();
+
+    for (const auto& cpid_to_output : cpids) {
+        UniValue beacon_contracts_output(UniValue::VARR);
+        auto beacon_contracts_to_output = beacon_contracts.equal_range(cpid_to_output);
+
+        uint256 prev_block_hash, prev_renewal_hash, prev_renewal_hash_report;
+
+        for (auto beacon_contract_to_output = beacon_contracts_to_output.first;
+             beacon_contract_to_output != beacon_contracts_to_output.second;
+             ++beacon_contract_to_output) {
+            bool prev_hash_mismatch_error = false;
+            bool no_historical_entry_error = false;
+
+            size_t i = std::distance(beacon_contracts_to_output.first, beacon_contract_to_output);
+
+            UniValue beacon_contract_output(UniValue::VOBJ);
+
+            uint256 beacon_hash = get<1>(beacon_contract_to_output->second).GetHash();
+
+            GRC::Contract::Action action = get<0>(beacon_contract_to_output->second).m_action;
+
+            const GRC::BeaconPayload& beacon_payload = get<0>(beacon_contract_to_output->second).CopyPayloadAs<GRC::BeaconPayload>();
+
+            GRC::BeaconOption historical_beacon_entry =
+                beacon_registry.FindHistorical(get<1>(beacon_contract_to_output->second).GetHash());
+
+            if (historical_beacon_entry) {
+                if (action == GRC::ContractAction::ADD && historical_beacon_entry->m_status == GRC::BeaconStatusForStorage::RENEWAL) {
+                    if (i && prev_block_hash == get<3>(beacon_contract_to_output->second)->GetBlockHash()
+                        && prev_renewal_hash != historical_beacon_entry->m_previous_hash) {
+                        prev_hash_mismatch_error = true;
+                    }
+
+                    prev_renewal_hash_report = prev_renewal_hash;
+                    prev_renewal_hash = beacon_hash;
+                    prev_block_hash = get<3>(beacon_contract_to_output->second)->GetBlockHash();
+                }
+            } else {
+                no_historical_entry_error = true;
+            }
+
+            if (!errors_only || prev_hash_mismatch_error || no_historical_entry_error) {
+                beacon_contract_output.pushKV("height", get<3>(beacon_contract_to_output->second)->nHeight);
+                beacon_contract_output.pushKV("vtx_index", (uint64_t) get<2>(beacon_contract_to_output->second));
+                beacon_contract_output.pushKV("txid", beacon_hash.ToString());
+                beacon_contract_output.pushKV("tx_time", (int64_t) get<1>(beacon_contract_to_output->second).nTime);
+                beacon_contract_output.pushKV("tx_time_string", FormatISO8601DateTime(get<1>(beacon_contract_to_output->second).nTime));
+                beacon_contract_output.pushKV("action", action.ToString());
+
+                beacon_contract_output.pushKV("same_block_renewal_prev_hash_mismatch", prev_hash_mismatch_error);
+
+                if (prev_hash_mismatch_error) {
+                    beacon_contract_output.pushKV("previous_renewal_hash_via_contract_traversal",
+                                                  prev_renewal_hash_report.ToString());
+                    beacon_contract_output.pushKV("previous_renewal_hash_by_historical_beacon_entry",
+                                                  historical_beacon_entry->m_previous_hash.ToString());
+                }
+
+                if (!no_historical_entry_error) {
+                    beacon_contract_output.pushKV("status", historical_beacon_entry->StatusToString());
+                } else {
+                    beacon_contract_output.pushKV("status", "no historical entry");
+                }
+
+                beacon_contracts_output.push_back(beacon_contract_output);
+            }
+        }
+
+        UniValue beacon(UniValue::VOBJ);
+
+        if (!beacon_contracts_output.empty()) {
+            beacon.pushKV("cpid", cpid_to_output.ToString());
+            beacon.pushKV("contracts", beacon_contracts_output);
+            beacons_to_output.push_back(beacon);
+        }
+    }
+
+    res.pushKV("cpids_with_more_than_one_beacon_contract_in_block", beacons_to_output);
+
+    return res;
+}
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {

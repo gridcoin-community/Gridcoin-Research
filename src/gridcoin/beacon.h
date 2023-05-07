@@ -620,6 +620,14 @@ public:
     std::vector<Beacon_ptr> FindPending(const Cpid& cpid) const;
 
     //!
+    //! \brief Find a historical beacon entry from the beacon (txid) hash;
+    //! \param txid hash
+    //! \return An object that either contains a reference to a historical
+    //! beacon entry if found or does not.
+    //!
+    const BeaconOption FindHistorical(const uint256& hash);
+
+    //!
     //! \brief Determine whether a beacon is active for the specified CPID.
     //!
     //! \param cpid The CPID to check for an active beacon.
