@@ -150,6 +150,10 @@ if(ENABLE_TESTS)
     endif()
 endif()
 
+if(UNIX)
+    find_package(Rt REQUIRED)
+endif()
+
 if(WIN32)
     enable_language(RC)
     find_program(MAKENSIS makensis)

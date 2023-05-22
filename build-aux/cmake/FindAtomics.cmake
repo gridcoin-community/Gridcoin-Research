@@ -17,7 +17,7 @@ include(CheckCXXSourceCompiles)
 # shifting like LLVM, but it’s a known bug that it does not. This means
 # anything that wants to use atomics on 1-byte or 2-byte types needs
 # -latomic, but not 4-byte or 8-byte (though it does no harm).
-check_cxx_source_compiles("
+set(atomic_code "
     #include <atomic>
     #include <cstdint>
 
@@ -29,8 +29,8 @@ check_cxx_source_compiles("
         ++n64;
         return 0;
     }"
-    ATOMICS_LOCK_FREE_INSTRUCTIONS
 )
+check_cxx_source_compiles("${atomic_code}" ATOMICS_LOCK_FREE_INSTRUCTIONS)
 
 if(ATOMICS_LOCK_FREE_INSTRUCTIONS)
     set(ATOMICS_FOUND TRUE)
