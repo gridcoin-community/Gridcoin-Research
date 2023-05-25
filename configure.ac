@@ -1329,7 +1329,7 @@ AC_SUBST(HAVE_BUILTIN_PREFETCH)
 AC_SUBST(HAVE_MM_PREFETCH)
 AC_SUBST(HAVE_STRONG_GETAUXVAL)
 AC_SUBST(HAVE_WEAK_GETAUXVAL)
-AC_CONFIG_FILES([Makefile src/Makefile share/setup.nsi share/qt/Info.plist])
+AC_CONFIG_FILES([Makefile src/Makefile share/setup.nsi share/qt/Info.plist CHANGELOG.md:CHANGELOG.md])
 AC_CONFIG_FILES([contrib/devtools/split-debug.sh],[chmod +x contrib/devtools/split-debug.sh])
 AM_COND_IF([HAVE_DOXYGEN], [AC_CONFIG_FILES([doc/Doxyfile])])
 
