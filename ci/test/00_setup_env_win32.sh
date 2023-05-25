@@ -13,7 +13,6 @@ export PACKAGES="python3 nsis g++-mingw-w64-i686 wine-binfmt winehq-stable"
 export RUN_UNIT_TESTS=true
 export RUN_FUNCTIONAL_TESTS=false
 # export RUN_SECURITY_TESTS="true"
-export GOAL=""
+export GOAL="deploy"
 export GRIDCOIN_CONFIG="--enable-reduce-exports"
-export DEP_OPTS="NO_QT=1"
 export DPKG_ADD_ARCH="i386"
