@@ -79,7 +79,6 @@ $(BITCOIN_WIN_INSTALLER): all-recursive
 	  echo error: could not build $@
 	@echo built $@
 	@rm release/gridcoinresearch.exe release/gridcoinresearchd.exe
-	@mv $@ $(top_builddir)/release/$@
 
 $(OSX_APP)/Contents/PkgInfo:
 	$(MKDIR_P) $(@D)
