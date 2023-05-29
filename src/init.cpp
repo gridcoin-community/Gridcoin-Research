@@ -402,8 +402,7 @@ void SetupServerArgs()
                                                  " prefixed by datadir location. (default: %s)",
                                                  GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    //TODO: Implement startupnotify option
-    //argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent,"
                                                 " so be careful not to delay it long (if the command doesn't require interaction with the"
                                                 " server, consider having it fork into the background).",
@@ -675,6 +674,17 @@ bool InitSanityCheck()
 
     return true;
 }
+
+#if HAVE_SYSTEM
+static void StartupNotify(const ArgsManager& args)
+{
+    std::string cmd = args.GetArg("-startupnotify", "");
+    if (!cmd.empty()) {
+        std::thread t(runCommand, cmd);
+        t.detach(); // thread runs free
+    }
+}
+#endif
 
 /**
  * Initialize global loggers.
@@ -1554,6 +1564,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
+
+    #if HAVE_SYSTEM
+        StartupNotify(gArgs);
+    #endif
 
     uiInterface.InitMessage(_("Done loading"));
     g_timer.GetTimes("Done loading", "init");
