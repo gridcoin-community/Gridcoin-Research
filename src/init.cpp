@@ -87,6 +87,19 @@ static fs::path GetPidFile(const ArgsManager& args)
 // Shutdown
 //
 
+#if HAVE_SYSTEM
+static void ShutdownNotify(const ArgsManager& args)
+{
+    std::vector<std::thread> threads;
+    for (const auto& cmd : args.GetArgs("-shutdownnotify")) {
+        threads.emplace_back(runCommand, cmd);
+    }
+    for (auto& t : threads) {
+        t.join();
+    }
+}
+#endif
+
 bool ShutdownRequested()
 {
     return fRequestShutdown;
@@ -126,6 +139,11 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
          LogPrintf("gridcoinresearch exiting...");
+
+        #if HAVE_SYSTEM
+            ShutdownNotify(gArgs);
+        #endif
+
         fShutdown = true;
 
         // Signal to the scheduler to stop.
@@ -386,6 +404,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     //TODO: Implement startupnotify option
     //argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent,"
+                                                " so be careful not to delay it long (if the command doesn't require interaction with the"
+                                                " server, consider having it fork into the background).",
+                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 
 
     // Staking
