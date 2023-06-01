@@ -137,9 +137,7 @@ $(OSX_TEMP_ISO): $(APP_DIST_EXTRAS)
 	$(XORRISOFS) -D -l -V "$(OSX_VOLNAME)" -no-pad -r -dir-mode 0755 -o $@ dist -- $(if $(SOURCE_DATE_EPOCH),-volume_date all_file_dates =$(SOURCE_DATE_EPOCH))
 
 $(OSX_DMG): $(OSX_TEMP_ISO)
-	$(MKDIR_P) $(top_builddir)/release
 	$(DMG) dmg "$<" "$@"
-	@mv $@ $(top_builddir)/release/$(PACKAGE)-$(PACKAGE_VERSION)-macos.dmg
 
 dpi%.$(OSX_BACKGROUND_IMAGE): contrib/macdeploy/$(OSX_BACKGROUND_SVG)
 	sed 's/PACKAGE_NAME/$(PACKAGE_NAME)/' < "$<" | $(RSVG_CONVERT) -f png -d $* -p $* | $(IMAGEMAGICK_CONVERT) - $@
