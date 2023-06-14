@@ -1,5 +1,5 @@
 configure_file(
-    config/gridcoin-config.h.in
+    config/gridcoin-config.h.cmake.in
     config/gridcoin-config.h
 )
 configure_file(
