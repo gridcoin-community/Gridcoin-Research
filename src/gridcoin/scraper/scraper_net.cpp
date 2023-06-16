@@ -31,7 +31,6 @@ extern CCriticalSection cs_ScraperGlobals;
 extern unsigned int nScraperSleep;
 extern std::atomic<int64_t> g_nTimeBestReceived;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
-extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern AppCacheSectionExt GetExtendedScrapersCache();
 extern bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
@@ -361,7 +360,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
     AppCacheSectionExt mScrapersExtended = GetExtendedScrapersCache();
 
-    // Now mScrapersExt is up to date. Walk and see if there is an entry with a value of true that matches
+    // Now mScrapersExtended is up to date. Walk and see if there is an entry with a value of true that matches
     // manifest address. If so the manifest is authorized. Note that no grace period has to be considered
     // for the authorized case. To prevent islanding in the unauthorized case, we must allow a grace period
     // before we return a banscore > 0. The grace period must extend SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD

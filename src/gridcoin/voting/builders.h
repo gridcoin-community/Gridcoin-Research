@@ -220,12 +220,13 @@ public:
     //! \brief Generate a poll contract transaction with the constructed poll.
     //!
     //! \param pwallet Points to a wallet instance to generate the claim from.
+    //! \param contract_version the contract version number to use.
     //!
     //! \return A new transaction that contains the poll contract.
     //!
     //! \throws VotingError If the constructed poll is malformed.
     //!
-    CWalletTx BuildContractTx(CWallet* const pwallet);
+    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version);
 
 private:
     std::unique_ptr<Poll> m_poll;    //!< The poll under construction.
@@ -337,12 +338,13 @@ public:
     //! \brief Generate a vote contract transaction with the constructed vote.
     //!
     //! \param pwallet Points to a wallet instance to generate the claim from.
+    //! \param contract_version the contract version number to use.
     //!
     //! \return A new transaction that contains the vote contract.
     //!
     //! \throws VotingError If the constructed vote is malformed.
     //!
-    CWalletTx BuildContractTx(CWallet* const pwallet);
+    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version);
 
 private:
     const Poll* m_poll;           //!< The poll to create a vote contract for.

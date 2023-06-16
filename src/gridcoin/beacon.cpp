@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -63,7 +63,7 @@ Beacon::Beacon(CPubKey public_key, int64_t timestamp, uint256 hash)
     , m_public_key(std::move(public_key))
     , m_timestamp(timestamp)
     , m_hash(hash)
-    , m_prev_beacon_hash()
+    , m_previous_hash()
     , m_status(BeaconStatusForStorage::UNKNOWN)
 {
 }
@@ -103,6 +103,51 @@ bool Beacon::WellFormed() const
     return m_public_key.IsValid();
 }
 
+std::pair<std::string, std::string> Beacon::KeyValueToString() const
+{
+    return std::make_pair(m_cpid.ToString(), GetAddress().ToString());
+}
+
+std::string Beacon::StatusToString() const
+{
+    return StatusToString(m_status.Value());
+}
+
+std::string Beacon::StatusToString(const BeaconStatusForStorage& status, const bool& translated) const
+{
+    if (translated) {
+        switch(status) {
+        case BeaconStatusForStorage::UNKNOWN:         return _("Unknown");
+        case BeaconStatusForStorage::PENDING:         return _("Pending");
+        case BeaconStatusForStorage::ACTIVE:          return _("Active");
+        case BeaconStatusForStorage::RENEWAL:         return _("Renewal");
+        case BeaconStatusForStorage::EXPIRED_PENDING: return _("Expired while pending");
+        case BeaconStatusForStorage::DELETED:         return _("Deleted");
+        case BeaconStatusForStorage::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    } else {
+        // The untranslated versions are really meant to serve as the string equivalent of the enum values.
+        switch(status) {
+        case BeaconStatusForStorage::UNKNOWN:         return "Unknown";
+        case BeaconStatusForStorage::PENDING:         return "Pending";
+        case BeaconStatusForStorage::ACTIVE:          return "Active";
+        case BeaconStatusForStorage::RENEWAL:         return "Renewal";
+        case BeaconStatusForStorage::EXPIRED_PENDING: return "Expired while pending";
+        case BeaconStatusForStorage::DELETED:         return "Deleted";
+        case BeaconStatusForStorage::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    }
+
+    // This will never be reached. Put it in anyway to prevent control reaches end of non-void function warning
+    // from some compiler versions.
+    return std::string{};
+}
+
+
 int64_t Beacon::Age(const int64_t now) const
 {
     return now - m_timestamp;
@@ -131,7 +176,7 @@ bool Beacon::Renewable(const int64_t now) const
 
 bool Beacon::Renewed() const
 {
-    return (m_status == BeaconStatusForStorage::RENEWAL && m_prev_beacon_hash != uint256());
+    return (m_status == BeaconStatusForStorage::RENEWAL && m_previous_hash != uint256());
 }
 
 CKeyID Beacon::GetId() const
@@ -177,7 +222,7 @@ bool Beacon::operator==(Beacon b)
     result &= (m_public_key == b.m_public_key);
     result &= (m_timestamp == b.m_timestamp);
     result &= (m_hash == b.m_hash);
-    result &= (m_prev_beacon_hash == b.m_prev_beacon_hash);
+    result &= (m_previous_hash == b.m_previous_hash);
     result &= (m_status == b.m_status);
 
     return result;
@@ -308,6 +353,13 @@ std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid& cpid) const
     return found;
 }
 
+const BeaconOption BeaconRegistry::FindHistorical(const uint256& hash)
+{
+    BeaconOption beacon = m_beacon_db.find(hash)->second;
+
+    return beacon;
+}
+
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
 {
     if (const BeaconOption beacon = Try(cpid)) {
@@ -358,7 +410,7 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
 
     // Set the status to RENEWAL.
     renewal.m_status = BeaconStatusForStorage::RENEWAL;
-    renewal.m_prev_beacon_hash = current_beacon_ptr->m_hash;
+    renewal.m_previous_hash = current_beacon_ptr->m_hash;
 
     // Put the renewal beacon into the db.
     if (!m_beacon_db.insert(renewal.m_hash, height, renewal))
@@ -415,11 +467,11 @@ void BeaconRegistry::Add(const ContractContext& ctx)
         current_beacon_ptr = beacon_pair_iter->second;
 
         // Set the payload m_beacon's prev beacon ctx hash = to the existing beacon's hash.
-        payload.m_beacon.m_prev_beacon_hash = current_beacon_ptr->m_hash;
+        payload.m_beacon.m_previous_hash = current_beacon_ptr->m_hash;
     }
     else // Effectively Newbie.
     {
-        payload.m_beacon.m_prev_beacon_hash = uint256 {};
+        payload.m_beacon.m_previous_hash = uint256 {};
     }
 
     // Legacy beacon contracts before block version 11--just load the beacon:
@@ -517,7 +569,7 @@ void BeaconRegistry::Delete(const ContractContext& ctx)
 
     deleted_beacon.m_cpid = payload->m_cpid;
     deleted_beacon.m_hash = ctx.m_tx.GetHash();
-    deleted_beacon.m_prev_beacon_hash = last_active_ctx_hash;
+    deleted_beacon.m_previous_hash = last_active_ctx_hash;
     deleted_beacon.m_status = BeaconStatusForStorage::DELETED;
 
     // Insert the deleted beacon entry in the storage db.
@@ -627,14 +679,14 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
             // Let's proceed anyway. A renewed beacon will have a non-null m_prev_beacon_hash, referring to the
             // prior beacon record, which could itself be a renewal, or the original advertisement. Regardless,
             // if found, resurrect that record.
-            if (!renewal->m_prev_beacon_hash.IsNull())
+            if (!renewal->m_previous_hash.IsNull())
             {
                 Cpid cpid = iter->first;
 
                 // Get the hash of the previous beacon. This normally could be a renewal, but
                 // it could also be a gap advertisement or a force advertisement.
                 uint256 renewal_hash = renewal->m_hash;
-                uint256 resurrect_hash = renewal->m_prev_beacon_hash;
+                uint256 resurrect_hash = renewal->m_previous_hash;
 
                 // Erase the beacon that was ordered deleted.
                 m_beacons.erase(iter);
@@ -682,7 +734,7 @@ void BeaconRegistry::Revert(const ContractContext& ctx)
 
         if (deleted_beacon_record != m_beacon_db.end())
         {
-            auto record_to_restore = m_beacon_db.find(deleted_beacon_record->second->m_prev_beacon_hash);
+            auto record_to_restore = m_beacon_db.find(deleted_beacon_record->second->m_previous_hash);
 
             if (record_to_restore != m_beacon_db.end())
             {
@@ -840,7 +892,7 @@ void BeaconRegistry::ActivatePending(
             Beacon activated_beacon(*iter_pair->second);
 
             // Update the new beacon's prev hash to be the hash of the pending beacon that is being activated.
-            activated_beacon.m_prev_beacon_hash = found_pending_beacon->m_hash;
+            activated_beacon.m_previous_hash = found_pending_beacon->m_hash;
 
             // We are going to have to use a composite hash for these because activation is not done as
             // individual transactions. Rather groups are done in each superblock under one hash. The
@@ -882,7 +934,7 @@ void BeaconRegistry::ActivatePending(
 
         if (pending_beacon.PendingExpired(superblock_time)) {
             // Set the expired pending beacon's previous beacon hash to the beacon entry's hash.
-            pending_beacon.m_prev_beacon_hash = pending_beacon.m_hash;
+            pending_beacon.m_previous_hash = pending_beacon.m_hash;
 
             // Mark the status as EXPIRED_PENDING.
             pending_beacon.m_status = BeaconStatusForStorage::EXPIRED_PENDING;
@@ -915,11 +967,11 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 activation_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
+        uint256 activation_hash = Hash(superblock_hash, iter->second->m_previous_hash);
         // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
         if (iter->second->m_hash == activation_hash) {
             // Find the pending beacon entry in the db before the activation. This is the previous state record.
-            auto pending_beacon_entry = m_beacon_db.find(iter->second->m_prev_beacon_hash);
+            auto pending_beacon_entry = m_beacon_db.find(iter->second->m_previous_hash);
 
             // If not found for some reason, move on.
             if (pending_beacon_entry == m_beacon_db.end())
@@ -959,13 +1011,13 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         // The cpid in the historical beacon record to be matched.
         Cpid cpid = iter->second->m_cpid;
 
-        uint256 match_hash = Hash(superblock_hash, iter->second->m_prev_beacon_hash);
+        uint256 match_hash = Hash(superblock_hash, iter->second->m_previous_hash);
 
         // If the calculated match_hash matches the key (hash) of the historical beacon record, then
         // restore the previous record pointed to by the historical beacon record to the pending map.
         if (match_hash == iter->first)
         {
-            uint256 resurrect_pending_hash = iter->second->m_prev_beacon_hash;
+            uint256 resurrect_pending_hash = iter->second->m_previous_hash;
 
             if (!resurrect_pending_hash.IsNull())
             {
@@ -1002,279 +1054,136 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     } // m_beacon_db traversal
 }
 
-int BeaconRegistry::Initialize()
+//!
+//! \brief BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries. This is a specialization of the RegistryDB template
+//! HandleCurrentHistoricalEntries specific to Beacons. It handles the pending/active/renawal/expired pending/deleted
+//! states and their interaction with the active entries map (m_beacons) and the pending entries map (m_pending).
+//!
+//! \param entries
+//! \param pending_entries
+//! \param entry
+//! \param historical_entry_ptr
+//! \param recnum
+//! \param key_type
+//!
+template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::BeaconRegistry::BeaconMap& entries,
+                                               GRC::BeaconRegistry::PendingBeaconMap& pending_entries,
+                                               const Beacon& entry,
+                                               entry_ptr& historical_entry_ptr,
+                                               const uint64_t& recnum,
+                                               const std::string& key_type)
 {
-    int height = m_beacon_db.Initialize(m_pending, m_beacons);
+    // Note that in this specialization, entry.m_cpid and entry.GetId() are used for the map keys. In the general template,
+    // entry.Key() is used (which here is the same as entry.m_cpid). No generalized method to implement entry.PendingKey()
+    // has been implemented up to this point, because the pending map is actually only used here in the beacon
+    // specialization.
 
-    LogPrint(LogFlags::BEACON, "INFO %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
-    LogPrint(LogFlags::BEACON, "INFO %s: m_beacons size after load: %u", __func__, m_beacons.size());
+    // If there is another registry class that arises that actually needs to use the "pending" state then it would be
+    // necessary to implement the PendingKey() call in the template.
 
-    return height;
+    if (entry.m_status == BeaconStatusForStorage::PENDING)
+    {
+        LogPrint(LogFlags::CONTRACT, "INFO: %s: %ss: pending entry insert: cpid %s, address %s, timestamp %" PRId64 ", "
+                 "hash %s, previous_hash %s, status %s, recnum %" PRId64 ".",
+                 __func__,
+                 key_type,
+                 entry.KeyValueToString().first, // cpid
+                 entry.KeyValueToString().second, // address
+                 entry.m_timestamp, // timestamp
+                 entry.m_hash.GetHex(), // transaction hash
+                 entry.m_previous_hash.GetHex(), // prev beacon transaction hash
+                 entry.StatusToString(), // status
+                 recnum
+                 );
+
+        // Insert the pending beacon in the pending map.
+        pending_entries[entry.GetId()] = historical_entry_ptr;
+    }
+
+    if (entry.m_status == BeaconStatusForStorage::ACTIVE || entry.m_status == BeaconStatusForStorage::RENEWAL)
+    {
+        LogPrint(LogFlags::CONTRACT, "INFO: %s: %ss: entry insert: cpid %s, address %s, timestamp %" PRId64 ", "
+                "hash %s, previous_hash %s, status %s, recnum %" PRId64 ".",
+                 __func__,
+                 key_type,
+                 entry.KeyValueToString().first, // cpid
+                 entry.KeyValueToString().second, // address
+                 entry.m_timestamp, // timestamp
+                 entry.m_hash.GetHex(), // transaction hash
+                 entry.m_previous_hash.GetHex(), // prev beacon transaction hash
+                 entry.StatusToString(), // status
+                 recnum
+                 );
+
+        // Insert or replace the existing map entry for the cpid with the latest active or renewed for that CPID.
+        entries[entry.m_cpid] = historical_entry_ptr;
+
+        // Delete any entry in the pending map with THE SAME public key.
+        auto pending_to_delete = pending_entries.find(entry.GetId());
+        if (pending_to_delete != pending_entries.end())
+        {
+            LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: pending entry delete after active insert: cpid %s, address %s, "
+                     "timestamp %" PRId64 ", hash %s, previous_hash %s, beacon status %s, recnum %" PRId64 ".",
+                      __func__,
+                     key_type,
+                     pending_to_delete->second->KeyValueToString().first, // cpid
+                     pending_to_delete->second->KeyValueToString().second, // address
+                     pending_to_delete->second->m_timestamp, // timestamp
+                     pending_to_delete->second->m_hash.GetHex(), // transaction hash
+                     pending_to_delete->second->m_previous_hash.GetHex(), // prev beacon transaction hash
+                     pending_to_delete->second->StatusToString(), // status
+                     recnum
+                     );
+
+            pending_entries.erase(pending_to_delete);
+        }
+    }
+
+    if (entry.m_status == BeaconStatusForStorage::EXPIRED_PENDING)
+    {
+        LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: expired pending entry delete: cpid %s, address %s, timestamp %" PRId64 ", "
+                 "hash %s, previous_hash %s, beacon status %s, recnum %" PRId64 ".",
+                  __func__,
+                 key_type,
+                 entry.KeyValueToString().first, // cpid
+                 entry.KeyValueToString().second, // address
+                 entry.m_timestamp, // timestamp
+                 entry.m_hash.GetHex(), // transaction hash
+                 entry.m_previous_hash.GetHex(), // prev beacon transaction hash
+                 entry.StatusToString(), // status
+                 recnum
+                 );
+
+        // Delete any entry in the pending map that is marked expired.
+        pending_entries.erase(entry.GetId());
+    }
+
+    if (entry.m_status == BeaconStatusForStorage::DELETED) // Erase any entry in m_beacons and m_pending for the CPID.
+    {
+        LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: entry delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
+                  "previous_hash %s, beacon status %s, recnum %" PRId64 ".",
+                  __func__,
+                 key_type,
+                 entry.KeyValueToString().first, // cpid
+                 entry.KeyValueToString().second, // address
+                 entry.m_timestamp, // timestamp
+                 entry.m_hash.GetHex(), // transaction hash
+                 entry.m_previous_hash.GetHex(), // prev beacon transaction hash
+                 entry.StatusToString(), // status
+                 recnum
+                 );
+
+        entries.erase(entry.m_cpid);
+        pending_entries.erase(entry.m_public_key.GetID());
+    }
 }
 
-int BeaconRegistry::BeaconDB::Initialize(PendingBeaconMap& m_pending, BeaconMap& m_beacons)
+int BeaconRegistry::Initialize()
 {
-    bool status = true;
-    int height = 0;
-    uint32_t version = 0;
-    bool needs_IsContract_correction = false;
+    int height = m_beacon_db.Initialize(m_beacons, m_pending);
 
-    // First load the beacon db version from LevelDB and check it against the constant in the class.
-    {
-        CTxDB txdb("r");
-
-        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "version");
-
-        bool status = txdb.ReadGenericSerializable(key, version);
-
-        if (!status) version = 0;
-    }
-
-    if (version != CURRENT_VERSION)
-    {
-        LogPrint(LogFlags::BEACON, "WARNING: %s: Version level of the beacon db stored in LevelDB, %u, does not "
-                                   "match that required in this code level, version %u. Clearing the LevelDB beacon "
-                                   "storage and setting version level to match this code level.",
-                 __func__,
-                 version,
-                 CURRENT_VERSION);
-
-        // Version 1, which corresponds to the 5.2.1.0 release contained a bug in ApplyContracts which prevented the
-        // application of multiple beacon contracts contained in a block under certain circumstances. In particular,
-        // the case with superblock 2053368, which contained beacon activations AND two beacon contracts was affected
-        // and once recorded in CBlockIndex, IsContract() returns the incorrect value. This flag will be used by
-        // ApplyContracts to check every block during the ContractReplay to correct the situation.
-        if (version == 1)
-        {
-            needs_IsContract_correction = true;
-        }
-
-        clear_leveldb();
-
-        // After clearing the LevelDB state, set the needs IsContract correction to the proper state. If the version that
-        // was on disk was 1, then this will be set to true.
-        SetNeedsIsContractCorrection(needs_IsContract_correction);
-
-        LogPrint(LogFlags::BEACON, "INFO: %s: LevelDB beacon area cleared. Version level set to %u.",
-                 __func__,
-                 CURRENT_VERSION);
-    }
-
-
-    // If LoadDBHeight not successful or height is zero then LevelDB has not been initialized before.
-    // LoadDBHeight will also set the private member variable m_height_stored from LevelDB for this first call.
-    if (!LoadDBHeight(height) || !height)
-    {
-        return height;
-    }
-    else // LevelDB already initialized from a prior run.
-    {
-        // Set m_database_init to true. This will cause LoadDBHeight hereinafter to simply report
-        // the value of m_height_stored rather than loading the stored height from LevelDB.
-        m_database_init = true;
-
-        // We are in a restart where at least some of a rescan was completed during a prior run. It is possible
-        // that the rescan may have not been completed before a shutdown was issued. In that case the
-        // needs_IsContract_correction flag will be set to true in LevelDB, so restore that state for this run
-        // to ensure the correction finishes. When ReplayContracts finishes the corrections, it will mark the flag
-        // false.
-        CTxDB txdb("r");
-
-        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "needs_IsContract_correction");
-
-        bool status = txdb.ReadGenericSerializable(key, needs_IsContract_correction);
-
-        if (!status) needs_IsContract_correction = false;
-
-        m_needs_IsContract_correction = needs_IsContract_correction;
-    }
-
-    LogPrint(LogFlags::BEACON, "INFO: %s: db stored height at block %i.",
-             __func__,
-             height);
-
-
-    // Now load the beacons from LevelDB.
-
-    std::string key_type = "beacon";
-
-    // This temporary map is keyed by record number, which insures the replay down below occurs in the right order.
-    StorageBeaconMapByRecordNum storage_by_record_num;
-
-    // Code block to scope the txdb object.
-    {
-        CTxDB txdb("r");
-
-        uint256 hash_hint = uint256();
-
-        // Load the temporary which is similar to m_historical, except the elements are of type BeaconStorage instead
-        // of Beacon.
-        status = txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint);
-    }
-
-    if (!status)
-    {
-        if (height > 0)
-        {
-            // For the height be greater than zero from the height K-V, but the read into the map to fail
-            // means the storage in LevelDB must be messed up in the beacon area and not be in concordance with
-            // the beacon_db K-V's. Therefore clear the whole thing.
-            clear();
-        }
-
-        // Return height of zero.
-        return 0;
-    }
-
-    uint64_t recnum_high_watermark = 0;
-    uint64_t number_passivated = 0;
-
-    // Replay the storage map. The iterator is ordered by record number, which ensures that the correct
-    // elements end up in m_beacons and m_pending. Storage entries that are "mark deletions" are also inserted
-    // and any entry in m_beacons (the active map) is removed.
-    for (const auto& iter : storage_by_record_num)
-    {
-        const uint64_t& recnum = iter.first;
-        Beacon beacon = static_cast<Beacon>(iter.second);
-
-        recnum_high_watermark = std::max(recnum_high_watermark, recnum);
-
-        LogPrint(LogFlags::BEACON, "INFO: %s: m_historical insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                  "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
-                  __func__,
-                  beacon.m_cpid.ToString(), // cpid
-                  beacon.GetAddress().ToString(), // address
-                  beacon.m_timestamp, // timestamp
-                  beacon.m_hash.GetHex(), // transaction hash
-                  beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                  beacon.m_status.Raw(), // status
-                  recnum
-                  );
-
-        // Insert the entry into the historical map. This includes ctx's where the beacon is marked deleted.
-        // --------------- hash ---------- does NOT include the Cpid.
-        m_historical[iter.second.m_hash] = std::make_shared<Beacon>(beacon);
-        Beacon_ptr& historical_beacon_ptr = m_historical[iter.second.m_hash];
-
-        BeaconRegistry::HistoricalBeaconMap::iterator prev_historical_iter = m_historical.end();
-
-        if (!historical_beacon_ptr->m_prev_beacon_hash.IsNull())
-        {
-            prev_historical_iter = m_historical.find(historical_beacon_ptr->m_prev_beacon_hash);
-        }
-
-        if (beacon.m_status == BeaconStatusForStorage::PENDING)
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u - (1) PENDING, recnum = %" PRId64 ".",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw(), // status
-                      recnum
-                      );
-
-            // Insert the pending beacon in the pending map.
-            m_pending[beacon.GetId()] = historical_beacon_ptr;
-        }
-
-        if (beacon.m_status == BeaconStatusForStorage::ACTIVE || beacon.m_status == BeaconStatusForStorage::RENEWAL)
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons insert: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u - (2) ACTIVE or (3) RENEWAL, recnum = %" PRId64 ".",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw(), // status
-                      recnum
-                      );
-
-            // Insert or replace the existing map entry for the cpid with the latest active or renewed for that CPID.
-            m_beacons[beacon.m_cpid] = historical_beacon_ptr;
-
-            // Delete any entry in the pending map with THE SAME public key.
-            auto pending_to_delete = m_pending.find(beacon.GetId());
-            if (pending_to_delete != m_pending.end())
-            {
-                LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete after active insert: cpid %s, address %s, "
-                         "timestamp %" PRId64 ", hash %s, "
-                         "prev_beacon_hash %s, beacon status = %u - (2), recnum = %" PRId64 ".",
-                          __func__,
-                          pending_to_delete->second->m_cpid.ToString(), // cpid
-                          pending_to_delete->second->GetAddress().ToString(), // address
-                          pending_to_delete->second->m_timestamp, // timestamp
-                          pending_to_delete->second->m_hash.GetHex(), // transaction hash
-                          pending_to_delete->second->m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                          pending_to_delete->second->m_status.Raw(), // status
-                          recnum
-                          );
-
-                m_pending.erase(pending_to_delete);
-            }
-        }
-
-        if (beacon.m_status == BeaconStatusForStorage::EXPIRED_PENDING)
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_pending delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw(), // status
-                      recnum
-                      );
-
-            // Delete any entry in the pending map that is marked expired.
-            m_pending.erase(beacon.GetId());
-        }
-
-        if (beacon.m_status == BeaconStatusForStorage::DELETED) // Erase any entry in m_beacons and m_pending for the CPID.
-        {
-            LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons delete: cpid %s, address %s, timestamp %" PRId64 ", hash %s, "
-                      "prev_beacon_hash %s, beacon status = %u, recnum = %" PRId64 ".",
-                      __func__,
-                      beacon.m_cpid.ToString(), // cpid
-                      beacon.GetAddress().ToString(), // address
-                      beacon.m_timestamp, // timestamp
-                      beacon.m_hash.GetHex(), // transaction hash
-                      beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                      beacon.m_status.Raw(), // status
-                      recnum
-                      );
-
-            m_beacons.erase(beacon.m_cpid);
-            m_pending.erase(beacon.m_public_key.GetID());
-        }
-
-        if (prev_historical_iter != m_historical.end())
-        {
-            // Note that passivation is not expected to be successful for every call. See the comments
-            // in the passivate() function.
-            std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool> passivation_result
-                    = passivate(prev_historical_iter);
-
-            number_passivated += passivation_result.second;
-        }
-    }
-
-    LogPrint(LogFlags::BEACON, "INFO: %s: number of historical records passivated: %" PRId64 ".",
-             __func__,
-             number_passivated);
-
-    // Set the in-memory record number stored variable to the highest recnum encountered during the replay above.
-    m_recnum_stored = recnum_high_watermark;
-
-    // Set the needs passivation flag to true, because the one-by-one passivation done above may not catch everything.
-    m_needs_passivation = true;
+    LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
+    LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());
 
     return height;
 }
@@ -1291,8 +1200,13 @@ uint64_t BeaconRegistry::PassivateDB()
     return m_beacon_db.passivate_db();
 }
 
+BeaconRegistry::BeaconDB &BeaconRegistry::GetBeaconDB()
+{
+    return m_beacon_db;
+}
+
 // This is static and called by the scheduler.
-void BeaconRegistry::RunBeaconDBPassivation()
+void BeaconRegistry::RunDBPassivation()
 {
     TRY_LOCK(cs_main, locked_main);
 
@@ -1306,308 +1220,7 @@ void BeaconRegistry::RunBeaconDBPassivation()
     beacons.PassivateDB();
 }
 
-// Required to make the linker happy.
-constexpr uint32_t BeaconRegistry::BeaconDB::CURRENT_VERSION;
-
-void BeaconRegistry::BeaconDB::clear_in_memory_only()
+template<> const std::string BeaconRegistry::BeaconDB::KeyType()
 {
-    m_historical.clear();
-    m_database_init = false;
-    m_height_stored = 0;
-    m_recnum_stored = 0;
-    m_needs_passivation = false;
-}
-
-bool BeaconRegistry::BeaconDB::clear_leveldb()
-{
-    bool status = true;
-
-    CTxDB txdb("rw");
-
-    std::string key_type = "beacon";
-    uint256 start_key_hint_beacon = uint256();
-
-    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon);
-
-    key_type = "beacon_db";
-    std::string start_key_hint_beacon_db {};
-
-    status &= txdb.EraseGenericSerializablesByKeyType(key_type, start_key_hint_beacon_db);
-
-    // We want to write back into LevelDB the revision level of the db in the running code.
-    std::pair<std::string, std::string> key = std::make_pair(key_type, "version");
-    status &= txdb.WriteGenericSerializable(key, CURRENT_VERSION);
-
-    m_height_stored = 0;
-    m_recnum_stored = 0;
-    m_database_init = false;
-    m_needs_passivation = false;
-    m_needs_IsContract_correction = false;
-
-    return status;
-}
-
-uint64_t BeaconRegistry::BeaconDB::passivate_db()
-{
-    uint64_t number_passivated = 0;
-
-    // Don't bother to go through the historical beacon map unless the needs passivation flag is set. This makes
-    // this function extremely light for most calls from the periodic schedule.
-    if (m_needs_passivation)
-    {
-        for (auto iter = m_historical.begin(); iter != m_historical.end(); /*no-op*/)
-        {
-            // The passivate function increments the iterator.
-            std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool> result = passivate(iter);
-
-            iter = result.first;
-            number_passivated += result.second;
-
-        }
-    }
-
-    LogPrint(BCLog::LogFlags::BEACON, "INFO %s: Passivated %" PRId64 " elements from beacon db.",
-             __func__,
-             number_passivated);
-
-    // Set needs passivation flag to false after passivating the db.
-    m_needs_passivation = false;
-
-    return number_passivated;
-}
-
-bool BeaconRegistry::BeaconDB::clear()
-{
-    clear_in_memory_only();
-
-    return clear_leveldb();
-}
-
-size_t BeaconRegistry::BeaconDB::size()
-{
-    return m_historical.size();
-}
-
-bool BeaconRegistry::BeaconDB::NeedsIsContractCorrection()
-{
-    return m_needs_IsContract_correction;
-}
-
-bool BeaconRegistry::BeaconDB::SetNeedsIsContractCorrection(bool flag)
-{
-    // Update the in-memory flag.
-    m_needs_IsContract_correction = flag;
-
-    // Update LevelDB
-    CTxDB txdb("rw");
-
-    std::pair<std::string, std::string> key = std::make_pair("beacon_db", "needs_IsContract_correction");
-
-    return txdb.WriteGenericSerializable(key, m_needs_IsContract_correction);
-}
-
-bool BeaconRegistry::BeaconDB::StoreDBHeight(const int& height_stored)
-{
-    // Update the in-memory bookmark variable.
-    m_height_stored = height_stored;
-
-    // Update LevelDB.
-    CTxDB txdb("rw");
-
-    std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
-
-    return txdb.WriteGenericSerializable(key, height_stored);
-}
-
-bool BeaconRegistry::BeaconDB::LoadDBHeight(int& height_stored)
-{
-    bool status = true;
-
-    // If the database has already been initialized (which includes loading the height to what the
-    // beacon storage was updated), then just report the valud of m_height_stored, otherwise
-    // pull the value from LevelDB.
-    if (m_database_init)
-    {
-        height_stored = m_height_stored;
-    }
-    else
-    {
-        CTxDB txdb("r");
-
-        std::pair<std::string, std::string> key = std::make_pair("beacon_db", "height_stored");
-
-        bool status = txdb.ReadGenericSerializable(key, height_stored);
-
-        if (!status) height_stored = 0;
-
-        m_height_stored = height_stored;
-    }
-
-    return status;
-}
-
-bool BeaconRegistry::BeaconDB::insert(const uint256 &hash, const int& height, const Beacon &beacon)
-{
-    bool status = false;
-
-
-    if (m_historical.find(hash) != m_historical.end())
-    {
-        return status;
-    }
-    else
-    {
-        LogPrint(LogFlags::BEACON, "INFO %s - store beacon: cpid %s, address %s, height %i, timestamp %" PRId64
-                  ", hash %s, prev_beacon_hash %s, status = %u.",
-                  __func__,
-                  beacon.m_cpid.ToString(), // cpid
-                  beacon.GetAddress().ToString(), // address
-                  height, // height
-                  beacon.m_timestamp, // timestamp
-                  beacon.m_hash.GetHex(), // transaction hash
-                  beacon.m_prev_beacon_hash.GetHex(), // prev beacon transaction hash
-                  beacon.m_status.Raw() // status
-                  );
-
-        m_historical.insert(std::make_pair(hash, std::make_shared<Beacon>(beacon)));
-
-        status = Store(hash, static_cast<StorageBeacon>(beacon));
-
-        if (height) status &= StoreDBHeight(height);
-
-        // Set needs passivation flag to true to allow the scheduled passivation to remove unnecessary records from
-        // memory.
-        m_needs_passivation = true;
-
-        return status;
-    }
-}
-
-bool BeaconRegistry::BeaconDB::erase(const uint256& hash)
-{
-    auto iter = m_historical.find(hash);
-
-    if (iter != m_historical.end())
-    {
-        m_historical.erase(hash);
-    }
-
-    return Delete(hash);
-}
-
-// Note that this function uses the shared pointer use_count() to determine whether an element in
-// m_historical is referenced by either the m_beacons or m_pending map and if not, erases it, leaving the backing
-// state in LevelDB untouched. Note that the use of use_count() in multithreaded environments must be carefully
-// considered because it is only approximate. In this case it is exact. Access to the entire BeaconRegistry class
-// and everything in it is protected by the cs_main lock and is therefore single threaded. This method of passivating
-// is MUCH faster than searching through m_beacons and m_pending for each element, because they are not keyed by hash.
-//
-// Note that this function acts very similarly to the map erase function with an iterator argument, but with a standard
-// pair returned. The first part of the pair a boolean as to whether the element was passivated, and the
-// second is an iterator to the next element. This is designed to be traversed in a for loop just like map erase.
-std::pair<BeaconRegistry::HistoricalBeaconMap::iterator, bool>
-    BeaconRegistry::BeaconDB::passivate(BeaconRegistry::HistoricalBeaconMap::iterator& iter)
-{
-    // m-historical itself holds one reference, additional references can be held by m_beacons and m_pending.
-    // If there is only one reference then remove the shared_pointer from m_historical, which will implicitly destroy
-    // the shared_pointer object.
-    if (iter->second.use_count() == 1)
-    {
-        iter = m_historical.erase(iter);
-        return std::make_pair(iter, true);
-    }
-    else
-    {
-        LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: Passivate called for historical beacon record with hash %s that "
-                                          "has existing reference count %li. This is expected under certain situations, "
-                                          "such as a forced (re)advertisement, where the new pending beacon is allowed "
-                                          "to expire, while the original is still active.",
-                 __func__,
-                 iter->second->m_hash.GetHex(),
-                 iter->second.use_count());
-
-        ++iter;
-        return std::make_pair(iter, false);
-    }
-}
-
-BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::begin()
-{
-    return m_historical.begin();
-}
-
-BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::end()
-{
-    return m_historical.end();
-}
-
-BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::find(const uint256& hash)
-{
-    // See if beacon from that ctx_hash is already in the historical map. If so, get iterator.
-    auto iter = m_historical.find(hash);
-
-    // If it isn't, attempt to load the beacon from LevelDB into the map.
-    if (iter == m_historical.end())
-    {
-        StorageBeacon beacon;
-
-        // If the load from LevelDB is successful, insert into the historical map and return the iterator.
-        if (Load(hash, beacon))
-        {
-            iter = m_historical.insert(std::make_pair(hash, std::make_shared<Beacon>(static_cast<Beacon>(beacon)))).first;
-
-            // Set the needs passivation flag to true
-            m_needs_passivation = true;
-        }
-    }
-
-    // Note that if there is no entry in m_historical, and also there is no K-V in LevelDB, then an
-    // iterator at end() will be returned.
-    return iter;
-}
-
-// TODO: A poor man's forward iterator. Implement a full wrapper iterator. Maybe don't need it though.
-BeaconRegistry::HistoricalBeaconMap::iterator BeaconRegistry::BeaconDB::advance(HistoricalBeaconMap::iterator iter)
-{
-    return ++iter;
-}
-
-bool BeaconRegistry::BeaconDB::Store(const uint256& hash, const StorageBeacon& beacon)
-{
-    CTxDB txdb("rw");
-
-    ++m_recnum_stored;
-
-    std::pair<std::string, uint256> key = std::make_pair("beacon", hash);
-
-    return txdb.WriteGenericSerializable(key, std::make_pair(m_recnum_stored, beacon));
-}
-
-bool BeaconRegistry::BeaconDB::Load(const uint256& hash, StorageBeacon& beacon)
-{
-    CTxDB txdb("r");
-
-    std::pair<std::string, uint256> key = std::make_pair("beacon", hash);
-
-    std::pair<uint64_t, StorageBeacon> beacon_pair;
-
-    bool status = txdb.ReadGenericSerializable(key, beacon_pair);
-
-    beacon = beacon_pair.second;
-
-    return status;
-}
-
-bool BeaconRegistry::BeaconDB::Delete(const uint256& hash)
-{
-    CTxDB txdb("rw");
-
-    std::pair<std::string, uint256> key = std::make_pair("beacon", hash);
-
-    return txdb.EraseGenericSerializable(key);
-}
-
-BeaconRegistry::BeaconDB &BeaconRegistry::GetBeaconDB()
-{
-    return m_beacon_db;
+    return std::string("beacon");
 }

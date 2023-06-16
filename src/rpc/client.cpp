@@ -204,6 +204,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "addkey"                 , 4 },
     { "auditsnapshotaccrual"   , 1 },
     { "auditsnapshotaccruals"  , 0 },
+    { "beaconaudit"            , 0 },
     { "convergencereport"      , 0 },
     { "debug"                  , 0 },
     { "dumpcontracts"          , 2 },

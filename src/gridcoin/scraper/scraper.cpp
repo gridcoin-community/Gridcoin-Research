@@ -9,10 +9,12 @@
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/scraper/http.h"
 #include "gridcoin/scraper/scraper.h"
 #include "gridcoin/scraper/scraper_net.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
@@ -57,10 +59,6 @@ CCriticalSection cs_Scraper;
  * @brief Protects the scraper globals
  */
 CCriticalSection cs_ScraperGlobals;
-/**
- * @brief Protects the extended scraper app cache global map.
- */
-CCriticalSection cs_mScrapersExt;
 /**
  * @brief Protects the main scraper file manifest structure. This is the primary global state machine for the scraper on the
  * file side.
@@ -175,56 +173,6 @@ std::string EXTERNAL_ADAPTER_PROJECTS GUARDED_BY(cs_ScraperGlobals) = std::strin
  */
 int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD GUARDED_BY(cs_ScraperGlobals) = 300;
 
-/** Map that holds extended app cache entries for scrapers, which includes deleted entries. */
-AppCacheSectionExt mScrapersExt GUARDED_BY(cs_mScrapersExt) = {};
-
-/** Enum for scraper log attributes */
-enum class logattribute
-{
-    // Can't use ERROR here because it is defined already in windows.h.
-    ERR,
-    INFO,
-    WARNING,
-    CRITICAL
-};
-
-/** Defines scraper file manifest entry. These are the entries for individual project stats file downloads. */
-struct ScraperFileManifestEntry
-{
-    std::string filename; // Filename
-    std::string project;
-    uint256 hash; // hash of file
-    int64_t timestamp = 0;
-    bool current = true;
-    bool excludefromcsmanifest = true;
-    std::string filetype;
-};
-
-/**
- * @brief Defines the scaper file manifest map.
- * --------- filename ---ScraperFileManifestEntry
- * std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap
- */
-typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
-
-/** Defines a structure that combines the ScraperFileManifestMap along with a map hash, the block hash of the
- * consensus block, and the time that the above fields were updated.
- */
-struct ScraperFileManifest
-{
-    ScraperFileManifestMap mScraperFileManifest;
-    uint256 nFileManifestMapHash;
-    uint256 nConsensusBlockHash;
-    int64_t timestamp = 0;
-};
-
-// Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
-/** Stores the team IDs for each team keyed by project. (Team ID's are different for the same team across different
- * projects.)
- * --------- project -------------team name -- teamID
- * std::map<std::string, std::map<std::string, int64_t>> mTeamIDs
- */
-typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
 mTeamIDs TeamIDMap GUARDED_BY(cs_TeamIDMap);
 
 /** ProjTeamETags is not persisted to disk. There would be little to be gained by doing so. The scrapers are restarted very
@@ -1288,8 +1236,10 @@ public:
 template<typename T>
 void ApplyCache(const std::string& key, T& result)
 {
-    // Local reference to avoid double lookup.
-    const auto& entry = ReadCache(Section::PROTOCOL, key);
+    // Local reference to avoid double lookup. This is changed from ReadCache with Section::PROTOCOL to
+    // the shunt call in ProtocolRegistry GetProtocolEntryByKeyLegacy.
+    // const auto& entry = ReadCache(Section::PROTOCOL, key);
+    const auto& entry = GetProtocolRegistry().GetProtocolEntryByKeyLegacy(key);
 
     // If the entry has an empty string (no value) then leave the original undisturbed.
     if (entry.value.empty())
@@ -1460,14 +1410,17 @@ void ScraperApplyAppCacheEntries()
 
 AppCacheSection GetScrapersCache()
 {
-    return ReadCacheSection(Section::SCRAPER);
+    // Includes authorized scraper entries only.
+    return GRC::GetScraperRegistry().GetScrapersLegacy();
 }
 
 AppCacheSectionExt GetExtendedScrapersCache()
 {
-    AppCacheSection mScrapers = GetScrapersCache();
-
     // For the IsManifestAuthorized() function...
+
+    // The below is the old comment that provides original motivation behind AppCacheSection vs. AppCacheSectionExt.
+    // Note that the GetScrapersLegacy() and GetScrapersLegacyExt() mimic the old behavior. These will be changed
+    // out for native wiring as part of a scraper update.
 
     /* We cannot use the AppCacheSection mScrapers in the raw, because there are two ways to deauthorize scrapers.
      * The first way is to change the value of an existing entry to false. This works fine with mScrapers. The second way
@@ -1481,34 +1434,8 @@ AppCacheSectionExt GetExtendedScrapersCache()
      * scraper is deauthorized and the block containing that deauthorization is received by the sending node.
      */
 
-    // So we are going to make use of AppCacheEntryExt and mScrapersExt, which are just like the normal AppCache structure,
-    // except they have an explicit deleted boolean.
-
-    // First, walk the mScrapersExt map and see if it contains an entry that does not exist in mScrapers. If so,
-    // update the entry's value and timestamp and mark deleted.
-    LOCK(cs_mScrapersExt);
-
-    for (auto const& entry : mScrapersExt)
-    {
-        const auto& iter = mScrapers.find(entry.first);
-
-        if (iter == mScrapers.end())
-        {
-            // Mark entry in mScrapersExt as deleted at the current adjusted time. The value is changed
-            // to false, because if it is deleted, it is also not authorized.
-            mScrapersExt[entry.first] = AppCacheEntryExt {"false", GetAdjustedTime(), true};
-        }
-
-    }
-
-    // Now insert/update entries from mScrapers into mScrapersExt.
-    for (auto const& entry : mScrapers)
-    {
-        mScrapersExt[entry.first] = AppCacheEntryExt {entry.second.value, entry.second.timestamp, false};
-    }
-
-    // Return a copy of the global on purpose so the cs_mScrapersExt can be a short term lock. This map is very small.
-    return mScrapersExt;
+    // Includes deleted scraper entries.
+    return GRC::GetScraperRegistry().GetScrapersLegacyExt(false);
 }
 
 // This is the "main" scraper function.

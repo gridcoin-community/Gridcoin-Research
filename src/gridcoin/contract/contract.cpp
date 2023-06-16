@@ -8,11 +8,14 @@
 #include "gridcoin/appcache.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/handler.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tx_message.h"
@@ -23,6 +26,24 @@
 #include "wallet/wallet.h"
 
 using namespace GRC;
+
+// -----------------------------------------------------------------------------
+// Contract Context (see handler.h)
+// -----------------------------------------------------------------------------
+
+void ContractContext::Log(const std::string& prefix) const
+{
+    LogPrint(BCLog::LogFlags::CONTRACT,
+             "<Contract::Log>: %s: block %i, txid %s, v%u, %s, %s, %s, %s",
+             prefix,
+             m_pindex->nHeight,
+             m_tx.GetHash().ToString(),
+             m_contract.m_version,
+             m_contract.m_type.ToString(),
+             m_contract.m_action.ToString(),
+             m_contract.SharePayload()->LegacyKeyString(),
+             m_contract.SharePayload()->LegacyValueString());
+}
 
 namespace {
 //!
@@ -71,123 +92,6 @@ public:
     }
 }; // EmptyPayload
 
-//!
-//! \brief A payload parsed from a legacy, version 1 contract.
-//!
-//! Version 2+ contracts provide support for binary representation of payload
-//! data. Legacy contract data exists as strings. This class provides for use
-//! of the contract payload API with legacy string contracts.
-//!
-class LegacyPayload : public IContractPayload
-{
-public:
-    std::string m_key;   //!< Legacy representation of a contract key.
-    std::string m_value; //!< Legacy representation of a contract value.
-
-    //!
-    //! \brief Initialize an empty, invalid legacy payload.
-    //!
-    LegacyPayload()
-    {
-    }
-
-    //!
-    //! \brief Initialize a legacy payload with data from a legacy contract.
-    //!
-    //! \param key   Legacy contract key as it exists in a transaction.
-    //! \param value Legacy contract value as it exists in a transaction.
-    //!
-    LegacyPayload(std::string key, std::string value)
-        : m_key(std::move(key))
-        , m_value(std::move(value))
-    {
-    }
-
-    GRC::ContractType ContractType() const override
-    {
-        return GRC::ContractType::UNKNOWN;
-    }
-
-    bool WellFormed(const ContractAction action) const override
-    {
-        return !m_key.empty()
-            && (action == ContractAction::REMOVE || !m_value.empty());
-    }
-
-    std::string LegacyKeyString() const override
-    {
-        return m_key;
-    }
-
-    std::string LegacyValueString() const override
-    {
-        return m_value;
-    }
-
-    CAmount RequiredBurnAmount() const override
-    {
-        return Contract::STANDARD_BURN_AMOUNT;
-    }
-
-    ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(
-        Stream& s,
-        Operation ser_action,
-        const ContractAction contract_action)
-    {
-        READWRITE(m_key);
-
-        if (contract_action != ContractAction::REMOVE) {
-            READWRITE(m_value);
-        }
-    }
-}; // LegacyPayload
-
-//!
-//! \brief Temporary interface implementation that reads and writes contracts
-//! to AppCache to use while we refactor away each of the AppCache sections:
-//!
-class AppCacheContractHandler : public IContractHandler
-{
-public:
-    void Reset() override
-    {
-        ClearCache(Section::PROTOCOL);
-        ClearCache(Section::SCRAPER);
-    }
-
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
-
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
-
-    void Add(const ContractContext& ctx) override
-    {
-        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
-
-        WriteCache(
-            StringToSection(ctx->m_type.ToString()),
-            payload->m_key,
-            payload->m_value,
-            ctx.m_tx.nTime);
-    }
-
-    void Delete(const ContractContext& ctx) override
-    {
-        const auto payload = ctx->SharePayloadAs<LegacyPayload>();
-
-        DeleteCache(
-            StringToSection(ctx->m_type.ToString()),
-            payload->m_key);
-    }
-};
 
 //!
 //! \brief Handles unknown contract message types by logging a message.
@@ -217,7 +121,7 @@ public:
     //!
     void Add(const ContractContext& ctx) override
     {
-        ctx->Log("WARNING: Add unknown contract type ignored");
+        ctx.Log("WARNING: Add unknown contract type ignored");
     }
 
     //!
@@ -227,7 +131,7 @@ public:
     //!
     void Delete(const ContractContext& ctx) override
     {
-        ctx->Log("WARNING: Delete unknown contract type ignored");
+        ctx.Log("WARNING: Delete unknown contract type ignored");
     }
 
     //!
@@ -237,7 +141,7 @@ public:
     //!
     void Revert(const ContractContext& ctx) override
     {
-        ctx->Log("WARNING: Revert unknown contract type ignored");
+        ctx.Log("WARNING: Revert unknown contract type ignored");
     }
 };
 
@@ -249,18 +153,18 @@ class Dispatcher
 {
 public:
     //!
-    //! \brief Reset the cached state of each contract handler to prepare for
-    //! historical contract replay.
+    //! \brief Reset the cached state of any contract handler to prepare for
+    //! historical contract replay. Note that all handlers are now native. The
+    //! appcache is formally retired.
+    //!
+    //! The contract replay will skip contracts for other handler types where
+    //! the backing store exists (beacons, scraper entries, protocol entries, and
+    //! projects), or the objects are independent and unique by key and admit to
+    //! simple reversion, such as polls/votes.
     //!
     void ResetHandlers()
     {
-        // Don't reset the beacon registry as it is now backed by a database.
-        // GetBeaconRegistry().Reset();
-
-        // Don't reset the poll registry as reorgs are properly handled.
-        // GetPollRegistry().Reset();
-        GetWhitelist().Reset();
-        m_appcache_handler.Reset();
+        // Nothing to do.
     }
 
     //!
@@ -272,18 +176,18 @@ public:
     void Apply(const ContractContext& ctx)
     {
         if (ctx->m_action == ContractAction::ADD) {
-            ctx->Log("INFO: Add contract");
+            ctx.Log("INFO: Add contract");
             GetHandler(ctx->m_type.Value()).Add(ctx);
             return;
         }
 
         if (ctx->m_action == ContractAction::REMOVE) {
-            ctx->Log("INFO: Delete contract");
+            ctx.Log("INFO: Delete contract");
             GetHandler(ctx->m_type.Value()).Delete(ctx);
             return;
         }
 
-        ctx.m_contract.Log("WARNING: Unknown contract action ignored");
+        ctx.Log("WARNING: Unknown contract action ignored");
     }
 
     //!
@@ -330,19 +234,30 @@ public:
     //!
     void Revert(const ContractContext& ctx)
     {
-        ctx->Log("INFO: Revert contract");
+        ctx.Log("INFO: Revert contract");
 
         // The default implementation of IContractHandler reverses an action
         // (addition or deletion) declared in the contract argument, but the
-        // type-specific handlers may override this behavior as needed:
+        // type-specific handlers may override this behavior as needed. The
+        // default implementation can ONLY be used for those contracts whose
+        // objects are unique. A good example is polls and votes. Each poll
+        // and each vote is a unique object (by key). In this case the simple
+        // reversion works. For objects that effectively are "revised", such
+        // as beacons, which have a complex lifecycle, and a history of
+        // revisions for the same key (CPID for beacon), a much more complex
+        // implementation, along with a backing db that stores historical
+        // objects and a linkage from current to previous objects is required.
+        // The scraper entry, protocol entry, project (whitelist) and beacon
+        // registry are all examples of this type which are backed by
+        // implementations of the RegistryDB template class.
         GetHandler(ctx->m_type.Value()).Revert(ctx);
     }
 
 private:
-    AppCacheContractHandler m_appcache_handler; //<! Temporary.
     MRCContractHandler m_mrc_contract_handler;  //<! Simple wrapper to do context validation on MRC transactions.
     UnknownContractHandler m_unknown_handler;   //<! Logs unknown types.
 
+protected:
     //!
     //! \brief Select an appropriate contract handler based on the message type.
     //!
@@ -352,14 +267,13 @@ private:
     //!
     IContractHandler& GetHandler(const ContractType type)
     {
-        // TODO: build contract handlers for the remaining contract types:
         // TODO: refactor to dynamic registration for easier testing:
         switch (type) {
             case ContractType::BEACON:     return GetBeaconRegistry();
             case ContractType::POLL:       return GetPollRegistry();
             case ContractType::PROJECT:    return GetWhitelist();
-            case ContractType::PROTOCOL:   return m_appcache_handler;
-            case ContractType::SCRAPER:    return m_appcache_handler;
+            case ContractType::PROTOCOL:   return GetProtocolRegistry();
+            case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
             case ContractType::MRC:        return m_mrc_contract_handler;
             default:                       return m_unknown_handler;
@@ -420,6 +334,8 @@ bool CheckLegacyContract(const Contract& contract, const CTransaction& tx, int b
 
     return CPubKey(Params().MasterKey(block_height)).Verify(body_hash, sig);
 }
+
+
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -432,7 +348,9 @@ Contract GRC::MakeLegacyContract(
     std::string key,
     std::string value)
 {
+    // There will be no new LegacyPayload contracts past version 2.
     Contract contract = MakeContract<LegacyPayload>(
+        uint32_t {2},
         action,
         std::move(key),
         std::move(value));
@@ -448,10 +366,11 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     // If there is no pindex_start (i.e. default value of nullptr), then set standard lookback. A Non-standard lookback
     // where there is a specific pindex_start argument supplied, is only used in the GRC InitializeContracts call for
-    // when the beacon database in LevelDB has not already been populated.
+    // when the corresponding RegistryDB instantiations and initialization in LevelDB has not already been populated
+    // for the registry types that use the RegistryDB.
     if (!pindex)
     {
-        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+        pindex = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Params().GetConsensus().StandardContractReplayLookback);
     }
 
     if (pindex->nHeight < (fTestNet ? 1 : 164618)) {
@@ -460,14 +379,29 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
     LogPrint(BCLog::LogFlags::CONTRACT,	"Replaying contracts from block %" PRId64 "...", pindex->nHeight);
 
-    // This no longer includes beacons or polls.
+    // This is actually a no-op now, because all existing contract types do proper reversion, either through implementations
+    // of the RegistryDB, or because they use independent objects that have no linked history and admit simple reverts
+    // provided by the default add/delete/revert.
     g_dispatcher.ResetHandlers();
 
+    RegistryBookmarks db_heights;
+
+    // Logs db_heights for reference in logs.
+    for (const auto& contract_type : CONTRACT_TYPES) {
+        std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
+
+        if (!db_height) continue;
+
+        LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: %s entry database at height %i",
+                 __func__,
+                 Contract::Type::ToString(contract_type),
+                 *db_height);
+    }
+
+    // This provides a convenient reference for the beacon registry, which has special processing below due to activations
+    // and the IsContract flag corrections. The scraper entries require no such special processing and are handled
+    // by the ApplyContracts call.
     BeaconRegistry& beacons = GetBeaconRegistry();
-
-    int beacon_db_height = beacons.GetDBHeight();
-
-    LogPrint(BCLog::LogFlags::BEACON, "Beacon database at height %i", beacon_db_height);
 
     if (beacons.NeedsIsContractCorrection())
     {
@@ -490,8 +424,10 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
                 continue;
             }
 
+            // The ApplyContracts below handles all of the contract types. The rest of this is special
+            // processing required for beacons.
             bool found_contract;
-            ApplyContracts(block, pindex, beacon_db_height, found_contract);
+            ApplyContracts(block, pindex, db_heights, found_contract);
 
             // If a contract was found and the NeedsIsContractCorrection flag is set, then
             // record that a contract was found in the block index. This corrects the block index
@@ -526,23 +462,24 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
             // Only apply activations that have not already been stored/loaded into
             // the beacon DB. This is at the block level, so we have to be careful here.
-            // If the pindex->nHeight is equal to the beacon_db_height, then the ActivatePending
+            // If the pindex->nHeight is equal to the beacon db height, then the ActivatePending
             // has already been replayed for this block and we do not need to call it again for that block.
             // BECAUSE ActivatePending is called at the block level. We do not need to worry about multiple
             // calls within the same block like below in ApplyContracts.
-            if (pindex->nHeight > beacon_db_height)
-            {
-                GetBeaconRegistry().ActivatePending(
-                            block.GetSuperblock()->m_verified_beacons.m_verified,
-                            block.GetBlockTime(),
-                            block.GetHash(),
-                            pindex->nHeight);
-            }
-            else
-            {
-                LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
-                          "skipped for superblock: pindex->height = %i <= beacon_db_height = %i."
-                          , __func__, pindex->nHeight, beacon_db_height);
+            std::optional<int> beacon_db_height = db_heights.GetRegistryBlockHeight(ContractType::BEACON);
+
+            if (beacon_db_height) {
+                if (pindex->nHeight > *beacon_db_height) {
+                    beacons.ActivatePending(
+                                block.GetSuperblock()->m_verified_beacons.m_verified,
+                                block.GetBlockTime(),
+                                block.GetHash(),
+                                pindex->nHeight);
+                } else {
+                    LogPrint(BCLog::LogFlags::BEACON, "INFO: %s: GetBeaconRegistry().ActivatePending() "
+                              "skipped for superblock: pindex->height = %i <= beacon_db_height = %i.",
+                             __func__, pindex->nHeight, *beacon_db_height);
+                }
             }
         }
 
@@ -561,7 +498,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 
 void GRC::ApplyContracts(
     const CBlock& block,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract)
 {
     out_found_contract = false;
@@ -571,33 +508,41 @@ void GRC::ApplyContracts(
         iter != end;
         ++iter)
     {
-        ApplyContracts(*iter, pindex, beacon_db_height, out_found_contract);
+        ApplyContracts(*iter, pindex, db_heights, out_found_contract);
     }
 }
 
 void GRC::ApplyContracts(
     const CTransaction& tx,
-    const CBlockIndex* const pindex, const int& beacon_db_height,
+    const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
     bool& out_found_contract)
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
-        // the beacon DB up to the block BEFORE the beacon db height. Because the beacon
-        // db height is at the block level, and is updated on each beacon insert, when
-        // in a sync from zero situation where the contracts are played as each block is validated,
-        // any beacon contract in the block EQUAL to the beacon db height must fail this test
-        // and be inserted again, because otherwise the second and succeeding contracts on the
-        // same block will not be inserted and those CPID's will not be recorded properly.
-        // This was the cause of the failure to sync through 2069264 that started on 20210312. See
-        // GitHub issue #2045.
-        if ((pindex->nHeight < beacon_db_height) && contract.m_type == ContractType::BEACON)
-        {
-            LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: ApplyContract tx skipped: "
-                      "pindex->height = %i <= beacon_db_height = %i and "
-                      "ContractType is BEACON."
-                      , __func__, pindex->nHeight, beacon_db_height);
-            continue;
+        // the relevant entry dbs up to the block BEFORE the relevant db height. Because
+        // these db heights are at the block level, and are updated on each relevant entry
+        // insert, when in a sync from zero situation where the contracts are played as each block
+        // is validated, any relevant contract in the block EQUAL to the relevant db height
+        // must fail this test and be inserted again, because otherwise the second and succeeding
+        // contracts on the same block will not be inserted and those relevant entries will
+        // not be recorded properly. For beacons, this was the cause of the failure to sync through
+        // 2069264 that started on 20210312. See GitHub issue #2045.
+
+        bool skip_apply_contract = false;
+
+        for (const auto& contract_type : CONTRACT_TYPES) {
+            if (contract.m_type == contract_type) {
+
+                std::optional<int> db_height = db_heights.GetRegistryBlockHeight(contract_type);
+
+                if (db_height && pindex->nHeight < *db_height) {
+                    skip_apply_contract = true;
+                    break;
+                }
+            }
         }
+
+        if (skip_apply_contract) continue;
 
         // V2 contracts are checked upon receipt:
         if (contract.m_version == 1 && !CheckLegacyContract(contract, tx, pindex->nHeight)) {
@@ -756,11 +701,15 @@ bool Contract::WellFormed() const
 
 ContractPayload Contract::SharePayload() const
 {
-    if (m_version > 1) {
-        return m_body.m_payload;
+    // The scraper and protocol entry formats were changed to native later than the others and a new contract
+    // version three is introduced for that. This will be coincident with block v13.
+    if (m_version < 2
+            || (m_type == ContractType::SCRAPER && m_version < 3)
+            || (m_type == ContractType::PROTOCOL && m_version < 3)) {
+        return m_body.ConvertFromLegacy(m_type.Value(), m_version);
     }
 
-    return m_body.ConvertFromLegacy(m_type.Value());
+    return m_body.m_payload;
 }
 
 void Contract::Log(const std::string& prefix) const
@@ -832,6 +781,38 @@ std::string Contract::Type::ToString() const
     }
 }
 
+std::string Contract::Type::ToString(ContractType contract_type)
+{
+    switch (contract_type) {
+        case ContractType::BEACON:     return "beacon";
+        case ContractType::CLAIM:      return "claim";
+        case ContractType::MRC:        return "mrc";
+        case ContractType::MESSAGE:    return "message";
+        case ContractType::POLL:       return "poll";
+        case ContractType::PROJECT:    return "project";
+        case ContractType::PROTOCOL:   return "protocol";
+        case ContractType::SCRAPER:    return "scraper";
+        case ContractType::VOTE:       return "vote";
+        default:                       return "";
+    }
+}
+
+std::string Contract::Type::ToTranslatedString(ContractType contract_type)
+{
+    switch (contract_type) {
+        case ContractType::BEACON:     return _("beacon");
+        case ContractType::CLAIM:      return _("claim");
+        case ContractType::MRC:        return _("mrc");
+        case ContractType::MESSAGE:    return _("message");
+        case ContractType::POLL:       return _("poll");
+        case ContractType::PROJECT:    return _("project");
+        case ContractType::PROTOCOL:   return _("protocol");
+        case ContractType::SCRAPER:    return _("scraper");
+        case ContractType::VOTE:       return _("vote");
+        default:                       return "";
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Class: Contract::Action
 // -----------------------------------------------------------------------------
@@ -881,12 +862,17 @@ ContractPayload Contract::Body::AssumeLegacy() const
     return m_payload;
 }
 
-ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
+ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint32_t version) const
 {
     // We use static_cast here instead of dynamic_cast to avoid the lookup. The
     // value of m_payload is guaranteed to be a LegacyPayload for v1 contracts.
     //
-    const auto& legacy = static_cast<const LegacyPayload&>(*m_payload);
+    LegacyPayload legacy;
+
+    //TODO: Evaluate if this condition is relevant anymore
+    //if (version < 2) {
+        legacy = static_cast<const LegacyPayload&>(*m_payload);
+    //}
 
     switch (type) {
         case ContractType::UNKNOWN:
@@ -909,11 +895,13 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type) const
             return ContractPayload::Make<PollPayload>(
                 Poll::Parse(legacy.m_key, legacy.m_value));
         case ContractType::PROJECT:
-            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value, 0);
+            return ContractPayload::Make<Project>(legacy.m_key, legacy.m_value);
         case ContractType::PROTOCOL:
-            return m_payload;
+            return ContractPayload::Make<ProtocolEntryPayload>(
+                ProtocolEntryPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::SCRAPER:
-            return m_payload;
+            return ContractPayload::Make<ScraperEntryPayload>(
+                ScraperEntryPayload::Parse(legacy.m_key, legacy.m_value));
         case ContractType::VOTE:
             return ContractPayload::Make<LegacyVote>(
                 LegacyVote::Parse(legacy.m_key, legacy.m_value));
@@ -950,13 +938,25 @@ void Contract::Body::ResetType(const ContractType type)
             m_payload.Reset(new PollPayload(IsPollV3Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROJECT:
-            m_payload.Reset(new Project());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new Project(IsV13Enabled(nBestHeight) ? 3 : 2));
             break;
         case ContractType::PROTOCOL:
-            m_payload.Reset(new LegacyPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new ProtocolEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
             break;
         case ContractType::SCRAPER:
-            m_payload.Reset(new LegacyPayload());
+            // Note that the contract code expects cs_main to already be taken which
+            // means that the access to nBestHeight is safe.
+            // TODO: This ternary should be removed at the next mandatory after
+            // Kermit's Mom.
+            m_payload.Reset(new ScraperEntryPayload(IsV13Enabled(nBestHeight) ? 2 : 1));
             break;
         case ContractType::VOTE:
             m_payload.Reset(new Vote());
@@ -983,4 +983,18 @@ void IContractHandler::Revert(const ContractContext& ctx)
     }
 
     error("Unknown contract action ignored: %s", ctx->m_action.ToString());
+}
+
+int IContractHandler::Initialize()
+{
+    return 0;
+}
+
+int IContractHandler::GetDBHeight()
+{
+    return 0;
+}
+
+void IContractHandler::SetDBHeight(int& height)
+{
 }

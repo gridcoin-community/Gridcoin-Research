@@ -153,7 +153,7 @@ CAmount MRC::ComputeMRCFee() const
             // If the beacon was renewed and the time stamp of this beacon is greater than
             // the time of the last_payment_index, then walk the beacon chain back to the previous beacon.
             while (beacon->m_timestamp > prev_block_pindex->nTime && beacon->Renewed()) {
-                beacon = GetBeaconRegistry().GetBeaconDB().find(beacon->m_prev_beacon_hash)->second;
+                beacon = GetBeaconRegistry().GetBeaconDB().find(beacon->m_previous_hash)->second;
             }
 
             last_reward_time = beacon->m_timestamp;

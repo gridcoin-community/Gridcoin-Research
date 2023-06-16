@@ -285,19 +285,4 @@ struct ScraperStatsAndVerifiedBeacons
     ScraperPendingBeaconMap mVerifiedMap;
 };
 
-/** Extended AppCache structure similar to those in AppCache.h, except a deleted flag is provided. This will be
- * reimplemented in the future with a custom contract handler since the appcache is being retired.
- */
-struct AppCacheEntryExt
-{
-    std::string value; // Value of entry.
-    int64_t timestamp; // Timestamp of entry/deletion
-    bool deleted; // Deleted flag.
-};
-
-/** Extended AppCache map typedef similar to those in AppCache.h, except a deleted flag is provided. This will be
- * reimplemented in the future with a custom contract handler since the appcache is being retired.
- */
-typedef std::unordered_map<std::string, AppCacheEntryExt> AppCacheSectionExt;
-
 #endif // GRIDCOIN_SCRAPER_FWD_H

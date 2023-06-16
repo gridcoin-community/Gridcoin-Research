@@ -24,12 +24,15 @@ extern bool g_mock_deterministic_tests;
 
 FastRandomContext g_insecure_rand_ctx;
 
+extern void SetupEnvironment();
 extern void noui_connect();
 extern leveldb::Options GetOptions();
 extern void InitLogging();
 
 struct TestingSetup {
     TestingSetup() {
+        SetupEnvironment();
+
         fs::path m_path_root = fs::temp_directory_path() / "test_common_" PACKAGE_NAME / InsecureRand256().ToString();
         fUseFastIndex = true; // Don't verify block hashes when loading
         gArgs.ForceSetArg("-datadir", m_path_root.string());

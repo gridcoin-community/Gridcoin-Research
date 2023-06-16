@@ -859,7 +859,10 @@ uint256 GRC::SendPollContract(PollBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {
@@ -875,7 +878,10 @@ uint256 GRC::SendVoteContract(VoteBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {
@@ -1176,7 +1182,7 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
     return std::move(*this);
 }
 
-CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
+CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
@@ -1208,6 +1214,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     PollEligibilityClaim claim = claim_builder.BuildClaim(*m_poll);
 
     tx.vContracts.emplace_back(MakeContract<PollPayload>(
+                                   contract_version,
                                    ContractAction::ADD,
                                    std::move(m_poll_payload_version),
                                    std::move(*m_poll),
@@ -1346,7 +1353,7 @@ VoteBuilder VoteBuilder::AddResponse(const std::string& label)
     throw VotingError(strprintf(_("\"%s\" is not a valid poll choice."), label));
 }
 
-CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
+CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
@@ -1362,7 +1369,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
     claim_builder.BuildClaim(*m_vote, *m_poll);
 
     tx.vContracts.emplace_back(
-        MakeContract<Vote>(ContractAction::ADD, std::move(*m_vote)));
+        MakeContract<Vote>(contract_version, ContractAction::ADD, std::move(*m_vote)));
 
     SelectFinalInputs<Vote>(*pwallet, tx);
     Vote& vote = tx.vContracts.back().SharePayload().As<Vote>();
