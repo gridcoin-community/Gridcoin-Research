@@ -99,6 +99,12 @@ add_library(gridcoinqt STATIC
 
 if(WIN32)
     target_sources(gridcoinqt PRIVATE res/gridcoinresearch.rc)
+elseif(APPLE)
+    target_sources(gridcoinqt PRIVATE
+        macdockiconhandler.mm
+        macnotificationhandler.mm
+        macos_appnap.mm
+    )
 endif()
 
 set_target_properties(gridcoinqt PROPERTIES
@@ -136,6 +142,14 @@ target_link_libraries(gridcoinqt PUBLIC
     gridcoin_util
 )
 
+if(APPLE)
+    target_link_libraries(gridcoinqt PUBLIC
+        "-framework Foundation"
+        "-framework ApplicationServices"
+        "-framework AppKit"
+    )
+endif()
+
 target_compile_definitions(gridcoinqt PUBLIC HAVE_CONFIG_H)
 
 if(USE_DBUS)
@@ -157,14 +171,6 @@ add_dependencies(gridcoinqt gridcoinqt_l10n)
 # ===========
 
 add_executable(gridcoinresearch WIN32 MACOSX_BUNDLE bitcoin.cpp)
-
-if(APPLE)
-    target_sources(gridcoinresearch PRIVATE
-        macdockiconhandler.mm
-        macnotificationhandler.mm
-        macos_appnap.mm
-    )
-endif()
 
 target_link_libraries(gridcoinresearch PRIVATE
     Qt5::Widgets

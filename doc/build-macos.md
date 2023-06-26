@@ -50,6 +50,7 @@ brew install cmake
 brew install automake libtool
 
 brew install berkeley-db@5 boost curl leveldb libzip openssl pkgconf secp256k1
+export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/usr/local/opt/openssl@3/lib/pkgconfig"
 ```
 
 ### 4. Clone Gridcoin repository
@@ -165,7 +166,11 @@ pip3 install ds_store mac_alias
 
      ```shell
      mkdir build && cd build
+
      cmake ..
+     # or, to configure with GUI
+     cmake .. -DENABLE_GUI=ON -DQt5_DIR=/usr/local/opt/qt5/lib/cmake/Qt5
+
      cmake --build .
      ```
    * With Autotools:

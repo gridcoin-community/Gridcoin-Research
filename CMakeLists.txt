@@ -174,6 +174,13 @@ endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 
+# Set compiler flags
+if (APPLE)
+    add_compile_options(-Wno-error=deprecated-declarations)
+    add_compile_options(-Wno-error=thread-safety-analysis)
+    add_compile_options(-Wno-error=thread-safety-reference)
+endif()
+
 # Set endianness
 if(CMAKE_CXX_BYTE_ORDER EQUAL BIG_ENDIAN)
     set(WORDS_BIGENDIAN 1)

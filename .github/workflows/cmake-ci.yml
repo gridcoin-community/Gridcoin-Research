@@ -9,7 +9,8 @@ jobs:
         runs-on: ubuntu-latest
         env:
             CCACHE_DIR: ${{github.workspace}}/ccache
-            CCACHE_MAXSIZE: 100M
+            CCACHE_MAXSIZE: 400M
+            CCACHE_COMPILERCHECK: content
         strategy:
             matrix:
                 tag:
@@ -22,21 +23,28 @@ jobs:
                       deps: null
                       options: -DENABLE_PIE=ON -DUSE_ASM=OFF
                     - tag: gui-full
-                      deps: |
+                      deps: >-
                           libminiupnpc-dev
                           libqrencode-dev
                           qtbase5-dev
                           qttools5-dev
-                      options: -DENABLE_GUI=ON -DENABLE_QRENCODE=ON -DENABLE_UPNP=ON -DUSE_DBUS=ON
+                      options: >-
+                          -DENABLE_GUI=ON
+                          -DENABLE_QRENCODE=ON
+                          -DENABLE_UPNP=ON
+                          -DUSE_DBUS=ON
                     - tag: system-libs
-                      deps: |
+                      deps: >-
                           libdb5.3++-dev
                           libleveldb-dev
                           libsnappy-dev
                           libsecp256k1-dev
                           libunivalue-dev
                           xxd
-                      options: -DSYSTEM_BDB=ON -DSYSTEM_LEVELDB=ON -DSYSTEM_UNIVALUE=ON
+                      options: >-
+                          -DSYSTEM_BDB=ON
+                          -DSYSTEM_LEVELDB=ON
+                          -DSYSTEM_UNIVALUE=ON
         steps:
             - name: Checkout
               uses: actions/checkout@v3
@@ -73,6 +81,7 @@ jobs:
                       -DENABLE_TESTS=ON
             - name: Restore cache
               uses: actions/cache/restore@v3
+              if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
                   key: ccache-linux-${{matrix.tag}}-${{github.run_id}}
@@ -83,6 +92,7 @@ jobs:
                   cmake --build ${{github.workspace}}/build -v -j $(nproc)
             - name: Save cache
               uses: actions/cache/save@v3
+              if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
                   key: ccache-linux-${{matrix.tag}}-${{github.run_id}}
@@ -94,5 +104,91 @@ jobs:
               if: always()
               with:
                   name: testlog-linux-${{matrix.tag}}
+                  path: ${{github.workspace}}/build/Testing/Temporary/LastTest.log
+                  retention-days: 7
+
+    test-macos:
+        runs-on: macos-latest
+        env:
+            CCACHE_DIR: ${{github.workspace}}/ccache
+            CCACHE_MAXSIZE: 400M
+            CCACHE_COMPILERCHECK: content
+        strategy:
+            matrix:
+                tag:
+                    - minimal
+                    - no-asm
+                    - gui-full
+                    - system-libs
+                include:
+                    - tag: no-asm
+                      deps: null
+                      options: -DENABLE_PIE=ON -DUSE_ASM=OFF
+                    - tag: gui-full
+                      deps: >-
+                          miniupnpc
+                          qrencode
+                          qt@5
+                      options: >-
+                          -DENABLE_GUI=ON
+                          -DQt5_DIR=/usr/local/opt/qt5/lib/cmake/Qt5
+                          -DENABLE_QRENCODE=ON
+                          -DENABLE_UPNP=ON
+                    - tag: system-libs
+                      deps: >-
+                          berkeley-db@5
+                          secp256k1
+                          vim
+                      options: >-
+                          -DSYSTEM_BDB=ON
+                          -DBerkeleyDB_INCLUDE_DIR=/usr/local/opt/berkeley-db@5/include
+                          -DBerkeleyDB_CXX_LIBRARY=/usr/local/opt/berkeley-db@5/lib/libdb_cxx.dylib
+                          -DSYSTEM_SECP256K1=ON
+                          -DSYSTEM_XXD=ON
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+            - name: Install dependencies
+              run: |
+                  brew install boost ccache ninja ${{matrix.deps}}
+            - name: Configure
+              run: |
+                  PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:${PKG_CONFIG_PATH}"
+                  export PKG_CONFIG_PATH
+
+                  pushd src
+                  ../contrib/nomacro.pl
+                  popd
+
+                  cmake -B ${{github.workspace}}/build -G Ninja \
+                      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                      ${{matrix.options}} \
+                      -DENABLE_TESTS=ON
+            - name: Restore cache
+              uses: actions/cache/restore@v3
+              if: always()
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-macos-${{matrix.tag}}-${{github.run_id}}
+                  restore-keys: |
+                      ccache-macos-${{matrix.tag}}-
+            - name: Build
+              run: |
+                  cmake --build ${{github.workspace}}/build -v -j $(sysctl -n hw.logicalcpu)
+            - name: Save cache
+              uses: actions/cache/save@v3
+              if: always()
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-macos-${{matrix.tag}}-${{github.run_id}}
+            - name: Run tests
+              run: |
+                  ctest --test-dir ${{github.workspace}}/build -j $(sysctl -n hw.logicalcpu)
+            - name: Upload test logs
+              uses: actions/upload-artifact@v3
+              if: always()
+              with:
+                  name: testlog-macos-${{matrix.tag}}
                   path: ${{github.workspace}}/build/Testing/Temporary/LastTest.log
                   retention-days: 7

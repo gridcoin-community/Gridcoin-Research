@@ -732,7 +732,10 @@ template<typename Stream, typename T> void Unserialize(Stream& os, std::unique_p
 template<typename Stream, typename T>
 inline void Serialize(Stream& os, const T& a)
 {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
     a.Serialize(os);
+#pragma clang diagnostic pop
 }
 
 template<typename Stream, typename T>
