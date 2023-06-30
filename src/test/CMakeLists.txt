@@ -19,7 +19,6 @@ add_executable(test_gridcoin
     fs_tests.cpp
     getarg_tests.cpp
     gridcoin_tests.cpp
-    gridcoin/appcache_tests.cpp
     gridcoin/block_finder_tests.cpp
     gridcoin/beacon_tests.cpp
     gridcoin/claim_tests.cpp
@@ -29,7 +28,9 @@ add_executable(test_gridcoin
     gridcoin/magnitude_tests.cpp
     gridcoin/mrc_tests.cpp
     gridcoin/project_tests.cpp
+    gridcoin/protocol_tests.cpp
     gridcoin/researcher_tests.cpp
+    gridcoin/scraper_registry_tests.cpp
     gridcoin/superblock_tests.cpp
     key_tests.cpp
     merkle_tests.cpp
@@ -47,7 +48,6 @@ add_executable(test_gridcoin
     sigopcount_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
-    test_gridcoin.h
     transaction_tests.cpp
     uint256_tests.cpp
     util_tests.cpp
