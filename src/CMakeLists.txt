@@ -117,22 +117,24 @@ add_library(gridcoin_util STATIC
     crypter.cpp
     dbwrapper.cpp
     fs.cpp
-    gridcoin/appcache.cpp
     gridcoin/backup.cpp
     gridcoin/beacon.cpp
     gridcoin/boinc.cpp
     gridcoin/claim.cpp
     gridcoin/contract/contract.cpp
     gridcoin/contract/message.cpp
+    gridcoin/contract/registry.cpp
     gridcoin/cpid.cpp
     gridcoin/gridcoin.cpp
     gridcoin/mrc.cpp
     gridcoin/project.cpp
+    gridcoin/protocol.cpp
     gridcoin/quorum.cpp
     gridcoin/researcher.cpp
     gridcoin/scraper/http.cpp
     gridcoin/scraper/scraper.cpp
     gridcoin/scraper/scraper_net.cpp
+    gridcoin/scraper/scraper_registry.cpp
     gridcoin/staking/difficulty.cpp
     gridcoin/staking/exceptions.cpp
     gridcoin/staking/kernel.cpp
