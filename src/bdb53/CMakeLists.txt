@@ -13,14 +13,14 @@ if(ENABLE_PIE)
         --with-pic
     )
 endif()
-if(APPLE)
-    list(APPEND BDB_FLAGS
-        CFLAGS=-Wno-implicit-function-declaration
-    )
-endif()
 if(MINGW)
     list(APPEND BDB_FLAGS
         --enable-mingw
+    )
+endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND BDB_FLAGS
+        CFLAGS=-Wno-implicit-function-declaration
     )
 endif()
 
