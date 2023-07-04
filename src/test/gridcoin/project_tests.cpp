@@ -28,6 +28,95 @@ GRC::Contract contract(std::string key, std::string value)
         1234567); // timestamp
 }
 
+void AddProjectEntry(const uint32_t& payload_version, const std::string& name, const std::string& url,
+                     const bool& gdpr_status, const int& height, const uint64_t time, const bool& reset_registry = false)
+{
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    // Make sure the registry is reset.
+    if (reset_registry) registry.Reset();
+
+    CTransaction dummy_tx;
+    CBlockIndex dummy_index = CBlockIndex {};
+    dummy_index.nHeight = height;
+    dummy_tx.nTime = time;
+    dummy_index.nTime = time;
+
+    GRC::Contract contract;
+
+    if (payload_version == 1) {
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {2}, // Contract version (pre v13)
+                    GRC::ContractAction::ADD,
+                    name,
+                    url);
+
+    } else if (payload_version == 2) {
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {2}, // Contract version (pre v13)
+                    GRC::ContractAction::ADD,
+                    payload_version,
+                    name,
+                    url,
+                    gdpr_status);
+    } else if (payload_version == 3){
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {3}, // Contract version (post v13)
+                    GRC::ContractAction::ADD,
+                    payload_version,
+                    name,
+                    url,
+                    gdpr_status);
+    }
+
+    dummy_tx.vContracts.push_back(contract);
+
+    registry.Add({contract, dummy_tx, &dummy_index});
+}
+
+void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name,
+                        const int& height, const uint64_t time, const bool& reset_registry = false)
+{
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    // Make sure the registry is reset.
+    if (reset_registry) registry.Reset();
+
+    CTransaction dummy_tx;
+    CBlockIndex dummy_index = CBlockIndex {};
+    dummy_index.nHeight = height;
+    dummy_tx.nTime = time;
+    dummy_index.nTime = time;
+
+    GRC::Contract contract;
+
+    if (payload_version == 1) {
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {2}, // Contract version (pre v13)
+                    GRC::ContractAction::REMOVE,
+                    name,
+                    std::string{});
+    } else if (payload_version == 2) {
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {2}, // Contract version (pre v13)
+                    GRC::ContractAction::REMOVE,
+                    payload_version,
+                    name,
+                    std::string{});
+    } else if (payload_version == 3){
+        contract = GRC::MakeContract<GRC::Project>(
+                    uint32_t {3}, // Contract version (post v13)
+                    GRC::ContractAction::REMOVE,
+                    payload_version,
+                    name,
+                    std::string{});
+    }
+
+    dummy_tx.vContracts.push_back(contract);
+
+    registry.Add({contract, dummy_tx, &dummy_index});
+}
+
 //!
 //! \brief Dummy transaction for contract handler API.
 //!
@@ -53,6 +142,16 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_project)
 BOOST_AUTO_TEST_CASE(it_initializes_to_a_new_project_contract)
 {
     const GRC::Project project("Enigma", "http://enigma.test/@");
+
+    BOOST_CHECK_EQUAL(project.m_version, 1);
+    BOOST_CHECK_EQUAL(project.m_name, "Enigma");
+    BOOST_CHECK_EQUAL(project.m_url, "http://enigma.test/@");
+    BOOST_CHECK_EQUAL(project.m_timestamp, 0);
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_to_a_new_project_contract_current_version)
+{
+    const GRC::Project project("Enigma", "http://enigma.test/@", 0);
 
     BOOST_CHECK_EQUAL(project.m_version, GRC::Project::CURRENT_VERSION);
     BOOST_CHECK_EQUAL(project.m_name, "Enigma");
@@ -171,10 +270,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_add)
         expectedv1.begin(),
         expectedv1.end()));
 
-    const GRC::Project projectv2("Enigma", "http://enigma.test/@", 1234567, GRC::Project::CURRENT_VERSION, true);
+    const GRC::Project projectv2("Enigma", "http://enigma.test/@", 1234567, 2, true);
 
     const CDataStream expectedv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-            << GRC::Project::CURRENT_VERSION
+            << uint32_t{2}
             << std::string("Enigma")
             << std::string("http://enigma.test/@")
             << true
@@ -213,7 +312,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
     CDataStream streamv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << GRC::Project::CURRENT_VERSION
+            << uint32_t{2}
         << std::string("Enigma")
         << std::string("http://enigma.test/@")
         << true
@@ -222,7 +321,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_add)
     GRC::Project projectv2;
     projectv2.Unserialize(streamv2, GRC::ContractAction::ADD);
 
-    BOOST_CHECK_EQUAL(projectv2.m_version, GRC::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(projectv2.m_version, uint32_t{2});
     BOOST_CHECK_EQUAL(projectv2.m_name, "Enigma");
     BOOST_CHECK_EQUAL(projectv2.m_url, "http://enigma.test/@");
     BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
@@ -250,10 +349,10 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_delete)
         expectedv1.begin(),
         expectedv1.end()));
 
-    const GRC::Project projectv2("Enigma", "", 1234567, GRC::Project::CURRENT_VERSION, true);
+    const GRC::Project projectv2("Enigma", "", 1234567, uint32_t{2}, true);
 
     const CDataStream expectedv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << GRC::Project::CURRENT_VERSION
+        << uint32_t{2}
         << std::string("Enigma");
 
     CDataStream streamv2(SER_NETWORK, PROTOCOL_VERSION);
@@ -286,13 +385,13 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_delete)
     BOOST_CHECK(projectv1.WellFormed(GRC::ContractAction::REMOVE) == true);
 
     CDataStream streamv2 = CDataStream(SER_NETWORK, PROTOCOL_VERSION)
-        << GRC::Project::CURRENT_VERSION
-        << std::string("Enigma");
+            << uint32_t{2}
+            << std::string("Enigma");
 
     GRC::Project projectv2;
     projectv2.Unserialize(streamv2, GRC::ContractAction::REMOVE);
 
-    BOOST_CHECK_EQUAL(projectv2.m_version, GRC::Project::CURRENT_VERSION);
+    BOOST_CHECK_EQUAL(projectv2.m_version, uint32_t {2});
     BOOST_CHECK_EQUAL(projectv2.m_name, "Enigma");
     BOOST_CHECK_EQUAL(projectv2.m_url, "");
     BOOST_CHECK_EQUAL(projectv2.m_timestamp, 0);
@@ -392,29 +491,41 @@ BOOST_AUTO_TEST_SUITE(Whitelist)
 
 BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
 {
-    GRC::Whitelist whitelist;
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+
+    whitelist.Reset();
+
+    int height = 0;
+    int64_t time = 0;
 
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
 
-    const GRC::Contract project = contract("Enigma", "http://enigma.test");
-    whitelist.Add({ project, g_tx, nullptr });
+    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
+
+    AddProjectEntry(2, "Foo", "http://foo.test", false, height++, time++, false);
+
+    BOOST_CHECK(whitelist.Snapshot().size() == 2);
+    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot().Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 {
-    GRC::Whitelist whitelist;
-    const GRC::Contract project = contract("Enigma", "http://enigma.test");
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
 
-    whitelist.Add({ project, g_tx, nullptr });
+    int height = 0;
+    int64_t time = 0;
+
+    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
 
-    whitelist.Delete({ project, g_tx, nullptr });
+    DeleteProjectEntry(1, "Enigma", height++, time++, false);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
@@ -422,25 +533,33 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
 {
-    GRC::Whitelist whitelist;
-    const GRC::Contract project = contract("Enigma", "http://enigma.test");
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
 
-    whitelist.Add({ project, g_tx, nullptr });
+    int height = 0;
+    int64_t time = 0;
+
+    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
+    AddProjectEntry(2, "Foo", "http://foo.test", true, height++, time++, false);
 
     auto snapshot = whitelist.Snapshot();
-    whitelist.Delete({ project, g_tx, nullptr });
+
+    DeleteProjectEntry(1, "Enigma", height, time, false);
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
+
+    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot().Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
 {
-    GRC::Whitelist whitelist;
-    const GRC::Contract project1 = contract("Enigma", "http://enigma.test");
-    const GRC::Contract project2 = contract("Enigma", "http://new.enigma.test");
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
 
-    whitelist.Add({ project1, g_tx, nullptr });
-    whitelist.Add({ project2, g_tx, nullptr });
+    int height = 0;
+    int64_t time = 0;
+
+    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
+    AddProjectEntry(2, "Enigma", "http://new.enigma.test", true, height++, time++, false);
 
     auto snapshot = whitelist.Snapshot();
     BOOST_CHECK(snapshot.size() == 1);

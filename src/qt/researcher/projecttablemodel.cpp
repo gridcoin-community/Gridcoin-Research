@@ -133,7 +133,7 @@ ProjectTableModel::ProjectTableModel(ResearcherModel *model, const bool extended
         << tr("Whitelist")
         << tr("Has GDPR Controls")
         << tr("Magnitude")
-        << tr("Avg. Credit")
+        << tr("Recent Avg. Credit")
         << tr("CPID");
 }
 
@@ -186,7 +186,7 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                 case Magnitude:
                     return row->m_magnitude;
                 case RecentAverageCredit:
-                    return row->m_rac;
+                    return QString::number(row->m_rac, 'f', 0);
             }
             break;
 

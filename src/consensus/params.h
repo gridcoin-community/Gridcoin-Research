@@ -33,6 +33,8 @@ struct Params {
     int BlockV11Height;
     /** Block height at which v12 blocks are created */
     int BlockV12Height;
+    /** Block height at which v13 blocks are created */
+    int BlockV13Height;
     /** Block height at which poll v3 contract payloads are valid */
     int PollV3Height;
     /** Block height at which project v2 contracts are allowed */
@@ -45,6 +47,8 @@ struct Params {
       * forfeiture of fees to the staker and/or foundation. Only consensus critical at BlockV12Height or above.
       */
     int64_t MRCZeroPaymentInterval;
+
+    int64_t StandardContractReplayLookback;
 
     uint256 powLimit;
 };

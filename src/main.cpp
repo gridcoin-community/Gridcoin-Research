@@ -19,6 +19,7 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
@@ -926,8 +927,8 @@ bool ForceReorganizeToHash(uint256 NewHash)
 bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     set<string> vRereadCPIDs;
-    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-    GRC::PollRegistry& polls = GRC::GetPollRegistry();
+
+    GRC::RegistryBookmarks registries;
 
     while(pindexBest != pcommon)
     {
@@ -965,8 +966,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             // for the reverted activations. This is safe to do before the transactional level reverts with beacon
             // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
             // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
-            // for a superblock.
-            beacons.Deactivate(pindexBest->GetBlockHash());
+            // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
+            // a virtual method that corresponds to this call, as it is only relevant to beacons.
+            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
 
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
@@ -980,7 +982,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
-        // Delete beacons, polls and votes from contracts in disconnected blocks.
+        // Delete beacons, scraper entries, protocol entries, projects, polls and votes from contracts
+        // in disconnected blocks.
         if (pindexBest->IsContract())
         {
             // Skip coinbase and coinstake transactions:
@@ -988,19 +991,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
                 tx != end;
                 ++tx)
             {
+                // This reverts contracts for those contract types which have handlers that properly handle
+                // contract level reversions.
                 for (const auto& contract : tx->GetContracts())
                 {
-                    if (contract.m_type == GRC::ContractType::BEACON)
-                    {
-                       const GRC::ContractContext contract_context(contract, *tx, pindexBest);
-
-                       beacons.Revert(contract_context);
-                    }
-
-                    if (contract.m_type == GRC::ContractType::POLL || contract.m_type == GRC::ContractType::VOTE) {
+                    if (GRC::RegistryBookmarks::IsRegistryRevertCapable(contract.m_type.Value())) {
                         const GRC::ContractContext contract_context(contract, *tx, pindexBest);
 
-                        polls.Revert(contract_context);
+                        GRC::RegistryBookmarks::GetRegistryWithRevert(contract.m_type.Value()).Revert(contract_context);
                     }
                 }
             }
@@ -1030,11 +1028,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
-        // Record new best height (the common block) in the beacon registry after the series of reverts.
-        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-        beacons.SetDBHeight(pindexBest->nHeight);
+        // Record new best height (the common block) in the registries that have a backing DB. This is important
+        // to ensure that if the wallet is shutdown, on the next start, the contract replay (if any) is done from
+        // the correct height.
+        registries.UpdateRegistryBlockHeights(pindexBest->nHeight);
 
-        GRC::ReplayContracts(pindexBest);
+        // Replaying contracts after a block disconnection is no longer needed, as all contract types that have handlers
+        // that operate at the tx/contract level have fully implemented reversion.
+        //GRC::ReplayContracts(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {

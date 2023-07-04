@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -9,8 +9,10 @@
 #include "contract/contract.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
+#include "gridcoin/contract/registry_db.h"
 #include "serialize.h"
 #include "pubkey.h"
+#include "sync.h"
 
 #include <memory>
 #include <vector>
@@ -19,11 +21,34 @@
 namespace GRC
 {
 //!
-//! \brief Represents a BOINC project in the Gridcoin whitelist.
+//! \brief Enumeration of project entry status. Unlike beacons this is for both storage
+//! and memory.
 //!
-class Project : public IContractPayload
+//! UNKNOWN status is only encountered in trivially constructed empty
+//! project entries and should never be seen on the blockchain.
+//!
+//! DELETED status corresponds to a removed entry.
+//!
+//! ACTIVE corresponds to an active entry.
+//!
+//! OUT_OF_BOUND must go at the end and be retained for the EnumBytes wrapper.
+//!
+enum class ProjectEntryStatus
+{
+    UNKNOWN,
+    DELETED,
+    ACTIVE,
+    OUT_OF_BOUND
+};
+
+class ProjectEntry
 {
 public:
+    //!
+    //! \brief Wrapped Enumeration of scraper entry status, mainly for serialization/deserialization.
+    //!
+    using Status = EnumByte<ProjectEntryStatus>;
+
     //!
     //! \brief Version number of the current format for a serialized project.
     //!
@@ -31,8 +56,177 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
+    //!
+    //! \brief Version number of the serialized project format.
+    //!
+    //! Defaults to the most recent version for a new project instance.
+    //!
+    uint32_t m_version = CURRENT_VERSION;
+
+    std::string m_name;                   //!< As it exists in the contract key field, this is the project name.
+    std::string m_url;                   //!< As it exists in the contract url field.
+    int64_t m_timestamp;                 //!< Timestamp of the contract.
+    uint256 m_hash;                      //!< The txid of the transaction that contains the project entry.
+    uint256 m_previous_hash;             //!< The m_hash of the previous project entry with the same key.
+    bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
+    CPubKey m_public_key;                //!< Project public key.
+    Status m_status;                     //!< The status of the project entry. (Note serialization converts to/from int.)
+
+    //!
+    //! \brief Initialize an empty, invalid project entry instance.
+    //!
+    ProjectEntry(uint32_t version = CURRENT_VERSION);
+
+    //!
+    //! \brief Initialize a new project entry for submission in a contract (with ACTIVE status)
+    //!
+    //! \param version. Project entry version. This is identical to the payload version that formed it.
+    //! \param name. The key of the project entry.
+    //! \param url. The url of the project entry.
+    //! \param gdpr_controls. The gdpr control flag of the project entry
+    //!
+    ProjectEntry(uint32_t version, std::string name, std::string url);
+
+    //!
+    //! \brief Initialize a new project entry for submission in a contract (with ACTIVE status)
+    //!
+    //! \param version. Project entry version. This is identical to the payload version that formed it.
+    //! \param name. The key of the project entry.
+    //! \param url. The url of the project entry.
+    //! \param gdpr_controls. The gdpr control flag of the project entry
+    //!
+    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls);
+
+    //!
+    //! \brief Initialize a project entry instance with data from a contract.
+    //!
+    //! \param version. Project entry version. This is identical to the payload version that formed it.
+    //! \param name. The key of the project entry.
+    //! \param url. The value of the project entry.
+    //! \param gdpr_controls. The gdpr control flag of the project entry
+    //! \param status. the status of the project entry.
+    //! \param timestamp. The timestamp of the project entry that comes from the containing transaction
+    //!
+    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls, Status status, int64_t timestamp);
+
+    //!
+    //! \brief Determine whether a project entry contains each of the required elements.
+    //!
+    //! \return \c true if the project entry is complete.
+    //!
+    bool WellFormed() const;
+
+    //!
+    //! \brief This is the standardized method that returns the key value for the project entry (for
+    //! the registry_db.h template.)
+    //!
+    //! \return std::string project name, which is the key for the project entry
+    //!
+    std::string Key() const;
+
+    //!
+    //! \brief Provides the project name and url (the key and principal value) as a pair.
+    //! \return std::pair of strings
+    //!
+    std::pair<std::string, std::string> KeyValueToString() const;
+
+    //!
+    //! \brief Returns the string representation of the current project entry status
+    //!
+    //! \return Translated string representation of project status
+    //!
+    std::string StatusToString() const;
+
+    //!
+    //! \brief Returns the translated or untranslated string of the input project entry status
+    //!
+    //! \param status. ProjectEntryStatus
+    //! \param translated. True for translated, false for not translated. Defaults to true.
+    //!
+    //! \return Project entry status string.
+    //!
+    std::string StatusToString(const ProjectEntryStatus& status, const bool& translated = true) const;
+
+    //!
+    //! \brief Get a user-friendly display name created from the project key.
+    //!
+    std::string DisplayName() const;
+
+    //!
+    //! \brief Get the root URL of the project's BOINC server website.
+    //!
+    std::string BaseUrl() const;
+
+    //!
+    //! \brief Get a user-accessible URL to the project's BOINC website.
+    //!
+    std::string DisplayUrl() const;
+
+    //!
+    //! \brief Get the URL to the project's statistics export files.
+    //!
+    //! \param type If empty, return a URL to the project's stats directory.
+    //!             Otherwise, return a URL to the specified export archive.
+    //!
+    std::string StatsUrl(const std::string& type = "") const;
+
+    //!
+    //! \brief Returns true if project has project stats GDPR export controls
+    //!
+    std::optional<bool> HasGDPRControls() const;
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side project entry to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator==(ProjectEntry b);
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side project entry to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator!=(ProjectEntry b);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_version);
+        READWRITE(m_name);
+        READWRITE(m_url);
+        READWRITE(m_timestamp);
+        READWRITE(m_hash);
+        READWRITE(m_gdpr_controls);
+        READWRITE(m_previous_hash);
+        READWRITE(m_status);
+    }
+};
+
+//!
+//! \brief The type that defines a shared pointer to a ProjectEntry
+//!
+typedef std::shared_ptr<ProjectEntry> ProjectEntry_ptr;
+
+//!
+//! \brief A type that either points to some ProjectEntry or does not.
+//!
+typedef const ProjectEntry_ptr ProjectEntryOption;
+
+//!
+//! \brief Represents a BOINC project in the Gridcoin whitelist.
+//!
+class Project : public IContractPayload, public ProjectEntry
+{
+public:
     //!
     //! \brief The maximum number of characters allowed for a serialized project
     //! name field.
@@ -49,41 +243,75 @@ public:
     static constexpr size_t MAX_URL_SIZE = 500;
 
     //!
-    //! \brief Version number of the serialized project format.
-    //!
-    //! Defaults to the most recent version for a new project instance.
-    //!
-    uint32_t m_version = CURRENT_VERSION;
-
-    std::string m_name;                  //!< As it exists in the contract key field.
-    std::string m_url;                   //!< As it exists in the contract value field.
-    int64_t m_timestamp;                 //!< Timestamp of the contract.
-    bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
-    CPubKey m_public_key;                //!< Project public key.
-
-    //!
     //! \brief Initialize an empty, invalid project object.
     //!
-    Project();
-
-    //!
-    //! \brief Initialize a new project for submission in a transaction.
-    //!
-    //! \param name      Project name from contract message key.
-    //! \param url       Project URL from contract message value.
-    //! \param timestamp Contract timestamp.
-    //!
-    Project(std::string name, std::string url, int64_t timestamp = 0);
+    Project(uint32_t version = CURRENT_VERSION);
 
     //!
     //! \brief Initialize a \c Project using data from the contract.
     //!
     //! \param name          Project name from contract message key.
     //! \param url           Project URL from contract message value.
-    //! \param timestamp     Contract timestamp.
+    //!
+    Project(std::string name, std::string url);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param version       Project payload version.
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
+    //!
+    Project(uint32_t version, std::string name, std::string url);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
+    //! \param timestamp     Timestamp
+    //! \param version       Project payload version.
+    //!
+    Project(std::string name, std::string url, int64_t timestamp, uint32_t version = CURRENT_VERSION);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param version       Project payload version.
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
     //! \param gdpr_controls Boolean to indicate gdpr stats export controls enforced
     //!
-    Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls = false);
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param version       Project payload version.
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
+    //! \param gdpr_controls Boolean to indicate gdpr stats export controls enforced
+    //! \param timestamp     Timestamp
+    //!
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, int64_t timestamp);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
+    //! \param name          Project name from contract message key.
+    //! \param url           Project URL from contract message value.
+    //! \param timestamp     Timestamp
+    //! \param version       Project payload version.
+    //! \param gdpr_controls Boolean to indicate gdpr stats export controls enforced
+    //!
+    Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls);
+
+    //!
+    //! \brief Initialize a \c Project payloard from a provided project entry
+    //! \param version. Project Payload version.
+    //! \param entry. Project entry to place in the payload.
+    //!
+    Project(ProjectEntry entry);
 
     //!
     //! \brief Get the type of contract that this payload contains data for.
@@ -145,34 +373,6 @@ public:
         return Contract::STANDARD_BURN_AMOUNT;
     }
 
-    //!
-    //! \brief Get a user-friendly display name created from the project key.
-    //!
-    std::string DisplayName() const;
-
-    //!
-    //! \brief Get the root URL of the project's BOINC server website.
-    //!
-    std::string BaseUrl() const;
-
-    //!
-    //! \brief Get a user-accessible URL to the project's BOINC website.
-    //!
-    std::string DisplayUrl() const;
-
-    //!
-    //! \brief Get the URL to the project's statistics export files.
-    //!
-    //! \param type If empty, return a URL to the project's stats directory.
-    //!             Otherwise, return a URL to the specified export archive.
-    //!
-    std::string StatsUrl(const std::string& type = "") const;
-
-    //!
-    //! \brief Returns true if project has project stats GDPR export controls
-    //!
-    std::optional<bool> HasGDPRControls() const;
-
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -192,13 +392,20 @@ public:
                 READWRITE(m_public_key);
             }
         }
+
+        if (m_version >= 3) {
+            READWRITE(m_hash);
+            READWRITE(m_previous_hash);
+            READWRITE(m_status);
+        }
     }
-};
+}; // Project (entry payload)
 
 //!
 //! \brief A collection of projects in the Gridcoin whitelist.
 //!
-typedef std::vector<Project> ProjectList;
+typedef std::map<std::string, ProjectEntry> ProjectEntryMap;
+typedef std::vector<ProjectEntry> ProjectList;
 
 //!
 //! \brief Smart pointer around a collection of projects.
@@ -216,7 +423,7 @@ public:
     typedef ProjectList::const_iterator const_iterator;
 
     //!
-    //! \brief Initialize a snapshot for the provided project list.
+    //! \brief Initialize a snapshot for the provided project list from the project entry map.
     //!
     //! \param projects A copy of the smart pointer to the project list.
     //!
@@ -264,50 +471,46 @@ public:
     WhitelistSnapshot Sorted() const;
 
 private:
-    const ProjectListPtr m_projects;  //!< The set of whitelisted projects.
+    const ProjectListPtr m_projects;  //!< The vector of whitelisted projects.
 };
 
 //!
-//! \brief Manages the collection of BOINC projects in the Gridcoin whitelist.
-//!
-//! An object of this class stores in memory the set of data that represents
-//! the BOINC projects in the Gridcoin whitelist. The application collects this
-//! data from network policy messages published to the network as contracts in
-//! a transaction.
-//!
-//! A \c Whitelist instance provides no direct access to the data it stores.
-//! Consumers call the \c Snapshot() method to obtain a view of the data. These
-//! \c WhitelistSnapshot instances enable read-only access to the project data
-//! as it existed at the time of their construction.
-//!
-//! This class implements copy-on-write semantics to facilitate thread-safety
-//! and to reduce overhead. It uses smart pointers to share ownership of project
-//! data with snapshots until the application mutates the data by adding or
-//! removing a project. During mutation, a \c Whitelist object copies its data
-//! and stores that behind a new smart pointer as an atomic operation, so any
-//! existing \c WhitelistSnapshot instances become obsolete.
-//!
-//! For this reason, consumers of this data shall not hold long-lived snapshot
-//! objects. Instead, they poll for the current whitelist data and retain it
-//! briefly as needed for each local routine. Because whitelisted projects
-//! change so infrequently, this design enables efficient, lock-free access to
-//! the data.
-//!
-//! Although this class protects against undefined behavior that results from
-//! access to its data by multiple threads, it does not guard against a data
-//! race that occurs when two threads mutate the project data at the same time.
-//! Only the result of one thread's operation will persist because of the time
-//! needed to copy the project data before the atomic update. The application
-//! only modifies this data from one thread now. The implementation needs more
-//! coarse locking if it will support multiple writers in the future.
+//! \brief Registry that manages the collection of BOINC projects in the Gridcoin whitelist.
 //!
 class Whitelist : public IContractHandler
 {
 public:
     //!
-    //! \brief Initializes the project whitelist manager.
+    //! \brief Initializes the project whitelist manager. The version must be incremented when
+    //! introducing a breaking change in the storage format (serialization) of the project entry.
     //!
-    Whitelist();
+    //! Version 0: <= 5.4.2.0 where there was no backing db.
+    //! Version 1: TBD.
+    //!
+    Whitelist()
+        :m_project_db(1)
+    {
+    };
+
+    //!
+    //! \brief The type that keys project entries by their key strings. Note that the entries
+    //! in this map are actually smart shared pointer wrappers, so that the same actual object
+    //! can be held by both this map and the historical map without object duplication.
+    //!
+    typedef std::map<std::string, ProjectEntry_ptr> ProjectEntryMap;
+
+    //!
+    //! \brief PendingProjectEntryMap. Not actually used here, but required for the template.
+    //!
+    typedef ProjectEntryMap PendingProjectEntryMap;
+
+    //!
+    //! \brief The type that keys historical project entries by the contract hash (txid).
+    //! Note that the entries in this map are actually smart shared pointer wrappers, so that
+    //! the same actual object can be held by both this map and the (current) project entry map
+    //! without object duplication.
+    //!
+    typedef std::map<uint256, ProjectEntry_ptr> HistoricalProjectEntryMap;
 
     //!
     //! \brief Get a read-only view of the projects in the whitelist.
@@ -329,10 +532,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -343,10 +543,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
-    {
-        return true; // No contextual validation needed yet
-    }
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
 
     //!
     //! \brief Add a project to the whitelist from contract data.
@@ -362,27 +559,103 @@ public:
     //!
     void Delete(const ContractContext& ctx) override;
 
+    //!
+    //! \brief Revert the registry state for the project entry to the state prior
+    //! to this ContractContext application. This is typically an issue
+    //! during reorganizations, where blocks are disconnected.
+    //!
+    //! \param ctx References the project entry contract and associated context.
+    //!
+    void Revert(const ContractContext& ctx) override;
+
+    //!
+    //! \brief Initialize the Project Whitelist (registry), which now includes restoring the state of the whitelist from
+    //! LevelDB on wallet start.
+    //!
+    //! \return Block height of the database restored from LevelDB. Zero if no LevelDB project entry data is found or
+    //! there is some issue in LevelDB project entry retrieval. (This will cause the contract replay to change scope
+    //! and initialize the Whitelist from contract replay and store in LevelDB.)
+    //!
+    int Initialize() override;
+
+    //!
+    //! \brief Gets the block height through which is stored in the project entry registry database.
+    //!
+    //! \return block height.
+    //!
+    int GetDBHeight() override;
+
+    //!
+    //! \brief Function normally only used after a series of reverts during block disconnects, because
+    //! block disconnects are done in groups back to a common ancestor, and will include a series of reverts.
+    //! This is essentially atomic, and therefore the final (common) height only needs to be set once. TODO:
+    //! reversion should be done with a vector argument of the contract contexts, along with a final height to
+    //! clean this up and move the logic to here from the calling function.
+    //!
+    //! \param height to set the storage DB bookmark.
+    //!
+    void SetDBHeight(int& height) override;
+
+    //!
+    //! \brief Resets the maps in the Whitelist but does not disturb the underlying LevelDB
+    //! storage. This is only used during testing in the testing harness.
+    //!
+    void ResetInMemoryOnly();
+
+    //!
+    //! \brief Passivates the elements in the scraper db, which means remove from memory elements in the
+    //! historical map that are not referenced by m_projects. The backing store of the element removed
+    //! from memory is retained and will be transparently restored if find() is called on the hash key
+    //! for the element.
+    //!
+    //! \return The number of elements passivated.
+    //!
+    uint64_t PassivateDB();
+
+    //!
+    //! \brief A static function that is called by the scheduler to run the project entry database passivation.
+    //!
+    static void RunDBPassivation();
+
+    //!
+    //! \brief Specializes the template RegistryDB for the ScraperEntry class
+    //!
+    typedef RegistryDB<ProjectEntry,
+                       ProjectEntry,
+                       ProjectEntryStatus,
+                       ProjectEntryMap,
+                       PendingProjectEntryMap,
+                       HistoricalProjectEntryMap> ProjectEntryDB;
+
 private:
-    // With C++20, use std::atomic<std::shared_ptr<T>> instead:
-    ProjectListPtr m_projects;  //!< The set of whitelisted projects.
+    //!
+    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //!
+    mutable CCriticalSection cs_lock;
 
     //!
-    //! \brief Create a copy of the current whitelist that excludes the project
-    //! with the specified name if it exists.
+    //! \brief Private helper method for the Add and Delete methods above. They both use identical code (with
+    //! different input statuses).
     //!
-    //! \param name Project name to exclude from the copy.
+    //! \param ctx The contract context for the add or delete.
     //!
-    //! \return A smart pointer to the copy of the whitelist.
-    //!
-    ProjectListPtr CopyFilteredWhitelist(const std::string& name) const;
-};
+    void AddDelete(const ContractContext& ctx);
+
+    ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
+    PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
+
+    ProjectEntryDB m_project_db; //!< The project db member
+public:
+
+    ProjectEntryDB& GetProjectDB();
+}; // Whitelist (Project Registry)
 
 //!
-//! \brief Get the global project whitelist manager.
+//! \brief Get the global project whitelist registry.
 //!
-//! \return Current global whitelist manager instance.
+//! \return Current global whitelist registry instance.
 //!
 Whitelist& GetWhitelist();
-}
+} // namespace GRC
 
 #endif // GRIDCOIN_PROJECT_H

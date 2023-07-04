@@ -210,7 +210,7 @@ public:
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION = 12;
+    static const int32_t CURRENT_VERSION = 13;
 
     // header
     int32_t nVersion;

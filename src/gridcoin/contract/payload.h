@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -66,6 +66,23 @@ enum class ContractType
     VOTE,         //!< A vote cast by a wallet for a poll.
     MRC,          //!< A manual rewards claim (MRC) request to pay rewards
     OUT_OF_BOUND, //!< Marker value for the end of the valid range.
+};
+
+//!
+//! \brief Allows use of the ContractType enum in range based for loops.
+//!
+static constexpr GRC::ContractType CONTRACT_TYPES[] = {
+    ContractType::UNKNOWN,
+    ContractType::BEACON,
+    ContractType::CLAIM,
+    ContractType::MESSAGE,
+    ContractType::POLL,
+    ContractType::PROJECT,
+    ContractType::PROTOCOL,
+    ContractType::SCRAPER,
+    ContractType::VOTE,
+    ContractType::MRC,
+    ContractType::OUT_OF_BOUND
 };
 
 //!

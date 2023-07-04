@@ -26,7 +26,6 @@
 // Thread safety. See scraper.cpp for documentation.
 extern CCriticalSection cs_Scraper;
 extern CCriticalSection cs_ScraperGlobals;
-extern CCriticalSection cs_mScrapersExt;
 extern CCriticalSection cs_StructScraperFileManifest;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern CCriticalSection cs_TeamIDMap;
@@ -60,9 +59,53 @@ extern std::string TEAM_WHITELIST;
 extern std::string EXTERNAL_ADAPTER_PROJECTS;
 extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
 
-extern CCriticalSection cs_mScrapersExt;
+/** Enum for scraper log attributes */
+enum class logattribute
+{
+    // Can't use ERROR here because it is defined already in windows.h.
+    ERR,
+    INFO,
+    WARNING,
+    CRITICAL
+};
 
-extern AppCacheSectionExt mScrapersExt;
+/** Defines scraper file manifest entry. These are the entries for individual project stats file downloads. */
+struct ScraperFileManifestEntry
+{
+    std::string filename; // Filename
+    std::string project;
+    uint256 hash; // hash of file
+    int64_t timestamp = 0;
+    bool current = true;
+    bool excludefromcsmanifest = true;
+    std::string filetype;
+};
+
+/**
+ * @brief Defines the scaper file manifest map.
+ * --------- filename ---ScraperFileManifestEntry
+ * std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap
+ */
+typedef std::map<std::string, ScraperFileManifestEntry> ScraperFileManifestMap;
+
+/** Defines a structure that combines the ScraperFileManifestMap along with a map hash, the block hash of the
+ * consensus block, and the time that the above fields were updated.
+ */
+struct ScraperFileManifest
+{
+    ScraperFileManifestMap mScraperFileManifest;
+    uint256 nFileManifestMapHash;
+    uint256 nConsensusBlockHash;
+    int64_t timestamp = 0;
+};
+
+// Both TeamIDMap and ProjTeamETags are protected by cs_TeamIDMap.
+/** Stores the team IDs for each team keyed by project. (Team ID's are different for the same team across different
+ * projects.)
+ * --------- project -------------team name -- teamID
+ * std::map<std::string, std::map<std::string, int64_t>> mTeamIDs
+ */
+typedef std::map<std::string, std::map<std::string, int64_t>> mTeamIDs;
 
 /*********************
 * Functions          *

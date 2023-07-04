@@ -257,7 +257,7 @@ public:
                               "ensure your addnode entries are up-to-date. If you recently started the wallet, you may "
                               "want to wait another few minutes for connections to build up and then test again. Please see "
                               "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.");
-            m_results_string = _("Failed: Count =") + " %1";
+            m_results_string = _("Failed: Count = %1");
             m_results = Diagnose::FAIL;
 
             std::string ss = ToString(outbound_connections);
@@ -271,7 +271,7 @@ public:
             m_results = Diagnose::WARNING;
         } else {
             m_results_tip = "";
-            m_results_string = _("Passed: Count =") + " %1";
+            m_results_string = _("Passed: Count = %1");
             std::string ss = ToString(outbound_connections);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
@@ -310,11 +310,11 @@ public:
                               "minutes for connections to build up and test again. Please see "
                               "https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.");
             m_results = Diagnose::WARNING;
-            m_results_string = _("Warning: Count =") + " %1 (Pass = 8+)";
+            m_results_string = _("Warning: Count = %1 (Pass = 8+)");
             m_results_string_arg.push_back(s_connections);
         } else if (m_connections >= 8) {
             m_results_tip = "";
-            m_results_string = _("Passed: Count =") + " %1";
+            m_results_string = _("Passed: Count = %1");
             m_results_string_arg.push_back(s_connections);
             m_results = Diagnose::PASS;
 
@@ -325,7 +325,7 @@ public:
                               "to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and "
                               "https://addnodes.cycy.me/.");
             m_results = Diagnose::FAIL;
-            m_results_string = _("Warning: Count =") + " %1";
+            m_results_string = _("Warning: Count = %1");
             m_results_string_arg.push_back(s_connections);
             m_results_tip_arg.push_back(ToString(minimum_connections_to_stake));
         }
@@ -670,7 +670,7 @@ public:
         if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
             m_tcpSocket.close();
             m_results = WARNING;
-            m_results_tip = _("Outbound communication to TCP port") + " %1 " + _("appears to be blocked.");
+            m_results_tip = _("Outbound communication to TCP port %1 appears to be blocked.");
             std::string ss = ToString(GetListenPort());
             m_results_string_arg.push_back(ss);
         } else {
@@ -720,7 +720,7 @@ public:
         // If g_nTimeBestReceived == 0, the wallet is still in the initial sync process. In that case use the failure
         // standard and just warn, with a different explanation.
         if (g_nTimeBestReceived == 0 && OutOfSyncByAge() && diff < fail_diff) {
-            m_results_string = _("Warning: 80 block difficulty is less than") + " %1.";
+            m_results_string = _("Warning: 80 block difficulty is less than %1.");
             std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
 
@@ -731,8 +731,7 @@ public:
         // If the wallet has been in sync in the past in this run, then apply the normal standards, whether the wallet is
         // in sync or not right now.
         else if (g_nTimeBestReceived > 0 && diff < fail_diff) {
-            m_results_string = _("Failed: 80 block difficulty is less than") + " %1. " + _("This wallet is almost certainly "
-                                                                                           "forked.");
+            m_results_string = _("Failed: 80 block difficulty is less than %1. This wallet is almost certainly forked.");
 
             std::string ss = ToString(fail_diff);
             m_results_string_arg.push_back(ss);
@@ -742,8 +741,7 @@ public:
                               "from genesis using the menu option. (Note this will take 2-4 hours.)");
             m_results = Diagnose::FAIL;
         } else if (g_nTimeBestReceived > 0 && diff < warn_diff) {
-            m_results_string = _("Warning: 80 block difficulty is less than") + "%1. " + _("This wallet is probably "
-                                                                                           "forked.");
+            m_results_string = _("Warning: 80 block difficulty is less than %1. This wallet is probably forked.");
             std::string ss = ToString(warn_diff);
             m_results_string_arg.push_back(ss);
 
@@ -752,7 +750,7 @@ public:
                               "genesis using the menu option. (Note this will take 2-4 hours.)");
             m_results = Diagnose::WARNING;
         } else {
-            m_results_string = _("Passed: 80 block difficulty is") + " %1.";
+            m_results_string = _("Passed: 80 block difficulty is %1.");
             std::string ss = ToString(diff);
             m_results_string_arg.push_back(ss);
             m_results = Diagnose::PASS;
@@ -827,10 +825,11 @@ public:
                 m_results_tip = _("Your balance is low given the current network difficulty to stake in a reasonable "
                                   "period of time to retrieve your research rewards when solo crunching. You should consider "
                                   "acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.");
-                m_results_string = _("Warning: 45 days < ETTS =") + " %1 <= 90 days";
+                m_results_string = _("Warning: 45 days < ETTS = %1 <= 90 days");
+                m_results_string_arg.push_back(rounded_ETTS);
                 m_results = Diagnose::WARNING;
             } else {
-                m_results_string = _("Passed: ETTS =") + " %1 <= 45 days";
+                m_results_string = _("Passed: ETTS = %1 <= 45 days");
                 m_results_string_arg.push_back(rounded_ETTS);
                 m_results = Diagnose::PASS;
             }

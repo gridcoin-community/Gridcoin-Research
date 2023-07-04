@@ -150,8 +150,8 @@ bool TrySignClaim(
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
 bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
-                      std::map<GRC::Cpid, uint256>& mrc_tx_map,
-                      GRC::Claim claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+                      std::map<GRC::Cpid, uint256>& mrc_tx_map, uint32_t& claim_contract_version,
+                      GRC::Claim& claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For convenience
     CTransaction& coinstake = blocknew.vtx[1];
@@ -291,8 +291,9 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 
     // Now the claim is complete. Put on the coinbase.
     blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
-        GRC::ContractAction::ADD,
-        std::move(claim)));
+                                                claim_contract_version,
+                                                GRC::ContractAction::ADD,
+                                                std::move(claim)));
 
     return true;
 }
@@ -1450,10 +1451,13 @@ void StakeMiner(CWallet *pwallet)
 
         // * Create a bare block
 
-        // This transition code is for mandatory change from V11 to v12 block format (accommodates MRC).
-        if (!IsV12Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 11;
+        // This transition code is to handle the v12 to v13 transition. The other transition handling
+        // for block versions in the stakeminer have been removed, because no blocks of an earlier version
+        // than v13 can be staked now, since the chain is past the v12 transition height.
+        if (!IsV13Enabled(pindexPrev->nHeight + 1)) {
+            StakeBlock.nVersion = 12;
         }
+
         StakeBlock.nTime = GetAdjustedTime();
         StakeBlock.nNonce = 0;
         StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
@@ -1492,9 +1496,11 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("INFO: %s: added Gridcoin reward to coinstake", __func__);
 
+        uint32_t claim_contract_version = IsV13Enabled(pindexPrev->nHeight + 1) ? 3 : 2;
+
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, claim, pwallet)) continue;
+        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, claim_contract_version, claim, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 

@@ -303,7 +303,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
              __func__,
              beacon_ptr->m_timestamp,
              beacon_ptr->m_hash.GetHex(),
-             beacon_ptr->m_prev_beacon_hash.GetHex());
+             beacon_ptr->m_previous_hash.GetHex());
 
     UniValue beacon_chain(UniValue::VARR);
     UniValue beacon_chain_entry(UniValue::VOBJ);
@@ -320,7 +320,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     // limit in, which represents 41 years worth of beacon chain at the 150 day standard auto-renewal cycle.
     while (beacon_ptr->Renewed() && renewals <= 100)
     {
-        auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash);
+        auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_previous_hash);
 
         beacon_ptr = iter->second;
 
@@ -330,7 +330,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                  renewals,
                  beacon_ptr->m_timestamp,
                  beacon_ptr->m_hash.GetHex(),
-                 beacon_ptr->m_prev_beacon_hash.GetHex());
+                 beacon_ptr->m_previous_hash.GetHex());
 
         beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_hash.GetHex());
         beacon_chain_entry.pushKV("timestamp", beacon_ptr->m_timestamp);

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -21,7 +21,7 @@ namespace GRC {
 
 class Beacon;
 class Magnitude;
-class Project;
+class ProjectEntry;
 class WhitelistSnapshot;
 
 //!
@@ -160,7 +160,7 @@ struct MiningProject
     //!
     //! \return A pointer to the whitelist project if it matches.
     //!
-    const Project* TryWhitelist(const WhitelistSnapshot& whitelist) const;
+    const GRC::ProjectEntry* TryWhitelist(const WhitelistSnapshot& whitelist) const;
 
     //!
     //! \brief Determine whether the project is whitelisted.
@@ -306,6 +306,7 @@ enum class BeaconError
     PENDING,            //!< Not enough time elapsed for pending advertisement.
     TX_FAILED,          //!< Beacon contract transacton failed to send.
     WALLET_LOCKED,      //!< Wallet not fully unlocked.
+    ALEADY_IN_MEMPOOL   //!< A beacon contract for this CPID is already in the mempool.
 };
 
 //!

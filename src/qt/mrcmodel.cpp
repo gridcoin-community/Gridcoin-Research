@@ -189,7 +189,11 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
     CWalletTx wtx;
     std::string e_str;
 
-    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, m_mrc));
+    uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
+                                                                         GRC::ContractAction::ADD,
+                                                                         m_mrc));
     if (!e_str.empty()) {
         m_mrc_error = true;
         s = m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;
@@ -251,7 +255,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     // This is similar to createmrcrequest in many ways, but the state tracking is more complicated.
 
-    AssertLockHeld(cs_main);
+    LOCK(cs_main);
 
     // Record initial block height during init run.
     if (!m_init_block_height) {
