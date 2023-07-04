@@ -569,9 +569,13 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
     // throw.
-    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+   if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return PollResultToJson(*ref);
     }
+#pragma clang diagnostic pop
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
@@ -722,9 +726,12 @@ UniValue votedetails(const UniValue& params, bool fHelp)
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
     // throw.
-    if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+   if (const PollReference* ref = WITH_LOCK(GetPollRegistry().cs_poll_registry, return TryPollByTitleOrId(title_or_id))) {
         return VoteDetailsToJson(*ref);
     }
+#pragma clang diagnostic pop
 
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }

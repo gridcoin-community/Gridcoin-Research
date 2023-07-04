@@ -1,0 +1,171 @@
+# Copyright (c) 2017-2020 The Bitcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or https://www.opensource.org/licenses/mit-license.php.
+
+#.rst
+# FindBerkeleyDB
+# -------------
+#
+# This is inspired by https://github.com/sum01/FindBerkeleyDB.
+#
+# Find the Berkeley database (versions >= 5.x) libraries The following
+# components are available::
+#   C
+#   CXX
+#
+# This will define the following variables::
+#
+#   BerkeleyDB_FOUND - system has Berkeley DB lib
+#   BerkeleyDB_INCLUDE_DIRS - the Berkeley DB include directories
+#   BerkeleyDB_LIBRARIES - Libraries needed to use Berkeley DB
+#   BerkeleyDB_VERSION - The library version MAJOR.MINOR.PATCH
+#   BerkeleyDB_VERSION_MAJOR - Major version number
+#   BerkeleyDB_VERSION_MINOR - Minor version number
+#   BerkeleyDB_VERSION_PATCH - Patch version number
+#
+# And the following imported target::
+#
+#   BerkeleyDB::C
+#   BerkeleyDB::CXX
+
+# Generate a list of all the possible versioned library name variants given a
+# list of separators.
+function(generate_versions_variants VARIANTS LIB MAJOR MINOR)
+    set(SEPARATORS
+        "" "." "-" "_"
+    )
+
+    set(${VARIANTS} "${LIB}")
+    foreach(_separator1 IN LISTS SEPARATORS)
+        list(APPEND ${VARIANTS} "${LIB}${_separator1}${MAJOR}")
+        foreach(_separator2 IN LISTS SEPARATORS)
+            list(APPEND ${VARIANTS} "${LIB}${_separator1}${MAJOR}${_separator2}${MINOR}")
+        endforeach()
+    endforeach()
+
+    # We need to search from the most specific to the least specific to prevent
+    # mismatches, e.g. if the include dir is /usr/include/db5.3 we want to link
+    # /usr/lib/libdb5.3.so and not libdb.so, which could very well be another
+    # version. Note that this is not only theoretical and actually happened on
+    # Archlinux with both db5.3 and db6.2 installed.
+    list(REVERSE ${VARIANTS})
+
+    set(${VARIANTS} ${${VARIANTS}} PARENT_SCOPE)
+endfunction()
+
+# If the include directory is user supplied, skip the search
+if(NOT BerkeleyDB_INCLUDE_DIR)
+    # Berkeley DB 5 including latest minor release.
+    generate_versions_variants(_BerkeleyDB_PATH_SUFFIXES_5_3 db 5 3)
+
+    set(_BerkeleyDB_PATH_SUFFIXES
+        include
+        ${_BerkeleyDB_PATH_SUFFIXES_5_3}
+    )
+    list(REMOVE_DUPLICATES _BerkeleyDB_PATH_SUFFIXES)
+
+    # Try to find the db.h header.
+    # If the header is not found the user can supply the correct path by passing
+    # the `BerkeleyDB_ROOT` variable to cmake.
+    find_path(BerkeleyDB_INCLUDE_DIR
+        NAMES db.h
+        PATH_SUFFIXES ${_BerkeleyDB_PATH_SUFFIXES}
+    )
+endif()
+
+# There is a single common include directory.
+# Set the BerkeleyDB_INCLUDE_DIRS variable which is the expected standard output
+# variable name for the include directories.
+set(BerkeleyDB_INCLUDE_DIRS "${BerkeleyDB_INCLUDE_DIR}")
+mark_as_advanced(BerkeleyDB_INCLUDE_DIR)
+
+if(BerkeleyDB_INCLUDE_DIR)
+    # Extract version information from the db.h header.
+    if(NOT DEFINED BerkeleyDB_VERSION)
+        set(db_version_test_program "
+            #include <stdio.h>
+            #include \"${BerkeleyDB_INCLUDE_DIR}/db.h\"
+
+            int main() {
+                printf(\"%d;%d;%d\", DB_VERSION_MAJOR, DB_VERSION_MINOR, DB_VERSION_PATCH);
+            }
+        ")
+
+        if(CMAKE_VERSION VERSION_LESS 3.25)
+            file(WRITE ${CMAKE_BINARY_DIR}/db-version.c "${db_version_test_program}")
+            try_run(
+                _run_result
+                _compile_result
+                ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/db-version.c
+                RUN_OUTPUT_STDOUT_VARIABLE BerkeleyDB_VERSION_LIST
+            )
+        else()
+            try_run(
+                _run_result
+                _compile_result
+                SOURCE_FROM_CONTENT db-version.c "${db_version_test_program}"
+                RUN_OUTPUT_STDOUT_VARIABLE BerkeleyDB_VERSION_LIST
+            )
+        endif()
+
+        list(GET BerkeleyDB_VERSION_LIST 0 BerkeleyDB_VERSION_MAJOR)
+        list(GET BerkeleyDB_VERSION_LIST 1 BerkeleyDB_VERSION_MINOR)
+        list(GET BerkeleyDB_VERSION_LIST 2 BerkeleyDB_VERSION_PATCH)
+
+        # Cache the result.
+        set(BerkeleyDB_VERSION_MAJOR ${BerkeleyDB_VERSION_MAJOR}
+            CACHE INTERNAL "BerkeleyDB major version number"
+        )
+        set(BerkeleyDB_VERSION_MINOR ${BerkeleyDB_VERSION_MINOR}
+            CACHE INTERNAL "BerkeleyDB minor version number"
+        )
+        set(BerkeleyDB_VERSION_PATCH ${BerkeleyDB_VERSION_PATCH}
+            CACHE INTERNAL "BerkeleyDB patch version number"
+        )
+        # The actual returned/output version variable (the others can be used if
+        # needed).
+        set(BerkeleyDB_VERSION
+            "${BerkeleyDB_VERSION_MAJOR}.${BerkeleyDB_VERSION_MINOR}.${BerkeleyDB_VERSION_PATCH}"
+            CACHE INTERNAL "BerkeleyDB full version"
+        )
+    endif()
+
+    include(ExternalLibraryHelper)
+
+    # Different systems sometimes have a version in the lib name...
+    # and some have a dash or underscore before the versions.
+    # Generate all combinations from the separators "" (none), ".", "-" and "_".
+    generate_versions_variants(
+        _db_variants
+        db
+        "${BerkeleyDB_VERSION_MAJOR}"
+        "${BerkeleyDB_VERSION_MINOR}"
+    )
+
+    find_component(BerkeleyDB C
+        NAMES ${_db_variants}
+        PATH_SUFFIXES ${_db_variants}
+        INCLUDE_DIRS ${BerkeleyDB_INCLUDE_DIRS}
+    )
+
+    generate_versions_variants(
+        _db_cxx_variants
+        db_cxx
+        "${BerkeleyDB_VERSION_MAJOR}"
+        "${BerkeleyDB_VERSION_MINOR}"
+    )
+
+    find_component(BerkeleyDB CXX
+        NAMES ${_db_cxx_variants}
+        PATH_SUFFIXES ${_db_variants}
+        INCLUDE_DIRS ${BerkeleyDB_INCLUDE_DIRS}
+    )
+endif()
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(BerkeleyDB
+    REQUIRED_VARS BerkeleyDB_INCLUDE_DIR
+    VERSION_VAR BerkeleyDB_VERSION
+    HANDLE_VERSION_RANGE
+    HANDLE_COMPONENTS
+)

@@ -1,0 +1,7 @@
+#ifndef GRIDCOIN_BUILD_H
+#define GRIDCOIN_BUILD_H
+
+#cmakedefine BUILD_GIT_TAG "@BUILD_GIT_TAG@"
+#cmakedefine BUILD_GIT_COMMIT "@BUILD_GIT_COMMIT@"
+
+#endif // GRIDCOIN_BUILD_H
