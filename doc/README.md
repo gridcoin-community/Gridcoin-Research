@@ -15,7 +15,7 @@ To download Gridcoin, visit [gridcoin.us](https://gridcoin.us).
 * See the documentation at the [Gridcoin Wiki](https://wiki.gridcoin.us/Main_Page)
 for help and more information.
 * A lot of features core features are based on Bitcoin and have been documented on the [Bitcoin Wiki](https://en.bitcoin.it/wiki/Main_Page)
-* For general questions, please visit our Discord server at https://discord.gg/jf9XX4a
+* For general questions, please visit our Discord server at https://discord.gg/UMWUnMjN4x
 * Ask for help or discuss on [#gridcoin](https://web.libera.chat/?channels=#gridcoin) on Libera Chat
 * You can also join us on [Slack](https://join.slack.com/t/teamgridcoin/shared_invite/enQtMjk2NTI4MzAwMzg0LTE4N2I3ZWZjYWJlZGM1Zjg3MTUyMDhiN2M5NmRmZTA2NDA0ZmY1ZTFmOGM3ZGU2YTBkOTdhNTk2ZjkzMGZkODY/)
 
