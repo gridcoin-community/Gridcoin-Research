@@ -12,7 +12,7 @@ project("Gridcoin"
     VERSION 5.4.5.4
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
-    LANGUAGES ASM C CXX
+    LANGUAGES C CXX
 )
 
 set(CLIENT_VERSION_IS_RELEASE "false")
@@ -112,6 +112,10 @@ endif()
 if(SYSTEM_UNIVALUE)
     find_package(PkgConfig)
     pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
+endif()
+
+if(USE_ASM)
+    enable_language(ASM)
 endif()
 
 if(ENABLE_GUI)
