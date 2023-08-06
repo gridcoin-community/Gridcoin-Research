@@ -6175,7 +6175,7 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
 
         if (PastConvergencesSize > 1)
         {
-            int i = GetRandInt(PastConvergencesSize - 1);
+            int i = GetRand<int>(PastConvergencesSize - 1);
 
             _log(logattribute::INFO, "testnewsb",
                  "ValidateSuperblock random past RandomPastConvergedManifest index " + ToString(i) + " selected.");

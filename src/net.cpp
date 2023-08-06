@@ -212,7 +212,7 @@ void AdvertiseLocal(CNode *pnode)
         // If discovery is enabled, sometimes give our peer the address it
         // tells us that it sees us as in case it has a better idea of our
         // address than we do.
-        const int randomNumber = GetRandInt((GetnScore(addrLocal) > LOCAL_MANUAL) ? 3+1 : 1+1);
+        const int randomNumber = GetRand<int>((GetnScore(addrLocal) > LOCAL_MANUAL) ? 3+1 : 1+1);
         if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
              randomNumber == 0))
         {
