@@ -93,6 +93,11 @@ public:
     bool hasEligibleProjects() const;
     bool hasPoolProjects() const;
     bool hasActiveBeacon() const;
+
+    //!
+    //! \brief hasPendingBeacon returns true if m_pending_beacon is not null and also not expired while pending.
+    //! \return boolean
+    //!
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
     bool beaconExpired() const;
