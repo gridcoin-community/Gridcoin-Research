@@ -1884,7 +1884,7 @@ void BitcoinGUI::updateBeaconIcon()
 
     if (researcherModel->hasPendingBeacon()) {
         labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                       "Time left to activate: %2"
+                                       "Time left to activate: %2\n"
                                        "%3")
                                     .arg(researcherModel->formatCpid(),
                                          researcherModel->formatTimeToPendingBeaconExpiration(),
