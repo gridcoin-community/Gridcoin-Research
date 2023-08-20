@@ -594,7 +594,7 @@ void StartRPCThreads()
         (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
-        GetRandBytes(rand_pwd, sizeof(rand_pwd));
+        GetRandBytes({rand_pwd, sizeof(rand_pwd)});
         string strWhatAmI = "To use gridcoind";
         if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
