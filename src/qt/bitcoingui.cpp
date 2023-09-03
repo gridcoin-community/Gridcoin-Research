@@ -553,7 +553,8 @@ void BitcoinGUI::createMenuBar()
     file->addAction(verifyMessageAction);
     file->addSeparator();
 
-    if (!gArgs.GetBoolArg("-testnet", false))
+    // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
+    if (/* !gArgs.GetBoolArg("-testnet", false) */ false)
     {
         file->addAction(snapshotAction);
     }
