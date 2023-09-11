@@ -31,7 +31,7 @@ else()
 endif()
 
 if(SYSTEM_LEVELDB)
-    set(LIBLEVELDB leveldb::leveldb)
+    set(LIBLEVELDB leveldb)
 else()
     set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
