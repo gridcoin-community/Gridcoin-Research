@@ -1752,7 +1752,10 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
 }
 
 bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    AssertLockHeld(cs_main);
+
     // Allow the genesis block to pass.
     if(block.hashPrevBlock.IsNull() &&
        block.GetHash(true) == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
