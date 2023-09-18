@@ -201,12 +201,11 @@ private:
         // ...to produce a distribution for values of x with a minimal rate of
         // collision.
         //
-        using limit_t = std::numeric_limits<size_t>;
 
         static const size_t w = sizeof(size_t) * 8;
         static const size_t M = std::log2(m_proofs_seen.size());
-        static const size_t a = (GetRand(limit_t::max()) * 2) + 1;
-        static const size_t b = GetRand(std::pow(2, w - M) - 1);
+        static const size_t a = (GetRand<size_t>() * 2) + 1;
+        static const size_t b = GetRand<size_t>(std::pow(2, w - M) - 1);
 
         size_t x = 0;
 

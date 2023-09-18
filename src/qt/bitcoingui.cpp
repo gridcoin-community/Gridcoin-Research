@@ -553,7 +553,8 @@ void BitcoinGUI::createMenuBar()
     file->addAction(verifyMessageAction);
     file->addSeparator();
 
-    if (!gArgs.GetBoolArg("-testnet", false))
+    // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
+    if (/* !gArgs.GetBoolArg("-testnet", false) */ false)
     {
         file->addAction(snapshotAction);
     }
@@ -1884,7 +1885,7 @@ void BitcoinGUI::updateBeaconIcon()
 
     if (researcherModel->hasPendingBeacon()) {
         labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                       "Time left to activate: %2"
+                                       "Time left to activate: %2\n"
                                        "%3")
                                     .arg(researcherModel->formatCpid(),
                                          researcherModel->formatTimeToPendingBeaconExpiration(),

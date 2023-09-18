@@ -3,8 +3,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-using namespace std;
-
 #include "script.h"
 #include <crypto/sha1.h>
 #include "keystore.h"
@@ -17,6 +15,8 @@ using namespace std;
 #include "util.h"
 
 #include <stdexcept>
+
+using namespace std;
 
 CScriptID::CScriptID(const CScript& in) : BaseHash(Hash160(in)) {}
 //CScriptID::CScriptID(const ScriptHash& in) : BaseHash(static_cast<uint160>(in)) {}

@@ -276,7 +276,17 @@ bool ResearcherModel::hasActiveBeacon() const
 
 bool ResearcherModel::hasPendingBeacon() const
 {
-    return m_pending_beacon.operator bool();
+    if (!m_pending_beacon.operator bool()) {
+        return false;
+    }
+
+    // If here, a pending beacon is present. Determine if expired
+    // while pending. No need to actually clean the pending entry
+    // up. It will be eventually cleaned by the contract handler via
+    // the ActivatePending call.
+    GRC::PendingBeacon pending_beacon(*m_pending_beacon);
+
+    return !pending_beacon.PendingExpired(GetAdjustedTime());
 }
 
 bool ResearcherModel::hasRenewableBeacon() const

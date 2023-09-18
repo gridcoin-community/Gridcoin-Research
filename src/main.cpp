@@ -2929,7 +2929,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         uint64_t nonce = 0;
         while (nonce == 0) {
-            GetRandBytes((unsigned char*)&nonce, sizeof(nonce));
+            GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
         }
         pto->fPingQueued = false;
         pto->nPingUsecStart = GetTimeMicros();

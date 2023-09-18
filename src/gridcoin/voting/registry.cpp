@@ -734,7 +734,11 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 {
     LOCK(GetPollRegistry().cs_poll_registry);
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-reference"
     return Sequence(m_polls);
+#pragma clang diagnostic pop
+
 }
 
 const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)

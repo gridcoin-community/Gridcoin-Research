@@ -221,7 +221,7 @@ void CAddrMan::Good_(const CService& addr, int64_t nTime)
         return;
 
     // find a bucket it is in now
-    int nRnd = GetRandInt(ADDRMAN_NEW_BUCKET_COUNT);
+    int nRnd = GetRand<int>(ADDRMAN_NEW_BUCKET_COUNT);
     int nUBucket = -1;
     for (unsigned int n = 0; n < ADDRMAN_NEW_BUCKET_COUNT; n++) {
         int nB = (n + nRnd) % ADDRMAN_NEW_BUCKET_COUNT;
@@ -278,7 +278,7 @@ bool CAddrMan::Add_(const CAddress& addr, const CNetAddr& source, int64_t nTimeP
         int nFactor = 1;
         for (int n = 0; n < pinfo->nRefCount; n++)
             nFactor *= 2;
-        if (nFactor > 1 && (GetRandInt(nFactor) != 0))
+        if (nFactor > 1 && (GetRand<int>(nFactor) != 0))
             return false;
     } else {
         pinfo = Create(addr, source, &nId);
@@ -467,7 +467,7 @@ void CAddrMan::GetAddr_(std::vector<CAddress> &vAddr)
         if (vAddr.size() >= nNodes)
             break;
 
-        int nRndPos = GetRandInt(vRandom.size() - n) + n;
+        int nRndPos = GetRand<int>(vRandom.size() - n) + n;
         SwapRandom(n, nRndPos);
         assert(mapInfo.count(vRandom[n]) == 1);
         
@@ -516,5 +516,5 @@ void CAddrMan::SetServices_(const CService& addr, ServiceFlags nServices)
 }
 
 int CAddrMan::RandomInt(int nMax){
-    return GetRandInt(nMax);
+    return GetRand<int>(nMax);
 }

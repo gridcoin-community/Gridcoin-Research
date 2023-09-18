@@ -920,7 +920,10 @@ private:
             throw InvalidVoteError();
         }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
         ProcessLegacyVote(candidate.LegacyVote());
+#pragma clang diagnostic pop
     }
 
     //!
