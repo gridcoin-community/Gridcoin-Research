@@ -135,6 +135,7 @@ add_library(gridcoin_util STATIC
     gridcoin/scraper/scraper.cpp
     gridcoin/scraper/scraper_net.cpp
     gridcoin/scraper/scraper_registry.cpp
+    gridcoin/sidestake.cpp
     gridcoin/staking/difficulty.cpp
     gridcoin/staking/exceptions.cpp
     gridcoin/staking/kernel.cpp
