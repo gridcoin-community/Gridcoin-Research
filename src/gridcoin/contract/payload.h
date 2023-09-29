@@ -65,6 +65,7 @@ enum class ContractType
     SCRAPER,      //!< Scraper node authorization grants and revocations.
     VOTE,         //!< A vote cast by a wallet for a poll.
     MRC,          //!< A manual rewards claim (MRC) request to pay rewards
+    SIDESTAKE,     //!< Mandatory sidestakes
     OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 
@@ -82,6 +83,7 @@ static constexpr GRC::ContractType CONTRACT_TYPES[] = {
     ContractType::SCRAPER,
     ContractType::VOTE,
     ContractType::MRC,
+    ContractType::SIDESTAKE,
     ContractType::OUT_OF_BOUND
 };
 
