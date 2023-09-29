@@ -17,6 +17,9 @@ namespace GRC {
 class CBitcoinAddressForStorage : public CBitcoinAddress
 {
 public:
+    CBitcoinAddressForStorage();
+
+    CBitcoinAddressForStorage(CBitcoinAddress address);
 
     ADD_SERIALIZE_METHODS;
 
@@ -419,6 +422,7 @@ public:
     //!
     //! \brief Allows local (voluntary) sidestakes to be added to the in-memory map and not persisted to
     //! the registry db.
+    //!
     //! \param SideStake object to add
     //!
     void NonContractAdd(SideStake& sidestake);
@@ -427,6 +431,7 @@ public:
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
     //! both Add and Delete actually call a common helper function AddDelete, because the action
     //! is actually symmetric to both.
+    //!
     //! \param ctx
     //!
     void Add(const ContractContext& ctx) override;
@@ -498,6 +503,12 @@ public:
     //! \return The number of elements passivated.
     //!
     uint64_t PassivateDB();
+
+    //!
+    //! \brief This method parses the config file for local sidestakes. It is based on the original GetSideStakingStatusAndAlloc()
+    //! that was in miner.cpp prior to the implementation of the SideStake class.
+    //!
+    void LoadLocalSideStakesFromConfig();
 
     //!
     //! \brief A static function that is called by the scheduler to run the sidestake entry database passivation.

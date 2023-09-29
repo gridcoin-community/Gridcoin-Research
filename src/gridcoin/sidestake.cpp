@@ -22,6 +22,17 @@ SideStakeRegistry& GRC::GetSideStakeRegistry()
 }
 
 // -----------------------------------------------------------------------------
+// Class: CBitcoinAddressForStorage
+// -----------------------------------------------------------------------------
+CBitcoinAddressForStorage::CBitcoinAddressForStorage()
+    : CBitcoinAddress()
+{}
+
+CBitcoinAddressForStorage::CBitcoinAddressForStorage(CBitcoinAddress address)
+    : CBitcoinAddress(address)
+{}
+
+// -----------------------------------------------------------------------------
 // Class: SideStake
 // -----------------------------------------------------------------------------
 SideStake::SideStake()
@@ -432,6 +443,128 @@ uint64_t SideStakeRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_sidestake_db.passivate_db();
+}
+
+void SideStakeRegistry::LoadLocalSideStakesFromConfig()
+{
+    std::vector<SideStake> vSideStakes;
+    std::vector<std::pair<std::string, std::string>> raw_vSideStakeAlloc;
+    double dSumAllocation = 0.0;
+
+    // Parse destinations and allocations. We don't need to worry about any that are rejected other than a warning
+    // message, because any unallocated rewards will go back into the coinstake output(s).
+
+    // If -sidestakeaddresses and -sidestakeallocations is set in either the config file or the r-w settings file
+    // and the settings are not empty and they are the same size, this will take precedence over the multiple entry
+    // -sidestake format.
+    std::vector<std::string> addresses;
+    std::vector<std::string> allocations;
+
+    ParseString(gArgs.GetArg("-sidestakeaddresses", ""), ',', addresses);
+    ParseString(gArgs.GetArg("-sidestakeallocations", ""), ',', allocations);
+
+    if (addresses.size() != allocations.size())
+    {
+        LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. Reverting to original format.",
+                  __func__);
+    }
+
+    if (addresses.size() && addresses.size() == allocations.size())
+    {
+        for (unsigned int i = 0; i < addresses.size(); ++i)
+        {
+            raw_vSideStakeAlloc.push_back(std::make_pair(addresses[i], allocations[i]));
+        }
+    }
+    else if (gArgs.GetArgs("-sidestake").size())
+    {
+        for (auto const& sSubParam : gArgs.GetArgs("-sidestake"))
+        {
+            std::vector<std::string> vSubParam;
+
+            ParseString(sSubParam, ',', vSubParam);
+            if (vSubParam.size() != 2)
+            {
+                LogPrintf("WARN: %s: Incomplete SideStake Allocation specified. Skipping SideStake entry.", __func__);
+                continue;
+            }
+
+            raw_vSideStakeAlloc.push_back(std::make_pair(vSubParam[0], vSubParam[1]));
+        }
+    }
+
+    for (const auto& entry : raw_vSideStakeAlloc)
+    {
+        std::string sAddress;
+        double dAllocation = 0.0;
+
+        sAddress = entry.first;
+
+        CBitcoinAddress address(sAddress);
+        if (!address.IsValid())
+        {
+            LogPrintf("WARN: %s: ignoring sidestake invalid address %s.", __func__, sAddress);
+            continue;
+        }
+
+        if (!ParseDouble(entry.second, &dAllocation))
+        {
+            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, entry.second);
+            continue;
+        }
+
+        dAllocation /= 100.0;
+
+        if (dAllocation <= 0)
+        {
+            LogPrintf("WARN: %s: Negative or zero allocation provided. Skipping allocation.", __func__);
+            continue;
+        }
+
+        // The below will stop allocations if someone has made a mistake and the total adds up to more than 100%.
+        // Note this same check is also done in SplitCoinStakeOutput, but it needs to be done here for two reasons:
+        // 1. Early alertment in the debug log, rather than when the first kernel is found, and 2. When the UI is
+        // hooked up, the SideStakeAlloc vector will be filled in by other than reading the config file and will
+        // skip the above code.
+        dSumAllocation += dAllocation;
+        if (dSumAllocation > 1.0)
+        {
+            LogPrintf("WARN: %s: allocation percentage over 100 percent, ending sidestake allocations.", __func__);
+            break;
+        }
+
+        SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address), dAllocation, 0, uint256{});
+
+        // This will add or update (replace) a non-contract entry in the registry for the local sidestake.
+        NonContractAdd(sidestake);
+
+        // This is needed because we need to detect entries in the registry map that are no longer in the config file to mark
+        // them deleted.
+        vSideStakes.push_back(sidestake);
+
+        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: SideStakeAlloc Address %s, Allocation %f",
+                 __func__, sAddress, dAllocation);
+    }
+
+    for (auto& entry : m_sidestake_entries)
+    {
+        // Only look at active entries. The others are NA for this alignment.
+        if (entry.second->m_status == SideStakeStatus::ACTIVE) {
+            auto iter = std::find(vSideStakes.begin(), vSideStakes.end(), *entry.second);
+
+            if (iter == vSideStakes.end()) {
+                // Entry in map is no longer found in config files, so mark map entry deleted.
+
+                entry.second->m_status = SideStakeStatus::DELETED;
+            }
+        }
+    }
+
+    // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
+    // was provided in the config file, so warn in the debug log.
+    if (!dSumAllocation)
+        LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
+                  " distribution!", __func__);
 }
 
 SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
