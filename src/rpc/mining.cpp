@@ -98,7 +98,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
 
     bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-    if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
+    if (fEnableSideStaking) vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
 
     stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
     if (fEnableStakeSplit)
@@ -115,8 +115,8 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     {
         for (const auto& alloc : vSideStakeAlloc)
         {
-            sidestakingalloc.pushKV("address", alloc.first);
-            sidestakingalloc.pushKV("allocation-pct", alloc.second * 100);
+            sidestakingalloc.pushKV("address", alloc->m_key.ToString());
+            sidestakingalloc.pushKV("allocation-pct", alloc->m_allocation * 100);
 
             vsidestakingalloc.push_back(sidestakingalloc);
         }

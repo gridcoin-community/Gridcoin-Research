@@ -8,11 +8,13 @@
 #define BITCOIN_MINER_H
 
 #include "main.h"
+#include "gridcoin/sidestake.h"
+
 
 class CWallet;
 class CWalletTx;
 
-typedef std::vector< std::pair<std::string, double> > SideStakeAlloc;
+typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
@@ -24,7 +26,6 @@ static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
                           SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);
-SideStakeAlloc GetSideStakingStatusAndAlloc();
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue);
 
 bool CreateMRCRewards(CBlock &blocknew,
