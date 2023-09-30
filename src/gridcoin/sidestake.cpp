@@ -53,13 +53,17 @@ SideStake::SideStake(CBitcoinAddressForStorage address, double allocation)
       , m_status(SideStakeStatus::UNKNOWN)
 {}
 
-SideStake::SideStake(CBitcoinAddressForStorage address, double allocation, int64_t timestamp, uint256 hash)
+SideStake::SideStake(CBitcoinAddressForStorage address,
+                     double allocation,
+                     int64_t timestamp,
+                     uint256 hash,
+                     SideStakeStatus status)
     : m_key(address)
       , m_allocation(allocation)
       , m_timestamp(timestamp)
       , m_hash(hash)
       , m_previous_hash()
-      , m_status(SideStakeStatus::UNKNOWN)
+      , m_status(status)
 {}
 
 bool SideStake::WellFormed() const
@@ -145,10 +149,13 @@ SideStakePayload::SideStakePayload(uint32_t version)
 {
 }
 
-SideStakePayload::SideStakePayload(const uint32_t version, CBitcoinAddressForStorage key, double value, SideStakeStatus status)
+SideStakePayload::SideStakePayload(const uint32_t version,
+                                   CBitcoinAddressForStorage key,
+                                   double value,
+                                   SideStakeStatus status)
     : IContractPayload()
       , m_version(version)
-      , m_entry(SideStake(key, value, status))
+      , m_entry(SideStake(key, value, 0, uint256{}, status))
 {
 }
 
@@ -172,9 +179,14 @@ const SideStakeRegistry::SideStakeMap& SideStakeRegistry::SideStakeEntries() con
     return m_sidestake_entries;
 }
 
-const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries() const
+const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
 {
     std::vector<SideStake_ptr> sidestakes;
+
+    // For right now refresh sidestakes from config file. This is about the same overhead as the original
+    // function in the miner. Perhaps replace with a signal to only refresh when r-w config file is
+    // actually changed.
+    LoadLocalSideStakesFromConfig();
 
     for (const auto& entry : m_sidestake_entries)
     {
@@ -547,7 +559,11 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
             break;
         }
 
-        SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address), dAllocation, 0, uint256{});
+        SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address),
+                            dAllocation,
+                            0,
+                            uint256{},
+                            SideStakeStatus::ACTIVE);
 
         // This will add or update (replace) a non-contract entry in the registry for the local sidestake.
         NonContractAdd(sidestake);

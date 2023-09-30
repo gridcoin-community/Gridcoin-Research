@@ -921,24 +921,26 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
             ++iterSideStake)
         {
-            CBitcoinAddress address(iterSideStake->first);
+            CBitcoinAddress& address = iterSideStake->get()->m_key;
             if (!address.IsValid())
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
-                          iterSideStake->first.c_str());
+                          iterSideStake->get()->m_key.ToString());
                 continue;
             }
 
             // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into
             // the coinstake below. Prevents dust build-up.
-            if (nReward * iterSideStake->second < CENT)
+            if (nReward * iterSideStake->get()->m_allocation < CENT)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
-                          CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
+                          CoinToDouble(nReward * iterSideStake->get()->m_allocation),
+                          iterSideStake->get()->m_key.ToString()
+                          );
                 continue;
             }
 
-            if (dSumAllocation + iterSideStake->second > 1.0)
+            if (dSumAllocation + iterSideStake->get()->m_allocation > 1.0)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100 percent, "
                           "ending sidestake allocations.");
@@ -961,11 +963,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             int64_t nSideStake = 0;
 
             // For allocations ending less than 100% assign using sidestake allocation.
-            if (dSumAllocation + iterSideStake->second < 1.0)
-                nSideStake = nReward * iterSideStake->second;
+            if (dSumAllocation + iterSideStake->get()->m_allocation < 1.0)
+                nSideStake = nReward * iterSideStake->get()->m_allocation;
             // We need to handle the final sidestake differently in the case it brings the total allocation up to 100%,
             // because testing showed in corner cases the output return to the staking address could be off by one Halford.
-            else if (dSumAllocation + iterSideStake->second == 1.0)
+            else if (dSumAllocation + iterSideStake->get()->m_allocation == 1.0)
                 // Simply assign the special case final nSideStake the remaining output value minus input value to ensure
                 // a match on the output flowing down.
                 nSideStake = nRemainingStakeOutputValue - nInputValue;
@@ -973,8 +975,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             blocknew.vtx[1].vout.push_back(CTxOut(nSideStake, SideStakeScriptPubKey));
 
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
-                      nOutputsUsed, CoinToDouble(nReward * iterSideStake->second), iterSideStake->first.c_str());
-            dSumAllocation += iterSideStake->second;
+                      nOutputsUsed,
+                      CoinToDouble(nReward * iterSideStake->get()->m_allocation),
+                      iterSideStake->get()->m_key.ToString()
+                      );
+            dSumAllocation += iterSideStake->get()->m_allocation;
             nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
         }
@@ -1248,110 +1253,6 @@ bool IsMiningAllowed(CWallet *pwallet)
     return g_miner_status.StakingEnabled();
 }
 
-// This function parses the config file for the directives for side staking. It is used
-// in StakeMiner for the miner loop and also called by rpc getstakinginfo.
-SideStakeAlloc GetSideStakingStatusAndAlloc()
-{
-    SideStakeAlloc vSideStakeAlloc;
-    std::vector<std::pair<std::string, std::string>> raw_vSideStakeAlloc;
-    double dSumAllocation = 0.0;
-
-    // Parse destinations and allocations. We don't need to worry about any that are rejected other than a warning
-    // message, because any unallocated rewards will go back into the coinstake output(s).
-
-    // If -sidestakeaddresses and -sidestakeallocations is set in either the config file or the r-w settings file
-    // and the settings are not empty and they are the same size, this will take precedence over the multiple entry
-    // -sidestake format.
-    std::vector<std::string> addresses;
-    std::vector<std::string> allocations;
-
-    ParseString(gArgs.GetArg("-sidestakeaddresses", ""), ',', addresses);
-    ParseString(gArgs.GetArg("-sidestakeallocations", ""), ',', allocations);
-
-    if (addresses.size() != allocations.size())
-    {
-        LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. Reverting to original format.",
-                  __func__);
-    }
-
-    if (addresses.size() && addresses.size() == allocations.size())
-    {
-        for (unsigned int i = 0; i < addresses.size(); ++i)
-        {
-            raw_vSideStakeAlloc.push_back(std::make_pair(addresses[i], allocations[i]));
-        }
-    }
-    else if (gArgs.GetArgs("-sidestake").size())
-    {
-        for (auto const& sSubParam : gArgs.GetArgs("-sidestake"))
-        {
-            std::vector<std::string> vSubParam;
-
-            ParseString(sSubParam, ',', vSubParam);
-            if (vSubParam.size() != 2)
-            {
-                LogPrintf("WARN: %s: Incomplete SideStake Allocation specified. Skipping SideStake entry.", __func__);
-                continue;
-            }
-
-            raw_vSideStakeAlloc.push_back(std::make_pair(vSubParam[0], vSubParam[1]));
-        }
-    }
-
-    for (auto const& entry : raw_vSideStakeAlloc)
-    {
-        std::string sAddress;
-        double dAllocation = 0.0;
-
-        sAddress = entry.first;
-
-        CBitcoinAddress address(sAddress);
-        if (!address.IsValid())
-        {
-            LogPrintf("WARN: %s: ignoring sidestake invalid address %s.", __func__, sAddress);
-            continue;
-        }
-
-        if (!ParseDouble(entry.second, &dAllocation))
-        {
-            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, entry.second);
-            continue;
-        }
-
-        dAllocation /= 100.0;
-
-        if (dAllocation <= 0)
-        {
-            LogPrintf("WARN: %s: Negative or zero allocation provided. Skipping allocation.", __func__);
-            continue;
-        }
-
-        // The below will stop allocations if someone has made a mistake and the total adds up to more than 100%.
-        // Note this same check is also done in SplitCoinStakeOutput, but it needs to be done here for two reasons:
-        // 1. Early alertment in the debug log, rather than when the first kernel is found, and 2. When the UI is
-        // hooked up, the SideStakeAlloc vector will be filled in by other than reading the config file and will
-        // skip the above code.
-        dSumAllocation += dAllocation;
-        if (dSumAllocation > 1.0)
-        {
-            LogPrintf("WARN: %s: allocation percentage over 100 percent, ending sidestake allocations.", __func__);
-            break;
-        }
-
-        vSideStakeAlloc.push_back(std::pair<std::string, double>(sAddress, dAllocation));
-        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: SideStakeAlloc Address %s, Allocation %f",
-                 __func__, sAddress, dAllocation);
-    }
-
-    // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
-    // was provided in the config file, so warn in the debug log.
-    if (!dSumAllocation)
-        LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
-                  " distribution!", __func__);
-
-    return vSideStakeAlloc;
-}
-
 // This function parses the config file for the directives for stake splitting. It is used
 // in StakeMiner for the miner loop and also called by rpc getstakinginfo.
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
@@ -1420,7 +1321,7 @@ void StakeMiner(CWallet *pwallet)
         LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
 
         // vSideStakeAlloc is an out parameter.
-        if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
+        if (fEnableSideStaking) vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;

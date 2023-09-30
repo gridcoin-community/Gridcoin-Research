@@ -106,8 +106,9 @@ public:
     //! \param allocation
     //! \param timestamp
     //! \param hash
+    //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, int64_t timestamp, uint256 hash);
+    SideStake(CBitcoinAddressForStorage address, double allocation, int64_t timestamp, uint256 hash, SideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -374,7 +375,7 @@ public:
     //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
-    const std::vector<SideStake_ptr> ActiveSideStakeEntries() const;
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries();
 
     //!
     //! \brief Get the current sidestake entry for the specified key string.
