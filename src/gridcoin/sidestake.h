@@ -368,6 +368,15 @@ public:
     const SideStakeMap& SideStakeEntries() const;
 
     //!
+    //! \brief Get the collection of active sidestake entries. This is presented as a vector of
+    //! smart pointers to the relevant sidestake entries in the database. The entries included have
+    //! the status of active (for local sidestakes) and/or mandatory (for contract sidestakes).
+    //!
+    //! \return A vector of smart pointers to sidestake entries.
+    //!
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries() const;
+
+    //!
     //! \brief Get the current sidestake entry for the specified key string.
     //!
     //! \param key The key string of the sidestake entry.
