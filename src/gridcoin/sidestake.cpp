@@ -172,6 +172,20 @@ const SideStakeRegistry::SideStakeMap& SideStakeRegistry::SideStakeEntries() con
     return m_sidestake_entries;
 }
 
+const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries() const
+{
+    std::vector<SideStake_ptr> sidestakes;
+
+    for (const auto& entry : m_sidestake_entries)
+    {
+        if (entry.second->m_status == SideStakeStatus::ACTIVE || entry.second->m_status == SideStakeStatus::MANDATORY) {
+            sidestakes.push_back(entry.second);
+        }
+    }
+
+    return sidestakes;
+}
+
 SideStakeOption SideStakeRegistry::Try(const CBitcoinAddressForStorage& key) const
 {
     LOCK(cs_lock);
