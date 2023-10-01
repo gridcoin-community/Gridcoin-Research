@@ -182,16 +182,30 @@ const SideStakeRegistry::SideStakeMap& SideStakeRegistry::SideStakeEntries() con
 const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
 {
     std::vector<SideStake_ptr> sidestakes;
+    double allocation_sum = 0.0;
 
     // For right now refresh sidestakes from config file. This is about the same overhead as the original
     // function in the miner. Perhaps replace with a signal to only refresh when r-w config file is
     // actually changed.
     LoadLocalSideStakesFromConfig();
 
+    // The loops below prevent sidestakes from being added that cause a total allocation above 1.0 (100%).
+
+    // Do mandatory sidestakes first.
     for (const auto& entry : m_sidestake_entries)
     {
-        if (entry.second->m_status == SideStakeStatus::ACTIVE || entry.second->m_status == SideStakeStatus::MANDATORY) {
+        if (entry.second->m_status == SideStakeStatus::MANDATORY && allocation_sum + entry.second->m_allocation <= 1.0) {
             sidestakes.push_back(entry.second);
+            allocation_sum += entry.second->m_allocation;
+        }
+    }
+
+    // Followed by local active sidestakes
+    for (const auto& entry : m_sidestake_entries)
+    {
+        if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
+            sidestakes.push_back(entry.second);
+            allocation_sum += entry.second->m_allocation;
         }
     }
 
@@ -400,15 +414,11 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
 
 bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
 {
-    if (contract.m_version < 1) {
-        return true;
-    }
-
     const auto payload = contract.SharePayloadAs<SideStakePayload>();
 
-    if (contract.m_version >= 3 && payload->m_version < 2) {
+    if (contract.m_version < 3) {
         DoS = 25;
-        error("%s: Legacy SideStake entry contract in contract v3", __func__);
+        error("%s: Sidestake entries only valid in contract v3 and above", __func__);
         return false;
     }
 
@@ -519,9 +529,17 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
         }
     }
 
+    // First, determine allocation already taken by mandatory sidestakes, because they must be allocated first.
+    for (const auto& entry : SideStakeEntries()) {
+        if (entry.second->m_status == SideStakeStatus::MANDATORY) {
+            dSumAllocation += entry.second->m_allocation;
+        }
+    }
+
     for (const auto& entry : raw_vSideStakeAlloc)
     {
         std::string sAddress;
+
         double dAllocation = 0.0;
 
         sAddress = entry.first;
@@ -583,9 +601,9 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
             auto iter = std::find(vSideStakes.begin(), vSideStakes.end(), *entry.second);
 
             if (iter == vSideStakes.end()) {
-                // Entry in map is no longer found in config files, so mark map entry deleted.
+                // Entry in map is no longer found in config files, so mark map entry inactive.
 
-                entry.second->m_status = SideStakeStatus::DELETED;
+                entry.second->m_status = SideStakeStatus::INACTIVE;
             }
         }
     }

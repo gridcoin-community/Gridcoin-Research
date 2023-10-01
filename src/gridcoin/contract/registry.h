@@ -9,6 +9,7 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/voting/registry.h"
 
@@ -50,6 +51,7 @@ public:
         case ContractType::PROJECT:     return GetWhitelist();
         case ContractType::PROTOCOL:    return GetProtocolRegistry();
         case ContractType::SCRAPER:     return GetScraperRegistry();
+        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
         case ContractType::UNKNOWN:
             [[fallthrough]];
         case ContractType::CLAIM:
@@ -78,6 +80,7 @@ public:
         case ContractType::PROTOCOL:    return GetProtocolRegistry();
         case ContractType::SCRAPER:     return GetScraperRegistry();
         case ContractType::VOTE:        return GetPollRegistry();
+        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
             [[fallthrough]];
         case ContractType::UNKNOWN:
             [[fallthrough]];
