@@ -11,6 +11,7 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_WITH_REG_
     ContractType::PROJECT,
     ContractType::PROTOCOL,
     ContractType::SCRAPER,
+    ContractType::SIDESTAKE
 };
 
 const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_SUPPORTING_REVERT = {
@@ -20,6 +21,7 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_SUPPORTIN
     ContractType::PROTOCOL,
     ContractType::SCRAPER,
     ContractType::VOTE,
+    ContractType::SIDESTAKE
 };
 
 } // namespace GRC

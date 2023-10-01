@@ -1934,6 +1934,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
             || (IsV10Enabled(nHeight) && block.nVersion < 10)
             || (IsV11Enabled(nHeight) && block.nVersion < 11)
             || (IsV12Enabled(nHeight) && block.nVersion < 12)
+            || (IsV13Enabled(nHeight) && block.nVersion < 13)
             ) {
         return block.DoS(20, error("%s: reject too old nVersion = %d", __func__, block.nVersion));
     } else if ((!IsProtocolV2(nHeight) && block.nVersion >= 7)
@@ -1942,6 +1943,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
                || (!IsV10Enabled(nHeight) && block.nVersion >= 10)
                || (!IsV11Enabled(nHeight) && block.nVersion >= 11)
                || (!IsV12Enabled(nHeight) && block.nVersion >= 12)
+               || (!IsV13Enabled(nHeight) && block.nVersion >= 13)
                ) {
         return block.DoS(100, error("%s: reject too new nVersion = %d", __func__, block.nVersion));
     }

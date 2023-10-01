@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -2304,7 +2305,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER
-          || type == GRC::ContractType::PROTOCOL)) {
+          || type == GRC::ContractType::PROTOCOL
+          || type == GRC::ContractType::SIDESTAKE)) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     }
 
@@ -2433,6 +2435,39 @@ UniValue addkey(const UniValue& params, bool fHelp)
                     params[2].get_str(),   // key
                     params[3].get_str());  // value
         break;
+    case GRC::ContractType::SIDESTAKE:
+    {
+        if (block_v13_enabled) {
+            GRC::CBitcoinAddressForStorage sidestake_address;
+            if (!sidestake_address.SetString(params[2].get_str())) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the sidestake is invalid.");
+            }
+
+            double allocation = 0.0;
+            if (!ParseDouble(params[3].get_str(), &allocation)) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid allocation specified.");
+            }
+
+            allocation /= 100.0;
+
+            if (allocation > 1.0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Allocation specified is greater than 100.0%.");
+            }
+
+            contract = GRC::MakeContract<GRC::SideStakePayload>(
+                        contract_version,               // Contract version number (3+)
+                        action,                         // Contract action
+                        uint32_t {1},                   // Contract payload version number
+                        sidestake_address,              // Sidestake address
+                        allocation,                     // Sidestake allocation
+                        GRC::SideStakeStatus::MANDATORY // sidestake status
+                        );
+        } else {
+             throw JSONRPCError(RPC_INVALID_PARAMETER, "Sidestake contracts are not valid for block version less than v13.");
+        }
+
+        break;
+    }
     case GRC::ContractType::BEACON:
         [[fallthrough]];
     case GRC::ContractType::CLAIM:

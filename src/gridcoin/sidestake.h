@@ -11,6 +11,7 @@
 #include "gridcoin/contract/registry_db.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
+#include "logging.h"
 
 namespace GRC {
 
@@ -29,6 +30,7 @@ public:
         // Note that (de)serializing the raw underlying vector char data for the address is safe here
         // because this is only used in this module and validations were performed before serialization into
         // storage.
+        READWRITE(nVersion);
         READWRITE(vchData);
     }
 };
@@ -274,11 +276,35 @@ public:
     //!
     bool WellFormed(const ContractAction action) const override
     {
-        if (m_version <= 0 || m_version > CURRENT_VERSION) {
+        bool valid = !(m_version <= 0 || m_version > CURRENT_VERSION);
+
+        if (!valid) {
+            LogPrint(BCLog::LogFlags::CONTRACT, "WARN: %s: Payload is not well formed. "
+                                                "m_version = %u, CURRENT_VERSION = %u",
+                     __func__,
+                     m_version,
+                     CURRENT_VERSION);
+
             return false;
         }
 
-        return m_entry.WellFormed();
+        valid = m_entry.WellFormed();
+
+        if (!valid) {
+            LogPrint(BCLog::LogFlags::CONTRACT, "WARN: %s: Sidestake entry is not well-formed. "
+                                                "m_entry.WellFormed = %u, m_entry.m_key = %s, m_entry.m_allocation = %f, "
+                                                "m_entry.StatusToString() = %s",
+                     __func__,
+                     valid,
+                     m_entry.m_key.ToString(),
+                     m_entry.m_allocation,
+                     m_entry.StatusToString()
+                     );
+
+            return false;
+        }
+
+        return valid;
     }
 
     //!
@@ -372,6 +398,8 @@ public:
     //! \brief Get the collection of active sidestake entries. This is presented as a vector of
     //! smart pointers to the relevant sidestake entries in the database. The entries included have
     //! the status of active (for local sidestakes) and/or mandatory (for contract sidestakes).
+    //! Mandatory sidestakes come before local ones, and the method ensures that the sidestakes
+    //! returned do not total an allocation greater than 1.0.
     //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
