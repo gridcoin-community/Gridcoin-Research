@@ -41,6 +41,7 @@ public:
         DataDir,                 // QString
         EnableStaking,           // bool
         EnableStakeSplit,        // bool
+        EnableSideStaking,       // bool
         StakingEfficiency,       // double
         MinStakeSplitValue,      // int
         PollExpireNotification,  // double
