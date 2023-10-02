@@ -1318,10 +1318,9 @@ void StakeMiner(CWallet *pwallet)
 
         bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
-
-        // vSideStakeAlloc is an out parameter.
-        if (fEnableSideStaking) vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
+        // Note that fEnableSideStaking is now processed internal to ActiveSideStakeEntries. The sidestaking flag only
+        // controls local sidestakes. If there exists mandatory sidestakes, they occur regardless of the flag.
+        vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;
