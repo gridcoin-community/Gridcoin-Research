@@ -251,7 +251,7 @@
          <x>10</x>
          <y>10</y>
          <width>651</width>
-         <height>135</height>
+         <height>171</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_StakeSplit">
