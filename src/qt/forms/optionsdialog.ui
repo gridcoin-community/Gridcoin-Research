@@ -320,6 +320,13 @@
           </item>
          </layout>
         </item>
+        <item>
+         <widget class="QCheckBox" name="enableSideStaking">
+          <property name="text">
+           <string>Enable Locally Specified Sidestaking</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </widget>

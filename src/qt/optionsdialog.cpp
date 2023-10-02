@@ -188,6 +188,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->enableStakeSplit, OptionsModel::EnableStakeSplit);
     mapper->addMapping(ui->stakingEfficiency, OptionsModel::StakingEfficiency);
     mapper->addMapping(ui->minPostSplitOutputValue, OptionsModel::MinStakeSplitValue);
+    mapper->addMapping(ui->enableSideStaking, OptionsModel::EnableSideStaking);
 
     /* Window */
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
