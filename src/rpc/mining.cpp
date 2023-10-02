@@ -110,20 +110,20 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     }
     obj.pushKV("stake-splitting", stakesplitting);
 
-    sidestaking.pushKV("side-staking-enabled", fEnableSideStaking);
-    if (fEnableSideStaking)
-    {
-        for (const auto& alloc : vSideStakeAlloc)
-        {
-            sidestakingalloc.pushKV("address", alloc->m_key.ToString());
-            sidestakingalloc.pushKV("allocation-pct", alloc->m_allocation * 100);
-            sidestakingalloc.pushKV("status", alloc->StatusToString());
+    sidestaking.pushKV("local_side_staking_enabled", fEnableSideStaking);
 
-            vsidestakingalloc.push_back(sidestakingalloc);
-        }
-        sidestaking.pushKV("side-staking-allocations", vsidestakingalloc);
+    // Note that if local_side_staking_enabled is true, then local sidestakes will be applicable and shown. Mandatory
+    // sidestakes are always included.
+    for (const auto& alloc : vSideStakeAlloc)
+    {
+        sidestakingalloc.pushKV("address", alloc->m_key.ToString());
+        sidestakingalloc.pushKV("allocation_pct", alloc->m_allocation * 100);
+        sidestakingalloc.pushKV("status", alloc->StatusToString());
+
+        vsidestakingalloc.push_back(sidestakingalloc);
     }
-    obj.pushKV("side-staking", sidestaking);
+    sidestaking.pushKV("side_staking_allocations", vsidestakingalloc);
+    obj.pushKV("side_staking", sidestaking);
 
     obj.pushKV("difficulty",    diff);
     obj.pushKV("errors",        GetWarnings("statusbar"));

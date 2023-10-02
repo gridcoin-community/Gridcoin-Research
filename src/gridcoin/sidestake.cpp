@@ -211,12 +211,18 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
         }
     }
 
-    // Followed by local active sidestakes
-    for (const auto& entry : m_sidestake_entries)
-    {
-        if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
-            sidestakes.push_back(entry.second);
-            allocation_sum += entry.second->m_allocation;
+    // Followed by local active sidestakes if sidestaking is enabled. Note that mandatory sidestaking cannot be disabled.
+    bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
+
+    if (fEnableSideStaking) {
+        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
+
+        for (const auto& entry : m_sidestake_entries)
+        {
+            if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
+                sidestakes.push_back(entry.second);
+                allocation_sum += entry.second->m_allocation;
+            }
         }
     }
 
