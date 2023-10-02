@@ -117,6 +117,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
         {
             sidestakingalloc.pushKV("address", alloc->m_key.ToString());
             sidestakingalloc.pushKV("allocation-pct", alloc->m_allocation * 100);
+            sidestakingalloc.pushKV("status", alloc->StatusToString());
 
             vsidestakingalloc.push_back(sidestakingalloc);
         }
