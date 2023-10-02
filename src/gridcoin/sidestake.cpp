@@ -5,6 +5,17 @@
 #include "sidestake.h"
 #include "node/ui_interface.h"
 
+//!
+//! \brief Model callback bound to the \c RwSettingsUpdated core signal.
+//!
+void RwSettingsUpdated(GRC::SideStakeRegistry* registry)
+{
+    LogPrint(BCLog::LogFlags::MISC, "INFO: %s: received RwSettingsUpdated() core signal", __func__);
+
+    registry->LoadLocalSideStakesFromConfig();
+}
+
+
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -184,12 +195,12 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
     std::vector<SideStake_ptr> sidestakes;
     double allocation_sum = 0.0;
 
-    // For right now refresh sidestakes from config file. This is about the same overhead as the original
-    // function in the miner. Perhaps replace with a signal to only refresh when r-w config file is
-    // actually changed.
-    LoadLocalSideStakesFromConfig();
+    // Note that LoadLocalSideStakesFromConfig is called upon a receipt of the core signal RwSettingsUpdated, which
+    // occurs immediately after the settings r-w file is updated.
 
     // The loops below prevent sidestakes from being added that cause a total allocation above 1.0 (100%).
+
+    LOCK(cs_lock);
 
     // Do mandatory sidestakes first.
     for (const auto& entry : m_sidestake_entries)
@@ -258,13 +269,13 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
 
     SideStakePayload payload = ctx->CopyPayloadAs<SideStakePayload>();
 
-           // Fill this in from the transaction context because these are not done during payload
-           // initialization.
+    // Fill this in from the transaction context because these are not done during payload
+    // initialization.
     payload.m_entry.m_hash = ctx.m_tx.GetHash();
     payload.m_entry.m_timestamp = ctx.m_tx.nTime;
 
-           // Ensure status is DELETED if the contract action was REMOVE, regardless of what was actually
-           // specified.
+    // Ensure status is DELETED if the contract action was REMOVE, regardless of what was actually
+    // specified.
     if (ctx->m_action == ContractAction::REMOVE) {
         payload.m_entry.m_status = SideStakeStatus::DELETED;
     }
@@ -275,14 +286,14 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
 
     SideStake_ptr current_sidestake_entry_ptr = nullptr;
 
-           // Is there an existing SideStake entry in the map?
+    // Is there an existing SideStake entry in the map?
     bool current_sidestake_entry_present = (sidestake_entry_pair_iter != m_sidestake_entries.end());
 
-           // If so, then get a smart pointer to it.
+    // If so, then get a smart pointer to it.
     if (current_sidestake_entry_present) {
         current_sidestake_entry_ptr = sidestake_entry_pair_iter->second;
 
-               // Set the payload m_entry's prev entry ctx hash = to the existing entry's hash.
+    // Set the payload m_entry's prev entry ctx hash = to the existing entry's hash.
         payload.m_entry.m_previous_hash = current_sidestake_entry_ptr->m_hash;
     } else { // Original entry for this SideStake entry key
         payload.m_entry.m_previous_hash = uint256 {};
@@ -315,7 +326,7 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
                  historical.m_hash.GetHex());
     }
 
-           // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
+    // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
     m_sidestake_entries[payload.m_entry.m_key] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
 
     return;
@@ -350,9 +361,9 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
 {
     const auto payload = ctx->SharePayloadAs<SideStakePayload>();
 
-           // For SideStake entries, both adds and removes will have records to revert in the m_sidestake_entries map,
-           // and also, if not the first entry for that SideStake key, will have a historical record to
-           // resurrect.
+    // For SideStake entries, both adds and removes will have records to revert in the m_sidestake_entries map,
+    // and also, if not the first entry for that SideStake key, will have a historical record to
+    // resurrect.
     LOCK(cs_lock);
 
     auto entry_to_revert = m_sidestake_entries.find(payload->m_entry.m_key);
@@ -362,8 +373,8 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
               __func__,
               entry_to_revert->second->m_key.ToString());
 
-               // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
-               // should not occur.
+        // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
+        // should not occur.
         return;
     }
 
@@ -388,9 +399,9 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
                   __func__,
                   key.ToString());
 
-                   // Unlike the above we will keep going even if this record is not found, because it is identical to the
-                   // m_sidestake_entries record above. This should not happen, because during contract adds and removes,
-                   // entries are made simultaneously to the m_sidestake_entries and m_sidestake_db.
+            // Unlike the above we will keep going even if this record is not found, because it is identical to the
+            // m_sidestake_entries record above. This should not happen, because during contract adds and removes,
+            // entries are made simultaneously to the m_sidestake_entries and m_sidestake_db.
         }
 
         if (resurrect_hash.IsNull()) {
@@ -406,8 +417,8 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
             return;
         }
 
-               // Resurrect the entry prior to the reverted one. It is safe to use the bracket form here, because of the protection
-               // of the logic above. There cannot be any entry in m_sidestake_entries with that key value left if we made it here.
+        // Resurrect the entry prior to the reverted one. It is safe to use the bracket form here, because of the protection
+        // of the logic above. There cannot be any entry in m_sidestake_entries with that key value left if we made it here.
         m_sidestake_entries[resurrect_entry->second->m_key] = resurrect_entry->second;
     }
 }
@@ -442,8 +453,13 @@ int SideStakeRegistry::Initialize()
 
     int height = m_sidestake_db.Initialize(m_sidestake_entries, m_pending_sidestake_entries);
 
+    SubscribeToCoreSignals();
+
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_db size after load: %u", __func__, m_sidestake_db.size());
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_entries size after load: %u", __func__, m_sidestake_entries.size());
+
+    // Add the local sidestakes specified in the config file(s) to the mandatory sidestakes.
+    LoadLocalSideStakesFromConfig();
 
     return height;
 }
@@ -536,6 +552,8 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
         }
     }
 
+    LOCK(cs_lock);
+
     for (const auto& entry : raw_vSideStakeAlloc)
     {
         std::string sAddress;
@@ -615,8 +633,20 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
                   " distribution!", __func__);
 }
 
+void SideStakeRegistry::SubscribeToCoreSignals()
+{
+    uiInterface.RwSettingsUpdated_connect(std::bind(RwSettingsUpdated, this));
+}
+
+void SideStakeRegistry::UnsubscribeFromCoreSignals()
+{
+  // Disconnect signals from client (no-op currently)
+}
+
 SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
 {
+    LOCK(cs_lock);
+
     return m_sidestake_db;
 }
 
