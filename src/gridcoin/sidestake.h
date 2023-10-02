@@ -577,6 +577,9 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
+    void SubscribeToCoreSignals();
+    void UnsubscribeFromCoreSignals();
+
     SideStakeMap m_sidestake_entries;                   //!< Contains the current sidestake entries including entries marked DELETED.
     PendingSideStakeMap m_pending_sidestake_entries {}; //!< Not used. Only to satisfy the template.
 
