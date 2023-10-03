@@ -49,15 +49,17 @@ CBitcoinAddressForStorage::CBitcoinAddressForStorage(CBitcoinAddress address)
 SideStake::SideStake()
     : m_key()
       , m_allocation()
+      , m_description()
       , m_timestamp(0)
       , m_hash()
       , m_previous_hash()
       , m_status(SideStakeStatus::UNKNOWN)
 {}
 
-SideStake::SideStake(CBitcoinAddressForStorage address, double allocation)
+SideStake::SideStake(CBitcoinAddressForStorage address, double allocation, std::string description)
     : m_key(address)
       , m_allocation(allocation)
+      , m_description(description)
       , m_timestamp(0)
       , m_hash()
       , m_previous_hash()
@@ -66,11 +68,13 @@ SideStake::SideStake(CBitcoinAddressForStorage address, double allocation)
 
 SideStake::SideStake(CBitcoinAddressForStorage address,
                      double allocation,
+                     std::string description,
                      int64_t timestamp,
                      uint256 hash,
                      SideStakeStatus status)
     : m_key(address)
       , m_allocation(allocation)
+      , m_description(description)
       , m_timestamp(timestamp)
       , m_hash(hash)
       , m_previous_hash()
@@ -163,10 +167,11 @@ SideStakePayload::SideStakePayload(uint32_t version)
 SideStakePayload::SideStakePayload(const uint32_t version,
                                    CBitcoinAddressForStorage key,
                                    double value,
+                                   std::string description,
                                    SideStakeStatus status)
     : IContractPayload()
       , m_version(version)
-      , m_entry(SideStake(key, value, 0, uint256{}, status))
+      , m_entry(SideStake(key, value, description, 0, uint256{}, status))
 {
 }
 
@@ -603,6 +608,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
         SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address),
                             dAllocation,
+                            std::string {},
                             0,
                             uint256{},
                             SideStakeStatus::ACTIVE);

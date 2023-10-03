@@ -69,6 +69,8 @@ public:
 
     double m_allocation;                //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
 
+    std::string m_description;            //!< The description of the sidestake (optional)
+
     int64_t m_timestamp;                //!< Time of the sidestake contract transaction.
 
     uint256 m_hash;                     //!< The hash of the transaction that contains a mandatory sidestake.
@@ -88,17 +90,19 @@ public:
     //!
     //! \param address
     //! \param allocation
+    //! \param description (optional)
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation);
+    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
     //!
     //! \param address
     //! \param allocation
+    //! \param description (optional)
     //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, SideStakeStatus status);
+    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, SideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters. This form is normally used to construct a
@@ -106,11 +110,12 @@ public:
     //!
     //! \param address
     //! \param allocation
+    //! \param description (optional)
     //! \param timestamp
     //! \param hash
     //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, int64_t timestamp, uint256 hash, SideStakeStatus status);
+    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp, uint256 hash, SideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -176,6 +181,7 @@ public:
     {
         READWRITE(m_key);
         READWRITE(m_allocation);
+        READWRITE(m_description);
         READWRITE(m_timestamp);
         READWRITE(m_hash);
         READWRITE(m_previous_hash);
@@ -242,7 +248,8 @@ public:
     //! \param value. Value string for the sidestake entry
     //! \param status. Status of the sidestake entry
     //!
-    SideStakePayload(const uint32_t version, CBitcoinAddressForStorage key, double value, SideStakeStatus status);
+    SideStakePayload(const uint32_t version, CBitcoinAddressForStorage key, double value,
+                     std::string description, SideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake entry payload from the given sidestake entry
