@@ -251,7 +251,7 @@
          <x>10</x>
          <y>10</y>
          <width>651</width>
-         <height>171</height>
+         <height>291</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_StakeSplit">
@@ -326,6 +326,9 @@
            <string>Enable Locally Specified Sidestaking</string>
           </property>
          </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="sidestakingTableWidget"/>
         </item>
        </layout>
       </widget>
