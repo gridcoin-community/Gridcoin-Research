@@ -197,7 +197,7 @@ typedef std::shared_ptr<SideStake> SideStake_ptr;
 //!
 //! \brief A type that either points to some sidestake or does not.
 //!
-typedef const SideStake_ptr SideStakeOption;
+//typedef const SideStake_ptr SideStakeOption;
 
 //!
 //! \brief The body of a sidestake entry contract. Note that this body is bimodal. It
@@ -416,21 +416,24 @@ public:
     //! \brief Get the current sidestake entry for the specified key string.
     //!
     //! \param key The key string of the sidestake entry.
+    //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return An object that either contains a reference to some sidestake entry if it exists
-    //! for the key or does not.
+    //! \return A vector of smart pointers to entries matching the provided key (address). Up to two elements
+    //! are returned, mandatory entry first, unless local only boolean is set true.
     //!
-    SideStakeOption Try(const CBitcoinAddressForStorage& key) const;
+    std::vector<SideStake_ptr> Try(const CBitcoinAddressForStorage& key, const bool& local_only = false) const;
 
     //!
     //! \brief Get the current sidestake entry for the specified key string if it has a status of ACTIVE or MANDATORY.
     //!
     //! \param key The key string of the sidestake entry.
+    //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return An object that either contains a reference to some sidestake entry if it exists
-    //! for the key and is in the required status or does not.
+    //! \return A vector of smart pointers to entries matching the provided key (address) that are in status of
+    //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, unless local only boolean
+    //! is set true.
     //!
-    SideStakeOption TryActive(const CBitcoinAddressForStorage& key) const;
+    std::vector<SideStake_ptr> TryActive(const CBitcoinAddressForStorage& key, const bool& local_only = false) const;
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -584,13 +587,24 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
+    //!
+    //! \brief Private helper function for non-contract add and delete to align the config r-w file with
+    //! in memory local sidestake map.
+    //!
+    //! \return bool true if successful.
+    //!
+    bool SaveLocalSideStakesToConfig();
+
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
 
-    SideStakeMap m_sidestake_entries;                   //!< Contains the current sidestake entries including entries marked DELETED.
+    SideStakeMap m_local_sidestake_entries;             //!< Contains the local (non-contract) sidestake entries.
+    SideStakeMap m_sidestake_entries;                   //!< Contains the mandatory sidestake entries, including DELETED.
     PendingSideStakeMap m_pending_sidestake_entries {}; //!< Not used. Only to satisfy the template.
 
     SideStakeDB m_sidestake_db;
+
+    bool m_local_entry_already_saved_to_config = false; //!< Flag to prevent reload on signal if individual entry saved already.
 
 public:
 

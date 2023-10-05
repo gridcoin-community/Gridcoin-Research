@@ -4,6 +4,7 @@
 
 #include "sidestake.h"
 #include "node/ui_interface.h"
+#include "univalue.h"
 
 //!
 //! \brief Model callback bound to the \c RwSettingsUpdated core signal.
@@ -222,7 +223,7 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
     if (fEnableSideStaking) {
         LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
 
-        for (const auto& entry : m_sidestake_entries)
+        for (const auto& entry : m_local_sidestake_entries)
         {
             if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
                 sidestakes.push_back(entry.second);
@@ -234,30 +235,42 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
     return sidestakes;
 }
 
-SideStakeOption SideStakeRegistry::Try(const CBitcoinAddressForStorage& key) const
+std::vector<SideStake_ptr> SideStakeRegistry::Try(const CBitcoinAddressForStorage& key, const bool& local_only) const
 {
     LOCK(cs_lock);
 
-    const auto iter = m_sidestake_entries.find(key);
+    std::vector<SideStake_ptr> result;
 
-    if (iter == m_sidestake_entries.end()) {
-        return nullptr;
-    }
+    if (!local_only) {
+        const auto mandatory_entry = m_sidestake_entries.find(key);
 
-    return iter->second;
-}
-
-SideStakeOption SideStakeRegistry::TryActive(const CBitcoinAddressForStorage& key) const
-{
-    LOCK(cs_lock);
-
-    if (const SideStakeOption SideStake_entry = Try(key)) {
-        if (SideStake_entry->m_status == SideStakeStatus::ACTIVE || SideStake_entry->m_status == SideStakeStatus::MANDATORY) {
-            return SideStake_entry;
+        if (mandatory_entry != m_sidestake_entries.end()) {
+            result.push_back(mandatory_entry->second);
         }
     }
 
-    return nullptr;
+    const auto local_entry = m_local_sidestake_entries.find(key);
+
+    if (local_entry != m_sidestake_entries.end()) {
+        result.push_back(local_entry->second);
+    }
+
+    return result;
+}
+
+std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CBitcoinAddressForStorage& key, const bool& local_only) const
+{
+    LOCK(cs_lock);
+
+    std::vector<SideStake_ptr> result;
+
+    for (const auto& iter : Try(key, local_only)) {
+        if (iter->m_status == SideStakeStatus::MANDATORY || iter->m_status == SideStakeStatus::ACTIVE) {
+            result.push_back(iter);
+        }
+    }
+
+    return result;
 }
 
 void SideStakeRegistry::Reset()
@@ -346,7 +359,9 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
 void SideStakeRegistry::NonContractAdd(SideStake& sidestake)
 {
     // Using this form of insert because we want the latest record with the same key to override any previous one.
-    m_sidestake_entries[sidestake.m_key] = std::make_shared<SideStake>(sidestake);
+    m_local_sidestake_entries[sidestake.m_key] = std::make_shared<SideStake>(sidestake);
+
+
 }
 
 void SideStakeRegistry::Add(const ContractContext& ctx)
@@ -356,10 +371,10 @@ void SideStakeRegistry::Add(const ContractContext& ctx)
 
 void SideStakeRegistry::NonContractDelete(CBitcoinAddressForStorage& address)
 {
-    auto sidestake_entry_pair_iter = m_sidestake_entries.find(address);
+    auto sidestake_entry_pair_iter = m_local_sidestake_entries.find(address);
 
-    if (sidestake_entry_pair_iter != m_sidestake_entries.end()) {
-        m_sidestake_entries.erase(sidestake_entry_pair_iter);
+    if (sidestake_entry_pair_iter != m_local_sidestake_entries.end()) {
+        m_local_sidestake_entries.erase(sidestake_entry_pair_iter);
     }
 }
 
@@ -469,8 +484,10 @@ int SideStakeRegistry::Initialize()
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_db size after load: %u", __func__, m_sidestake_db.size());
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_entries size after load: %u", __func__, m_sidestake_entries.size());
 
-    // Add the local sidestakes specified in the config file(s) to the mandatory sidestakes.
+    // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
+
+    m_local_entry_already_saved_to_config = false;
 
     return height;
 }
@@ -497,6 +514,7 @@ void SideStakeRegistry::ResetInMemoryOnly()
 {
     LOCK(cs_lock);
 
+    m_local_sidestake_entries.clear();
     m_sidestake_entries.clear();
     m_sidestake_db.clear_in_memory_only();
 }
@@ -510,6 +528,16 @@ uint64_t SideStakeRegistry::PassivateDB()
 
 void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 {
+    // If the m_local_entry_already_saved_to_config is set, then SaveLocalSideStakeToConfig was just called,
+    // and we want to then ignore the update signal from the r-w file change that calls this function for
+    // that action (only) and then reset the flag to be responsive to any changes on the core r-w file side
+    // through changesettings, for example.
+    if (m_local_entry_already_saved_to_config) {
+        m_local_entry_already_saved_to_config = false;
+
+        return;
+    }
+
     std::vector<SideStake> vSideStakes;
     std::vector<std::pair<std::string, std::string>> raw_vSideStakeAlloc;
     double dSumAllocation = 0.0;
@@ -624,7 +652,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
                  __func__, sAddress, dAllocation);
     }
 
-    for (auto& entry : m_sidestake_entries)
+    for (auto& entry : m_local_sidestake_entries)
     {
         // Only look at active entries. The others are NA for this alignment.
         if (entry.second->m_status == SideStakeStatus::ACTIVE) {
@@ -643,6 +671,42 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     if (!dSumAllocation)
         LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
                   " distribution!", __func__);
+}
+
+bool SideStakeRegistry::SaveLocalSideStakesToConfig()
+{
+    bool status = false;
+
+    std::string addresses;
+    std::string allocations;
+    std::string descriptions;
+
+    std::string separator;
+
+    std::vector<std::pair<std::string, util::SettingsValue>> settings;
+
+    unsigned int i = 0;
+    for (const auto& iter : m_local_sidestake_entries) {
+        if (i) {
+            separator = ",";
+        }
+
+        addresses += separator + iter.second->m_key.ToString();
+        allocations += separator + ToString(iter.second->m_allocation * 100.0);
+        descriptions += separator + iter.second->m_description;
+
+        ++i;
+    }
+
+    settings.push_back(std::make_pair("addresses", addresses));
+    settings.push_back(std::make_pair("allocations", allocations));
+    settings.push_back(std::make_pair("descriptions", descriptions));
+
+    status = updateRwSettings(settings);
+
+    m_local_entry_already_saved_to_config = true;
+
+    return status;
 }
 
 void SideStakeRegistry::SubscribeToCoreSignals()
