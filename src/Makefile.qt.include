@@ -285,6 +285,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/rpcconsole.h \
   qt/sendcoinsdialog.h \
   qt/sendcoinsentry.h \
+  qt/sidestaketablemodel.h \
   qt/signverifymessagedialog.h \
   qt/trafficgraphwidget.h \
   qt/transactiondesc.h \
@@ -372,6 +373,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/rpcconsole.cpp \
   qt/sendcoinsdialog.cpp \
   qt/sendcoinsentry.cpp \
+  qt/sidestaketablemodel.cpp \
   qt/signverifymessagedialog.cpp \
   qt/trafficgraphwidget.cpp \
   qt/transactiondesc.cpp \
