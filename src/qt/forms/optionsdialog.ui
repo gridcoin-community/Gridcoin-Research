@@ -16,8 +16,8 @@
   <property name="modal">
    <bool>true</bool>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
     <widget class="QTabWidget" name="tabWidget">
      <property name="tabPosition">
       <enum>QTabWidget::North</enum>
@@ -245,93 +245,122 @@
       <attribute name="title">
        <string>Staking</string>
       </attribute>
-      <widget class="QWidget" name="layoutWidget">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>651</width>
-         <height>291</height>
-        </rect>
-       </property>
-       <layout class="QVBoxLayout" name="verticalLayout_StakeSplit">
-        <item>
-         <widget class="QCheckBox" name="enableStaking">
-          <property name="toolTip">
-           <string>This enables or disables staking (the default is enabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
-          </property>
-          <property name="text">
-           <string>Enable Staking</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QCheckBox" name="enableStakeSplit">
-          <property name="toolTip">
-           <string>This enables or disables splitting of stake outputs to optimize staking (default disabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
-          </property>
-          <property name="text">
-           <string>Enable Stake Splitting</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_StakeSplit">
-          <item>
-           <widget class="QLabel" name="stakingEfficiencyLabel">
-            <property name="text">
-             <string>Target Efficiency</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QValidatedLineEdit" name="stakingEfficiency">
-            <property name="toolTip">
-             <string>Valid values are between 75 and 98 percent. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="minPostSplitOutputValueLabel">
-            <property name="text">
-             <string>Min Post Split UTXO</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QValidatedLineEdit" name="minPostSplitOutputValue">
-            <property name="toolTip">
-             <string>Valid values are 800 or greater. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer_StakeSplit">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QCheckBox" name="enableSideStaking">
-          <property name="text">
-           <string>Enable Locally Specified Sidestaking</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QTableWidget" name="sidestakingTableWidget"/>
-        </item>
-       </layout>
-      </widget>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <layout class="QVBoxLayout" name="verticalLayout_StakeSplit">
+         <item>
+          <widget class="QCheckBox" name="enableStaking">
+           <property name="toolTip">
+            <string>This enables or disables staking (the default is enabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+           </property>
+           <property name="text">
+            <string>Enable Staking</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="enableStakeSplit">
+           <property name="toolTip">
+            <string>This enables or disables splitting of stake outputs to optimize staking (default disabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+           </property>
+           <property name="text">
+            <string>Enable Stake Splitting</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_StakeSplit">
+           <item>
+            <widget class="QLabel" name="stakingEfficiencyLabel">
+             <property name="text">
+              <string>Target Efficiency</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QValidatedLineEdit" name="stakingEfficiency">
+             <property name="toolTip">
+              <string>Valid values are between 75 and 98 percent. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="minPostSplitOutputValueLabel">
+             <property name="text">
+              <string>Min Post Split UTXO</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QValidatedLineEdit" name="minPostSplitOutputValue">
+             <property name="toolTip">
+              <string>Valid values are 800 or greater. Note that a change to this setting will permanently override the config file with an entry in the settings file.</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_StakeSplit">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="enableSideStaking">
+           <property name="text">
+            <string>Enable Locally Specified Sidestaking</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTableView" name="sidestakingTableView">
+           <property name="sortingEnabled">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayoutSideStake">
+           <item>
+            <widget class="QPushButton" name="pushButtonNewSideStake">
+             <property name="text">
+              <string>New</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButtonEditSideStake">
+             <property name="text">
+              <string>Edit</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_SideStake">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </item>
+      </layout>
      </widget>
      <widget class="QWidget" name="tabWindow">
       <attribute name="title">
@@ -544,7 +573,7 @@
      </widget>
     </widget>
    </item>
-   <item>
+   <item row="1" column="0">
     <layout class="QHBoxLayout" name="horizontalLayout_Buttons">
      <item>
       <spacer name="horizontalSpacer_1">

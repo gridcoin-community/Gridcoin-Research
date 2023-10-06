@@ -9,6 +9,7 @@
 #include "qt/decoration.h"
 #include "init.h"
 #include "miner.h"
+#include "sidestaketablemodel.h"
 
 #include <QDir>
 #include <QIntValidator>
@@ -152,6 +153,27 @@ void OptionsDialog::setModel(OptionsModel *model)
         mapper->setModel(model);
         setMapper();
         mapper->toFirst();
+
+        SideStakeTableModel* sidestake_model = model->getSideStakeTableModel();
+
+        sidestake_model->refresh();
+
+        ui->sidestakingTableView->setModel(sidestake_model);
+        ui->sidestakingTableView->verticalHeader()->hide();
+        ui->sidestakingTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+        ui->sidestakingTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        ui->sidestakingTableView->setContextMenuPolicy(Qt::CustomContextMenu);
+
+        // Scale column widths by the logical DPI over 96.0 to deal with hires displays.
+        ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Address, GRC::ScalePx(this, ADDRESS_COLUMN_WIDTH));
+        ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Allocation, GRC::ScalePx(this, ALLOCATION_COLUMN_WIDTH));
+        ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Description, GRC::ScalePx(this, DESCRIPTION_COLUMN_WIDTH));
+        ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Status, GRC::ScalePx(this, STATUS_COLUMN_WIDTH));
+        ui->sidestakingTableView->horizontalHeader()->setStretchLastSection(true);
+        ui->sidestakingTableView->setShowGrid(true);
+
+        connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::hideSideStakeEdit);
+        connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::refreshSideStakeTableModel);
     }
 
     /* update the display unit, to not use the default ("BTC") */
@@ -253,7 +275,20 @@ void OptionsDialog::on_cancelButton_clicked()
 void OptionsDialog::on_applyButton_clicked()
 {
     mapper->submit();
+
+    refreshSideStakeTableModel();
+
     disableApplyButton();
+}
+
+void OptionsDialog::newSideStakeButton_clicked()
+{
+
+}
+
+void OptionsDialog::editSideStakeButton_clicked()
+{
+
 }
 
 void OptionsDialog::showRestartWarning_Proxy()
@@ -333,6 +368,16 @@ void OptionsDialog::hideStakeSplitting()
     }
 }
 
+void OptionsDialog::hideSideStakeEdit()
+{
+    if (model) {
+        bool local_side_staking_enabled = ui->enableSideStaking->isChecked();
+
+        ui->pushButtonNewSideStake->setHidden(!local_side_staking_enabled);
+        ui->pushButtonEditSideStake->setHidden(!local_side_staking_enabled);
+    }
+}
+
 void OptionsDialog::handleProxyIpValid(QValidatedLineEdit *object, bool fState)
 {
     // this is used in a check before re-enabling the save buttons
@@ -405,6 +450,13 @@ void OptionsDialog::handlePollExpireNotifyValid(QValidatedLineEdit *object, bool
         ui->statusLabel->setText(tr("The supplied time for notification before poll expires must "
                                     "be between 0.25 and 24 hours."));
     }
+}
+
+void OptionsDialog::refreshSideStakeTableModel()
+{
+    mapper->submit();
+
+    model->getSideStakeTableModel()->refresh();
 }
 
 bool OptionsDialog::eventFilter(QObject *object, QEvent *event)

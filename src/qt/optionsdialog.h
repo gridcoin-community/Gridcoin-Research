@@ -40,6 +40,9 @@ private slots:
     void on_cancelButton_clicked();
     void on_applyButton_clicked();
 
+    void newSideStakeButton_clicked();
+    void editSideStakeButton_clicked();
+
     void showRestartWarning_Proxy();
     void showRestartWarning_Lang();
     void updateDisplayUnit();
@@ -48,10 +51,13 @@ private slots:
     void hideLimitTxnDisplayDate();
     void hideStakeSplitting();
     void hidePollExpireNotify();
+    void hideSideStakeEdit();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
     void handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState);
     void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
     void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
+
+    void refreshSideStakeTableModel();
 
 signals:
     void proxyIpValid(QValidatedLineEdit *object, bool fValid);
@@ -69,6 +75,15 @@ private:
     bool fStakingEfficiencyValid;
     bool fMinStakeSplitValueValid;
     bool fPollExpireNotifyValid;
+
+    enum SideStakeTableColumnWidths
+    {
+        ADDRESS_COLUMN_WIDTH = 200,
+        ALLOCATION_COLUMN_WIDTH = 80,
+        DESCRIPTION_COLUMN_WIDTH = 130,
+        BANSUBNET_COLUMN_WIDTH = 150,
+        STATUS_COLUMN_WIDTH = 150
+    };
 };
 
 #endif // BITCOIN_QT_OPTIONSDIALOG_H
