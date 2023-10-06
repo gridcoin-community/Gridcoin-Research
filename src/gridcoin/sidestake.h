@@ -408,9 +408,11 @@ public:
     //! Mandatory sidestakes come before local ones, and the method ensures that the sidestakes
     //! returned do not total an allocation greater than 1.0.
     //!
+    //! \param bool true to return local sidestakes only
+    //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
-    const std::vector<SideStake_ptr> ActiveSideStakeEntries();
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc);
 
     //!
     //! \brief Get the current sidestake entry for the specified key string.
@@ -472,8 +474,9 @@ public:
     //! the registry db.
     //!
     //! \param SideStake object to add
+    //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
     //!
-    void NonContractAdd(SideStake& sidestake);
+    void NonContractAdd(const SideStake& sidestake, const bool& save_to_file = true);
 
     //!
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
@@ -487,9 +490,11 @@ public:
     //!
     //! \brief Provides for deletion of local (voluntary) sidestakes from the in-memory map that are not persisted
     //! to the registry db. Deletion is by the map key (CBitcoinAddress).
-    //! \param address
     //!
-    void NonContractDelete(CBitcoinAddressForStorage& address);
+    //! \param address
+    //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    void NonContractDelete(const CBitcoinAddressForStorage& address, const bool& save_to_file = true);
 
     //!
     //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry

@@ -10,7 +10,9 @@
 #include "init.h"
 #include "miner.h"
 #include "sidestaketablemodel.h"
+#include "editsidestakedialog.h"
 
+#include <QSortFilterProxyModel>
 #include <QDir>
 #include <QIntValidator>
 #include <QLocale>
@@ -172,8 +174,22 @@ void OptionsDialog::setModel(OptionsModel *model)
         ui->sidestakingTableView->horizontalHeader()->setStretchLastSection(true);
         ui->sidestakingTableView->setShowGrid(true);
 
+        ui->sidestakingTableView->sortByColumn(0, Qt::AscendingOrder);
+
         connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::hideSideStakeEdit);
         connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::refreshSideStakeTableModel);
+
+        connect(ui->pushButtonNewSideStake, &QPushButton::clicked, this, &OptionsDialog::newSideStakeButton_clicked);
+        connect(ui->pushButtonEditSideStake, &QPushButton::clicked, this, &OptionsDialog::editSideStakeButton_clicked);
+        connect(ui->pushButtonDeleteSideStake, &QPushButton::clicked, this, &OptionsDialog::deleteSideStakeButton_clicked);
+
+        connect(ui->sidestakingTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+                this, &OptionsDialog::sidestakeSelectionChanged);
+
+        ui->sidestakingTableView->installEventFilter(this);
+
+        connect(this, &OptionsDialog::sidestakeAllocationInvalid, this, &OptionsDialog::handleSideStakeAllocationInvalid);
+
     }
 
     /* update the display unit, to not use the default ("BTC") */
@@ -263,7 +279,8 @@ void OptionsDialog::setSaveButtonState(bool fState)
 
 void OptionsDialog::on_okButton_clicked()
 {
-    mapper->submit();
+    refreshSideStakeTableModel();
+
     accept();
 }
 
@@ -274,8 +291,6 @@ void OptionsDialog::on_cancelButton_clicked()
 
 void OptionsDialog::on_applyButton_clicked()
 {
-    mapper->submit();
-
     refreshSideStakeTableModel();
 
     disableApplyButton();
@@ -283,19 +298,65 @@ void OptionsDialog::on_applyButton_clicked()
 
 void OptionsDialog::newSideStakeButton_clicked()
 {
+    if (!model) {
+        return;
+    }
 
+    EditSideStakeDialog dialog(EditSideStakeDialog::NewSideStake, this);
+
+    dialog.setModel(model->getSideStakeTableModel());
+
+    dialog.exec();
 }
 
 void OptionsDialog::editSideStakeButton_clicked()
 {
+    if (!model || !ui->sidestakingTableView->selectionModel()) {
+        return;
+    }
 
+    QModelIndexList indexes = ui->sidestakingTableView->selectionModel()->selectedRows();
+
+    if (indexes.isEmpty()) {
+        return;
+    }
+
+    if (indexes.size() > 1) {
+        QMessageBox::warning(this, tr("Error"), tr("You can only edit one sidestake at a time."),  QMessageBox::Ok);
+    }
+
+    EditSideStakeDialog dialog(EditSideStakeDialog::EditSideStake, this);
+
+    dialog.setModel(model->getSideStakeTableModel());
+    dialog.loadRow(indexes.at(0).row());
+    dialog.exec();
+}
+
+void OptionsDialog::deleteSideStakeButton_clicked()
+{
+    if (!model || !ui->sidestakingTableView->selectionModel()) {
+        return;
+    }
+
+    QModelIndexList indexes = ui->sidestakingTableView->selectionModel()->selectedRows();
+
+    if (indexes.isEmpty()) {
+        return;
+    }
+
+    if (indexes.size() > 1) {
+        QMessageBox::warning(this, tr("Error"), tr("You can only delete one sidestake at a time."),  QMessageBox::Ok);
+    }
+
+    model->getSideStakeTableModel()->removeRows(indexes.at(0).row(), 1);
 }
 
 void OptionsDialog::showRestartWarning_Proxy()
 {
     if(!fRestartWarningDisplayed_Proxy)
     {
-        QMessageBox::warning(this, tr("Warning"), tr("This setting will take effect after restarting Gridcoin."), QMessageBox::Ok);
+        QMessageBox::warning(this, tr("Warning"), tr("This setting will take effect"
+                                                     " after restarting Gridcoin."), QMessageBox::Ok);
         fRestartWarningDisplayed_Proxy = true;
     }
 }
@@ -454,9 +515,12 @@ void OptionsDialog::handlePollExpireNotifyValid(QValidatedLineEdit *object, bool
 
 void OptionsDialog::refreshSideStakeTableModel()
 {
-    mapper->submit();
-
-    model->getSideStakeTableModel()->refresh();
+    if (!mapper->submit()
+        && model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
+        emit sidestakeAllocationInvalid();
+    } else {
+        model->getSideStakeTableModel()->refresh();
+    }
 }
 
 bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
@@ -545,5 +609,57 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
         }
     }
 
+<<<<<<< HEAD
+=======
+    // This is required to provide immediate feedback on invalid allocation entries on in place editing.
+    if (object == ui->sidestakingTableView)
+    {
+        if (model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: event type = %i",
+                     __func__,
+                     (int) event->type());
+
+            emit sidestakeAllocationInvalid();
+        }
+    }
+
+>>>>>>> 71b6deb3e (Implementation of EditSideStakeDialog)
     return QDialog::eventFilter(object, event);
+}
+
+void OptionsDialog::sidestakeSelectionChanged()
+{
+    QTableView *table = ui->sidestakingTableView;
+
+    if (table->selectionModel()->hasSelection()) {
+        QModelIndexList indexes = ui->sidestakingTableView->selectionModel()->selectedRows();
+
+        if (indexes.size() > 1) {
+            ui->pushButtonEditSideStake->setEnabled(false);
+            ui->pushButtonDeleteSideStake->setEnabled(false);
+        } else if (static_cast<GRC::SideStake*>(indexes.at(0).internalPointer())->m_status
+                   == GRC::SideStakeStatus::MANDATORY) {
+            ui->pushButtonEditSideStake->setEnabled(false);
+            ui->pushButtonDeleteSideStake->setEnabled(false);
+        } else {
+            ui->pushButtonEditSideStake->setEnabled(true);
+            ui->pushButtonDeleteSideStake->setEnabled(true);
+        }
+    }
+}
+
+void OptionsDialog::handleSideStakeAllocationInvalid()
+{
+    model->getSideStakeTableModel()->refresh();
+
+    QMessageBox::warning(this, windowTitle(),
+                         tr("The entered allocation is not valid and is reverted. Check to make sure "
+                            "that the allocation is greater than or equal to zero and when added to the other "
+                            "allocations totals less than 100."),
+                         QMessageBox::Ok, QMessageBox::Ok);
+}
+
+void OptionsDialog::updateSideStakeTableView()
+{
+    ui->sidestakingTableView->update();
 }

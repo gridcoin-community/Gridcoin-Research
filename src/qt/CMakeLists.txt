@@ -29,6 +29,7 @@ add_library(gridcoinqt STATIC
     decoration.cpp
     diagnosticsdialog.cpp
     editaddressdialog.cpp
+    editsidestakedialog.cpp
     favoritespage.cpp
     guiutil.cpp
     intro.cpp

@@ -108,7 +108,8 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     }
     obj.pushKV("stake-splitting", stakesplitting);
 
-    vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
+    // This is what the miner sees...
+    vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false);
 
     sidestaking.pushKV("local_side_staking_enabled", fEnableSideStaking);
 

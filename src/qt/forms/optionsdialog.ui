@@ -342,12 +342,29 @@
            </item>
            <item>
             <widget class="QPushButton" name="pushButtonEditSideStake">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="text">
               <string>Edit</string>
              </property>
              <property name="icon">
               <iconset resource="../bitcoin.qrc">
                <normaloff>:/icons/edit</normaloff>:/icons/edit</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButtonDeleteSideStake">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>Delete</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../bitcoin.qrc">
+               <normaloff>:/icons/remove</normaloff>:/icons/remove</iconset>
              </property>
             </widget>
            </item>
