@@ -79,6 +79,8 @@ void OptionsModel::Init()
     if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
         gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
     }
+
+    m_sidestake_model = new SideStakeTableModel(this);
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -468,4 +470,9 @@ void OptionsModel::setMaskValues(bool privacy_mode)
 QString OptionsModel::getDataDir()
 {
     return dataDir;
+}
+
+SideStakeTableModel* OptionsModel::getSideStakeTableModel()
+{
+    return m_sidestake_model;
 }

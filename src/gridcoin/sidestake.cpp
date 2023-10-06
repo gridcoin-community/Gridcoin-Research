@@ -191,9 +191,21 @@ SideStakePayload::SideStakePayload(SideStake entry)
 // -----------------------------------------------------------------------------
 // Class: SideStakeRegistry
 // -----------------------------------------------------------------------------
-const SideStakeRegistry::SideStakeMap& SideStakeRegistry::SideStakeEntries() const
+const std::vector<SideStake_ptr> SideStakeRegistry::SideStakeEntries() const
 {
-    return m_sidestake_entries;
+    std::vector<SideStake_ptr> sidestakes;
+
+    LOCK(cs_lock);
+
+    for (const auto& entry : m_sidestake_entries) {
+        sidestakes.push_back(entry.second);
+    }
+
+    for (const auto& entry : m_local_sidestake_entries) {
+        sidestakes.push_back(entry.second);
+    }
+
+    return sidestakes;
 }
 
 const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
@@ -586,8 +598,8 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
     // First, determine allocation already taken by mandatory sidestakes, because they must be allocated first.
     for (const auto& entry : SideStakeEntries()) {
-        if (entry.second->m_status == SideStakeStatus::MANDATORY) {
-            dSumAllocation += entry.second->m_allocation;
+        if (entry->m_status == SideStakeStatus::MANDATORY) {
+            dSumAllocation += entry->m_allocation;
         }
     }
 

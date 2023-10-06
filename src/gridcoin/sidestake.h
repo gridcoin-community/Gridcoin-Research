@@ -399,7 +399,7 @@ public:
     //!
     //! \return \c A reference to the current sidestake entries stored in the registry.
     //!
-    const SideStakeMap& SideStakeEntries() const;
+    const std::vector<SideStake_ptr> SideStakeEntries() const;
 
     //!
     //! \brief Get the collection of active sidestake entries. This is presented as a vector of

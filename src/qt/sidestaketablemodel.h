@@ -5,4 +5,86 @@
 #ifndef BITCOIN_QT_SIDESTAKETABLEMODEL_H
 #define BITCOIN_QT_SIDESTAKETABLEMODEL_H
 
+#include <QAbstractTableModel>
+#include <memory>
+#include "gridcoin/sidestake.h"
+
+class OptionsModel;
+class SideStakeTablePriv;
+
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
+
+class SideStakeLessThan
+{
+public:
+    SideStakeLessThan(int column, Qt::SortOrder order);
+
+    bool operator()(const GRC::SideStake& left, const GRC::SideStake& right) const;
+
+private:
+    int m_column;
+    Qt::SortOrder m_order;
+};
+
+class SideStakeTableModel : public QAbstractTableModel
+{
+    Q_OBJECT
+
+public:
+    explicit SideStakeTableModel(OptionsModel* parent = nullptr);
+    ~SideStakeTableModel();
+
+    enum ColumnIndex {
+        Address,
+        Allocation,
+        Description,
+        Status
+    };
+
+    /** Return status of edit/insert operation */
+    enum EditStatus {
+        OK,                     /**< Everything ok */
+        NO_CHANGES,             /**< No changes were made during edit operation */
+        INVALID_ADDRESS,        /**< Unparseable address */
+        DUPLICATE_ADDRESS,      /**< Address already in sidestake registry */
+        INVALID_ALLOCATION      /**< Allocation is invalid (i.e. not parseable or not between 0.0 and 100.0) */
+    };
+
+    /** @name Methods overridden from QAbstractTableModel
+        @{*/
+    int rowCount(const QModelIndex &parent) const;
+    int columnCount(const QModelIndex &parent) const;
+    QVariant data(const QModelIndex &index, int role) const;
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+    QModelIndex index(int row, int column, const QModelIndex &parent) const;
+    Qt::ItemFlags flags(const QModelIndex &index) const;
+    void sort(int column, Qt::SortOrder order);
+    /*@}*/
+
+    /** Add a sidestake to the model.
+       Returns the added address on success, and an empty string otherwise.
+     */
+    QString addRow(const QString &address, const QString &allocation, const QString description);
+
+    EditStatus getEditStatus() const;
+
+public Q_SLOTS:
+    void refresh();
+
+private:
+    QStringList m_columns;
+    std::unique_ptr<SideStakeTablePriv> m_priv;
+    EditStatus m_edit_status;
+    void subscribeToCoreSignals();
+    void unsubscribeFromCoreSignals();
+
+    void updateSideStakeTableModel();
+
+signals:
+
+    void updateSideStakeTableModelSig();
+};
+
 #endif // BITCOIN_QT_SIDESTAKETABLEMODEL_H
