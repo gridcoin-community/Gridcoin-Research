@@ -334,12 +334,20 @@
              <property name="text">
               <string>New</string>
              </property>
+             <property name="icon">
+              <iconset resource="../bitcoin.qrc">
+               <normaloff>:/icons/add</normaloff>:/icons/add</iconset>
+             </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="pushButtonEditSideStake">
              <property name="text">
               <string>Edit</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../bitcoin.qrc">
+               <normaloff>:/icons/edit</normaloff>:/icons/edit</iconset>
              </property>
             </widget>
            </item>
@@ -663,6 +671,8 @@
    <header>qvaluecombobox.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../bitcoin.qrc"/>
+ </resources>
  <connections/>
 </ui>
