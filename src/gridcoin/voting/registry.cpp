@@ -734,10 +734,14 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 {
     LOCK(GetPollRegistry().cs_poll_registry);
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-reference"
+#endif
     return Sequence(m_polls);
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
 
 }
 
