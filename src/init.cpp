@@ -433,6 +433,13 @@ void SetupServerArgs()
                                                    "if -enablesidestaking is set. If set along with -sidestakeaddresses "
                                                    "overrides the -sidestake entries.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakedescriptions=string1,string2,...,stringN>", "Sidestake entry description. There can be as many "
+                                                                          "specified as desired. Only six per stake can be sent. "
+                                                                          "If more than six are specified. Six are randomly chosen "
+                                                                          "for each stake. Only active if -enablesidestaking is set. "
+                                                                          "If set along with -sidestakeaddresses overrides the "
+                                                                          "-sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
