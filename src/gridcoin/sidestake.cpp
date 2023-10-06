@@ -551,7 +551,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     }
 
     std::vector<SideStake> vSideStakes;
-    std::vector<std::pair<std::string, std::string>> raw_vSideStakeAlloc;
+    std::vector<std::tuple<std::string, std::string, std::string>> raw_vSideStakeAlloc;
     double dSumAllocation = 0.0;
 
     // Parse destinations and allocations. We don't need to worry about any that are rejected other than a warning
@@ -559,40 +559,51 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
     // If -sidestakeaddresses and -sidestakeallocations is set in either the config file or the r-w settings file
     // and the settings are not empty and they are the same size, this will take precedence over the multiple entry
-    // -sidestake format.
+    // -sidestake format. Note that -descriptions is optional; however, if descriptions is used, the number must
+    // match the other two if present.
     std::vector<std::string> addresses;
     std::vector<std::string> allocations;
+    std::vector<std::string> descriptions;
 
     ParseString(gArgs.GetArg("-sidestakeaddresses", ""), ',', addresses);
     ParseString(gArgs.GetArg("-sidestakeallocations", ""), ',', allocations);
+    ParseString(gArgs.GetArg("-sidestakedescriptions", ""), ',', descriptions);
 
-    if (addresses.size() != allocations.size())
+    bool new_format_valid = false;
+
+    if (addresses.size() != allocations.size() || (!descriptions.empty() && descriptions.size() != addresses.size()))
     {
-        LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. Reverting to original format.",
+        LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. Reverting to original format in read only "
+                  "gridcoinresearch.conf file.",
                   __func__);
-    }
+    } else {
+        new_format_valid = true;
 
-    if (addresses.size() && addresses.size() == allocations.size())
-    {
         for (unsigned int i = 0; i < addresses.size(); ++i)
         {
-            raw_vSideStakeAlloc.push_back(std::make_pair(addresses[i], allocations[i]));
+            raw_vSideStakeAlloc.push_back(std::make_tuple(addresses[i], allocations[i], descriptions[i]));
         }
     }
-    else if (gArgs.GetArgs("-sidestake").size())
+
+    if (new_format_valid == false && gArgs.GetArgs("-sidestake").size())
     {
         for (auto const& sSubParam : gArgs.GetArgs("-sidestake"))
         {
             std::vector<std::string> vSubParam;
 
             ParseString(sSubParam, ',', vSubParam);
-            if (vSubParam.size() != 2)
+            if (vSubParam.size() < 2)
             {
                 LogPrintf("WARN: %s: Incomplete SideStake Allocation specified. Skipping SideStake entry.", __func__);
                 continue;
             }
 
-            raw_vSideStakeAlloc.push_back(std::make_pair(vSubParam[0], vSubParam[1]));
+            // Deal with optional description.
+            if (vSubParam.size() == 3) {
+                raw_vSideStakeAlloc.push_back(std::make_tuple(vSubParam[0], vSubParam[1], vSubParam[2]));
+            } else {
+                raw_vSideStakeAlloc.push_back(std::make_tuple(vSubParam[0], vSubParam[1], ""));
+            }
         }
     }
 
@@ -611,7 +622,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
         double dAllocation = 0.0;
 
-        sAddress = entry.first;
+        sAddress = std::get<0>(entry);
 
         CBitcoinAddress address(sAddress);
         if (!address.IsValid())
@@ -620,9 +631,9 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
             continue;
         }
 
-        if (!ParseDouble(entry.second, &dAllocation))
+        if (!ParseDouble(std::get<1>(entry), &dAllocation))
         {
-            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, entry.second);
+            LogPrintf("WARN: %s: Invalid allocation %s provided. Skipping allocation.", __func__, std::get<1>(entry));
             continue;
         }
 
@@ -648,7 +659,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
         SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address),
                             dAllocation,
-                            std::string {},
+                            std::get<2>(entry),
                             0,
                             uint256{},
                             SideStakeStatus::ACTIVE);
