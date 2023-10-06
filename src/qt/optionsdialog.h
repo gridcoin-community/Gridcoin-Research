@@ -42,6 +42,7 @@ private slots:
 
     void newSideStakeButton_clicked();
     void editSideStakeButton_clicked();
+    void deleteSideStakeButton_clicked();
 
     void showRestartWarning_Proxy();
     void showRestartWarning_Lang();
@@ -56,6 +57,7 @@ private slots:
     void handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState);
     void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
     void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
+    void handleSideStakeAllocationInvalid();
 
     void refreshSideStakeTableModel();
 
@@ -64,6 +66,7 @@ signals:
     void stakingEfficiencyValid(QValidatedLineEdit *object, bool fValid);
     void minStakeSplitValueValid(QValidatedLineEdit *object, bool fValid);
     void pollExpireNotifyValid(QValidatedLineEdit *object, bool fValid);
+    void sidestakeAllocationInvalid();
 
 private:
     Ui::OptionsDialog *ui;
@@ -84,6 +87,10 @@ private:
         BANSUBNET_COLUMN_WIDTH = 150,
         STATUS_COLUMN_WIDTH = 150
     };
+
+private slots:
+    void sidestakeSelectionChanged();
+    void updateSideStakeTableView();
 };
 
 #endif // BITCOIN_QT_OPTIONSDIALOG_H

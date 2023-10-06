@@ -1320,7 +1320,7 @@ void StakeMiner(CWallet *pwallet)
 
         // Note that fEnableSideStaking is now processed internal to ActiveSideStakeEntries. The sidestaking flag only
         // controls local sidestakes. If there exists mandatory sidestakes, they occur regardless of the flag.
-        vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries();
+        vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false);
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;

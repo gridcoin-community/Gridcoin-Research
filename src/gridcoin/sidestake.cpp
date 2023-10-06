@@ -208,7 +208,8 @@ const std::vector<SideStake_ptr> SideStakeRegistry::SideStakeEntries() const
     return sidestakes;
 }
 
-const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
+const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const bool& local_only,
+                                                                           const bool& include_zero_alloc)
 {
     std::vector<SideStake_ptr> sidestakes;
     double allocation_sum = 0.0;
@@ -221,11 +222,15 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
     LOCK(cs_lock);
 
     // Do mandatory sidestakes first.
-    for (const auto& entry : m_sidestake_entries)
-    {
-        if (entry.second->m_status == SideStakeStatus::MANDATORY && allocation_sum + entry.second->m_allocation <= 1.0) {
-            sidestakes.push_back(entry.second);
-            allocation_sum += entry.second->m_allocation;
+    if (!local_only) {
+        for (const auto& entry : m_sidestake_entries)
+        {
+            if (entry.second->m_status == SideStakeStatus::MANDATORY && allocation_sum + entry.second->m_allocation <= 1.0) {
+                if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
+                    sidestakes.push_back(entry.second);
+                    allocation_sum += entry.second->m_allocation;
+                }
+            }
         }
     }
 
@@ -238,8 +243,10 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries()
         for (const auto& entry : m_local_sidestake_entries)
         {
             if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
-                sidestakes.push_back(entry.second);
-                allocation_sum += entry.second->m_allocation;
+                if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
+                    sidestakes.push_back(entry.second);
+                    allocation_sum += entry.second->m_allocation;
+                }
             }
         }
     }
@@ -263,7 +270,7 @@ std::vector<SideStake_ptr> SideStakeRegistry::Try(const CBitcoinAddressForStorag
 
     const auto local_entry = m_local_sidestake_entries.find(key);
 
-    if (local_entry != m_sidestake_entries.end()) {
+    if (local_entry != m_local_sidestake_entries.end()) {
         result.push_back(local_entry->second);
     }
 
@@ -368,12 +375,16 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void SideStakeRegistry::NonContractAdd(SideStake& sidestake)
+void SideStakeRegistry::NonContractAdd(const SideStake& sidestake, const bool& save_to_file)
 {
+    LOCK(cs_lock);
+
     // Using this form of insert because we want the latest record with the same key to override any previous one.
     m_local_sidestake_entries[sidestake.m_key] = std::make_shared<SideStake>(sidestake);
 
-
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
 }
 
 void SideStakeRegistry::Add(const ContractContext& ctx)
@@ -381,12 +392,18 @@ void SideStakeRegistry::Add(const ContractContext& ctx)
     AddDelete(ctx);
 }
 
-void SideStakeRegistry::NonContractDelete(CBitcoinAddressForStorage& address)
+void SideStakeRegistry::NonContractDelete(const CBitcoinAddressForStorage& address, const bool& save_to_file)
 {
+    LOCK(cs_lock);
+
     auto sidestake_entry_pair_iter = m_local_sidestake_entries.find(address);
 
     if (sidestake_entry_pair_iter != m_local_sidestake_entries.end()) {
         m_local_sidestake_entries.erase(sidestake_entry_pair_iter);
+    }
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
     }
 }
 
@@ -571,17 +588,22 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
     bool new_format_valid = false;
 
-    if (addresses.size() != allocations.size() || (!descriptions.empty() && descriptions.size() != addresses.size()))
-    {
-        LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. Reverting to original format in read only "
-                  "gridcoinresearch.conf file.",
-                  __func__);
-    } else {
-        new_format_valid = true;
+    if (!addresses.empty()) {
+        if (addresses.size() != allocations.size() || (!descriptions.empty() && addresses.size() != descriptions.size())) {
+            LogPrintf("WARN: %s: Malformed new style sidestaking configuration entries. "
+                      "Reverting to original format in read only gridcoinresearch.conf file.",
+                      __func__);
+        } else {
+            new_format_valid = true;
 
-        for (unsigned int i = 0; i < addresses.size(); ++i)
-        {
-            raw_vSideStakeAlloc.push_back(std::make_tuple(addresses[i], allocations[i], descriptions[i]));
+            for (unsigned int i = 0; i < addresses.size(); ++i)
+            {
+                if (descriptions.empty()) {
+                    raw_vSideStakeAlloc.push_back(std::make_tuple(addresses[i], allocations[i], ""));
+                } else {
+                    raw_vSideStakeAlloc.push_back(std::make_tuple(addresses[i], allocations[i], descriptions[i]));
+                }
+            }
         }
     }
 
@@ -639,9 +661,9 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
         dAllocation /= 100.0;
 
-        if (dAllocation <= 0)
+        if (dAllocation < 0)
         {
-            LogPrintf("WARN: %s: Negative or zero allocation provided. Skipping allocation.", __func__);
+            LogPrintf("WARN: %s: Negative allocation provided. Skipping allocation.", __func__);
             continue;
         }
 
@@ -665,7 +687,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
                             SideStakeStatus::ACTIVE);
 
         // This will add or update (replace) a non-contract entry in the registry for the local sidestake.
-        NonContractAdd(sidestake);
+        NonContractAdd(sidestake, false);
 
         // This is needed because we need to detect entries in the registry map that are no longer in the config file to mark
         // them deleted.
@@ -708,6 +730,8 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 
     std::vector<std::pair<std::string, util::SettingsValue>> settings;
 
+    LOCK(cs_lock);
+
     unsigned int i = 0;
     for (const auto& iter : m_local_sidestake_entries) {
         if (i) {
@@ -721,9 +745,9 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
         ++i;
     }
 
-    settings.push_back(std::make_pair("addresses", addresses));
-    settings.push_back(std::make_pair("allocations", allocations));
-    settings.push_back(std::make_pair("descriptions", descriptions));
+    settings.push_back(std::make_pair("sidestakeaddresses", addresses));
+    settings.push_back(std::make_pair("sidestakeallocations", allocations));
+    settings.push_back(std::make_pair("sidestakedescriptions", descriptions));
 
     status = updateRwSettings(settings);
 

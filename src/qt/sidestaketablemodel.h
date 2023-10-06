@@ -28,6 +28,10 @@ private:
     Qt::SortOrder m_order;
 };
 
+//!
+//! \brief The SideStakeTableModel class represents the core sidestake registry as a model which can be consumed
+//! and updated by the GUI.
+//!
 class SideStakeTableModel : public QAbstractTableModel
 {
     Q_OBJECT
@@ -57,9 +61,11 @@ public:
     int rowCount(const QModelIndex &parent) const;
     int columnCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
+    bool setData(const QModelIndex &index, const QVariant &value, int role);
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex &parent) const;
     Qt::ItemFlags flags(const QModelIndex &index) const;
+    bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex());
     void sort(int column, Qt::SortOrder order);
     /*@}*/
 
@@ -80,11 +86,12 @@ private:
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 
-    void updateSideStakeTableModel();
-
 signals:
 
     void updateSideStakeTableModelSig();
+
+public slots:
+    void updateSideStakeTableModel();
 };
 
 #endif // BITCOIN_QT_SIDESTAKETABLEMODEL_H
