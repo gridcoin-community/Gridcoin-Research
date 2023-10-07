@@ -12,6 +12,7 @@
 #include <crypto/sha256.h>
 #include <crypto/sha3.h>
 #include <crypto/sha512.h>
+#include <gridcoin/md5.h>
 #include <hash.h>
 #include <random.h>
 #include <streams.h>
@@ -54,6 +55,14 @@ static void TestVector(const Hasher &h, const In &in, const Out &out) {
     }
 }
 
+static void TestMD5(const std::string &in, const std::string &hexout) {
+    assert(hexout.size() == 2 * MD5_DIGEST_LENGTH);
+
+    uint8_t out[MD5_DIGEST_LENGTH];
+    MD5((const uint8_t*)in.data(), in.size(), out);
+
+    BOOST_CHECK(std::memcmp(out, ParseHex(hexout).data(), MD5_DIGEST_LENGTH) == 0);
+}
 static void TestSHA1(const std::string &in, const std::string &hexout) { TestVector(CSHA1(), in, ParseHex(hexout));}
 static void TestSHA256(const std::string &in, const std::string &hexout) { TestVector(CSHA256(), in, ParseHex(hexout));}
 static void TestSHA512(const std::string &in, const std::string &hexout) { TestVector(CSHA512(), in, ParseHex(hexout));}
@@ -186,6 +195,18 @@ static std::string LongTestString()
 }
 
 const std::string test1 = LongTestString();
+
+BOOST_AUTO_TEST_CASE(md5_testvectors) {
+    TestMD5("", "d41d8cd98f00b204e9800998ecf8427e");
+    TestMD5("a", "0cc175b9c0f1b6a831c399e269772661");
+    TestMD5("abc", "900150983cd24fb0d6963f7d28e17f72");
+    TestMD5("message digest", "f96b697d7cb7938d525a2f31aaf161d0");
+    TestMD5("abcdefghijklmnopqrstuvwxyz", "c3fcd3d76192e4007dfb496cca67e13b");
+    TestMD5("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "d174ab98d277d9f5a5611c2c9f419d9f");
+    TestMD5("12345678901234567890123456789012345678901234567890123456789012345678901234567890", "57edf4a22be3c955ac49da2e2107b67a");
+    TestMD5(std::string(1000000, 'a'), "7707d6ae4e027c70eea2a935c2296f21");
+    TestMD5(test1, "12ebd71b1cadcfde2bb6905987b8a52e");
+}
 
 BOOST_AUTO_TEST_CASE(ripemd160_testvectors) {
     TestRIPEMD160("", "9c1185a5c5e9fc54612808977ee8f548b2258d31");
