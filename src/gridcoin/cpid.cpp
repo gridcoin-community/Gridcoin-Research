@@ -3,10 +3,10 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/cpid.h"
+#include <gridcoin/md5.h>
 #include "util.h"
 
 #include <algorithm>
-#include <openssl/md5.h>
 
 using namespace GRC;
 

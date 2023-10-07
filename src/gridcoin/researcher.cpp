@@ -8,6 +8,7 @@
 #include "gridcoin/boinc.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
@@ -23,7 +24,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <optional>
-#include <openssl/md5.h>
 #include <set>
 #include <univalue.h>
 

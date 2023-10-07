@@ -4,6 +4,7 @@
 
 #include "base58.h"
 #include "compat/endian.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
@@ -13,7 +14,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
-#include <openssl/md5.h>
 #include <vector>
 
 #include "test/data/superblock.txt.h"

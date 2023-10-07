@@ -7,6 +7,7 @@
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/quorum.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "gridcoin/superblock.h"
@@ -14,7 +15,6 @@
 #include "util/reverse_iterator.h"
 #include <util/string.h>
 
-#include <openssl/md5.h>
 #include <unordered_map>
 
 using namespace GRC;

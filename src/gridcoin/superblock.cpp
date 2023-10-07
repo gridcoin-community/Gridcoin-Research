@@ -6,6 +6,7 @@
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "node/blockstorage.h"
@@ -13,7 +14,6 @@
 #include "util.h"
 #include "util/reverse_iterator.h"
 
-#include <openssl/md5.h>
 
 using namespace GRC;
 
