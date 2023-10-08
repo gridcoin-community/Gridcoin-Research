@@ -4,7 +4,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
-#include "bignum.h"
 #include "chainparams.h"
 #include "init.h"
 #include "gridcoin/staking/difficulty.h"
@@ -21,7 +20,7 @@ using namespace GRC;
 
 namespace {
 constexpr int64_t TARGET_TIMESPAN = 16 * 60;  // 16 mins in seconds
-const CBigNum PROOF_OF_STAKE_LIMIT(ArithToUint256(~arith_uint256() >> 20));
+const arith_uint256 PROOF_OF_STAKE_LIMIT = ~arith_uint256() >> 20;
 
 // ppcoin: find last block index up to pindex
 const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
@@ -61,7 +60,7 @@ unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast)
 
     // ppcoin: target change every block
     // ppcoin: retarget with exponential moving toward target spacing
-    CBigNum bnNew;
+    arith_uint256 bnNew;
     bnNew.SetCompact(pindexPrev->nBits);
 
     // Gridcoin - Reset Diff to 1 on 12-19-2014 (R Halford) - Diff sticking at

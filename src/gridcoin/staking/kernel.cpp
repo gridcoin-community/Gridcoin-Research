@@ -461,7 +461,7 @@ bool GRC::CalculateLegacyV3HashProof(
         << coinstake.nTime
         << por_nonce;
 
-    out_hash_proof = CBigNum(out.GetHash()).getuint256();
+    out_hash_proof = out.GetHash();
 
     return true;
 }
@@ -631,10 +631,10 @@ bool GRC::CheckProofOfStakeV8(
 
     //Stake refactoring TomasBrod
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
-    CBigNum bnHashProof(hashProofOfStake);
+    arith_uint256 bnHashProof = UintToArith256(hashProofOfStake);
 
     // Base target
-    CBigNum bnTarget;
+    arith_uint256 bnTarget;
     bnTarget.SetCompact(Block.nBits);
     // Weighted target
     bnTarget *= Weight;
@@ -646,7 +646,7 @@ bool GRC::CheckProofOfStakeV8(
              " Trg %72s", generated_by_me?" Local,":"",
              (double)header.nTime, (double)txPrev.nTime, (double)tx.nTime,
              Block.nBits, (double)Weight,
-             CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
+             hashProofOfStake.GetHex(), bnTarget.GetHex()
              );
 
     // Now check if proof-of-stake hash meets target protocol

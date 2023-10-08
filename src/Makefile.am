@@ -81,7 +81,6 @@ GRIDCOIN_CORE_H = \
     attributes.h \
     banman.h \
     base58.h \
-    bignum.h \
     chainparams.h \
     chainparamsbase.h \
     checkpoints.h \

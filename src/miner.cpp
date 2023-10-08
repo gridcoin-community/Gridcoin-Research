@@ -662,7 +662,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
     function += ": ";
 
     int64_t CoinWeight;
-    CBigNum StakeKernelHash;
+    arith_uint256 StakeKernelHash;
     CTxDB txdb("r");
     int64_t StakeWeightSum = 0;
     double StakeValueSum = 0;
@@ -730,9 +730,9 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
         CoinWeight = GRC::CalculateStakeWeightV8(CoinTx, CoinTxN);
 
-        StakeKernelHash.setuint256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
+        StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
 
-        CBigNum StakeTarget;
+        arith_uint256 StakeTarget;
         StakeTarget.SetCompact(blocknew.nBits);
         StakeTarget *= CoinWeight;
         StakeWeightSum += CoinWeight;
