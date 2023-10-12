@@ -47,6 +47,11 @@ public:
         Status
     };
 
+    static constexpr std::initializer_list<ColumnIndex> all_ColumnIndex = {Address,
+                                                                           Allocation,
+                                                                           Description,
+                                                                           Status};
+
     /** Return status of edit/insert operation */
     enum EditStatus {
         OK,                     /**< Everything ok */

@@ -11,6 +11,7 @@
 #include "miner.h"
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"
+#include "logging.h"
 
 #include <QSortFilterProxyModel>
 #include <QDir>
@@ -30,6 +31,8 @@ OptionsDialog::OptionsDialog(QWidget* parent)
       , fStakingEfficiencyValid(true)
       , fMinStakeSplitValueValid(true)
       , fPollExpireNotifyValid(true)
+      , m_init_column_sizes_set(false)
+      , m_resize_columns_in_progress(false)
 {
     ui->setupUi(this);
 
@@ -171,10 +174,24 @@ void OptionsDialog::setModel(OptionsModel *model)
         ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Allocation, GRC::ScalePx(this, ALLOCATION_COLUMN_WIDTH));
         ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Description, GRC::ScalePx(this, DESCRIPTION_COLUMN_WIDTH));
         ui->sidestakingTableView->setColumnWidth(SideStakeTableModel::Status, GRC::ScalePx(this, STATUS_COLUMN_WIDTH));
-        ui->sidestakingTableView->horizontalHeader()->setStretchLastSection(true);
         ui->sidestakingTableView->setShowGrid(true);
 
+        // Set table column sizes vector for sidestake table proportional resize algorithm.
+        m_table_column_sizes = {GRC::ScalePx(this, ADDRESS_COLUMN_WIDTH),
+                                GRC::ScalePx(this, ALLOCATION_COLUMN_WIDTH),
+                                GRC::ScalePx(this, DESCRIPTION_COLUMN_WIDTH),
+                                GRC::ScalePx(this, STATUS_COLUMN_WIDTH)};
+
         ui->sidestakingTableView->sortByColumn(0, Qt::AscendingOrder);
+
+        // Insures initial size of sidestake table and (header) columns are correct as of the context directly
+        // after tab selection.
+        connect(ui->tabWidget, &QTabWidget::currentChanged, this, &OptionsDialog::tabWidgetSelectionChanged);
+
+        // Insures that header width remains constant and columns are resized correctly when a column delimiter is
+        // dragged to resize one column.
+        connect(ui->sidestakingTableView->horizontalHeader(), &QHeaderView::sectionResized,
+                this, &OptionsDialog::sidestakeTableSectionResized);
 
         connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::hideSideStakeEdit);
         connect(ui->enableSideStaking, &QCheckBox::toggled, this, &OptionsDialog::refreshSideStakeTableModel);
@@ -609,22 +626,14 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
         }
     }
 
-<<<<<<< HEAD
-=======
     // This is required to provide immediate feedback on invalid allocation entries on in place editing.
-    if (object == ui->sidestakingTableView)
-    {
+    if (object == ui->sidestakingTableView) {
         if (model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
-            LogPrint(BCLog::LogFlags::VERBOSE, "INFO %s: event type = %i",
-                     __func__,
-                     (int) event->type());
-
             emit sidestakeAllocationInvalid();
         }
     }
 
->>>>>>> 71b6deb3e (Implementation of EditSideStakeDialog)
-    return QDialog::eventFilter(object, event);
+   return QDialog::eventFilter(object, event);
 }
 
 void OptionsDialog::sidestakeSelectionChanged()
@@ -662,4 +671,110 @@ void OptionsDialog::handleSideStakeAllocationInvalid()
 void OptionsDialog::updateSideStakeTableView()
 {
     ui->sidestakingTableView->update();
+}
+
+void OptionsDialog::resizeSideStakeTableColumns(const bool& neighbor_pair_adjust, const int& index,
+                                         const int& old_size, const int& new_size)
+{
+    // This prevents unwanted recursion to here from addressBookSectionResized.
+    m_resize_columns_in_progress = true;
+
+    if (!model) {
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (!m_init_column_sizes_set) {
+        for (int i = 0; i < (int) m_table_column_sizes.size(); ++i) {
+            ui->sidestakingTableView->horizontalHeader()->resizeSection(i, m_table_column_sizes[i]);
+
+
+            LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: section size = %i",
+                     __func__,
+                     ui->sidestakingTableView->horizontalHeader()->sectionSize(i));
+        }
+
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: header width = %i",
+                 __func__,
+                 ui->sidestakingTableView->horizontalHeader()->width()
+                 );
+
+        m_init_column_sizes_set = true;
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+    if (neighbor_pair_adjust) {
+        if (index != SideStakeTableModel::all_ColumnIndex.size() - 1) {
+            int new_neighbor_section_size = ui->sidestakingTableView->horizontalHeader()->sectionSize(index + 1)
+                                            + old_size - new_size;
+
+            ui->sidestakingTableView->horizontalHeader()->resizeSection(
+                index + 1, new_neighbor_section_size);
+
+                   // This detects and deals with the case where the resize of a column tries to force the neighbor
+                   // to a size below its minimum, in which case we have to reverse out the attempt.
+            if (ui->sidestakingTableView->horizontalHeader()->sectionSize(index + 1)
+                != new_neighbor_section_size) {
+                ui->sidestakingTableView->horizontalHeader()->resizeSection(
+                    index,
+                    ui->sidestakingTableView->horizontalHeader()->sectionSize(index)
+                        + new_neighbor_section_size
+                        - ui->sidestakingTableView->horizontalHeader()->sectionSize(index + 1));
+            }
+        } else {
+            // Do not allow the last column to be resized because there is no adjoining neighbor to the right
+            // and we are maintaining the total width fixed to the size of the containing frame.
+            ui->sidestakingTableView->horizontalHeader()->resizeSection(index, old_size);
+        }
+
+        m_resize_columns_in_progress = false;
+
+        return;
+    }
+
+           // This is the proportional resize case when the window is resized.
+    const int width = ui->sidestakingTableView->horizontalHeader()->width() - 5;
+
+    int orig_header_width = 0;
+
+    for (const auto& iter : SideStakeTableModel::all_ColumnIndex) {
+        orig_header_width += ui->sidestakingTableView->horizontalHeader()->sectionSize(iter);
+    }
+
+    if (!width || !orig_header_width) return;
+
+    for (const auto& iter : SideStakeTableModel::all_ColumnIndex) {
+        int section_size = ui->sidestakingTableView->horizontalHeader()->sectionSize(iter);
+
+        ui->sidestakingTableView->horizontalHeader()->resizeSection(
+            iter, section_size * width / orig_header_width);
+    }
+
+    m_resize_columns_in_progress = false;
+}
+
+void OptionsDialog::resizeEvent(QResizeEvent *event)
+{
+    resizeSideStakeTableColumns();
+
+    QWidget::resizeEvent(event);
+}
+
+void OptionsDialog::sidestakeTableSectionResized(int index, int old_size, int new_size)
+{
+    // Avoid implicit recursion between resizeTableColumns and addressBookSectionResized
+    if (m_resize_columns_in_progress) return;
+
+    resizeSideStakeTableColumns(true, index, old_size, new_size);
+}
+
+void OptionsDialog::tabWidgetSelectionChanged(int index)
+{
+    // Index = 2 is the sidestaking tab for the current tab order.
+    if (index == 2) {
+        resizeSideStakeTableColumns();
+    }
 }
