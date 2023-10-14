@@ -206,7 +206,7 @@ void OptionsDialog::setModel(OptionsModel *model)
         ui->sidestakingTableView->installEventFilter(this);
 
         connect(this, &OptionsDialog::sidestakeAllocationInvalid, this, &OptionsDialog::handleSideStakeAllocationInvalid);
-
+        connect(this, &OptionsDialog::sidestakeDescriptionInvalid, this, &OptionsDialog::handleSideStakeDescriptionInvalid);
     }
 
     /* update the display unit, to not use the default ("BTC") */
@@ -631,6 +631,10 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
         if (model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_ALLOCATION) {
             emit sidestakeAllocationInvalid();
         }
+
+        if (model->getSideStakeTableModel()->getEditStatus() == SideStakeTableModel::INVALID_DESCRIPTION) {
+            emit sidestakeDescriptionInvalid();
+        }
     }
 
    return QDialog::eventFilter(object, event);
@@ -665,6 +669,17 @@ void OptionsDialog::handleSideStakeAllocationInvalid()
                          tr("The entered allocation is not valid and is reverted. Check to make sure "
                             "that the allocation is greater than or equal to zero and when added to the other "
                             "allocations totals less than 100."),
+                         QMessageBox::Ok, QMessageBox::Ok);
+}
+
+void OptionsDialog::handleSideStakeDescriptionInvalid()
+{
+    model->getSideStakeTableModel()->refresh();
+
+    QMessageBox::warning(this, windowTitle(),
+                         tr("The entered description is not valid. Check to make sure that the "
+                            "description only contains letters, numbers, spaces, periods, or "
+                            "underscores."),
                          QMessageBox::Ok, QMessageBox::Ok);
 }
 

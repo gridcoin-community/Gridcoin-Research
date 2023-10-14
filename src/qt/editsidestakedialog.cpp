@@ -138,7 +138,14 @@ void EditSideStakeDialog::accept()
             QMessageBox::warning(this, windowTitle(),
                                  tr("The entered allocation is not valid. Check to make sure that the "
                                     "allocation is greater than zero and when added to the other allocations "
-                                    "totals less than 100.").arg(ui->allocationLineEdit->text()),
+                                    "totals less than 100."),
+                                 QMessageBox::Ok, QMessageBox::Ok);
+            break;
+        case SideStakeTableModel::INVALID_DESCRIPTION:
+            QMessageBox::warning(this, windowTitle(),
+                                 tr("The entered description is not valid. Check to make sure that the "
+                                    "description only contains letters, numbers, spaces, periods, or "
+                                    "underscores."),
                                  QMessageBox::Ok, QMessageBox::Ok);
         }
 
