@@ -247,8 +247,16 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
     }
     case Description:
     {
-        if (rec->m_description == value.toString().toStdString()) {
+        std::string orig_value = value.toString().toStdString();
+        std::string san_value = SanitizeString(orig_value, SAFE_CHARS_CSV);
+
+        if (rec->m_description == orig_value) {
             m_edit_status = NO_CHANGES;
+            return false;
+        }
+
+        if (san_value != orig_value) {
+            m_edit_status = INVALID_DESCRIPTION;
             return false;
         }
 
@@ -261,7 +269,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         // Add back the sidestake with the modified allocation
         registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_key,
                                                orig_sidestake.m_allocation,
-                                               value.toString().toStdString(),
+                                               san_value,
                                                int64_t {0},
                                                uint256 {},
                                                orig_sidestake.m_status.Value()), true);
@@ -327,8 +335,6 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
 
     double sidestake_allocation = 0.0;
 
-    std::string sidestake_description = description.toStdString();
-
     m_edit_status = OK;
 
     if (!sidestake_address.IsValid()) {
@@ -362,9 +368,17 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
 
     sidestake_allocation /= 100.0;
 
+    std::string sidestake_description = description.toStdString();
+    std::string sanitized_description = SanitizeString(sidestake_description, SAFE_CHARS_CSV);
+
+    if (sanitized_description != sidestake_description) {
+        m_edit_status = INVALID_DESCRIPTION;
+        return QString();
+    }
+
     registry.NonContractAdd(GRC::SideStake(sidestake_address,
                                            sidestake_allocation,
-                                           sidestake_description,
+                                           sanitized_description,
                                            int64_t {0},
                                            uint256 {},
                                            GRC::SideStakeStatus::ACTIVE));

@@ -63,6 +63,7 @@ private slots:
     void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
     void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
     void handleSideStakeAllocationInvalid();
+    void handleSideStakeDescriptionInvalid();
 
     void refreshSideStakeTableModel();
 
@@ -74,6 +75,7 @@ signals:
     void minStakeSplitValueValid(QValidatedLineEdit *object, bool fValid);
     void pollExpireNotifyValid(QValidatedLineEdit *object, bool fValid);
     void sidestakeAllocationInvalid();
+    void sidestakeDescriptionInvalid();
 
 private:
     Ui::OptionsDialog *ui;
@@ -93,8 +95,8 @@ private:
     enum SideStakeTableColumnWidths
     {
         ADDRESS_COLUMN_WIDTH = 200,
-        ALLOCATION_COLUMN_WIDTH = 50,
-        DESCRIPTION_COLUMN_WIDTH = 130,
+        ALLOCATION_COLUMN_WIDTH = 60,
+        DESCRIPTION_COLUMN_WIDTH = 150,
         STATUS_COLUMN_WIDTH = 50
     };
 

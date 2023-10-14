@@ -58,7 +58,8 @@ public:
         NO_CHANGES,             /**< No changes were made during edit operation */
         INVALID_ADDRESS,        /**< Unparseable address */
         DUPLICATE_ADDRESS,      /**< Address already in sidestake registry */
-        INVALID_ALLOCATION      /**< Allocation is invalid (i.e. not parseable or not between 0.0 and 100.0) */
+        INVALID_ALLOCATION,     /**< Allocation is invalid (i.e. not parseable or not between 0.0 and 100.0) */
+        INVALID_DESCRIPTION     /**< Description contains an invalid character */
     };
 
     /** @name Methods overridden from QAbstractTableModel
