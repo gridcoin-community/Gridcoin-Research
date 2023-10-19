@@ -732,9 +732,8 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 
         StakeKernelHash = UintToArith256(GRC::CalculateStakeHashV8(block_time, CoinTx, CoinTxN, txnew.nTime, StakeModifier));
 
-        arith_uint256 StakeTarget;
-        StakeTarget.SetCompact(blocknew.nBits);
-        StakeTarget *= CoinWeight;
+        arith_uint320 StakeTarget = arith_uint256().SetCompact(blocknew.nBits);
+        StakeTarget *= arith_uint320(CoinWeight);
         StakeWeightSum += CoinWeight;
         StakeWeightMin = std::min(StakeWeightMin, CoinWeight);
         StakeWeightMax = std::max(StakeWeightMax, CoinWeight);
@@ -754,7 +753,7 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
                  StakeKernelDiff,
                  GRC::GetBlockDifficulty(blocknew.nBits));
 
-        if (StakeKernelHash <= StakeTarget)
+        if (arith_uint320(StakeKernelHash) <= StakeTarget)
         {
             // Found a kernel
             LogPrintf("CreateCoinStake: Found Kernel");

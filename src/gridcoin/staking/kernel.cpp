@@ -631,13 +631,12 @@ bool GRC::CheckProofOfStakeV8(
 
     //Stake refactoring TomasBrod
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
-    arith_uint256 bnHashProof = UintToArith256(hashProofOfStake);
+    arith_uint320 bnHashProof = arith_uint320(hashProofOfStake);
 
     // Base target
-    arith_uint256 bnTarget;
-    bnTarget.SetCompact(Block.nBits);
+    arith_uint320 bnTarget = arith_uint256().SetCompact(Block.nBits);
     // Weighted target
-    bnTarget *= Weight;
+    bnTarget *= arith_uint320(Weight);
 
 
     LogPrint(BCLog::LogFlags::VERBOSE,
