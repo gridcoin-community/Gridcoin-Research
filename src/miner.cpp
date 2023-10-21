@@ -921,11 +921,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
             ++iterSideStake)
         {
-            CBitcoinAddress& address = iterSideStake->get()->m_key;
+            CBitcoinAddress& address = iterSideStake->get()->m_address;
             if (!address.IsValid())
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
-                          iterSideStake->get()->m_key.ToString());
+                          iterSideStake->get()->m_address.ToString());
                 continue;
             }
 
@@ -935,7 +935,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
                           CoinToDouble(nReward * iterSideStake->get()->m_allocation),
-                          iterSideStake->get()->m_key.ToString()
+                          iterSideStake->get()->m_address.ToString()
                           );
                 continue;
             }
@@ -977,7 +977,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
                       CoinToDouble(nReward * iterSideStake->get()->m_allocation),
-                      iterSideStake->get()->m_key.ToString()
+                      iterSideStake->get()->m_address.ToString()
                       );
             dSumAllocation += iterSideStake->get()->m_allocation;
             nRemainingStakeOutputValue -= nSideStake;

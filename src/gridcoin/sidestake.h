@@ -15,6 +15,10 @@
 
 namespace GRC {
 
+//!
+//! \brief The CBitcoinAddressForStorage class. This is a very small extension of the CBitcoinAddress class that
+//! provides serialization/deserialization.
+//!
 class CBitcoinAddressForStorage : public CBitcoinAddress
 {
 public:
@@ -65,19 +69,19 @@ public:
     //!
     using Status = EnumByte<SideStakeStatus>;
 
-    CBitcoinAddressForStorage m_key;    //!< The key here is the Gridcoin Address of the sidestake destination.
+    CBitcoinAddressForStorage m_address; //!< The Gridcoin Address of the sidestake destination.
 
-    double m_allocation;                //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
+    double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
 
-    std::string m_description;            //!< The description of the sidestake (optional)
+    std::string m_description;           //!< The description of the sidestake (optional)
 
-    int64_t m_timestamp;                //!< Time of the sidestake contract transaction.
+    int64_t m_timestamp;                 //!< Time of the sidestake contract transaction.
 
-    uint256 m_hash;                     //!< The hash of the transaction that contains a mandatory sidestake.
+    uint256 m_hash;                      //!< The hash of the transaction that contains a mandatory sidestake.
 
-    uint256 m_previous_hash;            //!< The m_hash of the previous mandatory sidestake allocation with the same address.
+    uint256 m_previous_hash;             //!< The m_hash of the previous mandatory sidestake allocation with the same address.
 
-    Status m_status;                    //!< The status of the sidestake. It is of type int instead of enum for serialization.
+    Status m_status;                     //!< The status of the sidestake. It is of type int instead of enum for serialization.
 
     //!
     //! \brief Initialize an empty, invalid sidestake instance.
@@ -115,7 +119,8 @@ public:
     //! \param hash
     //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp, uint256 hash, SideStakeStatus status);
+    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp,
+              uint256 hash, SideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -124,7 +129,7 @@ public:
     bool WellFormed() const;
 
     //!
-    //! \brief This is the standardized method that returns the key value for the sidestake entry (for
+    //! \brief This is the standardized method that returns the key value (in this case the address) for the sidestake entry (for
     //! the registry_db.h template.)
     //!
     //! \return CBitcoinAddress key value for the sidestake entry
@@ -132,7 +137,7 @@ public:
     CBitcoinAddressForStorage Key() const;
 
     //!
-    //! \brief Provides the sidestake address and status (value) as a pair of strings.
+    //! \brief Provides the sidestake address and status as a pair of strings.
     //! \return std::pair of strings
     //!
     std::pair<std::string, std::string> KeyValueToString() const;
@@ -161,7 +166,6 @@ public:
     //!
     //! \return Equal or not.
     //!
-
     bool operator==(SideStake b);
 
     //!
@@ -171,7 +175,6 @@ public:
     //!
     //! \return Equal or not.
     //!
-
     bool operator!=(SideStake b);
 
     ADD_SERIALIZE_METHODS;
@@ -179,7 +182,7 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(m_key);
+        READWRITE(m_address);
         READWRITE(m_allocation);
         READWRITE(m_description);
         READWRITE(m_timestamp);
@@ -195,23 +198,9 @@ public:
 typedef std::shared_ptr<SideStake> SideStake_ptr;
 
 //!
-//! \brief A type that either points to some sidestake or does not.
-//!
-//typedef const SideStake_ptr SideStakeOption;
-
-//!
-//! \brief The body of a sidestake entry contract. Note that this body is bimodal. It
-//! supports both the personality of the "LegacyPayload", and also the new native
-//! sidestakeEntry format. In the Contract::Body::ConvertFromLegacy call, by the time
-//! this call has been reached, the contract will have already been deserialized.
-//! This will follow the legacy mode. For contracts at version 3+, the
-//! Contract::SharePayload() will NOT call the ConvertFromLegacy. Note that because
-//! the existing legacyPayloads are not versioned, the deserialization of
-//! the payload first (de)serializes m_key, which is guaranteed to exist in either
-//! legacy or native. If the key is empty, then payload v2+ is being deserialized
-//! and the m_version and m_value are (de)serialized. This is ugly
-//! but necessary to deal with the unversioned Legacy Payloads and maintain
-//! compatibility.
+//! \brief The body of a sidestake entry contract. This payload does NOT support
+//! legacy payload formatting, as this contract/payload type is introduced after
+//! legacy payloads are retired.
 //!
 class SideStakePayload : public IContractPayload
 {
@@ -240,15 +229,15 @@ public:
     SideStakePayload(uint32_t version = CURRENT_VERSION);
 
     //!
-    //! \brief Initialize a sidestakeEntryPayload from a sidestake entry constructed from
-    //! string key and value. Not to be used for version 1 payloads. Will assert. Does NOT
-    //! initialize hash fields.
+    //! \brief Initialize a sidestakeEntryPayload from a sidestake address, allocation,
+    //! description, and status.
     //!
-    //! \param key. Key string for the sidestake entry
-    //! \param value. Value string for the sidestake entry
+    //! \param address. Address for the sidestake entry
+    //! \param allocation. Allocation for the sidestake entry
+    //! \param description. Description string for the sidstake entry
     //! \param status. Status of the sidestake entry
     //!
-    SideStakePayload(const uint32_t version, CBitcoinAddressForStorage key, double value,
+    SideStakePayload(const uint32_t version, CBitcoinAddressForStorage address, double allocation,
                      std::string description, SideStakeStatus status);
 
     //!
@@ -303,7 +292,7 @@ public:
                                                 "m_entry.StatusToString() = %s",
                      __func__,
                      valid,
-                     m_entry.m_key.ToString(),
+                     m_entry.m_address.ToString(),
                      m_entry.m_allocation,
                      m_entry.StatusToString()
                      );
@@ -319,7 +308,7 @@ public:
     //!
     std::string LegacyKeyString() const override
     {
-        return m_entry.m_key.ToString();
+        return m_entry.m_address.ToString();
     }
 
     //!
@@ -366,7 +355,7 @@ public:
     //! sidestake entry db. This must be incremented when implementing format changes to the sidestake
     //! entries to force a reinit.
     //!
-    //! Version 1: TBD.
+    //! Version 1: 5.4.5.5+
     //!
     SideStakeRegistry()
         : m_sidestake_db(1)
@@ -374,7 +363,7 @@ public:
           };
 
     //!
-    //! \brief The type that keys sidestake entries by their key strings. Note that the entries
+    //! \brief The type that keys sidestake entries by their addresses. Note that the entries
     //! in this map are actually smart shared pointer wrappers, so that the same actual object
     //! can be held by both this map and the historical map without object duplication.
     //!
@@ -415,23 +404,23 @@ public:
     const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc);
 
     //!
-    //! \brief Get the current sidestake entry for the specified key string.
+    //! \brief Get the current sidestake entry for the specified address.
     //!
-    //! \param key The key string of the sidestake entry.
+    //! \param key The address of the sidestake entry.
     //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return A vector of smart pointers to entries matching the provided key (address). Up to two elements
+    //! \return A vector of smart pointers to entries matching the provided address. Up to two elements
     //! are returned, mandatory entry first, unless local only boolean is set true.
     //!
     std::vector<SideStake_ptr> Try(const CBitcoinAddressForStorage& key, const bool& local_only = false) const;
 
     //!
-    //! \brief Get the current sidestake entry for the specified key string if it has a status of ACTIVE or MANDATORY.
+    //! \brief Get the current sidestake entry for the specified address if it has a status of ACTIVE or MANDATORY.
     //!
-    //! \param key The key string of the sidestake entry.
+    //! \param key The address of the sidestake entry.
     //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return A vector of smart pointers to entries matching the provided key (address) that are in status of
+    //! \return A vector of smart pointers to entries matching the provided address that are in status of
     //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, unless local only boolean
     //! is set true.
     //!
@@ -440,7 +429,7 @@ public:
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
     //! the sidestake entry registry state from LevelDB to prepare for reload from contract
-    //! replay. This is not used for sidestake entries, unless -clearSideStakehistory is specified
+    //! replay. This is not used for sidestake entries, unless -clearsidestakehistory is specified
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for sidestake entries.
     //!
@@ -460,7 +449,7 @@ public:
     //!
     //! \brief Determine whether a sidestake entry contract is valid including block context. This is used
     //! in ConnectBlock. Note that for sidestake entries this simply calls Validate as there is no
-    //! block level specific validation to be done.
+    //! block level specific validation to be done at the current time.
     //!
     //! \param ctx ContractContext containing the sidestake entry data to validate.
     //! \param DoS Misbehavior score out.
@@ -470,7 +459,7 @@ public:
     bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
 
     //!
-    //! \brief Allows local (voluntary) sidestakes to be added to the in-memory map and not persisted to
+    //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
     //! the registry db.
     //!
     //! \param SideStake object to add
@@ -488,7 +477,7 @@ public:
     void Add(const ContractContext& ctx) override;
 
     //!
-    //! \brief Provides for deletion of local (voluntary) sidestakes from the in-memory map that are not persisted
+    //! \brief Provides for deletion of local (voluntary) sidestakes from the in-memory local map that are not persisted
     //! to the registry db. Deletion is by the map key (CBitcoinAddress).
     //!
     //! \param address
@@ -506,7 +495,7 @@ public:
 
     //!
     //! \brief Revert the registry state for the sidestake entry to the state prior
-    //! to this ContractContext application. This is typically an issue
+    //! to this ContractContext application. This is typically used
     //! during reorganizations, where blocks are disconnected.
     //!
     //! \param ctx References the sidestake entry contract and associated context.
