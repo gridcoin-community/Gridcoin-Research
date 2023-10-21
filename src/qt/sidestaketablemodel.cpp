@@ -36,7 +36,7 @@ bool SideStakeLessThan::operator()(const GRC::SideStake& left, const GRC::SideSt
 
     switch (static_cast<SideStakeTableModel::ColumnIndex>(m_column)) {
     case SideStakeTableModel::Address:
-        return pLeft->m_key < pRight->m_key;
+        return pLeft->m_address < pRight->m_address;
     case SideStakeTableModel::Allocation:
         return pLeft->m_allocation < pRight->m_allocation;
     case SideStakeTableModel::Description:
@@ -131,7 +131,7 @@ QVariant SideStakeTableModel::data(const QModelIndex &index, int role) const
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         switch (column) {
         case Address:
-            return QString::fromStdString(rec->m_key.ToString());
+            return QString::fromStdString(rec->m_address.ToString());
         case Allocation:
             return rec->m_allocation * 100.0;
         case Description:
@@ -182,7 +182,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         address.SetString(value.toString().toStdString());
 
 
-        if (rec->m_key == address) {
+        if (rec->m_address == address) {
             m_edit_status = NO_CHANGES;
             return false;
         } else if (!address.IsValid()) {
@@ -210,7 +210,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         GRC::SideStake orig_sidestake = *rec;
 
         for (const auto& entry : registry.ActiveSideStakeEntries(false, true)) {
-            if (entry->m_key == orig_sidestake.m_key) {
+            if (entry->m_address == orig_sidestake.m_address) {
                 continue;
             }
 
@@ -233,10 +233,10 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         }
 
         // Delete the original sidestake
-        registry.NonContractDelete(orig_sidestake.m_key, false);
+        registry.NonContractDelete(orig_sidestake.m_address, false);
 
         // Add back the sidestake with the modified allocation
-        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_key,
+        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_address,
                                                value.toDouble() / 100.0,
                                                orig_sidestake.m_description,
                                                int64_t {0},
@@ -264,10 +264,10 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         GRC::SideStake orig_sidestake = *rec;
 
         // Delete the original sidestake
-        registry.NonContractDelete(orig_sidestake.m_key, false);
+        registry.NonContractDelete(orig_sidestake.m_address, false);
 
         // Add back the sidestake with the modified allocation
-        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_key,
+        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_address,
                                                orig_sidestake.m_allocation,
                                                san_value,
                                                int64_t {0},
@@ -400,7 +400,7 @@ bool SideStakeTableModel::removeRows(int row, int count, const QModelIndex &pare
         return false;
     }
 
-    GRC::GetSideStakeRegistry().NonContractDelete(rec->m_key);
+    GRC::GetSideStakeRegistry().NonContractDelete(rec->m_address);
 
     updateSideStakeTableModel();
 

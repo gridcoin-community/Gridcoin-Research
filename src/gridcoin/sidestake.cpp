@@ -48,7 +48,7 @@ CBitcoinAddressForStorage::CBitcoinAddressForStorage(CBitcoinAddress address)
 // Class: SideStake
 // -----------------------------------------------------------------------------
 SideStake::SideStake()
-    : m_key()
+    : m_address()
       , m_allocation()
       , m_description()
       , m_timestamp(0)
@@ -58,7 +58,7 @@ SideStake::SideStake()
 {}
 
 SideStake::SideStake(CBitcoinAddressForStorage address, double allocation, std::string description)
-    : m_key(address)
+    : m_address(address)
       , m_allocation(allocation)
       , m_description(description)
       , m_timestamp(0)
@@ -73,7 +73,7 @@ SideStake::SideStake(CBitcoinAddressForStorage address,
                      int64_t timestamp,
                      uint256 hash,
                      SideStakeStatus status)
-    : m_key(address)
+    : m_address(address)
       , m_allocation(allocation)
       , m_description(description)
       , m_timestamp(timestamp)
@@ -84,17 +84,17 @@ SideStake::SideStake(CBitcoinAddressForStorage address,
 
 bool SideStake::WellFormed() const
 {
-    return m_key.IsValid() && m_allocation >= 0.0 && m_allocation <= 1.0;
+    return m_address.IsValid() && m_allocation >= 0.0 && m_allocation <= 1.0;
 }
 
 CBitcoinAddressForStorage SideStake::Key() const
 {
-    return m_key;
+    return m_address;
 }
 
 std::pair<std::string, std::string> SideStake::KeyValueToString() const
 {
-    return std::make_pair(m_key.ToString(), StatusToString());
+    return std::make_pair(m_address.ToString(), StatusToString());
 }
 
 std::string SideStake::StatusToString() const
@@ -138,7 +138,7 @@ bool SideStake::operator==(SideStake b)
 {
     bool result = true;
 
-    result &= (m_key == b.m_key);
+    result &= (m_address == b.m_address);
     result &= (m_allocation == b.m_allocation);
     result &= (m_timestamp == b.m_timestamp);
     result &= (m_hash == b.m_hash);
@@ -166,13 +166,13 @@ SideStakePayload::SideStakePayload(uint32_t version)
 }
 
 SideStakePayload::SideStakePayload(const uint32_t version,
-                                   CBitcoinAddressForStorage key,
-                                   double value,
+                                   CBitcoinAddressForStorage address,
+                                   double allocation,
                                    std::string description,
                                    SideStakeStatus status)
     : IContractPayload()
       , m_version(version)
-      , m_entry(SideStake(key, value, description, 0, uint256{}, status))
+      , m_entry(SideStake(address, allocation, description, 0, uint256{}, status))
 {
 }
 
@@ -325,7 +325,7 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
 
     LOCK(cs_lock);
 
-    auto sidestake_entry_pair_iter = m_sidestake_entries.find(payload.m_entry.m_key);
+    auto sidestake_entry_pair_iter = m_sidestake_entries.find(payload.m_entry.m_address);
 
     SideStake_ptr current_sidestake_entry_ptr = nullptr;
 
@@ -343,12 +343,12 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     }
 
     LogPrint(LogFlags::CONTRACT, "INFO: %s: SideStake entry add/delete: contract m_version = %u, payload "
-                                 "m_version = %u, key = %s, value = %f, m_timestamp = %" PRId64 ", "
+                                 "m_version = %u, address = %s, allocation = %f, m_timestamp = %" PRId64 ", "
                                  "m_hash = %s, m_previous_hash = %s, m_status = %s",
              __func__,
              ctx->m_version,
              payload.m_version,
-             payload.m_entry.m_key.ToString(),
+             payload.m_entry.m_address.ToString(),
              payload.m_entry.m_allocation,
              payload.m_entry.m_timestamp,
              payload.m_entry.m_hash.ToString(),
@@ -364,13 +364,13 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
                                      "the SideStake entry db record already exists. This can be expected on a restart "
                                      "of the wallet to ensure multiple contracts in the same block get stored/replayed.",
                  __func__,
-                 historical.m_key.ToString(),
+                 historical.m_address.ToString(),
                  historical.m_allocation,
                  historical.m_hash.GetHex());
     }
 
     // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
-    m_sidestake_entries[payload.m_entry.m_key] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
+    m_sidestake_entries[payload.m_entry.m_address] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
 
     return;
 }
@@ -380,7 +380,7 @@ void SideStakeRegistry::NonContractAdd(const SideStake& sidestake, const bool& s
     LOCK(cs_lock);
 
     // Using this form of insert because we want the latest record with the same key to override any previous one.
-    m_local_sidestake_entries[sidestake.m_key] = std::make_shared<SideStake>(sidestake);
+    m_local_sidestake_entries[sidestake.m_address] = std::make_shared<SideStake>(sidestake);
 
     if (save_to_file) {
         SaveLocalSideStakesToConfig();
@@ -421,12 +421,12 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     // resurrect.
     LOCK(cs_lock);
 
-    auto entry_to_revert = m_sidestake_entries.find(payload->m_entry.m_key);
+    auto entry_to_revert = m_sidestake_entries.find(payload->m_entry.m_address);
 
     if (entry_to_revert == m_sidestake_entries.end()) {
         error("%s: The SideStake entry for key %s to revert was not found in the SideStake entry map.",
               __func__,
-              entry_to_revert->second->m_key.ToString());
+              entry_to_revert->second->m_address.ToString());
 
         // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
         // should not occur.
@@ -434,13 +434,13 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     }
 
            // If this is not a null hash, then there will be a prior entry to resurrect.
-    CBitcoinAddressForStorage key = entry_to_revert->second->m_key;
+    CBitcoinAddressForStorage key = entry_to_revert->second->m_address;
     uint256 resurrect_hash = entry_to_revert->second->m_previous_hash;
 
            // Revert the ADD or REMOVE action. Unlike the beacons, this is symmetric.
     if (ctx->m_action == ContractAction::ADD || ctx->m_action == ContractAction::REMOVE) {
         // Erase the record from m_sidestake_entries.
-        if (m_sidestake_entries.erase(payload->m_entry.m_key) == 0) {
+        if (m_sidestake_entries.erase(payload->m_entry.m_address) == 0) {
             error("%s: The SideStake entry to erase during a SideStake entry revert for key %s was not found.",
                   __func__,
                   key.ToString());
@@ -474,7 +474,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
 
         // Resurrect the entry prior to the reverted one. It is safe to use the bracket form here, because of the protection
         // of the logic above. There cannot be any entry in m_sidestake_entries with that key value left if we made it here.
-        m_sidestake_entries[resurrect_entry->second->m_key] = resurrect_entry->second;
+        m_sidestake_entries[resurrect_entry->second->m_address] = resurrect_entry->second;
     }
 }
 
@@ -576,7 +576,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
     // If -sidestakeaddresses and -sidestakeallocations is set in either the config file or the r-w settings file
     // and the settings are not empty and they are the same size, this will take precedence over the multiple entry
-    // -sidestake format. Note that -descriptions is optional; however, if descriptions is used, the number must
+    // -sidestake format. Note that -descriptions is optional; however, if descriptions is used, the size must
     // match the other two if present.
     std::vector<std::string> addresses;
     std::vector<std::string> allocations;
@@ -738,7 +738,7 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
             separator = ",";
         }
 
-        addresses += separator + iter.second->m_key.ToString();
+        addresses += separator + iter.second->m_address.ToString();
         allocations += separator + ToString(iter.second->m_allocation * 100.0);
         descriptions += separator + iter.second->m_description;
 
