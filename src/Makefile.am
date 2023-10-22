@@ -357,6 +357,7 @@ nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 
 
 # crypto primitives library
+crypto_libgridcoin_crypto_base_a_CFLAGS = $(AM_CFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_SOURCES = \
