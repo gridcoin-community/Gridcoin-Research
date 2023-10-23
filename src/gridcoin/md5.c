@@ -200,7 +200,7 @@ static inline void crypto_md32_final(crypto_md32_block_func block_func,
   memset(data, 0, block_size);
 }
 
-int MD5_Init(MD5_CTX *md5) {
+static int MD5_Init(MD5_CTX *md5) {
   memset(md5, 0, sizeof(MD5_CTX));
   md5->h[0] = 0x67452301UL;
   md5->h[1] = 0xefcdab89UL;
@@ -212,17 +212,17 @@ int MD5_Init(MD5_CTX *md5) {
 static void md5_block_data_order(uint32_t *state, const uint8_t *data,
                                  size_t num);
 
-void MD5_Transform(MD5_CTX *c, const uint8_t data[MD5_CBLOCK]) {
+static void MD5_Transform(MD5_CTX *c, const uint8_t data[MD5_CBLOCK]) {
   md5_block_data_order(c->h, data, 1);
 }
 
-int MD5_Update(MD5_CTX *c, const void *data, size_t len) {
+static int MD5_Update(MD5_CTX *c, const void *data, size_t len) {
   crypto_md32_update(&md5_block_data_order, c->h, c->data, MD5_CBLOCK, &c->num,
                      &c->Nh, &c->Nl, data, len);
   return 1;
 }
 
-int MD5_Final(uint8_t out[MD5_DIGEST_LENGTH], MD5_CTX *c) {
+static int MD5_Final(uint8_t out[MD5_DIGEST_LENGTH], MD5_CTX *c) {
   crypto_md32_final(&md5_block_data_order, c->h, c->data, MD5_CBLOCK, &c->num,
                     c->Nh, c->Nl, /*is_big_endian=*/0);
 
