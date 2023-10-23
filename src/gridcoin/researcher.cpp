@@ -8,6 +8,7 @@
 #include "gridcoin/boinc.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
@@ -23,7 +24,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <optional>
-#include <openssl/md5.h>
 #include <set>
 #include <univalue.h>
 
@@ -393,9 +393,9 @@ std::optional<Cpid> FallbackToCpidByEmail(
     const std::string email = Researcher::Email();
     std::vector<unsigned char> email_hash_bytes(16);
 
-    MD5(reinterpret_cast<const unsigned char*>(email.data()),
-        email.size(),
-        email_hash_bytes.data());
+    GRC__MD5(reinterpret_cast<const unsigned char*>(email.data()),
+             email.size(),
+             email_hash_bytes.data());
 
     if (HexStr(email_hash_bytes) != email_hash) {
         return std::nullopt;

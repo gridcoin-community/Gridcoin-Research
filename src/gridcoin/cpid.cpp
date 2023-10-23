@@ -3,10 +3,10 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/cpid.h"
+#include <gridcoin/md5.h>
 #include "util.h"
 
 #include <algorithm>
-#include <openssl/md5.h>
 
 using namespace GRC;
 
@@ -67,7 +67,7 @@ Cpid Cpid::Hash(const std::string& internal, const std::string& email)
     std::vector<unsigned char> input(internal.begin(), internal.end());
     input.insert(input.end(), email.begin(), email.end());
 
-    MD5(input.data(), input.size(), cpid.m_bytes.data());
+    GRC__MD5(input.data(), input.size(), cpid.m_bytes.data());
 
     return cpid;
 }

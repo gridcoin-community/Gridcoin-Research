@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/upgrade.h"
+#include <crypto/sha256.h>
 #include "util.h"
 #include "init.h"
 
@@ -16,7 +17,6 @@
 #include <iostream>
 
 #include <zip.h>
-#include <openssl/sha.h>
 
 using namespace GRC;
 
@@ -428,13 +428,10 @@ void Upgrade::VerifySHA256SUM()
         return;
     }
 
-    unsigned char digest[SHA256_DIGEST_LENGTH];
-
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
+    CSHA256 hasher;
 
     fs::path fileloc = GetDataDir() / "snapshot.zip";
-    unsigned char *buffer[32768];
+    uint8_t buffer[32768];
     int bytesread = 0;
 
     CAutoFile file(fsbridge::fopen(fileloc, "rb"), SER_DISK, CLIENT_VERSION);
@@ -453,15 +450,16 @@ void Upgrade::VerifySHA256SUM()
     unsigned int read_count = 0;
     while ((bytesread = fread(buffer, 1, sizeof(buffer), file.Get())))
     {
-        SHA256_Update(&ctx, buffer, bytesread);
+        hasher.Write(buffer, bytesread);
         ++read_count;
 
         DownloadStatus.SetSHA256SUMProgress(read_count * 100 / total_reads);
     }
 
-    SHA256_Final(digest, &ctx);
+    uint8_t digest[CSHA256::OUTPUT_SIZE];
+    hasher.Finalize(digest);
 
-    const std::vector<unsigned char> digest_vector(digest, digest + SHA256_DIGEST_LENGTH);
+    const std::vector<unsigned char> digest_vector(digest, digest + CSHA256::OUTPUT_SIZE);
 
     std::string FileSHA256SUM = HexStr(digest_vector);
 

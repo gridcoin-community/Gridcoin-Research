@@ -6,6 +6,7 @@
 #include "compat/endian.h"
 #include "hash.h"
 #include "main.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include "node/blockstorage.h"
@@ -13,7 +14,6 @@
 #include "util.h"
 #include "util/reverse_iterator.h"
 
-#include <openssl/md5.h>
 
 using namespace GRC;
 
@@ -1083,7 +1083,7 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     }
 
     Md5Sum output;
-    MD5((const unsigned char*)input.data(), input.size(), output.data());
+    GRC__MD5((const unsigned char*)input.data(), input.size(), output.data());
 
     return QuorumHash(output);
 }

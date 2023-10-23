@@ -81,7 +81,6 @@ GRIDCOIN_CORE_H = \
     attributes.h \
     banman.h \
     base58.h \
-    bignum.h \
     chainparams.h \
     chainparamsbase.h \
     checkpoints.h \
@@ -358,6 +357,7 @@ nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 
 
 # crypto primitives library
+crypto_libgridcoin_crypto_base_a_CFLAGS = $(AM_CFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_SOURCES = \
@@ -383,7 +383,9 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/sha512.cpp \
     crypto/sha512.h \
     crypto/siphash.cpp \
-    crypto/siphash.h
+    crypto/siphash.h \
+    gridcoin/md5.c \
+    gridcoin/md5.h
 
 if USE_ASM
 crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp

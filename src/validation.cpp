@@ -485,7 +485,7 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
 // age (trust score) of competing branches.
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
 {
-    CBigNum bnCentSecond = 0;  // coin age in the unit of cent-seconds
+    arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
 
     if (tx.IsCoinBase())
@@ -513,16 +513,16 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
         }
 
         CAmount nValueIn = txPrev.vout[txin.prevout.n].nValue;
-        bnCentSecond += CBigNum(nValueIn) * (tx.nTime - txPrev.nTime) / CENT;
+        bnCentSecond += arith_uint256(nValueIn) * (tx.nTime - txPrev.nTime) / CENT;
 
         if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printcoinage"))
             LogPrintf("coin age nValueIn=%" PRId64 " nTimeDiff=%d bnCentSecond=%s", nValueIn, tx.nTime - txPrev.nTime, bnCentSecond.ToString());
     }
 
-    CBigNum bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
+    arith_uint256 bnCoinDay = bnCentSecond * CENT / COIN / (24 * 60 * 60);
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE) && gArgs.GetBoolArg("-printcoinage"))
         LogPrintf("coin age bnCoinDay=%s", bnCoinDay.ToString());
-    nCoinAge = bnCoinDay.getuint64();
+    nCoinAge = bnCoinDay.GetLow64();
     return true;
 }
 
