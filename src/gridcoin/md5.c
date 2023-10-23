@@ -61,9 +61,9 @@
 #include <string.h>
 
 #define CRYPTO_load_u32_le(data) (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24)
-#define CRYPTO_store_u32_le(dst, src) (dst)[0] = src & 0xFF; (dst)[1] = src & 0xFF00; (dst)[2] = src & 0xFF0000; (dst)[3] = src & 0xFF000000
+#define CRYPTO_store_u32_le(dst, src) (dst)[0] = (src & 0xFF); (dst)[1] = (src & 0xFF00) >> 8; (dst)[2] = (src & 0xFF0000) >> 16; (dst)[3] = (src & 0xFF000000) >> 24
 #define CRYPTO_load_u32_be(data) (uint32_t)data[3] | ((uint32_t)data[2] << 8) | ((uint32_t)data[1] << 16) | ((uint32_t)data[0] << 24)
-#define CRYPTO_store_u32_be(dst, src) (dst)[3] = src & 0xFF; (dst)[2] = src & 0xFF00; (dst)[1] = src & 0xFF0000; (dst)[0] = src & 0xFF000000
+#define CRYPTO_store_u32_be(dst, src) (dst)[3] = (src & 0xFF); (dst)[2] = (src & 0xFF00) >> 8; (dst)[1] = (src & 0xFF0000) >> 16; (dst)[0] = (src & 0xFF000000) >> 24
 
 static inline uint32_t CRYPTO_rotl_u32(uint32_t value, int shift) {
 #if defined(_MSC_VER)
