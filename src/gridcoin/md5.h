@@ -22,7 +22,7 @@ typedef struct MD5_CTX {
   unsigned num;
 } MD5_CTX;
 
-uint8_t *MD5(const uint8_t *data, size_t len, uint8_t out[MD5_DIGEST_LENGTH]);
+uint8_t *GRC__MD5(const uint8_t *data, size_t len, uint8_t out[MD5_DIGEST_LENGTH]);
 
 #if defined(__cplusplus)
 }

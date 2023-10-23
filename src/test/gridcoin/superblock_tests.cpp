@@ -141,7 +141,7 @@ struct Legacy
         {
             const char* chIn = s1.c_str();
             unsigned char digest2[16];
-            MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);
+            GRC__MD5((unsigned char*)chIn, strlen(chIn), (unsigned char*)&digest2);
 
             const std::vector<unsigned char> digest_vector(digest2, digest2 + sizeof(digest2));
 

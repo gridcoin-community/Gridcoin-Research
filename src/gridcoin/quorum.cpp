@@ -313,9 +313,9 @@ public:
         std::string input = grc_address + "_" + ToString(GetDayOfYear(time));
         std::vector<unsigned char> address_day_hash(16);
 
-        MD5(reinterpret_cast<const unsigned char*>(input.data()),
-            input.size(),
-            address_day_hash.data());
+        GRC__MD5(reinterpret_cast<const unsigned char*>(input.data()),
+                 input.size(),
+                 address_day_hash.data());
 
         return arith_uint256("0x" + HexStr(address_day_hash)) < reference_hash;
     }

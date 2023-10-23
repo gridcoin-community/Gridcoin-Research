@@ -393,9 +393,9 @@ std::optional<Cpid> FallbackToCpidByEmail(
     const std::string email = Researcher::Email();
     std::vector<unsigned char> email_hash_bytes(16);
 
-    MD5(reinterpret_cast<const unsigned char*>(email.data()),
-        email.size(),
-        email_hash_bytes.data());
+    GRC__MD5(reinterpret_cast<const unsigned char*>(email.data()),
+             email.size(),
+             email_hash_bytes.data());
 
     if (HexStr(email_hash_bytes) != email_hash) {
         return std::nullopt;

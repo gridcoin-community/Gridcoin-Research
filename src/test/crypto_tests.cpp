@@ -59,7 +59,7 @@ static void TestMD5(const std::string &in, const std::string &hexout) {
     assert(hexout.size() == 2 * MD5_DIGEST_LENGTH);
 
     uint8_t out[MD5_DIGEST_LENGTH];
-    MD5((const uint8_t*)in.data(), in.size(), out);
+    GRC__MD5((const uint8_t*)in.data(), in.size(), out);
 
     BOOST_CHECK(std::memcmp(out, ParseHex(hexout).data(), MD5_DIGEST_LENGTH) == 0);
 }

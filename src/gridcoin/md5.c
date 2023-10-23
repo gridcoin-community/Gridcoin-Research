@@ -233,7 +233,7 @@ int MD5_Final(uint8_t out[MD5_DIGEST_LENGTH], MD5_CTX *c) {
   return 1;
 }
 
-uint8_t *MD5(const uint8_t *data, size_t len, uint8_t out[MD5_DIGEST_LENGTH]) {
+uint8_t *GRC__MD5(const uint8_t *data, size_t len, uint8_t out[MD5_DIGEST_LENGTH]) {
   MD5_CTX ctx;
   MD5_Init(&ctx);
   MD5_Update(&ctx, data, len);

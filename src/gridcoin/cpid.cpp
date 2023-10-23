@@ -67,7 +67,7 @@ Cpid Cpid::Hash(const std::string& internal, const std::string& email)
     std::vector<unsigned char> input(internal.begin(), internal.end());
     input.insert(input.end(), email.begin(), email.end());
 
-    MD5(input.data(), input.size(), cpid.m_bytes.data());
+    GRC__MD5(input.data(), input.size(), cpid.m_bytes.data());
 
     return cpid;
 }

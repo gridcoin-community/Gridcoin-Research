@@ -1083,7 +1083,7 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     }
 
     Md5Sum output;
-    MD5((const unsigned char*)input.data(), input.size(), output.data());
+    GRC__MD5((const unsigned char*)input.data(), input.size(), output.data());
 
     return QuorumHash(output);
 }
