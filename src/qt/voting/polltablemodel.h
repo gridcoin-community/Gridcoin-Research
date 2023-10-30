@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
 #define GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
 
+#include "uint256.h"
 #include "gridcoin/voting/filter.h"
 
 #include <memory>
@@ -13,6 +14,28 @@
 
 class PollItem;
 class VotingModel;
+
+namespace {
+class PollTableDataModel : public QAbstractTableModel
+{
+public:
+    PollTableDataModel();
+
+    int rowCount(const QModelIndex &parent) const override;
+    int columnCount(const QModelIndex &parent) const override;
+    QVariant data(const QModelIndex &index, int role) const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+    QModelIndex index(int row, int column, const QModelIndex &parent) const override;
+    Qt::ItemFlags flags(const QModelIndex &index) const override;
+    void reload(std::vector<PollItem> rows);
+    void handlePollStaleFlag(QString poll_txid_string);
+
+private:
+    QStringList m_columns;
+    std::vector<PollItem> m_rows;
+
+};
+} // Anonymous namespace
 
 class PollTableModel : public QSortFilterProxyModel
 {
@@ -31,6 +54,7 @@ public:
         VotePercentAVW,
         Validated,
         TopAnswer,
+        StaleResults
     };
 
     enum Roles
@@ -55,9 +79,11 @@ public slots:
     void changeTitleFilter(const QString& pattern);
     Qt::SortOrder sort(int column);
 
+    void handlePollStaleFlag(QString poll_txid_string);
+
 private:
     VotingModel* m_model;
-    std::unique_ptr<QAbstractTableModel> m_data_model;
+    std::unique_ptr<PollTableDataModel> m_data_model;
     GRC::PollFilterFlag m_filter_flags;
     QMutex m_refresh_mutex;
 };

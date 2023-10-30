@@ -23,7 +23,6 @@
 
 #include <boost/signals2/signal.hpp>
 
-
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
@@ -36,10 +35,19 @@ namespace {
 //!
 void NewPollReceived(VotingModel* model, int64_t poll_time)
 {
-    LogPrint(LogFlags::QT, "GUI: received NewPollReceived() core signal");
+    LogPrint(LogFlags::QT, "INFO: %s: received NewPollReceived() core signal", __func__);
 
     QMetaObject::invokeMethod(model, "handleNewPoll", Qt::QueuedConnection,
-        Q_ARG(int64_t, poll_time));
+                              Q_ARG(int64_t, poll_time));
+}
+
+void NewVoteReceived(VotingModel* model, uint256 poll_txid)
+{
+    LogPrint(LogFlags::QT, "INFO: %s: received NewVoteReceived() core signal", __func__);
+
+    // Ugly but uint256 is not registered as a Metatype.
+    QMetaObject::invokeMethod(model, "handleNewVote", Qt::QueuedConnection,
+                              Q_ARG(QString, QString().fromStdString(poll_txid.ToString())));
 }
 
 std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
@@ -116,6 +124,9 @@ std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& it
         item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
     }
 
+    // Mark stale flag false since we just rebuilt the item.
+    item.m_stale = false;
+
     g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     return item;
 }
@@ -134,6 +145,7 @@ VotingModel::VotingModel(
     , m_options_model(options_model)
     , m_wallet_model(wallet_model)
     , m_last_poll_time(0)
+    , m_pollitems()
 {
     subscribeToCoreSignals();
 
@@ -239,7 +251,7 @@ QStringList VotingModel::getActiveProjectUrls() const
 
 }
 
-std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) const
+std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
 {
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
     g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, __func__);
@@ -254,6 +266,24 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
     for (unsigned int i = 0; i < 3; ++i)
     {
         for (const auto& iter : WITH_LOCK(m_registry.cs_poll_registry, return m_registry.Polls().Where(flags))) {
+            // First check to see if the poll item already exists, and if so is it stale (i.e. a new vote has
+            // been received for that poll). If it is stale, it will need rebuilding. If not, we insert the cached
+            // poll item into the results and move on.
+
+            bool pollitem_needs_rebuild = true;
+            auto pollitems_iter = m_pollitems.find(iter->Ref().Txid());
+
+            // Note that the NewVoteReceived core signal will also be fired during reorgs where votes are reverted,
+            // i.e. unreceived. This will cause the stale flag to be set on polls during reorg where votes have been
+            // removed during reorg, which is what is desired.
+            if (pollitems_iter != m_pollitems.end()) {
+                if (!pollitems_iter->second.m_stale) {
+                    // Not stale... the cache entry is good. Insert into items to return and go to the next one.
+                    items.push_back(pollitems_iter->second);
+                    pollitem_needs_rebuild = false;
+                }
+            }
+
             // Note that we are implementing a coarse-grained fork/rollback detector here.
             // We do this because we have eliminated the cs_main lock to free up the GUI.
             // Instead we have reversed the locking scheme and have the contract actions (add/delete)
@@ -268,13 +298,18 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags) co
             // Transactions that have not been rolled back by a reorg can be safely accessed for reading
             // by another thread as we are doing here.
 
-            try {
-                if (std::optional<PollItem> item = BuildPollItem(iter)) {
-                    items.push_back(std::move(*item));
+            if (pollitem_needs_rebuild) {
+                try {
+                    if (std::optional<PollItem> item = BuildPollItem(iter)) {
+                        // This will replace any stale existing entry in the cache with the freshly built item.
+                        // It will also correctly add a new entry for a new item.
+                        m_pollitems[iter->Ref().Txid()] = *item;
+                        items.push_back(std::move(*item));
+                    }
+                } catch (InvalidDuetoReorgFork& e) {
+                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.",
+                             __func__);
                 }
-            } catch (InvalidDuetoReorgFork& e) {
-                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.",
-                         __func__);
             }
 
             // This must be AFTER BuildPollItem. If a reorg occurred during reg traversal that could invalidate
@@ -440,6 +475,7 @@ VotingResult VotingModel::sendVote(
 void VotingModel::subscribeToCoreSignals()
 {
     uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1));
+    uiInterface.NewVoteReceived_connect(std::bind(NewVoteReceived, this, std::placeholders::_1));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
@@ -455,6 +491,22 @@ void VotingModel::handleNewPoll(int64_t poll_time)
     m_last_poll_time = poll_time;
 
     emit newPollReceived();
+}
+
+void VotingModel::handleNewVote(QString poll_txid_string)
+{
+    uint256 poll_txid;
+
+    poll_txid.SetHex(poll_txid_string.toStdString());
+
+    auto pollitems_iter = m_pollitems.find(poll_txid);
+
+    if (pollitems_iter != m_pollitems.end()) {
+        // Set stale flag on poll item associated with vote.
+        pollitems_iter->second.m_stale = true;
+    }
+
+    emit newVoteReceived(poll_txid_string);
 }
 
 // -----------------------------------------------------------------------------
