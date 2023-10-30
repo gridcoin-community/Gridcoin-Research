@@ -83,6 +83,12 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
         ui->invalidLabel->show();
     }
 
+    if (poll_item.m_stale) {
+        ui->staleLabel->show();
+    } else {
+        ui->staleLabel->hide();
+    }
+
     ui->topAnswerLabel->setText(poll_item.m_top_answer);
 
     if (!poll_item.m_finished) {
