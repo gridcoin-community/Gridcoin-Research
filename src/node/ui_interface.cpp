@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
+#include "uint256.h"
 #include <node/ui_interface.h>
 
 #include <boost/signals2/optional_last_value.hpp>
@@ -25,6 +26,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::MRCChangedSig> MRCChanged;
     boost::signals2::signal<CClientUIInterface::BeaconChangedSig> BeaconChanged;
     boost::signals2::signal<CClientUIInterface::NewPollReceivedSig> NewPollReceived;
+    boost::signals2::signal<CClientUIInterface::NewVoteReceivedSig> NewVoteReceived;
     boost::signals2::signal<CClientUIInterface::NotifyScraperEventSig> NotifyScraperEvent;
     boost::signals2::signal<CClientUIInterface::ThreadSafeAskFeeSig> ThreadSafeAskFee;
     boost::signals2::signal<CClientUIInterface::ThreadSafeHandleURISig> ThreadSafeHandleURI;
@@ -53,6 +55,7 @@ ADD_SIGNALS_IMPL_WRAPPER(AccrualChangedFromStakeOrMRC);
 ADD_SIGNALS_IMPL_WRAPPER(MRCChanged);
 ADD_SIGNALS_IMPL_WRAPPER(BeaconChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NewPollReceived);
+ADD_SIGNALS_IMPL_WRAPPER(NewVoteReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyScraperEvent);
 ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeAskFee);
 ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeHandleURI);
@@ -78,6 +81,7 @@ void CClientUIInterface::AccrualChangedFromStakeOrMRC() { return g_ui_signals.Ac
 void CClientUIInterface::MRCChanged() { return g_ui_signals.MRCChanged(); }
 void CClientUIInterface::BeaconChanged() { return g_ui_signals.BeaconChanged(); }
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
+void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }
 void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message) { return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message); }
 

@@ -299,6 +299,13 @@
        </spacer>
       </item>
       <item>
+       <widget class="QLabel" name="staleLabel">
+        <property name="text">
+         <string>Stale</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QLabel" name="validatedLabel">
         <property name="text">
          <string>Validated</string>

@@ -13,169 +13,179 @@
 using namespace GRC;
 
 namespace {
-class PollTableDataModel : public QAbstractTableModel
+PollTableDataModel::PollTableDataModel()
 {
-public:
-    PollTableDataModel()
-    {
-        qRegisterMetaType<QList<QPersistentModelIndex>>();
-        qRegisterMetaType<QAbstractItemModel::LayoutChangeHint>();
+    qRegisterMetaType<QList<QPersistentModelIndex>>();
+    qRegisterMetaType<QAbstractItemModel::LayoutChangeHint>();
 
-        m_columns
-            << tr("Title")
-            << tr("Poll Type")
-            << tr("Duration")
-            << tr("Expiration")
-            << tr("Weight Type")
-            << tr("Votes")
-            << tr("Total Weight")
-            << tr("% of Active Vote Weight")
-            << tr("Validated")
-            << tr("Top Answer");
+    m_columns
+        << tr("Title")
+        << tr("Poll Type")
+        << tr("Duration")
+        << tr("Expiration")
+        << tr("Weight Type")
+        << tr("Votes")
+        << tr("Total Weight")
+        << tr("% of Active Vote Weight")
+        << tr("Validated")
+        << tr("Top Answer")
+        << tr("Stale Results");
+}
+
+int PollTableDataModel::rowCount(const QModelIndex &parent) const
+{
+    if (parent.isValid()) {
+        return 0;
+    }
+    return m_rows.size();
+}
+
+int PollTableDataModel::columnCount(const QModelIndex &parent) const
+{
+    if (parent.isValid()) {
+        return 0;
+    }
+    return m_columns.size();
+}
+
+QVariant PollTableDataModel::data(const QModelIndex &index, int role) const
+{
+    if (!index.isValid()) {
+        return QVariant();
     }
 
-    int rowCount(const QModelIndex &parent) const override
-    {
-        if (parent.isValid()) {
-            return 0;
-        }
-        return m_rows.size();
-    }
+    const PollItem* row = static_cast<const PollItem*>(index.internalPointer());
 
-    int columnCount(const QModelIndex &parent) const override
-    {
-        if (parent.isValid()) {
-            return 0;
-        }
-        return m_columns.size();
-    }
-
-    QVariant data(const QModelIndex &index, int role) const override
-    {
-        if (!index.isValid()) {
-            return QVariant();
-        }
-
-        const PollItem* row = static_cast<const PollItem*>(index.internalPointer());
-
-        switch (role) {
-            case Qt::DisplayRole:
-                switch (index.column()) {
-                    case PollTableModel::Title:
-                        return row->m_title;
-                    case PollTableModel::PollType:
-                        if (row->m_version >= 3) {
-                            return row->m_type_str;
-                        } else {
-                            return QString{};
-                        }
-                    case PollTableModel::Duration:
-                        return row->m_duration;
-                    case PollTableModel::Expiration:
-                        return GUIUtil::dateTimeStr(row->m_expiration);
-                    case PollTableModel::WeightType:
-                        return row->m_weight_type_str;
-                    case PollTableModel::TotalVotes:
-                        return row->m_total_votes;
-                    case PollTableModel::TotalWeight:
-                        return QString::number(row->m_total_weight);
-                    case PollTableModel::VotePercentAVW:
-                        return QString::number(row->m_vote_percent_AVW, 'f', 4);
-                    case PollTableModel::Validated:
-                        return row->m_validated;
-                    case PollTableModel::TopAnswer:
-                        return row->m_top_answer;
-                } // no default case, so the compiler can warn about missing cases
-                assert(false);
-
-            case Qt::TextAlignmentRole:
-                switch (index.column()) {
-                    case PollTableModel::Duration:
-                        // Pass-through case
-                    case PollTableModel::TotalVotes:
-                        // Pass-through case
-                    case PollTableModel::TotalWeight:
-                        // Pass-through case
-                    case PollTableModel::VotePercentAVW:
-                        // Pass-through case
-                    case PollTableModel::Validated:
-                        return QVariant(Qt::AlignRight | Qt::AlignVCenter);
-                }
-                break;
-
-            case PollTableModel::SortRole:
-                switch (index.column()) {
-                    case PollTableModel::Title:
-                        return row->m_title;
-                    case PollTableModel::PollType:
+    switch (role) {
+        case Qt::DisplayRole:
+            switch (index.column()) {
+                case PollTableModel::Title:
+                    return row->m_title;
+                case PollTableModel::PollType:
+                    if (row->m_version >= 3) {
                         return row->m_type_str;
-                    case PollTableModel::Duration:
-                        return row->m_duration;
-                    case PollTableModel::Expiration:
-                        return row->m_expiration;
-                    case PollTableModel::WeightType:
-                        return row->m_weight_type_str;
-                    case PollTableModel::TotalVotes:
-                        return row->m_total_votes;
-                    case PollTableModel::TotalWeight:
-                        return QVariant::fromValue(row->m_total_weight);
-                    case PollTableModel::VotePercentAVW:
-                        return QVariant::fromValue(row->m_vote_percent_AVW);
-                    case PollTableModel::Validated:
-                        return row->m_validated;
-                    case PollTableModel::TopAnswer:
-                        return row->m_top_answer;
-                } // no default case, so the compiler can warn about missing cases
-                assert(false);
-        }
+                    } else {
+                        return QString{};
+                    }
+                case PollTableModel::Duration:
+                    return row->m_duration;
+                case PollTableModel::Expiration:
+                    return GUIUtil::dateTimeStr(row->m_expiration);
+                case PollTableModel::WeightType:
+                    return row->m_weight_type_str;
+                case PollTableModel::TotalVotes:
+                    return row->m_total_votes;
+                case PollTableModel::TotalWeight:
+                    return QString::number(row->m_total_weight);
+                case PollTableModel::VotePercentAVW:
+                    return QString::number(row->m_vote_percent_AVW, 'f', 4);
+                case PollTableModel::Validated:
+                    return row->m_validated;
+                case PollTableModel::TopAnswer:
+                    return row->m_top_answer;
+                case PollTableModel::StaleResults:
+                    return row->m_stale;
+            } // no default case, so the compiler can warn about missing cases
+            assert(false);
 
-        return QVariant();
-    }
-
-    QVariant headerData(int section, Qt::Orientation orientation, int role) const override
-    {
-        if (orientation == Qt::Horizontal) {
-            if (role == Qt::DisplayRole && section < m_columns.size()) {
-                return m_columns[section];
+        case Qt::TextAlignmentRole:
+            switch (index.column()) {
+                case PollTableModel::Duration:
+                    // Pass-through case
+                case PollTableModel::TotalVotes:
+                    // Pass-through case
+                case PollTableModel::TotalWeight:
+                    // Pass-through case
+                case PollTableModel::VotePercentAVW:
+                    // Pass-through case
+                case PollTableModel::Validated:
+                    return QVariant(Qt::AlignRight | Qt::AlignVCenter);
             }
+            break;
+
+        case PollTableModel::SortRole:
+            switch (index.column()) {
+                case PollTableModel::Title:
+                    return row->m_title;
+                case PollTableModel::PollType:
+                    return row->m_type_str;
+                case PollTableModel::Duration:
+                    return row->m_duration;
+                case PollTableModel::Expiration:
+                    return row->m_expiration;
+                case PollTableModel::WeightType:
+                    return row->m_weight_type_str;
+                case PollTableModel::TotalVotes:
+                    return row->m_total_votes;
+                case PollTableModel::TotalWeight:
+                    return QVariant::fromValue(row->m_total_weight);
+                case PollTableModel::VotePercentAVW:
+                    return QVariant::fromValue(row->m_vote_percent_AVW);
+                case PollTableModel::Validated:
+                    return row->m_validated;
+                case PollTableModel::TopAnswer:
+                    return row->m_top_answer;
+                case PollTableModel::StaleResults:
+                    return row->m_stale;
+            } // no default case, so the compiler can warn about missing cases
+            assert(false);
+    }
+
+    return QVariant();
+}
+
+QVariant PollTableDataModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole && section < m_columns.size()) {
+            return m_columns[section];
         }
-
-        return QVariant();
     }
 
-    QModelIndex index(int row, int column, const QModelIndex &parent) const override
-    {
-        Q_UNUSED(parent);
+    return QVariant();
+}
 
-        if (row > static_cast<int>(m_rows.size())) {
-            return QModelIndex();
+QModelIndex PollTableDataModel::index(int row, int column, const QModelIndex &parent) const
+{
+    Q_UNUSED(parent);
+
+    if (row > static_cast<int>(m_rows.size())) {
+        return QModelIndex();
+    }
+
+    void* data = static_cast<void*>(const_cast<PollItem*>(&m_rows[row]));
+
+    return createIndex(row, column, data);
+}
+
+Qt::ItemFlags PollTableDataModel::flags(const QModelIndex &index) const
+{
+    if (!index.isValid()) {
+        return Qt::NoItemFlags;
+    }
+
+    return (Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+}
+
+void PollTableDataModel::reload(std::vector<PollItem> rows)
+{
+    emit layoutAboutToBeChanged();
+    m_rows = std::move(rows);
+    emit layoutChanged();
+}
+
+void PollTableDataModel::handlePollStaleFlag(QString poll_txid_string)
+{
+    emit layoutAboutToBeChanged();
+
+    for (auto& iter : m_rows) {
+        if (iter.m_id == poll_txid_string) {
+            iter.m_stale = true;
         }
-
-        void* data = static_cast<void*>(const_cast<PollItem*>(&m_rows[row]));
-
-        return createIndex(row, column, data);
     }
 
-    Qt::ItemFlags flags(const QModelIndex &index) const override
-    {
-        if (!index.isValid()) {
-            return Qt::NoItemFlags;
-        }
-
-        return (Qt::ItemIsSelectable | Qt::ItemIsEnabled);
-    }
-
-    void reload(std::vector<PollItem> rows)
-    {
-        emit layoutAboutToBeChanged();
-        m_rows = std::move(rows);
-        emit layoutChanged();
-    }
-
-private:
-    QStringList m_columns;
-    std::vector<PollItem> m_rows;
-}; // PollTableDataModel
+    emit layoutChanged();
+}
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -203,6 +213,10 @@ PollTableModel::~PollTableModel()
 void PollTableModel::setModel(VotingModel* model)
 {
     m_model = model;
+
+    // Connect poll stale handler to newVoteReceived signal from voting model, which propagates
+    // from the core.
+    connect(m_model, &VotingModel::newVoteReceived, this, &PollTableModel::handlePollStaleFlag);
 }
 
 void PollTableModel::setPollFilterFlags(PollFilterFlag flags)
@@ -250,6 +264,11 @@ void PollTableModel::refresh()
 
         m_refresh_mutex.unlock();
     });
+}
+
+void PollTableModel::handlePollStaleFlag(QString poll_txid_string)
+{
+    m_data_model->handlePollStaleFlag(poll_txid_string);
 }
 
 void PollTableModel::changeTitleFilter(const QString& pattern)
