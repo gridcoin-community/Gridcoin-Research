@@ -157,8 +157,21 @@ public:
         int lowest_height = std::numeric_limits<int>::max();
 
         for (const auto& iter : m_db_heights) {
+            int db_height = iter.second;
+
+            //! When below the operational range of the sidestake contracts and registry, initialization of the sidestake
+            //! registry will report zero for height. It is undesirable to return this in the GetLowestRegistryBlockHeight()
+            //! method, because it will cause the contract replay clamp to go to the Fern mandatory blockheight. Setting
+            //! the db_height recorded in the bookmarks at V13 height for the sidestake registry for the purpose of contract
+            //! replay solves the problem.
+            //!
+            //! This code can be removed after the V13 mandatory blockheight has been reached.
+            if (iter.first == GRC::ContractType::SIDESTAKE and db_height < Params().GetConsensus().BlockV13Height) {
+                db_height = Params().GetConsensus().BlockV13Height;
+            }
+
             if (iter.second < lowest_height) {
-                lowest_height = iter.second;
+                lowest_height = db_height;
             }
         }
 
