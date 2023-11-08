@@ -2957,11 +2957,11 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 
                 if (cpid_parsed)
                 {
-                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed).Floating());
+                    c.pushKV("magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed).Floating());
                 }
 
                 if (displaycontract)
-                    c.pushKV("Contract Contents", SuperblockToJson(superblock));
+                    c.pushKV("contract_contents", SuperblockToJson(superblock));
 
                 results.push_back(c);
 
