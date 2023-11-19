@@ -11,6 +11,7 @@
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper.h"
+#include "gridcoin/superblock.h"
 #include "node/ui_interface.h"
 
 #include "qt/bitcoinunits.h"
@@ -23,6 +24,7 @@
 #include <QTimer>
 
 extern CWallet* pwalletMain;
+extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -481,6 +483,13 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
     //
 
     const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+    std::vector<std::string> excluded_projects;
+
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        excluded_projects = ConvergedScraperStatsCache.Convergence.vExcludedProjects;
+    }
 
     // This is temporary implementation of the suppression of "not attached" for projects that
     // are whitelisted that require an external adapter, and so will not be attached as a native
@@ -516,7 +525,14 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         // between local projects and whitelisted projects:
         //
         if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
-            row.m_whitelisted = true;
+            if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
+                != excluded_projects.end()) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
+                row.m_error = tr("Greylisted");
+            } else {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::True;
+            }
+
             row.m_name = QString::fromStdString(whitelist_project->DisplayName()).toLower();
 
             for (const auto& explain_mag_project : explain_mag) {
@@ -531,7 +547,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
             rows.emplace(whitelist_project->m_name, std::move(row));
         } else {
-            row.m_whitelisted = false;
+            row.m_whitelisted = ProjectRow::WhiteListStatus::False;
             row.m_name = QString::fromStdString(project.m_name).toLower();
             row.m_rac = project.m_rac;
 
@@ -552,7 +568,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
         ProjectRow row;
         row.m_gdpr_controls = project.HasGDPRControls();
-        row.m_whitelisted = true;
+
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
 
@@ -562,6 +578,14 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
             row.m_error = tr("Not attached");
         } else {
             row.m_error = tr("Uses external adapter");
+        }
+
+        if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
+            != excluded_projects.end()) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
+            row.m_error = tr("Greylisted");
+        } else {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::True;
         }
 
         for (const auto& explain_mag_project : explain_mag) {
