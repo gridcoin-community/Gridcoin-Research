@@ -43,6 +43,7 @@ public:
         EnableStakeSplit,        // bool
         StakingEfficiency,       // double
         MinStakeSplitValue,      // int
+        PollExpireNotification,  // double
         ContractChangeToInput,   // bool
         MaskValues,              // bool
         OptionIDRowCount
@@ -71,6 +72,7 @@ public:
     bool getMaskValues();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();
+    double getPollExpireNotification();
     QString getLanguage() { return language; }
     QString getCurrentStyle();
     QString getDataDir();
@@ -87,13 +89,14 @@ private:
     bool fStartMin;
     bool fDisableTrxNotifications;
     bool fDisablePollNotifications;
-	bool bDisplayAddresses;
+    bool bDisplayAddresses;
     bool fMinimizeOnClose;
     bool fConfirmOnClose;
     bool fCoinControlFeatures;
     bool fLimitTxnDisplay;
     bool fMaskValues;
     QDate limitTxnDate;
+    double pollExpireNotification;
     QString language;
     QString walletStylesheet;
     QString dataDir;

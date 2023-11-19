@@ -1932,16 +1932,43 @@ void BitcoinGUI::handleNewPoll()
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 }
 
+//!
+//! \brief BitcoinGUI::extracted. Helper function to avoid container detach on range loop warning.
+//! \param expiring_polls
+//! \param notification
+//!
+void BitcoinGUI::extracted(QStringList& expiring_polls, QString& notification)
+{
+    for (const auto& expiring_poll : expiring_polls) {
+        notification += expiring_poll + "\n";
+    }
+}
+
 void BitcoinGUI::handleExpiredPoll()
 {
-    // The only difference between this and handleNewPoll() is no call to the event notifier.
-
     if (!clientModel || !clientModel->getOptionsModel()) {
         return;
     }
 
     if (!votingModel) {
         return;
+    }
+
+    if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
+        QStringList expiring_polls = votingModel->getExpiringPollsNotNotified();
+
+        if (!expiring_polls.isEmpty()) {
+            QString notification = tr("The following poll(s) are about to expire:\n");
+
+            extracted(expiring_polls, notification);
+
+            notification += tr("Open Gridcoin to vote.");
+
+            notificator->notify(
+                Notificator::Information,
+                tr("Poll(s) about to expire"),
+                notification);
+        }
     }
 
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
