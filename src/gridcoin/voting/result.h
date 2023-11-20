@@ -72,6 +72,13 @@ public:
         VoteDetail();
 
         //!
+        //! \brief User copy constructor.
+        //!
+        //! \param original_votedetail
+        //!
+        VoteDetail(const VoteDetail& original_votedetail);
+
+        //!
         //! \brief Determine whether a vote contributes no weight.
         //!
         //! \return \c true if the vote claims no balance or magnitude weight.

@@ -20,6 +20,7 @@ class WalletModel;
 class ResearcherModel;
 class MRCModel;
 class VotingModel;
+class PollTableModel;
 class TransactionView;
 class OverviewPage;
 class FavoritesPage;

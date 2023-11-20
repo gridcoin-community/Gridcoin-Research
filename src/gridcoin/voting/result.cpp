@@ -864,18 +864,38 @@ private:
     {
         CTransaction tx;
 
-        if (!m_txdb.ReadDiskTx(txid, tx)) {
-            LogPrint(LogFlags::VOTE, "%s: failed to read vote tx", __func__);
+        bool read_tx_success = false;
+
+        // This is very ugly. In testing for implement poll expiration reminders PR2716, there is an issue with ReadDiskTx
+        // on very fast machines, where upon receipt of a vote on an existing poll, the poll builder tests for the transaction
+        // BEFORE it is committed to disk. This retry loop is essentially zero overhead for an immediate success, but does
+        // up to 10 tries over up to 2.5 seconds total to "wait" for the transaction to appear in leveldb.
+        for (unsigned int i = 0; i < 10; ++i) {
+            if (m_txdb.ReadDiskTx(txid, tx)) {
+                read_tx_success = true;
+                break;
+            } else {
+                LogPrintf("WARN: %s: failed to read vote tx in try %u", __func__, i + 1);
+            }
+
+            if (!MilliSleep(250)) {
+                // Interrupt with throw if MilliSleep interrupted by op sys signal.
+                throw InvalidVoteError();
+            }
+        }
+
+        if (!read_tx_success) {
+            LogPrintf("WARN: %s: failed to read vote tx after 10 tries", __func__);
             throw InvalidVoteError();
         }
 
         if (tx.nTime < m_poll.m_timestamp) {
-            LogPrint(LogFlags::VOTE, "%s: tx earlier than poll", __func__);
+            LogPrintf("WARN: %s: tx earlier than poll", __func__);
             throw InvalidVoteError();
         }
 
         if (m_poll.Expired(tx.nTime)) {
-            LogPrint(LogFlags::VOTE, "%s: tx exceeds expiration", __func__);
+            LogPrintf("WARN: %s: tx exceeds expiration", __func__);
             throw InvalidVoteError();
         }
 
@@ -885,7 +905,7 @@ private:
             }
 
             if (!contract.WellFormed()) {
-                LogPrint(LogFlags::VOTE, "%s: skipped bad contract", __func__);
+                LogPrintf("WARN: %s: skipped bad contract", __func__);
                 continue;
             }
 
@@ -1256,6 +1276,15 @@ ResponseDetail::ResponseDetail() : m_weight(0), m_votes(0)
 // -----------------------------------------------------------------------------
 
 VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero()), m_ismine(ISMINE_NO)
+{
+}
+
+VoteDetail::VoteDetail(const VoteDetail &original_votedetail)
+    : m_amount(original_votedetail.m_amount)
+      , m_mining_id(original_votedetail.m_mining_id)
+      , m_magnitude(original_votedetail.m_magnitude)
+      , m_ismine(original_votedetail.m_ismine)
+      , m_responses(original_votedetail.m_responses)
 {
 }
 

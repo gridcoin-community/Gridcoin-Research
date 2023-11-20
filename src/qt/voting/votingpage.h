@@ -35,6 +35,7 @@ public:
     void setOptionsModel(OptionsModel* model);
 
     PollTab& currentTab();
+    PollTab* getActiveTab();
 
 private:
     Ui::VotingPage* ui;

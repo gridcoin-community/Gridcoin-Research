@@ -5,6 +5,7 @@
 #include "qt/guiutil.h"
 #include "qt/voting/polltablemodel.h"
 #include "qt/voting/votingmodel.h"
+#include "logging.h"
 
 #include <QtConcurrentRun>
 #include <QSortFilterProxyModel>
@@ -212,11 +213,11 @@ PollTableModel::~PollTableModel()
 
 void PollTableModel::setModel(VotingModel* model)
 {
-    m_model = model;
+    m_voting_model = model;
 
     // Connect poll stale handler to newVoteReceived signal from voting model, which propagates
     // from the core.
-    connect(m_model, &VotingModel::newVoteReceived, this, &PollTableModel::handlePollStaleFlag);
+    connect(m_voting_model, &VotingModel::newVoteReceived, this, &PollTableModel::handlePollStaleFlag);
 }
 
 void PollTableModel::setPollFilterFlags(PollFilterFlag flags)
@@ -254,13 +255,16 @@ const PollItem* PollTableModel::rowItem(int row) const
 
 void PollTableModel::refresh()
 {
-    if (!m_model || !m_refresh_mutex.tryLock()) {
+    if (!m_voting_model || !m_refresh_mutex.tryLock()) {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex is already taken, so tryLock failed",
+                 __func__);
+
         return;
     }
 
     QtConcurrent::run([this]() {
         static_cast<PollTableDataModel*>(m_data_model.get())
-            ->reload(m_model->buildPollTable(m_filter_flags));
+            ->reload(m_voting_model->buildPollTable(m_filter_flags));
 
         m_refresh_mutex.unlock();
     });
@@ -269,6 +273,8 @@ void PollTableModel::refresh()
 void PollTableModel::handlePollStaleFlag(QString poll_txid_string)
 {
     m_data_model->handlePollStaleFlag(poll_txid_string);
+
+    emit newVoteReceivedAndPollMarkedDirty();
 }
 
 void PollTableModel::changeTitleFilter(const QString& pattern)

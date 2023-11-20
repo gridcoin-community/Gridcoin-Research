@@ -33,7 +33,7 @@ PollCardView::~PollCardView()
 
 void PollCardView::setModel(PollTableModel* model)
 {
-    m_model = model;
+    m_polltable_model = model;
 
     if (!model) {
         return;
@@ -41,7 +41,7 @@ void PollCardView::setModel(PollTableModel* model)
 
     connect(model, &PollTableModel::layoutChanged, this, &PollCardView::redraw);
 
-    if (!m_refresh_timer && m_model->includesActivePolls()) {
+    if (!m_refresh_timer && m_polltable_model->includesActivePolls()) {
         m_refresh_timer.reset(new QTimer(this));
         m_refresh_timer->setTimerType(Qt::VeryCoarseTimer);
 
@@ -76,15 +76,15 @@ void PollCardView::redraw()
     // sorting and filtering. Hook up model events for these operations.
     clear();
 
-    if (!m_model) {
+    if (!m_polltable_model) {
         return;
     }
 
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const QModelIndex dummy_parent;
 
-    for (int i = 0; i < m_model->rowCount(dummy_parent); ++i) {
-        if (const PollItem* poll_item = m_model->rowItem(i)) {
+    for (int i = 0; i < m_polltable_model->rowCount(dummy_parent); ++i) {
+        if (const PollItem* poll_item = m_polltable_model->rowItem(i)) {
             PollCard* card = new PollCard(*poll_item, this);
             card->updateRemainingTime(now);
             card->updateIcons(m_theme);

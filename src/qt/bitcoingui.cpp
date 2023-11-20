@@ -20,6 +20,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+#include "voting/polltab.h"
 #include "voting/votingpage.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -43,6 +44,7 @@
 #include "univalue.h"
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
+#include "voting/polltablemodel.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -1946,7 +1948,11 @@ void BitcoinGUI::extracted(QStringList& expiring_polls, QString& notification)
 
 void BitcoinGUI::handleExpiredPoll()
 {
-    if (!clientModel || !clientModel->getOptionsModel()) {
+    if (!clientModel) {
+        return;
+    }
+
+    if (!clientModel->getOptionsModel()) {
         return;
     }
 
@@ -1954,20 +1960,27 @@ void BitcoinGUI::handleExpiredPoll()
         return;
     }
 
-    if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
-        QStringList expiring_polls = votingModel->getExpiringPollsNotNotified();
+    // Only do if in sync.
+    if (researcherModel && !researcherModel->outOfSync() && votingPage->getActiveTab()) {
 
-        if (!expiring_polls.isEmpty()) {
-            QString notification = tr("The following poll(s) are about to expire:\n");
+        // First refresh the active poll tab and underlying table
+        votingPage->getActiveTab()->refresh();
 
-            extracted(expiring_polls, notification);
+        if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
+            QStringList expiring_polls = votingModel->getExpiringPollsNotNotified();
 
-            notification += tr("Open Gridcoin to vote.");
+            if (!expiring_polls.isEmpty()) {
+                QString notification = tr("The following poll(s) are about to expire:\n");
 
-            notificator->notify(
-                Notificator::Information,
-                tr("Poll(s) about to expire"),
-                notification);
+                extracted(expiring_polls, notification);
+
+                notification += tr("Open Gridcoin to vote.");
+
+                notificator->notify(
+                    Notificator::Information,
+                    tr("Poll(s) about to expire"),
+                    notification);
+            }
         }
     }
 
