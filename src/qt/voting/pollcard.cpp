@@ -39,6 +39,7 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
         ui->myPercentAVWLabel->setText("N/A");
     } else {
         QString choices_str;
+        QString weights_str;
 
         int64_t my_total_weight = 0;
 
@@ -49,11 +50,17 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
                 choices_str = QString(poll_item.m_choices[choice.first].m_label);
             }
 
+            if (!weights_str.isEmpty()) {
+                weights_str += ", " + QString::number(choice.second / COIN);
+            } else {
+                weights_str = QString::number(choice.second / COIN);
+            }
+
             my_total_weight += choice.second / COIN;
         }
 
         ui->myLastVoteAnswerLabel->setText(choices_str);
-        ui->myVoteWeightLabel->setText(QString::number(my_total_weight));
+        ui->myVoteWeightLabel->setText(weights_str);
         if (poll_item.m_active_weight) ui->myPercentAVWLabel->setText(QString::number((double) my_total_weight
                                                                                       / (double) poll_item.m_active_weight
                                                                                       * (double) 100.0, 'f', 4) + '\%');

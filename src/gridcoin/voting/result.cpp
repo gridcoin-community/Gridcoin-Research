@@ -1248,7 +1248,11 @@ void PollResult::TallyVote(VoteDetail detail)
 
     if (detail.m_ismine != ISMINE_NO) {
         m_self_voted = true;
-        m_self_vote_detail = detail;
+
+        m_self_vote_detail.m_amount += detail.m_amount;
+        m_self_vote_detail.m_mining_id = detail.m_mining_id;
+        m_self_vote_detail.m_magnitude = detail.m_magnitude;
+        m_self_vote_detail.m_ismine = detail.m_ismine;
     }
 
     for (const auto& response_pair : detail.m_responses) {
@@ -1258,6 +1262,22 @@ void PollResult::TallyVote(VoteDetail detail)
         m_responses[response_offset].m_weight += response_weight;
         m_responses[response_offset].m_votes += 1.0 / detail.m_responses.size();
         m_total_weight += response_weight;
+
+        if (detail.m_ismine != ISMINE_NO) {
+            bool choice_found = false;
+
+            for (auto& choice : m_self_vote_detail.m_responses) {
+                if (choice.first == response_offset) {
+                    choice.second += response_weight;
+                    choice_found = true;
+                    break;
+                }
+            }
+
+            if (!choice_found) {
+                m_self_vote_detail.m_responses.push_back(std::make_pair(response_offset, response_weight));
+            }
+        }
     }
 
     m_votes.emplace_back(std::move(detail));
