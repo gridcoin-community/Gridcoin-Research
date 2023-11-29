@@ -104,6 +104,7 @@ option(SYSTEM_XXD       "Find system xxd binary" OFF)
 
 # Hunter packages
 option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
+option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
 
 
@@ -121,7 +122,6 @@ if(ENABLE_TESTS)
 endif()
 
 find_package(Atomics REQUIRED)
-find_package(CURL COMPONENTS HTTP HTTPS SSL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(libzip REQUIRED)
 
@@ -154,6 +154,13 @@ if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
 endif()
 find_package(OpenSSL REQUIRED)
+
+if(BUNDLED_CURL)
+    hunter_add_package(CURL)
+    find_package(CURL CONFIG REQUIRED)
+else()
+    find_package(CURL REQUIRED)
+endif()
 
 if(USE_ASM)
     enable_language(ASM)
