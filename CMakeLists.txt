@@ -107,12 +107,21 @@ option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
 option(BUNDLED_LIBZIP   "Use the bundled version of libzip" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
+option(BUNDLED_QT       "Use the bundled version of Qt" ${HUNTER_ENABLED})
 
 
 # Handle dependencies
 # ===================
 
-set(QT5_MINIMUM_VERSION 5.15.0)
+set(QT5_MINIMUM_VERSION 5.9.5)
+set(QT5_COMPONENTS Concurrent Core Gui LinguistTools Network Widgets)
+set(QT5_HUNTER_COMPONENTS qtbase qttools)
+if(USE_DBUS)
+    list(APPEND QT5_COMPONENTS DBus)
+endif()
+if(ENABLE_TESTS)
+    list(APPEND QT5_COMPONENTS Test)
+endif()
 
 set(BOOST_MINIMUM_VERSION 1.63.0)
 set(BOOST_COMPONENTS filesystem iostreams thread)
@@ -172,25 +181,24 @@ if(USE_ASM)
 endif()
 
 if(ENABLE_GUI)
-    find_package(Qt5 ${QT5_MINIMUM_VERSION} REQUIRED COMPONENTS
-        Concurrent
-        Core
-        Gui
-        LinguistTools
-        Network
-        Widgets
-    )
-
-    if(USE_DBUS)
-        find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS DBus REQUIRED)
+    if(BUNDLED_QT)
+        hunter_add_package(Qt COMPONENTS ${QT5_HUNTER_COMPONENTS})
     endif()
-
-    if(ENABLE_TESTS)
-        find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS Test REQUIRED)
-    endif()
+    find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS ${QT5_COMPONENTS} REQUIRED)
 
     if(ENABLE_QRENCODE)
         pkg_check_modules(QRENCODE REQUIRED IMPORTED_TARGET libqrencode)
+    endif()
+
+    # Compatibility macros
+    if(Qt5Core_VERSION VERSION_LESS 5.15.0)
+        macro(qt_create_translation)
+            qt5_create_translation(${ARGN})
+        endmacro()
+
+        macro(qt_add_translation)
+            qt5_add_translation(${ARGN})
+        endmacro()
     endif()
 endif()
 
