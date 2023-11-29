@@ -105,6 +105,7 @@ option(SYSTEM_XXD       "Find system xxd binary" OFF)
 # Hunter packages
 option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
+option(BUNDLED_LIBZIP   "Use the bundled version of libzip" ${HUNTER_ENABLED})
 option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
 
 
@@ -123,7 +124,6 @@ endif()
 
 find_package(Atomics REQUIRED)
 find_package(Threads REQUIRED)
-find_package(libzip REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
@@ -161,6 +161,11 @@ if(BUNDLED_CURL)
 else()
     find_package(CURL REQUIRED)
 endif()
+
+if(BUNDLED_LIBZIP)
+    hunter_add_package(libzip)
+endif()
+find_package(libzip CONFIG REQUIRED)
 
 if(USE_ASM)
     enable_language(ASM)
