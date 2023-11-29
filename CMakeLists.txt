@@ -7,6 +7,25 @@
 # CMake support is experimental. Use with caution and report any bugs.
 
 cmake_minimum_required(VERSION 3.18)
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
+
+
+# Hunter Package Manager
+# ======================
+
+# Windows doesn't yet have a package manager that can be used for managing
+# dependencies, so we use Hunter on it.
+option(HUNTER_ENABLED "Enable Hunter package manager" OFF)
+include(HunterGate)
+HunterGate(
+    URL "https://github.com/cpp-pm/hunter/archive/refs/tags/v0.25.3.tar.gz"
+    SHA1 "0dfbc2cb5c4cf7e83533733bdfd2125ff96680cb"
+    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake/Hunter/config.cmake"
+)
+
+
+# Project configuration
+# =====================
 
 project("Gridcoin"
     VERSION 5.4.5.4
@@ -37,19 +56,20 @@ string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_REL
 string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
 
-# Load modules from the source tree
-# =================================
-
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
+# Load CMake modules
+# ==================
 
 include(CheckCXXSymbolExists)
 include(CheckFunctionExists)
 include(CheckIncludeFile)
 include(CheckPIESupported)
+include(CheckSymbolExists)
+
 include(CheckSSE)
 include(CheckStrerrorR)
-include(CheckSymbolExists)
+include(HunterGate)
 include(VersionFromGit)
+
 
 # Define options
 # ==============
@@ -74,21 +94,32 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
+
+# Bundled packages
 option(SYSTEM_BDB	    "Find system installation of Berkeley DB CXX 5.3" OFF)
 option(SYSTEM_LEVELDB   "Find system installation of leveldb" OFF)
 option(SYSTEM_SECP256K1 "Find system installation of libsecp256k1 with pkg-config" OFF)
 option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
 option(SYSTEM_XXD       "Find system xxd binary" OFF)
 
+# Hunter packages
+option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
 
-# Find dependencies
-# =================
 
-set(BOOST_MINIMUM_VERSION 1.63.0)
+# Handle dependencies
+# ===================
+
 set(QT5_MINIMUM_VERSION 5.15.0)
 
+set(BOOST_MINIMUM_VERSION 1.63.0)
+set(BOOST_COMPONENTS filesystem iostreams thread)
+set(BOOST_HUNTER_COMPONENTS ${BOOST_COMPONENTS})
+if(ENABLE_TESTS)
+    list(APPEND BOOST_COMPONENTS unit_test_framework)
+    list(APPEND BOOST_HUNTER_COMPONENTS test)
+endif()
+
 find_package(Atomics REQUIRED)
-find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS filesystem iostreams thread REQUIRED)
 find_package(CURL COMPONENTS HTTP HTTPS SSL REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
@@ -113,6 +144,11 @@ if(SYSTEM_UNIVALUE)
     find_package(PkgConfig)
     pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
 endif()
+
+if(BUNDLED_BOOST)
+    hunter_add_package(Boost COMPONENTS ${BOOST_HUNTER_COMPONENTS})
+endif()
+find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} CONFIG REQUIRED)
 
 if(USE_ASM)
     enable_language(ASM)
@@ -146,7 +182,6 @@ if(ENABLE_UPNP)
 endif()
 
 if(ENABLE_TESTS)
-    find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS unit_test_framework REQUIRED)
     enable_testing()
 
     if(SYSTEM_XXD)

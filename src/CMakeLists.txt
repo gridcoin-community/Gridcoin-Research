@@ -220,7 +220,7 @@ target_include_directories(gridcoin_util PUBLIC
 target_link_libraries(gridcoin_util PUBLIC
     -lm ${ATOMICS_LIBRARIES} ${RT_LIBRARIES}
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-    Boost::filesystem Boost::headers Boost::iostreams Boost::thread
+    Boost::boost Boost::filesystem Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
