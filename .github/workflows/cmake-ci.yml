@@ -192,3 +192,87 @@ jobs:
                   name: testlog-macos-${{matrix.tag}}
                   path: ${{github.workspace}}/build/Testing/Temporary/LastTest.log
                   retention-days: 7
+
+    test-msys2:
+        runs-on: windows-latest
+        defaults:
+            run:
+                shell: msys2 {0}
+        env:
+            CCACHE_DIR: ${{github.workspace}}\ccache
+            CCACHE_MAXSIZE: 400M
+            CCACHE_COMPILERCHECK: content
+        strategy:
+            matrix:
+                tag:
+                    - minimal
+                    - no-asm
+                    - gui-full
+                include:
+                    - tag: no-asm
+                      deps: null
+                      options: -DUSE_ASM=OFF
+                    - tag: gui-full
+                      deps: >-
+                          miniupnpc:p
+                          qrencode:p
+                          qt5-base:p
+                          qt5-tools:p
+                      options: >-
+                          -DENABLE_GUI=ON
+                          -DENABLE_QRENCODE=ON
+                          -DENABLE_UPNP=ON
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
+            - name: Setup MSYS2
+              uses: msys2/setup-msys2@v2
+              with:
+                  msystem: UCRT64
+                  update: true
+                  install: >-
+                      make
+                      ninja
+                  pacboy: >-
+                      ${{matrix.deps}}
+                      boost:p
+                      ccache:p
+                      cmake:p
+                      curl:p
+                      libzip:p
+                      openssl:p
+                      toolchain:p
+            - name: Configure
+              run: |
+                  cmake -B ./build -G Ninja \
+                      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                      ${{matrix.options}} \
+                      -DBUILD_SHARED_LIBS=OFF -DENABLE_TESTS=ON
+            - name: Restore cache
+              uses: actions/cache/restore@v3
+              if: always()
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-msys2-${{matrix.tag}}-${{github.run_id}}
+                  restore-keys: |
+                      ccache-msys2-${{matrix.tag}}-
+            - name: Build
+              run: |
+                  cmake --build ./build -v -j $NUMBER_OF_PROCESSORS
+            - name: Save cache
+              uses: actions/cache/save@v3
+              if: always()
+              with:
+                  path: ${{env.CCACHE_DIR}}
+                  key: ccache-msys2-${{matrix.tag}}-${{github.run_id}}
+            - name: Run tests
+              run: |
+                  ctest --test-dir ./build -j $NUMBER_OF_PROCESSORS
+            - name: Upload test logs
+              uses: actions/upload-artifact@v3
+              if: always()
+              with:
+                  name: testlog-msys-${{matrix.tag}}
+                  path: ${{github.workspace}}\build\Testing\Temporary\LastTest.log
+                  retention-days: 7
