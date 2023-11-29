@@ -43,17 +43,22 @@ set(COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers")
 # =======================
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-# Remove '-DNDEBUG' from flags because we need asserts
-string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+if(MSVC)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        message(FATAL_ERROR "It's not yet possible to build Gridcoin with MSVC")
+    endif()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
+    add_compile_options(/U NDEBUG)
+else()
+    add_compile_options(-UNDEBUG)
+endif()
 
 
 # Load CMake modules
