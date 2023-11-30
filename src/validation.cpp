@@ -1641,30 +1641,39 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
         mapQueuedChanges[hashTx] = CTxIndex(posThisTx, tx.vout.size());
     }
 
-    if (IsResearchAgeEnabled(pindex->nHeight)
-        && !GridcoinConnectBlock(block, pindex, txdb, stake_value_in, nStakeReward, nFees))
     {
-        return false;
-    }
+        // This lock protects the time period between the GridcoinConnectBlock, which also connects validated transaction contracts
+        // and causes contract handlers to fire, and the committing of the txindex changes to disk below. Any contract handlers that
+        // generate signals whose downstream handlers make use of transaction data on disk via leveldb (txdb) on another thread need
+        // to take this lock to ensure that the write to leveldb and the access of the transaction data by the signal handlers is
+        // appropriately serialized.
+        LOCK(cs_tx_val_commit_to_disk);
 
-    pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
+        if (IsResearchAgeEnabled(pindex->nHeight)
+            && !GridcoinConnectBlock(block, pindex, txdb, stake_value_in, nStakeReward, nFees))
+        {
+            return false;
+        }
 
-    if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
-        return error("%s: WriteBlockIndex for pindex failed", __func__);
+        pindex->nMoneySupply = ReturnCurrentMoneySupply(pindex) + nValueOut - nValueIn;
 
-    if (!OutOfSyncByAge())
-    {
-        fColdBoot = false;
-    }
+        if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
+            return error("%s: WriteBlockIndex for pindex failed", __func__);
 
-    if (fJustCheck)
-        return true;
+        if (!OutOfSyncByAge())
+        {
+            fColdBoot = false;
+        }
 
-    // Write queued txindex changes
-    for (const auto& [hash, index] : mapQueuedChanges)
-    {
-        if (!txdb.UpdateTxIndex(hash, index))
-            return error("%s: UpdateTxIndex failed", __func__);
+        if (fJustCheck)
+            return true;
+
+        // Write queued txindex changes
+        for (const auto& [hash, index] : mapQueuedChanges)
+        {
+            if (!txdb.UpdateTxIndex(hash, index))
+                return error("%s: UpdateTxIndex failed", __func__);
+        }
     }
 
     // Update block index on disk without changing it in memory.

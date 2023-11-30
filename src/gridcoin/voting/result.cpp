@@ -864,6 +864,7 @@ private:
     {
         CTransaction tx;
 
+        /*
         bool read_tx_success = false;
 
         // This is very ugly. In testing for implement poll expiration reminders PR2716, there is an issue with ReadDiskTx
@@ -884,10 +885,20 @@ private:
             }
         }
 
-        if (!read_tx_success) {
-            LogPrintf("WARN: %s: failed to read vote tx after 10 tries", __func__);
-            throw InvalidVoteError();
+         if (!read_tx_success) {
+             LogPrintf("WARN: %s: failed to read vote tx after 10 tries", __func__);
+             throw InvalidVoteError();
+         }
+         */
+
+        {
+            LOCK(cs_tx_val_commit_to_disk);
+
+            if (!m_txdb.ReadDiskTx(txid, tx)) {
+                LogPrintf("WARN: %s: failed to read vote tx.", __func__);
+            }
         }
+
 
         if (tx.nTime < m_poll.m_timestamp) {
             LogPrintf("WARN: %s: tx earlier than poll", __func__);

@@ -62,6 +62,7 @@ CCriticalSection cs_setpwalletRegistered;
 set<CWallet*> setpwalletRegistered;
 
 CCriticalSection cs_main;
+CCriticalSection cs_tx_val_commit_to_disk;
 
 CTxMemPool mempool;
 
