@@ -893,10 +893,13 @@ private:
 
         {
             LOCK(cs_tx_val_commit_to_disk);
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
 
             if (!m_txdb.ReadDiskTx(txid, tx)) {
                 LogPrintf("WARN: %s: failed to read vote tx.", __func__);
             }
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
         }
 
 

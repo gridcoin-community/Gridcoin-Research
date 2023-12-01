@@ -1648,6 +1648,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
         // to take this lock to ensure that the write to leveldb and the access of the transaction data by the signal handlers is
         // appropriately serialized.
         LOCK(cs_tx_val_commit_to_disk);
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
 
         if (IsResearchAgeEnabled(pindex->nHeight)
             && !GridcoinConnectBlock(block, pindex, txdb, stake_value_in, nStakeReward, nFees))
@@ -1674,6 +1675,8 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
             if (!txdb.UpdateTxIndex(hash, index))
                 return error("%s: UpdateTxIndex failed", __func__);
         }
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
     }
 
     // Update block index on disk without changing it in memory.

@@ -6,6 +6,8 @@
 #include "qt/voting/polltablemodel.h"
 #include "qt/voting/votingmodel.h"
 #include "logging.h"
+#include "util.h"
+#include "util/threadnames.h"
 
 #include <QtConcurrentRun>
 #include <QSortFilterProxyModel>
@@ -260,13 +262,21 @@ void PollTableModel::refresh()
                  __func__);
 
         return;
+    } else {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex trylock succeeded.",
+                 __func__);
     }
 
     QtConcurrent::run([this]() {
+        RenameThread("PollTableModel_refresh");
+        util::ThreadSetInternalName("PollTableModel_refresh");
+
         static_cast<PollTableDataModel*>(m_data_model.get())
             ->reload(m_voting_model->buildPollTable(m_filter_flags));
 
         m_refresh_mutex.unlock();
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex lock released.",
+                 __func__);
     });
 }
 
