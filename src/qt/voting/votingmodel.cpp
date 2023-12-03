@@ -160,8 +160,6 @@ VotingModel::VotingModel(
             m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
         }
     }
-
-    m_poll_expire_warning = static_cast<qint64>(m_options_model.getPollExpireNotification() * 3600.0 * 1000.0);
 }
 
 VotingModel::~VotingModel()
@@ -259,9 +257,11 @@ QStringList VotingModel::getExpiringPollsNotNotified()
 
     QDateTime now = QDateTime::fromMSecsSinceEpoch(GetAdjustedTime() * 1000);
 
+    qint64 poll_expire_warning = static_cast<qint64>(m_options_model.getPollExpireNotification() * 3600.0 * 1000.0);
+
     // Populate the list and mark the poll items included in the list m_expire_notified true.
     for (auto& poll : m_pollitems) {
-        if (now.msecsTo(poll.second.m_expiration) <= m_poll_expire_warning
+        if (now.msecsTo(poll.second.m_expiration) <= poll_expire_warning
             && !poll.second.m_expire_notified
             && !poll.second.m_self_voted) {
             expiring_polls << poll.second.m_title;

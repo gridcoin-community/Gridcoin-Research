@@ -173,8 +173,6 @@ signals:
     void newVoteReceived(QString poll_txid_string);
 
 private:
-    qint64 m_poll_expire_warning;
-
     GRC::PollRegistry& m_registry;
     ClientModel& m_client_model;
     OptionsModel& m_options_model;
