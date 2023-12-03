@@ -483,7 +483,7 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
             if (!ok) {
                 emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, false);
             } else {
-                if (hours >= 0.25 && hours <= 24.0) {
+                if (hours >= 0.25 && hours <= 24.0 * 7.0) {
                     emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, true);
                 } else {
                     emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, false);

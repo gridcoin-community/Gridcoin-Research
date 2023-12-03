@@ -381,7 +381,7 @@
          <item>
           <widget class="QValidatedLineEdit" name="pollExpireNotifyLineEdit">
            <property name="toolTip">
-            <string>Valid values are between 0.25 and 24.0 hours.</string>
+            <string>Valid values are between 0.25 and 168.0 hours.</string>
            </property>
           </widget>
          </item>
