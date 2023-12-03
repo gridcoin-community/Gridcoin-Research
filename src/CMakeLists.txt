@@ -228,6 +228,10 @@ target_link_libraries(gridcoin_util PUBLIC
 )
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
 
+if(WIN32)
+    target_link_libraries(gridcoin_util PUBLIC wsock32 Ws2_32)
+endif()
+
 target_compile_definitions(gridcoin_util PUBLIC
     HAVE_CONFIG_H
     HAVE_BUILD_INFO
