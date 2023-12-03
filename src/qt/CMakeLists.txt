@@ -99,6 +99,9 @@ add_library(gridcoinqt STATIC
 
 if(WIN32)
     target_sources(gridcoinqt PRIVATE res/gridcoinresearch.rc)
+    set_source_files_properties(res/gridcoinresearch.rc PROPERTIES
+        COMPILE_DEFINITIONS WINDRES_PREPROC
+    )
 elseif(APPLE)
     target_sources(gridcoinqt PRIVATE
         macdockiconhandler.mm

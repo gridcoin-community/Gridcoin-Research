@@ -257,6 +257,9 @@ if(ENABLE_DAEMON)
 
     if(WIN32)
         target_sources(gridcoinresearchd PRIVATE gridcoinresearchd-res.rc)
+        set_source_files_properties(gridcoinresearchd-res.rc PROPERTIES
+            COMPILE_DEFINITIONS WINDRES_PREPROC
+        )
     endif()
 
     if(UNIX AND NOT APPLE)
