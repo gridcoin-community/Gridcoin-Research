@@ -13,6 +13,8 @@
 
 using namespace std;
 
+std::vector<std::unique_ptr<CWalletTx>> wtxn;
+
 typedef set<pair<const CWalletTx*,unsigned int> > CoinSet;
 
 BOOST_AUTO_TEST_SUITE(wallet_tests)
@@ -23,13 +25,12 @@ static vector<COutput> vCoins;
 static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0)
 {
     static int i;
-    CTransaction* tx = new CTransaction;
-    tx->nLockTime = i++;        // so all transactions get different hashes
-    tx->nTime = 0;
-    tx->vout.resize(nInput+1);
-    tx->vout[nInput].nValue = nValue;
-    CWalletTx* wtx = new CWalletTx(&wallet, *tx);
-    delete tx;
+    CTransaction tx;
+    tx.nLockTime = i++;        // so all transactions get different hashes
+    tx.nTime = 0;
+    tx.vout.resize(nInput+1);
+    tx.vout[nInput].nValue = nValue;
+    std::unique_ptr<CWalletTx> wtx(new CWalletTx(&wallet, tx));
     if (fIsFromMe)
     {
         // IsFromMe() returns (GetDebit() > 0), and GetDebit() is 0 if vin.empty(),
@@ -38,15 +39,15 @@ static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, in
         wtx->fDebitCached = true;
         wtx->nDebitCached = 1;
     }
-    COutput output(wtx, nInput, nAge);
+    COutput output(wtx.get(), nInput, nAge);
     vCoins.push_back(output);
+    wtxn.emplace_back(std::move(wtx));
 }
 
 static void empty_wallet()
 {
-    for(COutput& output : vCoins)
-        delete output.tx;
     vCoins.clear();
+    wtxn.clear();
 }
 
 static bool equal_sets(CoinSet a, CoinSet b)
@@ -298,6 +299,7 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
             BOOST_CHECK_NE(fails, RANDOM_REPEATS);
         }
     }
+    empty_wallet();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
