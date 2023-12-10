@@ -57,7 +57,7 @@ void OptionsModel::Init()
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
     fMaskValues = settings.value("fMaskValues", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
-    pollExpireNotification = settings.value("pollExpireNotification", 1.0).toDouble();
+    pollExpireNotification = settings.value("pollExpireNotification", 8.0).toDouble();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "dark").toString();
