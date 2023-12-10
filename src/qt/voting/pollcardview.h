@@ -43,7 +43,7 @@ public slots:
 
 private:
     Ui::PollCardView* ui;
-    PollTableModel* m_model;
+    PollTableModel* m_polltable_model;
     std::unique_ptr<QTimer> m_refresh_timer;
     QString m_theme;
 

@@ -47,14 +47,17 @@ private slots:
     void hideStartMinimized();
     void hideLimitTxnDisplayDate();
     void hideStakeSplitting();
+    void hidePollExpireNotify();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
     void handleStakingEfficiencyValid(QValidatedLineEdit *object, bool fState);
     void handleMinStakeSplitValueValid(QValidatedLineEdit *object, bool fState);
+    void handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState);
 
 signals:
     void proxyIpValid(QValidatedLineEdit *object, bool fValid);
     void stakingEfficiencyValid(QValidatedLineEdit *object, bool fValid);
     void minStakeSplitValueValid(QValidatedLineEdit *object, bool fValid);
+    void pollExpireNotifyValid(QValidatedLineEdit *object, bool fValid);
 
 private:
     Ui::OptionsDialog *ui;
@@ -65,6 +68,7 @@ private:
     bool fProxyIpValid;
     bool fStakingEfficiencyValid;
     bool fMinStakeSplitValueValid;
+    bool fPollExpireNotifyValid;
 };
 
 #endif // BITCOIN_QT_OPTIONSDIALOG_H

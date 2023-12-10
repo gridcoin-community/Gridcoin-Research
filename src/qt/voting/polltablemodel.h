@@ -74,6 +74,9 @@ public:
     QString columnName(int offset) const;
     const PollItem* rowItem(int row) const;
 
+signals:
+    void newVoteReceivedAndPollMarkedDirty();
+
 public slots:
     void refresh();
     void changeTitleFilter(const QString& pattern);
@@ -82,7 +85,7 @@ public slots:
     void handlePollStaleFlag(QString poll_txid_string);
 
 private:
-    VotingModel* m_model;
+    VotingModel* m_voting_model;
     std::unique_ptr<PollTableDataModel> m_data_model;
     GRC::PollFilterFlag m_filter_flags;
     QMutex m_refresh_mutex;

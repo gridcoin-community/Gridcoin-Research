@@ -1,4 +1,5 @@
 #include "optionsdialog.h"
+#include "qevent.h"
 #include "ui_optionsdialog.h"
 
 #include "netbase.h"
@@ -16,13 +17,16 @@
 #include <QSystemTrayIcon>
 
 OptionsDialog::OptionsDialog(QWidget* parent)
-           : QDialog(parent)
-           , ui(new Ui::OptionsDialog)
-           , model(nullptr)
-           , mapper(nullptr)
-           , fRestartWarningDisplayed_Proxy(false)
-           , fRestartWarningDisplayed_Lang(false)
-           , fProxyIpValid(true)
+    : QDialog(parent)
+      , ui(new Ui::OptionsDialog)
+      , model(nullptr)
+      , mapper(nullptr)
+      , fRestartWarningDisplayed_Proxy(false)
+      , fRestartWarningDisplayed_Lang(false)
+      , fProxyIpValid(true)
+      , fStakingEfficiencyValid(true)
+      , fMinStakeSplitValueValid(true)
+      , fPollExpireNotifyValid(true)
 {
     ui->setupUi(this);
 
@@ -44,6 +48,7 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     ui->proxyIp->installEventFilter(this);
     ui->stakingEfficiency->installEventFilter(this);
     ui->minPostSplitOutputValue->installEventFilter(this);
+    ui->pollExpireNotifyLineEdit->installEventFilter(this);
 
     /* Window elements init */
 #ifdef Q_OS_MAC
@@ -103,16 +108,23 @@ OptionsDialog::OptionsDialog(QWidget* parent)
     connect(this, &OptionsDialog::proxyIpValid, this, &OptionsDialog::handleProxyIpValid);
     connect(this, &OptionsDialog::stakingEfficiencyValid, this, &OptionsDialog::handleStakingEfficiencyValid);
     connect(this, &OptionsDialog::minStakeSplitValueValid, this, &OptionsDialog::handleMinStakeSplitValueValid);
+    /** setup/change UI elements when poll expiry notification time window is valid/invalid */
+    connect(this, &OptionsDialog::pollExpireNotifyValid, this, &OptionsDialog::handlePollExpireNotifyValid);
 
     if (fTestNet) ui->disableUpdateCheck->setHidden(true);
 
     ui->gridcoinAtStartupMinimised->setHidden(!ui->gridcoinAtStartup->isChecked());
     ui->limitTxnDisplayDateEdit->setHidden(!ui->limitTxnDisplayCheckBox->isChecked());
 
+    ui->pollExpireNotifyLabel->setHidden(ui->disablePollNotifications->isChecked());
+    ui->pollExpireNotifyLineEdit->setHidden(ui->disablePollNotifications->isChecked());
+
     connect(ui->gridcoinAtStartup, &QCheckBox::toggled, this, &OptionsDialog::hideStartMinimized);
     connect(ui->gridcoinAtStartupMinimised, &QCheckBox::toggled, this, &OptionsDialog::hideStartMinimized);
 
     connect(ui->limitTxnDisplayCheckBox, &QCheckBox::toggled, this, &OptionsDialog::hideLimitTxnDisplayDate);
+
+    connect(ui->disablePollNotifications, &QCheckBox::toggled, this , &OptionsDialog::hidePollExpireNotify);
 
     bool stake_split_enabled = ui->enableStakeSplit->isChecked();
 
@@ -180,6 +192,7 @@ void OptionsDialog::setMapper()
     /* Window */
     mapper->addMapping(ui->disableTransactionNotifications, OptionsModel::DisableTrxNotifications);
     mapper->addMapping(ui->disablePollNotifications, OptionsModel::DisablePollNotifications);
+    mapper->addMapping(ui->pollExpireNotifyLineEdit, OptionsModel::PollExpireNotification);
 #ifndef Q_OS_MAC
     if (QSystemTrayIcon::isSystemTrayAvailable()) {
         mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
@@ -194,7 +207,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->styleComboBox, OptionsModel::WalletStylesheet,"currentData");
     mapper->addMapping(ui->limitTxnDisplayCheckBox, OptionsModel::LimitTxnDisplay);
     mapper->addMapping(ui->limitTxnDisplayDateEdit, OptionsModel::LimitTxnDate);
-	mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
+    mapper->addMapping(ui->displayAddresses, OptionsModel::DisplayAddresses);
 }
 
 void OptionsDialog::enableApplyButton()
@@ -298,6 +311,14 @@ void OptionsDialog::hideLimitTxnDisplayDate()
     }
 }
 
+void OptionsDialog::hidePollExpireNotify()
+{
+    if (model) {
+        ui->pollExpireNotifyLabel->setHidden(ui->disablePollNotifications->isChecked());
+        ui->pollExpireNotifyLineEdit->setHidden(ui->disablePollNotifications->isChecked());
+    }
+}
+
 void OptionsDialog::hideStakeSplitting()
 {
     if (model)
@@ -368,9 +389,40 @@ void OptionsDialog::handleMinStakeSplitValueValid(QValidatedLineEdit *object, bo
     }
 }
 
+void OptionsDialog::handlePollExpireNotifyValid(QValidatedLineEdit *object, bool fState)
+{
+    // this is used in a check before re-enabling the save buttons
+    fPollExpireNotifyValid = fState;
+
+    if (fPollExpireNotifyValid) {
+        enableSaveButtons();
+        ui->statusLabel->clear();
+    } else {
+        disableSaveButtons();
+        object->setValid(fPollExpireNotifyValid);
+        ui->statusLabel->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel->setText(tr("The supplied time for notification before poll expires must "
+                                    "be between 0.25 and 24 hours."));
+    }
+}
+
 bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
 {
-    if (event->type() == QEvent::FocusOut)
+    bool filter_event = false;
+
+    if (event->type() == QEvent::FocusOut) {
+        filter_event = true;
+    }
+
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
+
+        if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return) {
+           filter_event = true;
+        }
+    }
+
+    if (filter_event)
     {
         if (object == ui->proxyIp)
         {
@@ -423,6 +475,22 @@ bool OptionsDialog::eventFilter(QObject *object, QEvent *event)
                 }
             }
         }
+
+        if (object == ui->pollExpireNotifyLineEdit) {
+            bool ok = false;
+            double hours = ui->pollExpireNotifyLineEdit->text().toDouble(&ok);
+
+            if (!ok) {
+                emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, false);
+            } else {
+                if (hours >= 0.25 && hours <= 24.0 * 7.0) {
+                    emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, true);
+                } else {
+                    emit pollExpireNotifyValid(ui->pollExpireNotifyLineEdit, false);
+                }
+            }
+        }
     }
+
     return QDialog::eventFilter(object, event);
 }

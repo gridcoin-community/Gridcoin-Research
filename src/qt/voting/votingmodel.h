@@ -88,6 +88,7 @@ public:
     GRC::PollResult::VoteDetail m_self_vote_detail;
 
     bool m_stale = true;
+    bool m_expire_notified = false;
 };
 
 //!
@@ -134,6 +135,20 @@ public:
     QString getCurrentPollTitle() const;
     QStringList getActiveProjectNames() const;
     QStringList getActiveProjectUrls() const;
+
+    //!
+    //! \brief getExpiringPollsNotNotified. This method populates a QStringList with
+    //! the polls in the pollitems cache that are within the m_poll_expire_warning window
+    //! and which have not previously been notified to the user. Since this method is
+    //! to be used to have the GUI immediately provide notification to the user, it also
+    //! marks each of the polls in the QStringList m_expire_notified = true so that they
+    //! will not appear again on this list (unless the wallet is restarted). This accomplishes
+    //! a single shot notification for each poll that is about to expire.
+    //!
+    //! \return QStringList of polls that are about to expire (within m_poll_expire_warning of
+    //! expiration), and which have not previously been included on the list (i.e. notified).
+    //!
+    QStringList getExpiringPollsNotNotified();
     std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags);
 
     CAmount estimatePollFee() const;

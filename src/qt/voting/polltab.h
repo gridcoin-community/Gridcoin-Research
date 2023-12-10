@@ -50,6 +50,9 @@ public:
     void setVotingModel(VotingModel* voting_model);
     void setPollFilterFlags(GRC::PollFilterFlag flags);
 
+signals:
+    void newVoteReceivedAndPollMarkedDirty();
+
 public slots:
     void changeViewMode(const ViewId view_id);
     void refresh();
@@ -60,7 +63,7 @@ public slots:
 private:
     Ui::PollTab* ui;
     VotingModel* m_voting_model;
-    std::unique_ptr<PollTableModel> m_model;
+    std::unique_ptr<PollTableModel> m_polltable_model;
     std::unique_ptr<NoResult> m_no_result;
     std::unique_ptr<LoadingBar> m_loading;
     QString m_last_filter;

@@ -62,6 +62,7 @@ CCriticalSection cs_setpwalletRegistered;
 set<CWallet*> setpwalletRegistered;
 
 CCriticalSection cs_main;
+CCriticalSection cs_tx_val_commit_to_disk;
 
 CTxMemPool mempool;
 
@@ -1155,84 +1156,96 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             return error("%s: TxnBegin failed", __func__);
         }
 
-        if (pindexGenesisBlock == nullptr) {
-            if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
-                txdb.TxnAbort();
-                return error("%s: genesis block hash does not match", __func__);
+        {
+            // This lock protects the time period between the GridcoinConnectBlock, which also connects validated transaction
+            // contracts and causes contract handlers to fire, and the committing of the txindex changes to disk. Any contract
+            // handlers that generate signals whose downstream handlers make use of transaction data on disk via leveldb (txdb)
+            // on another thread need to take this lock to ensure that the write to leveldb and the access of the transaction data
+            // by the signal handlers is appropriately serialized.
+            LOCK(cs_tx_val_commit_to_disk);
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
+
+            if (pindexGenesisBlock == nullptr) {
+                if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
+                    txdb.TxnAbort();
+                    return error("%s: genesis block hash does not match", __func__);
+                }
+
+                pindexGenesisBlock = pindex;
+            } else {
+                assert(pindex->GetBlockHash()==block.GetHash(true));
+                assert(pindex->pprev == pindexBest);
+
+                if (!ConnectBlock(block, txdb, pindex, false)) {
+                    txdb.TxnAbort();
+                    error("%s: ConnectBlock %s failed, Previous block %s",
+                          __func__,
+                          hash.ToString().c_str(),
+                          pindex->pprev->GetBlockHash().ToString());
+                    InvalidChainFound(pindex);
+                    return false;
+                }
             }
 
-            pindexGenesisBlock = pindex;
-        } else {
-            assert(pindex->GetBlockHash()==block.GetHash(true));
-            assert(pindex->pprev == pindexBest);
-
-            if (!ConnectBlock(block, txdb, pindex, false)) {
-                txdb.TxnAbort();
-                error("%s: ConnectBlock %s failed, Previous block %s",
-                      __func__,
-                      hash.ToString().c_str(),
-                      pindex->pprev->GetBlockHash().ToString());
-                InvalidChainFound(pindex);
-                return false;
+            // Delete redundant memory transactions
+            for (auto const& tx : block.vtx) {
+                mempool.remove(tx);
+                mempool.removeConflicts(tx);
             }
-        }
 
-        // Delete redundant memory transactions
-        for (auto const& tx : block.vtx) {
-            mempool.remove(tx);
-            mempool.removeConflicts(tx);
-        }
+            // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
+            // AcceptToMemoryPool. Here we just need to do a staleness check.
+            std::vector<CTransaction> to_be_erased;
 
-        // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
-        // AcceptToMemoryPool. Here we just need to do a staleness check.
-        std::vector<CTransaction> to_be_erased;
+            for (const auto& [_, pool_tx] : mempool.mapTx) {
+                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
 
-        for (const auto& [_, pool_tx] : mempool.mapTx) {
-            for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
-                if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
-                    GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
-
-                    if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
-                        to_be_erased.push_back(pool_tx);
+                        if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
+                            to_be_erased.push_back(pool_tx);
+                        }
                     }
                 }
             }
-        }
 
-        // TODO: Additional mempool removals for generic transactions based on txns...
-        // that satisfy lock time requirements,
-        // that are at least 30m old,
-        // that have been broadcast at least once min 5m ago,
-        // that had at least 45s to go in to the last block,
-        // and are still not in the txdb? (for the wallet itself, not mempool.)
+            // TODO: Additional mempool removals for generic transactions based on txns...
+            // that satisfy lock time requirements,
+            // that are at least 30m old,
+            // that have been broadcast at least once min 5m ago,
+            // that had at least 45s to go in to the last block,
+            // and are still not in the txdb? (for the wallet itself, not mempool.)
 
-        for (const auto& tx : to_be_erased) {
-            LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
-            mempool.remove(tx);
-            // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
-            if (pwalletMain->EraseFromWallet(tx.GetHash())) {
-                pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+            for (const auto& tx : to_be_erased) {
+                LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
+                mempool.remove(tx);
+                // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+                if (pwalletMain->EraseFromWallet(tx.GetHash())) {
+                    pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+                }
             }
-        }
 
-        // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
-        // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
-        // repairwallet rpc, this is silent.
-        if (!to_be_erased.empty()) {
-            int nMisMatchFound = 0;
-            CAmount nBalanceInQuestion = 0;
+            // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+            // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+            // repairwallet rpc, this is silent.
+            if (!to_be_erased.empty()) {
+                int nMisMatchFound = 0;
+                CAmount nBalanceInQuestion = 0;
 
-            pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
-        }
+                pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
+            }
 
-        if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
-            txdb.TxnAbort();
-            return error("%s: WriteHashBestChain failed", __func__);
-        }
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
 
-        // Make sure it's successfully written to disk before changing memory structure
-        if (!txdb.TxnCommit()) {
-            return error("%s: TxnCommit failed", __func__);
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
         }
 
         // Add to current best branch

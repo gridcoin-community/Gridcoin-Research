@@ -57,6 +57,7 @@ void OptionsModel::Init()
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
     fMaskValues = settings.value("fMaskValues", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
+    pollExpireNotification = settings.value("pollExpireNotification", 8.0).toDouble();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "dark").toString();
@@ -142,6 +143,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fMaskValues);
         case LimitTxnDate:
             return QVariant(limitTxnDate);
+        case PollExpireNotification:
+            return QVariant(pollExpireNotification);
         case DisableUpdateCheck:
             return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
         case DataDir:
@@ -284,6 +287,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             limitTxnDate = value.toDate();
             settings.setValue("limitTxnDate", limitTxnDate);
             break;
+        case PollExpireNotification:
+            pollExpireNotification = value.toDouble();
+            settings.setValue("pollExpireNotification", pollExpireNotification);
+            break;
         case DisableUpdateCheck:
             gArgs.ForceSetArg("-disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
@@ -378,6 +385,11 @@ int64_t OptionsModel::getLimitTxnDateTime()
 #endif
 
     return limitTxnDateTime.toMSecsSinceEpoch() / 1000;
+}
+
+double OptionsModel::getPollExpireNotification()
+{
+    return pollExpireNotification;
 }
 
 bool OptionsModel::getStartAtStartup()

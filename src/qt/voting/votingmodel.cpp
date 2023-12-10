@@ -15,6 +15,7 @@
 #include "gridcoin/voting/payloads.h"
 #include "logging.h"
 #include "main.h"
+#include "optionsmodel.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
@@ -248,7 +249,27 @@ QStringList VotingModel::getActiveProjectUrls() const
     }
 
     return Urls;
+}
 
+QStringList VotingModel::getExpiringPollsNotNotified()
+{
+    QStringList expiring_polls;
+
+    QDateTime now = QDateTime::fromMSecsSinceEpoch(GetAdjustedTime() * 1000);
+
+    qint64 poll_expire_warning = static_cast<qint64>(m_options_model.getPollExpireNotification() * 3600.0 * 1000.0);
+
+    // Populate the list and mark the poll items included in the list m_expire_notified true.
+    for (auto& poll : m_pollitems) {
+        if (now.msecsTo(poll.second.m_expiration) <= poll_expire_warning
+            && !poll.second.m_expire_notified
+            && !poll.second.m_self_voted) {
+            expiring_polls << poll.second.m_title;
+            poll.second.m_expire_notified = true;
+        }
+    }
+
+    return expiring_polls;
 }
 
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
@@ -271,6 +292,7 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
             // poll item into the results and move on.
 
             bool pollitem_needs_rebuild = true;
+            bool pollitem_expire_notified = false;
             auto pollitems_iter = m_pollitems.find(iter->Ref().Txid());
 
             // Note that the NewVoteReceived core signal will also be fired during reorgs where votes are reverted,
@@ -281,6 +303,10 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
                     // Not stale... the cache entry is good. Insert into items to return and go to the next one.
                     items.push_back(pollitems_iter->second);
                     pollitem_needs_rebuild = false;
+                } else {
+                    // Retain state for expire notification in the case of a stale poll item that needs to be
+                    // refreshed.
+                    pollitem_expire_notified = pollitems_iter->second.m_expire_notified;
                 }
             }
 
@@ -302,7 +328,9 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
                 try {
                     if (std::optional<PollItem> item = BuildPollItem(iter)) {
                         // This will replace any stale existing entry in the cache with the freshly built item.
-                        // It will also correctly add a new entry for a new item.
+                        // It will also correctly add a new entry for a new item. The state of the pending expiry
+                        // notification is retained from the stale entry to the refreshed one.
+                        item->m_expire_notified = pollitem_expire_notified;
                         m_pollitems[iter->Ref().Txid()] = *item;
                         items.push_back(std::move(*item));
                     }
