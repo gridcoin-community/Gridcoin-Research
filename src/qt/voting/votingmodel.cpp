@@ -261,7 +261,8 @@ QStringList VotingModel::getExpiringPollsNotNotified()
 
     // Populate the list and mark the poll items included in the list m_expire_notified true.
     for (auto& poll : m_pollitems) {
-        if (now.msecsTo(poll.second.m_expiration) <= poll_expire_warning
+        if (!poll.second.m_finished
+            && now.msecsTo(poll.second.m_expiration) <= poll_expire_warning
             && !poll.second.m_expire_notified
             && !poll.second.m_self_voted) {
             expiring_polls << poll.second.m_title;
