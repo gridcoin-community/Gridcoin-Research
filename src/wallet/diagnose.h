@@ -147,7 +147,7 @@ public:
 
         m_hasEligibleProjects = researcher->Id().Which() == GRC::MiningId::Kind::CPID;
         m_hasPoolProjects = researcher->Projects().ContainsPool();
-        m_researcher_mode = !(configured_for_investor_mode || (!m_hasEligibleProjects && m_hasPoolProjects));
+        m_researcher_mode = !(configured_for_investor_mode || (!m_hasEligibleProjects && !m_hasPoolProjects));
     }
 
     /**
