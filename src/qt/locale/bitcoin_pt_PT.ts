@@ -2171,7 +2171,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <location line="+3"/>
         <source>Enable Staking</source>
-        <translation>Habilitar Realização de Stake</translation>
+        <translation>Ativar Staking</translation>
     </message>
     <message>
         <location line="+7"/>
