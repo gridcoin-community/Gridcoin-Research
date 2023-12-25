@@ -2472,7 +2472,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     case GRC::ContractType::SIDESTAKE:
     {
         if (block_v13_enabled) {
-            GRC::CBitcoinAddressForStorage sidestake_address;
+            CBitcoinAddress sidestake_address;
             if (!sidestake_address.SetString(params[2].get_str())) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the sidestake is invalid.");
             }
@@ -2499,7 +2499,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 contract_version,                                            // Contract version number (3+)
                 action,                                                      // Contract action
                 uint32_t {1},                                                // Contract payload version number
-                sidestake_address,                                           // Sidestake address
+                sidestake_address.Get(),                                     // Sidestake destination
                 allocation,                                                  // Sidestake allocation
                 description,                                                 // Sidestake description
                 GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY // sidestake status

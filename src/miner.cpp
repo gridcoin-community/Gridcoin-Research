@@ -921,7 +921,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
             ++iterSideStake)
         {
-            CBitcoinAddress address = iterSideStake->get()->GetAddress();
+            CBitcoinAddress address(iterSideStake->get()->GetDestination());
             double allocation = iterSideStake->get()->GetAllocation();
 
             if (!address.IsValid())
