@@ -39,35 +39,146 @@ public:
     }
 };
 
-
-enum class SideStakeStatus
-{
-    UNKNOWN,
-    ACTIVE,         //!< A user specified sidestake that is active
-    INACTIVE,       //!< A user specified sidestake that is inactive
-    DELETED,        //!< A mandatory sidestake that has been deleted by contract
-    MANDATORY,      //!< An active mandatory sidetake by contract
-    OUT_OF_BOUND
-};
-
 //!
-//! \brief The SideStake class. This class formalizes the "sidestake", which is a directive to apportion
+//! \brief The LocalSideStake class. This class formalizes the local sidestake, which is a directive to apportion
 //! a percentage of the total stake value to a designated address. This address must be a valid address, but
 //! may or may not be owned by the staker. This is the primary mechanism to do automatic "donations" to
 //! defined network addresses.
 //!
-//! The class supports two modes of operation. Local (voluntary) entries will be picked up from the config file(s)
-//! and will be managed dynamically based on the initial load of the config file + the r-w file + any changes to
-//! in any GUI implementation on top of this. Mandatory entries will be picked up by contract handlers similar to
-//! other contract types (cf. protocol entries).
+//! Local (voluntary) entries will be picked up from the config file(s) and will be managed dynamically based on the
+//! initial load of the config file + the r-w file + any changes in any GUI implementation on top of this.
 //!
-class SideStake
+class LocalSideStake
 {
 public:
+    enum class LocalSideStakeStatus
+    {
+        UNKNOWN,
+        ACTIVE,         //!< A user specified sidestake that is active
+        INACTIVE,       //!< A user specified sidestake that is inactive
+        OUT_OF_BOUND
+    };
+
     //!
     //! \brief Wrapped Enumeration of sidestake entry status, mainly for serialization/deserialization.
     //!
-    using Status = EnumByte<SideStakeStatus>;
+    using Status = EnumByte<LocalSideStakeStatus>;
+
+    CBitcoinAddressForStorage m_address; //!< The Gridcoin Address of the sidestake destination.
+
+    double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
+
+    std::string m_description;           //!< The description of the sidestake (optional)
+
+    Status m_status;                     //!< The status of the sidestake. It is of type int instead of enum for serialization.
+
+
+    //!
+    //! \brief Initialize an empty, invalid sidestake instance.
+    //!
+    LocalSideStake();
+
+    //!
+    //! \brief Initialize a sidestake instance with the provided address and allocation. This is used to construct a user
+    //! specified sidestake.
+    //!
+    //! \param address
+    //! \param allocation
+    //! \param description (optional)
+    //!
+    LocalSideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
+
+    //!
+    //! \brief Initialize a sidestake instance with the provided parameters.
+    //!
+    //! \param address
+    //! \param allocation
+    //! \param description (optional)
+    //! \param status
+    //!
+    LocalSideStake(CBitcoinAddressForStorage address, double allocation, std::string description, LocalSideStakeStatus status);
+
+    //!
+    //! \brief Determine whether a sidestake contains each of the required elements.
+    //! \return true if the sidestake is well-formed.
+    //!
+    bool WellFormed() const;
+
+    //!
+    //! \brief Returns the string representation of the current sidestake status
+    //!
+    //! \return Translated string representation of sidestake status
+    //!
+    std::string StatusToString() const;
+
+    //!
+    //! \brief Returns the translated or untranslated string of the input sidestake status
+    //!
+    //! \param status. SideStake status
+    //! \param translated. True for translated, false for not translated. Defaults to true.
+    //!
+    //! \return SideStake status string.
+    //!
+    std::string StatusToString(const LocalSideStakeStatus& status, const bool& translated = true) const;
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side sidestake to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator==(LocalSideStake b);
+
+    //!
+    //! \brief Comparison operator overload used in the unit test harness.
+    //!
+    //! \param b The right hand side sidestake to compare for equality.
+    //!
+    //! \return Equal or not.
+    //!
+    bool operator!=(LocalSideStake b);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_address);
+        READWRITE(m_allocation);
+        READWRITE(m_description);
+        READWRITE(m_status);
+    }
+};
+
+//!
+//! \brief The type that defines a shared pointer to a local sidestake
+//!
+typedef std::shared_ptr<LocalSideStake> LocalSideStake_ptr;
+
+//!
+//! \brief The MandatorySideStake class. This class formalizes the mandatory sidestake, which is a directive to apportion
+//! a percentage of the total stake value to a designated address. This address must be a valid address, but
+//! may or may not be owned by the staker. This is the primary mechanism to do automatic "donations" to
+//! defined network addresses.
+//!
+//! Mandatory entries will be picked up by contract handlers similar to other contract types (cf. protocol entries).
+//!
+class MandatorySideStake
+{
+public:
+    enum class MandatorySideStakeStatus
+    {
+        UNKNOWN,
+        DELETED,        //!< A mandatory sidestake that has been deleted by contract
+        MANDATORY,      //!< An active mandatory sidetake by contract
+        OUT_OF_BOUND
+    };
+
+    //!
+    //! \brief Wrapped Enumeration of sidestake entry status, mainly for serialization/deserialization.
+    //!
+    using Status = EnumByte<MandatorySideStakeStatus>;
 
     CBitcoinAddressForStorage m_address; //!< The Gridcoin Address of the sidestake destination.
 
@@ -86,7 +197,7 @@ public:
     //!
     //! \brief Initialize an empty, invalid sidestake instance.
     //!
-    SideStake();
+    MandatorySideStake();
 
     //!
     //! \brief Initialize a sidestake instance with the provided address and allocation. This is used to construct a user
@@ -96,7 +207,7 @@ public:
     //! \param allocation
     //! \param description (optional)
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
+    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
@@ -106,7 +217,7 @@ public:
     //! \param description (optional)
     //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, SideStakeStatus status);
+    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description, MandatorySideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters. This form is normally used to construct a
@@ -119,8 +230,8 @@ public:
     //! \param hash
     //! \param status
     //!
-    SideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp,
-              uint256 hash, SideStakeStatus status);
+    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp,
+              uint256 hash, MandatorySideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -157,7 +268,7 @@ public:
     //!
     //! \return SideStake status string.
     //!
-    std::string StatusToString(const SideStakeStatus& status, const bool& translated = true) const;
+    std::string StatusToString(const MandatorySideStakeStatus& status, const bool& translated = true) const;
 
     //!
     //! \brief Comparison operator overload used in the unit test harness.
@@ -166,7 +277,7 @@ public:
     //!
     //! \return Equal or not.
     //!
-    bool operator==(SideStake b);
+    bool operator==(MandatorySideStake b);
 
     //!
     //! \brief Comparison operator overload used in the unit test harness.
@@ -175,7 +286,7 @@ public:
     //!
     //! \return Equal or not.
     //!
-    bool operator!=(SideStake b);
+    bool operator!=(MandatorySideStake b);
 
     ADD_SERIALIZE_METHODS;
 
@@ -193,7 +304,44 @@ public:
 };
 
 //!
-//! \brief The type that defines a shared pointer to a sidestake
+//! \brief The type that defines a shared pointer to a mandatory sidestake
+//!
+typedef std::shared_ptr<MandatorySideStake> MandatorySideStake_ptr;
+
+//!
+//! \brief This is a facade that combines the mandatory and local sidestake classes into one for use in the registry
+//! and the GUI code.
+//!
+class SideStake
+{
+public:
+    //!
+    //! \brief A variant to hold the two different types of sidestake status enums.
+    //!
+    typedef std::variant<MandatorySideStake::Status, LocalSideStake::Status> Status;
+
+    SideStake();
+
+    SideStake(LocalSideStake_ptr sidestake_ptr);
+
+    SideStake(MandatorySideStake_ptr sidestake_ptr);
+
+    bool IsMandatory() const;
+
+    CBitcoinAddress GetAddress() const;
+    double GetAllocation() const;
+    std::string GetDescription() const;
+    Status GetStatus() const;
+    std::string StatusToString() const;
+
+private:
+    LocalSideStake_ptr m_local_sidestake_ptr;
+    MandatorySideStake_ptr m_mandatory_sidestake_ptr;
+    bool m_mandatory;
+};
+
+//!
+//! \brief The type that defines a shared pointer to a mandatory sidestake
 //!
 typedef std::shared_ptr<SideStake> SideStake_ptr;
 
@@ -221,7 +369,7 @@ public:
     //!
     uint32_t m_version = CURRENT_VERSION;
 
-    SideStake m_entry; //!< The sidestake entry in the payload.
+    MandatorySideStake m_entry; //!< The sidestake entry in the payload.
 
     //!
     //! \brief Initialize an empty, invalid sidestake entry payload.
@@ -238,7 +386,7 @@ public:
     //! \param status. Status of the sidestake entry
     //!
     SideStakePayload(const uint32_t version, CBitcoinAddressForStorage address, double allocation,
-                     std::string description, SideStakeStatus status);
+                     std::string description, MandatorySideStake::MandatorySideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake entry payload from the given sidestake entry
@@ -247,7 +395,7 @@ public:
     //! \param version Version of the serialized sidestake entry format.
     //! \param sidestake_entry The sidestake entry itself.
     //!
-    SideStakePayload(const uint32_t version, SideStake sidestake_entry);
+    SideStakePayload(const uint32_t version, MandatorySideStake sidestake_entry);
 
     //!
     //! \brief Initialize a sidestake entry payload from the given sidestake entry
@@ -255,7 +403,7 @@ public:
     //!
     //! \param sidestake_entry The sidestake entry itself.
     //!
-    SideStakePayload(SideStake sidestake_entry);
+    SideStakePayload(MandatorySideStake sidestake_entry);
 
     //!
     //! \brief Get the type of contract that this payload contains data for.
@@ -363,16 +511,23 @@ public:
           };
 
     //!
-    //! \brief The type that keys sidestake entries by their addresses. Note that the entries
+    //! \brief The type that keys local sidestake entries by their addresses. Note that the entries
     //! in this map are actually smart shared pointer wrappers, so that the same actual object
     //! can be held by both this map and the historical map without object duplication.
     //!
-    typedef std::map<CBitcoinAddressForStorage, SideStake_ptr> SideStakeMap;
+    typedef std::map<CBitcoinAddressForStorage, LocalSideStake_ptr> LocalSideStakeMap;
+
+    //!
+    //! \brief The type that keys mandatory sidestake entries by their addresses. Note that the entries
+    //! in this map are actually smart shared pointer wrappers, so that the same actual object
+    //! can be held by both this map and the historical map without object duplication.
+    //!
+    typedef std::map<CBitcoinAddressForStorage, MandatorySideStake_ptr> MandatorySideStakeMap;
 
     //!
     //! \brief PendingSideStakeMap. This is not actually used but defined to satisfy the template.
     //!
-    typedef SideStakeMap PendingSideStakeMap;
+    typedef MandatorySideStakeMap PendingSideStakeMap;
 
     //!
     //! \brief The type that keys historical sidestake entries by the contract hash (txid).
@@ -380,7 +535,7 @@ public:
     //! the same actual object can be held by both this map and the (current) sidestake entry map
     //! without object duplication.
     //!
-    typedef std::map<uint256, SideStake_ptr> HistoricalSideStakeMap;
+    typedef std::map<uint256, MandatorySideStake_ptr> HistoricalSideStakeMap;
 
     //!
     //! \brief Get the collection of current sidestake entries. Note that this INCLUDES deleted
@@ -459,15 +614,6 @@ public:
     bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
 
     //!
-    //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
-    //! the registry db.
-    //!
-    //! \param SideStake object to add
-    //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
-    //!
-    void NonContractAdd(const SideStake& sidestake, const bool& save_to_file = true);
-
-    //!
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
     //! both Add and Delete actually call a common helper function AddDelete, because the action
     //! is actually symmetric to both.
@@ -477,6 +623,23 @@ public:
     void Add(const ContractContext& ctx) override;
 
     //!
+    //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry
+    //! both Add and Delete actually call a common helper function AddDelete, because the action
+    //! is actually symmetric to both.
+    //! \param ctx
+    //!
+    void Delete(const ContractContext& ctx) override;
+
+    //!
+    //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
+    //! the registry db.
+    //!
+    //! \param SideStake object to add
+    //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
+    //!
+    void NonContractAdd(const LocalSideStake& sidestake, const bool& save_to_file = true);
+
+    //!
     //! \brief Provides for deletion of local (voluntary) sidestakes from the in-memory local map that are not persisted
     //! to the registry db. Deletion is by the map key (CBitcoinAddress).
     //!
@@ -484,14 +647,6 @@ public:
     //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
     //!
     void NonContractDelete(const CBitcoinAddressForStorage& address, const bool& save_to_file = true);
-
-    //!
-    //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry
-    //! both Add and Delete actually call a common helper function AddDelete, because the action
-    //! is actually symmetric to both.
-    //! \param ctx
-    //!
-    void Delete(const ContractContext& ctx) override;
 
     //!
     //! \brief Revert the registry state for the sidestake entry to the state prior
@@ -560,10 +715,10 @@ public:
     //!
     //! \brief Specializes the template RegistryDB for the SideStake class
     //!
-    typedef RegistryDB<SideStake,
-                       SideStake,
-                       SideStakeStatus,
-                       SideStakeMap,
+    typedef RegistryDB<MandatorySideStake,
+                       MandatorySideStake,
+                       MandatorySideStake::MandatorySideStakeStatus,
+                       MandatorySideStakeMap,
                        PendingSideStakeMap,
                        HistoricalSideStakeMap> SideStakeDB;
 
@@ -592,9 +747,9 @@ private:
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
 
-    SideStakeMap m_local_sidestake_entries;             //!< Contains the local (non-contract) sidestake entries.
-    SideStakeMap m_sidestake_entries;                   //!< Contains the mandatory sidestake entries, including DELETED.
-    PendingSideStakeMap m_pending_sidestake_entries {}; //!< Not used. Only to satisfy the template.
+    LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
+    MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
+    PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
 
     SideStakeDB m_sidestake_db;
 

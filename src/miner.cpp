@@ -921,26 +921,28 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
             ++iterSideStake)
         {
-            CBitcoinAddress& address = iterSideStake->get()->m_address;
+            CBitcoinAddress address = iterSideStake->get()->GetAddress();
+            double allocation = iterSideStake->get()->GetAllocation();
+
             if (!address.IsValid())
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
-                          iterSideStake->get()->m_address.ToString());
+                          address.ToString());
                 continue;
             }
 
             // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into
             // the coinstake below. Prevents dust build-up.
-            if (nReward * iterSideStake->get()->m_allocation < CENT)
+            if (nReward * allocation < CENT)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
-                          CoinToDouble(nReward * iterSideStake->get()->m_allocation),
-                          iterSideStake->get()->m_address.ToString()
+                          CoinToDouble(nReward * allocation),
+                          address.ToString()
                           );
                 continue;
             }
 
-            if (dSumAllocation + iterSideStake->get()->m_allocation > 1.0)
+            if (dSumAllocation + allocation > 1.0)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100 percent, "
                           "ending sidestake allocations.");
@@ -963,11 +965,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             int64_t nSideStake = 0;
 
             // For allocations ending less than 100% assign using sidestake allocation.
-            if (dSumAllocation + iterSideStake->get()->m_allocation < 1.0)
-                nSideStake = nReward * iterSideStake->get()->m_allocation;
+            if (dSumAllocation + allocation < 1.0)
+                nSideStake = nReward * allocation;
             // We need to handle the final sidestake differently in the case it brings the total allocation up to 100%,
             // because testing showed in corner cases the output return to the staking address could be off by one Halford.
-            else if (dSumAllocation + iterSideStake->get()->m_allocation == 1.0)
+            else if (dSumAllocation + allocation == 1.0)
                 // Simply assign the special case final nSideStake the remaining output value minus input value to ensure
                 // a match on the output flowing down.
                 nSideStake = nRemainingStakeOutputValue - nInputValue;
@@ -976,10 +978,10 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
-                      CoinToDouble(nReward * iterSideStake->get()->m_allocation),
-                      iterSideStake->get()->m_address.ToString()
+                      CoinToDouble(nReward * allocation),
+                      address.ToString()
                       );
-            dSumAllocation += iterSideStake->get()->m_allocation;
+            dSumAllocation += allocation;
             nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
         }

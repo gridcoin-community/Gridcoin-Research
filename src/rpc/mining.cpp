@@ -117,8 +117,8 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     // sidestakes are always included.
     for (const auto& alloc : vSideStakeAlloc)
     {
-        sidestakingalloc.pushKV("address", alloc->m_address.ToString());
-        sidestakingalloc.pushKV("allocation_pct", alloc->m_allocation * 100);
+        sidestakingalloc.pushKV("address", alloc->GetAddress().ToString());
+        sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation() * 100);
         sidestakingalloc.pushKV("status", alloc->StatusToString());
 
         vsidestakingalloc.push_back(sidestakingalloc);
