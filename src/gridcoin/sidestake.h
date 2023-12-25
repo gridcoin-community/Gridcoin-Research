@@ -15,6 +15,7 @@
 
 namespace GRC {
 
+/*
 //!
 //! \brief The CBitcoinAddressForStorage class. This is a very small extension of the CBitcoinAddress class that
 //! provides serialization/deserialization.
@@ -38,10 +39,11 @@ public:
         READWRITE(vchData);
     }
 };
+*/
 
 //!
 //! \brief The LocalSideStake class. This class formalizes the local sidestake, which is a directive to apportion
-//! a percentage of the total stake value to a designated address. This address must be a valid address, but
+//! a percentage of the total stake value to a designated destination. This destination must be valid, but
 //! may or may not be owned by the staker. This is the primary mechanism to do automatic "donations" to
 //! defined network addresses.
 //!
@@ -64,7 +66,7 @@ public:
     //!
     using Status = EnumByte<LocalSideStakeStatus>;
 
-    CBitcoinAddressForStorage m_address; //!< The Gridcoin Address of the sidestake destination.
+    CTxDestination m_destination;        //!< The destination of the sidestake.
 
     double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
 
@@ -79,24 +81,24 @@ public:
     LocalSideStake();
 
     //!
-    //! \brief Initialize a sidestake instance with the provided address and allocation. This is used to construct a user
+    //! \brief Initialize a sidestake instance with the provided destination and allocation. This is used to construct a user
     //! specified sidestake.
     //!
-    //! \param address
+    //! \param destination
     //! \param allocation
     //! \param description (optional)
     //!
-    LocalSideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
+    LocalSideStake(CTxDestination destination, double allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
     //!
-    //! \param address
+    //! \param destination
     //! \param allocation
     //! \param description (optional)
     //! \param status
     //!
-    LocalSideStake(CBitcoinAddressForStorage address, double allocation, std::string description, LocalSideStakeStatus status);
+    LocalSideStake(CTxDestination destination, double allocation, std::string description, LocalSideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -144,7 +146,7 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(m_address);
+        READWRITE(m_destination);
         READWRITE(m_allocation);
         READWRITE(m_description);
         READWRITE(m_status);
@@ -158,7 +160,7 @@ typedef std::shared_ptr<LocalSideStake> LocalSideStake_ptr;
 
 //!
 //! \brief The MandatorySideStake class. This class formalizes the mandatory sidestake, which is a directive to apportion
-//! a percentage of the total stake value to a designated address. This address must be a valid address, but
+//! a percentage of the total stake value to a designated destination. This destination must be valid, but
 //! may or may not be owned by the staker. This is the primary mechanism to do automatic "donations" to
 //! defined network addresses.
 //!
@@ -180,7 +182,7 @@ public:
     //!
     using Status = EnumByte<MandatorySideStakeStatus>;
 
-    CBitcoinAddressForStorage m_address; //!< The Gridcoin Address of the sidestake destination.
+    CTxDestination m_destination;        //!< The destination of the sidestake.
 
     double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
 
@@ -190,7 +192,7 @@ public:
 
     uint256 m_hash;                      //!< The hash of the transaction that contains a mandatory sidestake.
 
-    uint256 m_previous_hash;             //!< The m_hash of the previous mandatory sidestake allocation with the same address.
+    uint256 m_previous_hash;             //!< The m_hash of the previous mandatory sidestake allocation with the same destination.
 
     Status m_status;                     //!< The status of the sidestake. It is of type int instead of enum for serialization.
 
@@ -200,37 +202,37 @@ public:
     MandatorySideStake();
 
     //!
-    //! \brief Initialize a sidestake instance with the provided address and allocation. This is used to construct a user
+    //! \brief Initialize a sidestake instance with the provided destination and allocation. This is used to construct a user
     //! specified sidestake.
     //!
-    //! \param address
+    //! \param destination
     //! \param allocation
     //! \param description (optional)
     //!
-    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description);
+    MandatorySideStake(CTxDestination destination, double allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
     //!
-    //! \param address
+    //! \param destination
     //! \param allocation
     //! \param description (optional)
     //! \param status
     //!
-    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description, MandatorySideStakeStatus status);
+    MandatorySideStake(CTxDestination destination, double allocation, std::string description, MandatorySideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters. This form is normally used to construct a
     //! mandatory sidestake from a contract.
     //!
-    //! \param address
+    //! \param destination
     //! \param allocation
     //! \param description (optional)
     //! \param timestamp
     //! \param hash
     //! \param status
     //!
-    MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description, int64_t timestamp,
+    MandatorySideStake(CTxDestination destination, double allocation, std::string description, int64_t timestamp,
               uint256 hash, MandatorySideStakeStatus status);
 
     //!
@@ -240,15 +242,15 @@ public:
     bool WellFormed() const;
 
     //!
-    //! \brief This is the standardized method that returns the key value (in this case the address) for the sidestake entry (for
+    //! \brief This is the standardized method that returns the key value (in this case the destination) for the sidestake entry (for
     //! the registry_db.h template.)
     //!
-    //! \return CBitcoinAddress key value for the sidestake entry
+    //! \return CTxDestination key value for the sidestake entry
     //!
-    CBitcoinAddressForStorage Key() const;
+    CTxDestination Key() const;
 
     //!
-    //! \brief Provides the sidestake address and status as a pair of strings.
+    //! \brief Provides the sidestake destination address and status as a pair of strings.
     //! \return std::pair of strings
     //!
     std::pair<std::string, std::string> KeyValueToString() const;
@@ -293,7 +295,7 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(m_address);
+        READWRITE(m_destination);
         READWRITE(m_allocation);
         READWRITE(m_description);
         READWRITE(m_timestamp);
@@ -328,7 +330,7 @@ public:
 
     bool IsMandatory() const;
 
-    CBitcoinAddress GetAddress() const;
+    CTxDestination GetDestination() const;
     double GetAllocation() const;
     std::string GetDescription() const;
     Status GetStatus() const;
@@ -377,15 +379,15 @@ public:
     SideStakePayload(uint32_t version = CURRENT_VERSION);
 
     //!
-    //! \brief Initialize a sidestakeEntryPayload from a sidestake address, allocation,
+    //! \brief Initialize a sidestakeEntryPayload from a sidestake destination, allocation,
     //! description, and status.
     //!
-    //! \param address. Address for the sidestake entry
+    //! \param destination. Destination for the sidestake entry
     //! \param allocation. Allocation for the sidestake entry
     //! \param description. Description string for the sidstake entry
     //! \param status. Status of the sidestake entry
     //!
-    SideStakePayload(const uint32_t version, CBitcoinAddressForStorage address, double allocation,
+    SideStakePayload(const uint32_t version, CTxDestination destination, double allocation,
                      std::string description, MandatorySideStake::MandatorySideStakeStatus status);
 
     //!
@@ -440,7 +442,7 @@ public:
                                                 "m_entry.StatusToString() = %s",
                      __func__,
                      valid,
-                     m_entry.m_address.ToString(),
+                     CBitcoinAddress(m_entry.m_destination).ToString(),
                      m_entry.m_allocation,
                      m_entry.StatusToString()
                      );
@@ -456,7 +458,7 @@ public:
     //!
     std::string LegacyKeyString() const override
     {
-        return m_entry.m_address.ToString();
+        return CBitcoinAddress(m_entry.m_destination).ToString();
     }
 
     //!
@@ -511,18 +513,18 @@ public:
           };
 
     //!
-    //! \brief The type that keys local sidestake entries by their addresses. Note that the entries
+    //! \brief The type that keys local sidestake entries by their destinations. Note that the entries
     //! in this map are actually smart shared pointer wrappers, so that the same actual object
     //! can be held by both this map and the historical map without object duplication.
     //!
-    typedef std::map<CBitcoinAddressForStorage, LocalSideStake_ptr> LocalSideStakeMap;
+    typedef std::map<CTxDestination, LocalSideStake_ptr> LocalSideStakeMap;
 
     //!
-    //! \brief The type that keys mandatory sidestake entries by their addresses. Note that the entries
+    //! \brief The type that keys mandatory sidestake entries by their destinations. Note that the entries
     //! in this map are actually smart shared pointer wrappers, so that the same actual object
     //! can be held by both this map and the historical map without object duplication.
     //!
-    typedef std::map<CBitcoinAddressForStorage, MandatorySideStake_ptr> MandatorySideStakeMap;
+    typedef std::map<CTxDestination, MandatorySideStake_ptr> MandatorySideStakeMap;
 
     //!
     //! \brief PendingSideStakeMap. This is not actually used but defined to satisfy the template.
@@ -559,27 +561,27 @@ public:
     const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc);
 
     //!
-    //! \brief Get the current sidestake entry for the specified address.
+    //! \brief Get the current sidestake entry for the specified destination.
     //!
-    //! \param key The address of the sidestake entry.
+    //! \param key The destination of the sidestake entry.
     //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return A vector of smart pointers to entries matching the provided address. Up to two elements
+    //! \return A vector of smart pointers to entries matching the provided destination. Up to two elements
     //! are returned, mandatory entry first, unless local only boolean is set true.
     //!
-    std::vector<SideStake_ptr> Try(const CBitcoinAddressForStorage& key, const bool& local_only = false) const;
+    std::vector<SideStake_ptr> Try(const CTxDestination& key, const bool& local_only = false) const;
 
     //!
-    //! \brief Get the current sidestake entry for the specified address if it has a status of ACTIVE or MANDATORY.
+    //! \brief Get the current sidestake entry for the specified destination if it has a status of ACTIVE or MANDATORY.
     //!
-    //! \param key The address of the sidestake entry.
+    //! \param key The destination of the sidestake entry.
     //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
     //!
-    //! \return A vector of smart pointers to entries matching the provided address that are in status of
+    //! \return A vector of smart pointers to entries matching the provided destination that are in status of
     //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, unless local only boolean
     //! is set true.
     //!
-    std::vector<SideStake_ptr> TryActive(const CBitcoinAddressForStorage& key, const bool& local_only = false) const;
+    std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const bool& local_only = false) const;
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -641,12 +643,12 @@ public:
 
     //!
     //! \brief Provides for deletion of local (voluntary) sidestakes from the in-memory local map that are not persisted
-    //! to the registry db. Deletion is by the map key (CBitcoinAddress).
+    //! to the registry db. Deletion is by the map key (CTxDestination).
     //!
-    //! \param address
+    //! \param destination
     //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
     //!
-    void NonContractDelete(const CBitcoinAddressForStorage& address, const bool& save_to_file = true);
+    void NonContractDelete(const CTxDestination& destination, const bool& save_to_file = true);
 
     //!
     //! \brief Revert the registry state for the sidestake entry to the state prior

@@ -117,7 +117,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     // sidestakes are always included.
     for (const auto& alloc : vSideStakeAlloc)
     {
-        sidestakingalloc.pushKV("address", alloc->GetAddress().ToString());
+        sidestakingalloc.pushKV("address", CBitcoinAddress(alloc->GetDestination()).ToString());
         sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation() * 100);
         sidestakingalloc.pushKV("status", alloc->StatusToString());
 
