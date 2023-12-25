@@ -2496,14 +2496,14 @@ UniValue addkey(const UniValue& params, bool fHelp)
             }
 
             contract = GRC::MakeContract<GRC::SideStakePayload>(
-                        contract_version,               // Contract version number (3+)
-                        action,                         // Contract action
-                        uint32_t {1},                   // Contract payload version number
-                        sidestake_address,              // Sidestake address
-                        allocation,                     // Sidestake allocation
-                        description,                    // Sidestake description
-                        GRC::SideStakeStatus::MANDATORY // sidestake status
-                        );
+                contract_version,                                            // Contract version number (3+)
+                action,                                                      // Contract action
+                uint32_t {1},                                                // Contract payload version number
+                sidestake_address,                                           // Sidestake address
+                allocation,                                                  // Sidestake allocation
+                description,                                                 // Sidestake description
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY // sidestake status
+                );
         } else {
              throw JSONRPCError(RPC_INVALID_PARAMETER, "Sidestake contracts are not valid for block version less than v13.");
         }

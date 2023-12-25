@@ -5,6 +5,7 @@
 #include <qt/sidestaketablemodel.h>
 #include <qt/optionsmodel.h>
 #include <node/ui_interface.h>
+#include <gridcoin/support/enumbytes.h>
 
 #include <QList>
 #include <QTimer>
@@ -34,15 +35,37 @@ bool SideStakeLessThan::operator()(const GRC::SideStake& left, const GRC::SideSt
         std::swap(pLeft, pRight);
     }
 
+    // For the purposes of sorting mandatory and local sidestakes in the GUI table, we will shift the local status enum to int
+    // values that are above the mandatory enum values by OUT_OF_BOUND on the mandatory status enum.
+    int left_status, right_status;
+
+    if (pLeft->IsMandatory()) {
+        left_status = static_cast<int>(std::get<GRC::MandatorySideStake::Status>(pLeft->GetStatus()).Value());
+    } else {
+        // For purposes of comparison, the enum value for local sidestake is shifted by the max entry of the mandatory
+        // status enum.
+        left_status = static_cast<int>(std::get<GRC::LocalSideStake::Status>(pLeft->GetStatus()).Value())
+                      + static_cast<int>(GRC::MandatorySideStake::MandatorySideStakeStatus::OUT_OF_BOUND);
+    }
+
+    if (pRight->IsMandatory()) {
+        right_status = static_cast<int>(std::get<GRC::MandatorySideStake::Status>(pRight->GetStatus()).Value());
+    } else {
+        // For purposes of comparison, the enum value for local sidestake is shifted by the max entry of the mandatory
+        // status enum.
+        right_status = static_cast<int>(std::get<GRC::LocalSideStake::Status>(pRight->GetStatus()).Value())
+                      + static_cast<int>(GRC::MandatorySideStake::MandatorySideStakeStatus::OUT_OF_BOUND);
+    }
+
     switch (static_cast<SideStakeTableModel::ColumnIndex>(m_column)) {
     case SideStakeTableModel::Address:
-        return pLeft->m_address < pRight->m_address;
+        return pLeft->GetAddress() < pRight->GetAddress();
     case SideStakeTableModel::Allocation:
-        return pLeft->m_allocation < pRight->m_allocation;
+        return pLeft->GetAllocation() < pRight->GetAllocation();
     case SideStakeTableModel::Description:
-        return pLeft->m_description.compare(pRight->m_description) < 0;
+        return pLeft->GetDescription().compare(pRight->GetDescription()) < 0;
     case SideStakeTableModel::Status:
-        return pLeft->m_status < pRight->m_status;
+        return left_status < right_status;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -84,7 +107,6 @@ public:
 
         return nullptr;
     }
-
 };
 
 SideStakeTableModel::SideStakeTableModel(OptionsModel* parent)
@@ -131,11 +153,11 @@ QVariant SideStakeTableModel::data(const QModelIndex &index, int role) const
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         switch (column) {
         case Address:
-            return QString::fromStdString(rec->m_address.ToString());
+            return QString::fromStdString(rec->GetAddress().ToString());
         case Allocation:
-            return rec->m_allocation * 100.0;
+            return rec->GetAllocation() * 100.0;
         case Description:
-            return QString::fromStdString(rec->m_description);
+            return QString::fromStdString(rec->GetDescription());
         case Status:
             return QString::fromStdString(rec->StatusToString());
         } // no default case, so the compiler can warn about missing cases
@@ -181,8 +203,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         CBitcoinAddress address;
         address.SetString(value.toString().toStdString());
 
-
-        if (rec->m_address == address) {
+        if (rec->GetAddress() == address) {
             m_edit_status = NO_CHANGES;
             return false;
         } else if (!address.IsValid()) {
@@ -209,15 +230,23 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         // Save the original local sidestake (also in the core).
         GRC::SideStake orig_sidestake = *rec;
 
+        CBitcoinAddress orig_address = rec->GetAddress();
+        double orig_allocation = rec->GetAllocation();
+        std::string orig_description = rec->GetDescription();
+        GRC::SideStake::Status orig_status = rec->GetStatus();
+
         for (const auto& entry : registry.ActiveSideStakeEntries(false, true)) {
-            if (entry->m_address == orig_sidestake.m_address) {
+            CBitcoinAddress address = entry->GetAddress();
+            double allocation = entry->GetAllocation();
+
+            if (address == orig_address) {
                 continue;
             }
 
-            prior_total_allocation += entry->m_allocation * 100.0;
+            prior_total_allocation += allocation * 100.0;
         }
 
-        if (rec->m_allocation * 100.0 == value.toDouble()) {
+        if (orig_allocation * 100.0 == value.toDouble()) {
             m_edit_status = NO_CHANGES;
             return false;
         }
@@ -233,15 +262,13 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         }
 
         // Delete the original sidestake
-        registry.NonContractDelete(orig_sidestake.m_address, false);
+        registry.NonContractDelete(orig_address, false);
 
         // Add back the sidestake with the modified allocation
-        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_address,
-                                               value.toDouble() / 100.0,
-                                               orig_sidestake.m_description,
-                                               int64_t {0},
-                                               uint256 {},
-                                               orig_sidestake.m_status.Value()), true);
+        registry.NonContractAdd(GRC::LocalSideStake(orig_address,
+                                                    value.toDouble() / 100.0,
+                                                    orig_description,
+                                                    std::get<GRC::LocalSideStake::Status>(orig_status).Value()), true);
 
         break;
     }
@@ -250,7 +277,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         std::string orig_value = value.toString().toStdString();
         std::string san_value = SanitizeString(orig_value, SAFE_CHARS_CSV);
 
-        if (rec->m_description == orig_value) {
+        if (rec->GetDescription() == orig_value) {
             m_edit_status = NO_CHANGES;
             return false;
         }
@@ -264,15 +291,13 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         GRC::SideStake orig_sidestake = *rec;
 
         // Delete the original sidestake
-        registry.NonContractDelete(orig_sidestake.m_address, false);
+        registry.NonContractDelete(orig_sidestake.GetAddress(), false);
 
         // Add back the sidestake with the modified allocation
-        registry.NonContractAdd(GRC::SideStake(orig_sidestake.m_address,
-                                               orig_sidestake.m_allocation,
-                                               san_value,
-                                               int64_t {0},
-                                               uint256 {},
-                                               orig_sidestake.m_status.Value()), true);
+        registry.NonContractAdd(GRC::LocalSideStake(orig_sidestake.GetAddress(),
+                                                    orig_sidestake.GetAllocation(),
+                                                    san_value,
+                                                    std::get<GRC::LocalSideStake::Status>(orig_sidestake.GetStatus()).Value()), true);
 
         break;
     }
@@ -308,7 +333,8 @@ Qt::ItemFlags SideStakeTableModel::flags(const QModelIndex &index) const
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
 
-    if (rec->m_status == GRC::SideStakeStatus::ACTIVE
+    if (!rec->IsMandatory()
+        && std::get<GRC::LocalSideStake::Status>(rec->GetStatus()) == GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE
         && (index.column() == Allocation || index.column() == Description)) {
         retval |= Qt::ItemIsEditable;
     }
@@ -350,7 +376,7 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
 
     // Get total allocation of all active/mandatory sidestake entries
     for (const auto& entry : registry.ActiveSideStakeEntries(false, true)) {
-        prior_total_allocation += entry->m_allocation * 100.0;
+        prior_total_allocation += entry->GetAllocation() * 100.0;
     }
 
     if (!core_local_sidestake.empty()) {
@@ -376,12 +402,10 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
         return QString();
     }
 
-    registry.NonContractAdd(GRC::SideStake(sidestake_address,
-                                           sidestake_allocation,
-                                           sanitized_description,
-                                           int64_t {0},
-                                           uint256 {},
-                                           GRC::SideStakeStatus::ACTIVE));
+    registry.NonContractAdd(GRC::LocalSideStake(sidestake_address,
+                                                sidestake_allocation,
+                                                sanitized_description,
+                                                GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE));
 
     updateSideStakeTableModel();
 
@@ -393,14 +417,14 @@ bool SideStakeTableModel::removeRows(int row, int count, const QModelIndex &pare
     Q_UNUSED(parent);
     GRC::SideStake* rec = m_priv->index(row);
 
-    if(count != 1 || !rec || rec->m_status == GRC::SideStakeStatus::MANDATORY)
+    if (count != 1 || !rec || rec->IsMandatory())
     {
         // Can only remove one row at a time, and cannot remove rows not in model.
         // Also refuse to remove mandatory sidestakes.
         return false;
     }
 
-    GRC::GetSideStakeRegistry().NonContractDelete(rec->m_address);
+    GRC::GetSideStakeRegistry().NonContractDelete(rec->GetAddress());
 
     updateSideStakeTableModel();
 

@@ -45,34 +45,34 @@ CBitcoinAddressForStorage::CBitcoinAddressForStorage(CBitcoinAddress address)
 {}
 
 // -----------------------------------------------------------------------------
-// Class: SideStake
+// Class: MandatorySideStake
 // -----------------------------------------------------------------------------
-SideStake::SideStake()
+MandatorySideStake::MandatorySideStake()
     : m_address()
       , m_allocation()
       , m_description()
       , m_timestamp(0)
       , m_hash()
       , m_previous_hash()
-      , m_status(SideStakeStatus::UNKNOWN)
+      , m_status(MandatorySideStakeStatus::UNKNOWN)
 {}
 
-SideStake::SideStake(CBitcoinAddressForStorage address, double allocation, std::string description)
+MandatorySideStake::MandatorySideStake(CBitcoinAddressForStorage address, double allocation, std::string description)
     : m_address(address)
       , m_allocation(allocation)
       , m_description(description)
       , m_timestamp(0)
       , m_hash()
       , m_previous_hash()
-      , m_status(SideStakeStatus::UNKNOWN)
+      , m_status(MandatorySideStakeStatus::UNKNOWN)
 {}
 
-SideStake::SideStake(CBitcoinAddressForStorage address,
-                     double allocation,
-                     std::string description,
-                     int64_t timestamp,
-                     uint256 hash,
-                     SideStakeStatus status)
+MandatorySideStake::MandatorySideStake(CBitcoinAddressForStorage address,
+                                       double allocation,
+                                       std::string description,
+                                       int64_t timestamp,
+                                       uint256 hash,
+                                       MandatorySideStakeStatus status)
     : m_address(address)
       , m_allocation(allocation)
       , m_description(description)
@@ -82,48 +82,44 @@ SideStake::SideStake(CBitcoinAddressForStorage address,
       , m_status(status)
 {}
 
-bool SideStake::WellFormed() const
+bool MandatorySideStake::WellFormed() const
 {
     return m_address.IsValid() && m_allocation >= 0.0 && m_allocation <= 1.0;
 }
 
-CBitcoinAddressForStorage SideStake::Key() const
+CBitcoinAddressForStorage MandatorySideStake::Key() const
 {
     return m_address;
 }
 
-std::pair<std::string, std::string> SideStake::KeyValueToString() const
+std::pair<std::string, std::string> MandatorySideStake::KeyValueToString() const
 {
     return std::make_pair(m_address.ToString(), StatusToString());
 }
 
-std::string SideStake::StatusToString() const
+std::string MandatorySideStake::StatusToString() const
 {
     return StatusToString(m_status.Value());
 }
 
-std::string SideStake::StatusToString(const SideStakeStatus& status, const bool& translated) const
+std::string MandatorySideStake::StatusToString(const MandatorySideStakeStatus& status, const bool& translated) const
 {
     if (translated) {
         switch(status) {
-        case SideStakeStatus::UNKNOWN:         return _("Unknown");
-        case SideStakeStatus::ACTIVE:          return _("Active");
-        case SideStakeStatus::INACTIVE:        return _("Inactive");
-        case SideStakeStatus::DELETED:         return _("Deleted");
-        case SideStakeStatus::MANDATORY:       return _("Mandatory");
-        case SideStakeStatus::OUT_OF_BOUND:    break;
+        case MandatorySideStakeStatus::UNKNOWN:         return _("Unknown");
+        case MandatorySideStakeStatus::DELETED:         return _("Deleted");
+        case MandatorySideStakeStatus::MANDATORY:       return _("Mandatory");
+        case MandatorySideStakeStatus::OUT_OF_BOUND:    break;
         }
 
         assert(false); // Suppress warning
     } else {
         // The untranslated versions are really meant to serve as the string equivalent of the enum values.
         switch(status) {
-        case SideStakeStatus::UNKNOWN:         return "Unknown";
-        case SideStakeStatus::ACTIVE:          return "Active";
-        case SideStakeStatus::INACTIVE:        return "Inactive";
-        case SideStakeStatus::DELETED:         return "Deleted";
-        case SideStakeStatus::MANDATORY:       return "Mandatory";
-        case SideStakeStatus::OUT_OF_BOUND:    break;
+        case MandatorySideStakeStatus::UNKNOWN:         return "Unknown";
+        case MandatorySideStakeStatus::DELETED:         return "Deleted";
+        case MandatorySideStakeStatus::MANDATORY:       return "Mandatory";
+        case MandatorySideStakeStatus::OUT_OF_BOUND:    break;
         }
 
         assert(false); // Suppress warning
@@ -134,12 +130,13 @@ std::string SideStake::StatusToString(const SideStakeStatus& status, const bool&
     return std::string{};
 }
 
-bool SideStake::operator==(SideStake b)
+bool MandatorySideStake::operator==(MandatorySideStake b)
 {
     bool result = true;
 
     result &= (m_address == b.m_address);
     result &= (m_allocation == b.m_allocation);
+    result &= (m_description == b.m_description);
     result &= (m_timestamp == b.m_timestamp);
     result &= (m_hash == b.m_hash);
     result &= (m_previous_hash == b.m_previous_hash);
@@ -148,9 +145,166 @@ bool SideStake::operator==(SideStake b)
     return result;
 }
 
-bool SideStake::operator!=(SideStake b)
+bool MandatorySideStake::operator!=(MandatorySideStake b)
 {
     return !(*this == b);
+}
+
+// -----------------------------------------------------------------------------
+// Class: LocalSideStake
+// -----------------------------------------------------------------------------
+LocalSideStake::LocalSideStake()
+    : m_address()
+      , m_allocation()
+      , m_description()
+      , m_status(LocalSideStakeStatus::UNKNOWN)
+{}
+
+LocalSideStake::LocalSideStake(CBitcoinAddressForStorage address, double allocation, std::string description)
+    : m_address(address)
+      , m_allocation(allocation)
+      , m_description(description)
+      , m_status(LocalSideStakeStatus::UNKNOWN)
+{}
+
+LocalSideStake::LocalSideStake(CBitcoinAddressForStorage address,
+                               double allocation,
+                               std::string description,
+                               LocalSideStakeStatus status)
+    : m_address(address)
+      , m_allocation(allocation)
+      , m_description(description)
+      , m_status(status)
+{}
+
+bool LocalSideStake::WellFormed() const
+{
+    return m_address.IsValid() && m_allocation >= 0.0 && m_allocation <= 1.0;
+}
+
+std::string LocalSideStake::StatusToString() const
+{
+    return StatusToString(m_status.Value());
+}
+
+std::string LocalSideStake::StatusToString(const LocalSideStakeStatus& status, const bool& translated) const
+{
+    if (translated) {
+        switch(status) {
+        case LocalSideStakeStatus::UNKNOWN:         return _("Unknown");
+        case LocalSideStakeStatus::ACTIVE:          return _("Active");
+        case LocalSideStakeStatus::INACTIVE:        return _("Inactive");
+        case LocalSideStakeStatus::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    } else {
+        // The untranslated versions are really meant to serve as the string equivalent of the enum values.
+        switch(status) {
+        case LocalSideStakeStatus::UNKNOWN:         return "Unknown";
+        case LocalSideStakeStatus::ACTIVE:          return "Active";
+        case LocalSideStakeStatus::INACTIVE:        return "Inactive";
+        case LocalSideStakeStatus::OUT_OF_BOUND:    break;
+        }
+
+        assert(false); // Suppress warning
+    }
+
+           // This will never be reached. Put it in anyway to prevent control reaches end of non-void function warning
+           // from some compiler versions.
+    return std::string{};
+}
+
+bool LocalSideStake::operator==(LocalSideStake b)
+{
+    bool result = true;
+
+    result &= (m_address == b.m_address);
+    result &= (m_allocation == b.m_allocation);
+    result &= (m_description == b.m_description);
+    result &= (m_status == b.m_status);
+
+    return result;
+}
+
+bool LocalSideStake::operator!=(LocalSideStake b)
+{
+    return !(*this == b);
+}
+
+// -----------------------------------------------------------------------------
+// Class: SideStake
+// -----------------------------------------------------------------------------
+SideStake::SideStake()
+    : m_local_sidestake_ptr(nullptr)
+      , m_mandatory_sidestake_ptr(nullptr)
+      , m_mandatory(false)
+{}
+
+SideStake::SideStake(LocalSideStake_ptr sidestake_ptr)
+    : m_local_sidestake_ptr(sidestake_ptr)
+      , m_mandatory_sidestake_ptr(nullptr)
+      , m_mandatory(false)
+{}
+
+SideStake::SideStake(MandatorySideStake_ptr sidestake_ptr)
+    : m_local_sidestake_ptr(nullptr)
+      , m_mandatory_sidestake_ptr(sidestake_ptr)
+      , m_mandatory(true)
+{}
+
+bool SideStake::IsMandatory() const
+{
+    return m_mandatory;
+}
+
+CBitcoinAddress SideStake::GetAddress() const
+{
+    if (IsMandatory()) {
+        return m_mandatory_sidestake_ptr->m_address;
+    } else {
+        return m_local_sidestake_ptr->m_address;
+    }
+}
+
+double SideStake::GetAllocation() const
+{
+    if (IsMandatory()) {
+        return m_mandatory_sidestake_ptr->m_allocation;
+    } else {
+        return m_local_sidestake_ptr->m_allocation;
+    }
+}
+
+std::string SideStake::GetDescription() const
+{
+    if (IsMandatory()) {
+        return m_mandatory_sidestake_ptr->m_description;
+    } else {
+        return m_local_sidestake_ptr->m_description;
+    }
+}
+
+SideStake::Status SideStake::GetStatus() const
+{
+    Status status;
+
+    if (IsMandatory()) {
+        status = m_mandatory_sidestake_ptr->m_status;
+    } else {
+        status = m_local_sidestake_ptr->m_status;
+    }
+
+    return status;
+}
+
+std::string SideStake::StatusToString() const
+{
+    if (IsMandatory()) {
+        return m_mandatory_sidestake_ptr->StatusToString();
+    } else {
+        return m_local_sidestake_ptr->StatusToString();
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -169,21 +323,21 @@ SideStakePayload::SideStakePayload(const uint32_t version,
                                    CBitcoinAddressForStorage address,
                                    double allocation,
                                    std::string description,
-                                   SideStakeStatus status)
+                                   MandatorySideStake::MandatorySideStakeStatus status)
     : IContractPayload()
       , m_version(version)
-      , m_entry(SideStake(address, allocation, description, 0, uint256{}, status))
+      , m_entry(MandatorySideStake(address, allocation, description, 0, uint256{}, status))
 {
 }
 
-SideStakePayload::SideStakePayload(const uint32_t version, SideStake entry)
+SideStakePayload::SideStakePayload(const uint32_t version, MandatorySideStake entry)
     : IContractPayload()
       , m_version(version)
       , m_entry(std::move(entry))
 {
 }
 
-SideStakePayload::SideStakePayload(SideStake entry)
+SideStakePayload::SideStakePayload(MandatorySideStake entry)
     : SideStakePayload(CURRENT_VERSION, std::move(entry))
 {
 }
@@ -197,12 +351,12 @@ const std::vector<SideStake_ptr> SideStakeRegistry::SideStakeEntries() const
 
     LOCK(cs_lock);
 
-    for (const auto& entry : m_sidestake_entries) {
-        sidestakes.push_back(entry.second);
+    for (const auto& entry : m_mandatory_sidestake_entries) {
+        sidestakes.push_back(std::make_shared<SideStake>(entry.second));
     }
 
     for (const auto& entry : m_local_sidestake_entries) {
-        sidestakes.push_back(entry.second);
+        sidestakes.push_back(std::make_shared<SideStake>(entry.second));
     }
 
     return sidestakes;
@@ -223,11 +377,12 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
 
     // Do mandatory sidestakes first.
     if (!local_only) {
-        for (const auto& entry : m_sidestake_entries)
+        for (const auto& entry : m_mandatory_sidestake_entries)
         {
-            if (entry.second->m_status == SideStakeStatus::MANDATORY && allocation_sum + entry.second->m_allocation <= 1.0) {
+            if (entry.second->m_status == MandatorySideStake::MandatorySideStakeStatus::MANDATORY
+                && allocation_sum + entry.second->m_allocation <= 1.0) {
                 if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
-                    sidestakes.push_back(entry.second);
+                    sidestakes.push_back(std::make_shared<SideStake>(entry.second));
                     allocation_sum += entry.second->m_allocation;
                 }
             }
@@ -242,9 +397,10 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
 
         for (const auto& entry : m_local_sidestake_entries)
         {
-            if (entry.second->m_status == SideStakeStatus::ACTIVE && allocation_sum + entry.second->m_allocation <= 1.0) {
+            if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE
+                && allocation_sum + entry.second->m_allocation <= 1.0) {
                 if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
-                    sidestakes.push_back(entry.second);
+                    sidestakes.push_back(std::make_shared<SideStake>(entry.second));
                     allocation_sum += entry.second->m_allocation;
                 }
             }
@@ -261,17 +417,17 @@ std::vector<SideStake_ptr> SideStakeRegistry::Try(const CBitcoinAddressForStorag
     std::vector<SideStake_ptr> result;
 
     if (!local_only) {
-        const auto mandatory_entry = m_sidestake_entries.find(key);
+        const auto mandatory_entry = m_mandatory_sidestake_entries.find(key);
 
-        if (mandatory_entry != m_sidestake_entries.end()) {
-            result.push_back(mandatory_entry->second);
+        if (mandatory_entry != m_mandatory_sidestake_entries.end()) {
+            result.push_back(std::make_shared<SideStake>(mandatory_entry->second));
         }
     }
 
     const auto local_entry = m_local_sidestake_entries.find(key);
 
     if (local_entry != m_local_sidestake_entries.end()) {
-        result.push_back(local_entry->second);
+        result.push_back(std::make_shared<SideStake>(local_entry->second));
     }
 
     return result;
@@ -284,8 +440,14 @@ std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CBitcoinAddressFor
     std::vector<SideStake_ptr> result;
 
     for (const auto& iter : Try(key, local_only)) {
-        if (iter->m_status == SideStakeStatus::MANDATORY || iter->m_status == SideStakeStatus::ACTIVE) {
-            result.push_back(iter);
+        if (iter->IsMandatory()) {
+            if (std::get<MandatorySideStake::Status>(iter->GetStatus()) == MandatorySideStake::MandatorySideStakeStatus::MANDATORY) {
+                result.push_back(iter);
+            }
+        } else {
+            if (std::get<LocalSideStake::Status>(iter->GetStatus()) == LocalSideStake::LocalSideStakeStatus::ACTIVE) {
+                result.push_back(iter);
+            }
         }
     }
 
@@ -296,7 +458,7 @@ void SideStakeRegistry::Reset()
 {
     LOCK(cs_lock);
 
-    m_sidestake_entries.clear();
+    m_mandatory_sidestake_entries.clear();
     m_sidestake_db.clear();
 }
 
@@ -320,17 +482,17 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     // Ensure status is DELETED if the contract action was REMOVE, regardless of what was actually
     // specified.
     if (ctx->m_action == ContractAction::REMOVE) {
-        payload.m_entry.m_status = SideStakeStatus::DELETED;
+        payload.m_entry.m_status = MandatorySideStake::MandatorySideStakeStatus::DELETED;
     }
 
     LOCK(cs_lock);
 
-    auto sidestake_entry_pair_iter = m_sidestake_entries.find(payload.m_entry.m_address);
+    auto sidestake_entry_pair_iter = m_mandatory_sidestake_entries.find(payload.m_entry.m_address);
 
-    SideStake_ptr current_sidestake_entry_ptr = nullptr;
+    MandatorySideStake_ptr current_sidestake_entry_ptr = nullptr;
 
     // Is there an existing SideStake entry in the map?
-    bool current_sidestake_entry_present = (sidestake_entry_pair_iter != m_sidestake_entries.end());
+    bool current_sidestake_entry_present = (sidestake_entry_pair_iter != m_mandatory_sidestake_entries.end());
 
     // If so, then get a smart pointer to it.
     if (current_sidestake_entry_present) {
@@ -356,7 +518,7 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
              payload.m_entry.StatusToString()
              );
 
-    SideStake& historical = payload.m_entry;
+    MandatorySideStake& historical = payload.m_entry;
 
     if (!m_sidestake_db.insert(ctx.m_tx.GetHash(), height, historical))
     {
@@ -370,26 +532,31 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     }
 
     // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
-    m_sidestake_entries[payload.m_entry.m_address] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
+    m_mandatory_sidestake_entries[payload.m_entry.m_address] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
 
     return;
-}
-
-void SideStakeRegistry::NonContractAdd(const SideStake& sidestake, const bool& save_to_file)
-{
-    LOCK(cs_lock);
-
-    // Using this form of insert because we want the latest record with the same key to override any previous one.
-    m_local_sidestake_entries[sidestake.m_address] = std::make_shared<SideStake>(sidestake);
-
-    if (save_to_file) {
-        SaveLocalSideStakesToConfig();
-    }
 }
 
 void SideStakeRegistry::Add(const ContractContext& ctx)
 {
     AddDelete(ctx);
+}
+
+void SideStakeRegistry::Delete(const ContractContext& ctx)
+{
+    AddDelete(ctx);
+}
+
+void SideStakeRegistry::NonContractAdd(const LocalSideStake& sidestake, const bool& save_to_file)
+{
+    LOCK(cs_lock);
+
+           // Using this form of insert because we want the latest record with the same key to override any previous one.
+    m_local_sidestake_entries[sidestake.m_address] = std::make_shared<LocalSideStake>(sidestake);
+
+    if (save_to_file) {
+        SaveLocalSideStakesToConfig();
+    }
 }
 
 void SideStakeRegistry::NonContractDelete(const CBitcoinAddressForStorage& address, const bool& save_to_file)
@@ -407,11 +574,6 @@ void SideStakeRegistry::NonContractDelete(const CBitcoinAddressForStorage& addre
     }
 }
 
-void SideStakeRegistry::Delete(const ContractContext& ctx)
-{
-    AddDelete(ctx);
-}
-
 void SideStakeRegistry::Revert(const ContractContext& ctx)
 {
     const auto payload = ctx->SharePayloadAs<SideStakePayload>();
@@ -421,9 +583,9 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     // resurrect.
     LOCK(cs_lock);
 
-    auto entry_to_revert = m_sidestake_entries.find(payload->m_entry.m_address);
+    auto entry_to_revert = m_mandatory_sidestake_entries.find(payload->m_entry.m_address);
 
-    if (entry_to_revert == m_sidestake_entries.end()) {
+    if (entry_to_revert == m_mandatory_sidestake_entries.end()) {
         error("%s: The SideStake entry for key %s to revert was not found in the SideStake entry map.",
               __func__,
               entry_to_revert->second->m_address.ToString());
@@ -440,7 +602,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
            // Revert the ADD or REMOVE action. Unlike the beacons, this is symmetric.
     if (ctx->m_action == ContractAction::ADD || ctx->m_action == ContractAction::REMOVE) {
         // Erase the record from m_sidestake_entries.
-        if (m_sidestake_entries.erase(payload->m_entry.m_address) == 0) {
+        if (m_mandatory_sidestake_entries.erase(payload->m_entry.m_address) == 0) {
             error("%s: The SideStake entry to erase during a SideStake entry revert for key %s was not found.",
                   __func__,
                   key.ToString());
@@ -474,7 +636,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
 
         // Resurrect the entry prior to the reverted one. It is safe to use the bracket form here, because of the protection
         // of the logic above. There cannot be any entry in m_sidestake_entries with that key value left if we made it here.
-        m_sidestake_entries[resurrect_entry->second->m_address] = resurrect_entry->second;
+        m_mandatory_sidestake_entries[resurrect_entry->second->m_address] = resurrect_entry->second;
     }
 }
 
@@ -506,12 +668,12 @@ int SideStakeRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_sidestake_db.Initialize(m_sidestake_entries, m_pending_sidestake_entries);
+    int height = m_sidestake_db.Initialize(m_mandatory_sidestake_entries, m_pending_sidestake_entries);
 
     SubscribeToCoreSignals();
 
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_db size after load: %u", __func__, m_sidestake_db.size());
-    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_entries size after load: %u", __func__, m_sidestake_entries.size());
+    LogPrint(LogFlags::CONTRACT, "INFO: %s: m_sidestake_entries size after load: %u", __func__, m_mandatory_sidestake_entries.size());
 
     // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
@@ -544,7 +706,7 @@ void SideStakeRegistry::ResetInMemoryOnly()
     LOCK(cs_lock);
 
     m_local_sidestake_entries.clear();
-    m_sidestake_entries.clear();
+    m_mandatory_sidestake_entries.clear();
     m_sidestake_db.clear_in_memory_only();
 }
 
@@ -567,7 +729,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
         return;
     }
 
-    std::vector<SideStake> vSideStakes;
+    std::vector<LocalSideStake> vLocalSideStakes;
     std::vector<std::tuple<std::string, std::string, std::string>> raw_vSideStakeAlloc;
     double dSumAllocation = 0.0;
 
@@ -631,8 +793,9 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
     // First, determine allocation already taken by mandatory sidestakes, because they must be allocated first.
     for (const auto& entry : SideStakeEntries()) {
-        if (entry->m_status == SideStakeStatus::MANDATORY) {
-            dSumAllocation += entry->m_allocation;
+        if (entry->IsMandatory()
+            && std::get<MandatorySideStake::Status>(entry->GetStatus()) == MandatorySideStake::MandatorySideStakeStatus::MANDATORY) {
+            dSumAllocation += entry->GetAllocation();
         }
     }
 
@@ -679,19 +842,17 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
             break;
         }
 
-        SideStake sidestake(static_cast<CBitcoinAddressForStorage>(address),
-                            dAllocation,
-                            std::get<2>(entry),
-                            0,
-                            uint256{},
-                            SideStakeStatus::ACTIVE);
+        LocalSideStake sidestake(static_cast<CBitcoinAddressForStorage>(address),
+                                 dAllocation,
+                                 std::get<2>(entry),
+                                 LocalSideStake::LocalSideStakeStatus::ACTIVE);
 
         // This will add or update (replace) a non-contract entry in the registry for the local sidestake.
         NonContractAdd(sidestake, false);
 
         // This is needed because we need to detect entries in the registry map that are no longer in the config file to mark
         // them deleted.
-        vSideStakes.push_back(sidestake);
+        vLocalSideStakes.push_back(sidestake);
 
         LogPrint(BCLog::LogFlags::MINER, "INFO: %s: SideStakeAlloc Address %s, Allocation %f",
                  __func__, sAddress, dAllocation);
@@ -700,13 +861,13 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     for (auto& entry : m_local_sidestake_entries)
     {
         // Only look at active entries. The others are NA for this alignment.
-        if (entry.second->m_status == SideStakeStatus::ACTIVE) {
-            auto iter = std::find(vSideStakes.begin(), vSideStakes.end(), *entry.second);
+        if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE) {
+            auto iter = std::find(vLocalSideStakes.begin(), vLocalSideStakes.end(), *entry.second);
 
-            if (iter == vSideStakes.end()) {
+            if (iter == vLocalSideStakes.end()) {
                 // Entry in map is no longer found in config files, so mark map entry inactive.
 
-                entry.second->m_status = SideStakeStatus::INACTIVE;
+                entry.second->m_status = LocalSideStake::LocalSideStakeStatus::INACTIVE;
             }
         }
     }
