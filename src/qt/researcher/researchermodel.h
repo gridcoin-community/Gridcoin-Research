@@ -44,6 +44,7 @@ enum class BeaconStatus
     PENDING,
     RENEWAL_NEEDED,
     RENEWAL_POSSIBLE,
+    ALREADY_IN_MEMPOOL,
     UNKNOWN,
 };
 

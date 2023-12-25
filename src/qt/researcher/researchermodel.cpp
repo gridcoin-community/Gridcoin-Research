@@ -85,7 +85,8 @@ BeaconStatus MapAdvertiseBeaconError(const BeaconError error)
         case BeaconError::PENDING:            return BeaconStatus::PENDING;
         case BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
         case BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
-    }
+        case BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+        }
 
     assert(false); // Suppress warning
 }
@@ -150,6 +151,8 @@ QString ResearcherModel::mapBeaconStatus(const BeaconStatus status)
             return tr("Beacon expires soon. Renew immediately.");
         case BeaconStatus::RENEWAL_POSSIBLE:
             return tr("Beacon eligible for renewal.");
+        case BeaconStatus::ALREADY_IN_MEMPOOL:
+            return tr("Beacon advertisement transaction already in mempool.");
         case BeaconStatus::UNKNOWN:
             return tr("Waiting for sync...");
     }
@@ -181,6 +184,7 @@ QIcon ResearcherModel::mapBeaconStatusIcon(const BeaconStatus status) const
         case BeaconStatus::PENDING:                  return make_icon(warning);
         case BeaconStatus::RENEWAL_NEEDED:           return make_icon(danger);
         case BeaconStatus::RENEWAL_POSSIBLE:         return make_icon(warning);
+        case BeaconStatus::ALREADY_IN_MEMPOOL:       return make_icon(warning);
         case BeaconStatus::UNKNOWN:                  return make_icon(inactive);
     }
 
