@@ -48,7 +48,7 @@
         {
             "name": "Gridcoin-Research",
             "buildsystem": "autotools",
-            "config-opts": ["--with-boost-libdir=/app/lib"], 
+            "config-opts": ["--with-boost-libdir=/app/lib"],
             "sources": [
                 {
                     "type": "dir",
