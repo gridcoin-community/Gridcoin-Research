@@ -663,7 +663,7 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
 
 bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 {
-    return Validate(ctx.m_contract, ctx.m_tx, DoS);
+    return (IsV13Enabled(ctx.m_pindex->nHeight) && Validate(ctx.m_contract, ctx.m_tx, DoS));
 }
 
 int SideStakeRegistry::Initialize()
