@@ -330,4 +330,36 @@ BOOST_AUTO_TEST_CASE(class_methods)
     BOOST_CHECK(methodtest3 == methodtest4);
 }
 
+BOOST_AUTO_TEST_CASE(variants)
+{
+    CDataStream ss(SER_DISK, PROTOCOL_VERSION);
+    using p_t = std::pair<int, int>;
+    std::variant<int, std::string, double, p_t, CSerializeMethodsTestSingle> v;
+    CTransaction txval;
+    const char charstrval[16] = "testing charstr";
+    CSerializeMethodsTestSingle csmts(-3, false, "testing", charstrval, txval);
+
+    v = 42;
+    ss << v;
+    v = "sel";
+    ss << v;
+    v = 3.1415;
+    ss << v;
+    v = std::make_pair(14, 48);
+    ss << v;
+    v = csmts;
+    ss << v;
+
+    ss >> v;
+    BOOST_CHECK_EQUAL(std::get<int>(v), 42);
+    ss >> v;
+    BOOST_CHECK_EQUAL(std::get<std::string>(v), "sel");
+    ss >> v;
+    BOOST_CHECK_EQUAL(std::get<double>(v), 3.1415);
+    ss >> v;
+    BOOST_CHECK(std::get<p_t>(v) == std::make_pair(14, 48));
+    ss >> v;
+    BOOST_CHECK(std::get<CSerializeMethodsTestSingle>(v) == csmts);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
