@@ -17,6 +17,7 @@
 #include "keystore.h"
 #include "prevector.h"
 #include <util/hash_type.h>
+#include "serialize.h"
 #include "wallet/ismine.h"
 
 typedef std::vector<unsigned char> valtype;
@@ -30,7 +31,14 @@ public:
     CScriptID() : BaseHash() {}
     explicit CScriptID(const CScript& in);
     explicit CScriptID(const uint160& in) : BaseHash(in) {}
-//    explicit CScriptID(const ScriptHash& in);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_hash);
+    }
 };
 
 static const unsigned int MAX_SCRIPT_ELEMENT_SIZE = 520; // bytes
@@ -85,6 +93,13 @@ public:
     friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
     friend bool operator!=(const CNoDestination &a, const CNoDestination &b) { return false; }
     friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {}
+
 };
 
 /** A txout script template with a specific destination. It is either:
