@@ -1334,11 +1334,14 @@ void StakeMiner(CWallet *pwallet)
         // nMinStakeSplitValue and dEfficiency are out parameters.
         bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
 
-        bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
-
         // Note that fEnableSideStaking is now processed internal to ActiveSideStakeEntries. The sidestaking flag only
         // controls local sidestakes. If there exists mandatory sidestakes, they occur regardless of the flag.
         vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false);
+
+        // If the vSideStakeAlloc is not empty, then set fEnableSideStaking to true. Note that vSideStakeAlloc will not be empty
+        // if non-zero allocation mandatory sidestakes are set OR local sidestaking is turned on by the -enablesidestaking config
+        // option.
+        bool fEnableSideStaking = (!vSideStakeAlloc.empty());
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;
