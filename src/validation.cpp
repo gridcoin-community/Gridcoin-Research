@@ -835,6 +835,49 @@ private:
                                  );
                 }
 
+                // For block version 13 and higher, check to ensure that mandatory sidestakes appear as outputs with the correct
+                // allocations.
+                if (m_block.nVersion >= 13) {
+                    for (const auto& sidestake : GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false)) {
+                        if (sidestake->IsMandatory()) {
+                            CTxDestination mandatory_sidestake_destination = sidestake->GetDestination();
+                            double mandatory_sidestake_allocation = sidestake->GetAllocation();
+
+                            // Check each non-MRC output for a match
+                            bool matched = false;
+
+                            for (unsigned int i = 1; i < mrc_start_index; ++i) {
+                                CTxDestination output_destination;
+
+                                if (!ExtractDestination(coinstake.vout[i].scriptPubKey, output_destination)) {
+                                    return error("%s: FAILED: coinstake output has invalid destination.");
+                                }
+
+                                double computed_output_alloc = (double) coinstake.vout[i].nValue / (double) total_owed_to_staker;
+
+
+                                // The output is deemed to match if the destination matches AND
+                                // the output amount expressed as a double fraction of the awards owed to staker is within 1%
+                                // of the required mandatory allocation.
+                                if (output_destination == mandatory_sidestake_destination
+                                    && abs(computed_output_alloc - mandatory_sidestake_allocation) < 0.01) {
+
+                                    matched = true;
+
+                                    break;
+                                }
+                            } // iterate through non-MRC outputs
+
+                            if (!matched) {
+                                return error("%s: FAILED: mandatory sidestake for address %s, allocation %f not found on coinstake.",
+                                             __func__,
+                                             CBitcoinAddress(mandatory_sidestake_destination).ToString(),
+                                             sidestake->GetAllocation() * 100.0);
+                            }
+                        } // IsMandatory sidestake?
+                    } // active sidestakes
+                } // V13+
+
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
                 // outputs were already checked by CheckMRCRewards.
                 if (foundation_mrc_sidestake_present) {
@@ -866,7 +909,7 @@ private:
                 }
             } // v12+
 
-            // If we get here, we are done with v11 and v12 validation so return true.
+            // If we get here, we are done with v11, v12, and v13 validation so return true.
             return true;
         } //v11+
 
