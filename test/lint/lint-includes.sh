@@ -57,6 +57,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/algorithm/string/predicate.hpp
     boost/algorithm/string/replace.hpp
     boost/algorithm/string/split.hpp
+    boost/array.hpp
     boost/asio.hpp
     boost/asio/ip/udp.hpp
     boost/asio/ip/v6_only.hpp
