@@ -365,7 +365,7 @@ const std::vector<SideStake_ptr> SideStakeRegistry::SideStakeEntries() const
 }
 
 const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const bool& local_only,
-                                                                           const bool& include_zero_alloc)
+                                                                           const bool& include_zero_alloc) const
 {
     std::vector<SideStake_ptr> sidestakes;
     double allocation_sum = 0.0;
@@ -382,7 +382,7 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
         for (const auto& entry : m_mandatory_sidestake_entries)
         {
             if (entry.second->m_status == MandatorySideStake::MandatorySideStakeStatus::MANDATORY
-                && allocation_sum + entry.second->m_allocation <= 1.0) {
+                && allocation_sum + entry.second->m_allocation <= Params().GetConsensus().MaxMandatorySideStakeTotalAlloc) {
                 if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
                     sidestakes.push_back(std::make_shared<SideStake>(entry.second));
                     allocation_sum += entry.second->m_allocation;
@@ -658,6 +658,17 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
         return false;
     }
 
+    double allocation = payload->m_entry.m_allocation;
+
+    // Contracts that would result in a total active mandatory sidestake allocation greater than the maximum allowed by consensus
+    // protocol must be rejected. Note that this is not a perfect validation, because there could be more than one sidestake
+    // contract transaction in the memory pool, and this is using already committed sidestake contracts (i.e. in blocks already
+    // accepted) as a basis.
+    if (GetMandatoryAllocationsTotal() + allocation > Params().GetConsensus().MaxMandatorySideStakeTotalAlloc) {
+        DoS = 25;
+        return false;
+    }
+
     return true;
 }
 
@@ -793,13 +804,8 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
         }
     }
 
-    // First, determine allocation already taken by mandatory sidestakes, because they must be allocated first.
-    for (const auto& entry : SideStakeEntries()) {
-        if (entry->IsMandatory()
-            && std::get<MandatorySideStake::Status>(entry->GetStatus()) == MandatorySideStake::MandatorySideStakeStatus::MANDATORY) {
-            dSumAllocation += entry->GetAllocation();
-        }
-    }
+    // First, add the allocation already taken by mandatory sidestakes, because they must be allocated first.
+    dSumAllocation += GetMandatoryAllocationsTotal();
 
     LOCK(cs_lock);
 
@@ -917,6 +923,20 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
     m_local_entry_already_saved_to_config = true;
 
     return status;
+}
+
+double SideStakeRegistry::GetMandatoryAllocationsTotal() const
+{
+    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(false, false);
+    double allocation_total = 0.0;
+
+    for (const auto& entry : sidestakes) {
+        if (entry->IsMandatory()) {
+            allocation_total += entry->GetAllocation();
+        }
+    }
+
+    return allocation_total;
 }
 
 void SideStakeRegistry::SubscribeToCoreSignals()

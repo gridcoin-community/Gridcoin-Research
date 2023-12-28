@@ -558,7 +558,7 @@ public:
     //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
-    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc);
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc) const;
 
     //!
     //! \brief Get the current sidestake entry for the specified destination.
@@ -745,6 +745,12 @@ private:
     //! \return bool true if successful.
     //!
     bool SaveLocalSideStakesToConfig();
+
+    //!
+    //! \brief Provides the total allocation for all active mandatory sidestakes as a floating point fraction.
+    //! \return total active mandatory sidestake allocation as a double.
+    //!
+    double GetMandatoryAllocationsTotal() const;
 
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();

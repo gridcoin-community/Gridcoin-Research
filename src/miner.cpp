@@ -337,6 +337,10 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
     const GRC::CpidOption cpid = researcher->Id().TryCpid();
 
+    // This boolean will be used to ensure that there is only one mandatory sidestake transaction bound into a block. This
+    // in combination with the transaction level validation for the maximum mandatory allocation perfects that rule.
+    bool mandatory_sidestake_bound = false;
+
     // Largest block you're willing to create:
     unsigned int nBlockMaxSize = gArgs.GetArg("-blockmaxsize", MAX_BLOCK_SIZE_GEN/2);
     // Limit to between 1K and MAX_BLOCK_SIZE-1K for sanity:
@@ -601,6 +605,18 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                         } //TryCpid()
                     } // output limit
                 } // contract type is MRC
+
+                // If a mandatory sidestake contract has not already been bound into the block, then set mandatory_sidestake_bound
+                // to true. The ignore_transaction flag is still false, so this mandatory sidestake contract will be bound into the
+                // block. Any more mandatory sidestakes in the transaction loop will be ignored because the mandatory_sidestake_bound
+                // will be set to true in the second and succeeding iterations in the loop.
+                if (contract.m_type == GRC::ContractType::SIDESTAKE) {
+                    if (!mandatory_sidestake_bound) {
+                        mandatory_sidestake_bound = true;
+                    } else {
+                        ignore_transaction = true;
+                    }
+                } // contract type is SIDESTAKE
             } // contracts not empty
 
             if (ignore_transaction) continue;
