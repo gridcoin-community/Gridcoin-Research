@@ -14,6 +14,7 @@
 #include "net.h"
 #include "util.h"
 #include <atomic>
+#include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <boost/asio/system_timer.hpp>
