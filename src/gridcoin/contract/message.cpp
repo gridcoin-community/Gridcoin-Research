@@ -5,6 +5,7 @@
 #include "amount.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/sidestake.h"
 #include "script.h"
 #include "wallet/wallet.h"
 
@@ -143,14 +144,27 @@ std::string SendContractTx(CWalletTx& wtx_new)
 
     if (balance < COIN || balance < burn_fee + nTransactionFee) {
         std::string strError = _("Balance too low to create a contract.");
-        LogPrintf("%s: %s", __func__, strError);
+        error("%s: %s", __func__, strError);
         return strError;
     }
 
     if (!CreateContractTx(wtx_new, reserve_key, burn_fee)) {
         std::string strError = _("Error: Transaction creation failed.");
-        LogPrintf("%s: %s", __func__, strError);
+        error("%s: %s", __func__, strError);
         return strError;
+    }
+
+    for (const auto& pool_tx : mempool.mapTx) {
+        for (const auto& pool_tx_contract : pool_tx.second.GetContracts()) {
+            if (pool_tx_contract.m_type == GRC::ContractType::SIDESTAKE) {
+                std::string strError = _(
+                    "Error: The mandatory sidestake transaction was rejected. "
+                    "There is already a mandatory sidestake transaction in the mempool. "
+                    "Wait until that transaction is bound in a block.");
+                error("%s: %s", __func__, strError);
+                return strError;
+            }
+        }
     }
 
     if (!pwalletMain->CommitTransaction(wtx_new, reserve_key)) {
@@ -160,7 +174,7 @@ std::string SendContractTx(CWalletTx& wtx_new)
             "a copy of wallet.dat and coins were spent in the copy but not "
             "marked as spent here.");
 
-        LogPrintf("%s: %s", __func__, strError);
+        error("%s: %s", __func__, strError);
         return strError;
     }
 

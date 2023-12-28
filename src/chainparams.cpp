@@ -74,6 +74,8 @@ public:
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 14 days on mainnet
         consensus.MRCZeroPaymentInterval = 14 * 24 * 60 * 60;
+        // The maximum ratio of rewards that can be allocated to all of the mandatory sidestakes.
+        consensus.MaxMandatorySideStakeTotalAlloc = 0.25;
         // The "standard" contract replay lookback for those contract types
         // that do not have a registry db.
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
@@ -187,6 +189,8 @@ public:
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.
         consensus.MRCZeroPaymentInterval = 10 * 60;
+        // The maximum ratio of rewards that can be allocated to all of the mandatory sidestakes.
+        consensus.MaxMandatorySideStakeTotalAlloc = 0.25;
         // The "standard" contract replay lookback for those contract types
         // that do not have a registry db.
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
