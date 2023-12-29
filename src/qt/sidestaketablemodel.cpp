@@ -81,7 +81,8 @@ public:
     {
         m_cached_sidestakes.clear();
 
-        std::vector<GRC::SideStake_ptr> core_sidestakes = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, true);
+        std::vector<GRC::SideStake_ptr> core_sidestakes
+            = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true);
 
         m_cached_sidestakes.reserve(core_sidestakes.size());
 
@@ -211,7 +212,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
             return false;
         }
 
-        std::vector<GRC::SideStake_ptr> sidestakes = registry.Try(address.Get(), true);
+        std::vector<GRC::SideStake_ptr> sidestakes = registry.Try(address.Get(), GRC::SideStake::FilterFlag::LOCAL);
 
         if (!sidestakes.empty()) {
             m_edit_status = DUPLICATE_ADDRESS;
@@ -235,7 +236,7 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
         std::string orig_description = rec->GetDescription();
         GRC::SideStake::Status orig_status = rec->GetStatus();
 
-        for (const auto& entry : registry.ActiveSideStakeEntries(false, true)) {
+        for (const auto& entry : registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
             CTxDestination destination = entry->GetDestination();
             double allocation = entry->GetAllocation();
 
@@ -370,12 +371,12 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
 
     // Check for duplicate local sidestakes. Here we use the actual core sidestake registry rather than the
     // UI model.
-    std::vector<GRC::SideStake_ptr> core_local_sidestake = registry.Try(sidestake_address.Get(), true);
+    std::vector<GRC::SideStake_ptr> core_local_sidestake = registry.Try(sidestake_address.Get(), GRC::SideStake::FilterFlag::LOCAL);
 
     double prior_total_allocation = 0.0;
 
     // Get total allocation of all active/mandatory sidestake entries
-    for (const auto& entry : registry.ActiveSideStakeEntries(false, true)) {
+    for (const auto& entry : registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
         prior_total_allocation += entry->GetAllocation() * 100.0;
     }
 
