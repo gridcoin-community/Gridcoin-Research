@@ -612,6 +612,12 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
     return output_limit;
 }
 
+unsigned int GetMandatorySideStakeOutputLimit(const int& block_version)
+{
+    // For block version 13+ mandatory sidestake output limit is 4, otherwise 0.
+    return (block_version >= 13) ? 4 : 0;
+}
+
 Fraction FoundationSideStakeAllocation()
 {
     // Note that the 4/5 (80%) for mainnet was approved by a validated poll,
@@ -838,45 +844,83 @@ private:
                 // For block version 13 and higher, check to ensure that mandatory sidestakes appear as outputs with the correct
                 // allocations.
                 if (m_block.nVersion >= 13) {
-                    for (const auto& sidestake : GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false)) {
-                        if (sidestake->IsMandatory()) {
-                            CTxDestination mandatory_sidestake_destination = sidestake->GetDestination();
-                            double mandatory_sidestake_allocation = sidestake->GetAllocation();
 
-                            // Check each non-MRC output for a match
-                            bool matched = false;
+                    // Get mandatory sidestakes
+                    std::vector<GRC::SideStake_ptr> mandatory_sidestakes
+                        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false);
 
-                            for (unsigned int i = 1; i < mrc_start_index; ++i) {
-                                CTxDestination output_destination;
+                    // This is exactly the same as the dust elimination in the SplitCoinStakeOutput function in the miner.
+                    for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
+                        if (total_owed_to_staker * iter->get()->GetAllocation() < CENT) {
+                            iter = mandatory_sidestakes.erase(iter);
+                        } else {
+                            ++iter;
+                        }
+                    }
 
-                                if (!ExtractDestination(coinstake.vout[i].scriptPubKey, output_destination)) {
-                                    return error("%s: FAILED: coinstake output has invalid destination.");
-                                }
+                    unsigned int validated_mandatory_sidestakes = 0;
 
-                                double computed_output_alloc = (double) coinstake.vout[i].nValue / (double) total_owed_to_staker;
+                    for (unsigned int i = 1; i < mrc_start_index; ++i) {
+                        CTxDestination output_destination;
 
+                        if (!ExtractDestination(coinstake.vout[i].scriptPubKey, output_destination)) {
+                            return error("%s: FAILED: coinstake output has invalid destination.");
+                        }
 
-                                // The output is deemed to match if the destination matches AND
-                                // the output amount expressed as a double fraction of the awards owed to staker is within 1%
-                                // of the required mandatory allocation.
-                                if (output_destination == mandatory_sidestake_destination
-                                    && abs(computed_output_alloc - mandatory_sidestake_allocation) < 0.01) {
+                        double computed_output_alloc = (double) coinstake.vout[i].nValue / (double) total_owed_to_staker;
 
-                                    matched = true;
+                        std::vector<GRC::SideStake_ptr> mandatory_sidestake
+                            = GRC::GetSideStakeRegistry().TryActive(output_destination,
+                                                                    GRC::SideStake::FilterFlag::MANDATORY);;
 
-                                    break;
-                                }
-                            } // iterate through non-MRC outputs
+                        // The output is deemed to match if the destination matches AND
+                        // the output amount expressed as a double fraction of the awards owed to staker is within 1%
+                        // of the required mandatory allocation. We allow some leeway here because the sidestake allocations
+                        // are double precision floating point fractions.
+                        if (!mandatory_sidestake.empty()
+                            && abs(computed_output_alloc - mandatory_sidestake[0]->GetAllocation()) < 0.01) {
 
-                            if (!matched) {
-                                return error("%s: FAILED: mandatory sidestake for address %s, allocation %f not found on coinstake.",
-                                             __func__,
-                                             CBitcoinAddress(mandatory_sidestake_destination).ToString(),
-                                             sidestake->GetAllocation() * 100.0);
-                            }
-                        } // IsMandatory sidestake?
-                    } // active sidestakes
-                } // V13+
+                            ++validated_mandatory_sidestakes;
+                        }
+
+                        // This should not happen, but include the check for thoroughness.
+                        if (validated_mandatory_sidestakes > GetMandatorySideStakeOutputLimit(m_block.nVersion)) {
+                            error("%s: FAILED: The number of mandatory sidestakes in the coinstake is %u, which is above "
+                                  "the limit of %u",
+                                  __func__,
+                                  validated_mandatory_sidestakes,
+                                  GetMandatorySideStakeOutputLimit(m_block.nVersion));
+                        }
+                    }
+
+                    // See the comments in SplitCoinStakeOutput regarding dust elimination in mandatory sidestake selection. Note
+                    // that in the miner for mandatory sidestakes, the shuffle is done AFTER the dust elimination, if the number of
+                    // residual elements is greater than the maximum allowed number of mandatory sidestakes. This leads to the
+                    // following check.
+                    //
+                    // If the residual number of mandatory sidestakes after dust elimination is GREATER than or equal
+                    // GetMandatorySideStakeOutputLimit, then number of outputs matched to mandatory sidestakes should be equal
+                    // to GetMandatorySideStakeOutputLimit, because the shuffle in combination with the allocation lambda operating
+                    // on non-dust outputs will result in exactly GetMandatorySideStakeOutputLimit mandatory sidestakes, which means
+                    // it will pass above, and also pass the check below. We do not have to worry about a cutoff above
+                    // MaxMandatorySideStakeTotalAlloc because that is handled IN ActiveSideStakeEntries, which is used as the
+                    // starting point in the miner (and of course here).
+                    //
+                    // If the residual number of mandatory sidestakes after dust elimination is less than
+                    // GetMandatorySideStakeOutputLimit, it should be equal in number to the mandatory_sidestakes size from above
+                    // after the elimination of outputs less than 1 CENT.
+                    //
+                    // The combination of these constraints means that the number of validated mandatory sidestakes MUST match
+                    // the minimum of GetMandatorySideStakeOutputLimit and mandatory_sidestakes.
+                    if (validated_mandatory_sidestakes < std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
+                                                                  mandatory_sidestakes.size())) {
+                        error("%s: FAILED: The number of validated sidestakes, %u, is less than required, %u.",
+                              __func__,
+                              validated_mandatory_sidestakes,
+                              std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
+                                                     mandatory_sidestakes.size()));
+                    }
+                }
 
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
                 // outputs were already checked by CheckMRCRewards.

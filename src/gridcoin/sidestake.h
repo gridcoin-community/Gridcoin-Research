@@ -317,6 +317,20 @@ typedef std::shared_ptr<MandatorySideStake> MandatorySideStake_ptr;
 class SideStake
 {
 public:
+    enum class Type {
+        UNKNOWN,
+        LOCAL,
+        MANDATORY,
+        OUT_OF_BOUND
+    };
+
+    enum FilterFlag  : uint8_t {
+        NONE      = 0b00,
+        LOCAL     = 0b01,
+        MANDATORY = 0b10,
+        ALL       = 0b11,
+    };
+
     //!
     //! \brief A variant to hold the two different types of sidestake status enums.
     //!
@@ -339,7 +353,7 @@ public:
 private:
     LocalSideStake_ptr m_local_sidestake_ptr;
     MandatorySideStake_ptr m_mandatory_sidestake_ptr;
-    bool m_mandatory;
+    Type m_type;
 };
 
 //!
@@ -554,34 +568,34 @@ public:
     //! Mandatory sidestakes come before local ones, and the method ensures that the sidestakes
     //! returned do not total an allocation greater than 1.0.
     //!
-    //! \param bool true to return local sidestakes only
+    //! \param bitmask filter to return mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
-    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const bool& local_only, const bool& include_zero_alloc) const;
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const SideStake::FilterFlag& filter, const bool& include_zero_alloc) const;
 
     //!
     //! \brief Get the current sidestake entry for the specified destination.
     //!
     //! \param key The destination of the sidestake entry.
-    //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
+    //! \param bitmask filter to try mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to entries matching the provided destination. Up to two elements
     //! are returned, mandatory entry first, unless local only boolean is set true.
     //!
-    std::vector<SideStake_ptr> Try(const CTxDestination& key, const bool& local_only = false) const;
+    std::vector<SideStake_ptr> Try(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
 
     //!
     //! \brief Get the current sidestake entry for the specified destination if it has a status of ACTIVE or MANDATORY.
     //!
     //! \param key The destination of the sidestake entry.
-    //! \param local_only If true causes Try to only check the local sidestake map. Defaults to false.
+    //! \param bitmask filter to try mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to entries matching the provided destination that are in status of
     //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, unless local only boolean
     //! is set true.
     //!
-    std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const bool& local_only = false) const;
+    std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading

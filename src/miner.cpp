@@ -845,14 +845,14 @@ bool CreateCoinStake(CBlock &blocknew, CKey &key,
 }
 
 void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
-    SideStakeAlloc &vSideStakeAlloc, int64_t &nMinStakeSplitValue, double &dEfficiency)
+    int64_t &nMinStakeSplitValue, double &dEfficiency)
 {
     // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
     // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
     // reward. This function does the following...
     // 1. Perform reward payment to specified addresses ("sidestaking") in the following manner...
     //      a. Check if both flags false and if so return with no action.
-    //      b. Limit number of outputs based on bv. 3 for <=9 and 8 for >= 10.
+    //      b. Limit number of outputs based on bv: 3 for <= v9, 8 for v10 & v11, and 10 for >= v12.
     //      c. Pull the nValue from the original output and store locally. (nReward was passed in.)
     //      d. Pop the existing outputs.
     //      e. Validate each address provided for redirection in turn. If valid, create an output of the
@@ -885,7 +885,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // 8 for 10 and above (excluding MRC outputs). The first one must be empty, so that gives 2 and 7 usable ones,
     // respectively. MRC outputs are excluded here. They are addressed in CreateMRC separately. Unlike in other areas,
     // the foundation sidestake IS COUNTED in the GetMRCOutputLimit because it is a sidestake, but handled in the
-    // CreateMRCRewards function and not here.
+    // CreateMRCRewards function and not here. For block version 12+ nMaxOutputs is 10, which gives 9 usable.
     unsigned int nMaxOutputs = GetCoinstakeOutputLimit(blocknew.nVersion) - GetMRCOutputLimit(blocknew.nVersion, true);
 
     // Set the maximum number of sidestake outputs to two less than the maximum allowable coinstake outputs
@@ -897,7 +897,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     unsigned int nOutputsUsed = 1;
 
     // If the number of sidestaking allocation entries exceeds nMaxSideStakeOutputs, then shuffle the vSideStakeAlloc
-    // to support sidestaking with more than six entries. This is a super simple solution but has some disadvantages.
+    // to support sidestaking with more than eight entries. This is a super simple solution but has some disadvantages.
     // If the person made a mistake and has the entries in the config file add up to more than 100%, then those entries
     // resulting a cumulative total over 100% will always be excluded, not just randomly excluded, because the cumulative
     // check is done in the order of the entries in the config file. This is not regarded as a big issue, because
@@ -905,9 +905,37 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // mMaxSideStakeOutput entries, the residual returned to the coinstake will vary when the entries are shuffled,
     // because the total percentage of the selected entries will be randomized. No attempt to renormalize
     // the percentages is done.
-    if (vSideStakeAlloc.size() > nMaxSideStakeOutputs)
-    {
-        Shuffle(vSideStakeAlloc.begin(), vSideStakeAlloc.end(), FastRandomContext());
+    SideStakeAlloc mandatory_sidestakes
+        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false);
+    SideStakeAlloc local_sidestakes
+        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::LOCAL, false);
+
+    // For mandatory sidestakes we need to check whether any of them will result in an output of less than 1 CENT, and in
+    // that case remove that entry from the vector. This is extremely important when validating this on a receiving node.
+    // In the case where there are more than GetMandatorySideStakeOutputLimit mandatory sidestakes, and a random shuffle
+    // selection is used, that shuffle CANNOT include any outputs that would be eliminated by the lambda below for output
+    // less than one cent, because on validation the receiving node will simply see this as a missing output and fail
+    // validation. Eliminating the outputs that would generate dust BEFORE the shuffle ensures that the set of outputs selected
+    // from the shuffle WILL be present as a result of the selection. This allows the validator to retrace the dust elimination
+    // for the coinstake mandatory sidestakes, and verify that EITHER the residual number of mandatory outputs after dust elimination
+    // is less than or equal to the maximum, in which case they all must be present and valid, OR, the residual number of outputs
+    // is greater than the maximum, which means that the maximum number of mandatory outputs MUST be present and valid.
+    for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
+        if (nReward * iter->get()->GetAllocation() < CENT) {
+            iter = mandatory_sidestakes.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+
+    if (mandatory_sidestakes.size() > GetMandatorySideStakeOutputLimit(blocknew.nVersion)) {
+        Shuffle(mandatory_sidestakes.begin(), mandatory_sidestakes.end(), FastRandomContext());
+    }
+
+    if (local_sidestakes.size() > nMaxSideStakeOutputs
+                                      - std::min<unsigned int>(GetMandatorySideStakeOutputLimit(blocknew.nVersion),
+                                                                                mandatory_sidestakes.size())) {
+        Shuffle(local_sidestakes.begin(), local_sidestakes.end(), FastRandomContext());
     }
 
     // Initialize remaining stake output value to the total value of output for stake, which also includes
@@ -929,13 +957,13 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     CScript SideStakeScriptPubKey;
     double dSumAllocation = 0.0;
 
-    if (fEnableSideStaking)
-    {
-        // Iterate through passed in SideStake vector until either all elements processed, the maximum number of
-        // sidestake outputs is reached, or accumulated allocation will exceed 100%.
-        for(auto iterSideStake = vSideStakeAlloc.begin();
-            (iterSideStake != vSideStakeAlloc.end()) && (nOutputsUsed <= nMaxSideStakeOutputs);
-            ++iterSideStake)
+    // Lambda for sidestake allocation. This iterates throught the provided sidestake vector until either all elements processed,
+    // the maximum number of sidestake outputs is reached via the provided output_limit, or accumulated allocation will exceed 100%.
+    const auto allocate_sidestakes = [&](SideStakeAlloc sidestakes, unsigned int output_limit) {
+        for (auto iterSideStake = sidestakes.begin();
+             (iterSideStake != sidestakes.end())
+             && (nOutputsUsed <= output_limit);
+             ++iterSideStake)
         {
             CBitcoinAddress address(iterSideStake->get()->GetDestination());
             double allocation = iterSideStake->get()->GetAllocation();
@@ -1001,13 +1029,16 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
         }
-        // If we get here and dSumAllocation is zero then the enablesidestaking flag was set, but no VALID distribution
-        // was in the vSideStakeAlloc vector. (Note that this is also in the parsing routine in StakeMiner, so it will show
-        // up when the wallet is first started, but also needs to be here, to remind the user periodically that something
-        // is amiss.)
-        if (dSumAllocation == 0.0)
-            LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
-                      " distribution!", __func__);
+    };
+
+    if (fEnableSideStaking) {
+        // Iterate through mandatory SideStake vector until either all elements processed, the maximum number of
+        // mandatory sidestake outputs is reached, or accumulated allocation will exceed 100%.
+        allocate_sidestakes(mandatory_sidestakes, GetMandatorySideStakeOutputLimit(blocknew.nVersion) + 1);
+
+        // Iterate through local SideStake vector until either all elements processed, the maximum number of
+        // sidestake outputs is reached, or accumulated allocation will exceed 100%.
+        allocate_sidestakes(local_sidestakes, nMaxSideStakeOutputs);
     }
 
     // By this point, if SideStaking was used and 100% was allocated nRemainingStakeOutputValue will be
@@ -1073,22 +1104,26 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     // The final state here of the coinstake blocknew.vtx[1].vout is
     // [empty],
     // [reward split 1], [reward split 2], ... , [reward split m],
-    // [sidestake 1], ... , [sidestake n],
-    // [MRC 1], ..., [MRC p].
+    // [mandatory sidestake 1], ... , [mandatory sidestake n]
+    // [sidestake 1], ... , [sidestake p],
+    // [MRC 1], ..., [MRC q].
     //
     // Currently according to the output limit rules encoded in CreateMRC and here:
     // For block version 10-11:
-    // one empty, m <= 6, m + n <= 7, and p = 0.
+    // one empty, m <= 7, n = 0, n + p <= 6, m + n + p <= 7 (i.e. empty + m + n + p <= 8), and q = 0, total <= 8..
     //
     // For block version 12:
-    // one empty, m <= 6, m + n <= 10, and p <= 10.
+    // one empty, m <= 9, n = 0, n + p <= 8, m + n + p <= 9 (i.e. empty + m + n + p <= 10), and q <= 10, total <= 20.
+    // (On testnet q <= 3, total <= 13.)
+
+    // For block version 13+:
+    // one empty, m <= 9, n <= 4, n + p <= 8, m + n + p <= 9 (i.e. empty + m + n + p <= 10), and q <= 10, total <= 20.
+    // (On testnet q <= 3, total <= 13.)
 
     // The total generated GRC is the total of the reward splits - the fees (the original GridcoinReward which is the
     // research reward + CBR), plus the total of the MRC outputs 2 to p (these outputs already have the fees subtracted)
     // MRC output 1 is always to the foundation (it is essentially a sidestake) and represents a cut of the MRC fees.
 }
-
-
 
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency)
 {
@@ -1334,14 +1369,10 @@ void StakeMiner(CWallet *pwallet)
         // nMinStakeSplitValue and dEfficiency are out parameters.
         bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
 
-        // Note that fEnableSideStaking is now processed internal to ActiveSideStakeEntries. The sidestaking flag only
-        // controls local sidestakes. If there exists mandatory sidestakes, they occur regardless of the flag.
-        vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(false, false);
-
         // If the vSideStakeAlloc is not empty, then set fEnableSideStaking to true. Note that vSideStakeAlloc will not be empty
         // if non-zero allocation mandatory sidestakes are set OR local sidestaking is turned on by the -enablesidestaking config
         // option.
-        bool fEnableSideStaking = (!vSideStakeAlloc.empty());
+        bool fEnableSideStaking = (!GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, false).empty());
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;
@@ -1429,7 +1460,7 @@ void StakeMiner(CWallet *pwallet)
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
         if (fEnableStakeSplit || fEnableSideStaking)
             SplitCoinStakeOutput(StakeBlock, nReward, fEnableStakeSplit, fEnableSideStaking,
-                                 vSideStakeAlloc, nMinStakeSplitValue, dEfficiency);
+                                 nMinStakeSplitValue, dEfficiency);
 
         g_timer.GetTimes(function + "SplitCoinStakeOutput", "miner");
 

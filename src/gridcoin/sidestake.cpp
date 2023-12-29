@@ -240,24 +240,24 @@ bool MandatorySideStake::operator!=(MandatorySideStake b)
 SideStake::SideStake()
     : m_local_sidestake_ptr(nullptr)
       , m_mandatory_sidestake_ptr(nullptr)
-      , m_mandatory(false)
+      , m_type(Type::UNKNOWN)
 {}
 
 SideStake::SideStake(LocalSideStake_ptr sidestake_ptr)
     : m_local_sidestake_ptr(sidestake_ptr)
       , m_mandatory_sidestake_ptr(nullptr)
-      , m_mandatory(false)
+      , m_type(Type::LOCAL)
 {}
 
 SideStake::SideStake(MandatorySideStake_ptr sidestake_ptr)
     : m_local_sidestake_ptr(nullptr)
       , m_mandatory_sidestake_ptr(sidestake_ptr)
-      , m_mandatory(true)
+      , m_type(Type::MANDATORY)
 {}
 
 bool SideStake::IsMandatory() const
 {
-    return m_mandatory;
+    return (m_type == Type::MANDATORY) ? true : false;
 }
 
 CTxDestination SideStake::GetDestination() const
@@ -364,7 +364,7 @@ const std::vector<SideStake_ptr> SideStakeRegistry::SideStakeEntries() const
     return sidestakes;
 }
 
-const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const bool& local_only,
+const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const SideStake::FilterFlag& filter,
                                                                            const bool& include_zero_alloc) const
 {
     std::vector<SideStake_ptr> sidestakes;
@@ -377,8 +377,7 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
 
     LOCK(cs_lock);
 
-    // Do mandatory sidestakes first.
-    if (!local_only) {
+    if (filter & SideStake::FilterFlag::MANDATORY) {
         for (const auto& entry : m_mandatory_sidestake_entries)
         {
             if (entry.second->m_status == MandatorySideStake::MandatorySideStakeStatus::MANDATORY
@@ -391,19 +390,21 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
         }
     }
 
-    // Followed by local active sidestakes if sidestaking is enabled. Note that mandatory sidestaking cannot be disabled.
-    bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
+    if (filter & SideStake::FilterFlag::LOCAL) {
+        // Followed by local active sidestakes if sidestaking is enabled. Note that mandatory sidestaking cannot be disabled.
+        bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-    if (fEnableSideStaking) {
-        LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
+        if (fEnableSideStaking) {
+            LogPrint(BCLog::LogFlags::MINER, "INFO: %s: fEnableSideStaking = %u", __func__, fEnableSideStaking);
 
-        for (const auto& entry : m_local_sidestake_entries)
-        {
-            if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE
-                && allocation_sum + entry.second->m_allocation <= 1.0) {
-                if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
-                    sidestakes.push_back(std::make_shared<SideStake>(entry.second));
-                    allocation_sum += entry.second->m_allocation;
+            for (const auto& entry : m_local_sidestake_entries)
+            {
+                if (entry.second->m_status == LocalSideStake::LocalSideStakeStatus::ACTIVE
+                    && allocation_sum + entry.second->m_allocation <= 1.0) {
+                    if ((include_zero_alloc && entry.second->m_allocation == 0.0) || entry.second->m_allocation > 0.0) {
+                        sidestakes.push_back(std::make_shared<SideStake>(entry.second));
+                        allocation_sum += entry.second->m_allocation;
+                    }
                 }
             }
         }
@@ -412,13 +413,13 @@ const std::vector<SideStake_ptr> SideStakeRegistry::ActiveSideStakeEntries(const
     return sidestakes;
 }
 
-std::vector<SideStake_ptr> SideStakeRegistry::Try(const CTxDestination& key, const bool& local_only) const
+std::vector<SideStake_ptr> SideStakeRegistry::Try(const CTxDestination& key, const SideStake::FilterFlag& filter) const
 {
     LOCK(cs_lock);
 
     std::vector<SideStake_ptr> result;
 
-    if (!local_only) {
+    if (filter & SideStake::FilterFlag::MANDATORY) {
         const auto mandatory_entry = m_mandatory_sidestake_entries.find(key);
 
         if (mandatory_entry != m_mandatory_sidestake_entries.end()) {
@@ -426,22 +427,24 @@ std::vector<SideStake_ptr> SideStakeRegistry::Try(const CTxDestination& key, con
         }
     }
 
-    const auto local_entry = m_local_sidestake_entries.find(key);
+    if (filter & SideStake::FilterFlag::LOCAL) {
+        const auto local_entry = m_local_sidestake_entries.find(key);
 
-    if (local_entry != m_local_sidestake_entries.end()) {
-        result.push_back(std::make_shared<SideStake>(local_entry->second));
+        if (local_entry != m_local_sidestake_entries.end()) {
+            result.push_back(std::make_shared<SideStake>(local_entry->second));
+        }
     }
 
     return result;
 }
 
-std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CTxDestination& key, const bool& local_only) const
+std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const
 {
     LOCK(cs_lock);
 
     std::vector<SideStake_ptr> result;
 
-    for (const auto& iter : Try(key, local_only)) {
+    for (const auto& iter : Try(key, filter)) {
         if (iter->IsMandatory()) {
             if (std::get<MandatorySideStake::Status>(iter->GetStatus()) == MandatorySideStake::MandatorySideStakeStatus::MANDATORY) {
                 result.push_back(iter);
@@ -927,13 +930,11 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 
 double SideStakeRegistry::GetMandatoryAllocationsTotal() const
 {
-    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(false, false);
+    std::vector<SideStake_ptr> sidestakes = ActiveSideStakeEntries(SideStake::FilterFlag::MANDATORY, false);
     double allocation_total = 0.0;
 
     for (const auto& entry : sidestakes) {
-        if (entry->IsMandatory()) {
-            allocation_total += entry->GetAllocation();
-        }
+        allocation_total += entry->GetAllocation();
     }
 
     return allocation_total;
