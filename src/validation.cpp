@@ -844,14 +844,21 @@ private:
                 // For block version 13 and higher, check to ensure that mandatory sidestakes appear as outputs with the correct
                 // allocations.
                 if (m_block.nVersion >= 13) {
+                    // Record the script public key for the base coinstake so we can reuse.
+                    CTxDestination coinstake_destination;
+                    ExtractDestination(m_block.vtx[1].vout[1].scriptPubKey, coinstake_destination);
 
                     // Get mandatory sidestakes
                     std::vector<GRC::SideStake_ptr> mandatory_sidestakes
                         = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false);
 
-                    // This is exactly the same as the dust elimination in the SplitCoinStakeOutput function in the miner.
+                    // This is exactly the same as the dust elimination in the SplitCoinStakeOutput function in the miner, with
+                    // the addition that a mandatory sidestake that is degenerate, i.e. eliminated by the miner because it is
+                    // to an address that staked the coinstake (i.e. local to the staker's wallet), in favor of simply returning
+                    // the funds back to the staker on the coinstake return, is also removed from the vector here.
                     for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
-                        if (total_owed_to_staker * iter->get()->GetAllocation() < CENT) {
+                        if (total_owed_to_staker * iter->get()->GetAllocation() < CENT
+                            || iter->get()->GetDestination() == coinstake_destination) {
                             iter = mandatory_sidestakes.erase(iter);
                         } else {
                             ++iter;
@@ -885,11 +892,11 @@ private:
 
                         // This should not happen, but include the check for thoroughness.
                         if (validated_mandatory_sidestakes > GetMandatorySideStakeOutputLimit(m_block.nVersion)) {
-                            error("%s: FAILED: The number of mandatory sidestakes in the coinstake is %u, which is above "
-                                  "the limit of %u",
-                                  __func__,
-                                  validated_mandatory_sidestakes,
-                                  GetMandatorySideStakeOutputLimit(m_block.nVersion));
+                            return error("%s: FAILED: The number of mandatory sidestakes in the coinstake is %u, which is above "
+                                         "the limit of %u",
+                                         __func__,
+                                         validated_mandatory_sidestakes,
+                                         GetMandatorySideStakeOutputLimit(m_block.nVersion));
                         }
                     }
 
@@ -914,13 +921,13 @@ private:
                     // the minimum of GetMandatorySideStakeOutputLimit and mandatory_sidestakes.
                     if (validated_mandatory_sidestakes < std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
                                                                   mandatory_sidestakes.size())) {
-                        error("%s: FAILED: The number of validated sidestakes, %u, is less than required, %u.",
-                              __func__,
-                              validated_mandatory_sidestakes,
-                              std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
-                                                     mandatory_sidestakes.size()));
+                        return error("%s: FAILED: The number of validated sidestakes, %u, is less than required, %u.",
+                                     __func__,
+                                     validated_mandatory_sidestakes,
+                                     std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
+                                                            mandatory_sidestakes.size()));
                     }
-                }
+                } // v13+
 
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
                 // outputs were already checked by CheckMRCRewards.
