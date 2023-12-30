@@ -844,7 +844,7 @@ private:
                 // For block version 13 and higher, check to ensure that mandatory sidestakes appear as outputs with the correct
                 // allocations.
                 if (m_block.nVersion >= 13) {
-                    // Record the script public key for the base coinstake so we can reuse.
+                    // Record the base coinstake destination.
                     CTxDestination coinstake_destination;
                     ExtractDestination(m_block.vtx[1].vout[1].scriptPubKey, coinstake_destination);
 
@@ -867,6 +867,7 @@ private:
 
                     unsigned int validated_mandatory_sidestakes = 0;
 
+                    // Skip the empty output at index 0, stop at the index before the start of MRC's.
                     for (unsigned int i = 1; i < mrc_start_index; ++i) {
                         CTxDestination output_destination;
 
