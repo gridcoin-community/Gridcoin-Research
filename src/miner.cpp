@@ -910,24 +910,6 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     SideStakeAlloc local_sidestakes
         = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::LOCAL, false);
 
-    // For mandatory sidestakes we need to check whether any of them will result in an output of less than 1 CENT, and in
-    // that case remove that entry from the vector. This is extremely important when validating this on a receiving node.
-    // In the case where there are more than GetMandatorySideStakeOutputLimit mandatory sidestakes, and a random shuffle
-    // selection is used, that shuffle CANNOT include any outputs that would be eliminated by the lambda below for output
-    // less than one cent, because on validation the receiving node will simply see this as a missing output and fail
-    // validation. Eliminating the outputs that would generate dust BEFORE the shuffle ensures that the set of outputs selected
-    // from the shuffle WILL be present as a result of the selection. This allows the validator to retrace the dust elimination
-    // for the coinstake mandatory sidestakes, and verify that EITHER the residual number of mandatory outputs after dust elimination
-    // is less than or equal to the maximum, in which case they all must be present and valid, OR, the residual number of outputs
-    // is greater than the maximum, which means that the maximum number of mandatory outputs MUST be present and valid.
-    for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
-        if (nReward * iter->get()->GetAllocation() < CENT) {
-            iter = mandatory_sidestakes.erase(iter);
-        } else {
-            ++iter;
-        }
-    }
-
     if (mandatory_sidestakes.size() > GetMandatorySideStakeOutputLimit(blocknew.nVersion)) {
         Shuffle(mandatory_sidestakes.begin(), mandatory_sidestakes.end(), FastRandomContext());
     }
@@ -977,6 +959,14 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             // Do not process a distribution that would result in an output less than 1 CENT. This will flow back into
             // the coinstake below. Prevents dust build-up.
+            //
+            // This is extremely important for mandatory sidestakes when validating this on a receiving node.
+            // This allows the validator to retrace the dust elimination for the coinstake mandatory sidestakes, and
+            // verify that EITHER the residual number of mandatory outputs after dust elimination is less than or equal to the
+            // maximum, in which case they all must be present and valid, OR, the residual number of outputs is greater than the
+            // maximum, which means that the maximum number of mandatory outputs MUST be present and valid.
+            //
+            // Note that nOutputsUsed is NOT incremented if the output is suppressed by this check.
             if (nReward * allocation < CENT)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
@@ -1034,7 +1024,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     if (fEnableSideStaking) {
         // Iterate through mandatory SideStake vector until either all elements processed, the maximum number of
         // mandatory sidestake outputs is reached, or accumulated allocation will exceed 100%.
-        allocate_sidestakes(mandatory_sidestakes, GetMandatorySideStakeOutputLimit(blocknew.nVersion) + 1);
+        allocate_sidestakes(mandatory_sidestakes, GetMandatorySideStakeOutputLimit(blocknew.nVersion));
 
         // Iterate through local SideStake vector until either all elements processed, the maximum number of
         // sidestake outputs is reached, or accumulated allocation will exceed 100%.
