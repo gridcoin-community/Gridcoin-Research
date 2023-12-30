@@ -2485,7 +2485,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
             // We have to do our own conversion here because the 4th parameter type specifier cannot be set other
             // than string in the client.cpp file.
             double allocation = 0.0;
-            if (!ParseDouble(params[3].get_str(), &allocation)) {
+            if (params.size() > 3 && !ParseDouble(params[3].get_str(), &allocation)) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid allocation specified.");
             }
 
