@@ -15,32 +15,6 @@
 
 namespace GRC {
 
-/*
-//!
-//! \brief The CBitcoinAddressForStorage class. This is a very small extension of the CBitcoinAddress class that
-//! provides serialization/deserialization.
-//!
-class CBitcoinAddressForStorage : public CBitcoinAddress
-{
-public:
-    CBitcoinAddressForStorage();
-
-    CBitcoinAddressForStorage(CBitcoinAddress address);
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        // Note that (de)serializing the raw underlying vector char data for the address is safe here
-        // because this is only used in this module and validations were performed before serialization into
-        // storage.
-        READWRITE(nVersion);
-        READWRITE(vchData);
-    }
-};
-*/
-
 //!
 //! \brief The LocalSideStake class. This class formalizes the local sidestake, which is a directive to apportion
 //! a percentage of the total stake value to a designated destination. This destination must be valid, but
@@ -324,7 +298,7 @@ public:
         OUT_OF_BOUND
     };
 
-    enum FilterFlag  : uint8_t {
+    enum FilterFlag : uint8_t {
         NONE      = 0b00,
         LOCAL     = 0b01,
         MANDATORY = 0b10,
@@ -342,22 +316,59 @@ public:
 
     SideStake(MandatorySideStake_ptr sidestake_ptr);
 
+    //!
+    //! \brief IsMandatory returns true if the sidestake is mandatory
+    //! \return true or false
+    //!
     bool IsMandatory() const;
 
+    //!
+    //! \brief Gets the destination of the sidestake
+    //! \return CTxDestination of the sidestake
+    //!
     CTxDestination GetDestination() const;
+    //!
+    //! \brief Gets the allocation of the sidestake
+    //! \return A double between 0.0 and 1.0 inclusive representing the allocation fraction of the sidestake
+    //!
     double GetAllocation() const;
+    //!
+    //! \brief Gets the description of the sidestake
+    //! \return The description string of the sidestake
+    //!
     std::string GetDescription() const;
+    //!
+    //! \brief Gets a variant containing either the mandatory sidestake status or local sidestake status, whichever
+    //! is applicable.
+    //! \return std::variant of the applicable sidestake status
+    //!
     Status GetStatus() const;
+    //!
+    //! \brief Gets the status string associated with the applicable sidestake status.
+    //! \return String of the applicable sidestake status
+    //!
     std::string StatusToString() const;
 
 private:
+    //!
+    //! \brief m_local_sidestake_ptr that points to the local sidestake object if this sidestake object is local;
+    //! nullptr otherwise.
+    //!
     LocalSideStake_ptr m_local_sidestake_ptr;
+    //!
+    //! \brief m_mandatory_sidestake_ptr that points to the mandatory sidestake object if this sidestake object is mandatory;
+    //! nullptr otherwise.
+    //!
     MandatorySideStake_ptr m_mandatory_sidestake_ptr;
+    //!
+    //! \brief m_type holds the type of the sidestake, either mandatory or local.
+    //!
     Type m_type;
 };
 
 //!
-//! \brief The type that defines a shared pointer to a mandatory sidestake
+//! \brief The type that defines a shared pointer to a sidestake. This is the facade and in turn will point to either a
+//! mandatory or local sidestake as applicable.
 //!
 typedef std::shared_ptr<SideStake> SideStake_ptr;
 
@@ -509,7 +520,8 @@ public:
 }; // SideStakePayload
 
 //!
-//! \brief Stores and manages sidestake entries.
+//! \brief Stores and manages sidestake entries. Note that the mandatory sidestakes are stored in leveldb using
+//! the registry db template. The local sidestakes are maintained in sync with the read-write gridcoinsettings.json file.
 //!
 class SideStakeRegistry : public IContractHandler
 {
@@ -527,9 +539,7 @@ public:
           };
 
     //!
-    //! \brief The type that keys local sidestake entries by their destinations. Note that the entries
-    //! in this map are actually smart shared pointer wrappers, so that the same actual object
-    //! can be held by both this map and the historical map without object duplication.
+    //! \brief The type that keys local sidestake entries by their destinations.
     //!
     typedef std::map<CTxDestination, LocalSideStake_ptr> LocalSideStakeMap;
 
@@ -565,8 +575,9 @@ public:
     //! \brief Get the collection of active sidestake entries. This is presented as a vector of
     //! smart pointers to the relevant sidestake entries in the database. The entries included have
     //! the status of active (for local sidestakes) and/or mandatory (for contract sidestakes).
-    //! Mandatory sidestakes come before local ones, and the method ensures that the sidestakes
-    //! returned do not total an allocation greater than 1.0.
+    //! Mandatory sidestakes come before local ones, and the method ensures that the mandatory sidestakes
+    //! returned do not total an allocation greater than MaxMandatorySideStakeTotalAlloc, and all of the
+    //! sidestakes combined do not total an allocation greater than 1.0.
     //!
     //! \param bitmask filter to return mandatory only, local only, or all
     //!
@@ -581,7 +592,7 @@ public:
     //! \param bitmask filter to try mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to entries matching the provided destination. Up to two elements
-    //! are returned, mandatory entry first, unless local only boolean is set true.
+    //! are returned, mandatory entry first, depending on the filter set.
     //!
     std::vector<SideStake_ptr> Try(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
 
@@ -592,8 +603,7 @@ public:
     //! \param bitmask filter to try mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to entries matching the provided destination that are in status of
-    //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, unless local only boolean
-    //! is set true.
+    //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first,, depending on the filter set.
     //!
     std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
 
@@ -773,9 +783,9 @@ private:
     MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
     PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
 
-    SideStakeDB m_sidestake_db;
+    SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
 
-    bool m_local_entry_already_saved_to_config = false; //!< Flag to prevent reload on signal if individual entry saved already.
+    bool m_local_entry_already_saved_to_config = false;   //!< Flag to prevent reload on signal if individual entry saved already.
 
 public:
 
