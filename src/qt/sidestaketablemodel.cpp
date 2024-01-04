@@ -334,8 +334,11 @@ Qt::ItemFlags SideStakeTableModel::flags(const QModelIndex &index) const
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
 
-    if (!rec->IsMandatory()
-        && std::get<GRC::LocalSideStake::Status>(rec->GetStatus()) == GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE
+    GRC::SideStake::Status status = rec->GetStatus();
+    GRC::LocalSideStake::Status* local_status_ptr = std::get_if<GRC::LocalSideStake::Status>(&status);
+
+    if (!rec->IsMandatory() && local_status_ptr
+        && *local_status_ptr == GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE
         && (index.column() == Allocation || index.column() == Description)) {
         retval |= Qt::ItemIsEditable;
     }
