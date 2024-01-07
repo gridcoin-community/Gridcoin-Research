@@ -806,6 +806,22 @@ private:
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
 
     //!
+    //! \brief Contains pending beacons that have expired.
+    //!
+    //! Contains pending beacons that have expired but need to be retained until the next SB (activation) to ensure a
+    //! reorganization will successfully resurrect expired pending beacons back into pending ones up to the depth equal to one SB to
+    //! the next, which is about 960 blocks. The reason this is necessary is two fold: 1) it makes the lookup for expired
+    //! pending beacons in the deactivate method much simpler in the case of a reorg across a SB boundary, and 2) it holds
+    //! a reference to the pending beacon shared pointer object in the history map, which prevents it from being passivated.
+    //! Otherwise, a passivation event, which would remove the pending deleted beacons, followed by a reorganization across
+    //! SB boundary could have a small possibility of removing a pending beacon that could be verified in the alternative SB
+    //! eventually staked.
+    //!
+    //! This set is cleared and repopulated at each SB accepted by the node with the current expired pending beacons.
+    //!
+    std::set<Beacon_ptr> m_expired_pending;
+
+    //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
     //! beacon registry and is only accessible by beacon registry functions.
     //!

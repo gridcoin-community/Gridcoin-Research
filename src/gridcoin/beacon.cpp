@@ -880,58 +880,74 @@ void BeaconRegistry::ActivatePending(
 {
     LogPrint(LogFlags::BEACON, "INFO: %s: Called for superblock at height %i.", __func__, height);
 
-    // Activate the pending beacons that are not expired with respect to pending age.
+    // It is possible that more than one pending beacon with the same CPID can be attempted to be
+    // activated in the same superblock. The behavior here to agree with the original implementation
+    // is the last one. Here we are going to use a map keyed by the CPID with the array style insert
+    // to ensure that the LAST pending beacon verified is the one activated.
+    BeaconMap verified_beacons;
+
     for (const auto& id : beacon_ids) {
         auto iter_pair = m_pending.find(id);
 
         if (iter_pair != m_pending.end()) {
+            bool already_found = (verified_beacons.find(iter_pair->second->m_cpid) != verified_beacons.end());
 
-            Beacon_ptr found_pending_beacon = iter_pair->second;
-
-            // Create a new beacon to activate from the found pending beacon.
-            Beacon activated_beacon(*iter_pair->second);
-
-            // Update the new beacon's prev hash to be the hash of the pending beacon that is being activated.
-            activated_beacon.m_previous_hash = found_pending_beacon->m_hash;
-
-            // We are going to have to use a composite hash for these because activation is not done as
-            // individual transactions. Rather groups are done in each superblock under one hash. The
-            // hash of the block hash, and the pending beacon that is being activated's hash is sufficient.
-            activated_beacon.m_status = BeaconStatusForStorage::ACTIVE;
-
-            activated_beacon.m_hash = Hash(block_hash, found_pending_beacon->m_hash);
-
-            LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
-                     __func__,
-                     activated_beacon.m_cpid.ToString(),
-                     activated_beacon.GetAddress().ToString(),
-                     activated_beacon.m_hash.GetHex());
-
-            // It is possible that more than one pending beacon with the same CPID can be attempted to be
-            // activated in the same superblock. The behavior here to agree with the original implementation
-            // is the last one. So get rid of any previous one activated/inserted.
-            auto found_already_activated_beacon = m_beacon_db.find(activated_beacon.m_hash);
-            if (found_already_activated_beacon != m_beacon_db.end())
-            {
-                m_beacon_db.erase(activated_beacon.m_hash);
+            if (already_found) {
+                LogPrint(LogFlags::BEACON, "INFO: %s: More than one pending beacon verified for the same CPID %s. Overriding previous"
+                                           "verified beacon.",
+                         __func__,
+                         iter_pair->second->m_cpid.ToString());
             }
 
-            m_beacon_db.insert(activated_beacon.m_hash, height, activated_beacon);
-
-            // This is the subscript form of insert. Important here because an activated beacon should
-            // overwrite any existing entry in the m_beacons map.
-            m_beacons[activated_beacon.m_cpid] = m_beacon_db.find(activated_beacon.m_hash)->second;
-
-            // Remove the pending beacon entry from the pending map. (Note this entry still exists in the historical
-            // table and the db.
-            m_pending.erase(iter_pair);
+            verified_beacons[iter_pair->second->m_cpid] = iter_pair->second;
         }
     }
 
-    // Discard pending beacons that are expired with respect to pending age.
+    // Activate the pending beacons that are not expired with respect to pending age.
+    for (const auto& iter_pair : verified_beacons) {
+
+        Beacon_ptr last_pending_beacon = iter_pair.second;
+
+        // Create a new beacon to activate from the found pending beacon.
+        Beacon activated_beacon(*iter_pair.second);
+
+        // Update the new beacon's prev hash to be the hash of the pending beacon that is being activated.
+        activated_beacon.m_previous_hash = last_pending_beacon->m_hash;
+
+        // We are going to have to use a composite hash for these because activation is not done as
+        // individual transactions. Rather groups are done in each superblock under one hash. The
+        // hash of the block hash, and the pending beacon that is being activated's hash is sufficient.
+        activated_beacon.m_status = BeaconStatusForStorage::ACTIVE;
+
+        activated_beacon.m_hash = Hash(block_hash, last_pending_beacon->m_hash);
+
+        LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
+                 __func__,
+                 activated_beacon.m_cpid.ToString(),
+                 activated_beacon.GetAddress().ToString(),
+                 activated_beacon.m_hash.GetHex());
+
+        m_beacon_db.insert(activated_beacon.m_hash, height, activated_beacon);
+
+        // This is the subscript form of insert. Important here because an activated beacon should
+        // overwrite any existing entry in the m_beacons map.
+        m_beacons[activated_beacon.m_cpid] = m_beacon_db.find(activated_beacon.m_hash)->second;
+
+        // Remove the pending beacon entry from the pending map. (Note this entry still exists in the historical
+        // table and the db.
+        m_pending.erase(iter_pair.second->GetId());
+    }
+
+    // Clear the expired pending beacon set. There is no need to retain expired beacons beyond one SB boundary (which is when
+    // this method is called) as this gives ~960 blocks of reorganization depth before running into the slight possibility that
+    // a different SB could verify a different pending beacon that should be resurrected to be verified.
+    m_expired_pending.clear();
+
+    // Mark remaining pending beacons that are expired with respect to pending age as expired and move to the expired map.
     for (auto iter = m_pending.begin(); iter != m_pending.end(); /* no-op */) {
         PendingBeacon pending_beacon(*iter->second);
 
+        // If the pending beacon has expired with no action remove the pending beacon.
         if (pending_beacon.PendingExpired(superblock_time)) {
             // Set the expired pending beacon's previous beacon hash to the beacon entry's hash.
             pending_beacon.m_previous_hash = pending_beacon.m_hash;
@@ -948,7 +964,19 @@ void BeaconRegistry::ActivatePending(
                      pending_beacon.m_hash.GetHex());
 
             // Insert the expired pending beacon into the db.
-            m_beacon_db.insert(pending_beacon.m_hash, height, static_cast<Beacon>(pending_beacon));
+            if (!m_beacon_db.insert(pending_beacon.m_hash, height, static_cast<Beacon>(pending_beacon))) {
+                LogPrintf("WARN: %s: Attempt to insert an expired pending beacon entry for cpid %s in the beacon registry where "
+                          "one with that hash key (%s) already exists.",
+                          __func__,
+                          pending_beacon.m_cpid.ToString(),
+                          pending_beacon.m_hash.GetHex());
+            }
+
+            // Insert the expired pending beacon into the m_expired_pending set. We do the find here because the insert above
+            // created a shared pointer to the beacon object we want to hold a reference to. To save memory we do not want to
+            // use a copy.
+            m_expired_pending.insert(m_beacon_db.find(pending_beacon.m_hash)->second);
+
             // Remove the pending beacon entry from the m_pending map.
             iter = m_pending.erase(iter);
         } else {
@@ -965,12 +993,13 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
     // Find beacons that were activated by the superblock to be reverted and restore them to pending status. These come
     // from the beacon db.
     for (auto iter = m_beacons.begin(); iter != m_beacons.end();) {
-        Cpid cpid = iter->second->m_cpid;
-
         uint256 activation_hash = Hash(superblock_hash, iter->second->m_previous_hash);
         // If we have an active beacon whose hash matches the composite hash assigned by ActivatePending...
         if (iter->second->m_hash == activation_hash) {
-            // Find the pending beacon entry in the db before the activation. This is the previous state record.
+            Cpid cpid = iter->second->m_cpid;
+
+            // Find the pending beacon entry in the db before the activation. This is the previous state record. NOTE that this
+            // find pulls the record from leveldb back into memory if the record had been passivated for memory savings before.
             auto pending_beacon_entry = m_beacon_db.find(iter->second->m_previous_hash);
 
             // If not found for some reason, move on.
@@ -1000,64 +1029,59 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
         }
     }
 
-    // Find pending beacons that were removed from the pending beacon map and marked PENDING_EXPIRED and restore them
-    // back to pending status. Unfortunately, the beacon_db has to be traversed for this, because it is the only entity
-    // that has the records at this point. This will only be done very rarely, when a reorganization crosses a
-    // superblock commit.
-    auto iter = m_beacon_db.begin();
+    // With the newer m_expired_pending set, the resurrection of expired pending beacons is relatively painless. We traverse
+    // the m_expired_pending set and simply restore the pending beacon pointed to as the antecedent of each expired beacon in
+    // the map. This is done by the m_beacon_db.find which will pull the beacon record from leveldb if it does not exist in
+    // memory, which makes this passivation-proof up to a reorganization depth of the interval between two SB's (approximately
+    // 960 blocks).
+    for (const auto& iter : m_expired_pending) {
+        // Get the pending beacon entry that is the antecedent of the expired entry.
+        auto pending_beacon_entry = m_beacon_db.find(iter->m_previous_hash);
 
-    while (iter != m_beacon_db.end())
-    {
-        // The cpid in the historical beacon record to be matched.
-        Cpid cpid = iter->second->m_cpid;
-
-        uint256 match_hash = Hash(superblock_hash, iter->second->m_previous_hash);
-
-        // If the calculated match_hash matches the key (hash) of the historical beacon record, then
-        // restore the previous record pointed to by the historical beacon record to the pending map.
-        if (match_hash == iter->first)
-        {
-            uint256 resurrect_pending_hash = iter->second->m_previous_hash;
-
-            if (!resurrect_pending_hash.IsNull())
-            {
-                Beacon_ptr resurrected_pending = m_beacon_db.find(resurrect_pending_hash)->second;
-
-                // Check that the status of the beacon to resurrect is PENDING. If it is not log an error but continue
-                // anyway.
-                if (resurrected_pending->m_status != BeaconStatusForStorage::PENDING)
-                {
-                    error("%s: Superblock hash %s: The beacon for cpid %s pointed to by an EXPIRED_PENDING beacon to be "
-                          "put back in PENDING status does not have the expected status of PENDING. The beacon hash is %s "
-                          "and the status is %i",
-                          __func__,
-                          superblock_hash.GetHex(),
-                          cpid.ToString(),
-                          resurrected_pending->m_hash.GetHex(),
-                          resurrected_pending->m_status.Raw());
-                }
-
-                // Put the record in m_pending.
-                m_pending[resurrected_pending->GetId()] = resurrected_pending;
-            }
-            else
-            {
-                error("%s: Superblock hash %s: The beacon for cpid %s with an EXPIRED_PENDING status has no valid "
-                      "previous beacon hash with which to restore the PENDING beacon.",
+        // Resurrect pending beacon entry
+        if (!m_pending.insert(std::make_pair(pending_beacon_entry->second->GetId(), pending_beacon_entry->second)).second) {
+            LogPrintf("WARN: %s: Resurrected pending beacon entry, hash %s, from expired pending beacon for cpid %s during deactivation "
+                      " of superblock hash %s already exists in the pending beacon map corresponding to beacon address %s.",
                       __func__,
+                      pending_beacon_entry->second->m_hash.GetHex(),
+                      pending_beacon_entry->second->m_cpid.ToString(),
                       superblock_hash.GetHex(),
-                      cpid.ToString());
-            }
-        } //matched EXPIRED_PENDING record
+                      pending_beacon_entry->second->GetAddress().ToString()
+                      );
+        }
+    }
 
-        iter = m_beacon_db.advance(iter);
-    } // m_beacon_db traversal
-}
+    // We clear the expired pending beacon map, as when the chain moves forward (perhaps on a different fork), the SB boundary will
+    // (during the activation) repopulate the m_expired_pending map with a new set of expired_beacons. (This is very, very likely
+    // to be the same set, BTW.)
+    m_expired_pending.clear();
+
+    // Note that making this foolproof in a reorganization across more than one SB boundary means we would have to repopulate the
+    // expired pending beacon map from the PREVIOUS set of expired pending beacons. This would require a traversal of the entire
+    // leveldb beacon structure for beacons, as it is keyed by beacon hash, not CPID or CKeyID. The expense is not worth it. In
+    // artificial reorgs for testing purposes on testnet, where the chain is reorganized back thousands of blocks and then reorganized
+    // forward along the same effective branch, the same superblocks will be restored using the same beacon activations as before,
+    // which means in effect none of the expired beacons are ever used. In a real fork scenario, not repopulating the expired_pending
+    // map limits the 100% foolproof reorg to the interval between SB's, which is approximately 960 blocks. This depth of reorg
+    // in an operational network scenario is almost inconceivable, and if it actually happens we have other problems much worse
+    // than the SLIGHT possibility of a different pending beacon being activated with the committed SB.
+
+    // The original algorithm, which traversed m_beacon_db using an iterator, was actually broken, because passivation removes
+    // elements from the m_beacon_db in memory map if there is only one remaining reference, which is the m_historical map that holds
+    // references to all historical (non-current) entries. In the original algorithm, expired_pending entries were created in the
+    // m_beacon_db, and the pending beacon pointer references were removed from m_pending, but no in memory map other than
+    // m_historical kept a reference to the expired entry. This qualified the expired entry for passivation, so would
+    // not necessarily be present to find in an iterator traversal of m_beacon_db. The iterator style traversal of m_beacon_db, unlike
+    // the find, does NOT have the augmentation to pull passivated items from leveldb not in memory, because this would be
+    // exceedingly expensive.
+ }
 
 //!
 //! \brief BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries. This is a specialization of the RegistryDB template
-//! HandleCurrentHistoricalEntries specific to Beacons. It handles the pending/active/renawal/expired pending/deleted
-//! states and their interaction with the active entries map (m_beacons) and the pending entries map (m_pending).
+//! HandleCurrentHistoricalEntries specific to Beacons. It handles the pending/active/renewal/expired pending/deleted
+//! states and their interaction with the active entries map (m_beacons) and the pending entries map (m_pending) when loading
+//! the beacon history from the beacon leveldb backing store during registry initialization. It is not intended to be used
+//! for other specializations/overrides.
 //!
 //! \param entries
 //! \param pending_entries
