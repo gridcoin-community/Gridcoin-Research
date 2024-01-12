@@ -13,7 +13,6 @@
 #include "gridcoin/contract/registry_db.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
-
 #include <memory>
 #include <string>
 #include <vector>
@@ -767,6 +766,18 @@ public:
     //! \return The number of elements passivated.
     //!
     uint64_t PassivateDB();
+
+    //!
+    //! \brief This function walks the linked beacon entries back (using the m_previous_hash member) from a provided
+    //! beacon to find the initial advertisement. Note that this does NOT traverse non-continuous beacon ownership,
+    //! which occurs when a beacon is allowed to expire and must be reverified under a new key.
+    //!
+    //! \param beacon smart shared pointer to beacon entry to begin walking back
+    //! \param beacon_chain_out shared pointer to UniValue beacon chain out report array
+    //! \return root (advertisement) beacon entry smart shared pointer
+    //!
+    Beacon_ptr GetBeaconChainletRoot(Beacon_ptr beacon,
+                                     std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out = nullptr);
 
     //!
     //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization

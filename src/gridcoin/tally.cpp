@@ -1228,15 +1228,12 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
         return accrual;
     }
 
-    Beacon_ptr beacon_ptr = beacon;
+    Beacon_ptr beacon_ptr;
 
     // Walk back the entries in the historical beacon map linked by renewal prev tx hash until the first
     // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier
     // than here.
-    while (beacon_ptr->Renewed())
-    {
-        beacon_ptr = beacons.GetBeaconDB().find(beacon_ptr->m_previous_hash)->second;
-    }
+    beacon_ptr = beacons.GetBeaconChainletRoot(beacon);
 
     const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
 
