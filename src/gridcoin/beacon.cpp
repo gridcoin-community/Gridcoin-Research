@@ -311,6 +311,11 @@ const BeaconRegistry::PendingBeaconMap& BeaconRegistry::PendingBeacons() const
     return m_pending;
 }
 
+const std::set<Beacon_ptr>& BeaconRegistry::ExpiredBeacons() const
+{
+    return m_expired_pending;
+}
+
 BeaconOption BeaconRegistry::Try(const Cpid& cpid) const
 {
     const auto iter = m_beacons.find(cpid);
@@ -987,7 +992,8 @@ void BeaconRegistry::ActivatePending(
         }
     }
 
-    // Activate the pending beacons that are not expired with respect to pending age.
+    // Activate the pending beacons that are not expired with respect to pending age as of the time of verification (the
+    // committing of the superblock).
     for (const auto& iter_pair : verified_beacons) {
 
         Beacon_ptr last_pending_beacon = iter_pair.second;

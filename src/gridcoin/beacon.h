@@ -589,6 +589,12 @@ public:
     const PendingBeaconMap& PendingBeacons() const;
 
     //!
+    //! \brief Get the set of beacons that have expired while pending (awaiting verification)
+    //! \return A reference to the expired pending beacon set.
+    //!
+    const std::set<Beacon_ptr>& ExpiredBeacons() const;
+
+    //!
     //! \brief Get the beacon for the specified CPID.
     //!
     //! \param cpid The researcher's CPID to look up a beacon for.
