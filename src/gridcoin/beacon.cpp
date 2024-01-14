@@ -355,9 +355,13 @@ std::vector<Beacon_ptr> BeaconRegistry::FindPending(const Cpid& cpid) const
 
 const BeaconOption BeaconRegistry::FindHistorical(const uint256& hash)
 {
-    BeaconOption beacon = m_beacon_db.find(hash)->second;
+    auto beacon_iter = m_beacon_db.find(hash);
 
-    return beacon;
+    if (beacon_iter != m_beacon_db.end()) {
+        return beacon_iter->second;
+    }
+
+    return {};
 }
 
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
