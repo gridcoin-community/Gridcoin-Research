@@ -390,6 +390,7 @@ void BeaconRegistry::Reset()
 {
     m_beacons.clear();
     m_pending.clear();
+    m_expired_pending.clear();
     m_beacon_db.clear();
 }
 
@@ -1182,6 +1183,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
 //!
 template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::BeaconRegistry::BeaconMap& entries,
                                                GRC::BeaconRegistry::PendingBeaconMap& pending_entries,
+                                                               std::set<Beacon_ptr>& expired_entries,
                                                const Beacon& entry,
                                                entry_ptr& historical_entry_ptr,
                                                const uint64_t& recnum,
@@ -1216,7 +1218,7 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
 
     if (entry.m_status == BeaconStatusForStorage::ACTIVE || entry.m_status == BeaconStatusForStorage::RENEWAL)
     {
-        LogPrint(LogFlags::CONTRACT, "INFO: %s: %ss: entry insert: cpid %s, address %s, timestamp %" PRId64 ", "
+        LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: entry insert: cpid %s, address %s, timestamp %" PRId64 ", "
                 "hash %s, previous_hash %s, status %s, recnum %" PRId64 ".",
                  __func__,
                  key_type,
@@ -1253,6 +1255,15 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
         }
     }
 
+    if (entry.m_status == BeaconStatusForStorage::ACTIVE) {
+        // Note that in the orginal activation, all the activations happen for a superblock, and then the expired_entry set is
+        // cleared and then new expired entries recorded from the just committed SB. This method operates at the record level, but
+        // clearing the expired_entries for each ACTIVE record posting will achieve the same effect, because the entries are ordered
+        // the proper way. It is a little bit of undesired work, but it is not worth the complexity of feeding the boundaries
+        // of the group of verified beacons to activate.
+        expired_entries.clear();
+    }
+
     if (entry.m_status == BeaconStatusForStorage::EXPIRED_PENDING)
     {
         LogPrint(LogFlags::CONTRACT, "INFO: %s: %s: expired pending entry delete: cpid %s, address %s, timestamp %" PRId64 ", "
@@ -1267,6 +1278,9 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
                  entry.StatusToString(), // status
                  recnum
                  );
+
+        // Insert the expired pending entry into the expired entries set.
+        expired_entries.insert(historical_entry_ptr);
 
         // Delete any entry in the pending map that is marked expired.
         pending_entries.erase(entry.GetId());
@@ -1294,7 +1308,7 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
 
 int BeaconRegistry::Initialize()
 {
-    int height = m_beacon_db.Initialize(m_beacons, m_pending);
+    int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending);
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());
@@ -1306,6 +1320,7 @@ void BeaconRegistry::ResetInMemoryOnly()
 {
     m_beacons.clear();
     m_pending.clear();
+    m_expired_pending.clear();
     m_beacon_db.clear_in_memory_only();
 }
 

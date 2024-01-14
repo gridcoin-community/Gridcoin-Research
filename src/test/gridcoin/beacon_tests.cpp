@@ -182,7 +182,6 @@ public:
                     if (beacon != nullptr) {
                         std::cout << "add beacon record: "
                                   << "blockheight = " << ctx.m_pindex->nHeight
-                                  << ", hash = " << beacon->m_hash.GetHex()
                                   << ", cpid = " << beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(beacon->m_public_key)
                                   << ", address = " << beacon->GetAddress().ToString()
@@ -203,7 +202,6 @@ public:
                     if (beacon != nullptr) {
                         std::cout << "delete beacon record: "
                                   << "blockheight = " << ctx.m_pindex->nHeight
-                                  << ", hash = " << beacon->m_hash.GetHex()
                                   << ", cpid = " << beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(beacon->m_public_key)
                                   << ", address = " << beacon->GetAddress().ToString()
@@ -242,7 +240,6 @@ public:
                     if (activated_beacon != nullptr) {
                         std::cout << "activated beacon record: "
                                   << "blockheight = " << pindex->nHeight
-                                  << ", hash = " << activated_beacon->m_hash.GetHex()
                                   << ", cpid = " << activated_beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(activated_beacon->m_public_key)
                                   << ", address = " << activated_beacon->GetAddress().ToString()
@@ -258,7 +255,6 @@ public:
                     if (iter != nullptr) {
                         std::cout << "expired beacon record: "
                                   << "blockheight = " << pindex->nHeight
-                                  << ", hash = " << iter->m_hash.GetHex()
                                   << ", cpid = " << iter->m_cpid.ToString()
                                   << ", public key = " << HexStr(iter->m_public_key)
                                   << ", address = " << iter->GetAddress().ToString()
@@ -279,17 +275,6 @@ public:
         for (const auto& iter : registry.Beacons())
         {
             m_beacons_init[iter.first] = *iter.second;
-
-            std::cout << "init beacon record: "
-                      << "hash = " << iter.second->m_hash.GetHex()
-                      << ", cpid = " << iter.second->m_cpid.ToString()
-                      << ", public key = " << HexStr(iter.second->m_public_key)
-                      << ", address = " << iter.second->GetAddress().ToString()
-                      << ", timestamp = " << iter.second->m_timestamp
-                      << ", hash = " << iter.second->m_hash.GetHex()
-                      << ", prev beacon hash = " << iter.second->m_previous_hash.GetHex()
-                      << ", status = " << iter.second->StatusToString()
-                      << std::endl;
         }
 
         m_init_number_beacons = m_beacons_init.size();
@@ -314,6 +299,16 @@ public:
             // Create a copy of the referenced beacon object with a shared pointer to it and store.
             m_local_historical_beacon_map_init[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
 
+            std::cout << "init beacon db record: "
+                      << ", cpid = " << beacon_ptr->m_cpid.ToString()
+                      << ", public key = " << HexStr(beacon_ptr->m_public_key)
+                      << ", address = " << beacon_ptr->GetAddress().ToString()
+                      << ", timestamp = " << beacon_ptr->m_timestamp
+                      << ", hash = " << beacon_ptr->m_hash.GetHex()
+                      << ", prev beacon hash = " << beacon_ptr->m_previous_hash.GetHex()
+                      << ", status = " << beacon_ptr->StatusToString()
+                      << std::endl;
+
             init_beacon_db_iter = init_beacon_db.advance(init_beacon_db_iter);
         }
 
@@ -331,17 +326,6 @@ public:
         for (const auto& iter : registry.Beacons())
         {
             m_beacons_reinit[iter.first] = *iter.second;
-
-            std::cout << "reinit beacon record: "
-                      << "hash = " << iter.second->m_hash.GetHex()
-                      << ", cpid = " << iter.second->m_cpid.ToString()
-                      << ", public key = " << HexStr(iter.second->m_public_key)
-                      << ", address = " << iter.second->GetAddress().ToString()
-                      << ", timestamp = " << iter.second->m_timestamp
-                      << ", hash = " << iter.second->m_hash.GetHex()
-                      << ", prev beacon hash = " << iter.second->m_previous_hash.GetHex()
-                      << ", status = " << iter.second->StatusToString()
-                      << std::endl;
         }
 
         m_reinit_number_beacons = m_beacons_reinit.size();
@@ -365,6 +349,16 @@ public:
 
             // Create a copy of the referenced beacon object with a shared pointer to it and store.
             m_local_historical_beacon_map_reinit[hash] = std::make_shared<GRC::Beacon>(*beacon_ptr);
+
+            std::cout << "init beacon db record: "
+                      << ", cpid = " << beacon_ptr->m_cpid.ToString()
+                      << ", public key = " << HexStr(beacon_ptr->m_public_key)
+                      << ", address = " << beacon_ptr->GetAddress().ToString()
+                      << ", timestamp = " << beacon_ptr->m_timestamp
+                      << ", hash = " << beacon_ptr->m_hash.GetHex()
+                      << ", prev beacon hash = " << beacon_ptr->m_previous_hash.GetHex()
+                      << ", status = " << beacon_ptr->StatusToString()
+                      << std::endl;
 
             reinit_beacon_db_iter = reinit_beacon_db.advance(reinit_beacon_db_iter);
         }

@@ -618,13 +618,15 @@ public:
     static void RunDBPassivation();
 
     //!
-    //! \brief Specializes the template RegistryDB for the ScraperEntry class
+    //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
+    //! actually used.
     //!
     typedef RegistryDB<ProjectEntry,
                        ProjectEntry,
                        ProjectEntryStatus,
                        ProjectEntryMap,
                        PendingProjectEntryMap,
+                       std::set<ProjectEntry>,
                        HistoricalProjectEntryMap> ProjectEntryDB;
 
 private:
@@ -643,6 +645,8 @@ private:
 
     ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
     PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
+
+    std::set<ProjectEntry> m_expired_project_entries {}; //!< Not actually used. Only to satisfy the template.
 
     ProjectEntryDB m_project_db; //!< The project db member
 public:

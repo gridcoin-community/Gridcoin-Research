@@ -26,9 +26,11 @@ namespace GRC {
 //! M:  the map type for the entries
 //! P:  the map type for pending entries. This is really only used for beacons. In all other registries it is typedef'd to
 //!     the same as M.
+//! X:  the map type for expired pending entries. This is really only used for beacons. In all other registries it is typedef'd to
+//!     the same as M.
 //! H:  the historical map type for historical entries
 //!
-template<class E, class SE, class S, class M, class P, class H>
+template<class E, class SE, class S, class M, class P, class X, class H>
 class RegistryDB
 {
 public:
@@ -62,10 +64,12 @@ public:
     //! \param entries The map of current entries.
     //! \param pending_entries. The map of pending entries. This is not used in the general template, only in the beacons
     //! specialization.
+    //! \param expired_entries. The map of expired pending entries. This is not used in the geenral template, only in the
+    //! beacons specialization.
     //!
     //! \return block height up to and including which the entry records were stored.
     //!
-    int Initialize(M& entries, P& pending_entries)
+    int Initialize(M& entries, P& pending_entries, X& expired_entries)
     {
         bool status = true;
         int height = 0;
@@ -169,7 +173,7 @@ public:
             m_historical[iter.second.m_hash] = std::make_shared<E>(entry);
             entry_ptr& historical_entry_ptr = m_historical[iter.second.m_hash];
 
-            HandleCurrentHistoricalEntries(entries, pending_entries, entry,
+            HandleCurrentHistoricalEntries(entries, pending_entries, expired_entries, entry,
                                                 historical_entry_ptr, recnum, key_type);
 
             number_passivated += (uint64_t) HandlePreviousHistoricalEntries(historical_entry_ptr);
@@ -199,7 +203,7 @@ public:
     //! \param recnum
     //! \param key_type
     //!
-    void HandleCurrentHistoricalEntries(M& entries, P& pending_entries, const E& entry,
+    void HandleCurrentHistoricalEntries(M& entries, P& pending_entries, X& expired_entries, const E& entry,
                                         entry_ptr& historical_entry_ptr, const uint64_t& recnum,
                                         const std::string& key_type)
     {

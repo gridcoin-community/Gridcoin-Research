@@ -606,13 +606,15 @@ public:
     static void RunDBPassivation();
 
     //!
-    //! \brief Specializes the template RegistryDB for the ScraperEntry class
+    //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ScraperEntry> is
+    //! not actually used.
     //!
     typedef RegistryDB<ScraperEntry,
                        ScraperEntry,
                        ScraperEntryStatus,
                        ScraperMap,
                        PendingScraperMap,
+                       std::set<ScraperEntry>,
                        HistoricalScraperMap> ScraperEntryDB;
 
 private:
@@ -631,6 +633,8 @@ private:
 
     ScraperMap m_scrapers;                   //!< Contains the current scraper entries, including entries marked DELETED.
     PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
+
+    std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
 
     ScraperEntryDB m_scraper_db;
 

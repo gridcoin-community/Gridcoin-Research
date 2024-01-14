@@ -783,13 +783,15 @@ public:
     static void RunDBPassivation();
 
     //!
-    //! \brief Specializes the template RegistryDB for the SideStake class
+    //! \brief Specializes the template RegistryDB for the SideStake class. Note that std::set<MandatorySideStake>
+    //! is not actually used.
     //!
     typedef RegistryDB<MandatorySideStake,
                        MandatorySideStake,
                        MandatorySideStake::MandatorySideStakeStatus,
                        MandatorySideStakeMap,
                        PendingSideStakeMap,
+                       std::set<SideStake>,
                        HistoricalSideStakeMap> SideStakeDB;
 
 private:
@@ -826,6 +828,8 @@ private:
     LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
     MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
     PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+
+    std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
 
     SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
 

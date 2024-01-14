@@ -567,13 +567,15 @@ public:
     static void RunDBPassivation();
 
     //!
-    //! \brief Specializes the template RegistryDB for the ProtocolEntry class
+    //! \brief Specializes the template RegistryDB for the ProtocolEntry class. Note that std::set<ProtocolEntry>
+    //! is not actually used.
     //!
     typedef RegistryDB<ProtocolEntry,
                        ProtocolEntry,
                        ProtocolEntryStatus,
                        ProtocolEntryMap,
                        PendingProtocolEntryMap,
+                       std::set<ProtocolEntry>,
                        HistoricalProtocolEntryMap> ProtocolEntryDB;
 
 private:
@@ -592,6 +594,8 @@ private:
 
     ProtocolEntryMap m_protocol_entries;                   //!< Contains the current protocol entries including entries marked DELETED.
     PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
+
+    std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
 
     ProtocolEntryDB m_protocol_db;
 

@@ -811,6 +811,7 @@ public:
                        BeaconStatusForStorage,
                        BeaconMap,
                        PendingBeaconMap,
+                       std::set<Beacon_ptr>,
                        HistoricalBeaconMap> BeaconDB;
 
 private:
