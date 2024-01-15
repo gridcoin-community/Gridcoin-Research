@@ -171,7 +171,7 @@ bool Beacon::Expired(const int64_t now) const
 
 bool Beacon::Renewable(const int64_t now) const
 {
-    return Age(now) > RENEWAL_AGE;
+    return (!Expired(now) && Age(now) > RENEWAL_AGE);
 }
 
 bool Beacon::Renewed() const
