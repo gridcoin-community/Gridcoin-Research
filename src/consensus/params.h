@@ -48,9 +48,9 @@ struct Params {
       */
     int64_t MRCZeroPaymentInterval;
     /**
-     * @brief The maximum allocation (as a floating point) that can be used by all of the mandatory sidestakes
+     * @brief The maximum allocation (as a Fraction) that can be used by all of the mandatory sidestakes
      */
-    double MaxMandatorySideStakeTotalAlloc;
+    Fraction MaxMandatorySideStakeTotalAlloc;
 
     int64_t StandardContractReplayLookback;
 
