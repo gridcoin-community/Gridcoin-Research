@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2020 The Bitcoin Core developers
+// Copyright (c) 2024 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -1022,6 +1023,457 @@ BOOST_AUTO_TEST_CASE(util_TrimString)
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6)), std::string("\x05\x04\x03\x02\x01\x00", 6));
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6), std::string("\x05\x04\x03\x02\x01", 5)), std::string("\0", 1));
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6), std::string("\x05\x04\x03\x02\x01\x00", 6)), "");
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_trivial)
+{
+    Fraction fraction;
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 0);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 1);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), true);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_already_simplified)
+{
+    Fraction fraction(2, 3);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_not_simplified)
+{
+    Fraction fraction(4, 6);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 4);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 6);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), false);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification)
+{
+    Fraction fraction(4, 6, true);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_neg_pos)
+{
+    Fraction fraction(-4, 6, true);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_pos_neg)
+{
+    Fraction fraction(4, -6, true);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_num_denom_with_simplification_neg_neg)
+{
+    Fraction fraction(-4, -6, true);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Copy_Constructor)
+{
+    Fraction fraction(4, 6);
+
+    Fraction fraction2(fraction);
+
+    BOOST_CHECK_EQUAL(fraction2.GetNumerator(), 4);
+    BOOST_CHECK_EQUAL(fraction2.GetDenominator(), 6);
+    BOOST_CHECK_EQUAL(fraction2.IsSimplified(), false);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_int64_t)
+{
+    Fraction fraction((int64_t) -2);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 1);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_Simplify)
+{
+    Fraction fraction(-4, -6);
+
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), false);
+
+    fraction.Simplify();
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 2);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 3);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), true);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_ToDouble)
+{
+    Fraction fraction (1, 4);
+
+    BOOST_CHECK_EQUAL(fraction.ToDouble(), 0.25);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition)
+{
+    Fraction lhs(2, 3);
+    Fraction rhs(3, 4);
+
+    Fraction sum = lhs + rhs;
+
+    BOOST_CHECK_EQUAL(sum.GetNumerator(), 17);
+    BOOST_CHECK_EQUAL(sum.GetDenominator(), 12);
+    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_simplification_common_denominator)
+{
+    Fraction lhs(3, 10);
+    Fraction rhs(2, 10);
+
+    Fraction sum = lhs + rhs;
+
+    BOOST_CHECK_EQUAL(sum.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(sum.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_simplification)
+{
+    Fraction lhs(3, 10);
+    Fraction rhs(1, 5);
+
+    Fraction sum = lhs + rhs;
+
+    BOOST_CHECK_EQUAL(sum.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(sum.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_subtraction)
+{
+    Fraction lhs(2, 3);
+    Fraction rhs(3, 4);
+
+    Fraction difference = lhs - rhs;
+
+    BOOST_CHECK_EQUAL(difference.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(difference.GetDenominator(), 12);
+    BOOST_CHECK_EQUAL(difference.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_subtraction_with_internal_simplification)
+{
+    Fraction lhs(2, 10);
+    Fraction rhs(7, 10);
+
+    Fraction difference = lhs - rhs;
+
+    BOOST_CHECK_EQUAL(difference.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(difference.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(difference.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_internal_simplification)
+{
+    Fraction lhs(-2, 3);
+    Fraction rhs(3, 4);
+
+    Fraction product = lhs * rhs;
+
+    BOOST_CHECK_EQUAL(product.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(product.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(product.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_division_with_internal_simplification)
+{
+    Fraction lhs(-2, 3);
+    Fraction rhs(4, 3);
+
+    Fraction quotient = lhs / rhs;
+
+    BOOST_CHECK_EQUAL(quotient.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(quotient.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(quotient.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_self_addition_with_internal_simplification)
+{
+    Fraction fraction(3, 10);
+
+    fraction += Fraction(2, 10);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_self_subtraction_with_internal_simplification)
+{
+    Fraction fraction(7, 10);
+
+    fraction -= Fraction(2, 10);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), 1);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_self_multiplication_with_internal_simplification)
+{
+    Fraction fraction(-2, 3);
+
+    fraction *= Fraction(3, 4);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_self_division_with_internal_simplification)
+{
+    Fraction fraction(-2, 3);
+
+    fraction /= Fraction(4, 3);
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -1);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 2);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_by_zero_Fraction)
+{
+    Fraction lhs(-2, 3);
+    Fraction rhs(0);
+
+    Fraction product = lhs * rhs;
+
+    BOOST_CHECK_EQUAL(product.GetNumerator(), 0);
+    BOOST_CHECK_EQUAL(product.GetDenominator(), 1);
+    BOOST_CHECK_EQUAL(product.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_Fraction)
+{
+    Fraction lhs(-2, 3);
+    Fraction rhs(0);
+
+    std::string err;
+
+    try {
+    Fraction quotient = lhs / rhs;
+    } catch (std::out_of_range& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, "denominator specified is zero");
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_int64_t)
+{
+    Fraction lhs(-2, 3);
+    int64_t rhs = 0;
+
+    std::string err;
+
+    try {
+        Fraction quotient = lhs / rhs;
+    } catch (std::out_of_range& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string{"denominator specified is zero"});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
+{
+    Fraction lhs((int64_t) 1 << 31, 1);
+    Fraction rhs((int64_t) 1 << 32, 1);
+
+    std::string err;
+
+    try {
+        Fraction product = lhs * rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_2)
+{
+    Fraction lhs((int64_t) 1 << 32, 1);
+    Fraction rhs((int64_t) 1 << 32, 1);
+
+    std::string err;
+
+    try {
+        Fraction product = lhs * rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {"fraction multiplication results in an overflow"});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_1)
+{
+    Fraction lhs(std::numeric_limits<int64_t>::max() / 2, 1);
+    Fraction rhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
+
+    std::string err;
+
+    try {
+        Fraction addition = lhs + rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_2)
+{
+    Fraction lhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
+    Fraction rhs(std::numeric_limits<int64_t>::max() / 2 + 1, 1);
+
+    std::string err;
+
+    try {
+        Fraction addition = lhs + rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {"fraction addition of a + b where a > 0 and b > 0 results in an overflow"});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_3)
+{
+    Fraction lhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
+    Fraction rhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
+
+    std::string err;
+
+    try {
+        Fraction addition = lhs + rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_4)
+{
+    Fraction lhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
+    Fraction rhs(-(std::numeric_limits<int64_t>::max() / 2 + 2), 1);
+
+    std::string err;
+
+    try {
+        Fraction addition = lhs + rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {"fraction addition of a + b where a < 0 and b < 0 results in an overflow"});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_equal)
+{
+    BOOST_CHECK_EQUAL(Fraction(1, 2) == Fraction(2, 4), true);
+    BOOST_CHECK_EQUAL(Fraction(-1, 2) == Fraction(1, -2), true);
+    BOOST_CHECK_EQUAL(Fraction(-1, 2) == Fraction(1, 2), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_not_equal)
+{
+    BOOST_CHECK_EQUAL(Fraction(1, 2) != Fraction(2, 4), false);
+    BOOST_CHECK_EQUAL(Fraction(-1, 2) != Fraction(1, -2), false);
+    BOOST_CHECK_EQUAL(Fraction(-1, 2) != Fraction(1, 2), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_less_than_or_equal)
+{
+    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(4, 5), true);
+    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(6, 8), true);
+    BOOST_CHECK_EQUAL(Fraction(3, 4) <= Fraction(2, 3), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_greater_than_or_equal)
+{
+    BOOST_CHECK_EQUAL(Fraction(4, 5) >= Fraction(3, 4), true);
+    BOOST_CHECK_EQUAL(Fraction(6, 8) >= Fraction(3, 4), true);
+    BOOST_CHECK_EQUAL(Fraction(2, 3) >= Fraction(3, 4), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_less_than)
+{
+    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(4, 5), true);
+    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(6, 8), false);
+    BOOST_CHECK_EQUAL(Fraction(3, 4) < Fraction(2, 3), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_greater_than)
+{
+    BOOST_CHECK_EQUAL(Fraction(4, 5) > Fraction(3, 4), true);
+    BOOST_CHECK_EQUAL(Fraction(6, 8) > Fraction(3, 4), false);
+    BOOST_CHECK_EQUAL(Fraction(2, 3) > Fraction(3, 4), false);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_logic_negation)
+{
+    BOOST_CHECK_EQUAL(!Fraction(1, 2), false);
+    BOOST_CHECK_EQUAL(!Fraction(-1, 2), false);
+    BOOST_CHECK_EQUAL(!Fraction(), true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
