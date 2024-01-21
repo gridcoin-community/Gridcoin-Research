@@ -16,6 +16,50 @@
 namespace GRC {
 
 //!
+//! \brief The Allocation class extends the Fraction class to provide functionality useful for sidestake allocations.
+//!
+class Allocation : public Fraction
+{
+public:
+    //!
+    //! \brief Default constructor. Creates a zero allocation fraction.
+    //!
+    Allocation();
+
+    //!
+    //! \brief Allocation constructor from a double input. This multiplies the double by 1000, rounds, casts to int64_t,
+    //! and then constructs Fraction(x, 1000, true), which essentially creates a fraction representative of the double
+    //! to the third decimal place.
+    //!
+    //! \param double allocation
+    //!
+    Allocation(const double& allocation);
+
+    //!
+    //! \brief Initialize an allocation from a Fraction. This is primarily used for casting. Note that no attempt to
+    //! limit the denominator size or simplify the fraction is made.
+    //!
+    //! \param Fraction f
+    //!
+    Allocation(const Fraction& f);
+
+    //!
+    //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
+    //! and the result of the muliplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
+    //!
+    //! \return CAmount of the Fraction representation of the actual allocation.
+    //!
+    CAmount ToCAmount() const;
+
+    //!
+    //! \brief Returns a double equivalent of the allocation fraction multiplied times 100.
+    //!
+    //! \return double percent representation of the allocation fraction.
+    //!
+    double ToPercent() const;
+};
+
+//!
 //! \brief The LocalSideStake class. This class formalizes the local sidestake, which is a directive to apportion
 //! a percentage of the total stake value to a designated destination. This destination must be valid, but
 //! may or may not be owned by the staker. This is the primary mechanism to do automatic "donations" to
@@ -40,13 +84,13 @@ public:
     //!
     using Status = EnumByte<LocalSideStakeStatus>;
 
-    CTxDestination m_destination;        //!< The destination of the sidestake.
+    CTxDestination m_destination; //!< The destination of the sidestake.
 
-    double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
+    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
 
-    std::string m_description;           //!< The description of the sidestake (optional)
+    std::string m_description;    //!< The description of the sidestake (optional)
 
-    Status m_status;                     //!< The status of the sidestake. It is of type int instead of enum for serialization.
+    Status m_status;              //!< The status of the sidestake. It is of type int instead of enum for serialization.
 
 
     //!
@@ -62,7 +106,7 @@ public:
     //! \param allocation
     //! \param description (optional)
     //!
-    LocalSideStake(CTxDestination destination, double allocation, std::string description);
+    LocalSideStake(CTxDestination destination, Allocation allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
@@ -72,7 +116,7 @@ public:
     //! \param description (optional)
     //! \param status
     //!
-    LocalSideStake(CTxDestination destination, double allocation, std::string description, LocalSideStakeStatus status);
+    LocalSideStake(CTxDestination destination, Allocation allocation, std::string description, LocalSideStakeStatus status);
 
     //!
     //! \brief Determine whether a sidestake contains each of the required elements.
@@ -156,19 +200,19 @@ public:
     //!
     using Status = EnumByte<MandatorySideStakeStatus>;
 
-    CTxDestination m_destination;        //!< The destination of the sidestake.
+    CTxDestination m_destination; //!< The destination of the sidestake.
 
-    double m_allocation;                 //!< The allocation is a double precision floating point between 0.0 and 1.0 inclusive
+    Allocation m_allocation;      //!< The allocation is a Fraction in the form x / 1000 where x is between 0 and 1000 inclusive.
 
-    std::string m_description;           //!< The description of the sidestake (optional)
+    std::string m_description;    //!< The description of the sidestake (optional)
 
-    int64_t m_timestamp;                 //!< Time of the sidestake contract transaction.
+    int64_t m_timestamp;          //!< Time of the sidestake contract transaction.
 
-    uint256 m_hash;                      //!< The hash of the transaction that contains a mandatory sidestake.
+    uint256 m_hash;               //!< The hash of the transaction that contains a mandatory sidestake.
 
-    uint256 m_previous_hash;             //!< The m_hash of the previous mandatory sidestake allocation with the same destination.
+    uint256 m_previous_hash;      //!< The m_hash of the previous mandatory sidestake allocation with the same destination.
 
-    Status m_status;                     //!< The status of the sidestake. It is of type int instead of enum for serialization.
+    Status m_status;              //!< The status of the sidestake. It is of type EnumByte instead of enum for serialization.
 
     //!
     //! \brief Initialize an empty, invalid sidestake instance.
@@ -183,7 +227,7 @@ public:
     //! \param allocation
     //! \param description (optional)
     //!
-    MandatorySideStake(CTxDestination destination, double allocation, std::string description);
+    MandatorySideStake(CTxDestination destination, Allocation allocation, std::string description);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters.
@@ -193,7 +237,7 @@ public:
     //! \param description (optional)
     //! \param status
     //!
-    MandatorySideStake(CTxDestination destination, double allocation, std::string description, MandatorySideStakeStatus status);
+    MandatorySideStake(CTxDestination destination, Allocation allocation, std::string description, MandatorySideStakeStatus status);
 
     //!
     //! \brief Initialize a sidestake instance with the provided parameters. This form is normally used to construct a
@@ -206,7 +250,7 @@ public:
     //! \param hash
     //! \param status
     //!
-    MandatorySideStake(CTxDestination destination, double allocation, std::string description, int64_t timestamp,
+    MandatorySideStake(CTxDestination destination, Allocation allocation, std::string description, int64_t timestamp,
               uint256 hash, MandatorySideStakeStatus status);
 
     //!
@@ -329,9 +373,9 @@ public:
     CTxDestination GetDestination() const;
     //!
     //! \brief Gets the allocation of the sidestake
-    //! \return A double between 0.0 and 1.0 inclusive representing the allocation fraction of the sidestake
+    //! \return A Fraction representing the allocation fraction of the sidestake.
     //!
-    double GetAllocation() const;
+    Allocation GetAllocation() const;
     //!
     //! \brief Gets the description of the sidestake
     //! \return The description string of the sidestake
@@ -412,7 +456,7 @@ public:
     //! \param description. Description string for the sidstake entry
     //! \param status. Status of the sidestake entry
     //!
-    SideStakePayload(const uint32_t version, CTxDestination destination, double allocation,
+    SideStakePayload(const uint32_t version, CTxDestination destination, Allocation allocation,
                      std::string description, MandatorySideStake::MandatorySideStakeStatus status);
 
     //!
@@ -468,7 +512,7 @@ public:
                      __func__,
                      valid,
                      CBitcoinAddress(m_entry.m_destination).ToString(),
-                     m_entry.m_allocation,
+                     m_entry.m_allocation.ToPercent(),
                      m_entry.StatusToString()
                      );
 
@@ -491,7 +535,7 @@ public:
     //!
     std::string LegacyValueString() const override
     {
-        return ToString(m_entry.m_allocation);
+        return ToString(m_entry.m_allocation.ToDouble());
     }
 
     //!
@@ -771,10 +815,10 @@ private:
     bool SaveLocalSideStakesToConfig();
 
     //!
-    //! \brief Provides the total allocation for all active mandatory sidestakes as a floating point fraction.
-    //! \return total active mandatory sidestake allocation as a double.
+    //! \brief Provides the total allocation for all active mandatory sidestakes as a Fraction.
+    //! \return total active mandatory sidestake allocation as a Fraction.
     //!
-    double GetMandatoryAllocationsTotal() const;
+    Allocation GetMandatoryAllocationsTotal() const;
 
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();

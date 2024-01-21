@@ -118,7 +118,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     for (const auto& alloc : vSideStakeAlloc)
     {
         sidestakingalloc.pushKV("address", CBitcoinAddress(alloc->GetDestination()).ToString());
-        sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation() * 100);
+        sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation().ToPercent());
         sidestakingalloc.pushKV("status", alloc->StatusToString());
 
         vsidestakingalloc.push_back(sidestakingalloc);

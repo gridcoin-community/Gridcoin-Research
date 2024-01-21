@@ -205,7 +205,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                     rewards += reward;
                 }
 
-                if (foundation_fee_fraction.isNonZero()) {
+                if (foundation_fee_fraction.IsNonZero()) {
                     CAmount foundation_fee = mrc.m_fee * foundation_fee_fraction.GetNumerator()
                                                        / foundation_fee_fraction.GetDenominator();
                     CAmount staker_fee = mrc.m_fee - foundation_fee;
@@ -937,7 +937,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     blocknew.vtx[1].vout.clear();
 
     CScript SideStakeScriptPubKey;
-    double dSumAllocation = 0.0;
+    GRC::Allocation SumAllocation;
 
     // Lambda for sidestake allocation. This iterates throught the provided sidestake vector until either all elements processed,
     // the maximum number of sidestake outputs is reached via the provided output_limit, or accumulated allocation will exceed 100%.
@@ -948,7 +948,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
              ++iterSideStake)
         {
             CBitcoinAddress address(iterSideStake->get()->GetDestination());
-            double allocation = iterSideStake->get()->GetAllocation();
+            GRC::Allocation allocation = iterSideStake->get()->GetAllocation();
 
             if (!address.IsValid())
             {
@@ -967,16 +967,16 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             // maximum, which means that the maximum number of mandatory outputs MUST be present and valid.
             //
             // Note that nOutputsUsed is NOT incremented if the output is suppressed by this check.
-            if (nReward * allocation < CENT)
+            if (allocation * nReward < CENT)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
-                          CoinToDouble(nReward * allocation),
+                          CoinToDouble(static_cast<GRC::Allocation>(allocation * nReward).ToCAmount()),
                           address.ToString()
                           );
                 continue;
             }
 
-            if (dSumAllocation + allocation > 1.0)
+            if (SumAllocation + allocation > 1)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: allocation percentage over 100 percent, "
                           "ending sidestake allocations.");
@@ -999,11 +999,11 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             int64_t nSideStake = 0;
 
             // For allocations ending less than 100% assign using sidestake allocation.
-            if (dSumAllocation + allocation < 1.0)
-                nSideStake = nReward * allocation;
+            if (SumAllocation + allocation < 1)
+                nSideStake = static_cast<GRC::Allocation>(allocation * nReward).ToCAmount();
             // We need to handle the final sidestake differently in the case it brings the total allocation up to 100%,
             // because testing showed in corner cases the output return to the staking address could be off by one Halford.
-            else if (dSumAllocation + allocation == 1.0)
+            else if (SumAllocation + allocation == 1)
                 // Simply assign the special case final nSideStake the remaining output value minus input value to ensure
                 // a match on the output flowing down.
                 nSideStake = nRemainingStakeOutputValue - nInputValue;
@@ -1012,10 +1012,10 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
-                      CoinToDouble(nReward * allocation),
+                      CoinToDouble(static_cast<GRC::Allocation>(allocation * nReward).ToCAmount()),
                       address.ToString()
                       );
-            dSumAllocation += allocation;
+            SumAllocation += allocation;
             nRemainingStakeOutputValue -= nSideStake;
             nOutputsUsed++;
         }

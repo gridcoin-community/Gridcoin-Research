@@ -253,7 +253,7 @@ UniValue SideStakePayloadToJson (const GRC::ContractPayload& payload)
     UniValue out(UniValue::VOBJ);
 
     out.pushKV("address", CBitcoinAddress(sidestake.m_entry.m_destination).ToString());
-    out.pushKV("allocation", sidestake.m_entry.m_allocation);
+    out.pushKV("allocation", sidestake.m_entry.m_allocation.ToPercent());
     out.pushKV("description", sidestake.m_entry.m_description);
     out.pushKV("status", sidestake.m_entry.StatusToString());
 

@@ -657,7 +657,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
     // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
     // output limit by 1. If the foundation sidestake allocation is zero, then there will be no foundation sidestake
     // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
-    if (!include_foundation_sidestake && FoundationSideStakeAllocation().isNonZero() && output_limit) {
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation().IsNonZero() && output_limit) {
         --output_limit;
     }
 
@@ -805,7 +805,7 @@ private:
                 // sidestake even though there will not be a corresponding mrc rewards output. (Zero value outputs are
                 // suppressed because that is wasteful.
                 bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
-                                                         && FoundationSideStakeAllocation().isNonZero()) ? true : false;
+                                                         && FoundationSideStakeAllocation().IsNonZero()) ? true : false;
 
                 // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
                 // element.
@@ -857,7 +857,7 @@ private:
                     // to an address that staked the coinstake (i.e. local to the staker's wallet), in favor of simply returning
                     // the funds back to the staker on the coinstake return, is also removed from the vector here.
                     for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
-                        if (total_owed_to_staker * iter->get()->GetAllocation() < CENT
+                        if (iter->get()->GetAllocation() * total_owed_to_staker < CENT
                             || iter->get()->GetDestination() == coinstake_destination) {
                             iter = mandatory_sidestakes.erase(iter);
                         } else {
@@ -875,18 +875,18 @@ private:
                             return error("%s: FAILED: coinstake output has invalid destination.");
                         }
 
-                        double computed_output_alloc = (double) coinstake.vout[i].nValue / (double) total_owed_to_staker;
+                        GRC::Allocation computed_output_alloc(Fraction(coinstake.vout[i].nValue, total_owed_to_staker, true));
 
                         std::vector<GRC::SideStake_ptr> mandatory_sidestake
                             = GRC::GetSideStakeRegistry().TryActive(output_destination,
                                                                     GRC::SideStake::FilterFlag::MANDATORY);;
 
-                        // The output is deemed to match if the destination matches AND
-                        // the output amount expressed as a double fraction of the awards owed to staker is within 1%
-                        // of the required mandatory allocation. We allow some leeway here because the sidestake allocations
-                        // are double precision floating point fractions.
+                        // The output is deemed to match if the destination matches AND the computed allocation matches or exceeds
+                        // what is required by the mandatory sidestake. Note that the test uses the GRC::Allocation class, which
+                        // extends the Fraction class, and provides comparison operators. This is now a precise calculation as it
+                        // is integer arithmetic.
                         if (!mandatory_sidestake.empty()
-                            && abs(computed_output_alloc - mandatory_sidestake[0]->GetAllocation()) < 0.01) {
+                            && computed_output_alloc >= mandatory_sidestake[0]->GetAllocation()) {
 
                             ++validated_mandatory_sidestakes;
                         }
