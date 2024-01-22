@@ -59,10 +59,10 @@ void EditSideStakeDialog::loadRow(int row)
 {
     m_row = row;
 
-    ui->addressLineEdit->setText(model->index(row, SideStakeTableModel::Address, QModelIndex()).data().toString());
-    ui->allocationLineEdit->setText(model->index(row, SideStakeTableModel::Allocation, QModelIndex()).data().toString());
-    ui->descriptionLineEdit->setText(model->index(row, SideStakeTableModel::Description, QModelIndex()).data().toString());
-    ui->statusLineEdit->setText(model->index(row, SideStakeTableModel::Status, QModelIndex()).data().toString());
+    ui->addressLineEdit->setText(model->index(row, SideStakeTableModel::Address, QModelIndex()).data(Qt::EditRole).toString());
+    ui->allocationLineEdit->setText(model->index(row, SideStakeTableModel::Allocation, QModelIndex()).data(Qt::EditRole).toString());
+    ui->descriptionLineEdit->setText(model->index(row, SideStakeTableModel::Description, QModelIndex()).data(Qt::EditRole).toString());
+    ui->statusLineEdit->setText(model->index(row, SideStakeTableModel::Status, QModelIndex()).data(Qt::EditRole).toString());
 }
 
 bool EditSideStakeDialog::saveCurrentRow()
