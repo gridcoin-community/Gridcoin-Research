@@ -30,6 +30,7 @@ add_executable(test_gridcoin
     gridcoin/protocol_tests.cpp
     gridcoin/researcher_tests.cpp
     gridcoin/scraper_registry_tests.cpp
+    gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
     key_tests.cpp
     merkle_tests.cpp
