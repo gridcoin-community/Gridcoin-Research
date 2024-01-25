@@ -1476,4 +1476,12 @@ BOOST_AUTO_TEST_CASE(util_Fraction_logic_negation)
     BOOST_CHECK_EQUAL(!Fraction(), true);
 }
 
+BOOST_AUTO_TEST_CASE(util_Fraction_ToString)
+{
+    Fraction fraction(123, 10000);
+
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.ToString(),"123/10000");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
