@@ -889,7 +889,7 @@ private:
                             CAmount required_output = static_cast<GRC::Allocation>(mandatory_sidestake[0]->GetAllocation()
                                                                                    * total_owed_to_staker).ToCAmount();
 
-                            if (actual_output == required_output) {
+                            if (actual_output >= required_output) {
 
                                 ++validated_mandatory_sidestakes;
                             } else {
