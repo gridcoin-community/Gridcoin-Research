@@ -330,8 +330,8 @@ public:
 
         LogPrint(BCLog::LogFlags::CONTRACT, "INFO: %s: Passivated %" PRId64 " elements from %s entry db.",
                  __func__,
-                 KeyType(),
-                 number_passivated);
+                 number_passivated,
+                 KeyType());
 
         // Set needs passivation flag to false after passivating the db.
         m_needs_passivation = false;
