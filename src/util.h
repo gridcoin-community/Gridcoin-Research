@@ -335,6 +335,11 @@ public:
         return *this;
     }
 
+    std::string ToString() const
+    {
+        return strprintf("%" PRId64 "/" "%" PRId64, m_numerator, m_denominator);
+    }
+
     bool operator!()
     {
         return IsZero();

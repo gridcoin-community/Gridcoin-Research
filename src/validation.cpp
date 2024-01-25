@@ -875,8 +875,6 @@ private:
                             return error("%s: FAILED: coinstake output has invalid destination.");
                         }
 
-                        GRC::Allocation computed_output_alloc(Fraction(coinstake.vout[i].nValue, total_owed_to_staker, true));
-
                         std::vector<GRC::SideStake_ptr> mandatory_sidestake
                             = GRC::GetSideStakeRegistry().TryActive(output_destination,
                                                                     GRC::SideStake::FilterFlag::MANDATORY);;
@@ -885,10 +883,24 @@ private:
                         // what is required by the mandatory sidestake. Note that the test uses the GRC::Allocation class, which
                         // extends the Fraction class, and provides comparison operators. This is now a precise calculation as it
                         // is integer arithmetic.
-                        if (!mandatory_sidestake.empty()
-                            && computed_output_alloc >= mandatory_sidestake[0]->GetAllocation()) {
+                        if (!mandatory_sidestake.empty()) {
+                            CAmount actual_output = coinstake.vout[i].nValue;
 
-                            ++validated_mandatory_sidestakes;
+                            CAmount required_output = static_cast<GRC::Allocation>(mandatory_sidestake[0]->GetAllocation()
+                                                                                   * total_owed_to_staker).ToCAmount();
+
+                            if (actual_output == required_output) {
+
+                                ++validated_mandatory_sidestakes;
+                            } else {
+                                error("%s: vout[%u] is mandatory sidestake destination %s, but failed validation: "
+                                      "actual_output = %" PRId64 ", required_output = %" PRId64,
+                                          __func__,
+                                          i,
+                                          CBitcoinAddress(output_destination).ToString(),
+                                          actual_output,
+                                          required_output);
+                            }
                         }
 
                         // This should not happen, but include the check for thoroughness.
