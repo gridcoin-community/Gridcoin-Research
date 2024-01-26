@@ -78,10 +78,10 @@ else()
     endif()
 
     add_subdirectory(secp256k1 EXCLUDE_FROM_ALL)
-    target_include_directories(secp256k1 PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/include"
+    target_include_directories(secp256k1_static PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/include>
     )
-    set(LIBSECP256K1 secp256k1)
+    set(LIBSECP256K1 secp256k1_static)
 endif()
 
 if(SYSTEM_UNIVALUE)
