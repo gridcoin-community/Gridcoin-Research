@@ -257,7 +257,7 @@ endif()
 
 if(ENABLE_DAEMON)
     add_executable(gridcoinresearchd gridcoinresearchd.cpp)
-    target_link_libraries(gridcoinresearchd PUBLIC gridcoin_util)
+    target_link_libraries(gridcoinresearchd PUBLIC ${RUNTIME_LIBS} gridcoin_util)
 
     if(WIN32)
         target_sources(gridcoinresearchd PRIVATE gridcoinresearchd-res.rc)

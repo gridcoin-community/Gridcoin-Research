@@ -176,6 +176,7 @@ add_dependencies(gridcoinqt gridcoinqt_l10n)
 add_executable(gridcoinresearch WIN32 MACOSX_BUNDLE bitcoin.cpp)
 
 target_link_libraries(gridcoinresearch PRIVATE
+    ${RUNTIME_LIBS}
     Qt5::Widgets
     gridcoin_util
     gridcoinqt

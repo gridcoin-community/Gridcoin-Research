@@ -54,7 +54,6 @@ if(MSVC)
     if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         message(FATAL_ERROR "It's not yet possible to build Gridcoin with MSVC")
     endif()
-    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
     add_compile_options(/U NDEBUG)
 else()
     add_compile_options(-UNDEBUG)
@@ -85,6 +84,7 @@ option(ENABLE_GUI       "Enable Qt-based GUI" OFF)
 option(ENABLE_DOCS      "Build Doxygen documentation" OFF)
 option(ENABLE_TESTS     "Build tests" OFF)
 option(LUPDATE          "Update translation files" OFF)
+option(STATIC_RUNTIME   "Link runtime statically" ${WIN32})
 
 # CPU-dependent options
 option(ENABLE_SSE41     "Build code that uses SSE4.1 intrinsics" ${HAS_SSE41})
@@ -245,10 +245,18 @@ endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 
 # Set compiler flags
-if (APPLE)
+if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
     add_compile_options(-Wno-error=thread-safety-analysis)
     add_compile_options(-Wno-error=thread-safety-reference)
+endif()
+
+if(STATIC_RUNTIME)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)\$")
+        list(APPEND RUNTIME_LIBS -static-libgcc -static-libstdc++)
+    elseif(MSVC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 endif()
 
 # Set endianness
