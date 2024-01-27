@@ -84,6 +84,7 @@ option(ENABLE_GUI       "Enable Qt-based GUI" OFF)
 option(ENABLE_DOCS      "Build Doxygen documentation" OFF)
 option(ENABLE_TESTS     "Build tests" OFF)
 option(LUPDATE          "Update translation files" OFF)
+option(STATIC_LIBS      "Prefer static variants of system libraries" ${WIN32})
 option(STATIC_RUNTIME   "Link runtime statically" ${WIN32})
 
 # CPU-dependent options
@@ -249,6 +250,11 @@ if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
     add_compile_options(-Wno-error=thread-safety-analysis)
     add_compile_options(-Wno-error=thread-safety-reference)
+endif()
+
+if(STATIC_LIBS)
+    set(CMAKE_LINK_SEARCH_START_STATIC ON)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endif()
 
 if(STATIC_RUNTIME)
