@@ -151,6 +151,8 @@ if(APPLE)
         "-framework ApplicationServices"
         "-framework AppKit"
     )
+elseif(WIN32)
+    target_link_libraries(gridcoinqt PUBLIC shlwapi)
 endif()
 
 target_compile_definitions(gridcoinqt PUBLIC HAVE_CONFIG_H)
