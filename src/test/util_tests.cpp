@@ -15,6 +15,58 @@
 
 #include <cstdint>
 
+namespace {
+// This version, which is recommended by some resources on the web, is actually slower, and has several issues. See
+// the unit tests below.
+int msb(const int64_t& n)
+{
+    // Can't take the log of 0.
+    if (n == 0) {
+        return 0;
+    }
+
+    // Log2 is O(1) both time and space-wise.
+    return (static_cast<int>(floor(log2(std::abs(n)))) + 1);
+}
+
+int msb2(const int64_t& n_in)
+{
+    int64_t n = std::abs(n_in);
+
+    int index = 0;
+
+    if (n == 0) {
+        return 0;
+    }
+
+    for (int i = 0; i <= 63; ++i) {
+        if (n % 2 == 1) {
+            index = i;
+        }
+
+        n /= 2;
+    }
+
+    return index + 1;
+}
+
+// This is the one currently used in the Fraction class
+int msb3(const int64_t& n_in)
+{
+    int64_t n = std::abs(n_in);
+
+    int index = 0;
+
+    for (; index <= 63; ++index) {
+        if (n >> index == 0) {
+            break;
+        }
+    }
+
+    return index;
+}
+} //anonymous namespace
+
 BOOST_AUTO_TEST_SUITE(util_tests)
 
 BOOST_AUTO_TEST_CASE(util_criticalsection)
@@ -1025,6 +1077,144 @@ BOOST_AUTO_TEST_CASE(util_TrimString)
     BOOST_CHECK_EQUAL(TrimString(std::string("\x05\x04\x03\x02\x01\x00", 6), std::string("\x05\x04\x03\x02\x01\x00", 6)), "");
 }
 
+BOOST_AUTO_TEST_CASE(Fraction_msb_algorithm_equivalence)
+{
+    for (unsigned int i = 0; i <= 63; ++i) {
+        int64_t n = 0;
+
+        if (i > 0) {
+            n = (int64_t {1} << (i - 1));
+        }
+
+        BOOST_CHECK_EQUAL(msb(n), i);
+    }
+
+    int bias_for_msb_result_63 = 0;
+
+    // msb ugly, ugly, ugly. Log2 looses resolution near the top of the range...
+    for (int i = 0; i < 16; ++i) {
+        bias_for_msb_result_63 = (int64_t {1} << i);
+
+        int msb_result = msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63);
+
+        if (msb_result == 63) {
+            LogPrintf("INFO: %s: bias_for_msb_result_63 = %i, msb_result = %i", __func__, bias_for_msb_result_63, msb_result);
+            break;
+        } else {
+        }
+    }
+
+    // bias_for_msb_result_63 is currently 32768! It should be zero! This disqualifies the log2 based approach based on
+    // a correctness check.
+    BOOST_CHECK_EQUAL(msb(std::numeric_limits<int64_t>::max() - bias_for_msb_result_63), 63);
+
+    BOOST_CHECK_EQUAL(msb2(std::numeric_limits<int64_t>::max()), 63);
+    BOOST_CHECK_EQUAL(msb3(std::numeric_limits<int64_t>::max()), 63);
+
+    std::vector<std::pair<int64_t, int>> msb_results, msb2_results, msb3_results;
+
+    unsigned int iterations = 1000;
+
+    FastRandomContext rand(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        int64_t n = rand.rand32();
+
+        msb_results.push_back(std::make_pair(n, msb(n)));
+    }
+
+    FastRandomContext rand2(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        int64_t n = rand2.rand32();
+
+        msb2_results.push_back(std::make_pair(n, msb2(n)));
+    }
+
+    FastRandomContext rand3(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        int64_t n = rand3.rand32();
+
+        msb3_results.push_back(std::make_pair(n, msb3(n)));
+    }
+
+    bool success = true;
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        if (msb_results[i] != msb2_results[i] || msb_results[i] != msb3_results[i]) {
+            success = false;
+            error("%s: iteration %u: mismatch: %" PRId64 ", msb = %i, %" PRId64 " msb2 = %i, %" PRId64 " msb3 = %i",
+                  __func__,
+                  i,
+                  msb_results[i].first,
+                  msb_results[i].second,
+                  msb2_results[i].first,
+                  msb2_results[i].second,
+                  msb3_results[i].first,
+                  msb3_results[i].second
+                  );
+        }
+    }
+
+    BOOST_CHECK(success);
+}
+
+BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
+{
+    // This is a test to bracket the three different algorithms above in anonymous namespace for doing msb calcs. The first is O(1),
+    // the second and third are O(log n), but the O(1) straight from the C++ library is pretty heavyweight and highly dependent on CPU
+    // architecture.
+
+    FastRandomContext rand(uint256 {0});
+
+    unsigned int iterations = 10000000;
+
+    g_timer.InitTimer("msb_test", true);
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        msb(rand.rand64());
+    }
+
+    int64_t msb_test_time = g_timer.GetTimes(strprintf("msb %u iterations", iterations), "msb_test").time_since_last_check;
+
+    FastRandomContext rand2(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        msb2(rand2.rand64());
+    }
+
+    int64_t msb2_test_time = g_timer.GetTimes(strprintf("msb2 %u iterations", iterations), "msb_test").time_since_last_check;
+
+    FastRandomContext rand3(uint256 {0});
+
+    for (unsigned int i = 0; i < iterations; ++i) {
+        msb3(rand3.rand64());
+    }
+
+    int64_t msb3_test_time = g_timer.GetTimes(strprintf("msb3 %u iterations", iterations), "msb_test").time_since_last_check;
+
+    // The execution time of the above on a 13900K is
+
+    // INFO: GetTimes: timer msb_test: msb 10000000 iterations: elapsed time: 86 ms, time since last check: 86 ms.
+    // INFO: GetTimes: timer msb_test: msb2 10000000 iterations: elapsed time: 166 ms, time since last check: 80 ms.
+    // INFO: GetTimes: timer msb_test: msb3 10000000 iterations: elapsed time: 246 ms, time since last check: 80 ms.
+
+    // Which is almost identical. msb appears to be much slower on 32 bit architectures.
+
+    // One can easily have T1 = k1 * O(1) and T2 = k2 * O(n) = k2 * n * O(1) where T1 > T2 for n < q if k1 > q * k2, so the O(1)
+    // algorithm is by no means the best choice.
+
+    // This test makes sure that the three algorithms are within 20x of the one with the minimum execution time. If not, it will
+    // fail to prompt us to look at this again.
+
+    double minimum_time = std::min<double>(std::min<double>(msb_test_time, msb2_test_time), msb3_test_time);
+
+    BOOST_CHECK((double) msb_test_time / minimum_time < 20.0);
+    BOOST_CHECK((double) msb2_test_time / minimum_time < 20.0);
+    BOOST_CHECK((double) msb3_test_time / minimum_time < 20.0);
+}
+
 BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_trivial)
 {
     Fraction fraction;
@@ -1333,8 +1523,11 @@ BOOST_AUTO_TEST_CASE(util_Fraction_division_by_zero_int64_t)
 
 BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
 {
-    Fraction lhs((int64_t) 1 << 31, 1);
-    Fraction rhs((int64_t) 1 << 32, 1);
+    Fraction lhs((int64_t) 1 << 30, 1);
+    Fraction rhs((int64_t) 1 << 31, 1);
+
+    LogPrintf("INFO: %s: msb((int64_t) 1 << 30) = %i", __func__, msb3((int64_t) 1 << 30));
+    LogPrintf("INFO: %s: msb((int64_t) 1 << 31) = %i", __func__, msb3((int64_t) 1 << 31));
 
     std::string err;
 
@@ -1349,8 +1542,24 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_1)
 
 BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_2)
 {
-    Fraction lhs((int64_t) 1 << 32, 1);
-    Fraction rhs((int64_t) 1 << 32, 1);
+    Fraction lhs(((int64_t) 1 << 31) - 1, 1);
+    Fraction rhs(((int64_t) 1 << 31) - 1, 1);
+
+    std::string err;
+
+    try {
+        Fraction product = lhs * rhs;
+    } catch (std::overflow_error& e) {
+        err = e.what();
+    }
+
+    BOOST_CHECK_EQUAL(err, std::string {""});
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_3)
+{
+    Fraction lhs((int64_t) 1 << 31, 1);
+    Fraction rhs((int64_t) 1 << 31, 1);
 
     std::string err;
 
@@ -1362,6 +1571,7 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_overflow_2)
 
     BOOST_CHECK_EQUAL(err, std::string {"fraction multiplication results in an overflow"});
 }
+
 
 BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_1)
 {

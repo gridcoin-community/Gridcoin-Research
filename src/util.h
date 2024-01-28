@@ -557,8 +557,17 @@ public:
 private:
     int msb(const int64_t& n) const
     {
-        // Log2 is O(1) both time and space-wise and so is the best choice here.
-        return (static_cast<int>(floor(log2(std::abs(n)))));
+        int64_t abs_n = std::abs(n);
+
+        int index = 0;
+
+        for (; index <= 63; ++index) {
+            if (abs_n >> index == 0) {
+                break;
+            }
+        }
+
+        return index;
     }
 
     int64_t overflow_mult(const int64_t& a, const int64_t& b) const
