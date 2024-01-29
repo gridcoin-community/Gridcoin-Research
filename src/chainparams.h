@@ -153,7 +153,7 @@ inline bool IsV12Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().BlockV12Height;
 }
 
-inline bool IsV13Enabled(int nHeight) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+inline bool IsV13Enabled(int nHeight)
 {
     // The argument driven override temporarily here to facilitate testing.
 
