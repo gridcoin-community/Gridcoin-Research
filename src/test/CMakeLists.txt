@@ -12,7 +12,6 @@ add_executable(test_gridcoin
     base32_tests.cpp
     base58_tests.cpp
     base64_tests.cpp
-    bignum_tests.cpp
     bip32_tests.cpp
     #compilerbug_tests.cpp
     crypto_tests.cpp
@@ -31,6 +30,7 @@ add_executable(test_gridcoin
     gridcoin/protocol_tests.cpp
     gridcoin/researcher_tests.cpp
     gridcoin/scraper_registry_tests.cpp
+    gridcoin/sidestake_tests.cpp
     gridcoin/superblock_tests.cpp
     key_tests.cpp
     merkle_tests.cpp

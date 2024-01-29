@@ -7,6 +7,7 @@
 
 #include <uint256.h>
 #include <crypto/common.h>
+#include <util/strencodings.h>
 
 
 template <unsigned int BITS>
@@ -146,7 +147,13 @@ double base_uint<BITS>::getdouble() const
 template <unsigned int BITS>
 std::string base_uint<BITS>::GetHex() const
 {
-    return ArithToUint256(*this).GetHex();
+    static constexpr ssize_t BYTES = BITS / 8;
+
+    uint8_t pn_rev[BYTES];
+    for (int i = 0; i < BYTES; ++i) {
+        pn_rev[i] = ((uint8_t*)&pn)[BYTES - 1 - i];
+    }
+    return HexStr(pn_rev);
 }
 
 template <unsigned int BITS>
@@ -257,3 +264,15 @@ arith_uint256 UintToArith256(const uint256 &a)
         b.pn[x] = ReadLE32(a.begin() + x*4);
     return b;
 }
+
+// Explicit instantiations for base_uint<320>
+template base_uint<320>& base_uint<320>::operator<<=(unsigned int);
+template base_uint<320>& base_uint<320>::operator*=(const base_uint<320>& b);
+template int base_uint<320>::CompareTo(const base_uint<320>&) const;
+template std::string base_uint<320>::GetHex() const;
+
+arith_uint320::arith_uint320(const uint256& b) {
+    std::memset(pn, 0, sizeof(pn));
+    std::memcpy(pn, b.data(), b.size());
+}
+

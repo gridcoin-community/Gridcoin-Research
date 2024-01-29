@@ -135,6 +135,12 @@ public:
     /** New poll received **/
     ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);
 
+    /** New vote received **/
+    ADD_SIGNALS_DECL_WRAPPER(NewVoteReceived, void, const uint256& poll_txid);
+
+    /** Read-write settings file updated **/
+    ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
+
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.

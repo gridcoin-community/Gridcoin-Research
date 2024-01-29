@@ -16,6 +16,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/tx_message.h"
@@ -276,6 +277,7 @@ protected:
             case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
             case ContractType::MRC:        return m_mrc_contract_handler;
+            case ContractType::SIDESTAKE:  return GetSideStakeRegistry();
             default:                       return m_unknown_handler;
         }
     }
@@ -677,12 +679,13 @@ bool Contract::RequiresMasterKey() const
             // beacons by signing them with the original private key:
             return m_version == 1 && m_action == ContractAction::REMOVE;
 
-        case ContractType::POLL:     return m_action == ContractAction::REMOVE;
-        case ContractType::PROJECT:  return true;
-        case ContractType::PROTOCOL: return true;
-        case ContractType::SCRAPER:  return true;
-        case ContractType::VOTE:     return m_action == ContractAction::REMOVE;
-        default:                     return false;
+        case ContractType::POLL:      return m_action == ContractAction::REMOVE;
+        case ContractType::PROJECT:   return true;
+        case ContractType::PROTOCOL:  return true;
+        case ContractType::SCRAPER:   return true;
+        case ContractType::VOTE:      return m_action == ContractAction::REMOVE;
+        case ContractType::SIDESTAKE: return true;
+        default:                      return false;
     }
 }
 
@@ -693,10 +696,23 @@ CAmount Contract::RequiredBurnAmount() const
 
 bool Contract::WellFormed() const
 {
-    return m_version > 0 && m_version <= Contract::CURRENT_VERSION
-        && m_type != ContractType::UNKNOWN
-        && m_action != ContractAction::UNKNOWN
-        && m_body.WellFormed(m_action.Value());
+    bool result = m_version > 0 && m_version <= Contract::CURRENT_VERSION
+                  && m_type != ContractType::UNKNOWN
+                  && m_action != ContractAction::UNKNOWN
+                  && m_body.WellFormed(m_action.Value());
+
+    if (!result) {
+            LogPrint(BCLog::LogFlags::CONTRACT, "WARN: %s: Contract was not well formed. m_version = %u, m_type = %s, "
+                                                "m_action = %s, m_body.Wellformed(m_action.Value()) = %u",
+                     __func__,
+                     m_version,
+                     m_type.ToString(),
+                     m_action.ToString(),
+                     m_body.WellFormed(m_action.Value())
+                     );
+    }
+
+    return result;
 }
 
 ContractPayload Contract::SharePayload() const
@@ -761,6 +777,7 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "scraper")        return ContractType::SCRAPER;
     if (input == "protocol")       return ContractType::PROTOCOL;
     if (input == "message")        return ContractType::MESSAGE;
+    if (input == "sidestake")      return ContractType::SIDESTAKE;
 
     return ContractType::UNKNOWN;
 }
@@ -777,6 +794,7 @@ std::string Contract::Type::ToString() const
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
+        case ContractType::SIDESTAKE:  return "sidestake";
         default:                       return "";
     }
 }
@@ -793,6 +811,7 @@ std::string Contract::Type::ToString(ContractType contract_type)
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
+        case ContractType::SIDESTAKE:  return "sidestake";
         default:                       return "";
     }
 }
@@ -809,6 +828,7 @@ std::string Contract::Type::ToTranslatedString(ContractType contract_type)
         case ContractType::PROTOCOL:   return _("protocol");
         case ContractType::SCRAPER:    return _("scraper");
         case ContractType::VOTE:       return _("vote");
+        case ContractType::SIDESTAKE:  return _("sidestake");
         default:                       return "";
     }
 }
@@ -905,6 +925,9 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
         case ContractType::VOTE:
             return ContractPayload::Make<LegacyVote>(
                 LegacyVote::Parse(legacy.m_key, legacy.m_value));
+        case ContractType::SIDESTAKE:
+            // Sidestakes have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy sidestake contract.");
         case ContractType::OUT_OF_BOUND:
             assert(false);
     }
@@ -960,6 +983,9 @@ void Contract::Body::ResetType(const ContractType type)
             break;
         case ContractType::VOTE:
             m_payload.Reset(new Vote());
+            break;
+        case ContractType::SIDESTAKE:
+            m_payload.Reset(new SideStakePayload());
             break;
         case ContractType::OUT_OF_BOUND:
             assert(false);

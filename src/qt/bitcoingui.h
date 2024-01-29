@@ -20,6 +20,7 @@ class WalletModel;
 class ResearcherModel;
 class MRCModel;
 class VotingModel;
+class PollTableModel;
 class TransactionView;
 class OverviewPage;
 class FavoritesPage;
@@ -295,6 +296,7 @@ private slots:
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void handleNewPoll();
+    void extracted(QStringList& expiring_polls, QString& notification);
     void handleExpiredPoll();
 };
 

@@ -75,6 +75,7 @@ typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
+extern CCriticalSection cs_tx_val_commit_to_disk;
 extern BlockMap mapBlockIndex;
 extern CBlockIndex* pindexGenesisBlock;
 extern unsigned int nStakeMinAge;

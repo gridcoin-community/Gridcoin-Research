@@ -864,18 +864,28 @@ private:
     {
         CTransaction tx;
 
-        if (!m_txdb.ReadDiskTx(txid, tx)) {
-            LogPrint(LogFlags::VOTE, "%s: failed to read vote tx", __func__);
-            throw InvalidVoteError();
+        {
+            // This lock is taken here to ensure that we wait on the leveldb batch write ("transaction commit") to finish
+            // in ReorganizeChain (which is essentially the ConnectBlock scope) and ensure that the voting transactions
+            // which correspond to the new vote signals sent from the contract handlers are actually present in leveldb when
+            // the below ReadDiskTx is called.
+            LOCK(cs_tx_val_commit_to_disk);
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
+
+            if (!m_txdb.ReadDiskTx(txid, tx)) {
+                LogPrintf("WARN: %s: failed to read vote tx.", __func__);
+            }
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
         }
 
         if (tx.nTime < m_poll.m_timestamp) {
-            LogPrint(LogFlags::VOTE, "%s: tx earlier than poll", __func__);
+            LogPrintf("WARN: %s: tx earlier than poll", __func__);
             throw InvalidVoteError();
         }
 
         if (m_poll.Expired(tx.nTime)) {
-            LogPrint(LogFlags::VOTE, "%s: tx exceeds expiration", __func__);
+            LogPrintf("WARN: %s: tx exceeds expiration", __func__);
             throw InvalidVoteError();
         }
 
@@ -885,7 +895,7 @@ private:
             }
 
             if (!contract.WellFormed()) {
-                LogPrint(LogFlags::VOTE, "%s: skipped bad contract", __func__);
+                LogPrintf("WARN: %s: skipped bad contract", __func__);
                 continue;
             }
 
@@ -920,10 +930,14 @@ private:
             throw InvalidVoteError();
         }
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
         ProcessLegacyVote(candidate.LegacyVote());
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
     }
 
     //!
@@ -1224,7 +1238,11 @@ void PollResult::TallyVote(VoteDetail detail)
 
     if (detail.m_ismine != ISMINE_NO) {
         m_self_voted = true;
-        m_self_vote_detail = detail;
+
+        m_self_vote_detail.m_amount += detail.m_amount;
+        m_self_vote_detail.m_mining_id = detail.m_mining_id;
+        m_self_vote_detail.m_magnitude = detail.m_magnitude;
+        m_self_vote_detail.m_ismine = detail.m_ismine;
     }
 
     for (const auto& response_pair : detail.m_responses) {
@@ -1234,6 +1252,22 @@ void PollResult::TallyVote(VoteDetail detail)
         m_responses[response_offset].m_weight += response_weight;
         m_responses[response_offset].m_votes += 1.0 / detail.m_responses.size();
         m_total_weight += response_weight;
+
+        if (detail.m_ismine != ISMINE_NO) {
+            bool choice_found = false;
+
+            for (auto& choice : m_self_vote_detail.m_responses) {
+                if (choice.first == response_offset) {
+                    choice.second += response_weight;
+                    choice_found = true;
+                    break;
+                }
+            }
+
+            if (!choice_found) {
+                m_self_vote_detail.m_responses.push_back(std::make_pair(response_offset, response_weight));
+            }
+        }
     }
 
     m_votes.emplace_back(std::move(detail));
@@ -1252,6 +1286,15 @@ ResponseDetail::ResponseDetail() : m_weight(0), m_votes(0)
 // -----------------------------------------------------------------------------
 
 VoteDetail::VoteDetail() : m_amount(0), m_magnitude(Magnitude::Zero()), m_ismine(ISMINE_NO)
+{
+}
+
+VoteDetail::VoteDetail(const VoteDetail &original_votedetail)
+    : m_amount(original_votedetail.m_amount)
+      , m_mining_id(original_votedetail.m_mining_id)
+      , m_magnitude(original_votedetail.m_magnitude)
+      , m_ismine(original_votedetail.m_ismine)
+      , m_responses(original_votedetail.m_responses)
 {
 }
 

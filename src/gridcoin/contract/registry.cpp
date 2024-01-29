@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023 The Gridcoin developers
+// Copyright (c) 2014-2024 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -11,6 +11,7 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_WITH_REG_
     ContractType::PROJECT,
     ContractType::PROTOCOL,
     ContractType::SCRAPER,
+    ContractType::SIDESTAKE
 };
 
 const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_SUPPORTING_REVERT = {
@@ -20,6 +21,7 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_SUPPORTIN
     ContractType::PROTOCOL,
     ContractType::SCRAPER,
     ContractType::VOTE,
+    ContractType::SIDESTAKE
 };
 
 } // namespace GRC

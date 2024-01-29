@@ -86,6 +86,9 @@ public:
     std::vector<VoteResultItem> m_choices;
     bool m_self_voted;
     GRC::PollResult::VoteDetail m_self_vote_detail;
+
+    bool m_stale = true;
+    bool m_expire_notified = false;
 };
 
 //!
@@ -132,7 +135,21 @@ public:
     QString getCurrentPollTitle() const;
     QStringList getActiveProjectNames() const;
     QStringList getActiveProjectUrls() const;
-    std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags) const;
+
+    //!
+    //! \brief getExpiringPollsNotNotified. This method populates a QStringList with
+    //! the polls in the pollitems cache that are within the m_poll_expire_warning window
+    //! and which have not previously been notified to the user. Since this method is
+    //! to be used to have the GUI immediately provide notification to the user, it also
+    //! marks each of the polls in the QStringList m_expire_notified = true so that they
+    //! will not appear again on this list (unless the wallet is restarted). This accomplishes
+    //! a single shot notification for each poll that is about to expire.
+    //!
+    //! \return QStringList of polls that are about to expire (within m_poll_expire_warning of
+    //! expiration), and which have not previously been included on the list (i.e. notified).
+    //!
+    QStringList getExpiringPollsNotNotified();
+    std::vector<PollItem> buildPollTable(const GRC::PollFilterFlag flags);
 
     CAmount estimatePollFee() const;
 
@@ -153,6 +170,7 @@ public:
 
 signals:
     void newPollReceived();
+    void newVoteReceived(QString poll_txid_string);
 
 private:
     GRC::PollRegistry& m_registry;
@@ -161,11 +179,22 @@ private:
     WalletModel& m_wallet_model;
     int64_t m_last_poll_time;
 
+    //!
+    //! \brief m_pollitems. A cache of poll items associated with the polls in the registry.
+    //! Each entry in the cache has a stale flag which is set when vote activity occurs, and is
+    //! defaulted to true (in construction) when the item is rebuilt by BuildPollItem inBuildPollTable,
+    //! then changed to false when BuildPollItem completes. When a vote is received (or "un" received
+    //! in a reorg situation), the NewVoteReceived signal from the core will cause the stale flag
+    //! in the appropriate corresponding poll item in this cache to be changed back to true.
+    //!
+    std::map<uint256, PollItem> m_pollitems;
+
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 
 private slots:
     void handleNewPoll(int64_t poll_time);
+    void handleNewVote(QString poll_txid_string);
 }; // VotingModel
 
 #endif // GRIDCOIN_QT_VOTING_VOTINGMODEL_H

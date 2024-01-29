@@ -20,6 +20,11 @@ AdditionalFieldsTableView::~AdditionalFieldsTableView()
 void AdditionalFieldsTableView::resizeEvent(QResizeEvent* event)
 {
     int height = horizontalHeader()->height();
+
+    if (!model()) {
+        return;
+    }
+
     for (int i = 0; i < model()->rowCount(); ++i)
     {
         height += rowHeight(i);

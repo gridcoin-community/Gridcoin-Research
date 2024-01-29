@@ -129,8 +129,17 @@ void VotingPage::setVotingModel(VotingModel* model)
         return;
     }
 
+    // Now that PollItem caching is available, automatically refresh current poll tab on receipt of new poll or vote.
     connect(model, &VotingModel::newPollReceived, [this]() {
         ui->pollReceivedLabel->show();
+        getActiveTab()->refresh();
+        ui->pollReceivedLabel->hide();
+    });
+
+    // Using the newVoteReceivedAndPollMarkedDirty instead of newVoteReceived insures the poll staleness flag in the appropriate
+    // poll item has been marked dirty before the refresh is called.
+    connect(getActiveTab(), &PollTab::newVoteReceivedAndPollMarkedDirty, [this]() {
+        getActiveTab()->refresh();
     });
 }
 
@@ -149,6 +158,10 @@ PollTab& VotingPage::currentTab()
     return *qobject_cast<PollTab*>(ui->tabWidget->currentWidget());
 }
 
+PollTab* VotingPage::getActiveTab()
+{
+    return m_tabs[0];
+}
 void VotingPage::updateIcons(const QString& theme)
 {
     m_filter_action->setIcon(QIcon(":/icons/" + theme + "_search"));

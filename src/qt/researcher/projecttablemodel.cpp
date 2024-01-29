@@ -198,8 +198,12 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                     }
                     break;
                 case Whitelisted:
-                    if (row->m_whitelisted) {
+                    if (row->m_whitelisted == ProjectRow::WhiteListStatus::True) {
                         return QIcon(":/icons/round_green_check");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Greylisted) {
+                        return QIcon(":/icons/warning");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::False) {
+                        return QIcon(":/icons/white_and_red_x");
                     }
                     break;
                 case GDPRControls:

@@ -11,6 +11,7 @@ add_library(gridcoin_crypto_base STATIC
     sha3.cpp
     sha512.cpp
     siphash.cpp
+    ../gridcoin/md5.c
 )
 
 if(USE_ASM)

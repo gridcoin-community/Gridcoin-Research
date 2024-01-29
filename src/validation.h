@@ -109,6 +109,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me);
 bool CheckBlockSignature(const CBlock& block);
 
 unsigned int GetCoinstakeOutputLimit(const int& block_version);
+unsigned int GetMandatorySideStakeOutputLimit(const int& block_version);
 Fraction FoundationSideStakeAllocation();
 CBitcoinAddress FoundationSideStakeAddress();
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
