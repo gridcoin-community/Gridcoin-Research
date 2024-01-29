@@ -29,6 +29,7 @@ add_library(gridcoinqt STATIC
     decoration.cpp
     diagnosticsdialog.cpp
     editaddressdialog.cpp
+    editsidestakedialog.cpp
     favoritespage.cpp
     guiutil.cpp
     intro.cpp
@@ -61,6 +62,7 @@ add_library(gridcoinqt STATIC
     rpcconsole.cpp
     sendcoinsdialog.cpp
     sendcoinsentry.cpp
+    sidestaketablemodel.cpp
     signverifymessagedialog.cpp
     trafficgraphwidget.cpp
     transactiondesc.cpp
@@ -122,6 +124,7 @@ set_source_files_properties(
     mrcmodel.cpp
     qtipcserver.cpp
     researcher/researchermodel.cpp
+    sidestaketablemodel.cpp
     transactiondesc.cpp
     transactiontablemodel.cpp
     voting/votingmodel.cpp

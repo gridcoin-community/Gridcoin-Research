@@ -612,6 +612,12 @@ unsigned int GetCoinstakeOutputLimit(const int& block_version)
     return output_limit;
 }
 
+unsigned int GetMandatorySideStakeOutputLimit(const int& block_version)
+{
+    // For block version 13+ mandatory sidestake output limit is 4, otherwise 0.
+    return (block_version >= 13) ? 4 : 0;
+}
+
 Fraction FoundationSideStakeAllocation()
 {
     // Note that the 4/5 (80%) for mainnet was approved by a validated poll,
@@ -651,7 +657,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
     // in the returned limit) AND the foundation sidestake allocation is greater than zero, then reduce the reported
     // output limit by 1. If the foundation sidestake allocation is zero, then there will be no foundation sidestake
     // output, so the output_limit should be as above. If the output limit was already zero then it remains zero.
-    if (!include_foundation_sidestake && FoundationSideStakeAllocation().isNonZero() && output_limit) {
+    if (!include_foundation_sidestake && FoundationSideStakeAllocation().IsNonZero() && output_limit) {
         --output_limit;
     }
 
@@ -766,7 +772,8 @@ private:
 
     bool CheckReward(const CAmount& research_owed, CAmount& out_stake_owed,
                      const CAmount& mrc_staker_fees_owed, const CAmount& mrc_fees,
-                     const CAmount& mrc_rewards, const unsigned int& mrc_non_zero_outputs) const
+                     const CAmount& mrc_rewards, const unsigned int& mrc_non_zero_outputs,
+                     std::string& error_out) const
     {
         out_stake_owed = GRC::GetProofOfStakeReward(m_coin_age, m_block.nTime, m_pindex);
 
@@ -774,6 +781,8 @@ private:
             // For block version 11, mrc_fees_owed and mrc_rewards are both zero, and there are no MRC outputs, so this is
             // the only check necessary.
             if (m_total_claimed > research_owed + out_stake_owed + m_fees + mrc_fees + mrc_rewards) {
+                error_out = "Claim too high";
+
                 return error("%s: CheckReward FAILED: m_total_claimed of %s > %s = research_owed %s + out_stake_owed %s + m_fees %s + "
                              "mrc_fees %s + mrc_rewards = %s",
                              __func__,
@@ -799,7 +808,7 @@ private:
                 // sidestake even though there will not be a corresponding mrc rewards output. (Zero value outputs are
                 // suppressed because that is wasteful.
                 bool foundation_mrc_sidestake_present = (m_claim.m_mrc_tx_map.size()
-                                                         && FoundationSideStakeAllocation().isNonZero()) ? true : false;
+                                                         && FoundationSideStakeAllocation().IsNonZero()) ? true : false;
 
                 // If there is no mrc, then this is coinstake.vout.size() - 0 - 0, which is one beyond the last coinstake
                 // element.
@@ -823,6 +832,8 @@ private:
                 }
 
                 if (total_owed_to_staker > research_owed + out_stake_owed + m_fees + mrc_staker_fees_owed) {
+                    error_out = "Total owed to staker too high";
+
                     return error("%s: FAILED: total_owed_to_staker of %s > %s = research_owed %s + out_stake_owed %s + "
                                  "mrc_fees %s + mrc_rewards = %s",
                                  __func__,
@@ -835,11 +846,120 @@ private:
                                  );
                 }
 
+                // For block version 13 and higher, check to ensure that mandatory sidestakes appear as outputs with the correct
+                // allocations.
+                if (m_block.nVersion >= 13) {
+                    // Record the base coinstake destination.
+                    CTxDestination coinstake_destination;
+                    ExtractDestination(m_block.vtx[1].vout[1].scriptPubKey, coinstake_destination);
+
+                    // Get mandatory sidestakes
+                    std::vector<GRC::SideStake_ptr> mandatory_sidestakes
+                        = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false);
+
+                    // This is exactly the same as the dust elimination in the SplitCoinStakeOutput function in the miner, with
+                    // the addition that a mandatory sidestake that is degenerate, i.e. eliminated by the miner because it is
+                    // to an address that staked the coinstake (i.e. local to the staker's wallet), in favor of simply returning
+                    // the funds back to the staker on the coinstake return, is also removed from the vector here.
+                    for (auto iter = mandatory_sidestakes.begin(); iter != mandatory_sidestakes.end();) {
+                        if (iter->get()->GetAllocation() * total_owed_to_staker < CENT
+                            || iter->get()->GetDestination() == coinstake_destination) {
+                            iter = mandatory_sidestakes.erase(iter);
+                        } else {
+                            ++iter;
+                        }
+                    }
+
+                    unsigned int validated_mandatory_sidestakes = 0;
+
+                    // Skip the empty output at index 0, stop at the index before the start of MRC's.
+                    for (unsigned int i = 1; i < mrc_start_index; ++i) {
+                        CTxDestination output_destination;
+
+                        if (!ExtractDestination(coinstake.vout[i].scriptPubKey, output_destination)) {
+                            return error("%s: FAILED: coinstake output has invalid destination.");
+                        }
+
+                        std::vector<GRC::SideStake_ptr> mandatory_sidestake
+                            = GRC::GetSideStakeRegistry().TryActive(output_destination,
+                                                                    GRC::SideStake::FilterFlag::MANDATORY);;
+
+                        // The output is deemed to match if the destination matches AND the computed allocation matches or exceeds
+                        // what is required by the mandatory sidestake. Note that the test uses the GRC::Allocation class, which
+                        // extends the Fraction class, and provides comparison operators. This is now a precise calculation as it
+                        // is integer arithmetic.
+                        if (!mandatory_sidestake.empty()) {
+                            CAmount actual_output = coinstake.vout[i].nValue;
+
+                            CAmount required_output = static_cast<GRC::Allocation>(mandatory_sidestake[0]->GetAllocation()
+                                                                                   * total_owed_to_staker).ToCAmount();
+
+                            if (actual_output >= required_output) {
+
+                                ++validated_mandatory_sidestakes;
+                            } else {
+                                error_out = "Mandatory sidestake failed validation";
+
+                                error("%s: vout[%u] is mandatory sidestake destination %s, but failed validation: "
+                                      "actual_output = %" PRId64 ", required_output = %" PRId64,
+                                          __func__,
+                                          i,
+                                          CBitcoinAddress(output_destination).ToString(),
+                                          actual_output,
+                                          required_output);
+                            }
+                        }
+
+                        // This should not happen, but include the check for thoroughness.
+                        if (validated_mandatory_sidestakes > GetMandatorySideStakeOutputLimit(m_block.nVersion)) {
+                            error_out = "Number of mandatory sidestakes in the coinstake exceeds the protocol limit.";
+
+                            return error("%s: FAILED: The number of mandatory sidestakes in the coinstake is %u, which is above "
+                                         "the limit of %u",
+                                         __func__,
+                                         validated_mandatory_sidestakes,
+                                         GetMandatorySideStakeOutputLimit(m_block.nVersion));
+                        }
+                    }
+
+                    // See the comments in SplitCoinStakeOutput regarding dust elimination in mandatory sidestake selection. Note
+                    // that in the miner for mandatory sidestakes, the shuffle is done AFTER the dust elimination, if the number of
+                    // residual elements is greater than the maximum allowed number of mandatory sidestakes. This leads to the
+                    // following check.
+                    //
+                    // If the residual number of mandatory sidestakes after dust elimination is GREATER than or equal
+                    // GetMandatorySideStakeOutputLimit, then number of outputs matched to mandatory sidestakes should be equal
+                    // to GetMandatorySideStakeOutputLimit, because the shuffle in combination with the allocation lambda operating
+                    // on non-dust outputs will result in exactly GetMandatorySideStakeOutputLimit mandatory sidestakes, which means
+                    // it will pass above, and also pass the check below. We do not have to worry about a cutoff above
+                    // MaxMandatorySideStakeTotalAlloc because that is handled IN ActiveSideStakeEntries, which is used as the
+                    // starting point in the miner (and of course here).
+                    //
+                    // If the residual number of mandatory sidestakes after dust elimination is less than
+                    // GetMandatorySideStakeOutputLimit, it should be equal in number to the mandatory_sidestakes size from above
+                    // after the elimination of outputs less than 1 CENT.
+                    //
+                    // The combination of these constraints means that the number of validated mandatory sidestakes MUST match
+                    // the minimum of GetMandatorySideStakeOutputLimit and mandatory_sidestakes.
+                    if (validated_mandatory_sidestakes < std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
+                                                                  mandatory_sidestakes.size())) {
+                        error_out = "Number of mandatory sidestakes is less than required.";
+
+                        return error("%s: FAILED: The number of validated sidestakes, %u, is less than required, %u.",
+                                     __func__,
+                                     validated_mandatory_sidestakes,
+                                     std::min<unsigned int>(GetMandatorySideStakeOutputLimit(m_block.nVersion),
+                                                            mandatory_sidestakes.size()));
+                    }
+                } // v13+
+
                 // If the foundation mrc sidestake is present, we check the foundation sidestake specifically. The MRC
                 // outputs were already checked by CheckMRCRewards.
                 if (foundation_mrc_sidestake_present) {
                     // The fee amount to the foundation must be correct.
                     if (coinstake.vout[mrc_start_index].nValue != mrc_fees - mrc_staker_fees_owed) {
+                        error_out = "MRC Foundation sidestake amount is incorrect";
+
                         return error("%s: FAILED: foundation output value of %s != mrc_fees %s - "
                                      "mrc_staker_fees_owed %s",
                                      __func__,
@@ -854,11 +974,15 @@ private:
                     // The foundation sidestake destination must be able to be extracted.
                     if (!ExtractDestination(coinstake.vout[mrc_start_index].scriptPubKey,
                                             foundation_sidestake_destination)) {
+                        error_out = "MRC Foundation sidestake destination is invalid";
+
                         return error("%s: FAILED: foundation MRC sidestake destination not valid", __func__);
                     }
 
                     // The sidestake destination must match that specified by FoundationSideStakeAddress().
                     if (foundation_sidestake_destination != FoundationSideStakeAddress().Get()) {
+                        error_out = "MRC Foundation sidestake destination is incorrect.";
+
                         return error("%s: FAILED: foundation MRC sidestake destination does not match protocol",
                                      __func__);
                     }
@@ -866,7 +990,7 @@ private:
                 }
             } // v12+
 
-            // If we get here, we are done with v11 and v12 validation so return true.
+            // If we get here, we are done with v11, v12, and v13 validation so return true.
             return true;
         } //v11+
 
@@ -894,6 +1018,7 @@ private:
         CAmount mrc_fees = 0;
         CAmount out_stake_owed;
         unsigned int mrc_non_zero_outputs = 0;
+        std::string error_out;
 
         // Even if the block is staked by an investor, the claim can include MRC payments to researchers...
         //
@@ -905,7 +1030,7 @@ private:
             return false;
         }
 
-        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+        if (CheckReward(0, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs, error_out)) {
             LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: CheckReward passed: m_total_claimed = %s, research_owed = %s, "
                                                "out_stake_owed = %s, m_fees = %s, mrc_staker_fees = %s, mrc_fees = %s, "
                                                "mrc_rewards = %s",
@@ -933,12 +1058,12 @@ private:
         }
 
         return m_block.DoS(10, error(
-            "ConnectBlock[%s]: investor claim %s exceeds %s. Expected %s, fees %s",
-            __func__,
-            FormatMoney(m_total_claimed),
-            FormatMoney(out_stake_owed + m_fees),
-            FormatMoney(out_stake_owed),
-            FormatMoney(m_fees)));
+                                   "ConnectBlock[%s]: investor claim %s, expected %s, fees %: %s",
+                                   __func__,
+                                   FormatMoney(m_total_claimed),
+                                   FormatMoney(out_stake_owed),
+                                   FormatMoney(m_fees),
+                                   error_out));
     }
 
     bool CheckResearcherClaim() const
@@ -1093,6 +1218,7 @@ private:
         CAmount mrc_staker_fees = 0;
         CAmount mrc_fees = 0;
         unsigned int mrc_non_zero_outputs = 0;
+        std::string error_out;
 
         const GRC::CpidOption cpid = m_claim.m_mining_id.TryCpid();
 
@@ -1109,7 +1235,7 @@ private:
         }
 
         CAmount out_stake_owed;
-        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+        if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs, error_out)) {
             LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: Post CheckReward: m_total_claimed = %s, research_owed = %s, "
                                                "out_stake_owed = %s, mrc_staker_fees = %s, mrc_fees = %s, mrc_rewards = %s",
                      __func__,
@@ -1130,7 +1256,7 @@ private:
                                                                                          GRC::Quorum::CurrentSuperblock());
             research_owed += newbie_correction;
 
-            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs)) {
+            if (CheckReward(research_owed, out_stake_owed, mrc_staker_fees, mrc_fees, mrc_rewards, mrc_non_zero_outputs, error_out)) {
                 LogPrintf("WARNING: ConnectBlock[%s]: Added newbie_correction of %s to calculated research owed. "
                           "Total calculated research with correction matches claim of %s in %s.",
                           __func__,
@@ -1146,7 +1272,7 @@ private:
         // by research age short 10-block-span pending accrual:
         if (fTestNet
             && m_block.nVersion <= 9
-            && !CheckReward(0, out_stake_owed, 0, 0, 0, 0))
+            && !CheckReward(0, out_stake_owed, 0, 0, 0, 0, error_out))
         {
             LogPrintf(
                 "WARNING: ConnectBlock[%s]: ignored bad testnet claim in %s",
@@ -1166,18 +1292,19 @@ private:
         }
 
         return m_block.DoS(10, error(
-            "ConnectBlock[%s]: researcher claim %s exceeds %s for CPID %s. "
-            "Expected research %s, stake %s, fees %s. "
-            "Claimed research %s, stake %s",
-            __func__,
-            FormatMoney(m_total_claimed),
-            FormatMoney(research_owed + out_stake_owed + m_fees),
-            m_claim.m_mining_id.ToString(),
-            FormatMoney(research_owed),
-            FormatMoney(out_stake_owed),
-            FormatMoney(m_fees),
-            FormatMoney(m_claim.m_research_subsidy),
-            FormatMoney(m_claim.m_block_subsidy)));
+                                   "ConnectBlock[%s]: researcher claim %s compared to expected %s for CPID %s. "
+                                   "Expected research %s, stake %s, fees %s. "
+                                   "Claimed research %s, stake %s: %s",
+                                   __func__,
+                                   FormatMoney(m_total_claimed),
+                                   FormatMoney(research_owed + out_stake_owed + m_fees),
+                                   m_claim.m_mining_id.ToString(),
+                                   FormatMoney(research_owed),
+                                   FormatMoney(out_stake_owed),
+                                   FormatMoney(m_fees),
+                                   FormatMoney(m_claim.m_research_subsidy),
+                                   FormatMoney(m_claim.m_block_subsidy),
+                                   error_out));
     }
 
     // Cf. CreateMRCRewards which is this method's conjugate. Note the parameters are out parameters.
@@ -1934,6 +2061,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
             || (IsV10Enabled(nHeight) && block.nVersion < 10)
             || (IsV11Enabled(nHeight) && block.nVersion < 11)
             || (IsV12Enabled(nHeight) && block.nVersion < 12)
+            || (IsV13Enabled(nHeight) && block.nVersion < 13)
             ) {
         return block.DoS(20, error("%s: reject too old nVersion = %d", __func__, block.nVersion));
     } else if ((!IsProtocolV2(nHeight) && block.nVersion >= 7)
@@ -1942,6 +2070,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
                || (!IsV10Enabled(nHeight) && block.nVersion >= 10)
                || (!IsV11Enabled(nHeight) && block.nVersion >= 11)
                || (!IsV12Enabled(nHeight) && block.nVersion >= 12)
+               || (!IsV13Enabled(nHeight) && block.nVersion >= 13)
                ) {
         return block.DoS(100, error("%s: reject too new nVersion = %d", __func__, block.nVersion));
     }

@@ -47,6 +47,10 @@ struct Params {
       * forfeiture of fees to the staker and/or foundation. Only consensus critical at BlockV12Height or above.
       */
     int64_t MRCZeroPaymentInterval;
+    /**
+     * @brief The maximum allocation (as a Fraction) that can be used by all of the mandatory sidestakes
+     */
+    Fraction MaxMandatorySideStakeTotalAlloc;
 
     int64_t StandardContractReplayLookback;
 
