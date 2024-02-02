@@ -86,6 +86,11 @@ struct TestKey
         return EncodeBase58(key_id.begin(), key_id.end());
     }
 
+    static GRC::Cpid Cpid()
+    {
+        return GRC::Cpid::Parse("00010203040506070809101112131415");
+    }
+
     //!
     //! \brief Create a beacon payload signature signed by this private key.
     //!
@@ -96,7 +101,7 @@ struct TestKey
         hasher
             << GRC::BeaconPayload::CURRENT_VERSION
             << GRC::Beacon(Public())
-            << GRC::Cpid::Parse("00010203040506070809101112131415");
+            << Cpid();
 
         std::vector<uint8_t> signature;
         CKey private_key = Private();
@@ -105,6 +110,27 @@ struct TestKey
 
         return signature;
     }
+
+    //!
+    //! \brief Create a beacon payload signature signed by this private key.
+    //!
+    static std::vector<uint8_t> Signature(GRC::BeaconPayload payload)
+    {
+        CHashWriter hasher(SER_NETWORK, PROTOCOL_VERSION);
+
+        hasher
+            << payload.m_version
+            << payload.m_beacon
+            << payload.m_cpid;
+
+        std::vector<uint8_t> signature;
+        CKey private_key = Private();
+
+        private_key.Sign(hasher.GetHash(), signature);
+
+        return signature;
+    }
+
 }; // TestKey
 
 
@@ -1221,6 +1247,417 @@ BOOST_AUTO_TEST_CASE(beaconstorage_mainnet_test)
     beacon_registry_test.BeaconDatabaseComparisonChecks_m_beacons();
 
     beacon_registry_test.BeaconDatabaseComparisonChecks_m_pending();
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
+{
+    LogInstance().EnableCategory(BCLog::LogFlags::BEACON);
+    LogInstance().EnableCategory(BCLog::LogFlags::ACCRUAL);
+
+    FastRandomContext rng(uint256 {0});
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    // Make sure the registry is reset.
+    registry.Reset();
+
+    // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
+
+    // Pending beacon
+    CTransaction tx1 {};
+    tx1.nTime = int64_t {1};
+    uint256 tx1_hash = tx1.GetHash();
+
+    CBlockIndex* pindex1 = new CBlockIndex;
+    pindex1->nVersion = 13;
+    pindex1->nHeight = 1;
+    pindex1->nTime = tx1.nTime;
+
+    GRC::Beacon beacon1 {TestKey::Public(), tx1.nTime, tx1_hash};
+    beacon1.m_cpid = TestKey::Cpid();
+    beacon1.m_status = GRC::Beacon::Status {GRC::BeaconStatusForStorage::PENDING};
+    GRC::BeaconPayload beacon_payload1 {2, TestKey::Cpid(), beacon1};
+    beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
+
+    GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
+    GRC::ContractContext ctx1 {contract1, tx1, pindex1};
+
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_hash == tx1_hash);
+    BOOST_CHECK(ctx1.m_tx.GetHash() == tx1_hash);
+
+    registry.Add(ctx1);
+
+    BOOST_CHECK(registry.GetBeaconDB().size() == 1);
+
+    std::vector<GRC::Beacon_ptr> pending_beacons = registry.FindPending(TestKey::Cpid());
+
+    BOOST_CHECK(pending_beacons.size() == 1);
+
+    if (pending_beacons.size() == 1) {
+        BOOST_CHECK(pending_beacons[0]->m_cpid == TestKey::Cpid());
+        BOOST_CHECK(pending_beacons[0]->m_hash == tx1_hash);
+        BOOST_CHECK(pending_beacons[0]->m_previous_hash == uint256 {});
+        BOOST_CHECK(pending_beacons[0]->m_public_key == TestKey::Public());
+        BOOST_CHECK(pending_beacons[0]->m_status == GRC::BeaconStatusForStorage::PENDING);
+        BOOST_CHECK(pending_beacons[0]->m_timestamp == tx1.nTime);
+    }
+
+    // Activation
+    CBlockIndex* pindex2 = new CBlockIndex;
+    pindex2->nVersion = 13;
+    pindex2->nHeight = 2;
+    pindex2->nTime = int64_t {2};
+    uint256* block2_phash = new uint256 {rng.rand256()};
+    pindex2->phashBlock = block2_phash;
+
+    std::vector<uint160> beacon_ids {TestKey::Public().GetID()};
+
+    registry.ActivatePending(beacon_ids, pindex2->nTime, *pindex2->phashBlock, pindex2->nHeight);
+
+    uint256 activated_beacon_hash = Hash(*block2_phash, pending_beacons[0]->m_hash);
+
+    BOOST_CHECK(registry.GetBeaconDB().size() == 2);
+
+    GRC::Beacon_ptr chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+        BOOST_CHECK(chainlet_head->m_hash == activated_beacon_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::ACTIVE);
+        // Note that the activated beacon's timestamp is actually the same as the timestamp of the PENDING beacon. (Here
+        // t = 1;
+        BOOST_CHECK(chainlet_head->m_timestamp == 1);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        // There is only one entry in the chainlet.. so the head and root are the same.
+        BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+    }
+
+    // Renewal
+    CTransaction tx3 {};
+    tx3.nTime = int64_t {3};
+    uint256 tx3_hash = tx3.GetHash();
+    CBlockIndex index3 {};
+    index3.nVersion = 13;
+    index3.nHeight = 3;
+    index3.nTime = tx3.nTime;
+
+    GRC::Beacon beacon3 {TestKey::Public(), tx3.nTime, tx3_hash};
+    beacon3.m_cpid = TestKey::Cpid();
+    GRC::BeaconPayload beacon_payload3 {2, TestKey::Cpid(), beacon3};
+    beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
+
+    GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
+    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+
+    registry.Add(ctx3);
+
+    chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+        BOOST_CHECK(chainlet_head->m_hash == tx3_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::RENEWAL);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+    }
+
+    // Second renewal
+    CTransaction tx4 {};
+    tx4.nTime = int64_t {4};
+    uint256 tx4_hash = tx4.GetHash();
+    CBlockIndex index4 = {};
+    index4.nVersion = 13;
+    index4.nHeight = 2;
+    index4.nTime = tx4.nTime;
+
+    GRC::Beacon beacon4 {TestKey::Public(), tx4.nTime, tx4_hash};
+    beacon4.m_cpid = TestKey::Cpid();
+    GRC::BeaconPayload beacon_payload4 {2, TestKey::Cpid(), beacon4};
+    beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
+
+    GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
+    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    registry.Add(ctx4);
+
+    chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+         = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+        BOOST_CHECK(chainlet_head->m_hash == tx4_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::RENEWAL);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+    }
+
+    // Let's corrupt the activation beacon to have a previous beacon hash that refers circularly back to the chain head...
+    bool original_activated_beacon_found = true;
+    bool circular_corruption_detected = false;
+
+    if (GRC::Beacon_ptr first_active = registry.FindHistorical(activated_beacon_hash)) {
+        // The original activated beacon m_previous_hash should be the pending beacon hash (beacon1).
+        BOOST_CHECK(first_active->m_previous_hash == beacon1.m_hash);
+        BOOST_CHECK(first_active->m_status == GRC::BeaconStatusForStorage::ACTIVE);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        // This creates a circular chainlet.
+        first_active->m_previous_hash = chainlet_head->m_hash;
+
+        beacon_chain_out_ptr->clear();
+
+        try {
+            GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+        } catch (std::runtime_error& e) {
+            circular_corruption_detected = true;
+        }
+    } else {
+        original_activated_beacon_found = false;
+    }
+
+    BOOST_CHECK_EQUAL(original_activated_beacon_found, true);
+
+    if (original_activated_beacon_found) {
+        BOOST_CHECK_EQUAL(circular_corruption_detected, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
+{
+    // For right now we will just cut and paste from above, given that the circularity detection causes the registry
+    // to get reset.
+
+    LogInstance().EnableCategory(BCLog::LogFlags::BEACON);
+    LogInstance().EnableCategory(BCLog::LogFlags::ACCRUAL);
+
+    FastRandomContext rng(uint256 {0});
+
+    GRC::BeaconRegistry& registry = GRC::GetBeaconRegistry();
+
+    // Make sure the registry is reset.
+    registry.Reset();
+
+    // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
+
+    // Pending beacon
+    CTransaction tx1 {};
+    tx1.nTime = int64_t {1};
+    uint256 tx1_hash = tx1.GetHash();
+
+    CBlockIndex* pindex1 = new CBlockIndex;
+    pindex1->nVersion = 13;
+    pindex1->nHeight = 1;
+    pindex1->nTime = tx1.nTime;
+
+    GRC::Beacon beacon1 {TestKey::Public(), tx1.nTime, tx1_hash};
+    beacon1.m_cpid = TestKey::Cpid();
+    beacon1.m_status = GRC::Beacon::Status {GRC::BeaconStatusForStorage::PENDING};
+    GRC::BeaconPayload beacon_payload1 {2, TestKey::Cpid(), beacon1};
+    beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
+
+    GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
+    GRC::ContractContext ctx1 {contract1, tx1, pindex1};
+
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
+    BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_hash == tx1_hash);
+    BOOST_CHECK(ctx1.m_tx.GetHash() == tx1_hash);
+
+    registry.Add(ctx1);
+
+    BOOST_CHECK(registry.GetBeaconDB().size() == 1);
+
+    std::vector<GRC::Beacon_ptr> pending_beacons = registry.FindPending(TestKey::Cpid());
+
+    BOOST_CHECK(pending_beacons.size() == 1);
+
+    if (pending_beacons.size() == 1) {
+        BOOST_CHECK(pending_beacons[0]->m_cpid == TestKey::Cpid());
+        BOOST_CHECK(pending_beacons[0]->m_hash == tx1_hash);
+        BOOST_CHECK(pending_beacons[0]->m_previous_hash == uint256 {});
+        BOOST_CHECK(pending_beacons[0]->m_public_key == TestKey::Public());
+        BOOST_CHECK(pending_beacons[0]->m_status == GRC::BeaconStatusForStorage::PENDING);
+        BOOST_CHECK(pending_beacons[0]->m_timestamp == tx1.nTime);
+    }
+
+    // Activation
+    CBlockIndex* pindex2 = new CBlockIndex;
+    pindex2->nVersion = 13;
+    pindex2->nHeight = 2;
+    pindex2->nTime = int64_t {2};
+    uint256* block2_phash = new uint256 {rng.rand256()};
+    pindex2->phashBlock = block2_phash;
+
+    std::vector<uint160> beacon_ids {TestKey::Public().GetID()};
+
+    registry.ActivatePending(beacon_ids, pindex2->nTime, *pindex2->phashBlock, pindex2->nHeight);
+
+    uint256 activated_beacon_hash = Hash(*block2_phash, pending_beacons[0]->m_hash);
+
+    BOOST_CHECK(registry.GetBeaconDB().size() == 2);
+
+    GRC::Beacon_ptr chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+        BOOST_CHECK(chainlet_head->m_hash == activated_beacon_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::ACTIVE);
+        // Note that the activated beacon's timestamp is actually the same as the timestamp of the PENDING beacon. (Here
+        // t = 1;
+        BOOST_CHECK(chainlet_head->m_timestamp == 1);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        // There is only one entry in the chainlet.. so the head and root are the same.
+        BOOST_CHECK(chainlet_root->m_hash == chainlet_head->m_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 1);
+    }
+
+    // Renewal
+    CTransaction tx3 {};
+    tx3.nTime = int64_t {3};
+    uint256 tx3_hash = tx3.GetHash();
+    CBlockIndex index3 {};
+    index3.nVersion = 13;
+    index3.nHeight = 3;
+    index3.nTime = tx3.nTime;
+
+    GRC::Beacon beacon3 {TestKey::Public(), tx3.nTime, tx3_hash};
+    beacon3.m_cpid = TestKey::Cpid();
+    GRC::BeaconPayload beacon_payload3 {2, TestKey::Cpid(), beacon3};
+    beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
+
+    GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
+    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+
+    registry.Add(ctx3);
+
+    chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+        BOOST_CHECK(chainlet_head->m_hash == tx3_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::RENEWAL);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 2);
+    }
+
+    // Second renewal
+    CTransaction tx4 {};
+    tx4.nTime = int64_t {4};
+    uint256 tx4_hash = tx4.GetHash();
+    CBlockIndex index4 = {};
+    index4.nVersion = 13;
+    index4.nHeight = 2;
+    index4.nTime = tx4.nTime;
+
+    GRC::Beacon beacon4 {TestKey::Public(), tx4.nTime, tx4_hash};
+    beacon4.m_cpid = TestKey::Cpid();
+    GRC::BeaconPayload beacon_payload4 {2, TestKey::Cpid(), beacon4};
+    beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
+
+    GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
+    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    registry.Add(ctx4);
+
+    chainlet_head = registry.Try(TestKey::Cpid());
+
+    BOOST_CHECK(chainlet_head != nullptr);
+
+    if (chainlet_head != nullptr) {
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+        BOOST_CHECK(chainlet_head->m_hash == tx4_hash);
+        BOOST_CHECK(chainlet_head->m_status == GRC::BeaconStatusForStorage::RENEWAL);
+
+        GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+
+        BOOST_CHECK(chainlet_root->m_hash == activated_beacon_hash);
+        BOOST_CHECK_EQUAL(beacon_chain_out_ptr->size(), 3);
+    }
+
+    // Let's corrupt the activation beacon to have a previous beacon hash that is the same as its hash...
+    bool original_activated_beacon_found = true;
+    bool circular_corruption_detected = false;
+
+    if (GRC::Beacon_ptr first_active = registry.FindHistorical(activated_beacon_hash)) {
+        // The original activated beacon m_previous_hash should be the pending beacon hash (beacon1).
+        BOOST_CHECK(first_active->m_previous_hash == beacon1.m_hash);
+        BOOST_CHECK(first_active->m_status == GRC::BeaconStatusForStorage::ACTIVE);
+
+        std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+        std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
+
+        // This creates a immediately circular chainlet of one.
+        first_active->m_previous_hash = first_active->m_hash;
+
+        beacon_chain_out_ptr->clear();
+
+        try {
+            GRC::Beacon_ptr chainlet_root = registry.GetBeaconChainletRoot(chainlet_head, beacon_chain_out_ptr);
+        } catch (std::runtime_error& e) {
+            circular_corruption_detected = true;
+        }
+    } else {
+        original_activated_beacon_found = false;
+    }
+
+    BOOST_CHECK_EQUAL(original_activated_beacon_found, true);
+
+    if (original_activated_beacon_found) {
+        BOOST_CHECK_EQUAL(circular_corruption_detected, true);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
