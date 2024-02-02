@@ -366,7 +366,7 @@ const BeaconOption BeaconRegistry::FindHistorical(const uint256& hash)
         return beacon_iter->second;
     }
 
-    return {};
+    return nullptr;
 }
 
 bool BeaconRegistry::ContainsActive(const Cpid& cpid, const int64_t now) const
@@ -800,20 +800,54 @@ int BeaconRegistry::GetDBHeight()
 Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
                                                  std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out)
 {
-    // Given that we have had rare situations where somehow cirularity has occurred in the beacon chainlet, which either
-    // results in the current hash and previous hash being the same, or even suspected previous hash of another entry pointing
-    // back to a later beacon this vector is used to detect the circularity.
-    std::vector<uint256> encountered_hashes { beacon->m_hash };
-
     Cpid cpid = beacon->m_cpid;
 
+    // The chain head itself.
+    auto beacon_iter = m_beacon_db.find(beacon->m_hash);
+
+   if (beacon_iter == m_beacon_db.end()) {
+        // Beacon chainlet chainhead cannot be found. This is fatal.
+
+        error("%s: Beacon chainlet is corrupted at chainhead for cpid %s: timestamp = %s" PRId64 ", ctx_hash = %s,"
+              "prev_beacon_ctx_hash = %s, status = %s: not found in the registry.",
+              __func__,
+              beacon->m_cpid.ToString(),
+              beacon->m_timestamp,
+              beacon->m_hash.GetHex(),
+              beacon->m_previous_hash.GetHex(),
+              beacon->StatusToString());
+
+        std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at chainhead for cpid %s: timestamp = %s"
+                                          PRId64 ", ctx_hash = %s, prev_beacon_ctx_hash = %s, status = %s: not found "
+                                          "in the registry.",
+                                          __func__,
+                                          beacon->m_cpid.ToString(),
+                                          beacon->m_timestamp,
+                                          beacon->m_hash.GetHex(),
+                                          beacon->m_previous_hash.GetHex(),
+                                          beacon->StatusToString());
+
+        Reset();
+
+        uiInterface.ThreadSafeMessageBox(str_error, "Gridcoin", CClientUIInterface::MSG_ERROR);
+
+        throw std::runtime_error(std::string {"The beacon registry is corrupted and Gridcoin cannot continue. Please restart."});
+    }
+
+    // Given that we have had rare situations where somehow circularity has occurred in the beacon chainlet, which either
+    // results in the current hash and previous hash being the same, or even suspected previous hash of another entry pointing
+    // back to a beacon in a circular manner, this vector is used to detect the circularity.
+    std::vector<uint256> encountered_hashes { beacon->m_hash };
+
     if (beacon_chain_out != nullptr) {
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: active beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
-                                           " prev_beacon_ctx_hash = %s",
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: chainlet head beacon for cpid %s: timestamp = %" PRId64 ", ctx_hash = %s,"
+                                           " prev_beacon_ctx_hash = %s, status = %s.",
                  __func__,
+                 beacon->m_cpid.ToString(),
                  beacon->m_timestamp,
                  beacon->m_hash.GetHex(),
-                 beacon->m_previous_hash.GetHex());
+                 beacon->m_previous_hash.GetHex(),
+                 beacon->StatusToString());
 
         beacon_chain_out->push_back(std::make_pair(beacon->m_hash, beacon->m_timestamp));
     }
@@ -825,54 +859,121 @@ Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
 
     while (beacon->Renewed())
     {
-        uint256 current_hash = beacon->m_hash;
+        // Select previous beacon in chainlet
+        auto beacon_iter = m_beacon_db.find(beacon->m_previous_hash);
 
-        beacon = m_beacon_db.find(beacon->m_previous_hash)->second;
+        if (beacon_iter == m_beacon_db.end()) {
+            // Linked beacon in chainlet cannot be found. This is fatal.
 
-        if (beacon_chain_out != nullptr) {
-            LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: renewal %u beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
-                                               " prev_beacon_ctx_hash = %s.",
-                     __func__,
-                     i,
-                     beacon->m_timestamp,
-                     beacon->m_hash.GetHex(),
-                     beacon->m_previous_hash.GetHex());
+            error("%s: Beacon chainlet is corrupted at %u links back for cpid %s: timestamp = %s" PRId64 ", ctx_hash = %s,"
+                  "prev_beacon_ctx_hash = %s, status = %s: prev_beacon not found in the registry.",
+                  __func__,
+                  i + 1,
+                  beacon->m_cpid.ToString(),
+                  beacon->m_timestamp,
+                  beacon->m_hash.GetHex(),
+                  beacon->m_previous_hash.GetHex(),
+                  beacon->StatusToString());
 
-            beacon_chain_out->push_back(std::make_pair(beacon->m_hash, beacon->m_timestamp));
+            std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at %u links back for cpid %s: timestamp = %s"
+                                              PRId64 ", ctx_hash = %s, prev_beacon_ctx_hash = %s, status = %s: prev_beacon not found "
+                                              "in the registry.",
+                  __func__,
+                  i + 1,
+                  beacon->m_cpid.ToString(),
+                  beacon->m_timestamp,
+                  beacon->m_hash.GetHex(),
+                  beacon->m_previous_hash.GetHex(),
+                  beacon->StatusToString());
+
+            Reset();
+
+            uiInterface.ThreadSafeMessageBox(str_error, "Gridcoin", CClientUIInterface::MSG_ERROR);
+
+            throw std::runtime_error(std::string {"The beacon registry is corrupted and Gridcoin cannot continue. Please restart."});
         }
 
-        if (std::find(encountered_hashes.begin(), encountered_hashes.end(), beacon->m_hash) != encountered_hashes.end()) {
+        if (std::find(encountered_hashes.begin(), encountered_hashes.end(), beacon->m_previous_hash) != encountered_hashes.end()) {
             // If circularity is found this is an indication of corruption of beacon state and is fatal.
             // Produce an error message, reset the beacon registry, and require a restart of the node.
+
             error("%s: Circularity encountered in beacon ownership chain for beacon with CPID %s, starting at hash %s, "
                   "at %u linked entries back from the start, with offending hash %s.",
                   __func__,
                   cpid.ToString(),
-                  current_hash.GetHex(),
-                  i,
-                  beacon->m_hash.GetHex());
+                  beacon->m_hash.GetHex(),
+                  i + 1,
+                  beacon->m_previous_hash.GetHex());
 
-            std::string str_error = strprintf("ERROR %s: Circularity encountered in beacon ownership chain for beacon with CPID %s, "
+            std::string str_error = strprintf("ERROR: %s: Circularity encountered in beacon ownership chain for beacon with CPID %s, "
                                               "starting at hash %s, at %u linked entries back from the start, with offending hash %s.\n"
                                               "\n"
                                               "The client cannot continue and the beacon history has been reset and will be rebuilt "
                                               "on the next restart. Please restart Gridcoin.",
                                               __func__,
                                               cpid.ToString(),
-                                              encountered_hashes[0].GetHex(),
-                                              i,
-                                              beacon->m_hash.GetHex());
+                                              beacon->m_hash.GetHex(),
+                                              i + 1,
+                                              beacon->m_previous_hash.GetHex());
 
             Reset();
 
             uiInterface.ThreadSafeMessageBox(str_error, "Gridcoin", CClientUIInterface::MSG_ERROR);
 
-            throw std::runtime_error(std::string {"A fatal error has occurred and Gridcoin cannot continue. Please restart."});
+            throw std::runtime_error(std::string {"The beacon registry is corrupted and Gridcoin cannot continue. Please restart."});
         }
+
+        // Reassign previous beacon to beacon.
+        beacon = beacon_iter->second;
 
         encountered_hashes.push_back(beacon->m_hash);
 
+        if (beacon_chain_out != nullptr) {
+            LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: beacon %u links back for cpid %s: timestamp = %" PRId64 ", ctx_hash = %s,"
+                                               " prev_beacon_ctx_hash = %s, status = %s.",
+                     __func__,
+                     i + 1,
+                     beacon->m_cpid.ToString(),
+                     beacon->m_timestamp,
+                     beacon->m_hash.GetHex(),
+                     beacon->m_previous_hash.GetHex(),
+                     beacon->StatusToString());
+
+            beacon_chain_out->push_back(std::make_pair(beacon->m_hash, beacon->m_timestamp));
+        }
+
         ++i;
+    }
+
+    // Check of initial advertised beacon's previous hash.
+    if (std::find(encountered_hashes.begin(), encountered_hashes.end(), beacon->m_previous_hash) != encountered_hashes.end()) {
+        // If circularity is found this is an indication of corruption of beacon state and is fatal.
+        // Produce an error message, reset the beacon registry, and require a restart of the node.
+
+        error("%s: Circularity encountered in beacon ownership chain for beacon with CPID %s, starting at hash %s, "
+              "at %u linked entries back from the start, with offending hash %s.",
+              __func__,
+              cpid.ToString(),
+              beacon->m_hash.GetHex(),
+              i + 1,
+              beacon->m_previous_hash.GetHex());
+
+        std::string str_error = strprintf("ERROR: %s: Circularity encountered in beacon ownership chain for beacon with CPID %s, "
+                                          "starting at hash %s, at %u linked entries back from the start, with offending hash %s.\n"
+                                          "\n"
+                                          "The client cannot continue and the beacon history has been reset and will be rebuilt "
+                                          "on the next restart. Please restart Gridcoin.",
+                                          __func__,
+                                          cpid.ToString(),
+                                          beacon->m_hash.GetHex(),
+                                          i + 1,
+                                          beacon->m_previous_hash.GetHex());
+
+        Reset();
+
+        uiInterface.ThreadSafeMessageBox(str_error, "Gridcoin", CClientUIInterface::MSG_ERROR);
+
+        throw std::runtime_error(std::string {"The beacon registry is corrupted and Gridcoin cannot continue. Please restart."});
     }
 
     return beacon;
