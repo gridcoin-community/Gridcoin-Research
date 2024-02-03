@@ -1313,7 +1313,7 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
     }
 
     if (entry.m_status == BeaconStatusForStorage::ACTIVE) {
-        // Note that in the orginal activation, all the activations happen for a superblock, and then the expired_entry set is
+        // Note that in the original activation, all the activations happen for a superblock, and then the expired_entry set is
         // cleared and then new expired entries recorded from the just committed SB. This method operates at the record level, but
         // clearing the expired_entries for each ACTIVE record posting will achieve the same effect, because the entries are ordered
         // the proper way. It is a little bit of undesired work, but it is not worth the complexity of feeding the boundaries

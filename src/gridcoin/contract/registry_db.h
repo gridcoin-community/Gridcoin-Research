@@ -64,7 +64,7 @@ public:
     //! \param entries The map of current entries.
     //! \param pending_entries. The map of pending entries. This is not used in the general template, only in the beacons
     //! specialization.
-    //! \param expired_entries. The map of expired pending entries. This is not used in the geenral template, only in the
+    //! \param expired_entries. The map of expired pending entries. This is not used in the general template, only in the
     //! beacons specialization.
     //!
     //! \return block height up to and including which the entry records were stored.
@@ -230,7 +230,7 @@ public:
     }
 
     //!
-    //! \brief Handles the passivation of previous historical entries that have been superceded by current entries.
+    //! \brief Handles the passivation of previous historical entries that have been superseded by current entries.
     //!
     //! \param historical_entry_ptr. Shared smart pointer to current historical entry already inserted into historical map.
     //!

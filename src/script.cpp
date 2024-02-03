@@ -1102,7 +1102,7 @@ public:
         {
             // Evict a random entry. Random because that helps
             // foil would-be DoS attackers who might try to pre-generate
-            // and re-use a set of valid signatures just-slightly-greater
+            // and reuse a set of valid signatures just-slightly-greater
             // than our cache size.
             uint256 randomHash = GetRandHash();
             std::vector<unsigned char> unused;

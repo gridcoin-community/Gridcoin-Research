@@ -939,7 +939,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
     CScript SideStakeScriptPubKey;
     GRC::Allocation SumAllocation;
 
-    // Lambda for sidestake allocation. This iterates throught the provided sidestake vector until either all elements processed,
+    // Lambda for sidestake allocation. This iterates through the provided sidestake vector until either all elements processed,
     // the maximum number of sidestake outputs is reached via the provided output_limit, or accumulated allocation will exceed 100%.
     const auto allocate_sidestakes = [&](SideStakeAlloc sidestakes, unsigned int output_limit) {
         for (auto iterSideStake = sidestakes.begin();
