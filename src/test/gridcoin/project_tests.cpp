@@ -9,25 +9,6 @@
 #include <boost/test/unit_test.hpp>
 
 namespace {
-//!
-//! \brief Generate a mock project contract.
-//!
-//! \param key   A fake project name as it might appear in a contract.
-//! \param value A fake project URL as it might appear in a contract.
-//!
-//! \return A mock project contract.
-//!
-GRC::Contract contract(std::string key, std::string value)
-{
-    return GRC::MakeContract<GRC::Project>(
-        // Add or delete checked before passing to handler, so we don't need
-        // to give a specific value here:
-        GRC::ContractAction::UNKNOWN,
-        std::move(key),
-        std::move(value),
-        1234567); // timestamp
-}
-
 void AddProjectEntry(const uint32_t& payload_version, const std::string& name, const std::string& url,
                      const bool& gdpr_status, const int& height, const uint64_t time, const bool& reset_registry = false)
 {
