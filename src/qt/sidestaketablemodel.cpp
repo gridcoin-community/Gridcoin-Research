@@ -238,9 +238,12 @@ bool SideStakeTableModel::setData(const QModelIndex &index, const QVariant &valu
             prior_total_allocation += allocation;
         }
 
-        GRC::Allocation modified_allocation(value.toDouble() / 100.0);
+        bool parse_ok = false;
+        double read_allocation = value.toDouble(&parse_ok) / 100.0;
 
-        if (modified_allocation < 0 || prior_total_allocation + modified_allocation > 1) {
+        GRC::Allocation modified_allocation(read_allocation);
+
+        if (!parse_ok || modified_allocation < 0 || prior_total_allocation + modified_allocation > 1) {
             m_edit_status = INVALID_ALLOCATION;
 
             LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: m_edit_status = %i",
@@ -359,7 +362,6 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
     }
 
     GRC::Allocation prior_total_allocation;
-    GRC::Allocation sidestake_allocation;
 
     // Get total allocation of all active/mandatory sidestake entries
     for (const auto& entry : registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
@@ -367,21 +369,20 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
     }
 
     // The new allocation must be parseable as a double, must be greater than or equal to 0, and
-    // must result in a total allocation of less than 100%.
-    double read_allocation = 0.0;
+    // must result in a total allocation of less than or equal to 100%.
+    bool parse_ok = false;
+    double read_allocation = allocation.toDouble(&parse_ok) / 100.0;
 
-    if (!ParseDouble(allocation.toStdString(), &read_allocation)) {
-        if (read_allocation < 0.0) {
-            m_edit_status = INVALID_ALLOCATION;
-            return QString();
-        }
+    GRC::Allocation sidestake_allocation(read_allocation);
 
-        sidestake_allocation += GRC::Allocation(read_allocation / 100.0);
+    if (!parse_ok || sidestake_allocation < 0 || prior_total_allocation + sidestake_allocation > 1) {
+        m_edit_status = INVALID_ALLOCATION;
 
-        if (prior_total_allocation + sidestake_allocation > 1) {
-            m_edit_status = INVALID_ALLOCATION;
-            return QString();
-        }
+        LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: m_edit_status = %i",
+                 __func__,
+                 (int) m_edit_status);
+
+        return QString();
     }
 
     std::string sidestake_description = description.toStdString();
