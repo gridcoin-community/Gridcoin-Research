@@ -15,7 +15,6 @@
 class PollItem;
 class VotingModel;
 
-namespace {
 class PollTableDataModel : public QAbstractTableModel
 {
 public:
@@ -35,7 +34,6 @@ private:
     std::vector<PollItem> m_rows;
 
 };
-} // Anonymous namespace
 
 class PollTableModel : public QSortFilterProxyModel
 {

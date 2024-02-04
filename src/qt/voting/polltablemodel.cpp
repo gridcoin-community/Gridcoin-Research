@@ -15,7 +15,6 @@
 
 using namespace GRC;
 
-namespace {
 PollTableDataModel::PollTableDataModel()
 {
     qRegisterMetaType<QList<QPersistentModelIndex>>();
@@ -189,7 +188,6 @@ void PollTableDataModel::handlePollStaleFlag(QString poll_txid_string)
 
     emit layoutChanged();
 }
-} // Anonymous namespace
 
 // -----------------------------------------------------------------------------
 // Class: PollTableModel

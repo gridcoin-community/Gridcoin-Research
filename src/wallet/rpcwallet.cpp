@@ -2188,11 +2188,10 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
     strWalletPass.reserve(100);
     strWalletPass = std::string_view{params[0].get_str()};
 
-    if (strWalletPass.length() > 0)
-    {
+    if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass))
+        if (!pwalletMain->Unlock(strWalletPass)) {
             // Check if the passphrase has a null character
             if (strWalletPass.find('\0') == std::string::npos) {
                 throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -2204,11 +2203,12 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
                                                                     "the first null character. If this is successful, please set a new "
                                                                     "passphrase to avoid this issue in the future.");
             }
-    }
-    else
+        }
+    } else {
         throw runtime_error(
             "walletpassphrase <passphrase> <timeout>\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.");
+    }
 
     NewThread(ThreadTopUpKeyPool, nullptr);
     int64_t* pnSleepTime = new int64_t(nSleepTime);
@@ -2252,7 +2252,7 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass))
+    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass)) {
         // Check if the old passphrase had a null character
         if (strOldWalletPass.find('\0') == std::string::npos) {
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
@@ -2263,12 +2263,13 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
                                                                 "please try again with only the characters up to — but not including — "
                                                                 "the first null character.");
         }
+    }
 
     return NullUniValue;
 }
 
 /**
- * Run the walled diagnose checks
+ * Run the wallet diagnose checks
  */
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
