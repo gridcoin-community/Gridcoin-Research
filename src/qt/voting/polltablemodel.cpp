@@ -292,7 +292,7 @@ void PollTableModel::changeTitleFilter(const QString& pattern)
     emit layoutChanged();
 }
 
-Qt::SortOrder PollTableModel::sort(int column)
+Qt::SortOrder PollTableModel::custom_sort(int column)
 {
     if (sortColumn() == column) {
         QSortFilterProxyModel::sort(column, static_cast<Qt::SortOrder>(!sortOrder()));

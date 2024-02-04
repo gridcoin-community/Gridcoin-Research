@@ -177,7 +177,7 @@ void AdditionalFieldsTableModel::refresh()
             ->reload(additional_fields);
 }
 
-Qt::SortOrder AdditionalFieldsTableModel::sort(int column)
+Qt::SortOrder AdditionalFieldsTableModel::custom_sort(int column)
 {
     if (sortColumn() == column) {
         QSortFilterProxyModel::sort(column, static_cast<Qt::SortOrder>(!sortOrder()));

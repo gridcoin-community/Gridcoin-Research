@@ -78,7 +78,7 @@ signals:
 public slots:
     void refresh();
     void changeTitleFilter(const QString& pattern);
-    Qt::SortOrder sort(int column);
+    Qt::SortOrder custom_sort(int column);
 
     void handlePollStaleFlag(QString poll_txid_string);
 
