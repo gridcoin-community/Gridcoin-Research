@@ -1020,7 +1020,7 @@ PollBuilder PollBuilder::SetTitle(std::string title)
             ToString(Poll::MAX_TITLE_SIZE)));
     }
 
-    m_poll->m_title = std::move(title);
+    m_poll->m_title = title;
 
     return std::move(*this);
 }
@@ -1037,7 +1037,7 @@ PollBuilder PollBuilder::SetUrl(std::string url)
             ToString(Poll::MAX_URL_SIZE)));
     }
 
-    m_poll->m_url = std::move(url);
+    m_poll->m_url = url;
 
     return std::move(*this);
 }
@@ -1050,7 +1050,7 @@ PollBuilder PollBuilder::SetQuestion(std::string question)
             ToString(Poll::MAX_QUESTION_SIZE)));
     }
 
-    m_poll->m_question = std::move(question);
+    m_poll->m_question = question;
 
     return std::move(*this);
 }
@@ -1059,13 +1059,13 @@ PollBuilder PollBuilder::SetChoices(std::vector<std::string> labels)
 {
     m_poll->m_choices = Poll::ChoiceList();
 
-    return AddChoices(std::move(labels));
+    return AddChoices(labels);
 }
 
 PollBuilder PollBuilder::AddChoices(std::vector<std::string> labels)
 {
     for (auto& label : labels) {
-        *this = AddChoice(std::move(label));
+        *this = AddChoice(label);
     }
 
     return std::move(*this);
@@ -1096,7 +1096,7 @@ PollBuilder PollBuilder::AddChoice(std::string label)
         throw VotingError(strprintf(_("Duplicate poll choice: %s"), label));
     }
 
-    m_poll->m_choices.Add(std::move(label));
+    m_poll->m_choices.Add(label);
 
     return std::move(*this);
 }
@@ -1105,20 +1105,20 @@ PollBuilder PollBuilder::SetAdditionalFields(std::vector<Poll::AdditionalField> 
 {
     m_poll->m_additional_fields = Poll::AdditionalFieldList();
 
-    return AddAdditionalFields(std::move(fields));
+    return AddAdditionalFields(fields);
 }
 
 PollBuilder PollBuilder::SetAdditionalFields(Poll::AdditionalFieldList fields)
 {
     m_poll->m_additional_fields = Poll::AdditionalFieldList();
 
-    return AddAdditionalFields(std::move(fields));
+    return AddAdditionalFields(fields);
 }
 
 PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> fields)
 {
     for (auto& field : fields) {
-        *this = AddAdditionalField(std::move(field));
+        *this = AddAdditionalField(field);
     }
 
     if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
@@ -1131,7 +1131,7 @@ PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> 
 PollBuilder PollBuilder::AddAdditionalFields(Poll::AdditionalFieldList fields)
 {
     for (auto& field : fields) {
-        *this = AddAdditionalField(std::move(field));
+        *this = AddAdditionalField(field);
     }
 
     if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
@@ -1177,7 +1177,7 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
         throw VotingError(strprintf(_("Duplicate poll additional field: %s"), field.m_name));
     }
 
-    m_poll->m_additional_fields.Add(std::move(field));
+    m_poll->m_additional_fields.Add(field);
 
     return std::move(*this);
 }
