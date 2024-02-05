@@ -109,6 +109,11 @@ public:
     {
         LOCK(pwalletMain->cs_wallet);
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: vote contract tx hash %s ismine status %i",
+                 __func__,
+                 m_tx.GetHash().GetHex(),
+                 pwalletMain->IsMine(m_tx));
+
         return pwalletMain->IsMine(m_tx);
     }
 
@@ -1256,6 +1261,7 @@ void PollResult::TallyVote(VoteDetail detail)
         if (detail.m_ismine != ISMINE_NO) {
             bool choice_found = false;
 
+            // If the response offset entry already exists, then append to the existing entry...
             for (auto& choice : m_self_vote_detail.m_responses) {
                 if (choice.first == response_offset) {
                     choice.second += response_weight;
@@ -1264,6 +1270,7 @@ void PollResult::TallyVote(VoteDetail detail)
                 }
             }
 
+            // Otherwise make a new m_responses entry to represent the response offset and the associated weight.
             if (!choice_found) {
                 m_self_vote_detail.m_responses.push_back(std::make_pair(response_offset, response_weight));
             }
