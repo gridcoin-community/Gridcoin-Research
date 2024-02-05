@@ -53,7 +53,11 @@
                 {
                     "type": "dir",
                     "path": ".."
-                }
+                },
+                {
+                    "type": "shell",
+                    "commands": ["./autogen.sh"]
+                },
             ]
         }
     ]
