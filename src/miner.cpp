@@ -479,7 +479,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                        - 2) * coinstake_output_ser_size;
         }
 
-        uint64_t nBlockTx = 0;
         int nBlockSigOps = 100;
 
         std::make_heap(vecPriority.begin(), vecPriority.end());
@@ -626,7 +625,6 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
 
             block.vtx.push_back(tx);
             nBlockSize += nTxSize;
-            ++nBlockTx;
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
