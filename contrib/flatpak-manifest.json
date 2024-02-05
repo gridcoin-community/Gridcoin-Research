@@ -20,16 +20,19 @@
     ],
     "modules": [
         {
-			"name": "libzip",
-			"cleanup": [ "/bin", "/share" ],
-			"sources": [
-				{
-					"type": "archive",
-					"url": "https://nih.at/libzip/libzip-1.1.3.tar.xz",
-					"sha256": "729a295a59a9fd6e5b9fe9fd291d36ae391a9d2be0b0824510a214cfaa05ceee"
-				}
-			]
-		},
+            "name": "libzip",
+            "cleanup": [
+                "/bin",
+                "/share"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://nih.at/libzip/libzip-1.1.3.tar.xz",
+                    "sha256": "729a295a59a9fd6e5b9fe9fd291d36ae391a9d2be0b0824510a214cfaa05ceee"
+                }
+            ]
+        },
         {
             "name": "boost",
             "buildsystem": "simple",
@@ -48,7 +51,9 @@
         {
             "name": "Gridcoin-Research",
             "buildsystem": "autotools",
-            "config-opts": ["--with-boost-libdir=/app/lib"],
+            "config-opts": [
+                "--with-boost-libdir=/app/lib"
+            ],
             "sources": [
                 {
                     "type": "dir",
@@ -56,10 +61,11 @@
                 },
                 {
                     "type": "shell",
-                    "commands": ["./autogen.sh"]
-                },
+                    "commands": [
+                        "./autogen.sh"
+                    ]
+                }
             ]
         }
     ]
 }
-
