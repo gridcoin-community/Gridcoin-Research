@@ -3,7 +3,7 @@ export LC_ALL=C
 set -e
 SECONDS=0
 
-repo_root="$(realpath $(dirname "$0")/..)"
+repo_root="$(realpath "$(dirname "$0")/..")"
 mkdir -p "$repo_root/build"
 cd "$repo_root/build"
 
