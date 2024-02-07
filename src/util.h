@@ -435,8 +435,36 @@ public:
         Fraction slhs(*this, true);
         Fraction srhs(rhs, true);
 
-        return Fraction(overflow_mult(slhs.GetNumerator(), srhs.GetNumerator()),
-                        overflow_mult(slhs.GetDenominator(), srhs.GetDenominator()),
+        // Gcd's can be used in multiplication for better overflow resistance as well.
+        //
+        // Consider
+        // a   c
+        // - * -, where a/b and c/d are already simplified (i.e. gcd(a, b) = gcd(c, d) = 1.
+        // b   d
+        //
+        // We can have g = gcd(a, d) and h = gcd(c, b), which is with the numerators reversed, since multiplication is
+        // commutative. This means we have
+        //
+        // (c / h)   (a / g)
+        // ------- * ------- .
+        // (b / h)   (d / g)
+        //
+        // If we form Fraction(c, b, true) and Fraction(a, d, true), the simplification will determine and divide the numerator and
+        // denominator by h and g respectively.
+        //
+        // A specific example is instructive.
+        //
+        // 1998   1000    999   1000   1000   999   1   1
+        // ---- * ---- = ---- * ---- = ---- * --- = - * -
+        // 2000    999   1000    999   1000   999   1   1
+        //
+        // This is a formal form of what grade school teachers called factor cancellation. :).
+
+        Fraction sxlhs(srhs.GetNumerator(), slhs.GetDenominator(), true);
+        Fraction sxrhs(slhs.GetNumerator(), srhs.GetDenominator(), true);
+
+        return Fraction(overflow_mult(sxlhs.GetNumerator(), sxrhs.GetNumerator()),
+                        overflow_mult(sxlhs.GetDenominator(), sxrhs.GetDenominator()),
                         true);
     }
 
