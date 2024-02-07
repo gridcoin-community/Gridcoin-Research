@@ -1439,6 +1439,29 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_internal_simplification)
     BOOST_CHECK_EQUAL(product.IsSimplified(), true);
 }
 
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_cross_simplification_overflow_resistance)
+{
+
+    Fraction lhs(std::numeric_limits<int64_t>::max() - 3, std::numeric_limits<int64_t>::max() - 1, false);
+    Fraction rhs((std::numeric_limits<int64_t>::max() - 1) / (int64_t) 2, (std::numeric_limits<int64_t>::max() - 3) / (int64_t) 2);
+
+    Fraction product;
+
+    // This should NOT overflow
+    bool overflow = false;
+    try {
+        product = lhs * rhs;
+    } catch (std::overflow_error& e) {
+        overflow = true;
+    }
+
+    BOOST_CHECK_EQUAL(overflow, false);
+
+    if (!overflow) {
+        BOOST_CHECK(product == Fraction(1));
+    }
+}
+
 BOOST_AUTO_TEST_CASE(util_Fraction_division_with_internal_simplification)
 {
     Fraction lhs(-2, 3);
