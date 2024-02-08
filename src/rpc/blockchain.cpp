@@ -7,6 +7,7 @@
 #include "blockchain.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -2268,6 +2269,17 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
+    // For add a mandatory sidestake, the 4th parameter is the allocation and the description (5th parameter) is optional.
+    if (type == GRC::ContractType::SIDESTAKE) {
+        if (action == GRC::ContractAction::ADD) {
+            required_param_count = 4;
+            param_count_max = 5;
+        } else {
+            required_param_count = 3;
+            param_count_max = 3;
+        }
+    }
+
     if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
         std::string error_string;
 
@@ -2304,7 +2316,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     if (!(type == GRC::ContractType::PROJECT
           || type == GRC::ContractType::SCRAPER
-          || type == GRC::ContractType::PROTOCOL)) {
+          || type == GRC::ContractType::PROTOCOL
+          || type == GRC::ContractType::SIDESTAKE)) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     }
 
@@ -2318,22 +2331,45 @@ UniValue addkey(const UniValue& params, bool fHelp)
     case GRC::ContractType::PROJECT:
     {
         if (action == GRC::ContractAction::ADD) {
+            bool gdpr_export_control = false;
+
             if (block_v13_enabled) {
+                // We must do our own conversion to boolean here, because the 5th parameter can either be
+                // a boolean for project or a string for sidestake, which means the client.cpp entry cannot contain a
+                // unicode type specifier for the 5th parameter.
+                if (ToLower(params[4].get_str()) == "true") {
+                    gdpr_export_control = true;
+                } else if (ToLower(params[4].get_str()) != "false") {
+                    // Neither true or false - throw an exception.
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
                             uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            params[4].getBool()); // GDPR stats export protection enforced boolean
+                            gdpr_export_control); // GDPR stats export protection enforced boolean
+
             } else if (project_v2_enabled) {
+                // We must do our own conversion to boolean here, because the 5th parameter can either be
+                // a boolean for project or a string for sidestake, which means the client.cpp entry cannot contain a
+                // unicode type specifier for the 5th parameter.
+                if (ToLower(params[4].get_str()) == "true") {
+                    gdpr_export_control = true;
+                } else if (ToLower(params[4].get_str()) != "false") {
+                    // Neither true or false - throw an exception.
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
                             uint32_t{2},          // Contract payload version number, 2
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            params[4].getBool()); // GDPR stats export protection enforced boolean
+                            gdpr_export_control); // GDPR stats export protection enforced boolean
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
@@ -2433,6 +2469,47 @@ UniValue addkey(const UniValue& params, bool fHelp)
                     params[2].get_str(),   // key
                     params[3].get_str());  // value
         break;
+    case GRC::ContractType::SIDESTAKE:
+    {
+        if (block_v13_enabled) {
+            CBitcoinAddress sidestake_address;
+            if (!sidestake_address.SetString(params[2].get_str())) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the sidestake is invalid.");
+            }
+
+            std::string description;
+            if (params.size() > 4) {
+                description = params[4].get_str();
+            }
+
+            // We have to do our own conversion here because the 4th parameter type specifier cannot be set other
+            // than string in the client.cpp file.
+            double allocation = 0.0;
+            if (params.size() > 3 && !ParseDouble(params[3].get_str(), &allocation)) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid allocation specified.");
+            }
+
+            allocation /= 100.0;
+
+            if (allocation > 1.0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Allocation specified is greater than 100.0%.");
+            }
+
+            contract = GRC::MakeContract<GRC::SideStakePayload>(
+                contract_version,                                            // Contract version number (3+)
+                action,                                                      // Contract action
+                uint32_t {1},                                                // Contract payload version number
+                sidestake_address.Get(),                                     // Sidestake destination
+                allocation,                                                  // Sidestake allocation
+                description,                                                 // Sidestake description
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY // sidestake status
+                );
+        } else {
+             throw JSONRPCError(RPC_INVALID_PARAMETER, "Sidestake contracts are not valid for block version less than v13.");
+        }
+
+        break;
+    }
     case GRC::ContractType::BEACON:
         [[fallthrough]];
     case GRC::ContractType::CLAIM:

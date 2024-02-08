@@ -34,6 +34,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::TranslateSig> Translate;
     boost::signals2::signal<CClientUIInterface::NotifyBlocksChangedSig> NotifyBlocksChanged;
     boost::signals2::signal<CClientUIInterface::UpdateMessageBoxSig> UpdateMessageBox;
+    boost::signals2::signal<CClientUIInterface::RwSettingsUpdatedSig> RwSettingsUpdated;
 };
 static UISignals g_ui_signals;
 
@@ -63,6 +64,7 @@ ADD_SIGNALS_IMPL_WRAPPER(QueueShutdown);
 ADD_SIGNALS_IMPL_WRAPPER(Translate);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyBlocksChanged);
 ADD_SIGNALS_IMPL_WRAPPER(UpdateMessageBox);
+ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, message); }
@@ -84,7 +86,7 @@ void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signal
 void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }
 void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message) { return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message); }
-
+void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpdated(); }
 
 bool InitError(const std::string &str)
 {

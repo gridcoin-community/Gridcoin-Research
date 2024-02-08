@@ -14,6 +14,7 @@
 #include "net.h"
 #include "util.h"
 #include <atomic>
+#include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/udp.hpp>
 #include <boost/asio/system_timer.hpp>
@@ -147,7 +148,7 @@ public:
 
         m_hasEligibleProjects = researcher->Id().Which() == GRC::MiningId::Kind::CPID;
         m_hasPoolProjects = researcher->Projects().ContainsPool();
-        m_researcher_mode = !(configured_for_investor_mode || (!m_hasEligibleProjects && m_hasPoolProjects));
+        m_researcher_mode = !(configured_for_investor_mode || (!m_hasEligibleProjects && !m_hasPoolProjects));
     }
 
     /**
@@ -532,14 +533,15 @@ public:
          */
 
         const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-        const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid();
-        if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
-            if (!beacon->Expired(GetAdjustedTime())) {
-                return true;
-            }
-            for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
-                if (!beacon_ptr->Expired(GetAdjustedTime())) {
+        if (const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid()) {
+            if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {
+                if (!beacon->Expired(GetAdjustedTime())) {
                     return true;
+                }
+                for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
+                    if (!beacon_ptr->Expired(GetAdjustedTime())) {
+                        return true;
+                    }
                 }
             }
         }

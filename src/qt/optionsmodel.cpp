@@ -79,6 +79,8 @@ void OptionsModel::Init()
     if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
         gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
     }
+
+    m_sidestake_model = new SideStakeTableModel(this);
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -155,6 +157,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case EnableStakeSplit:
             // This comes from the core and is a read-write setting (see below).
             return QVariant(gArgs.GetBoolArg("-enablestakesplit"));
+        case EnableSideStaking:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-enablesidestaking"));
         case StakingEfficiency:
             // This comes from the core and is a read-write setting (see below).
             return QVariant((double) gArgs.GetArg("-stakingefficiency", (int64_t) 90));
@@ -310,9 +315,14 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case EnableStakeSplit:
             // This is a core setting stored in the read-write settings file and once set will override the read-only
             //config file.
-            //fStakeSplitEnabled = value.toBool();
             gArgs.ForceSetArg("-enablestakesplit", value.toBool() ? "1" : "0");
             updateRwSetting("enablestakesplit", gArgs.GetBoolArg("-enablestakesplit"));
+            break;
+        case EnableSideStaking:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-enablesidestaking", value.toBool() ? "1" : "0");
+            updateRwSetting("enablesidestaking", gArgs.GetBoolArg("-enablesidestaking"));
             break;
         case StakingEfficiency:
             // This is a core setting stored in the read-write settings file and once set will override the read-only
@@ -460,4 +470,9 @@ void OptionsModel::setMaskValues(bool privacy_mode)
 QString OptionsModel::getDataDir()
 {
     return dataDir;
+}
+
+SideStakeTableModel* OptionsModel::getSideStakeTableModel()
+{
+    return m_sidestake_model;
 }

@@ -1,6 +1,7 @@
 #ifndef BITCOIN_QT_OPTIONSMODEL_H
 #define BITCOIN_QT_OPTIONSMODEL_H
 
+#include "sidestaketablemodel.h"
 #include <QAbstractListModel>
 #include <QDate>
 
@@ -41,6 +42,7 @@ public:
         DataDir,                 // QString
         EnableStaking,           // bool
         EnableStakeSplit,        // bool
+        EnableSideStaking,       // bool
         StakingEfficiency,       // double
         MinStakeSplitValue,      // int
         PollExpireNotification,  // double
@@ -77,6 +79,8 @@ public:
     QString getCurrentStyle();
     QString getDataDir();
 
+    SideStakeTableModel* getSideStakeTableModel();
+
     /* Explicit setters */
     void setCurrentStyle(QString theme);
     void setMaskValues(bool privacy_mode);
@@ -100,6 +104,8 @@ private:
     QString language;
     QString walletStylesheet;
     QString dataDir;
+
+    SideStakeTableModel* m_sidestake_model;
 
 signals:
     void displayUnitChanged(int unit);
