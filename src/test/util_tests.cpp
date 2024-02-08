@@ -1385,6 +1385,24 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_simplification)
     BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
 }
 
+BOOST_AUTO_TEST_CASE(util_Fraction_addition_with_internal_gcd_simplification)
+{
+    Fraction lhs(1, 6);
+    Fraction rhs(2, 15);
+
+    // gcd(6, 15) = 3, so this really is
+    //
+    // 1 * (15/3) + 2 * (6/3)   1 * 5 + 2 * 2    3
+    // ---------------------- = ------------- = --
+    //   3 * (6/3) * (15/3)       3 * 2 * 5     10
+
+    Fraction sum = lhs + rhs;
+
+    BOOST_CHECK_EQUAL(sum.GetNumerator(), 3);
+    BOOST_CHECK_EQUAL(sum.GetDenominator(), 10);
+    BOOST_CHECK_EQUAL(sum.IsSimplified(), true);
+}
+
 BOOST_AUTO_TEST_CASE(util_Fraction_subtraction)
 {
     Fraction lhs(2, 3);
@@ -1419,6 +1437,29 @@ BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_internal_simplification)
     BOOST_CHECK_EQUAL(product.GetNumerator(), -1);
     BOOST_CHECK_EQUAL(product.GetDenominator(), 2);
     BOOST_CHECK_EQUAL(product.IsSimplified(), true);
+}
+
+BOOST_AUTO_TEST_CASE(util_Fraction_multiplication_with_cross_simplification_overflow_resistance)
+{
+
+    Fraction lhs(std::numeric_limits<int64_t>::max() - 3, std::numeric_limits<int64_t>::max() - 1, false);
+    Fraction rhs((std::numeric_limits<int64_t>::max() - 1) / (int64_t) 2, (std::numeric_limits<int64_t>::max() - 3) / (int64_t) 2);
+
+    Fraction product;
+
+    // This should NOT overflow
+    bool overflow = false;
+    try {
+        product = lhs * rhs;
+    } catch (std::overflow_error& e) {
+        overflow = true;
+    }
+
+    BOOST_CHECK_EQUAL(overflow, false);
+
+    if (!overflow) {
+        BOOST_CHECK(product == Fraction(1));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(util_Fraction_division_with_internal_simplification)
