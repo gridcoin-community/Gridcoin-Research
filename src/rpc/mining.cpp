@@ -307,7 +307,11 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     UniValue beacon_chain(UniValue::VARR);
 
-    beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
+    try {
+        beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
+    } catch (std::runtime_error& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
+    }
 
     for (const auto& iter : *beacon_chain_out_ptr) {
         UniValue beacon_chain_entry(UniValue::VOBJ);
