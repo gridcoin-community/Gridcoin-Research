@@ -214,8 +214,8 @@ void InitializeContracts(CBlockIndex* pindexBest)
     // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
     // is simply to delete them. The wallet startup replay requirement is still required for polls and votes, because
     // the Poll/Vote classes do not have a backing registry db yet.
-    const int& start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
-                                       lookback_window_low_height);
+    int start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
+                                lookback_window_low_height);
 
     LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
 

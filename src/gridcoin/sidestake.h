@@ -45,7 +45,7 @@ public:
 
     //!
     //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
-    //! and the result of the muliplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
+    //! and the result of the multiplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
     //!
     //! \return CAmount of the Fraction representation of the actual allocation.
     //!

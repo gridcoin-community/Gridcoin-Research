@@ -1528,14 +1528,14 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
         const UniValue& input = inputs[idx];
         const UniValue& o = input.get_obj();
 
-        const UniValue& txid_v = find_value(o, "txid");
+        UniValue txid_v = find_value(o, "txid");
         if (!txid_v.isStr())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing txid key");
         string txid = txid_v.get_str();
         if (!IsHex(txid))
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected hex txid");
 
-        const UniValue& vout_v = find_value(o, "vout");
+        UniValue vout_v = find_value(o, "vout");
         if (!vout_v.isNum())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing vout key");
         int nOutput = vout_v.get_int();

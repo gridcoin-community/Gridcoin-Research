@@ -1,5 +1,6 @@
 #include <boost/test/unit_test.hpp>
 
+#include "gridcoin/sidestake.h"
 #include "main.h"
 #include "wallet/wallet.h"
 
@@ -236,18 +237,23 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
 
         // test avoiding sub-cent change
         empty_wallet();
-        add_coin(0.0005 * COIN);
-        add_coin(0.01 * COIN);
+        // Use rational arithmetic because the floating point has problems with GCC13 on 32 bit architecture x86.
+        add_coin(static_cast<GRC::Allocation>(Fraction(5, 10000, true) * COIN).ToCAmount());
+        add_coin(static_cast<GRC::Allocation>(Fraction(1, 100, true) * COIN).ToCAmount());
         add_coin(1 * COIN);
 
         // trying to make 1.0001 from these three coins
-        BOOST_CHECK( wallet.SelectCoinsMinConf(1.0001 * COIN, spendTime, 1, 1, vCoins, setCoinsRet, nValueRet));
-        BOOST_CHECK_EQUAL(nValueRet, 1.0105 * COIN);   // we should get all coins
+        BOOST_CHECK( wallet.SelectCoinsMinConf(static_cast<GRC::Allocation>(Fraction(10001, 10000, true) * COIN).ToCAmount(),
+                                              spendTime, 1, 1, vCoins, setCoinsRet, nValueRet));
+        // we should get all coins
+        BOOST_CHECK(nValueRet == static_cast<GRC::Allocation>(Fraction(10105, 10000, true) * COIN).ToCAmount());
         BOOST_CHECK_EQUAL(setCoinsRet.size(), (size_t) 3);
 
         // but if we try to make 0.999, we should take the bigger of the two small coins to avoid sub-cent change
-        BOOST_CHECK( wallet.SelectCoinsMinConf(0.999 * COIN, spendTime, 1, 1, vCoins, setCoinsRet, nValueRet));
-        BOOST_CHECK_EQUAL(nValueRet, 1.01 * COIN);   // we should get 1 + 0.01
+        BOOST_CHECK( wallet.SelectCoinsMinConf(static_cast<GRC::Allocation>(Fraction(999, 1000, true) * COIN).ToCAmount(),
+                                              spendTime, 1, 1, vCoins, setCoinsRet, nValueRet));
+        // we should get 1 + 0.01
+        BOOST_CHECK(nValueRet == static_cast<GRC::Allocation>(Fraction(101, 100, true) * COIN).ToCAmount());
         BOOST_CHECK_EQUAL(setCoinsRet.size(), (size_t) 2);
 
         // test randomness

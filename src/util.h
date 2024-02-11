@@ -168,7 +168,7 @@ inline int64_t abs64(int64_t n)
 //! implementations.
 //!
 //! In particular this class is used for sidestake allocations, both the allocation "percentage", and the CAmount allocations
-//! resulting from muliplying the allocation (fraction) times the CAmount rewards.
+//! resulting from multiplying the allocation (fraction) times the CAmount rewards.
 //!
 class Fraction {
 public:

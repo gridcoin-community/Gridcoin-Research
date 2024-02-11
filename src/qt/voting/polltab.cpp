@@ -205,7 +205,7 @@ void PollTab::filter(const QString& needle)
 
 void PollTab::sort(const int column)
 {
-    const Qt::SortOrder order = m_polltable_model->sort(column);
+    const Qt::SortOrder order = m_polltable_model->custom_sort(column);
     ui->table->horizontalHeader()->setSortIndicator(column, order);
 }
 

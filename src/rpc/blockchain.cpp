@@ -1750,7 +1750,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         active.push_back(entry);
     }
 
-    for (auto beacon_ptr : beacons.FindPending(*cpid)) {
+    for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("cpid", cpid->ToString());
         entry.pushKV("active", false);

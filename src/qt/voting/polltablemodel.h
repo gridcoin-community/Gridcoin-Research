@@ -15,7 +15,6 @@
 class PollItem;
 class VotingModel;
 
-namespace {
 class PollTableDataModel : public QAbstractTableModel
 {
 public:
@@ -35,7 +34,6 @@ private:
     std::vector<PollItem> m_rows;
 
 };
-} // Anonymous namespace
 
 class PollTableModel : public QSortFilterProxyModel
 {
@@ -80,7 +78,7 @@ signals:
 public slots:
     void refresh();
     void changeTitleFilter(const QString& pattern);
-    Qt::SortOrder sort(int column);
+    Qt::SortOrder custom_sort(int column);
 
     void handlePollStaleFlag(QString poll_txid_string);
 
