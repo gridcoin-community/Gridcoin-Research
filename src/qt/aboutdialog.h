@@ -23,6 +23,7 @@ private:
 
 private slots:
     void on_buttonBox_accepted();
+    void handlePressVersionInfoButton();
 };
 
 #endif // BITCOIN_QT_ABOUTDIALOG_H

@@ -106,6 +106,7 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsentry.ui \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/transactiondescdialog.ui \
+  qt/forms/updatedialog.ui \
   qt/forms/voting/additionalfieldstableview.ui \
   qt/forms/voting/pollcard.ui \
   qt/forms/voting/pollcardview.ui \
@@ -171,6 +172,7 @@ QT_MOC_CPP = \
   qt/moc_transactionfilterproxy.cpp \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
+  qt/moc_updatedialog.cpp \
   qt/moc_walletmodel.cpp \
   qt/researcher/moc_projecttablemodel.cpp \
   qt/researcher/moc_researchermodel.cpp \
@@ -298,6 +300,7 @@ GRIDCOINRESEARCH_QT_H = \
   qt/transactionrecord.h \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
+  qt/updatedialog.h \
   qt/upgradeqt.h \
   qt/voting/additionalfieldstableview.h \
   qt/voting/additionalfieldstablemodel.h \
@@ -388,6 +391,7 @@ GRIDCOINRESEARCH_QT_CPP = \
   qt/transactiontablemodel.cpp \
   qt/transactionview.cpp \
   qt/upgradeqt.cpp \
+  qt/updatedialog.cpp \
   qt/voting/additionalfieldstableview.cpp \
   qt/voting/additionalfieldstablemodel.cpp \
   qt/voting/poll_types.cpp \

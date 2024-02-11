@@ -125,6 +125,13 @@ public:
         GithubResponse
     };
 
+    enum UpgradeType {
+        Unknown,
+        Leisure,
+        Mandatory,
+        Unsupported //! This is used for a running version that is greater than the current official release.
+    };
+
     //!
     //! \brief Scheduler call to CheckForLatestUpdate
     //!
@@ -133,7 +140,8 @@ public:
     //!
     //! \brief Check for latest updates on GitHub.
     //!
-    static bool CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog = true, bool snapshotrequest = false);
+    static bool CheckForLatestUpdate(std::string& client_message_out, std::string& change_log, UpgradeType& upgrade_type,
+                                     bool ui_dialog = true, bool snapshotrequest = false);
 
     //!
     //! \brief Function that will be threaded to download snapshot
