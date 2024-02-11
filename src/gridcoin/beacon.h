@@ -13,7 +13,6 @@
 #include "gridcoin/contract/registry_db.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/support/enumbytes.h"
-
 #include <memory>
 #include <string>
 #include <vector>
@@ -545,13 +544,10 @@ public:
     //! Version 0: <= 5.2.0.0
     //! Version 1: = 5.2.1.0
     //! Version 2: 5.2.1.0 with hotfix and > 5.2.1.0
-    //!
-    //! The current version of the beacon db is 2. No changes to the underlying storage have
-    //! occurred during the refactor to the registry db template, so this version remains unchanged
-    //! through 5.4.2.0+
+    //! Version 3: 5.4.5.5+
     //!
     BeaconRegistry()
-        : m_beacon_db(2)
+        : m_beacon_db(3)
     {
     };
 
@@ -588,6 +584,12 @@ public:
     //! \return A reference to the pending beacon map stored in the registry.
     //!
     const PendingBeaconMap& PendingBeacons() const;
+
+    //!
+    //! \brief Get the set of beacons that have expired while pending (awaiting verification)
+    //! \return A reference to the expired pending beacon set.
+    //!
+    const std::set<Beacon_ptr>& ExpiredBeacons() const;
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -769,6 +771,18 @@ public:
     uint64_t PassivateDB();
 
     //!
+    //! \brief This function walks the linked beacon entries back (using the m_previous_hash member) from a provided
+    //! beacon to find the initial advertisement. Note that this does NOT traverse non-continuous beacon ownership,
+    //! which occurs when a beacon is allowed to expire and must be reverified under a new key.
+    //!
+    //! \param beacon smart shared pointer to beacon entry to begin walking back
+    //! \param beacon_chain_out shared pointer to UniValue beacon chain out report array
+    //! \return root (advertisement) beacon entry smart shared pointer
+    //!
+    Beacon_ptr GetBeaconChainletRoot(Beacon_ptr beacon,
+                                     std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out = nullptr);
+
+    //!
     //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
     //! \return
     //!
@@ -794,6 +808,7 @@ public:
                        BeaconStatusForStorage,
                        BeaconMap,
                        PendingBeaconMap,
+                       std::set<Beacon_ptr>,
                        HistoricalBeaconMap> BeaconDB;
 
 private:
@@ -804,6 +819,22 @@ private:
 
     BeaconMap m_beacons;        //!< Contains the active registered beacons.
     PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+
+    //!
+    //! \brief Contains pending beacons that have expired.
+    //!
+    //! Contains pending beacons that have expired but need to be retained until the next SB (activation) to ensure a
+    //! reorganization will successfully resurrect expired pending beacons back into pending ones up to the depth equal to one SB to
+    //! the next, which is about 960 blocks. The reason this is necessary is two fold: 1) it makes the lookup for expired
+    //! pending beacons in the deactivate method much simpler in the case of a reorg across a SB boundary, and 2) it holds
+    //! a reference to the pending beacon shared pointer object in the history map, which prevents it from being passivated.
+    //! Otherwise, a passivation event, which would remove the pending deleted beacons, followed by a reorganization across
+    //! SB boundary could have a small possibility of removing a pending beacon that could be verified in the alternative SB
+    //! eventually staked.
+    //!
+    //! This set is cleared and repopulated at each SB accepted by the node with the current expired pending beacons.
+    //!
+    std::set<Beacon_ptr> m_expired_pending;
 
     //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
