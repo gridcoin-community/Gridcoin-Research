@@ -18,4 +18,13 @@ static inline uint64_t InsecureRandRange(uint64_t range) { return g_insecure_ran
 static inline bool InsecureRandBool() { return g_insecure_rand_ctx.randbool(); }
 static inline std::vector<unsigned char> InsecureRandBytes(size_t len) { return g_insecure_rand_ctx.randbytes(len); }
 
+// Enable BOOST_CHECK_EQUAL for enum class types
+namespace std {
+template <typename T>
+std::ostream& operator<<(typename std::enable_if<std::is_enum<T>::value, std::ostream>::type& stream, const T& e)
+{
+    return stream << static_cast<typename std::underlying_type<T>::type>(e);
+}
+} // namespace std
+
 #endif

@@ -367,6 +367,8 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/aes.h \
     crypto/chacha20.h \
     crypto/chacha20.cpp \
+    crypto/chacha20poly1305.h \
+    crypto/chacha20poly1305.cpp \
     crypto/common.h \
     crypto/hmac_sha256.cpp \
     crypto/hmac_sha256.h \
