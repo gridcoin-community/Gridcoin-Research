@@ -276,3 +276,7 @@ arith_uint320::arith_uint320(const uint256& b) {
     std::memcpy(pn, b.data(), b.size());
 }
 
+// Explicit instantiation for base_uint<352> for mnemonic parsing.
+template base_uint<352>& base_uint<352>::operator<<=(unsigned int);
+template base_uint<352>& base_uint<352>::operator>>=(unsigned int);
+

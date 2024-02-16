@@ -119,6 +119,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/cpid.h \
     gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
+    gridcoin/mnemonics.h \
     gridcoin/mrc.h \
     gridcoin/project.h \
     gridcoin/protocol.h \
@@ -250,6 +251,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/contract/registry.cpp \
     gridcoin/cpid.cpp \
     gridcoin/gridcoin.cpp \
+    gridcoin/mnemonics.cpp \
     gridcoin/mrc.cpp \
     gridcoin/project.cpp \
     gridcoin/protocol.cpp \

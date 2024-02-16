@@ -25,6 +25,11 @@ std::ostream& operator<<(typename std::enable_if<std::is_enum<T>::value, std::os
 {
     return stream << static_cast<typename std::underlying_type<T>::type>(e);
 }
+
+template <typename T>
+std::ostream& operator<<(typename std::enable_if_t<std::is_same_v<T, std::byte>, std::ostream>& stream, const std::vector<T>& v) {
+    return stream << HexStr(v);
+}
 } // namespace std
 
 #endif
