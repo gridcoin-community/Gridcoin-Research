@@ -5,7 +5,12 @@
 #include <gridcoin/mnemonics.h>
 
 #include <arith_uint256.h>
+#include <crypto/chacha20poly1305.h>
+#include <crypto/sha256.h>
+#include <key.h>
+#include <random.h>
 #include <span.h>
+#include <scrypt.h>
 #include <support/allocators/secure.h>
 
 #include <algorithm>
@@ -128,3 +133,82 @@ SecureString GRC::Mnemonics::EncodeSeedPhrase(Span<const std::byte> data_in) {
     return seed_phrase;
 }
 
+SecureString GRC::Mnemonics::GenerateSeedPhrase(const SecureString& password, CKey& key_out) {
+    unsigned char plaintext[PLAINTEXT_LENGTH];
+    unsigned char enciphered[ENCIPHERED_LENGTH];
+    unsigned char key_data[32];
+
+    do {
+        GetStrongRandBytes(Span{&plaintext[3], 16});
+        CSHA256().Write(&plaintext[3], 16).Finalize(key_data);
+        key_out.Set(std::begin(key_data), std::end(key_data), /*fCompressedIn=*/true);
+    } while (!key_out.IsValid());
+    memory_cleanse(key_data, sizeof(key_data));
+
+    // Outer version is 0 for now.
+    enciphered[0] = 0;
+
+    // Generate the salt / nonce.
+    GetStrongRandBytes(Span{&enciphered[1], 8});
+    uint64_t nonce = ReadLE64(&enciphered[1]);
+
+    // Inner version is also 0 for now.
+    plaintext[0] = 0;
+    uint16_t days_since_birthday = (GetTime<std::chrono::seconds>() - std::chrono::seconds(BITCOIN_GENESIS)).count() / 86400;
+    plaintext[1] = days_since_birthday & 0xFF;
+    plaintext[2] = (days_since_birthday >> 8) & 0xFF;
+
+    uint256 salted_pass = scrypt_salted_multiround_hash(password.data(), password.size(),
+                                                        &enciphered[1], 8, 32768);
+    AEADChaCha20Poly1305 cipher({(std::byte*)salted_pass.data(), 32});
+    cipher.Encrypt(Span{(std::byte*)plaintext, PLAINTEXT_LENGTH}, Span{(std::byte*)enciphered, 9},
+                   {(uint32_t)nonce, nonce}, Span{(std::byte*)&enciphered[9], PLAINTEXT_LENGTH + AEADChaCha20Poly1305::EXPANSION});
+
+    memory_cleanse(plaintext, PLAINTEXT_LENGTH);
+    SecureString seed_phrase = EncodeSeedPhrase({(std::byte*)enciphered, sizeof(enciphered)});
+    memory_cleanse(enciphered, ENCIPHERED_LENGTH);
+
+    return seed_phrase;
+}
+
+bool GRC::Mnemonics::ParseSeedPhrase(const SecureString& seed_phrase, const SecureString& password, CKey& key_out) {
+    unsigned char plaintext[PLAINTEXT_LENGTH];
+    unsigned char enciphered[ENCIPHERED_LENGTH];
+
+    if (!DecodeSeedPhrase(seed_phrase, Span{(std::byte*)enciphered, sizeof(enciphered)})) {
+        memory_cleanse(enciphered, sizeof(enciphered));
+        return false;
+    }
+
+    if (enciphered[0] != 0) {
+        memory_cleanse(enciphered, sizeof(enciphered));
+        return false;
+    }
+
+    uint64_t nonce = ReadLE64(&enciphered[1]);
+
+    uint256 salted_pass = scrypt_salted_multiround_hash(password.data(), password.size(),
+                                                        &enciphered[1], 8, 32768);
+    AEADChaCha20Poly1305 cipher({(std::byte*)salted_pass.data(), 32});
+    if (!cipher.Decrypt(Span{(std::byte*)&enciphered[9], sizeof(plaintext) + AEADChaCha20Poly1305::EXPANSION}, Span{(std::byte*)enciphered, 9},
+                        {(uint32_t)nonce, nonce}, Span{(std::byte*)plaintext, sizeof(plaintext)})) {
+        memory_cleanse(enciphered, sizeof(enciphered));
+        memory_cleanse(plaintext, sizeof(plaintext));
+        return false;
+    }
+
+    memory_cleanse(enciphered, sizeof(enciphered));
+
+    if (plaintext[0] != 0) {
+        memory_cleanse(plaintext, sizeof(plaintext));
+        return false;
+    }
+
+    unsigned char key_data[32];
+    CSHA256().Write(&plaintext[3], 16).Finalize(key_data);
+    memory_cleanse(plaintext, sizeof(plaintext));
+
+    key_out.Set(std::begin(key_data), std::end(key_data), /*fCompressedIn=*/true);
+    memory_cleanse(key_data, sizeof(key_data));
+    return key_out.IsValid();
+}

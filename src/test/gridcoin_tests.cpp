@@ -286,4 +286,16 @@ BOOST_AUTO_TEST_CASE(gridcoin_test_seed_phrase_coding)
     }
 }
 
+BOOST_AUTO_TEST_CASE(gridcoin_test_mnemonics_generation)
+{
+    CKey key1;
+    CKey key2;
+
+    SecureString seed_phrase = GRC::Mnemonics::GenerateSeedPhrase(SecureString(""), key1);
+    BOOST_CHECK(GRC::Mnemonics::ParseSeedPhrase(seed_phrase, SecureString(""), key2));
+    BOOST_CHECK(key1 == key2);
+
+    BOOST_CHECK(!GRC::Mnemonics::ParseSeedPhrase(seed_phrase, SecureString("wrong password"), key2));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
