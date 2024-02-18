@@ -968,7 +968,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             if (allocation * nReward < CENT)
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
-                          CoinToDouble(static_cast<GRC::Allocation>(allocation * nReward).ToCAmount()),
+                          CoinToDouble((allocation * nReward).ToCAmount()),
                           address.ToString()
                           );
                 continue;
@@ -998,7 +998,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             // For allocations ending less than 100% assign using sidestake allocation.
             if (SumAllocation + allocation < 1)
-                nSideStake = static_cast<GRC::Allocation>(allocation * nReward).ToCAmount();
+                nSideStake = (allocation * nReward).ToCAmount();
             // We need to handle the final sidestake differently in the case it brings the total allocation up to 100%,
             // because testing showed in corner cases the output return to the staking address could be off by one Halford.
             else if (SumAllocation + allocation == 1)
@@ -1010,7 +1010,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
 
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
-                      CoinToDouble(static_cast<GRC::Allocation>(allocation * nReward).ToCAmount()),
+                      CoinToDouble((allocation * nReward).ToCAmount()),
                       address.ToString()
                       );
             SumAllocation += allocation;

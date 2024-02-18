@@ -44,6 +44,23 @@ public:
     Allocation(const Fraction& f);
 
     //!
+    //! \brief Initialize an allocation directly from specifying a numerator and denominator
+    //! \param numerator
+    //! \param denominator
+    //!
+    Allocation(const int64_t& numerator, const int64_t& denominator);
+
+    //!
+    //! \brief Initialize an allocation directly from specifying a numerator and denominator, specifying the simplification
+    //! directive.
+    //!
+    //! \param numerator
+    //! \param denominator
+    //! \param simplify
+    //!
+    Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify);
+
+    //!
     //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
     //! and the result of the multiplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
     //!
@@ -57,6 +74,35 @@ public:
     //! \return double percent representation of the allocation fraction.
     //!
     double ToPercent() const;
+
+    Allocation operator+(const Allocation& rhs) const;
+    Allocation operator+(const int64_t& rhs) const;
+    Allocation operator-(const Allocation& rhs) const;
+    Allocation operator-(const int64_t& rhs) const;
+    Allocation operator*(const Allocation& rhs) const;
+    Allocation operator*(const int64_t& rhs) const;
+    Allocation operator/(const Allocation& rhs) const;
+    Allocation operator/(const int64_t& rhs) const;
+    Allocation operator+=(const Allocation& rhs);
+    Allocation operator+=(const int64_t& rhs);
+    Allocation operator-=(const Allocation& rhs);
+    Allocation operator-=(const int64_t& rhs);
+    Allocation operator*=(const Allocation& rhs);
+    Allocation operator*=(const int64_t& rhs);
+    Allocation operator/=(const Allocation& rhs);
+    Allocation operator/=(const int64_t& rhs);
+    bool operator==(const Allocation& rhs) const;
+    bool operator!=(const Allocation& rhs) const;
+    bool operator<=(const Allocation& rhs) const;
+    bool operator>=(const Allocation& rhs) const;
+    bool operator<(const Allocation& rhs) const;
+    bool operator>(const Allocation& rhs) const;
+    bool operator==(const int64_t& rhs) const;
+    bool operator!=(const int64_t& rhs) const;
+    bool operator<=(const int64_t& rhs) const;
+    bool operator>=(const int64_t& rhs) const;
+    bool operator<(const int64_t& rhs) const;
+    bool operator>(const int64_t& rhs) const;
 };
 
 //!

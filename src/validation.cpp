@@ -891,8 +891,8 @@ private:
                         if (!mandatory_sidestake.empty()) {
                             CAmount actual_output = coinstake.vout[i].nValue;
 
-                            CAmount required_output = static_cast<GRC::Allocation>(mandatory_sidestake[0]->GetAllocation()
-                                                                                   * total_owed_to_staker).ToCAmount();
+                            CAmount required_output = (mandatory_sidestake[0]->GetAllocation()
+                                                       * total_owed_to_staker).ToCAmount();
 
                             if (actual_output >= required_output) {
 
