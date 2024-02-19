@@ -14,8 +14,12 @@ AboutDialog::AboutDialog(QWidget *parent) :
 
     resize(GRC::ScaleSize(this, width(), height()));
 
-    if (!fTestNet) {
+    if (!fTestNet && !gArgs.GetBoolArg("-disableupdatecheck", false)) {
         connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
+    } else if (gArgs.GetBoolArg("-disableupdatecheck", false)) {
+        ui->versionInfoButton->setDisabled(true);
+        ui->versionInfoButton->setToolTip(tr("Version information and update check has been disabled "
+                                             "by config or startup parameter."));
     } else {
         ui->versionInfoButton->setDisabled(true);
         ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
