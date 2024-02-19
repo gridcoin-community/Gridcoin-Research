@@ -10,7 +10,23 @@ AboutDialog::AboutDialog(QWidget *parent) :
     ui(new Ui::AboutDialog)
 {
     ui->setupUi(this);
-    ui->copyrightLabel->setText("Copyright 2009-2024 The Bitcoin/Peercoin/Black-Coin/Gridcoin developers");
+
+    QString copyrightText = "Copyright 2009-";
+    std::variant<int, QString> copyright_year = COPYRIGHT_YEAR;
+
+    try {
+        copyrightText += QString::number(std::get<int>(copyright_year));
+    } catch (const std::bad_variant_access& e) {
+        try {
+            copyrightText += std::get<QString>(copyright_year);
+        } catch (const std::bad_variant_access& e) {
+            copyrightText += "Present";
+        }
+    }
+
+    copyrightText +=  " The Bitcoin/Peercoin/Black-Coin/Gridcoin developers";
+
+    ui->copyrightLabel->setText(copyrightText);
 
     resize(GRC::ScaleSize(this, width(), height()));
 
