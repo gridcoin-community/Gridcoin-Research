@@ -17,7 +17,8 @@ AboutDialog::AboutDialog(QWidget *parent) :
     if (!fTestNet) {
         connect(ui->versionInfoButton, &QAbstractButton::pressed, this, [this]() { handlePressVersionInfoButton(); });
     } else {
-        ui->versionInfoButton->hide();
+        ui->versionInfoButton->setDisabled(true);
+        ui->versionInfoButton->setToolTip(tr("Version information is not available on testnet."));
     }
 }
 
