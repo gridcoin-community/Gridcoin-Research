@@ -21,7 +21,7 @@ static bool noui_ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCa
     return true;
 }
 
-static int noui_UpdateMessageBox(const std::string& version, const std::string& message)
+static int noui_UpdateMessageBox(const std::string& version, const int& upgrade_type, const std::string& message)
 {
     std::string caption = _("Gridcoin Update Available");
 

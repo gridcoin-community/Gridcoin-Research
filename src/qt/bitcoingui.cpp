@@ -45,6 +45,7 @@
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
 #include "voting/polltablemodel.h"
+#include "updatedialog.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -1159,22 +1160,20 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
     }
 }
 
-void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
+void BitcoinGUI::update(const QString &title, const QString& version, const int& upgrade_type, const QString &message)
 {
-    // Create our own message box; A dialog can go here in future for qt if we choose
-
-    updateMessageDialog.reset(new QMessageBox);
+    updateMessageDialog.reset(new UpdateDialog);
 
     updateMessageDialog->setWindowTitle(title);
-    updateMessageDialog->setText(version);
-    updateMessageDialog->setDetailedText(message);
-    updateMessageDialog->setIcon(QMessageBox::Information);
-    updateMessageDialog->setStandardButtons(QMessageBox::Ok);
+    updateMessageDialog->setVersion(version);
+    updateMessageDialog->setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
+    updateMessageDialog->setDetails(message);
     updateMessageDialog->setModal(false);
-    connect(updateMessageDialog.get(), &QMessageBox::finished, [this](int) { updateMessageDialog.reset(); });
+
+    connect(updateMessageDialog.get(), &QDialog::finished, this, [this]() { updateMessageDialog.reset(); });
+
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
-
     QTimer::singleShot(5000, updateMessageDialog.get(), [this]() { updateMessageDialog->show(); });
 }
 

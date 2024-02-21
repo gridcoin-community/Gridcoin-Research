@@ -67,7 +67,7 @@ ADD_SIGNALS_IMPL_WRAPPER(UpdateMessageBox);
 ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
-void CClientUIInterface::UpdateMessageBox(const std::string& version, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, message); }
+void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
 bool CClientUIInterface::ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption) { return g_ui_signals.ThreadSafeAskFee(nFeeRequired, strCaption).value_or(false); }
 bool CClientUIInterface::ThreadSafeAskQuestion(std::string caption, std::string body) { return g_ui_signals.ThreadSafeAskQuestion(caption, body).value_or(false); }
 void CClientUIInterface::ThreadSafeHandleURI(const std::string& strURI) { return g_ui_signals.ThreadSafeHandleURI(strURI); }
