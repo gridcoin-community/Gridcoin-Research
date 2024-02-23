@@ -1158,19 +1158,19 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
                               ToString(POLL_MAX_ADDITIONAL_FIELDS_SIZE)));
     }
 
-    if (field.m_name.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+    if (field.m_name.size() > Poll::AdditionalField::MAX_NAME_SIZE) {
         throw VotingError(strprintf(
                               _("Poll additional field name \"%s\" exceeds %s characters."),
                               field.m_name,
-                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+                              ToString(Poll::AdditionalField::MAX_NAME_SIZE)));
     }
 
-    if (field.m_value.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+    if (field.m_value.size() > Poll::AdditionalField::MAX_VALUE_SIZE) {
         throw VotingError(strprintf(
                               _("Poll additional field value \"%s\" for field name \"%s\" exceeds %s characters."),
                               field.m_value,
                               field.m_name,
-                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+                              ToString(Poll::AdditionalField::MAX_VALUE_SIZE)));
     }
 
     if (m_poll->m_additional_fields.FieldExists(field.m_name)) {

@@ -31,6 +31,9 @@ PollWizardProjectPage::PollWizardProjectPage(QWidget* parent)
     ui->removeWidget->hide();
     ui->addRemoveStateLineEdit->hide();
 
+    ui->projectNameField->setMaxLength(m_voting_model->maxPollProjectNameLength());
+    ui->projectUrlField->setMaxLength(m_voting_model->maxPollProjectUrlLength());
+
     QStringListModel* project_names_model = new QStringListModel(this);
     QStringListModel* project_urls_model = new QStringListModel(this);
 

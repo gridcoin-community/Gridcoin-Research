@@ -203,9 +203,15 @@ public:
     {
     public:
         //!
-        //! \brief The maximum length for a poll additional field name or value.
+        //! \brief The maximum length for a poll additional field name.
         //!
-        static constexpr size_t MAX_N_OR_V_SIZE = 100;
+        static constexpr size_t MAX_NAME_SIZE = 100;
+
+        //!
+        //! \brief The maximum length for a poll additional field value. This is currently set to align with the
+        //! maximum Project URL length.
+        //!
+        static constexpr size_t MAX_VALUE_SIZE = 500;
 
         std::string m_name;
         std::string m_value;
@@ -244,8 +250,8 @@ public:
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action)
         {
-            READWRITE(LIMITED_STRING(m_name, MAX_N_OR_V_SIZE));
-            READWRITE(LIMITED_STRING(m_value, MAX_N_OR_V_SIZE));
+            READWRITE(LIMITED_STRING(m_name, MAX_NAME_SIZE));
+            READWRITE(LIMITED_STRING(m_value, MAX_VALUE_SIZE));
             READWRITE(m_required);
         }
     }; // AdditionalField

@@ -130,6 +130,10 @@ public:
     static int maxPollUrlLength();
     static int maxPollQuestionLength();
     static int maxPollChoiceLabelLength();
+    static int maxPollAdditionalFieldNameLength();
+    static int maxPollAdditionalFieldValueLength();
+    static int maxPollProjectNameLength();
+    static int maxPollProjectUrlLength();
 
     OptionsModel& getOptionsModel();
     QString getCurrentPollTitle() const;
