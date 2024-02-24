@@ -131,7 +131,7 @@ jobs:
                           qt@5
                       options: >-
                           -DENABLE_GUI=ON
-                          -DQt5_DIR=/usr/local/opt/qt5/lib/cmake/Qt5
+                          -DQt5_DIR=/usr/local/opt/qt@5/lib/cmake/Qt5
                           -DENABLE_QRENCODE=ON
                           -DENABLE_UPNP=ON
                     - tag: system-libs
