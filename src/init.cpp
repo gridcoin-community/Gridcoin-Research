@@ -1144,15 +1144,22 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // -tor can override normal proxy, -notor disables Tor entirely
-    if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
-        proxyType addrOnion;
-        if (!gArgs.IsArgSet("-tor")) {
-            addrOnion = addrProxy;
+    if (gArgs.IsArgSet("-tor")) {
+        CService addrOnion;
+
+        // If -tor is specified without any argument, and proxy was specified, then override proxy with tor
+        // at same address and port.
+        if (gArgs.GetArg("-tor", "") == "") {
+            if (fProxy) {
+                addrOnion = addrProxy;
+            }
         } else {
-            CService addrProxy(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
+            addrOnion = CService(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
         }
-        if (!addrOnion.IsValid())
+
+        if (!addrOnion.IsValid()) {
             return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
+        }
         SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
     }
