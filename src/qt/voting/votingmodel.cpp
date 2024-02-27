@@ -217,6 +217,42 @@ int VotingModel::maxPollChoiceLabelLength()
     return Poll::Choice::MAX_LABEL_SIZE;
 }
 
+int VotingModel::maxPollAdditionalFieldNameLength()
+{
+    // Not strictly accurate: the protocol limits the max length in bytes, but
+    // Qt limits field lengths in UTF-8 characters which may be represented by
+    // more than one byte.
+    //
+    return Poll::AdditionalField::MAX_NAME_SIZE;
+}
+
+int VotingModel::maxPollAdditionalFieldValueLength()
+{
+    // Not strictly accurate: the protocol limits the max length in bytes, but
+    // Qt limits field lengths in UTF-8 characters which may be represented by
+    // more than one byte.
+    //
+    return Poll::AdditionalField::MAX_VALUE_SIZE;
+}
+
+int VotingModel::maxPollProjectNameLength()
+{
+    // Not strictly accurate: the protocol limits the max length in bytes, but
+    // Qt limits field lengths in UTF-8 characters which may be represented by
+    // more than one byte.
+    //
+    return Project::MAX_NAME_SIZE;
+}
+
+int VotingModel::maxPollProjectUrlLength()
+{
+    // Not strictly accurate: the protocol limits the max length in bytes, but
+    // Qt limits field lengths in UTF-8 characters which may be represented by
+    // more than one byte.
+    //
+    return Project::MAX_URL_SIZE;
+}
+
 OptionsModel& VotingModel::getOptionsModel()
 {
     return m_options_model;
