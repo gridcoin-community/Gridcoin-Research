@@ -1158,7 +1158,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
 
         if (!addrOnion.IsValid()) {
-            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
+            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", gArgs.GetArg("-proxy", ""))));
         }
         SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
