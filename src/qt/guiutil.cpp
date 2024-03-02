@@ -48,7 +48,7 @@ QString dateTimeStr(qint64 nTime)
 
 QString formatPingTime(double dPingTime)
 {
-    return (dPingTime == std::numeric_limits<int64_t>::max()/1e6 || dPingTime == 0) ?
+    return (dPingTime >= static_cast<double>(std::numeric_limits<int64_t>::max()) / 1e6 || dPingTime <= 0) ?
         QObject::tr("N/A") : 
         QObject::tr("%1 ms").arg(QString::number((int)(dPingTime * 1000), 10));
 }

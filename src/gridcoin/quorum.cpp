@@ -721,7 +721,7 @@ private: // SuperblockValidator classes
         std::vector<ResolvedPart> m_resolved_parts;
 
         //!
-        //! \brief Divisor set by the \c ProjectCombiner for iteraton over each
+        //! \brief Divisor set by the \c ProjectCombiner for iteration over each
         //! convergence combination.
         //!
         size_t m_combiner_mask;

@@ -98,10 +98,18 @@ namespace
             {
                 pg->lastruntime = currenttime;
 
+#if LIBCURL_VERSION_NUM >= 0x073700
+                curl_off_t speed;
+#else
                 double speed;
+#endif
                 CURLcode result;
 
+#if LIBCURL_VERSION_NUM >= 0x073700
+                result = curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD_T, &speed);
+#else
                 result = curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &speed);
+#endif
 
                 // Download speed update
                 if (result == CURLE_OK)

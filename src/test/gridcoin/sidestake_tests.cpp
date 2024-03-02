@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(sidestake_Allocation_multiplication_and_derivation_of_alloc
 
     CAmount max_accrual = 16384 * COIN;
 
-    CAmount actual_output = static_cast<GRC::Allocation>(allocation * max_accrual).ToCAmount();
+    CAmount actual_output = (allocation * max_accrual).ToCAmount();
     BOOST_CHECK_EQUAL(actual_output, int64_t {1638236160000});
 }
 

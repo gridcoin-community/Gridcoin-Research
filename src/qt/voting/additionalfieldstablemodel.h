@@ -42,7 +42,7 @@ public:
 
 public slots:
     void refresh();
-    Qt::SortOrder sort(int column);
+    Qt::SortOrder custom_sort(int column);
 
 private:
     const PollItem* m_poll_item;

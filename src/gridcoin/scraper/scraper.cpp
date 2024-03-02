@@ -208,7 +208,7 @@ std::map<uint256, std::shared_ptr<CScraperManifest>> CScraperManifest::mapManife
 ConvergedScraperStats ConvergedScraperStatsCache GUARDED_BY(cs_ConvergedScraperStatsCache) = {};
 
 /**
- * @brief Scraper loggger function
+ * @brief Scraper logger function
  * @param eType
  * @param sCall
  * @param sMessage

@@ -44,8 +44,25 @@ public:
     Allocation(const Fraction& f);
 
     //!
+    //! \brief Initialize an allocation directly from specifying a numerator and denominator
+    //! \param numerator
+    //! \param denominator
+    //!
+    Allocation(const int64_t& numerator, const int64_t& denominator);
+
+    //!
+    //! \brief Initialize an allocation directly from specifying a numerator and denominator, specifying the simplification
+    //! directive.
+    //!
+    //! \param numerator
+    //! \param denominator
+    //! \param simplify
+    //!
+    Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify);
+
+    //!
     //! \brief Allocations extend the Fraction class and can also represent the result of the allocation constructed fraction
-    //! and the result of the muliplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
+    //! and the result of the multiplication of that fraction times the reward, which is in CAmount (i.e. int64_t).
     //!
     //! \return CAmount of the Fraction representation of the actual allocation.
     //!
@@ -57,6 +74,35 @@ public:
     //! \return double percent representation of the allocation fraction.
     //!
     double ToPercent() const;
+
+    Allocation operator+(const Allocation& rhs) const;
+    Allocation operator+(const int64_t& rhs) const;
+    Allocation operator-(const Allocation& rhs) const;
+    Allocation operator-(const int64_t& rhs) const;
+    Allocation operator*(const Allocation& rhs) const;
+    Allocation operator*(const int64_t& rhs) const;
+    Allocation operator/(const Allocation& rhs) const;
+    Allocation operator/(const int64_t& rhs) const;
+    Allocation operator+=(const Allocation& rhs);
+    Allocation operator+=(const int64_t& rhs);
+    Allocation operator-=(const Allocation& rhs);
+    Allocation operator-=(const int64_t& rhs);
+    Allocation operator*=(const Allocation& rhs);
+    Allocation operator*=(const int64_t& rhs);
+    Allocation operator/=(const Allocation& rhs);
+    Allocation operator/=(const int64_t& rhs);
+    bool operator==(const Allocation& rhs) const;
+    bool operator!=(const Allocation& rhs) const;
+    bool operator<=(const Allocation& rhs) const;
+    bool operator>=(const Allocation& rhs) const;
+    bool operator<(const Allocation& rhs) const;
+    bool operator>(const Allocation& rhs) const;
+    bool operator==(const int64_t& rhs) const;
+    bool operator!=(const int64_t& rhs) const;
+    bool operator<=(const int64_t& rhs) const;
+    bool operator>=(const int64_t& rhs) const;
+    bool operator<(const int64_t& rhs) const;
+    bool operator>(const int64_t& rhs) const;
 };
 
 //!
@@ -783,13 +829,15 @@ public:
     static void RunDBPassivation();
 
     //!
-    //! \brief Specializes the template RegistryDB for the SideStake class
+    //! \brief Specializes the template RegistryDB for the SideStake class. Note that std::set<MandatorySideStake>
+    //! is not actually used.
     //!
     typedef RegistryDB<MandatorySideStake,
                        MandatorySideStake,
                        MandatorySideStake::MandatorySideStakeStatus,
                        MandatorySideStakeMap,
                        PendingSideStakeMap,
+                       std::set<SideStake>,
                        HistoricalSideStakeMap> SideStakeDB;
 
 private:
@@ -826,6 +874,8 @@ private:
     LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
     MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
     PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+
+    std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
 
     SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
 

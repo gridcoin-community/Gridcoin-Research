@@ -88,7 +88,7 @@ public:
     ADD_SIGNALS_DECL_WRAPPER(ThreadSafeMessageBox, void, const std::string& message, const std::string& caption, int style);
 
     /** Update notification message box. */
-    ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const std::string& message);
+    ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const int& update_type, const std::string& message);
 
     /** Ask the user whether they want to pay a fee or not. */
     ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskFee, bool, int64_t nFeeRequired, const std::string& strCaption);

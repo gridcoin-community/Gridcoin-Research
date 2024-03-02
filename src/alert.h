@@ -94,7 +94,7 @@ public:
     uint256 GetHash() const;
     bool IsInEffect() const;
     bool Cancels(const CAlert& alert) const;
-    bool AppliesTo(int nVersion, std::string strSubVerIn) const;
+    bool AppliesTo(int version, std::string strSubVerIn) const;
     bool AppliesToMe() const;
     bool RelayTo(CNode* pnode) const;
     bool CheckSignature() const;

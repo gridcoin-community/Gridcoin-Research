@@ -282,7 +282,7 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     BOOST_CHECK(VerifyScript(goodsig3, scriptPubKey23, txTo23, 0, 0));
 
     keys.clear();
-    keys.push_back(key2); keys.push_back(key2); // Can't re-use sig
+    keys.push_back(key2); keys.push_back(key2); // Can't reuse sig
     CScript badsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
     BOOST_CHECK(!VerifyScript(badsig1, scriptPubKey23, txTo23, 0, 0));
 

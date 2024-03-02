@@ -403,14 +403,16 @@ public:
         m_results_tip_arg.clear();
 
         std::string client_message;
+        std::string change_log;
+        GRC::Upgrade::UpgradeType upgrade_type {GRC::Upgrade::UpgradeType::Unknown};
 
-        if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
+        if (g_UpdateChecker->CheckForLatestUpdate(client_message, change_log, upgrade_type, false)
                 && client_message.find("mandatory") != std::string::npos) {
             m_results_tip = _("There is a new mandatory version available and you should upgrade as soon as possible to "
                               "ensure your wallet remains in consensus with the network.");
             m_results = Diagnose::FAIL;
 
-        } else if (g_UpdateChecker->CheckForLatestUpdate(client_message, false)
+        } else if (g_UpdateChecker->CheckForLatestUpdate(client_message, change_log, upgrade_type, false)
                    && client_message.find("mandatory") == std::string::npos) {
             m_results_tip = _("There is a new leisure version available and you should upgrade as soon as practical.");
             m_results = Diagnose::WARNING;

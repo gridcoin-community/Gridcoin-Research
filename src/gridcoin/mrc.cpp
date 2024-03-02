@@ -280,8 +280,6 @@ bool TrySignMRC(
     CBlockIndex* pindex,
     GRC::MRC& mrc) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    AssertLockHeld(cs_main);
-
     // lock needs to be taken on pwallet here.
     LOCK(pwallet->cs_wallet);
 

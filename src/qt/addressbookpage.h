@@ -42,7 +42,7 @@ public:
     const QString &getReturnValue() const { return returnValue; }
 
 public slots:
-    void done(int retval);
+    void done(int retval) override;
     void exportClicked();
     void changeFilter(const QString& needle);
     void resizeTableColumns(const bool& neighbor_pair_adjust = false, const int& index = 0,

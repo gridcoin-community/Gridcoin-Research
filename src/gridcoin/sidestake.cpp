@@ -48,6 +48,14 @@ Allocation::Allocation(const Fraction& f)
     : Fraction(f)
 {}
 
+Allocation::Allocation(const int64_t& numerator, const int64_t& denominator)
+    : Fraction(numerator, denominator)
+{}
+
+Allocation::Allocation(const int64_t& numerator, const int64_t& denominator, const bool& simplify)
+    : Fraction(numerator, denominator, simplify)
+{}
+
 CAmount Allocation::ToCAmount() const
 {
     return GetNumerator() / GetDenominator();
@@ -56,6 +64,146 @@ CAmount Allocation::ToCAmount() const
 double Allocation::ToPercent() const
 {
     return ToDouble() * 100.0;
+}
+
+Allocation Allocation::operator+(const Allocation& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator+(rhs));
+}
+
+Allocation Allocation::operator+(const int64_t& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator+(rhs));
+}
+
+Allocation Allocation::operator-(const Allocation& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator-(rhs));
+}
+
+Allocation Allocation::operator-(const int64_t& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator-(rhs));
+}
+
+Allocation Allocation::operator*(const Allocation& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator*(rhs));
+}
+
+Allocation Allocation::operator*(const int64_t& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator*(rhs));
+}
+
+Allocation Allocation::operator/(const Allocation& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator/(rhs));
+}
+
+Allocation Allocation::operator/(const int64_t& rhs) const
+{
+    return static_cast<Allocation>(Fraction::operator/(rhs));
+}
+
+Allocation Allocation::operator+=(const Allocation& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator+=(rhs));
+}
+
+Allocation Allocation::operator+=(const int64_t& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator+=(rhs));
+}
+
+Allocation Allocation::operator-=(const Allocation& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator-=(rhs));
+}
+
+Allocation Allocation::operator-=(const int64_t& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator-=(rhs));
+}
+
+Allocation Allocation::operator*=(const Allocation& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator*=(rhs));
+}
+
+Allocation Allocation::operator*=(const int64_t& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator*=(rhs));
+}
+
+Allocation Allocation::operator/=(const Allocation& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator/=(rhs));
+}
+
+Allocation Allocation::operator/=(const int64_t& rhs)
+{
+    return static_cast<Allocation>(Fraction::operator/=(rhs));
+}
+
+bool Allocation::operator==(const Allocation& rhs) const
+{
+    return Fraction::operator==(rhs);
+}
+
+bool Allocation::operator!=(const Allocation& rhs) const
+{
+    return Fraction::operator!=(rhs);
+}
+
+bool Allocation::operator<=(const Allocation& rhs) const
+{
+    return Fraction::operator<=(rhs);
+}
+
+bool Allocation::operator>=(const Allocation& rhs) const
+{
+    return Fraction::operator>=(rhs);
+}
+
+bool Allocation::operator<(const Allocation& rhs) const
+{
+    return Fraction::operator<(rhs);
+}
+
+bool Allocation::operator>(const Allocation& rhs) const
+{
+    return Fraction::operator>(rhs);
+}
+
+bool Allocation::operator==(const int64_t& rhs) const
+{
+    return Fraction::operator==(rhs);
+}
+
+bool Allocation::operator!=(const int64_t& rhs) const
+{
+    return Fraction::operator!=(rhs);
+}
+
+bool Allocation::operator<=(const int64_t& rhs) const
+{
+    return Fraction::operator<=(rhs);
+}
+
+bool Allocation::operator>=(const int64_t& rhs) const
+{
+    return Fraction::operator>=(rhs);
+}
+
+bool Allocation::operator<(const int64_t& rhs) const
+{
+    return Fraction::operator<(rhs);
+}
+
+bool Allocation::operator>(const int64_t& rhs) const
+{
+    return Fraction::operator>(rhs);
 }
 
 // -----------------------------------------------------------------------------
@@ -712,7 +860,7 @@ int SideStakeRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_sidestake_db.Initialize(m_mandatory_sidestake_entries, m_pending_sidestake_entries);
+    int height = m_sidestake_db.Initialize(m_mandatory_sidestake_entries, m_pending_sidestake_entries, m_expired_sidestake_entries);
 
     SubscribeToCoreSignals();
 

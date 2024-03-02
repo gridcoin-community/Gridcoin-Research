@@ -316,11 +316,11 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
     </message>
     <message>
         <source>Web Site</source>
-        <translation>Website</translation>
+        <translation>Sítio Web</translation>
     </message>
     <message>
         <source>&amp;Web Site</source>
-        <translation>&amp;Website</translation>
+        <translation>&amp;Site Web</translation>
     </message>
     <message>
         <source>&amp;GRC Chat Room</source>
@@ -460,11 +460,11 @@ Este produto inclui desenvolvimento de software pelo Projeto OpenSSL para uso em
     </message>
     <message>
         <source>&amp;Reset blockchain data</source>
-        <translation>&amp;Repor dados da blockchain</translation>
+        <translation>&amp;Repor dados da cadeia de blocos</translation>
     </message>
     <message>
         <source>Remove blockchain data and start chain from zero</source>
-        <translation>Remover dados da blockchain e começar a cadeira do zero</translation>
+        <translation>Remover dados da cadeia de blocos e começar a cadeia do zero</translation>
     </message>
     <message>
         <source>&amp;Mask values</source>
@@ -608,15 +608,15 @@ Endereço: %4</translation>
     </message>
     <message>
         <source>Warning: Canceling after stage 2 will result in sync from 0 or corrupted blockchain files.</source>
-        <translation>Aviso: Cancelar depois do 2º passo irá resultar em sincronizar tudo do "0", ou ficheiros corrompidos no blockchain.</translation>
+        <translation>Aviso: Cancelar depois do 2º passo irá resultar em sincronizar tudo do "0", ou ficheiros corrompidos na cadeia de blocos.</translation>
     </message>
     <message>
         <source>Do you want to delete blockchain data and sync from zero?</source>
-        <translation>Tem a certeza que quer eliminar os dados da blockchain e começar a sincronização do zero?</translation>
+        <translation>Tem a certeza que quer eliminar os dados da cadeia de blocos e começar a sincronização do zero?</translation>
     </message>
     <message>
         <source>Warning: After the blockchain data is deleted, the wallet will shutdown and when restarted will begin syncing from zero. Your balance will temporarily show as 0 GRC while syncing.</source>
-        <translation>Aviso: Depois dos dados da blockchain serem eliminados, a carteira irá encerrar e ao reiniciar, irá começar a sincronizar do zero. O seu balanço irá temporariamente aparecer como 0 GRC enquanto sincroniza.</translation>
+        <translation>Aviso: Depois dos dados da cadeia de blocos serem eliminados, a carteira irá encerrar e ao reiniciar, irá começar a sincronizar do zero. O seu balanço irá temporariamente aparecer como 0 GRC enquanto sincroniza.</translation>
     </message>
     <message>
         <source>Close Confirmation</source>
@@ -754,6 +754,12 @@ Projeto(s) excluído(s): %2.</translation>
     </message>
     <message>
         <source>CPID: %1
+Time left to activate: %2%3</source>
+        <translation>CPID: %1
+Tempo restante para ativar: %2%3</translation>
+    </message>
+    <message>
+        <source>CPID: %1
 Beacon age: %2
 Current beacon expired!
 %3</source>
@@ -774,11 +780,11 @@ Expira: %3
     </message>
     <message>
         <source>New Poll</source>
-        <translation>Nova Votação</translation>
+        <translation>Nova Sondagem</translation>
     </message>
     <message>
         <source>A new poll is available. Open Gridcoin to vote.</source>
-        <translation>Uma nova votação está disponível. Abra o Gridcoin para votar.</translation>
+        <translation>Uma nova sondagem está disponível. Abra o Gridcoin para votar.</translation>
     </message>
 </context>
 <context>
@@ -849,6 +855,10 @@ Expira: %3
     <message>
         <source>Filter</source>
         <translation>Filtro</translation>
+    </message>
+    <message>
+        <source>Pushing this button after making a input selection either manually or with the filter will present a destination address list where you specify a single address as the destination for the consolidated output. The send (Pay To) entry will be filled in with this address and you can finish the consolidation by pressing the send button.</source>
+        <translation>Ao premir este botão depois de fazer uma seleção de entrada manualmente ou com o filtro, é apresentada uma lista de endereços de destino onde pode especificar um único endereço como destino para a saída consolidada. A entrada de envio (Pagar a) será preenchida com este endereço e pode terminar a consolidação premindo o botão de enviar.</translation>
     </message>
     <message>
         <source>Consolidate</source>
@@ -929,6 +939,10 @@ Expira: %3
     <message>
         <source>Copy change</source>
         <translation>Copiar modificação</translation>
+    </message>
+    <message>
+        <source>Flips the filter mode between selecting inputs less than or equal to the provided value (&lt;=) and greater than or equal to the provided value (&gt;=). The filter also automatically limits the number of inputs to %1, in ascending order for &lt;= and descending order for &gt;=.</source>
+        <translation>Alterna o modo de filtro entre a seleção de entradas menores ou iguais ao valor fornecido (&lt;=) e maiores ou iguais ao valor fornecido (&gt;=). O filtro também limita automaticamente o número de entradas a %1, em ordem crescente para &lt;= e decrescente para &gt;=.</translation>
     </message>
     <message>
         <source>Select None</source>
@@ -1026,6 +1040,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>WizardPage</source>
         <translation>Página do Assistente</translation>
+    </message>
+    <message>
+        <source>Step 2: Select the destination address for the consolidation transaction. Note that all of the selected inputs will be consolidated to an output on this address. If there is a very small amount of change (due to uncertainty in the fee calculation), it will also be sent to this address. If you selected inputs only from a particular address on the previous page, then that address will already be selected by default.</source>
+        <translation>Passo 2: Selecionar o endereço de destino para a transação de consolidação. Note que todas as entradas selecionadas serão consolidadas numa saída neste endereço. Se houver um valor muito pequeno de mudança (devido à incerteza no cálculo da taxa), ele também será enviado para este endereço. Se na página anterior tiver selecionado apenas entradas de um determinado endereço, esse endereço já estará selecionado por defeito.</translation>
     </message>
     <message>
         <source>Label</source>
@@ -1270,11 +1288,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>One or more tests have generated a warning status. Wallet operation may be degraded. Please see the individual test tooltips for details and recommended action(s).</source>
-        <translation>Um ou mais testes geraram um estado de alerta. Operações com a carteira podem estar corrompidas. Por favor, veja as dicas individuais de teste para detalhes e ações recomendadas.</translation>
+        <translation>Um ou mais testes geraram um estado de alerta. Operações com a carteira podem estar corrompidas. Por favor, consulte as dicas individuais de teste para detalhes e ações recomendadas.</translation>
     </message>
     <message>
         <source>One or more tests have failed. Proper wallet operation may be significantly degraded or impossible. Please see the individual test tooltips for details and recommended action(s).</source>
-        <translation>Um ou mais testes falharam. Operações adequadas com a carteira, podem estar signifcamente degradadas ou impossiveis. Por favor, veja as dicas indivuais de teste para detalhes e ações recomendadas.</translation>
+        <translation>Um ou mais testes falharam. Operações adequadas com a carteira, podem estar significativamente degradadas ou impossíveis. Por favor, consulte as dicas individuais de teste para detalhes e ações recomendadas.</translation>
     </message>
     <message>
         <source>All tests passed. Your wallet operation is normal.</source>
@@ -1411,6 +1429,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Utilizar uma diretoria de dados personalizada:</translation>
     </message>
     <message>
+        <source>When you click OK, %1 will begin to download and process the full %4 block chain (~%2GB), either from genesis in %3, or the last synchronized block, if this was a preexisting data directory.</source>
+        <translation>Quando clicar em OK, %1 começará a transferir e a processar toda a cadeia de blocos %4 (~%2GB), quer a partir da génese em %3, ou a partir do último bloco sincronizado, se este for um diretório de dados pré-existente.</translation>
+    </message>
+    <message>
+        <source>The synchronization is very demanding, and may expose hardware problems with your computer that had previously gone unnoticed. Each time you run %1, it will continue downloading where it left off.</source>
+        <translation>A sincronização é muito exigente e pode expor problemas de hardware do seu computador que anteriormente tivessem passado despercebidos. Cada vez que executar o %1, ele continuará a transferência onde parou anteriormente.</translation>
+    </message>
+    <message>
         <source>Error: Specified data directory "%1" cannot be created.</source>
         <translation>Erro: Diretoria de dados especificada "%1" não pode ser criada.</translation>
     </message>
@@ -1443,8 +1469,32 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
 <context>
     <name>MRCModel</name>
     <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Tem que ter um balanço com maturidade de pelo menos 1 GRC para poder submeter um pedido de MRC.</translation>
+    </message>
+    <message>
+        <source>Too soon since your last research rewards payment.</source>
+        <translation>Muito cedo desde o último pagamento de recompensa de pesquisa.</translation>
+    </message>
+    <message>
+        <source>The total fee (the minimum fee + fee boost) is greater than the rewards due.</source>
+        <translation>A taxa total (taxa mínima + taxa de boost) é maior que os ganhos da recompensa.</translation>
+    </message>
+    <message>
+        <source>Your MRC was successfully submitted earlier but has now become stale without being bound to the just received block by a staker. This may be because your MRC was submitted just before the block was staked and the MRC didn't make it to the staker in time, or your MRC was pushed down in the queue past the pay limit. Please wait for the next block to clear the queue and try again.</source>
+        <translation>O seu MRC foi submetido com sucesso mais cedo, mas agora tornou-se obsoleto sem estar ligado ao bloco recém recebido por um staker. Isto pode acontecerr porque o seu MRC foi submetida pouco antes do bloco ter sido staked e o MRC não chegou a tempo ao staker, ou o seu MRC desceu na fila para além do limite de pagamentos. Por favor, aguarde pelo próximo bloco para limpar a fila de espera e tente novamente.</translation>
+    </message>
+    <message>
         <source>You have a pending MRC request.</source>
         <translation>Tem uma solicitação de MRC pendente.</translation>
+    </message>
+    <message>
+        <source>Your MRC was successfully submitted, but other MRCs with higher fees have pushed your MRC down in the queue past the pay limit, and your MRC will be canceled. Wait until the next block is received and the queue clears and try again. Your fee for the canceled MRC will be refunded.</source>
+        <translation>O seu MRC foi submetido com êxito, mas outros MRCs com taxas mais altas, fizeram o seu MRC baixar na fila, ultrapassando o limite de pagamentos, e o seu MRC será cancelado. Aguarde até que o próximo bloco seja recebido e a fila seja limpa e tente novamente. A sua taxa para o MRC cancelado será reembolsada.</translation>
+    </message>
+    <message>
+        <source>The MRC queue is full. You can try boosting your fee to put your MRC request in the queue and displace another MRC request.</source>
+        <translation>A fila do MRC está cheia. Pode tentar aumentar a sua taxa para colocar o seu pedido MRC na fila e remover da fila outro pedido de MRC.</translation>
     </message>
     <message>
         <source>The wallet is locked.</source>
@@ -1466,12 +1516,64 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Taxa MRC @ Posição Limite de Pagamento na Fila</translation>
     </message>
     <message>
+        <source>MRC Fee @ Tail of Queue</source>
+        <translation>Taxa MRC @ Na Cauda da Fila</translation>
+    </message>
+    <message>
+        <source>Your projected or actual position among MRCs in the memory pool ordered by MRC fee in descending order</source>
+        <translation>A sua posição projetada ou real entre os MRCs na reserva de memória, ordenada por taxa de MRC por ordem decrescente</translation>
+    </message>
+    <message>
         <source>Number of All MRC Requests in Queue</source>
         <translation>Número de Todos os Pedidos MRC na Fila</translation>
     </message>
     <message>
         <source>The number of MRCs in the memory pool</source>
         <translation>Número de pedidos MRC em espera</translation>
+    </message>
+    <message>
+        <source>Your Projected MRC Request Position in Queue</source>
+        <translation>A sua posição prevista do seu pedido MRC na fila de espera</translation>
+    </message>
+    <message>
+        <source>The MRC fee being paid by the MRC in the last position within the pay limit in the memory pool</source>
+        <translation>A taxa de MRC que está a ser paga pelo MRC na última posição dentro do limite de remuneração na reserva de memória</translation>
+    </message>
+    <message>
+        <source>MRC Request Pay Limit per Block</source>
+        <translation>Limite de pagamento por bloco do pedido MRC</translation>
+    </message>
+    <message>
+        <source>Your MRC Calculated Minimum Fee</source>
+        <translation>A sua taxa mínima calculada pelo MRC</translation>
+    </message>
+    <message>
+        <source>The calculated minimum fee for the MRC. This may not be sufficient to submit the MRC if the queue is already full. In that case, you need to use the MRC fee boost to raise the fee to get your MRC in the queue.</source>
+        <translation>A taxa mínima calculada para o MRC. Este valor pode não ser suficiente para submeter o MRC se a fila de espera já estiver cheia. Nesse caso, é necessário que faça um boost da taxa de MRC para a aumentar, colocando o MRC na fila de espera.</translation>
+    </message>
+    <message>
+        <source>The lowest MRC fee being paid of MRCs in the memory pool</source>
+        <translation>A taxa mais baixa de MRC que está a ser paga de MRCs na reserva de memória</translation>
+    </message>
+    <message>
+        <source>The maximum number of MRCs that can be paid per block</source>
+        <translation>O número máximo de MRCs que pode ser pago por bloco</translation>
+    </message>
+    <message>
+        <source>The highest MRC fee being paid of MRCs in the memory pool</source>
+        <translation>A taxa mais alta de MRC que está a ser paga de MRCs na reserva de memória</translation>
+    </message>
+    <message>
+        <source>MRC Fee @ Head of Queue</source>
+        <translation>Taxa MRC @ No Topo da Fila</translation>
+    </message>
+    <message>
+        <source>MRC Fee Boost</source>
+        <translation>Aumento da taxa de inscrição no MRC</translation>
+    </message>
+    <message>
+        <source>Raise to Minimum For Submit</source>
+        <translation>Subir para o Mínimo para Submeter</translation>
     </message>
     <message>
         <source>Update</source>
@@ -1501,7 +1603,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <source>A block update must have occurred after wallet start or sync to submit MRCs.</source>
         <translation>Uma atualização do bloco tem de ocorrer depois da carteira iniciar ou sincronizar, para submeter um pedido MRC.</translation>
     </message>
-    </context>
+    <message>
+        <source>You must have a mature balance of at least 1 GRC to submit an MRC.</source>
+        <translation>Tem que ter um balanço com maturidade de pelo menos 1 GRC para poder submeter um pedido de MRC.</translation>
+    </message>
+</context>
 <context>
     <name>NoResult</name>
     <message>
@@ -1584,8 +1690,32 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>A realizar stake</translation>
     </message>
     <message>
+        <source>This enables or disables staking (the default is enabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</source>
+        <translation>Isto ativa ou desativa o staking (por predefinição está ativado). Note que uma alteração a esta definição irá substituir permanentemente o ficheiro de configuração por uma entrada no ficheiro de definições.</translation>
+    </message>
+    <message>
         <source>Enable Staking</source>
-        <translation>Habilitar Realização de Stake</translation>
+        <translation>Ativar Staking</translation>
+    </message>
+    <message>
+        <source>This enables or disables splitting of stake outputs to optimize staking (default disabled). Note that a change to this setting will permanently override the config file with an entry in the settings file.</source>
+        <translation>Isso permite ativar ou desativar a divisão das saídas de stake para otimizar a aposta (desativado por padrão). Note que uma alteração nesta configuração irá substituir permanentemente o arquivo de configuração com uma entrada no ficheiro de configurações.</translation>
+    </message>
+    <message>
+        <source>Enable Stake Splitting</source>
+        <translation>Ativar Divisão de Stake</translation>
+    </message>
+    <message>
+        <source>Target Efficiency</source>
+        <translation>Eficiência do Objetivo</translation>
+    </message>
+    <message>
+        <source>Min Post Split UTXO</source>
+        <translation>Mínimo Pós-divisão UTXO</translation>
+    </message>
+    <message>
+        <source>Valid values are 800 or greater. Note that a change to this setting will permanently override the config file with an entry in the settings file.</source>
+        <translation>Os valores válidos são 800 ou superior. Note que uma alteração a esta definição substituirá permanentemente o ficheiro de configuração por uma entrada no ficheiro de definições.</translation>
     </message>
     <message>
         <source>Minimize instead of exit the application when the window is closed. When this option is enabled, the application will be closed only after selecting Quit in the menu.</source>
@@ -1601,7 +1731,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Disable Poll Notifications</source>
-        <translation>Desabilitar Notificações de Votações</translation>
+        <translation>Desabilitar Notificações de Sondagens</translation>
     </message>
     <message>
         <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
@@ -1646,6 +1776,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Disable &amp;update checks</source>
         <translation>Desabilitar verificações de &amp;atualização</translation>
+    </message>
+    <message>
+        <source>Return change to an input address for contract transactions</source>
+        <translation>Devolver o troco para um endereço de entrada para transações de contrato</translation>
+    </message>
+    <message>
+        <source>Connect to the Gridcoin network through a SOCKS5 proxy (e.g. when connecting through Tor).</source>
+        <translation>Ligar à rede Gridcoin através de um proxy SOCKS5 (por exemplo, quando a ligação é feita através do Tor).</translation>
     </message>
     <message>
         <source>&amp;Connect through SOCKS5 proxy:</source>
@@ -1711,7 +1849,15 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <source>The supplied proxy address is invalid.</source>
         <translation>O endereço de proxy introduzido é inválido.</translation>
     </message>
-    </context>
+    <message>
+        <source>The supplied target staking efficiency is invalid.</source>
+        <translation>A eficiência de staking do alvo fornecido é inválida.</translation>
+    </message>
+    <message>
+        <source>The supplied minimum post stake-split UTXO size is invalid.</source>
+        <translation>O tamanho mínimo de UTXO pós-divisão de stack fornecido é inválido.</translation>
+    </message>
+</context>
 <context>
     <name>OverviewPage</name>
     <message>
@@ -1807,8 +1953,16 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Investigador</translation>
     </message>
     <message>
+        <source>Open the Manual Reward Claim (MRC) request page</source>
+        <translation>Abrir a página de pedido de Pedido de Recompensa Manual (MRC)</translation>
+    </message>
+    <message>
         <source>Status:</source>
         <translation>Estado:</translation>
+    </message>
+    <message>
+        <source>You are approaching the accrual limit of 16384 GRC. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</source>
+        <translation>Está a atingir o limite de acumulação de 16384 GRC. Se tiver um saldo relativamente baixo, deve solicitar o pagamento através de MRC para que não perca as recompensas ganhas.</translation>
     </message>
     <message>
         <source>Recent Transactions</source>
@@ -1816,7 +1970,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Current Polls</source>
-        <translation>Votações Atuais</translation>
+        <translation>Sondagens Atuais</translation>
     </message>
     <message>
         <source>Out of Sync</source>
@@ -1874,7 +2028,19 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Poll Type</source>
-        <translation>Tipo de Votação</translation>
+        <translation>Tipo de Sonadagem</translation>
+    </message>
+    <message>
+        <source>Your Last Vote:</source>
+        <translation>O Seu Último Voto:</translation>
+    </message>
+    <message>
+        <source>Your Vote Weight:</source>
+        <translation>O Peso do Seu Voto:</translation>
+    </message>
+    <message>
+        <source>Your % of AVW:</source>
+        <translation>A Sua % de AVW</translation>
     </message>
     <message>
         <source>Balance</source>
@@ -1938,11 +2104,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <name>PollResultDialog</name>
     <message>
         <source>Poll Details</source>
-        <translation>Detalhes da Votação</translation>
+        <translation>Detalhes da Sondagem</translation>
     </message>
     <message>
         <source>Poll ID</source>
-        <translation>ID da Votação</translation>
+        <translation>ID da Sondagem</translation>
     </message>
 </context>
 <context>
@@ -1976,7 +2142,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Poll Type</source>
-        <translation>Tipo de Votação</translation>
+        <translation>Tipo de Sondagem</translation>
     </message>
     <message>
         <source>Duration</source>
@@ -2015,22 +2181,22 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <name>PollWizard</name>
     <message>
         <source>Create a Poll</source>
-        <translation>Criar uma Votação</translation>
+        <translation>Criar uma Sondagem</translation>
     </message>
 </context>
 <context>
     <name>PollWizardDetailsPage</name>
     <message>
         <source>Poll Details</source>
-        <translation>Detalhes da Votação</translation>
+        <translation>Detalhes da Sondagem</translation>
     </message>
     <message>
         <source>Some fields are locked for the selected poll type.</source>
-        <translation>Alguns campos estão bloqueados para o tipo de votação selecionada.</translation>
+        <translation>Alguns campos estão bloqueados para o tipo de sondagem selecionada.</translation>
     </message>
     <message>
         <source>Poll Type:</source>
-        <translation>Tipo de Votação:</translation>
+        <translation>Tipo de Sondagem:</translation>
     </message>
     <message>
         <source>Duration:</source>
@@ -2070,7 +2236,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
-        <translation>Uma votação com uma resposta do tipo sim/não/abster-se, não pode incluir quaisquer escolhas adicionais.</translation>
+        <translation>Uma sondagem com uma resposta do tipo sim/não/abster-se, não pode incluir quaisquer escolhas adicionais.</translation>
     </message>
     <message>
         <source>Additional Fields:</source>
@@ -2078,7 +2244,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Create Poll</source>
-        <translation>Criar Votação</translation>
+        <translation>Criar Sondagem</translation>
     </message>
     <message>
         <source>Balance</source>
@@ -2102,7 +2268,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>This poll will cost %1 plus a transaction fee. Continue?</source>
-        <translation>Esta votação irá custar %1 para além duma taxa adicional. Continuar?</translation>
+        <translation>Esta sondagem irá custar %1 para além duma taxa adicional. Continuar?</translation>
     </message>
 </context>
 <context>
@@ -2144,11 +2310,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <name>PollWizardSummaryPage</name>
     <message>
         <source>Poll Created</source>
-        <translation>Votação Criada</translation>
+        <translation>Sondagem Criada</translation>
     </message>
     <message>
         <source>The poll will activate with the next block.</source>
-        <translation>A votação será ativada no próximo bloco.</translation>
+        <translation>A sondagem será ativada no próximo bloco.</translation>
     </message>
     <message>
         <source>Copy ID</source>
@@ -2159,15 +2325,15 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <name>PollWizardTypePage</name>
     <message>
         <source>Create a Poll</source>
-        <translation>Criar uma Votação</translation>
+        <translation>Criar uma Sondagem</translation>
     </message>
     <message>
         <source>The Gridcoin community established guidelines for polls with requirements for each type. Please read the wiki for more information:</source>
-        <translation>A comunidade Gridcoin estabeleceu diretrizes para as votações, com requisitos para cada tipo. Por favor leia a wiki para mais informações: </translation>
+        <translation>A comunidade Gridcoin estabeleceu diretrizes para as sondagem, com requisitos para cada tipo. Por favor leia a wiki para mais informações: </translation>
     </message>
     <message>
         <source>Choose a poll type:</source>
-        <translation>Escolha o tipo de votação:</translation>
+        <translation>Escolha o tipo de sondagem:</translation>
     </message>
 </context>
 <context>
@@ -2195,6 +2361,17 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </context>
 <context>
     <name>QObject</name>
+    <message>
+        <source>Error: Cannot parse command line arguments. Please check the arguments and ensure they are valid and formatted correctly: 
+
+</source>
+        <translation>Erro: Não é possível analisar os argumentos na linha de comando. Verifique os argumentos e certifique-se de que são válidos e estão formatados corretamente:
+</translation>
+    </message>
+    <message>
+        <source>Error: Cannot read configuration file. Please check the path and format of the file.</source>
+        <translation>Erro: Não é possível ler o ficheiro de configuração. Verifique o caminho e o formato do ficheiro.</translation>
+    </message>
     <message>
         <source>Error: Specified data directory "%1" does not exist.</source>
         <translation>Erro: A diretoria %1 especificada não existe.</translation>
@@ -2674,7 +2851,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <source>Not attached</source>
         <translation>Não anexado</translation>
     </message>
-    </context>
+    <message>
+        <source>Uses external adapter</source>
+        <translation>Utiliza adaptador externo</translation>
+    </message>
+</context>
 <context>
     <name>ResearcherWizard</name>
     <message>
@@ -2698,11 +2879,15 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>1. Sign in to your account at the website for a whitelisted BOINC project.</source>
-        <translation>1. Entre na sua conta num website dum projeto BOINC na lista aprovada.</translation>
+        <translation>1. Entre na sua conta no sítio web dum projeto BOINC que esteja na lista aprovada.</translation>
     </message>
     <message>
         <source>2. Visit the settings page to change your username. Many projects label it as "other account info".</source>
         <translation>2. Visite a página de configurações para alterar o nome de utilizador. Muitos projetos identificam como "outra informação da conta"</translation>
+    </message>
+    <message>
+        <source>3. Change your "name" (real name or nickname) to the following verification code:</source>
+        <translation>3. Altere o seu "nome" (nome real ou alcunha) para o seguinte código de verificação:</translation>
     </message>
     <message>
         <source>Copy the verification code to the system clipboard</source>
@@ -2714,7 +2899,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>4. Some projects will not export your statistics by default. If available, enable the privacy setting that gives consent to the project to export your statistics data. Many projects place this setting on the "Preferences for this Project" page and label it as "Do you consent to exporting your data to BOINC statistics aggregation web sites?"</source>
-        <translation>4. Alguns projetos não irão exportar as suas estatísticas por defeito. Se a opção estiver disponível, deve alterar as definições de privacidade que consentem que um projeto possa exportar os dados das suas estatísticas. Muitos projetos colocam esta definição na página "Preferências para este Projeto" e etiquetam-na como "Pretende consentir a exportação dos seus dados para websites de estatísticas de agregação do BOINC ?"</translation>
+        <translation>4. Alguns projetos não irão exportar as suas estatísticas por defeito. Se a opção estiver disponível, deve alterar as definições de privacidade que consentem que um projeto possa exportar os dados das suas estatísticas. Muitos projetos colocam esta definição na página "Preferências para este Projeto" e etiquetam-na como "Pretende consentir a exportação dos seus dados para sítios web de estatísticas de agregação do BOINC ?"</translation>
     </message>
     <message>
         <source>5. Wait 24 to 48 hours for the verification process to finish (beacon status will change to "active").</source>
@@ -2911,11 +3096,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>In this mode, a pool will take care of staking research rewards for you. Your wallet can still earn standard staking rewards on your balance. You do not need a BOINC account, CPID, or beacon. Please choose a pool and follow the instructions on the website to sign up and connect the pool's account manager to BOINC:</source>
-        <translation>Neste modo, a pool irá tomar conta de realizar o stake para pesquisar recompensas para si. A sua carteira pode ainda ganhar recompensas normais por realizar stake. Não precisa de uma conta BOINC, CPID ou Beacon. Por favor escolha uma pool e siga as instruções no website para se registar e ligar a uma conta duma pool gestora do BOINC. </translation>
+        <translation>Neste modo, a pool irá tomar conta de realizar o stake para pesquisar recompensas para si. A sua carteira pode ainda ganhar recompensas normais por realizar stake. Não precisa de uma conta BOINC, CPID ou Beacon. Por favor escolha uma pool e siga as instruções no sítio web para se registar e ligar a uma conta duma pool gestora do BOINC:</translation>
     </message>
     <message>
         <source>Website URL</source>
-        <translation>URL do Website</translation>
+        <translation>URL do Sítio Web</translation>
     </message>
     <message>
         <source>As you sign up, the pool may ask for a payment address to send earnings to. Press the button below to generate an address.</source>
@@ -2945,7 +3130,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <source>Pool Receiving Address</source>
         <translation>Endereço de Receção da Pool</translation>
     </message>
-    </context>
+    <message>
+        <source>Error: failed to generate a new address.</source>
+        <translation>Erro: falhou ao gerar um novo endereço.</translation>
+    </message>
+</context>
 <context>
     <name>ResearcherWizardPoolSummaryPage</name>
     <message>
@@ -3095,6 +3284,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Renovação do beacon disponível.</translation>
     </message>
     <message>
+        <source>Split CPID or mismatched email.</source>
+        <translation>CPID dividido ou eMail não correspondente.</translation>
+    </message>
+    <message>
+        <source>Your projects either refer to more than one CPID or your projects' email do not match what you used to configure Gridcoin here. Please ensure all of your projects are attached using the same email address, the email address matches what was configured here, and if you added a project recently, update that project and then all other projects using the update button in the BOINC manager, then restart the client and recheck.</source>
+        <translation>Os  seus projetos referem-se a mais do que um CPID ou, o e-mail dos seus projetos não corresponde ao que utilizou para configurar o Gridcoin. Por favor, certifique-se de que todos os seus projetos estão anexados utilizando o mesmo endereço de e-mail, o que corresponde ao que foi configurado aqui, e se adicionou um projeto recentemente, atualize esse projeto de seguida, todos os outros projetos utilizando o botão de atualização no Gestor BOINC. Por último, reinicie o cliente e verifique novamente.</translation>
+    </message>
+    <message>
         <source>Waiting for magnitude.</source>
         <translation>Aguardando pela magnitude</translation>
     </message>
@@ -3136,6 +3333,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Reset</source>
         <translation>Repor</translation>
+    </message>
+    <message>
+        <source>Consolidate Wizard</source>
+        <translation>Assistente de Consolidação</translation>
     </message>
     <message>
         <source>Quantity:</source>
@@ -3503,9 +3704,9 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message numerus="yes">
         <source>, broadcast through %n node(s)</source>
-        <translation type="unfinished">
-            <numerusform />
-            <numerusform />
+        <translation>
+            <numerusform>, transmitida através de %n nó</numerusform>
+            <numerusform>, transmitida através de %n nós</numerusform>
         </translation>
     </message>
     <message>
@@ -3547,6 +3748,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>PoS+RR Side Stake Sent</source>
         <translation>PoS+RR Side Stake Enviado</translation>
+    </message>
+    <message>
+        <source>MRC Payment Received</source>
+        <translation>Pagamento MRC Recebido</translation>
+    </message>
+    <message>
+        <source>MRC Payment Sent</source>
+        <translation>Pagamento MRC Enviado</translation>
     </message>
     <message>
         <source>Mined - Superblock</source>
@@ -3769,6 +3978,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>PoS+RR Side Stake Enviado</translation>
     </message>
     <message>
+        <source>MRC Payment Received</source>
+        <translation>Pagamento MRC Recebido</translation>
+    </message>
+    <message>
+        <source>MRC Payment Sent</source>
+        <translation>Pagamento MRC Enviado</translation>
+    </message>
+    <message>
         <source>Mined - Superblock</source>
         <translation>Minada -  Super Bloco</translation>
     </message>
@@ -3782,11 +3999,15 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Poll</source>
-        <translation>Votação</translation>
+        <translation>Sondagem</translation>
     </message>
     <message>
         <source>Vote</source>
         <translation>Voto</translation>
+    </message>
+    <message>
+        <source>Manual Rewards Claim Request</source>
+        <translation>Solicitação Manual de Reivindicação de Recompensas</translation>
     </message>
     <message>
         <source>Message</source>
@@ -4009,11 +4230,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Poll not found.</source>
-        <translation>Votação não encontrada.</translation>
+        <translation>Sondagem não encontrada.</translation>
     </message>
     <message>
         <source>Failed to load poll from disk</source>
-        <translation>Falhou o carregamento das votações do disco</translation>
+        <translation>Falhou o carregamento das sondagens do disco</translation>
     </message>
 </context>
 <context>
@@ -4024,7 +4245,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Polls</source>
-        <translation>Votações</translation>
+        <translation>Sondagem</translation>
     </message>
     <message>
         <source>Search by title</source>
@@ -4048,11 +4269,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Create &amp;Poll</source>
-        <translation>Criar &amp;Votação</translation>
+        <translation>Criar &amp;Sondagem</translation>
     </message>
     <message>
         <source>A new poll is available. Press "Refresh" to load it.</source>
-        <translation>Uma nova votação está disponível. Carregue em "Atualizar" para a mostrar.</translation>
+        <translation>Uma nova sondagem está disponível. Carregue em "Atualizar" para a mostrar.</translation>
     </message>
     <message>
         <source>&amp;Active</source>
@@ -4090,7 +4311,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>A poll with a yes/no/abstain response type cannot include any additional custom choices.</source>
-        <translation>Uma votação com uma resposta do tipo sim/não/abster-se, não pode incluir quaisquer escolhas adicionais.</translation>
+        <translation>Uma sondagem com uma resposta do tipo sim/não/abster-se, não pode incluir quaisquer escolhas adicionais.</translation>
     </message>
     <message>
         <source>Cannot obtain a lock on data directory %s. %s is probably already running and using that directory.</source>
@@ -4101,6 +4322,14 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Não foi possivel cadear a diretoria de dados %s. %s já está provavelmente em execução.</translation>
     </message>
     <message>
+        <source>Check that BOINC is installed and that you have the correct path in the config file if you installed it to a nonstandard location.</source>
+        <translation>Verifique que o BOINC está instalado e que tem o caminho correto no ficheiro de configuração, caso o tenha instalado numa localização não definida por padrão.</translation>
+    </message>
+    <message>
+        <source>Error: Clock skew is 5 minutes or greater. Please check your clock settings.</source>
+        <translation>Erro: O sincronização do relógio é de 5 minutos ou mais. Verifique as definições do seu relógio.</translation>
+    </message>
+    <message>
         <source>Error: The transaction was rejected. This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
         <translation>Erro: A transação foi rejeitada. Isso pode acontecer se algumas das  na sua moedas na carteira já tiverem sido gastas, se tiver utilizado uma cópia da wallet.dat e as moedas não tiverem sido marcadas como gastas aqui.</translation>
     </message>
@@ -4109,20 +4338,152 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Erro: Esta transação devido à sua quantia, complexidade ou utilização de fundos recebidos recentemente, necessita de uma taxa de transação de pelo menos %s </translation>
     </message>
     <message>
+        <source>For initiatives related to the Gridcoin community not covered by other poll types.</source>
+        <translation>Para iniciativas relacionadas com a Comunidade Gridcoin, não abrangidas por outros tipos de sondagem.</translation>
+    </message>
+    <message>
+        <source>For polls about community representation, public relations, and communications.</source>
+        <translation>Para sondagens sobre representação comunitária, relações públicas e comunicações.</translation>
+    </message>
+    <message>
+        <source>Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Por favor, verifique a sua rede e também o ficheiro de configuração e certifique-se de que as suas entradas addnode estão atualizadas. Se iniciou recentemente a carteira, poderá querer aguardar mais alguns minutos para que as ligações sejam estabelecidas e testar novamente. Consulte https://gridcoin.us/wiki/config-file.html e https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Please ensure that you have followed the process to advertise and verify your beacon. You can use the research wizard (the beacon button on the overview screen).</source>
+        <translation>Certifique-se de que seguiu o processo para publicitar e verificar o seu beacon. Pode utilizar o assistente de pesquisa (o botão beacon no ecrã de resumo).</translation>
+    </message>
+    <message>
+        <source>Poll additional field value "%s" for field name "%s" exceeds %s characters.</source>
+        <translation>A sondagem do valor de campo adicional "%s" para o nome de campo "%s" excede os %s caracteres.</translation>
+    </message>
+    <message>
+        <source>Proposals related to Gridcoin management like poll requirements and funding.</source>
+        <translation>Propostas relacionadas com a gestão do Gridcoin, como requisitos de sondagem e financiamento.</translation>
+    </message>
+    <message>
+        <source>Propose additions or removals of computing projects for research reward eligibility.</source>
+        <translation>Propor adições ou remoções de projetos de computação para a elegibilidade de prémios de investigação.</translation>
+    </message>
+    <message>
+        <source>The IP for the port test site is unable to be resolved. This could mean your DNS is not working correctly. The wallet may operate without DNS, but it could be severely degraded, especially if the wallet is new and a database of prior successful connections has not been built up. Please check your computer and ensure name resolution is operating correctly.</source>
+        <translation>Não é possível resolver o IP do site de teste de portas. Isto pode significar que o seu DNS não está a funcionar corretamente. A carteira pode funcionar sem DNS, mas pode ser gravemente degradada, especialmente se a carteira for nova e não tiver sido criada uma base de dados de ligações anteriores bem sucedidas. Verifique o seu computador e certifique-se de que a resolução de nomes está a funcionar corretamente.</translation>
+    </message>
+    <message>
+        <source>The connection to the port test site was refused. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>A ligação ao site de teste de portas foi recusada. Isto pode ser um problema transitório com o site de teste de portas, mas também pode ser um problema com a sua firewall. Se também estiver a falhar o teste de ligação, a sua firewall está provavelmente a bloquear as comunicações de rede do cliente Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The network has experienced a low-level error and this probably means your IP address or other network connection parameters are not configured correctly. Please check your network configuration on your computer.</source>
+        <translation>A rede sofreu um erro de baixo nível, o que provavelmente significa que o seu endereço IP ou outros parâmetros de ligação à rede não estão corretamente configurados. Verifique a configuração da rede no seu computador.</translation>
+    </message>
+    <message>
+        <source>The network is reporting an unspecified socket error. If you also are failing the connection test, then please check your computer's network configuration.</source>
+        <translation>A rede está a reportar um erro de socket não especificado. Se também falhar o teste de ligação, verifique a configuração de rede do seu computador.</translation>
+    </message>
+    <message>
+        <source>The port test site is closed on port. This could be a transient problem with the port test site, but could also be an issue with your firewall. If you are also failing the connection test, your firewall is most likely blocking network communications from the Gridcoin client.</source>
+        <translation>O sítio de teste de portas está fechado na porta. Isto pode ser um problema transitório com o site de teste de portas, mas também pode ser um problema com a sua firewall. Se também estiver a falhar o teste de ligação, a sua firewall está muito provavelmente a bloquear as comunicações de rede do cliente Gridcoin.</translation>
+    </message>
+    <message>
+        <source>The wallet has less than five connections to the network and is unable to connect to an NTP server to check your computer clock. This is not necessarily a problem. You can wait a few minutes and try the test again.</source>
+        <translation>A carteira tem menos de cinco ligações à rede e não consegue ligar-se a um servidor NTP para verificar o relógio do seu computador. Isto não é necessariamente um problema. Pode esperar alguns minutos e repetir o teste novamente.</translation>
+    </message>
+    <message>
         <source>The wallet will now shutdown. Please start your wallet to begin sync from zero</source>
         <translation>A carteira irá encerrar. Por favor, inicie a sua carteira para começar a sincronização do zero</translation>
+    </message>
+    <message>
+        <source>There is a new leisure version available and you should upgrade as soon as practical.</source>
+        <translation>Existe uma nova versão de lazer disponível e deve ser atualizada assim que possível.</translation>
+    </message>
+    <message>
+        <source>There is a new mandatory version available and you should upgrade as soon as possible to ensure your wallet remains in consensus with the network.</source>
+        <translation>Existe uma nova versão obrigatória disponível e deve atualizá-la o mais rapidamente possível para garantir que a sua carteira se mantém em consenso com a rede.</translation>
+    </message>
+    <message>
+        <source>Verify (1) that you have BOINC installed correctly, (2) that you have attached at least one whitelisted project, (3) that you advertised your beacon with the same email as you use for your BOINC project(s), and (4) that the CPID on the overview screen matches the CPID when you login to your BOINC project(s) online.</source>
+        <translation>Verifique (1) se o BOINC está instalado corretamente, (2) se adicionou pelo menos um projeto da whitelist, (3) se anunciou seu beacon com o mesmo e-mail que usa para o(s) seu(s) projeto(s) BOINC e (4) se o CPID no ecrã de visão geral corresponde ao CPID quando inicia sessão no(s) seu(s) projeto(s) BOINC on-line.</translation>
+    </message>
+    <message>
+        <source>Verify that you have actually completed workunits for the projects you have attached and that you have authorized the export of statistics. Please see https://gridcoin.us/guides/whitelist.htm.</source>
+        <translation>Verifique se as unidades de trabalho dos projetos que adicionou foram efetivamente concluídas e se autorizou a exportação de estatísticas. Consultar https://gridcoin.us/guides/whitelist.htm.</translation>
     </message>
     <message>
         <source>WARNING: A mandatory release is available. Please upgrade as soon as possible.</source>
         <translation>AVISO: Uma versão obrigatória do cliente Gridcoin está disponível. Por favor atualize o mais rapidamente possível.</translation>
     </message>
     <message>
+        <source>Warning: Clock skew is between 3 and 5 minutes. Please check your clock settings.</source>
+        <translation>Aviso: O desvio do relógio situa-se entre 3 e 5 minutos. Verifique as definições do seu relógio.</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is &gt; 90 days. It will take a very long time to receive your research rewards by staking - increase balance or use MRC</source>
+        <translation>Aviso: O ETTS é &gt; 90 dias. Vai demorar muito tempo a receber as suas recompensas de investigação por staking - aumente o saldo ou utilize o MRC</translation>
+    </message>
+    <message>
+        <source>Warning: ETTS is infinite. No coins to stake - increase balance or use MRC</source>
+        <translation>Aviso: O ETTS é infinito. Não há moedas para realizar stake - aumente o saldo ou use o MRC</translation>
+    </message>
+    <message>
         <source>Warning: Ending this process after Stage 2 will result in syncing from 0 or an incomplete/corrupted blockchain.</source>
-        <translation>Aviso: Acabar este processo antes da Fase 2 irão resultar numa sincronização do "0", ou num blockchain incompleto/corrupto.</translation>
+        <translation>Aviso: Acabar este processo antes da Fase 2 irá resultar numa sincronização do "0", ou numa cadeia de blocos incompleta/corrupta.</translation>
+    </message>
+    <message>
+        <source>You have no balance and will be unable to retrieve your research rewards when solo crunching by staking. You can use MRC to retrieve your rewards, or you should acquire GRC to stake so you can retrieve your research rewards. Please see https://gridcoin.us/guides/boinc-install.htm.</source>
+        <translation>Não tens saldo e não será possível recuperar as tuas recompensas de investigação quando estiveres a fazer crunch a solo por staking. Podes usar MRC para recuperar as tuas recompensas, ou deverás adquirir GRC para fazer stake e poderes recuperar as tuas recompensas de investigação. Consulte https://gridcoin.us/guides/boinc-install.htm.</translation>
+    </message>
+    <message>
+        <source>You will not be able to stake because you have less than %1 connection(s). Please check your network and also check the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>Não será possível realizar stake porque tem menos de %1 ligação(ões). Por favor, verifique a sua rede e verifique também o ficheiro de configuração e certifique-se de que as suas entradas addnode estão atualizadas. Se iniciou recentemente a carteira, pode querer esperar mais alguns minutos para que as ligações se estabeleçam e depois testar novamente. Consulte https://gridcoin.us/wiki/config-file.html e https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your balance is low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You should consider acquiring more GRC to stake more often, or else use MRC to retrieve your rewards.</source>
+        <translation>O seu saldo é baixo dada a dificuldade atual da rede em realizar stake num período de tempo razoável para recuperar as suas recompensas de investigação quando faz crunch a solo. Deve considerar a aquisição de mais GRC para realizar stake mais vezes, ou então usar MRC para recuperar as suas recompensas.</translation>
+    </message>
+    <message>
+        <source>Your balance is too low given the current network difficulty to stake in a reasonable period of time to retrieve your research rewards when solo crunching. You can use MRC  to retrieve your rewards, or you should acquire more GRC to stake more often.</source>
+        <translation>O teu saldo é demasiado baixo tendo em conta a dificuldade atual da rede, para poderes realizar stake num período de tempo razoável para recuperares as tuas recompensas de investigação quando fazes crunch a solo. Podes usar MRC para recuperar as tuas recompensas, ou deverás adquirir mais GRC para realizar stake mais vezes.</translation>
+    </message>
+    <message>
+        <source>Your clock in your computer is significantly off from UTC or network time and this may seriously degrade the operation of the wallet, including maintaining connection to the network. You should check your time and time zone settings for your computer. A very common problem is the off by one hour caused by a time zone issue or problems with daylight savings time.</source>
+        <translation>O relógio do seu computador está significativamente desfasado da hora UTC ou da hora da rede, o que pode degradar seriamente o funcionamento da carteira, incluindo a manutenção da ligação à rede. Deve verificar as definições da hora e do fuso horário do seu computador. Um problema muito comum é o desfasamento de uma hora causado por um problema de fuso horário ou por problemas com a hora de Verão.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is extremely low and your wallet is almost certainly forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>A sua dificuldade é extremamente baixa e a sua carteira está quase de certeza bifurcada. Por favor, certifique-se de que está a correr a versão mais recente e tente remover a base de dados da cadeia de blocos e voltar a sincronizar a partir do génese usando a opção de menu. (Note que isso levará de 2-4 horas).</translation>
+    </message>
+    <message>
+        <source>Your difficulty is low but your wallet is still in initial sync. Please recheck it later to see if this passes.</source>
+        <translation>A sua dificuldade é baixa, mas a sua carteira ainda está na sincronização inicial. Volte a verificar mais tarde para ver se isto ficou resolvido.</translation>
+    </message>
+    <message>
+        <source>Your difficulty is very low and your wallet is probably forked. Please ensure you are running the latest version and try removing the blockchain database and resyncing from genesis using the menu option. (Note this will take 2-4 hours.)</source>
+        <translation>A sua dificuldade é muito baixa e a sua carteira está provavelmente bifurcada. Por favor, certifique-se de que está a correr a versão mais recente e tente remover a base de dados da cadeia de blocos e volte a sincronizar a partir da génese usando a opção de menu. (Observe que isso levará de 2-4 horas).</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is critically low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>A sua contagem de ligações de saída é criticamente baixa. Por favor, verifique o seu ficheiro de configuração e certifique-se de que as suas entradas addnode estão atualizadas. Se iniciou recentemente a carteira, pode ter de esperar mais alguns minutos para que as ligações se estabeleçam e depois testar novamente. Consulte https://gridcoin.us/wiki/config-file.html e https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your outbound connection count is low. Please check your the config file and ensure your addnode entries are up-to-date. If you recently started the wallet, you may want to wait another few minutes for connections to build up and then test again. Please see https://gridcoin.us/wiki/config-file.html and https://addnodes.cycy.me/.</source>
+        <translation>A sua contagem de ligações de saída é baixa. Por favor, verifique o seu ficheiro de configuração e certifique-se de que as suas entradas addnode estão atualizadas. Se iniciou recentemente a carteira, pode ter de esperar mais alguns minutos para que as ligações se estabeleçam e depois testar novamente. Consulte https://gridcoin.us/wiki/config-file.html e https://addnodes.cycy.me/.</translation>
+    </message>
+    <message>
+        <source>Your wallet is not in sync and has not previously been in sync during this run, please wait for the wallet to sync and retest. If there are other failures preventing the wallet from syncing, please correct those items and retest to see if this test passes.</source>
+        <translation>A sua carteira não está sincronizada e não esteve anteriormente sincronizada durante esta execução, aguarde que a carteira sincronize e volte a testar. Se existirem outras falhas que impeçam a sincronização da carteira, corrija esses itens e volte a testar para ver se este teste é concluído com sucesso.</translation>
+    </message>
+    <message>
+        <source>Your wallet is out of sync with the network but was in sync before. If this fails there is likely a severe problem that is preventing the wallet from syncing. If the lack of sync is due to network connection issues, you will see failures on the network connection test(s). If the network connections pass, but your wallet fails this test, and continues to fail this test on repeated attempts with a few minutes in between, this could indicate a more serious issue. In that case you should check the debug log to see if it sheds light on the cause for no sync.</source>
+        <translation>A sua carteira está fora de sincronia com a rede, mas estava sincronizada anteriormente. Se isto falhar, é provável que exista um problema grave que esteja a impedir a sincronização da carteira. Se a falta de sincronização se dever a problemas de ligação à rede, verá falhas no(s) teste(s) de ligação à rede. Se as ligações de rede passarem, mas a sua carteira falhar este teste, e continuar a falhar este teste em tentativas repetidas com alguns minutos de intervalo, isto pode indicar um problema mais sério. Nesse caso, deve verificar o registo de depuração para ver se este esclarece a causa da falha na sincronização.</translation>
+    </message>
+    <message>
+        <source>Your wallet is still in initial sync. If this is a sync from the beginning (genesis), the sync process can take from 2 to 4 hours, or longer on a slow computer. If you have synced your wallet before but you just started the wallet up, then wait a few more minutes and retry the diagnostics again.</source>
+        <translation>A sua carteira ainda está na sincronização inicial. Se se tratar de uma sincronização desde o início (génese), o processo de sincronização pode demorar de 2 a 4 horas, ou mais num computador lento. Se já sincronizou a sua carteira antes, mas acabou de a iniciar, aguarde mais alguns minutos e tente executar novamente o diagnóstico.</translation>
     </message>
     <message>
         <source>A poll choice cannot be empty.</source>
-        <translation>A escolha duma votação não pode estar vazia.</translation>
+        <translation>A escolha duma sondagem não pode estar vazia.</translation>
     </message>
     <message>
         <source>Are you sure you want to cancel the snapshot operation?</source>
@@ -4138,7 +4499,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>CPID count polls are not supported.</source>
-        <translation>Contagem de votações CPID não são suportadas.</translation>
+        <translation>Contagem de sondagens CPID não são suportadas.</translation>
     </message>
     <message>
         <source>Cancel snapshot operation?</source>
@@ -4166,15 +4527,15 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Duplicate poll additional field: %s</source>
-        <translation>Duplicar campo adicional na votação: %s</translation>
+        <translation>Duplicar campo adicional na sondagem: %s</translation>
     </message>
     <message>
         <source>Duplicate poll choice: %s</source>
-        <translation>Duplicar escolhas da votação: %s</translation>
+        <translation>Duplicar escolhas da sondagem: %s</translation>
     </message>
     <message>
         <source>Duplicate response for poll choice: %s</source>
-        <translation>Duplicar respostas para escolha da votação %s</translation>
+        <translation>Duplicar respostas para escolha da sondagem %s</translation>
     </message>
     <message>
         <source>Entire balance reserved</source>
@@ -4190,7 +4551,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Exceeded the number of choices in the poll: %s</source>
-        <translation>Excedidos número de escolhas na votação: %s</translation>
+        <translation>Excedidos número de escolhas na sondagem: %s</translation>
     </message>
     <message>
         <source>Failed to download snapshot.zip; See debug.log</source>
@@ -4199,6 +4560,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Failed to rename bootstrap file to .old for backup purposes.</source>
         <translation>Falhou a alteração de nome por motivos de backups no ficheiro bootstrap para .old.</translation>
+    </message>
+    <message>
+        <source>Failed: 80 block difficulty is less than</source>
+        <translation>Falhou: a dificuldade de 80 blocos é menor que</translation>
     </message>
     <message>
         <source>Failed: Count =</source>
@@ -4214,7 +4579,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>For opinion or casual polls without any particular requirements.</source>
-        <translation>Para opiniões ou votações casuais sem requisitos especiais.</translation>
+        <translation>Para opiniões ou sondagens casuais sem requisitos especiais.</translation>
     </message>
     <message>
         <source>Get help for a command</source>
@@ -4262,7 +4627,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Magnitude-only polls are not supported.</source>
-        <translation>Magnitude-pools apenas não são suportadas.</translation>
+        <translation>Sondagens de Magnitude apenas não são suportadas.</translation>
     </message>
     <message>
         <source>Multiple Choice</source>
@@ -4314,15 +4679,27 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Participant count polls are not supported.</source>
-        <translation>Contagens de participantes das votações não são suportadas.</translation>
+        <translation>Contagens de participantes das sondagens não são suportadas.</translation>
+    </message>
+    <message>
+        <source>Passed: 80 block difficulty is</source>
+        <translation>Sucesso: A dificuldade de 80 blocos é</translation>
+    </message>
+    <message>
+        <source>Passed: Count =</source>
+        <translation>Sucesso: Contagem =</translation>
+    </message>
+    <message>
+        <source>Passed: ETTS =</source>
+        <translation>Sucesso: ETTS =</translation>
     </message>
     <message>
         <source>Please enter a poll discussion website URL.</source>
-        <translation>Por favor insira o URL do website para a discussão da votação.</translation>
+        <translation>Por favor insira o URL do sítio web para a discussão da sondagem.</translation>
     </message>
     <message>
         <source>Please enter a poll title.</source>
-        <translation>Por favor insira o titulo da votação.</translation>
+        <translation>Por favor insira o titulo da sondagem.</translation>
     </message>
     <message>
         <source>Please enter at least one response.</source>
@@ -4330,47 +4707,75 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Please enter at least two poll choices.</source>
-        <translation>Por favor insira pelo menos duas escolhas na votação.</translation>
+        <translation>Por favor insira pelo menos duas escolhas na sondagem.</translation>
+    </message>
+    <message>
+        <source>Poll additional field name "%s" exceeds %s characters.</source>
+        <translation>O nome do campo adicional da sondagem "%s" excede os %s caracteres.</translation>
+    </message>
+    <message>
+        <source>Poll cannot contain more than %s additional fields</source>
+        <translation>A sondagem não pode conter mais de %s campos adicionais</translation>
     </message>
     <message>
         <source>Poll cannot contain more than %s choices.</source>
-        <translation>Votação não pode conter mais do que %s escolhas.</translation>
+        <translation>A sondagem não pode conter mais do que %s escolhas.</translation>
     </message>
     <message>
         <source>Poll choice "%s" exceeds %s characters.</source>
-        <translation>Escolha %s da votação excede os %s carateres.</translation>
+        <translation>Escolha %s da sondagem excede os %s carateres.</translation>
     </message>
     <message>
         <source>Poll discussion URL cannot exceed %s characters.</source>
-        <translation>URL de discussão da votação não pode exceder os %s carateres.</translation>
+        <translation>URL de discussão da sondagem não pode exceder os %s carateres.</translation>
     </message>
     <message>
         <source>Poll duration cannot exceed %s days.</source>
-        <translation>Duração da votação não pode exceder os %s dias.</translation>
+        <translation>Duração da sondagem não pode exceder os %s dias.</translation>
     </message>
     <message>
         <source>Poll duration must be at least %s days.</source>
-        <translation>Duração da votação tem de durar pelo menos %s dias.</translation>
+        <translation>Duração da sondagem tem de durar pelo menos %s dias.</translation>
     </message>
     <message>
         <source>Poll has already finished.</source>
-        <translation>Votação já terminou.</translation>
+        <translation>A sondagem já terminou.</translation>
     </message>
     <message>
         <source>Poll only allows a single choice.</source>
-        <translation>Votação permite apenas uma escolha única.</translation>
+        <translation>A sondagem permite apenas uma escolha única.</translation>
     </message>
     <message>
         <source>Poll question cannot exceed %s characters.</source>
-        <translation>Questão da votação não pode exceder %s carateres.</translation>
+        <translation>Questão da sondagem não pode exceder %s carateres.</translation>
     </message>
     <message>
         <source>Poll signature failed. See debug.log.</source>
-        <translation>Assinatura da votação falhou. Veja debug.log</translation>
+        <translation>Assinatura da sondagem falhou. Ver debug.log</translation>
     </message>
     <message>
         <source>Poll title cannot exceed %s characters.</source>
-        <translation>Título da votação não pode exceder %s carateres.</translation>
+        <translation>Título da sondagem não pode exceder %s carateres.</translation>
+    </message>
+    <message>
+        <source>Poll with that title already exists. Please choose another title.</source>
+        <translation>Já existe uma sondagem com esse título. Por favor, escolha outro título.</translation>
+    </message>
+    <message>
+        <source>Project Listing</source>
+        <translation>Listagem de Projetos</translation>
+    </message>
+    <message>
+        <source>Propose a change to Gridcoin at the protocol level.</source>
+        <translation>Propor uma alteração ao Gridcon ao nível do protocolo.</translation>
+    </message>
+    <message>
+        <source>Propose marketing initiatives like ad campaigns.</source>
+        <translation>Propor iniciativas de marketing como campanhas publicitárias.</translation>
+    </message>
+    <message>
+        <source>Protocol Development</source>
+        <translation>Protocolo de Desenvolvimento</translation>
     </message>
     <message>
         <source>Quorum Hash</source>
@@ -4378,7 +4783,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Reindexing blockchain from on disk block data files...</source>
-        <translation>Reindexando blockchain dos ficheiros de dados no disco...</translation>
+        <translation>Reindexando cadeia de blocos dos ficheiros de dados de blocos no disco...</translation>
     </message>
     <message>
         <source>Replaying contracts...</source>
@@ -4386,11 +4791,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Reset Blockchain Data: Blockchain data removal failed.</source>
-        <translation>Repor Dados da Blockchain: Remoção de dados da Blockchain falhou.</translation>
+        <translation>Repor os Dados da Cadeia de Blocos: Remoção de dados da cadeia de blocos falhou.</translation>
     </message>
     <message>
         <source>Reset Blockchain Data: Blockchain data removal was a success</source>
-        <translation>Repor Dados da Blockchain: Remoção de dados da Blockchain realizada com sucesso</translation>
+        <translation>Repor os Dados da Cadeia de Blocos: Remoção de dados da cadeia  de blocos realizada com sucesso</translation>
     </message>
     <message>
         <source>Send command to -server or gridcoinresearchd</source>
@@ -4422,11 +4827,23 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Stage (3/4): Cleanup blockchain data</source>
-        <translation>Etapa (3/4): Limpando dados do blockchain</translation>
+        <translation>Etapa (3/4): Limpando dados da cadeia de blocos</translation>
     </message>
     <message>
         <source>Stage (4/4): Extracting snapshot.zip</source>
         <translation>Etapa (4/4): Extraindo o snapshot.zip</translation>
+    </message>
+    <message>
+        <source>Survey</source>
+        <translation>Questionário</translation>
+    </message>
+    <message>
+        <source>The field is not well-formed.</source>
+        <translation>O campo não está bem formado.</translation>
+    </message>
+    <message>
+        <source>The field list is not well-formed.</source>
+        <translation>A lista do campo não está bem formada.</translation>
     </message>
     <message>
         <source>The wallet is now shutting down. Please restart your wallet.</source>
@@ -4437,8 +4854,48 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>A carteira irá agora encerrar.</translation>
     </message>
     <message>
+        <source>This wallet is almost certainly forked.</source>
+        <translation>A carteira está quase de certeza bifurcada.</translation>
+    </message>
+    <message>
+        <source>This wallet is probably forked.</source>
+        <translation>A carteira está provavelmente bifurcada.</translation>
+    </message>
+    <message>
+        <source>Unable to create the PID file '%s': %s</source>
+        <translation>Não foi possível criar o ficheiro PID "%s': %s</translation>
+    </message>
+    <message>
+        <source>Unknown poll type. This should never happen.</source>
+        <translation>Tipo de sondagem desconhecida. Isto nunca deverá acontecer.</translation>
+    </message>
+    <message>
+        <source>Warning: 45 days &lt; ETTS =</source>
+        <translation>Aviso: 45 dias &lt; ETTS =</translation>
+    </message>
+    <message>
+        <source>Warning: 80 block difficulty is less than</source>
+        <translation>Aviso: A dificuldade de 80 blocos é menor que</translation>
+    </message>
+    <message>
+        <source>Warning: Cannot connect to NTP server</source>
+        <translation>Aviso: Não foi possível ligar ao servidor NTP</translation>
+    </message>
+    <message>
+        <source>Warning: Count =</source>
+        <translation>Aviso: Contagem =</translation>
+    </message>
+    <message>
+        <source>Wrong Payload version specified for current block height.</source>
+        <translation>Versão de carga útil incorreta especificada para a altura do bloco atual.</translation>
+    </message>
+    <message>
         <source>Yes/No/Abstain</source>
         <translation>Sim/Não/Abster-se</translation>
+    </message>
+    <message>
+        <source>You should check your time and time zone settings for your computer.</source>
+        <translation>Deve verificar as definições de hora e fuso horário do seu computador.</translation>
     </message>
     <message>
         <source>You will need to delete the following.</source>
@@ -4446,7 +4903,11 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>"%s" is not a valid poll choice.</source>
-        <translation>%s não é uma escolha válida da votação.</translation>
+        <translation>"%s" não é uma escolha válida da sondagem.</translation>
+    </message>
+    <message>
+        <source>appears to be blocked.</source>
+        <translation>parece estar bloqueado.</translation>
     </message>
     <message>
         <source>leisure</source>
@@ -4469,8 +4930,16 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
         <translation>Os %s desenvolvedores</translation>
     </message>
     <message>
+        <source>Error: Unsupported argument -socks found. Setting SOCKS version isn't possible anymore, only SOCKS5 proxies are supported.</source>
+        <translation>Erro: Argumento não suportado -socks encontrado. Definir a versão SOCKS não é mais possível, são apenas suportadas proxies SOCKS5.</translation>
+    </message>
+    <message>
         <source>Block Version</source>
         <translation>Versão do Bloco</translation>
+    </message>
+    <message>
+        <source>Block file load progress </source>
+        <translation>Progresso do carregamento do ficheiro de blocos</translation>
     </message>
     <message>
         <source>Block not in index</source>
@@ -4534,7 +5003,7 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     </message>
     <message>
         <source>Importing blockchain data file(s).</source>
-        <translation>Importando ficheiro(s) de dados da blockchain.</translation>
+        <translation>Importando ficheiro(s) de dados da cadeia de blocos.</translation>
     </message>
     <message>
         <source>Interest</source>
@@ -4551,6 +5020,10 @@ Isto significa que uma taxa de pelo menos %2 é necessária.</translation>
     <message>
         <source>Is Superblock</source>
         <translation>É um Super Bloco</translation>
+    </message>
+    <message>
+        <source>Latest Version GitHub data response:</source>
+        <translation>Versão mais recente da resposta de dados do GitHub:</translation>
     </message>
     <message>
         <source>Loading Network Averages...</source>
@@ -4638,11 +5111,15 @@ por exemplo: alertnotify=echo %%s | mail -s "Gridcoin Alert" admin@foo.com
     </message>
     <message>
         <source>Due to the failure to delete the blockchain data you will be required to manually delete the data before starting your wallet.</source>
-        <translation>Devido à falha em eliminar os dados da blockchain, irá necessitar de eliminar manualmente os dados antes de começar de iniciar a sua carteira.</translation>
+        <translation>Devido à falha na eliminação dos dados da cadeia de blocos, ser-lhe-á solicitado que elimine manualmente os dados antes de iniciar a sua carteira.</translation>
     </message>
     <message>
         <source>Failed to download snapshot as mandatory client is available for download.</source>
         <translation>Falhou a transferência do snapshot porque existe uma atualização obrigatória da aplicação.</translation>
+    </message>
+    <message>
+        <source>Failure to do so will result in undefined behaviour or failure to start wallet.</source>
+        <translation>Se não o fizer, o resultado será um comportamento indefinido ou uma falha no arranque da carteira.</translation>
     </message>
     <message>
         <source>Unable to download a snapshot, as the wallet has detected that a new mandatory version is available for install. The mandatory upgrade must be installed before the snapshot can be downloaded and applied.</source>
@@ -4659,7 +5136,7 @@ Please exit Gridcoin, open the data directory, and delete:
 
 Your wallet will re-download the blockchain. Your balance may appear incorrect until the synchronization finishes.
 </source>
-        <translation>AVISO: A Blockchain pode estar corrompida.
+        <translation>AVISO: A Cadeia de Blocos pode estar corrompida.
 
 O Gridcoin detetou entradas incorretas do índice. Isto pode ocorrer devido uma fecho inesperado, falha de energia ou uma atualização da aplicação.
 
@@ -4667,7 +5144,7 @@ Por favor saia do Gridcoin, abra a diretoria de dados e, elimine:
 - os ficheiros blk****.dat
 - a diretoria txleveldb
 
-A sua carteira irá transferir novamente a blockchain. O seu balanço poder aparecer incorreto até que a sincronização termine.
+A sua carteira irá transferir novamente a cadeia de blocos. O seu balanço poder aparecer incorreto até que a sincronização termine.
 </translation>
     </message>
     <message>
@@ -4683,6 +5160,10 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
         <translation>Versão do Gridcoin</translation>
     </message>
     <message>
+        <source>Resetting block chain index to prepare for reindexing...</source>
+        <translation>Repondo o índice da block chain para preparar a reindexação...</translation>
+    </message>
+    <message>
         <source>Stage (1/4): Downloading snapshot.zip:         </source>
         <translation>Etapa (1/4): Transferindo o snapshot.zip:</translation>
     </message>
@@ -4692,7 +5173,7 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>Stage (3/4): Cleanup blockchain data:          </source>
-        <translation>Etapa (3/4): Limpar dados da blockchain:</translation>
+        <translation>Etapa (3/4): Limpar dados da cadeia de blocos:</translation>
     </message>
     <message>
         <source>Stage (4/4): Extracting snapshot.zip:          </source>
@@ -4736,15 +5217,15 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>Unknown poll response type.</source>
-        <translation>Tipo de resposta da votação desconhecido.</translation>
+        <translation>Tipo de resposta da sondagem desconhecida.</translation>
     </message>
     <message>
         <source>Unknown poll type.</source>
-        <translation>Tipo de votação desconhecido.</translation>
+        <translation>Tipo de sondagem desconhecida.</translation>
     </message>
     <message>
         <source>Unknown poll weight type.</source>
-        <translation>Tipo de peso da votação desconhecido.</translation>
+        <translation>Tipo de peso da sondagem desconhecido.</translation>
     </message>
     <message>
         <source>None</source>
@@ -4752,7 +5233,7 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>No current polls</source>
-        <translation>Sem votações</translation>
+        <translation>Sem sondagens</translation>
     </message>
     <message>
         <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s'</source>
@@ -4832,7 +5313,7 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>Importing bootstrap blockchain data file.</source>
-        <translation>Importando ficheiro de dados do bootstrap da blockchain.</translation>
+        <translation>Importação do ficheiro de dados da cadeia de blocos bootstrap.</translation>
     </message>
     <message>
         <source>Loading addresses...</source>
@@ -4876,7 +5357,7 @@ Se o ficheiro não existir, crie-o com permissões de leitura.</translation>
     </message>
     <message>
         <source>Vote signature failed. See debug.log.</source>
-        <translation>Assinatura da votação falhou. Veja debug.log.</translation>
+        <translation>Assinatura da votação falhou. Ver debug.log.</translation>
     </message>
     <message>
         <source>Warning: Disk space is low!</source>

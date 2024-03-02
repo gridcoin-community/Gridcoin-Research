@@ -168,7 +168,7 @@ inline int64_t abs64(int64_t n)
 //! implementations.
 //!
 //! In particular this class is used for sidestake allocations, both the allocation "percentage", and the CAmount allocations
-//! resulting from muliplying the allocation (fraction) times the CAmount rewards.
+//! resulting from multiplying the allocation (fraction) times the CAmount rewards.
 //!
 class Fraction {
 public:
@@ -356,10 +356,60 @@ public:
             return Fraction(overflow_add(slhs.GetNumerator(), srhs.GetNumerator()), slhs.GetDenominator(), true);
         }
 
-        // Otherwise do the full pattern of getting a common denominator and adding, then simplify...
-        return Fraction(overflow_add(overflow_mult(slhs.GetNumerator(), srhs.GetDenominator()),
-                                     overflow_mult(slhs.GetDenominator(), srhs.GetNumerator())),
-                        overflow_mult(slhs.GetDenominator(), srhs.GetDenominator()),
+        // Now the more complex case. In general, fraction addition follows this pattern:
+        //
+        // a   c                    a * (d/g) + c * (b/g)
+        // - + - , g = gcd(b, d) => --------------------- where {(b/g), (d/g)} will be elements of the counting numbers.
+        // b   d                      g * (b/g) * (d/g)
+        //
+        // (b/g) and (d/g) are divisible with no remainders precisely because of the definition of gcd.
+        //
+        // We have already covered the trivial common denominator case above before bothering to compute the gcd of the
+        // denominator.
+        int64_t denom_gcd = std::gcd(slhs.GetDenominator(), srhs.GetDenominator());
+
+        // We have two special cases. One is where g = b (i.e. d is actually a multiple of b). In this case,
+        // the expression simplifies to
+        //
+        // a * (d/b) + c
+        // -------------
+        //       d
+        if (denom_gcd == slhs.GetDenominator()) {
+            return Fraction(overflow_add(overflow_mult(slhs.GetNumerator(), srhs.GetDenominator() / slhs.GetDenominator()),
+                                         srhs.GetNumerator()),
+                            srhs.GetDenominator(),
+                            true);
+        }
+
+        // The other is where g = d (i.e. b is actually a multiple of d). In this case,
+        // the expression simplifies to
+        //
+        // a + c * (b/d)
+        // -------------
+        //       b
+        if (denom_gcd == srhs.GetDenominator()) {
+            return Fraction(overflow_add(overflow_mult(srhs.GetNumerator(), slhs.GetDenominator() / srhs.GetDenominator()),
+                                         slhs.GetNumerator()),
+                            slhs.GetDenominator(),
+                            true);
+        }
+
+        // Otherwise do the full pattern of getting a common denominator (pulling out the gcd of the denominators),
+        // and adding, then simplify...
+        //
+        // This approach is more complex than
+        //
+        // a * d + c * b
+        // -------------
+        //     b * d
+        //
+        // but has the advantage of being more resistant to overflows, especially when the two denominators are related by a large
+        // gcd. In particular in Gridcoin's application with Allocations, the largest denominator of the allocations is 10000, so
+        // every allocation denominator in reduced form must be divisible evenly into 10000. This means the majority of fraction
+        // additions will be the two simpler cases above.
+        return Fraction(overflow_add(overflow_mult(slhs.GetNumerator(), srhs.GetDenominator() / denom_gcd),
+                                     overflow_mult(srhs.GetNumerator(), slhs.GetDenominator() / denom_gcd)),
+                        overflow_mult(denom_gcd, overflow_mult(slhs.GetDenominator() / denom_gcd, srhs.GetDenominator() / denom_gcd)),
                         true);
     }
 
@@ -385,8 +435,36 @@ public:
         Fraction slhs(*this, true);
         Fraction srhs(rhs, true);
 
-        return Fraction(overflow_mult(slhs.GetNumerator(), srhs.GetNumerator()),
-                        overflow_mult(slhs.GetDenominator(), srhs.GetDenominator()),
+        // Gcd's can be used in multiplication for better overflow resistance as well.
+        //
+        // Consider
+        // a   c
+        // - * -, where a/b and c/d are already simplified (i.e. gcd(a, b) = gcd(c, d) = 1.
+        // b   d
+        //
+        // We can have g = gcd(a, d) and h = gcd(c, b), which is with the numerators reversed, since multiplication is
+        // commutative. This means we have
+        //
+        // (c / h)   (a / g)
+        // ------- * ------- .
+        // (b / h)   (d / g)
+        //
+        // If we form Fraction(c, b, true) and Fraction(a, d, true), the simplification will determine and divide the numerator and
+        // denominator by h and g respectively.
+        //
+        // A specific example is instructive.
+        //
+        // 1998   1000    999   1000   1000   999   1   1
+        // ---- * ---- = ---- * ---- = ---- * --- = - * -
+        // 2000    999   1000    999   1000   999   1   1
+        //
+        // This is a formal form of what grade school teachers called factor cancellation. :).
+
+        Fraction sxlhs(srhs.GetNumerator(), slhs.GetDenominator(), true);
+        Fraction sxrhs(slhs.GetNumerator(), srhs.GetDenominator(), true);
+
+        return Fraction(overflow_mult(sxlhs.GetNumerator(), sxrhs.GetNumerator()),
+                        overflow_mult(sxlhs.GetDenominator(), sxrhs.GetDenominator()),
                         true);
     }
 
