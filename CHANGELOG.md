@@ -4,6 +4,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.6.0], 2024-03-02, leisure, "Miss Piggy"
+
+### Added
+ - contrib: add nix file for compilation environment #2660 (@div72)
+ - gui: Make main Gridcoin window geometry save unique to datadir location #2661 (@jamescowens)
+ - build: Initial CMake support #2676 (@CyberTailor)
+ - util: Add `-shutdownnotify` and `startupnotify` options from upstream #2688 (@barton2526)
+ - gui, staking: Implement facilities for mandatory sidestakes and sidestake GUI #2704 (@jamescowens)
+ - gui, voting: Implement poll result caching and poll stale indicator #2709 (@jamescowens)
+ - gui, projects: Implement greylist state for projects in GUI projects table #2715 (@jamescowens)
+ - gui, poll: Implement poll expiration reminders #2716 (@jamescowens)
+ - serialize: allow variants to be serialized #2729 (@div72)
+ - gui: Implement poll field length limiters in GUI forms #2742 (@jamescowens)
+
+### Changed
+ - consensus, contract, scraper, protocol, project, beacon, rpc: Replace remaining appcache sections with native structures #2639 (@jamescowens)
+ - build: update libsecp256k1 to v0.3.0 #2655 (@div72)
+ - build: Replace $(AT) with .SILENT #2674 (@barton2526)
+ - build: allow system bdb #2675 (@div72)
+ - Resize Header Column with Additional Text #2683 (@PrestackI)
+ - rpc: use RPCErrorCode everywhere #2687 (@Pythonix)
+ - wallet: SecureString to allow null characters #2690 (@barton2526)
+ - random: port some upstream changes #2696 (@div72)
+ - depends: Bump dependencies #2692 (@barton2526)
+ - doc: Update link to Discord server #2693 (@adriaanjoubert)
+ - rpc: Change capitalization, remove whitespace of rpc keys #2711 (@Pythonix)
+ - ci: bump MacOS version to 12 #2713 (@div72)
+ - depends: no-longer nuke libc++abi.so* in native_clang package #2719 (@div72)
+ - doc: update windows `-fstack-clash-protection` doc #2720 (@div72)
+ - Silence `-Wcast-function-type` warning #2721 (@div72)
+ - build: Use newest `config.{guess,sub}` available #2722 (@div72)
+ - refactor: use the try_lock result in TryEnter #2723 (@div72)
+ - Updates for file src/qt/locale/bitcoin_en.ts in pt_PT #2726 (@gridcoin-community)
+ - ci: do not silently fail #2727 (@div72)
+ - Properly include Boost Array header #2730 (@theMarix)
+ - build: Update depends zlib to 1.3.1 #2734 (@jamescowens)
+ - util: Enhance Fraction class overflow resistance #2735 (@jamescowens)
+ - refactor: Fix compilation warnings #2737 (@jamescowens)
+ - gui, util: Improve upgrade dialog #2738 (@jamescowens)
+ - util: Improve allocation class #2740 (@jamescowens)
+ - translations: translation updates for Miss Piggy release #2745 (@jamescowens)
+
+### Removed
+ - gui: Disable snapshot GUI action #2700 (@jamescowens)
+ - build, crypto, script: remove most of OpenSSL usage #2705 (@div72)
+ - util: remove WSL 1 workaround in fs #2717 (@div72)
+
+### Fixed
+ - diagnostics: fix missing arg in ETTS warning #2684 (@div72)
+ - misc: fix include guard in netaddress.h #2695 (@div72)
+ - gui: Fix expired pending beacon display #2698 (@jamescowens)
+ - consensus: Fix 20230904 testnet forking issue #2703 (@jamescowens)
+ - gui: Fix filter by type in Transaction View #2708 (@jamescowens)
+ - depends: make fontconfig build under clang-16 #2718 (@div72)
+ - diag: fix researcher mode check #2725 (@div72)
+ - gui: Add missing switch cases for ALREADY_IN_MEMPOOL #2728 (@jamescowens)
+ - beacon, registry: Fix beacon history stall #2731 (@jamescowens)
+ - build: Implement comp_double comparison function in certain tests #2741 (@jamescowens)
+ - ci: change Qt path in CMake CI #2743 (@div72)
+ - net: Correct -tor argument handling #2744 (@jamescowens)
+
 ## [5.4.5.0] 2023-04-23, leisure
 
 ### Added
