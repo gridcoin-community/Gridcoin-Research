@@ -278,6 +278,16 @@ if test "$CXXFLAGS_overridden" = "no"; then
   AX_CHECK_COMPILE_FLAG([-Wdeprecated-copy],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-copy"],,[[$CXXFLAG_WERROR]])
 fi
 
+
+dnl x87 FP operations on x86 hosts can break assumptions made about the floating point values.
+dnl See the commit message which introduced this change for more details.
+case $host in
+ i?86-*|x86_64-*)
+    AX_CHECK_COMPILE_FLAG([-msse2],[CXXFLAGS="$CXXFLAGS -msse2 -mfpmath=sse"],[AC_MSG_ERROR([SSE2 support is required on x86 targets.])],[[$CXXFLAG_WERROR]])
+    ;;
+ *) ;;
+esac
+
 enable_sse42=no
 enable_sse41=no
 enable_avx2=no
