@@ -9,14 +9,14 @@
 cmake_minimum_required(VERSION 3.18)
 
 project("Gridcoin"
-    VERSION 5.4.5.4
+    VERSION 5.4.6.0
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES ASM C CXX
 )
 
-set(CLIENT_VERSION_IS_RELEASE "false")
-set(COPYRIGHT_YEAR "2023")
+set(CLIENT_VERSION_IS_RELEASE "true")
+set(COPYRIGHT_YEAR "2024")
 set(COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers")
 
 
