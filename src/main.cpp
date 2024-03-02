@@ -19,6 +19,7 @@
 #include "gridcoin/claim.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/project.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
@@ -61,6 +62,7 @@ CCriticalSection cs_setpwalletRegistered;
 set<CWallet*> setpwalletRegistered;
 
 CCriticalSection cs_main;
+CCriticalSection cs_tx_val_commit_to_disk;
 
 CTxMemPool mempool;
 
@@ -926,8 +928,8 @@ bool ForceReorganizeToHash(uint256 NewHash)
 bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned& cnt_dis, CBlockIndex* pcommon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     set<string> vRereadCPIDs;
-    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-    GRC::PollRegistry& polls = GRC::GetPollRegistry();
+
+    GRC::RegistryBookmarks registries;
 
     while(pindexBest != pcommon)
     {
@@ -965,8 +967,9 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             // for the reverted activations. This is safe to do before the transactional level reverts with beacon
             // contracts, because any beacon that is activated CANNOT have been a new advertisement in the superblock
             // itself. It would not be verified. AND if the beacon is a renewal, it would never be in the activation list
-            // for a superblock.
-            beacons.Deactivate(pindexBest->GetBlockHash());
+            // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
+            // a virtual method that corresponds to this call, as it is only relevant to beacons.
+            GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
 
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
@@ -980,7 +983,8 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             GRC::Quorum::ForgetVote(pindexBest);
         }
 
-        // Delete beacons, polls and votes from contracts in disconnected blocks.
+        // Delete beacons, scraper entries, protocol entries, projects, polls and votes from contracts
+        // in disconnected blocks.
         if (pindexBest->IsContract())
         {
             // Skip coinbase and coinstake transactions:
@@ -988,19 +992,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
                 tx != end;
                 ++tx)
             {
+                // This reverts contracts for those contract types which have handlers that properly handle
+                // contract level reversions.
                 for (const auto& contract : tx->GetContracts())
                 {
-                    if (contract.m_type == GRC::ContractType::BEACON)
-                    {
-                       const GRC::ContractContext contract_context(contract, *tx, pindexBest);
-
-                       beacons.Revert(contract_context);
-                    }
-
-                    if (contract.m_type == GRC::ContractType::POLL || contract.m_type == GRC::ContractType::VOTE) {
+                    if (GRC::RegistryBookmarks::IsRegistryRevertCapable(contract.m_type.Value())) {
                         const GRC::ContractContext contract_context(contract, *tx, pindexBest);
 
-                        polls.Revert(contract_context);
+                        GRC::RegistryBookmarks::GetRegistryWithRevert(contract.m_type.Value()).Revert(contract_context);
                     }
                 }
             }
@@ -1030,11 +1029,14 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
 
-        // Record new best height (the common block) in the beacon registry after the series of reverts.
-        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
-        beacons.SetDBHeight(pindexBest->nHeight);
+        // Record new best height (the common block) in the registries that have a backing DB. This is important
+        // to ensure that if the wallet is shutdown, on the next start, the contract replay (if any) is done from
+        // the correct height.
+        registries.UpdateRegistryBlockHeights(pindexBest->nHeight);
 
-        GRC::ReplayContracts(pindexBest);
+        // Replaying contracts after a block disconnection is no longer needed, as all contract types that have handlers
+        // that operate at the tx/contract level have fully implemented reversion.
+        //GRC::ReplayContracts(pindexBest);
 
         // Tally research averages.
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
@@ -1154,84 +1156,96 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             return error("%s: TxnBegin failed", __func__);
         }
 
-        if (pindexGenesisBlock == nullptr) {
-            if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
-                txdb.TxnAbort();
-                return error("%s: genesis block hash does not match", __func__);
+        {
+            // This lock protects the time period between the GridcoinConnectBlock, which also connects validated transaction
+            // contracts and causes contract handlers to fire, and the committing of the txindex changes to disk. Any contract
+            // handlers that generate signals whose downstream handlers make use of transaction data on disk via leveldb (txdb)
+            // on another thread need to take this lock to ensure that the write to leveldb and the access of the transaction data
+            // by the signal handlers is appropriately serialized.
+            LOCK(cs_tx_val_commit_to_disk);
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
+
+            if (pindexGenesisBlock == nullptr) {
+                if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
+                    txdb.TxnAbort();
+                    return error("%s: genesis block hash does not match", __func__);
+                }
+
+                pindexGenesisBlock = pindex;
+            } else {
+                assert(pindex->GetBlockHash()==block.GetHash(true));
+                assert(pindex->pprev == pindexBest);
+
+                if (!ConnectBlock(block, txdb, pindex, false)) {
+                    txdb.TxnAbort();
+                    error("%s: ConnectBlock %s failed, Previous block %s",
+                          __func__,
+                          hash.ToString().c_str(),
+                          pindex->pprev->GetBlockHash().ToString());
+                    InvalidChainFound(pindex);
+                    return false;
+                }
             }
 
-            pindexGenesisBlock = pindex;
-        } else {
-            assert(pindex->GetBlockHash()==block.GetHash(true));
-            assert(pindex->pprev == pindexBest);
-
-            if (!ConnectBlock(block, txdb, pindex, false)) {
-                txdb.TxnAbort();
-                error("%s: ConnectBlock %s failed, Previous block %s",
-                      __func__,
-                      hash.ToString().c_str(),
-                      pindex->pprev->GetBlockHash().ToString());
-                InvalidChainFound(pindex);
-                return false;
+            // Delete redundant memory transactions
+            for (auto const& tx : block.vtx) {
+                mempool.remove(tx);
+                mempool.removeConflicts(tx);
             }
-        }
 
-        // Delete redundant memory transactions
-        for (auto const& tx : block.vtx) {
-            mempool.remove(tx);
-            mempool.removeConflicts(tx);
-        }
+            // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
+            // AcceptToMemoryPool. Here we just need to do a staleness check.
+            std::vector<CTransaction> to_be_erased;
 
-        // Remove stale MRCs in the mempool that are not in this new block. Remember the MRCs were initially validated in
-        // AcceptToMemoryPool. Here we just need to do a staleness check.
-        std::vector<CTransaction> to_be_erased;
+            for (const auto& [_, pool_tx] : mempool.mapTx) {
+                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
+                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
 
-        for (const auto& [_, pool_tx] : mempool.mapTx) {
-            for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
-                if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
-                    GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
-
-                    if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
-                        to_be_erased.push_back(pool_tx);
+                        if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
+                            to_be_erased.push_back(pool_tx);
+                        }
                     }
                 }
             }
-        }
 
-        // TODO: Additional mempool removals for generic transactions based on txns...
-        // that satisfy lock time requirements,
-        // that are at least 30m old,
-        // that have been broadcast at least once min 5m ago,
-        // that had at least 45s to go in to the last block,
-        // and are still not in the txdb? (for the wallet itself, not mempool.)
+            // TODO: Additional mempool removals for generic transactions based on txns...
+            // that satisfy lock time requirements,
+            // that are at least 30m old,
+            // that have been broadcast at least once min 5m ago,
+            // that had at least 45s to go in to the last block,
+            // and are still not in the txdb? (for the wallet itself, not mempool.)
 
-        for (const auto& tx : to_be_erased) {
-            LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
-            mempool.remove(tx);
-            // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
-            if (pwalletMain->EraseFromWallet(tx.GetHash())) {
-                pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+            for (const auto& tx : to_be_erased) {
+                LogPrintf("%s: Erasing stale transaction %s from mempool and wallet.", __func__, tx.GetHash().ToString());
+                mempool.remove(tx);
+                // If this transaction was in this wallet (i.e. erasure successful), then send signal for GUI.
+                if (pwalletMain->EraseFromWallet(tx.GetHash())) {
+                    pwalletMain->NotifyTransactionChanged(pwalletMain, tx.GetHash(), CT_DELETED);
+                }
             }
-        }
 
-        // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
-        // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
-        // repairwallet rpc, this is silent.
-        if (!to_be_erased.empty()) {
-            int nMisMatchFound = 0;
-            CAmount nBalanceInQuestion = 0;
+            // Clean up spent outputs in wallet that are now not spent if mempool transactions erased above. This
+            // is ugly and heavyweight and should be replaced when the upstream wallet code is ported. Unlike the
+            // repairwallet rpc, this is silent.
+            if (!to_be_erased.empty()) {
+                int nMisMatchFound = 0;
+                CAmount nBalanceInQuestion = 0;
 
-            pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
-        }
+                pwalletMain->FixSpentCoins(nMisMatchFound, nBalanceInQuestion);
+            }
 
-        if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
-            txdb.TxnAbort();
-            return error("%s: WriteHashBestChain failed", __func__);
-        }
+            if (!txdb.WriteHashBestChain(pindex->GetBlockHash())) {
+                txdb.TxnAbort();
+                return error("%s: WriteHashBestChain failed", __func__);
+            }
 
-        // Make sure it's successfully written to disk before changing memory structure
-        if (!txdb.TxnCommit()) {
-            return error("%s: TxnCommit failed", __func__);
+            // Make sure it's successfully written to disk before changing memory structure
+            if (!txdb.TxnCommit()) {
+                return error("%s: TxnCommit failed", __func__);
+            }
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk unlocked", __func__);
         }
 
         // Add to current best branch
@@ -1674,7 +1688,7 @@ bool LoadBlockIndex(bool fAllowNew)
         txNew.nTime = 1413033777;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
-        txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+        txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
         txNew.vout[0].SetEmpty();
         CBlock block;
         block.vtx.push_back(txNew);
@@ -2928,7 +2942,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     {
         uint64_t nonce = 0;
         while (nonce == 0) {
-            GetRandBytes((unsigned char*)&nonce, sizeof(nonce));
+            GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
         }
         pto->fPingQueued = false;
         pto->nPingUsecStart = GetTimeMicros();

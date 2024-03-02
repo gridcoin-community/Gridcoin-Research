@@ -2186,21 +2186,29 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
     // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
     SecureString strWalletPass;
     strWalletPass.reserve(100);
-    // Get rid of this .c_str() by implementing SecureString::operator=(std::string)
-    // Alternately, find a way to make params[0] mlock()'d to begin with.
-    strWalletPass = params[0].get_str().c_str();
+    strWalletPass = std::string_view{params[0].get_str()};
 
-    if (strWalletPass.length() > 0)
-    {
+    if (strWalletPass.length() > 0) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        if (!pwalletMain->Unlock(strWalletPass))
-            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
-    }
-    else
+        if (!pwalletMain->Unlock(strWalletPass)) {
+            // Check if the passphrase has a null character
+            if (strWalletPass.find('\0') == std::string::npos) {
+                throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+            } else {
+                throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered is incorrect. "
+                                                                    "It contains a null character (ie - a zero byte). "
+                                                                    "If the passphrase was set with a version of this software prior to 5.4.6, "
+                                                                    "please try again with only the characters up to — but not including — "
+                                                                    "the first null character. If this is successful, please set a new "
+                                                                    "passphrase to avoid this issue in the future.");
+            }
+        }
+    } else {
         throw runtime_error(
             "walletpassphrase <passphrase> <timeout>\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.");
+    }
 
     NewThread(ThreadTopUpKeyPool, nullptr);
     int64_t* pnSleepTime = new int64_t(nSleepTime);
@@ -2229,15 +2237,13 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
 
-    // Get rid of these .c_str() calls by implementing SecureString::operator=(std::string)
-    // Alternately, find a way to make params[0] mlock()'d to begin with.
     SecureString strOldWalletPass;
     strOldWalletPass.reserve(100);
-    strOldWalletPass = params[0].get_str().c_str();
+    strOldWalletPass = std::string_view{params[0].get_str()};
 
     SecureString strNewWalletPass;
     strNewWalletPass.reserve(100);
-    strNewWalletPass = params[1].get_str().c_str();
+    strNewWalletPass = std::string_view{params[1].get_str()};
 
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
         throw runtime_error(
@@ -2246,14 +2252,24 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass))
-        throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    if (!pwalletMain->ChangeWalletPassphrase(strOldWalletPass, strNewWalletPass)) {
+        // Check if the old passphrase had a null character
+        if (strOldWalletPass.find('\0') == std::string::npos) {
+            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+        } else {
+            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The old wallet passphrase entered is incorrect. "
+                                                                "It contains a null character (ie - a zero byte). "
+                                                                "If the old passphrase was set with a version of this software prior to 5.4.6, "
+                                                                "please try again with only the characters up to — but not including — "
+                                                                "the first null character.");
+        }
+    }
 
     return NullUniValue;
 }
 
 /**
- * Run the walled diagnose checks
+ * Run the wallet diagnose checks
  */
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
@@ -2373,11 +2389,9 @@ UniValue encryptwallet(const UniValue& params, bool fHelp)
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
 
-    // Get rid of this .c_str() by implementing SecureString::operator=(std::string)
-    // Alternately, find a way to make params[0] mlock()'d to begin with.
     SecureString strWalletPass;
     strWalletPass.reserve(100);
-    strWalletPass = params[0].get_str().c_str();
+    strWalletPass = std::string_view{params[0].get_str()};
 
     if (strWalletPass.length() < 1)
         throw runtime_error(

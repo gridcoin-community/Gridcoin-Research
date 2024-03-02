@@ -1,3 +1,4 @@
+MSDOS
 hights
 mor
 mut
@@ -26,3 +27,4 @@ smoe
 sur
 clen
 siz
+anull

@@ -57,7 +57,8 @@ bool ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
     CBlockHeader& out_header,
-    CTransaction& out_txprev);
+    CTransaction& out_txprev,
+    CBlockIndex* pindexPrev = nullptr);
 
 //!
 //! \brief Calculate the provided block's proof hash with the version 3 staking

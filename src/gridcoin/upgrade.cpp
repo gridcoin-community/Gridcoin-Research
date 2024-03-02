@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/upgrade.h"
+#include <crypto/sha256.h>
 #include "util.h"
 #include "init.h"
 
@@ -16,7 +17,6 @@
 #include <iostream>
 
 #include <zip.h>
-#include <openssl/sha.h>
 
 using namespace GRC;
 
@@ -32,12 +32,16 @@ Upgrade::Upgrade()
 
 void Upgrade::ScheduledUpdateCheck()
 {
-    std::string VersionResponse = "";
+    std::string VersionResponse;
+    std::string change_log;
 
-    CheckForLatestUpdate(VersionResponse);
+    Upgrade::UpgradeType upgrade_type {Upgrade::UpgradeType::Unknown};
+
+    CheckForLatestUpdate(VersionResponse, change_log, upgrade_type);
 }
 
-bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dialog, bool snapshotrequest)
+bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, std::string& change_log, Upgrade::UpgradeType& upgrade_type,
+                                   bool ui_dialog, bool snapshotrequest)
 {
     // If testnet skip this || If the user changes this to disable while wallet running just drop out of here now.
     // (Need a way to remove items from scheduler.)
@@ -46,8 +50,8 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     Http VersionPull;
 
-    std::string GithubResponse = "";
-    std::string VersionResponse = "";
+    std::string GithubResponse;
+    std::string VersionResponse;
 
     // We receive the response and it's in a json reply
     UniValue Response(UniValue::VOBJ);
@@ -64,15 +68,15 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     if (VersionResponse.empty())
     {
-        LogPrintf("WARNING %s: No Response from GitHub", __func__);
+        LogPrintf("WARNING: %s: No Response from GitHub", __func__);
 
         return false;
     }
 
-    std::string GithubReleaseData = "";
-    std::string GithubReleaseTypeData = "";
-    std::string GithubReleaseBody = "";
-    std::string GithubReleaseType = "";
+    std::string GithubReleaseData;
+    std::string GithubReleaseTypeData;
+    std::string GithubReleaseBody;
+    std::string GithubReleaseType;
 
     try
     {
@@ -95,14 +99,19 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     }
 
     GithubReleaseTypeData = ToLower(GithubReleaseTypeData);
-    if (GithubReleaseTypeData.find("leisure") != std::string::npos)
+
+    if (GithubReleaseTypeData.find("leisure") != std::string::npos) {
         GithubReleaseType = _("leisure");
-
-    else if (GithubReleaseTypeData.find("mandatory") != std::string::npos)
+        upgrade_type = Upgrade::UpgradeType::Leisure;
+    } else if (GithubReleaseTypeData.find("mandatory") != std::string::npos) {
         GithubReleaseType = _("mandatory");
-
-    else
+        // This will be confirmed below by also checking the second position version. If not incremented, then it will
+        // be set to unknown.
+        upgrade_type = Upgrade::UpgradeType::Mandatory;
+    } else {
         GithubReleaseType = _("unknown");
+        upgrade_type = Upgrade::UpgradeType::Unknown;
+    }
 
     // Parse version data
     std::vector<std::string> GithubVersion;
@@ -113,6 +122,7 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
     LocalVersion.push_back(CLIENT_VERSION_MAJOR);
     LocalVersion.push_back(CLIENT_VERSION_MINOR);
     LocalVersion.push_back(CLIENT_VERSION_REVISION);
+    LocalVersion.push_back(CLIENT_VERSION_BUILD);
 
     if (GithubVersion.size() != 4)
     {
@@ -123,60 +133,79 @@ bool Upgrade::CheckForLatestUpdate(std::string& client_message_out, bool ui_dial
 
     bool NewVersion = false;
     bool NewMandatory = false;
+    bool same_version = true;
 
     try {
         // Left to right version numbers.
-        // 3 numbers to check for production.
-        for (unsigned int x = 0; x < 3; x++)
-        {
+        // 4 numbers to check.
+        for (unsigned int x = 0; x <= 3; x++) {
             int github_version = 0;
 
-            if (!ParseInt32(GithubVersion[x], &github_version))
-            {
+            if (!ParseInt32(GithubVersion[x], &github_version)) {
                 throw std::invalid_argument("Failed to parse GitHub version from official GitHub project repo.");
             }
 
-            if (github_version > LocalVersion[x])
-            {
+            if (github_version > LocalVersion[x]) {
                 NewVersion = true;
-                if (x < 2)
-                {
+                same_version = false;
+
+                if (x < 2 && upgrade_type == Upgrade::UpgradeType::Mandatory) {
                     NewMandatory = true;
+                } else {
+                    upgrade_type = Upgrade::UpgradeType::Unknown;
                 }
-                break;
+            } else {
+                same_version &= (github_version == LocalVersion[x]);
             }
         }
-    }
-    catch (std::exception& ex)
-    {
+    } catch (std::exception& ex) {
         error("%s: Exception occurred checking client version against GitHub version (%s)",
                   __func__, ToString(ex.what()));
 
+        upgrade_type = Upgrade::UpgradeType::Unknown;
         return false;
     }
 
-    if (!NewVersion) return NewVersion;
-
-    // New version was found
+    // Populate client_message_out regardless of whether new version is found, because we are using this method for
+    // the version information button in the "About Gridcoin" dialog.
     client_message_out = _("Local version: ") + strprintf("%d.%d.%d.%d", CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR,
                                                           CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD) + "\r\n";
     client_message_out.append(_("GitHub version: ") + GithubReleaseData + "\r\n");
-    client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
 
-    // For snapshot requests we will handle things differently after this point
-    if (snapshotrequest && NewMandatory)
-        return NewVersion;
+    if (NewVersion) {
+        client_message_out.append(_("This update is ") + GithubReleaseType + "\r\n\r\n");
+    } else if (same_version) {
+        client_message_out.append(_("The latest release is ") + GithubReleaseType + "\r\n\r\n");
+        client_message_out.append(_("You are running the latest release.") + "\n");
+    } else {
+        client_message_out.append(_("The latest release is ") + GithubReleaseType + "\r\n\r\n");
 
-    if (NewMandatory)
+        // If not a new version available and the version is not the same, the only thing left is that we are running
+        // a version greater than the latest release version, so set the upgrade_type to Unsupported, which is used for a
+        // warning.
+        upgrade_type = Upgrade::UpgradeType::Unsupported;
+        client_message_out.append(_("WARNING: You are running a version that is higher than the latest release.") + "\n");
+    }
+
+    change_log = GithubReleaseBody;
+
+    if (!NewVersion) return false;
+
+    // For snapshot requests we will only return true if there is a new mandatory version AND the snapshotrequest boolean
+    // is set true. This is because the snapshot request context is looking for the presence of a new mandatory to block
+    // the snapshot download before upgrading to the new mandatory if there is one.
+    if (snapshotrequest && NewMandatory) return true;
+
+    if (NewMandatory) {
         client_message_out.append(_("WARNING: A mandatory release is available. Please upgrade as soon as possible.")
                                   + "\n");
+    }
 
-    std::string ChangeLog = GithubReleaseBody;
+    if (ui_dialog) {
+        uiInterface.UpdateMessageBox(client_message_out, static_cast<int>(upgrade_type), change_log);
+    }
 
-    if (ui_dialog)
-        uiInterface.UpdateMessageBox(client_message_out, ChangeLog);
-
-    return NewVersion;
+    return true;
 }
 
 void Upgrade::SnapshotMain()
@@ -188,8 +217,10 @@ void Upgrade::SnapshotMain()
 
     // Verify a mandatory release is not available before we continue to snapshot download.
     std::string VersionResponse = "";
+    std::string change_log;
+    Upgrade::UpgradeType upgrade_type {Upgrade::UpgradeType::Unknown};
 
-    if (CheckForLatestUpdate(VersionResponse, false, true))
+    if (CheckForLatestUpdate(VersionResponse, change_log, upgrade_type, false, true))
     {
         std::cout << this->ResetBlockchainMessages(UpdateAvailable) << std::endl;
         std::cout << this->ResetBlockchainMessages(GithubResponse) << std::endl;
@@ -428,13 +459,10 @@ void Upgrade::VerifySHA256SUM()
         return;
     }
 
-    unsigned char digest[SHA256_DIGEST_LENGTH];
-
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
+    CSHA256 hasher;
 
     fs::path fileloc = GetDataDir() / "snapshot.zip";
-    unsigned char *buffer[32768];
+    uint8_t buffer[32768];
     int bytesread = 0;
 
     CAutoFile file(fsbridge::fopen(fileloc, "rb"), SER_DISK, CLIENT_VERSION);
@@ -453,15 +481,16 @@ void Upgrade::VerifySHA256SUM()
     unsigned int read_count = 0;
     while ((bytesread = fread(buffer, 1, sizeof(buffer), file.Get())))
     {
-        SHA256_Update(&ctx, buffer, bytesread);
+        hasher.Write(buffer, bytesread);
         ++read_count;
 
         DownloadStatus.SetSHA256SUMProgress(read_count * 100 / total_reads);
     }
 
-    SHA256_Final(digest, &ctx);
+    uint8_t digest[CSHA256::OUTPUT_SIZE];
+    hasher.Finalize(digest);
 
-    const std::vector<unsigned char> digest_vector(digest, digest + SHA256_DIGEST_LENGTH);
+    const std::vector<unsigned char> digest_vector(digest, digest + CSHA256::OUTPUT_SIZE);
 
     std::string FileSHA256SUM = HexStr(digest_vector);
 

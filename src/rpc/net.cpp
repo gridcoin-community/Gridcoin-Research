@@ -52,7 +52,7 @@ UniValue addnode(const UniValue& params, bool fHelp)
         CAddress addr;
         CNode* pnode= ConnectNode(addr, strNode.c_str());
         if(!pnode)
-            throw JSONRPCError(-23, "Error: Node connection failed");
+            throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node connection failed");
         UniValue result(UniValue::VOBJ);
         result.pushKV("result", "ok");
         return result;
@@ -67,13 +67,13 @@ UniValue addnode(const UniValue& params, bool fHelp)
     if (strCommand == "add")
     {
         if (it != vAddedNodes.end())
-            throw JSONRPCError(-23, "Error: Node already added");
+            throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node already added");
         vAddedNodes.push_back(strNode);
     }
     else if(strCommand == "remove")
     {
         if (it == vAddedNodes.end())
-            throw JSONRPCError(-24, "Error: Node has not been added.");
+            throw JSONRPCError(RPC_CLIENT_NODE_NOT_ADDED, "Error: Node has not been added.");
         vAddedNodes.erase(it);
     }
 
@@ -95,7 +95,7 @@ UniValue getnodeaddresses(const UniValue& params, bool fHelp)
         count = params[0].get_int();
 
     if (count <= 0)
-        throw JSONRPCError(-8, "Address count out of range");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Address count out of range");
 
     // returns a shuffled list of CAddress
     std::vector<CAddress> vAddr = addrman.GetAddr();
@@ -145,7 +145,7 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
                 break;
             }
         if (laddedNodes.size() == 0)
-            throw JSONRPCError(-24, "Error: Node has not been added.");
+            throw JSONRPCError(RPC_CLIENT_NODE_NOT_ADDED, "Error: Node has not been added.");
     }
 
     if (!fDns)

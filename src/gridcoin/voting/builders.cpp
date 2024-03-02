@@ -859,7 +859,10 @@ uint256 GRC::SendPollContract(PollBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {
@@ -875,7 +878,10 @@ uint256 GRC::SendVoteContract(VoteBuilder builder)
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        result_pair = SendContract(builder.BuildContractTx(pwalletMain));
+
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        result_pair = SendContract(builder.BuildContractTx(pwalletMain, contract_version));
     }
 
     if (!result_pair.second.empty()) {
@@ -1014,7 +1020,7 @@ PollBuilder PollBuilder::SetTitle(std::string title)
             ToString(Poll::MAX_TITLE_SIZE)));
     }
 
-    m_poll->m_title = std::move(title);
+    m_poll->m_title = title;
 
     return std::move(*this);
 }
@@ -1031,7 +1037,7 @@ PollBuilder PollBuilder::SetUrl(std::string url)
             ToString(Poll::MAX_URL_SIZE)));
     }
 
-    m_poll->m_url = std::move(url);
+    m_poll->m_url = url;
 
     return std::move(*this);
 }
@@ -1044,7 +1050,7 @@ PollBuilder PollBuilder::SetQuestion(std::string question)
             ToString(Poll::MAX_QUESTION_SIZE)));
     }
 
-    m_poll->m_question = std::move(question);
+    m_poll->m_question = question;
 
     return std::move(*this);
 }
@@ -1053,13 +1059,13 @@ PollBuilder PollBuilder::SetChoices(std::vector<std::string> labels)
 {
     m_poll->m_choices = Poll::ChoiceList();
 
-    return AddChoices(std::move(labels));
+    return AddChoices(labels);
 }
 
 PollBuilder PollBuilder::AddChoices(std::vector<std::string> labels)
 {
     for (auto& label : labels) {
-        *this = AddChoice(std::move(label));
+        *this = AddChoice(label);
     }
 
     return std::move(*this);
@@ -1090,7 +1096,7 @@ PollBuilder PollBuilder::AddChoice(std::string label)
         throw VotingError(strprintf(_("Duplicate poll choice: %s"), label));
     }
 
-    m_poll->m_choices.Add(std::move(label));
+    m_poll->m_choices.Add(label);
 
     return std::move(*this);
 }
@@ -1099,20 +1105,20 @@ PollBuilder PollBuilder::SetAdditionalFields(std::vector<Poll::AdditionalField> 
 {
     m_poll->m_additional_fields = Poll::AdditionalFieldList();
 
-    return AddAdditionalFields(std::move(fields));
+    return AddAdditionalFields(fields);
 }
 
 PollBuilder PollBuilder::SetAdditionalFields(Poll::AdditionalFieldList fields)
 {
     m_poll->m_additional_fields = Poll::AdditionalFieldList();
 
-    return AddAdditionalFields(std::move(fields));
+    return AddAdditionalFields(fields);
 }
 
 PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> fields)
 {
     for (auto& field : fields) {
-        *this = AddAdditionalField(std::move(field));
+        *this = AddAdditionalField(field);
     }
 
     if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
@@ -1125,7 +1131,7 @@ PollBuilder PollBuilder::AddAdditionalFields(std::vector<Poll::AdditionalField> 
 PollBuilder PollBuilder::AddAdditionalFields(Poll::AdditionalFieldList fields)
 {
     for (auto& field : fields) {
-        *this = AddAdditionalField(std::move(field));
+        *this = AddAdditionalField(field);
     }
 
     if (!m_poll->m_additional_fields.WellFormed(m_poll->m_type.Value())) {
@@ -1152,31 +1158,31 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
                               ToString(POLL_MAX_ADDITIONAL_FIELDS_SIZE)));
     }
 
-    if (field.m_name.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+    if (field.m_name.size() > Poll::AdditionalField::MAX_NAME_SIZE) {
         throw VotingError(strprintf(
                               _("Poll additional field name \"%s\" exceeds %s characters."),
                               field.m_name,
-                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+                              ToString(Poll::AdditionalField::MAX_NAME_SIZE)));
     }
 
-    if (field.m_value.size() > Poll::AdditionalField::MAX_N_OR_V_SIZE) {
+    if (field.m_value.size() > Poll::AdditionalField::MAX_VALUE_SIZE) {
         throw VotingError(strprintf(
                               _("Poll additional field value \"%s\" for field name \"%s\" exceeds %s characters."),
                               field.m_value,
                               field.m_name,
-                              ToString(Poll::AdditionalField::MAX_N_OR_V_SIZE)));
+                              ToString(Poll::AdditionalField::MAX_VALUE_SIZE)));
     }
 
     if (m_poll->m_additional_fields.FieldExists(field.m_name)) {
         throw VotingError(strprintf(_("Duplicate poll additional field: %s"), field.m_name));
     }
 
-    m_poll->m_additional_fields.Add(std::move(field));
+    m_poll->m_additional_fields.Add(field);
 
     return std::move(*this);
 }
 
-CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
+CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
@@ -1208,6 +1214,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet)
     PollEligibilityClaim claim = claim_builder.BuildClaim(*m_poll);
 
     tx.vContracts.emplace_back(MakeContract<PollPayload>(
+                                   contract_version,
                                    ContractAction::ADD,
                                    std::move(m_poll_payload_version),
                                    std::move(*m_poll),
@@ -1346,7 +1353,7 @@ VoteBuilder VoteBuilder::AddResponse(const std::string& label)
     throw VotingError(strprintf(_("\"%s\" is not a valid poll choice."), label));
 }
 
-CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
+CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
@@ -1362,7 +1369,7 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet)
     claim_builder.BuildClaim(*m_vote, *m_poll);
 
     tx.vContracts.emplace_back(
-        MakeContract<Vote>(ContractAction::ADD, std::move(*m_vote)));
+        MakeContract<Vote>(contract_version, ContractAction::ADD, std::move(*m_vote)));
 
     SelectFinalInputs<Vote>(*pwallet, tx);
     Vote& vote = tx.vContracts.back().SharePayload().As<Vote>();

@@ -734,7 +734,15 @@ const PollRegistry::Sequence PollRegistry::Polls() const
 {
     LOCK(GetPollRegistry().cs_poll_registry);
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-reference"
+#endif
     return Sequence(m_polls);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
 }
 
 const PollReference* PollRegistry::TryLatestActive() const EXCLUSIVE_LOCKS_REQUIRED(PollRegistry::cs_poll_registry)
@@ -1042,6 +1050,9 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
                          *poll_ref->m_ptitle,
                          poll_ref->Votes().size());
 
+                if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+                    uiInterface.NewVoteReceived(poll_ref->Txid());
+                }
             }
         }
 
@@ -1064,12 +1075,18 @@ void PollRegistry::AddVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
             return;
         }
         poll_ref->LinkVote(ctx.m_tx.GetHash());
+
+        if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+            uiInterface.NewVoteReceived(poll_ref->Txid());
+        }
     }
 }
 
 void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
 {
     const auto payload = ctx->SharePayloadAs<PollPayload>();
+
+    int64_t poll_time = payload->m_poll.m_timestamp;
 
     m_polls.erase(ToLower(payload->m_poll.m_title));
 
@@ -1080,6 +1097,10 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
              __func__,
              payload->m_poll.m_title,
              m_polls.size());
+
+    if (fQtActive) {
+        uiInterface.NewPollReceived(poll_time);;
+    }
 
 }
 
@@ -1096,6 +1117,10 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
                      ctx.m_tx.GetHash().GetHex(),
                      *poll_ref->m_ptitle,
                      poll_ref->Votes().size());
+
+            if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+                uiInterface.NewVoteReceived(poll_ref->Txid());
+            }
         }
 
         return;
@@ -1110,6 +1135,10 @@ void PollRegistry::DeleteVote(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     if (PollReference* poll_ref = TryBy(title)) {
         poll_ref->UnlinkVote(ctx.m_tx.GetHash());
+
+        if (fQtActive && !poll_ref->Expired(GetAdjustedTime())) {
+            uiInterface.NewVoteReceived(poll_ref->Txid());
+        }
     }
 }
 

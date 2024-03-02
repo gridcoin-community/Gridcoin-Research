@@ -88,7 +88,7 @@ public:
     ADD_SIGNALS_DECL_WRAPPER(ThreadSafeMessageBox, void, const std::string& message, const std::string& caption, int style);
 
     /** Update notification message box. */
-    ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const std::string& message);
+    ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const int& update_type, const std::string& message);
 
     /** Ask the user whether they want to pay a fee or not. */
     ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskFee, bool, int64_t nFeeRequired, const std::string& strCaption);
@@ -134,6 +134,12 @@ public:
 
     /** New poll received **/
     ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);
+
+    /** New vote received **/
+    ADD_SIGNALS_DECL_WRAPPER(NewVoteReceived, void, const uint256& poll_txid);
+
+    /** Read-write settings file updated **/
+    ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
 
     /**
      * New, updated or cancelled alert.

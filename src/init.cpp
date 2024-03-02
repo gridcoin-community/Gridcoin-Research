@@ -19,6 +19,7 @@
 #include "scheduler.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
+#include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "node/blockstorage.h"
 #include <util/syserror.h>
@@ -57,8 +58,6 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 
-static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
-
 /**
  * The PID file facilities.
  */
@@ -88,6 +87,19 @@ static fs::path GetPidFile(const ArgsManager& args)
 //
 // Shutdown
 //
+
+#if HAVE_SYSTEM
+static void ShutdownNotify(const ArgsManager& args)
+{
+    std::vector<std::thread> threads;
+    for (const auto& cmd : args.GetArgs("-shutdownnotify")) {
+        threads.emplace_back(runCommand, cmd);
+    }
+    for (auto& t : threads) {
+        t.join();
+    }
+}
+#endif
 
 bool ShutdownRequested()
 {
@@ -128,6 +140,11 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
          LogPrintf("gridcoinresearch exiting...");
+
+        #if HAVE_SYSTEM
+            ShutdownNotify(gArgs);
+        #endif
+
         fShutdown = true;
 
         // Signal to the scheduler to stop.
@@ -166,7 +183,6 @@ void Shutdown(void* parg)
         // This causes issues on daemons where it tries to create a second
         // lock file.
         //CTxDB().Close();
-        globalVerifyHandle.reset();
         ECC_Stop();
         UninterruptibleSleep(std::chrono::milliseconds{50});
         LogPrintf("Gridcoin exited");
@@ -387,8 +403,11 @@ void SetupServerArgs()
                                                  " prefixed by datadir location. (default: %s)",
                                                  GRIDCOIN_CONF_FILENAME, GRIDCOIN_SETTINGS_FILENAME),
                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
-    //TODO: Implement startupnotify option
-    //argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-startupnotify=<cmd>", "Execute command on startup.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-shutdownnotify=<cmd>", "Execute command immediately before beginning shutdown. The need for shutdown may be urgent,"
+                                                " so be careful not to delay it long (if the command doesn't require interaction with the"
+                                                " server, consider having it fork into the background).",
+                    ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 
 
     // Staking
@@ -413,6 +432,13 @@ void SetupServerArgs()
                                                    "six are specified. Six are randomly chosen for each stake. Only active "
                                                    "if -enablesidestaking is set. If set along with -sidestakeaddresses "
                                                    "overrides the -sidestake entries.",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
+    argsman.AddArg("-sidestakedescriptions=string1,string2,...,stringN>", "Sidestake entry description. There can be as many "
+                                                                          "specified as desired. Only six per stake can be sent. "
+                                                                          "If more than six are specified. Six are randomly chosen "
+                                                                          "for each stake. Only active if -enablesidestaking is set. "
+                                                                          "If set along with -sidestakeaddresses overrides the "
+                                                                          "-sidestake entries.",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::STAKING);
     argsman.AddArg("-enablestakesplit", "Enable unspent output spitting when staking to optimize staking efficiency "
                                         "(default: 0",
@@ -592,11 +618,21 @@ void SetupServerArgs()
     hidden_args.emplace_back("-daemonwait");
 #endif
 
+    // Temporary hidden option for block v13 height override to facilitate testing.
+    hidden_args.emplace_back("-blockv13height");
+
     // Additional hidden options
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
-    hidden_args.emplace_back("-clearbeaconhistory");
+
+    // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
+    // registry with a backing db. This is currently beacon, project, protocol, and scraper.
+    for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
+
+        hidden_args.emplace_back(history_arg);
+    }
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.
@@ -656,6 +692,17 @@ bool InitSanityCheck()
 
     return true;
 }
+
+#if HAVE_SYSTEM
+static void StartupNotify(const ArgsManager& args)
+{
+    std::string cmd = args.GetArg("-startupnotify", "");
+    if (!cmd.empty()) {
+        std::thread t(runCommand, cmd);
+        t.detach(); // thread runs free
+    }
+}
+#endif
 
 /**
  * Initialize global loggers.
@@ -969,7 +1016,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Using the '%s' SHA256 implementation\n", sha256_algo);
     RandomInit();
     ECC_Start();
-    globalVerifyHandle.reset(new ECCVerifyHandle());
 
     // Sanity check
     if (!InitSanityCheck())
@@ -1098,15 +1144,22 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     // -tor can override normal proxy, -notor disables Tor entirely
-    if (gArgs.IsArgSet("-tor") && (fProxy || gArgs.IsArgSet("-tor"))) {
-        proxyType addrOnion;
-        if (!gArgs.IsArgSet("-tor")) {
-            addrOnion = addrProxy;
+    if (gArgs.IsArgSet("-tor")) {
+        CService addrOnion;
+
+        // If -tor is specified without any argument, and proxy was specified, then override proxy with tor
+        // at same address and port.
+        if (gArgs.GetArg("-tor", "") == "") {
+            if (fProxy) {
+                addrOnion = addrProxy;
+            }
         } else {
-            CService addrProxy(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
+            addrOnion = CService(LookupNumeric(gArgs.GetArg("-tor", "").c_str(), 9050));
         }
-        if (!addrOnion.IsValid())
-            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", "")));
+
+        if (!addrOnion.IsValid()) {
+            return InitError(strprintf(_("Invalid -tor address: '%s'"), gArgs.GetArg("-tor", gArgs.GetArg("-proxy", ""))));
+        }
         SetProxy(NET_TOR, addrOnion);
         SetReachable(NET_TOR, true);
     }
@@ -1536,6 +1589,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
     GRC::ScheduleBackgroundJobs(scheduler);
+
+    #if HAVE_SYSTEM
+        StartupNotify(gArgs);
+    #endif
 
     uiInterface.InitMessage(_("Done loading"));
     g_timer.GetTimes("Done loading", "init");

@@ -44,6 +44,7 @@ enum class BeaconStatus
     PENDING,
     RENEWAL_NEEDED,
     RENEWAL_POSSIBLE,
+    ALREADY_IN_MEMPOOL,
     UNKNOWN,
 };
 
@@ -59,7 +60,14 @@ enum class BeaconStatus
 class ProjectRow
 {
 public:
-    bool m_whitelisted;
+    enum WhiteListStatus
+    {
+        False,
+        Greylisted,
+        True
+    };
+
+    WhiteListStatus m_whitelisted;
     std::optional<bool> m_gdpr_controls;
     QString m_name;
     QString m_cpid;
@@ -93,6 +101,11 @@ public:
     bool hasEligibleProjects() const;
     bool hasPoolProjects() const;
     bool hasActiveBeacon() const;
+
+    //!
+    //! \brief hasPendingBeacon returns true if m_pending_beacon is not null and also not expired while pending.
+    //! \return boolean
+    //!
     bool hasPendingBeacon() const;
     bool hasRenewableBeacon() const;
     bool beaconExpired() const;

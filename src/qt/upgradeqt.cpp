@@ -41,8 +41,10 @@ bool UpgradeQt::SnapshotMain(QApplication& SnapshotApp)
 
     // Verify a mandatory release is not available before we continue to snapshot download.
     std::string VersionResponse = "";
+    std::string change_log;
+    Upgrade::UpgradeType upgrade_type {Upgrade::UpgradeType::Unknown};
 
-    if (UpgradeMain.CheckForLatestUpdate(VersionResponse, false, true))
+    if (UpgradeMain.CheckForLatestUpdate(VersionResponse, change_log, upgrade_type, false, true))
     {
         ErrorMsg(UpgradeMain.ResetBlockchainMessages(Upgrade::UpdateAvailable),
                  UpgradeMain.ResetBlockchainMessages(Upgrade::GithubResponse) + "\r\n" + VersionResponse);

@@ -19,6 +19,7 @@
 #include <string>
 #include <string.h>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <prevector.h>
@@ -724,6 +725,10 @@ template<typename Stream, typename T> void Unserialize(Stream& os, std::shared_p
 template<typename Stream, typename T> void Serialize(Stream& os, const std::unique_ptr<const T>& p);
 template<typename Stream, typename T> void Unserialize(Stream& os, std::unique_ptr<const T>& p);
 
+// variant
+template<typename Stream, class... Args> void Serialize(Stream& os, const std::variant<Args...>& v);
+template<typename Stream, class... Args> void Unserialize(Stream& is, const std::variant<Args...>& v);
+
 
 
 /**
@@ -732,7 +737,14 @@ template<typename Stream, typename T> void Unserialize(Stream& os, std::unique_p
 template<typename Stream, typename T>
 inline void Serialize(Stream& os, const T& a)
 {
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
     a.Serialize(os);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 template<typename Stream, typename T>
@@ -1063,6 +1075,46 @@ void Unserialize(Stream& is, std::shared_ptr<const T>& p)
 }
 
 
+
+// variant
+template<typename Stream, class... Args>
+void Serialize(Stream& os, const std::variant<Args...>& v) {
+    // The 253 limit here is for that if there's a need for more than 253 type variant in the
+    // future, someone can replace the index uint8 with a var-int without sacrificing backwards
+    // compatibility.
+    static_assert(sizeof...(Args) < 253, "variants should hold less than 253 types.");
+
+    Serialize(os, (uint8_t)v.index());
+
+    std::visit([&](auto& v2) { Serialize(os, v2); }, v);
+}
+
+template<typename Stream, uint64_t n, typename V>
+void unserialize_variant_helper(Stream& is, uint8_t index, V& v) {}
+
+template<typename Stream, uint64_t n, typename V, typename T, class... Args>
+void unserialize_variant_helper(Stream& is, uint8_t index, V& v) {
+    if (index == n) {
+        T o;
+        Unserialize(is, o);
+        v = o;
+    } else {
+        unserialize_variant_helper<Stream, n + 1, V, Args...>(is, index, v);
+    }
+}
+
+template<typename Stream, class... Args>
+void Unserialize(Stream& is, std::variant<Args...>& v) {
+    // The 253 limit here is for that if there's a need for more than 253 type variant in the
+    // future, someone can replace the index uint8 with a var-int without sacrificing backwards
+    // compatibility.
+    static_assert(sizeof...(Args) < 253, "variants should hold less than 253 types.");
+
+    uint8_t index;
+    Unserialize(is, index);
+
+    unserialize_variant_helper<Stream, 0, std::variant<Args...>, Args...>(is, index, v);
+}
 
 /**
  * Support for ADD_SERIALIZE_METHODS and READWRITE macro

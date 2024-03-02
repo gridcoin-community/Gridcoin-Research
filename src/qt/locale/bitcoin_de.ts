@@ -12,7 +12,11 @@
         <source>Value</source>
         <translation>Wert</translation>
     </message>
-    </context>
+    <message>
+        <source>Required</source>
+        <translation>Erforderlich</translation>
+    </message>
+</context>
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -64,6 +68,10 @@
         <translation>Das sind Ihre Gridcoin Adressen um Zahlungen zu erhalten. Sie werden vielleicht verschiedene an jeden Sender vergeben, damit Sie im Auge behalten können wer sie bezahlt.</translation>
     </message>
     <message>
+        <source>Double-click to edit label</source>
+        <translation>Doppelklicken um das Label zu bearbeiten</translation>
+    </message>
+    <message>
         <source>&amp;Delete</source>
         <translation>&amp;Löschen</translation>
     </message>
@@ -78,6 +86,11 @@
     <message>
         <source>Export Address Book Data</source>
         <translation>Exportiere Addressbuch Daten</translation>
+    </message>
+    <message>
+        <source>Comma separated file</source>
+        <comment>Name of CSV file format</comment>
+        <translation>Kommaseparierte Datei</translation>
     </message>
     <message>
         <source>Error exporting</source>
@@ -207,6 +220,13 @@
     </message>
 </context>
 <context>
+    <name>BanTableModel</name>
+    <message>
+        <source>IP/Netmask</source>
+        <translation>IP/Netzmaske</translation>
+    </message>
+    </context>
+<context>
     <name>BitcoinGUI</name>
     <message>
         <source>A fatal error occurred. Gridcoin can no longer continue safely and will quit.</source>
@@ -237,6 +257,10 @@
         <translation>Zeige die Liste der Addressen für die Erhaltung von Zahlungen</translation>
     </message>
     <message>
+        <source>&amp;History</source>
+        <translation>&amp;Historie</translation>
+    </message>
+    <message>
         <source>Browse transaction history</source>
         <translation>Transaktionsverlauf durchsehen</translation>
     </message>
@@ -263,6 +287,14 @@
     <message>
         <source>&amp;Web Site</source>
         <translation>&amp;Webseite</translation>
+    </message>
+    <message>
+        <source>&amp;GRC Chat Room</source>
+        <translation>&amp;GRC Chatraum</translation>
+    </message>
+    <message>
+        <source>GRC Chatroom</source>
+        <translation>GRC Chatraum</translation>
     </message>
     <message>
         <source>Gridcoin rewards distributed computing with BOINC</source>
@@ -307,6 +339,10 @@
     <message>
         <source>&amp;Encrypt Wallet...</source>
         <translation>Wallet &amp;verschlüsseln...</translation>
+    </message>
+    <message>
+        <source>Encrypt wallet</source>
+        <translation>Wallet verschlüsseln</translation>
     </message>
     <message>
         <source>&amp;Change Passphrase...</source>
@@ -367,6 +403,10 @@
     <message>
         <source>&amp;Help</source>
         <translation>&amp;Hilfe</translation>
+    </message>
+    <message>
+        <source>Toggle light/dark mode.</source>
+        <translation>Hell-/Dunkelmodus umschalten.</translation>
     </message>
     <message>
         <source>[testnet]</source>
@@ -447,6 +487,14 @@
         <translation>Eingehende Transaktion</translation>
     </message>
     <message>
+        <source>Close Confirmation</source>
+        <translation>Beenden bestätigen</translation>
+    </message>
+    <message>
+        <source>Exit the Gridcoin wallet?</source>
+        <translation>Die Gridcoinwallet beenden?</translation>
+    </message>
+    <message>
         <source>URI handling</source>
         <translation>URI Handhabung</translation>
     </message>
@@ -514,6 +562,10 @@
         <source>%1 times per %2</source>
         <translation>%1 Mal pro %2</translation>
     </message>
+    <message>
+        <source>none</source>
+        <translation>keine</translation>
+    </message>
     </context>
 <context>
     <name>ClientModel</name>
@@ -551,6 +603,10 @@
     <message>
         <source>Change:</source>
         <translation>Wechselgeld:</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Alles auswählen</translation>
     </message>
     <message>
         <source>Amount</source>
@@ -683,12 +739,44 @@
 <context>
     <name>ConsolidateUnspentWizardSelectInputsPage</name>
     <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    <message>
         <source>Date</source>
         <translation>Datum</translation>
+    </message>
+    <message>
+        <source>Confirmations</source>
+        <translation>Bestätigungen</translation>
+    </message>
+    <message>
+        <source>Confirmed</source>
+        <translation>Bestätigt</translation>
+    </message>
+    <message>
+        <source>Quantity</source>
+        <translation>Anzahl</translation>
+    </message>
+    <message>
+        <source>Fee</source>
+        <translation>Gebühr</translation>
     </message>
     </context>
 <context>
     <name>DiagnosticsDialog</name>
+    <message>
+        <source>Diagnostics</source>
+        <translation>Diagnose</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Schließen</translation>
+    </message>
+    <message>
+        <source>Passed</source>
+        <translation>Bestanden</translation>
+    </message>
     <message>
         <source>Warning</source>
         <translation>Warnung</translation>
@@ -777,6 +865,10 @@
         <source>Welcome</source>
         <translation>Willkommen</translation>
     </message>
+    <message>
+        <source>Error</source>
+        <translation>Fehler</translation>
+    </message>
     <message numerus="yes">
         <source>%n GB of free space available</source>
         <translation type="unfinished">
@@ -804,6 +896,14 @@
     <message>
         <source>Form</source>
         <translation>Formular</translation>
+    </message>
+    <message>
+        <source>Nothing here yet...</source>
+        <translation>Noch nichts hier...</translation>
+    </message>
+    <message>
+        <source>No results available.</source>
+        <translation>Keine Ergebnisse verfügbar.</translation>
     </message>
     <message>
         <source>Loading...</source>
@@ -853,6 +953,14 @@
         <translation>Minimiert die Anwendung anstatt sie zu beenden wenn das Fenster geschlossen wird. Wenn dies aktiviert ist, müssen Sie das Programm über "Beenden" im Menü schließen.</translation>
     </message>
     <message>
+        <source>Disable Transaction Notifications</source>
+        <translation>Transaktionsbenachrichtigungen deaktivieren</translation>
+    </message>
+    <message>
+        <source>Disable Poll Notifications</source>
+        <translation>Abstimmungsbenachrichtigungen deaktivieren</translation>
+    </message>
+    <message>
         <source>The user interface language can be set here. This setting will take effect after restarting Gridcoin.</source>
         <translation>Die Sprache der GUI kann hier verändert werden. Die Einstellung wird nach einem Neustart übernommen.</translation>
     </message>
@@ -875,6 +983,10 @@
     <message>
         <source>Show only a tray icon after minimizing the window.</source>
         <translation>Nur ein Symbol im Infobereich anzeigen, nachdem das Programmfenster minimiert wurde.</translation>
+    </message>
+    <message>
+        <source>Start minimized</source>
+        <translation>Minimiert starten</translation>
     </message>
     <message>
         <source>&amp;Minimize to the tray instead of the taskbar</source>
@@ -974,6 +1086,17 @@
     <message>
         <source>Difficulty:</source>
         <translation>Schwierigkeit:</translation>
+    </message>
+    </context>
+<context>
+    <name>PeerTableModel</name>
+    <message>
+        <source>Sent</source>
+        <translation>Gesendet</translation>
+    </message>
+    <message>
+        <source>Received</source>
+        <translation>Empfangen</translation>
     </message>
     </context>
 <context>
@@ -1535,7 +1658,11 @@
         <source>WARNING: unknown change address</source>
         <translation>WARNUNG: Unbekannte Wechseladdresse</translation>
     </message>
-    </context>
+    <message>
+        <source>Active</source>
+        <translation>Aktiv</translation>
+    </message>
+</context>
 <context>
     <name>SendCoinsEntry</name>
     <message>
@@ -2019,10 +2146,21 @@
     </message>
 </context>
 <context>
+    <name>VotingModel</name>
+    <message>
+        <source>Poll not found.</source>
+        <translation>Abstimmung nicht gefunden.</translation>
+    </message>
+    </context>
+<context>
     <name>VotingPage</name>
     <message>
         <source>Sort by...</source>
         <translation>Sortieren nach...</translation>
+    </message>
+    <message>
+        <source>&amp;Active</source>
+        <translation>&amp;Aktiv</translation>
     </message>
     </context>
 <context>

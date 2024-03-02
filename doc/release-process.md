@@ -5,7 +5,7 @@
  - git pull
  - git merge testnet
  - Update changelog and commit
- - Change version in configure.ac to [version] and set CLIENT_VERSION_IS_RELEASE to 'true' and commit
+ - Change version in configure.ac and CMakeLists.txt to [version] and set CLIENT_VERSION_IS_RELEASE to 'true' and commit
  - git push
 
 ### Merge to master

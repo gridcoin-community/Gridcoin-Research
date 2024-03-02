@@ -40,7 +40,8 @@ template <typename Data>
 bool SerializeFileDB(const std::string& prefix, const fs::path& path, const Data& data)
 {
     // Generate random temporary filename
-    std::string tmpfn = strprintf("%s.%" PRIx64, prefix, GetPerformanceCounter());
+    const uint16_t randv{GetRand<uint16_t>()};
+    std::string tmpfn = strprintf("%s.%04x", prefix, randv);
 
     // open temp output file, and associate with CAutoFile
     fs::path pathTmp = GetDataDir() / tmpfn;

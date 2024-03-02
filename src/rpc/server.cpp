@@ -374,19 +374,20 @@ static const CRPCCommand vRPCCommands[] =
     { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
     { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer     },
     { "addkey",                  &addkey,                  cat_developer     },
+    { "beaconaudit",             &beaconaudit,             cat_developer     },
     { "changesettings",          &changesettings,          cat_developer     },
     { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
     { "debug",                   &debug,                   cat_developer     },
     { "dumpcontracts",           &dumpcontracts,           cat_developer     },
     { "exportstats1",            &rpc_exportstats,         cat_developer     },
     { "getblockstats",           &rpc_getblockstats,       cat_developer     },
-    { "getlistof",               &getlistof,               cat_developer     },
     { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
     { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listalerts",              &listalerts,              cat_developer     },
-    { "listdata",                &listdata,                cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
+    { "listprotocolentries",     &listprotocolentries,     cat_developer     },
     { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
+    { "listscrapers",            &listscrapers,            cat_developer     },
     { "listsettings",            &listsettings,            cat_developer     },
     { "logging",                 &logging,                 cat_developer     },
     { "network",                 &network,                 cat_developer     },
@@ -593,7 +594,7 @@ void StartRPCThreads()
         (gArgs.GetArg("-rpcuser", "") == gArgs.GetArg("-rpcpassword", ""))))
     {
         unsigned char rand_pwd[32];
-        GetRandBytes(rand_pwd, sizeof(rand_pwd));
+        GetRandBytes({rand_pwd, sizeof(rand_pwd)});
         string strWhatAmI = "To use gridcoind";
         if (gArgs.IsArgSet("-server"))
             strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");

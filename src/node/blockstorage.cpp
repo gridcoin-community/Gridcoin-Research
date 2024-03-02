@@ -15,7 +15,10 @@
 
 bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int& nBlockPosRet,
                       const CMessageHeader::MessageStartChars& messageStart)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    AssertLockHeld(cs_main);
+
     // Open history file to append
     CAutoFile fileout(AppendBlockFile(nFileRet), SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())

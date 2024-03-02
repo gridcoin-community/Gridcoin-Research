@@ -1,12 +1,14 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2024 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
+#include "gridcoin/scraper/scraper_registry.h"
 #include "main.h"
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
@@ -141,50 +143,83 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
 //!
 void InitializeContracts(CBlockIndex* pindexBest)
 {
-    LogPrintf("Gridcoin: Loading beacon history...");
-    uiInterface.InitMessage(_("Loading beacon history..."));
+    // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
+    for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
 
-    BeaconRegistry& beacons = GetBeaconRegistry();
+        std::string contract_type_string = Contract::Type::ToString(contract_type);
+        std::string tr_contract_type_string = Contract::Type::ToTranslatedString(contract_type);
 
-    // If the clearbeaconhistory argument is provided, then clear everything from the beacon registry,
-    // including the beacon_db and beacon key type elements from LevelDB.
-    if (gArgs.GetBoolArg("-clearbeaconhistory", false))
-    {
-        beacons.Reset();
-    }
+        LogPrintf("INFO: %s: Loading stored history for contract type %s...",
+                  __func__,
+                  contract_type_string);
 
-    LogPrintf("Gridcoin: Initializing beacon registry from stored history...");
-    uiInterface.InitMessage(_("Initializing beacon registry from stored history..."));
-    int beacon_db_height = beacons.Initialize();
+        uiInterface.InitMessage(_("Loading history for contract type ") + tr_contract_type_string + "...");
 
-    if (beacon_db_height > 0)
-    {
-        LogPrintf("Gridcoin: beacon history loaded through height = %i.", beacon_db_height);
-    }
-    else
-    {
-        LogPrintf("Gridcoin: beacon history load not successful. Will initialize from contract replay.");
+        std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
+        if (gArgs.GetBoolArg(history_arg, false)) {
+            registry.Reset();
+        }
+
+        LogPrintf("INFO: %s: Initializing registry from stored history for contract type %s...",
+                  __func__,
+                  contract_type_string);
+
+        uiInterface.InitMessage(_("Initializing registry from stored history for contract type ")
+                                  + tr_contract_type_string + "...");
+
+        int db_height = registry.Initialize();
+
+        if (db_height > 0) {
+            LogPrintf("INFO: %s: History loaded through height %i for contract type %s",
+                      __func__,
+                      db_height,
+                      contract_type_string);
+        } else {
+            LogPrintf("INFO: %s: History load not successful for contract type %s. Will initialize "
+                      "from contract replay.",
+                      __func__,
+                      contract_type_string);
+        }
     }
 
     LogPrintf("Gridcoin: replaying contracts...");
     uiInterface.InitMessage(_("Replaying contracts..."));
 
-    CBlockIndex* pindex_start = GRC::BlockFinder::FindByMinTime(pindexBest->nTime - Beacon::MAX_AGE);
+    CBlockIndex* pindex_start = GRC::BlockFinder::FindByMinTime(pindexBest->nTime
+                                                                - Params().GetConsensus().StandardContractReplayLookback);
 
     const int& V11_height = Params().GetConsensus().BlockV11Height;
     const int& lookback_window_low_height = pindex_start->nHeight;
 
+    // Gets a registry db height bookmark object with the heights loaded now that the registries are loaded.
+    RegistryBookmarks db_heights;
+
     // This tricky clamp ensures the correct start height for the contract replay. Note that the current
-    // implementation will skip beacon contracts that overlap the already loaded beacon history. See
-    // ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current height.
-    // This is the replay that will be encountered when starting a wallet that was in sync with this code, and the
-    // head of the chain is more than MAX AGE above the V11Height. When the contracts are replayed, the beacon db
-    // will then be initialized and the controlling window will be consistent with MAX_AGE on restarts and reorgs.
-    const int& start_height = std::min(std::max(beacon_db_height, V11_height), lookback_window_low_height);
+    // implementation will skip beacon, scraper entry, project, poll and vote contracts that overlap the already loaded
+    // history. See ReplayContracts. The worst case replay is a window that starts at V11_height and extends to current
+    // height. This is the replay that will be encountered when starting a wallet that was in sync with this code but has
+    // uninitialized registry dbs, and the head of the chain is more than MAX AGE above the V11_height, because
+    // GetLowestRegistryBlockHeight() is 0, and then the maximum of V11_height and GetLowestRegistryBlockHeight() will be
+    // V11_height and the minimum of V11_height and lookback_window_low_height will be V11_height. When the contracts are
+    // replayed, the beacon db and scraper entry db will then be initialized and the controlling window will be either the
+    // GetLowestRegistryBlockHeight() or the lookback_window_low_height, whichever is higher. The MAX_AGE (i.e.
+    // lookback_window_low_height) condition once the contract types that have a backing db are initialized is now driven
+    // by the following remaining contract types which have no registry (backing) db:
+    //
+    // CONTRACT type                      Wallet startup replay requirement           Block reorg replay requirement
+    // POLL/VOTE (polls and voting)               V11 or std lookback                             false
+    //
+    // Note that the handler reset and contract replay forwards from lookback_window_low_height no longer is required
+    // for polls and votes. The reason for this is quite simple. Polls and votes are UNIQUE. The reversion of an add
+    // is simply to delete them. The wallet startup replay requirement is still required for polls and votes, because
+    // the Poll/Vote classes do not have a backing registry db yet.
+    int start_height = std::min(std::max(db_heights.GetLowestRegistryBlockHeight(), V11_height),
+                                lookback_window_low_height);
 
     LogPrintf("Gridcoin: Starting contract replay from height %i.", start_height);
 
-    CBlockIndex* pblock_index = mapBlockIndex[hashBestChain];
+    CBlockIndex* pblock_index = pindexBest;
 
     while (pblock_index->nHeight > start_height)
     {
@@ -194,8 +229,8 @@ void InitializeContracts(CBlockIndex* pindexBest)
     // Reset pindex_start to the index for the block at start_height
     pindex_start = pblock_index;
 
-    // The replay contract window here may overlap with the beacon db coverage. Logic is now included in
-    // the ApplyContracts to ignore beacon contracts that have already been covered by the beacon db.
+    // The replay contract window here may overlap with the registry db coverage for the various registries. Logic
+    // is now included in the ApplyContracts to ignore contracts that have already been covered by the registry dbs.
     ReplayContracts(pindexBest, pindex_start);
 }
 
@@ -427,11 +462,15 @@ void ScheduleUpdateChecks(CScheduler& scheduler)
     }, std::chrono::minutes{1});
 }
 
-void ScheduleBeaconDBPassivation(CScheduler& scheduler)
+void ScheduleRegistriesPassivation(CScheduler& scheduler)
 {
-    // Run beacon database passivation every 5 minutes. This is a very thin call most of the time.
+    // Run registry database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    scheduler.scheduleEvery(BeaconRegistry::RunBeaconDBPassivation, std::chrono::minutes{5});
+    // TODO: Turn into a loop using extension of RegistryBookmarks
+    scheduler.scheduleEvery(BeaconRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(ScraperRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(ProtocolRegistry::RunDBPassivation, std::chrono::minutes{5});
+    scheduler.scheduleEvery(Whitelist::RunDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -496,7 +535,7 @@ void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 
     ScheduleBackups(scheduler);
     ScheduleUpdateChecks(scheduler);
-    ScheduleBeaconDBPassivation(scheduler);
+    ScheduleRegistriesPassivation(scheduler);
 }
 
 bool GRC::CleanConfig() {

@@ -20,6 +20,7 @@ class WalletModel;
 class ResearcherModel;
 class MRCModel;
 class VotingModel;
+class PollTableModel;
 class TransactionView;
 class OverviewPage;
 class FavoritesPage;
@@ -31,6 +32,7 @@ class Notificator;
 class RPCConsole;
 class DiagnosticsDialog;
 class ClickLabel;
+class UpdateDialog;
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -109,7 +111,7 @@ private:
     TransactionView *transactionView;
     VotingPage *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
-    std::unique_ptr<QMessageBox> updateMessageDialog;
+    std::unique_ptr<UpdateDialog> updateMessageDialog;
 
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;
@@ -204,7 +206,7 @@ public slots:
     void setEncryptionStatus(int status);
 
     /** Notify the user if there is an update available */
-    void update(const QString& title, const QString& version, const QString& message);
+    void update(const QString& title, const QString& version, const int& upgrade_type, const QString& message);
 
     /** Notify the user of an error in the network or transaction handling code. */
     void error(const QString &title, const QString &message, bool modal);
@@ -295,6 +297,7 @@ private slots:
     QString GetEstimatedStakingFrequency(unsigned int nEstimateTime);
 
     void handleNewPoll();
+    void extracted(QStringList& expiring_polls, QString& notification);
     void handleExpiredPoll();
 };
 

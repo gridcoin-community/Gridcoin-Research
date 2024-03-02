@@ -97,6 +97,26 @@ static CKey GetTestPrivateKey()
 
     return key;
 }
+
+// Unfortunately, GCC 13 on openSUSE i386 is misbehaving and exhibiting weird errors in the last decimal places for things
+// even as straightforward as
+//
+// double foo = 0.0;
+// text >> foo.
+//
+// This comparison function works around that by allowing a small error band to pass the tests, but not enough to invalidate
+// the tests on compilers that work.
+bool comp_double(double lhs, double rhs)
+{
+    // Require exact match if 0=0.
+    if (std::min(lhs, rhs) == 0.0) {
+        return (lhs == rhs);
+    } else {
+        double unsigned_rel_error = std::abs(lhs - rhs) / std::min(lhs, rhs);
+
+        return (unsigned_rel_error <= double {1e-8});
+    }
+}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -118,7 +138,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_claim)
 
     BOOST_CHECK(claim.m_magnitude == 0);
     BOOST_CHECK(claim.m_research_subsidy == 0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
 
     BOOST_CHECK(claim.m_signature.empty() == true);
 
@@ -141,7 +161,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 
     BOOST_CHECK(claim.m_magnitude == 0);
     BOOST_CHECK(claim.m_research_subsidy == 0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
 
     BOOST_CHECK(claim.m_signature.empty() == true);
 
@@ -220,7 +240,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_legacy_boincblock_string_for_researcher)
 
     BOOST_CHECK(claim.m_magnitude == 123);
     BOOST_CHECK(claim.m_research_subsidy == 47.25 * COIN);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.123456);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.123456));
 
     BOOST_CHECK(claim.m_signature == signature);
 
@@ -503,7 +523,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor)
 
     BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude == 0.0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
     BOOST_CHECK(claim.m_signature.empty() == true);
     BOOST_CHECK(claim.m_quorum_address.empty() == true);
     BOOST_CHECK(claim.m_superblock->WellFormed() == false);
@@ -545,7 +565,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_investor_with_superblock)
 
     BOOST_CHECK(claim.m_research_subsidy == 0);
     BOOST_CHECK(claim.m_magnitude == 0.0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
     BOOST_CHECK(claim.m_signature.empty() == true);
 }
 
@@ -630,7 +650,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher)
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == 0.0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);
@@ -670,7 +690,7 @@ BOOST_AUTO_TEST_CASE(it_deserializes_from_a_stream_for_researcher_with_superbloc
 
     BOOST_CHECK(claim.m_research_subsidy == expected.m_research_subsidy);
     BOOST_CHECK(claim.m_magnitude == 0.0);
-    BOOST_CHECK(claim.m_magnitude_unit == 0.0);
+    BOOST_CHECK(comp_double(claim.m_magnitude_unit, 0.0));
     BOOST_CHECK(claim.m_signature == expected.m_signature);
 
     BOOST_CHECK(claim.m_quorum_hash == expected.m_quorum_hash);

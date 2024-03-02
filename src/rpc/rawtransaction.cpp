@@ -11,6 +11,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
@@ -245,6 +246,20 @@ UniValue VotePayloadToJson(const GRC::ContractPayload& payload)
     return out;
 }
 
+UniValue SideStakePayloadToJson (const GRC::ContractPayload& payload)
+{
+    const auto& sidestake = payload.As<GRC::SideStakePayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("address", CBitcoinAddress(sidestake.m_entry.m_destination).ToString());
+    out.pushKV("allocation", sidestake.m_entry.m_allocation.ToPercent());
+    out.pushKV("description", sidestake.m_entry.m_description);
+    out.pushKV("status", sidestake.m_entry.StatusToString());
+
+    return out;
+}
+
 UniValue LegacyVotePayloadToJson(const GRC::ContractPayload& payload)
 {
     const auto& vote = payload.As<GRC::LegacyVote>();
@@ -294,6 +309,9 @@ UniValue ContractToJson(const GRC::Contract& contract)
             break;
         case GRC::ContractType::MRC:
             out.pushKV("body", MRCToJson(contract.CopyPayloadAs<GRC::MRC>()));
+            break;
+        case GRC::ContractType::SIDESTAKE:
+            out.pushKV("body", SideStakePayloadToJson(contract.SharePayload()));
             break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
@@ -1510,14 +1528,14 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
         const UniValue& input = inputs[idx];
         const UniValue& o = input.get_obj();
 
-        const UniValue& txid_v = find_value(o, "txid");
+        UniValue txid_v = find_value(o, "txid");
         if (!txid_v.isStr())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing txid key");
         string txid = txid_v.get_str();
         if (!IsHex(txid))
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected hex txid");
 
-        const UniValue& vout_v = find_value(o, "vout");
+        UniValue vout_v = find_value(o, "vout");
         if (!vout_v.isNum())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing vout key");
         int nOutput = vout_v.get_int();

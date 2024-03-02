@@ -133,7 +133,7 @@ ProjectTableModel::ProjectTableModel(ResearcherModel *model, const bool extended
         << tr("Whitelist")
         << tr("Has GDPR Controls")
         << tr("Magnitude")
-        << tr("Avg. Credit")
+        << tr("Recent Avg. Credit")
         << tr("CPID");
 }
 
@@ -186,7 +186,7 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                 case Magnitude:
                     return row->m_magnitude;
                 case RecentAverageCredit:
-                    return row->m_rac;
+                    return QString::number(row->m_rac, 'f', 0);
             }
             break;
 
@@ -198,8 +198,12 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                     }
                     break;
                 case Whitelisted:
-                    if (row->m_whitelisted) {
+                    if (row->m_whitelisted == ProjectRow::WhiteListStatus::True) {
                         return QIcon(":/icons/round_green_check");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Greylisted) {
+                        return QIcon(":/icons/warning");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::False) {
+                        return QIcon(":/icons/white_and_red_x");
                     }
                     break;
                 case GDPRControls:

@@ -1,0 +1,79 @@
+#ifndef GRIDCOIN_CONFIG_H
+#define GRIDCOIN_CONFIG_H
+
+// Define if thread_local is supported
+#define HAVE_THREAD_LOCAL
+
+#define PACKAGE_NAME "@CMAKE_PROJECT_NAME@"
+#define PACKAGE_VERSION "@CMAKE_PROJECT_VERSION@"
+#define CLIENT_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define CLIENT_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define CLIENT_VERSION_REVISION @PROJECT_VERSION_PATCH@
+#define CLIENT_VERSION_BUILD @PROJECT_VERSION_TWEAK@
+#define CLIENT_VERSION_IS_RELEASE @CLIENT_VERSION_IS_RELEASE@
+#define COPYRIGHT_YEAR "@COPYRIGHT_YEAR@"
+#define COPYRIGHT_HOLDERS_FINAL "@COPYRIGHT_HOLDERS_FINAL@"
+
+#cmakedefine ENABLE_SSE41
+#cmakedefine ENABLE_AVX2
+#cmakedefine ENABLE_X86_SHANI
+#cmakedefine ENABLE_ARM_CRC
+#cmakedefine ENABLE_ARM_SHANI
+#cmakedefine USE_ASM
+
+#cmakedefine USE_DBUS
+#cmakedefine USE_QRCODE
+
+#cmakedefine HAVE_STRERROR_R
+#cmakedefine STRERROR_R_CHAR_P
+
+#cmakedefine WORDS_BIGENDIAN
+
+#cmakedefine HAVE_BYTESWAP_H
+#cmakedefine HAVE_ENDIAN_H
+#cmakedefine HAVE_SYS_ENDIAN_H
+#cmakedefine HAVE_SYS_PRCTL_H
+
+#cmakedefine01 HAVE_DECL_LE16TOH
+#cmakedefine01 HAVE_DECL_LE32TOH
+#cmakedefine01 HAVE_DECL_LE64TOH
+
+#cmakedefine01 HAVE_DECL_HTOLE16
+#cmakedefine01 HAVE_DECL_HTOLE32
+#cmakedefine01 HAVE_DECL_HTOLE64
+
+#cmakedefine01 HAVE_DECL_BE16TOH
+#cmakedefine01 HAVE_DECL_BE32TOH
+#cmakedefine01 HAVE_DECL_BE64TOH
+
+#cmakedefine01 HAVE_DECL_HTOBE16
+#cmakedefine01 HAVE_DECL_HTOBE32
+#cmakedefine01 HAVE_DECL_HTOBE64
+
+#cmakedefine01 HAVE_DECL_BSWAP_16
+#cmakedefine01 HAVE_DECL_BSWAP_32
+#cmakedefine01 HAVE_DECL_BSWAP_64
+
+#cmakedefine HAVE_BUILTIN_CLZL
+#cmakedefine HAVE_BUILTIN_CLZLL
+
+#cmakedefine HAVE_MSG_NOSIGNAL
+#cmakedefine HAVE_MSG_DONTWAIT
+
+#cmakedefine HAVE_MALLOC_INFO
+#cmakedefine HAVE_MALLOPT_ARENA_MAX
+
+#cmakedefine01 HAVE_SYSTEM
+#cmakedefine HAVE_GMTIME_R
+
+// Define if the Linux getrandom system call is available
+#cmakedefine HAVE_SYS_GETRANDOM
+// Define if the BSD getentropy system call is available
+#cmakedefine HAVE_GETENTROPY
+// Define if the BSD sysctl(KERN_ARND) is available
+#cmakedefine HAVE_SYSCTL_ARND
+
+#cmakedefine01 HAVE_O_CLOEXEC
+#cmakedefine HAVE_STRONG_GETAUXVAL
+
+#endif //GRIDCOIN_CONFIG_H

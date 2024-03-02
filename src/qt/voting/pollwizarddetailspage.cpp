@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "main.h"
+#include "qitemdelegate.h"
 #include "qt/bitcoinunits.h"
 #include "qt/decoration.h"
 #include "qt/forms/voting/ui_pollwizarddetailspage.h"
@@ -53,6 +54,37 @@ private:
         option->text = QStringLiteral("%1. %2").arg(index.row() + 1).arg(option->text);
     }
 }; // ChoicesListDelegate
+
+//!
+//! \brief Applies custom behavior to additional field items in the poll editor.
+//!
+class AdditionalFieldDelegate : public QItemDelegate
+{
+    Q_OBJECT
+
+public:
+    AdditionalFieldDelegate(QObject* parent = nullptr) : QItemDelegate(parent)
+    {
+    }
+
+    QWidget* createEditor(
+        QWidget* parent,
+        const QStyleOptionViewItem& option,
+        const QModelIndex& index) const override
+    {
+        QWidget* editor = QItemDelegate::createEditor(parent, option, index);
+
+        if (QLineEdit* line_edit = qobject_cast<QLineEdit*>(editor)) {
+            if (index.column() == AdditionalFieldsTableModel::Name) {
+                line_edit->setMaxLength(VotingModel::maxPollAdditionalFieldNameLength());
+            } else if (index.column() == AdditionalFieldsTableModel::Value) {
+                line_edit->setMaxLength(VotingModel::maxPollAdditionalFieldValueLength());
+            }
+        }
+
+        return editor;
+    }
+}; // AdditionalFieldDelegate
 
 //!
 //! \brief Provides for QWizardPage::registerField() without a real widget.
@@ -167,12 +199,19 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     ui->responseTypeList->addItem(tr("Multiple Choice"));
 
     ChoicesListDelegate* choices_delegate = new ChoicesListDelegate(this);
+    AdditionalFieldDelegate* additonal_field_delegate = new AdditionalFieldDelegate(this);
 
     ui->choicesList->setModel(m_choices_model.get());
     ui->choicesList->setItemDelegate(choices_delegate);
     ui->choicesFrame->hide();
     ui->editChoiceButton->hide();
     ui->removeChoiceButton->hide();
+
+    ui->additionalFieldsTableView->setItemDelegate(additonal_field_delegate);
+
+    ui->titleField->setMaxLength(m_voting_model->maxPollTitleLength());
+    ui->questionField->setMaxLength(m_voting_model->maxPollQuestionLength());
+    ui->urlField->setMaxLength(m_voting_model->maxPollUrlLength());
 
     connect(
         ui->responseTypeList, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -261,12 +300,7 @@ void PollWizardDetailsPage::initializePage()
 
         // Only populate poll additional field entries if version >= 3.
         bool v3_enabled = false;
-
-        {
-            AssertLockHeld(cs_main);
-
-            v3_enabled = IsPollV3Enabled(nBestHeight);
-        }
+        v3_enabled = IsPollV3Enabled(nBestHeight);
 
         if (v3_enabled) {
             poll_item.m_additional_field_entries.push_back(

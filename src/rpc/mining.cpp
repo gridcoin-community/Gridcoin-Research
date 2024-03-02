@@ -98,8 +98,6 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
 
     bool fEnableSideStaking = gArgs.GetBoolArg("-enablesidestaking");
 
-    if (fEnableSideStaking) vSideStakeAlloc = GetSideStakingStatusAndAlloc();
-
     stakesplitting.pushKV("stake-splitting-enabled", fEnableStakeSplit);
     if (fEnableStakeSplit)
     {
@@ -110,19 +108,23 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     }
     obj.pushKV("stake-splitting", stakesplitting);
 
-    sidestaking.pushKV("side-staking-enabled", fEnableSideStaking);
-    if (fEnableSideStaking)
-    {
-        for (const auto& alloc : vSideStakeAlloc)
-        {
-            sidestakingalloc.pushKV("address", alloc.first);
-            sidestakingalloc.pushKV("allocation-pct", alloc.second * 100);
+    // This is what the miner sees...
+    vSideStakeAlloc = GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, false);
 
-            vsidestakingalloc.push_back(sidestakingalloc);
-        }
-        sidestaking.pushKV("side-staking-allocations", vsidestakingalloc);
+    sidestaking.pushKV("local_side_staking_enabled", fEnableSideStaking);
+
+    // Note that if local_side_staking_enabled is true, then local sidestakes will be applicable and shown. Mandatory
+    // sidestakes are always included.
+    for (const auto& alloc : vSideStakeAlloc)
+    {
+        sidestakingalloc.pushKV("address", CBitcoinAddress(alloc->GetDestination()).ToString());
+        sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation().ToPercent());
+        sidestakingalloc.pushKV("status", alloc->StatusToString());
+
+        vsidestakingalloc.push_back(sidestakingalloc);
     }
-    obj.pushKV("side-staking", sidestaking);
+    sidestaking.pushKV("side_staking_allocations", vsidestakingalloc);
+    obj.pushKV("side_staking", sidestaking);
 
     obj.pushKV("difficulty",    diff);
     obj.pushKV("errors",        GetWarnings("statusbar"));
@@ -298,46 +300,28 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
     GRC::Beacon_ptr beacon_ptr = beacon_try;
 
-    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: active beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
-                                       " prev_beacon_ctx_hash = %s",
-             __func__,
-             beacon_ptr->m_timestamp,
-             beacon_ptr->m_hash.GetHex(),
-             beacon_ptr->m_prev_beacon_hash.GetHex());
+    std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
+
+    std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
+        = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
 
     UniValue beacon_chain(UniValue::VARR);
-    UniValue beacon_chain_entry(UniValue::VOBJ);
 
-    beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_hash.GetHex());
-    beacon_chain_entry.pushKV("timestamp",  beacon_ptr->m_timestamp);
-    beacon_chain.push_back(beacon_chain_entry);
-
-    // This walks back the entries in the historical beacon map linked by renewal prev tx hash until the first
-    // beacon in the renewal chain is found (the original advertisement). The accrual starts no earlier than here.
-    uint64_t renewals = 0;
-    // The renewals <= 100 is simply to prevent an infinite loop if there is a problem with the beacon chain in the registry. This
-    // was an issue in post Fern beacon db work, but has been resolved and not encountered since. Still makes sense to leave the
-    // limit in, which represents 41 years worth of beacon chain at the 150 day standard auto-renewal cycle.
-    while (beacon_ptr->Renewed() && renewals <= 100)
-    {
-        auto iter = beacons.GetBeaconDB().find(beacon_ptr->m_prev_beacon_hash);
-
-        beacon_ptr = iter->second;
-
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: renewal %u beacon: timestamp = %" PRId64 ", ctx_hash = %s,"
-                                           " prev_beacon_ctx_hash = %s.",
-                 __func__,
-                 renewals,
-                 beacon_ptr->m_timestamp,
-                 beacon_ptr->m_hash.GetHex(),
-                 beacon_ptr->m_prev_beacon_hash.GetHex());
-
-        beacon_chain_entry.pushKV("ctx_hash", beacon_ptr->m_hash.GetHex());
-        beacon_chain_entry.pushKV("timestamp", beacon_ptr->m_timestamp);
-        beacon_chain.push_back(beacon_chain_entry);
-
-        ++renewals;
+    try {
+        beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
+    } catch (std::runtime_error& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
     }
+
+    for (const auto& iter : *beacon_chain_out_ptr) {
+        UniValue beacon_chain_entry(UniValue::VOBJ);
+
+        beacon_chain_entry.pushKV("ctx_hash", iter.first.GetHex());
+        beacon_chain_entry.pushKV("timestamp",  iter.second);
+        beacon_chain.push_back(beacon_chain_entry);
+    }
+
+    int64_t renewals = beacon_chain_out_ptr->size() - 1;
 
     bool retry_from_baseline = false;
 

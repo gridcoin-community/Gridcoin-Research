@@ -1,15 +1,16 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2023 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
-#include "gridcoin/appcache.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
+#include <gridcoin/md5.h>
 #include "gridcoin/project.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/support/xml.h"
@@ -23,7 +24,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <optional>
-#include <openssl/md5.h>
 #include <set>
 #include <univalue.h>
 
@@ -147,7 +147,7 @@ bool CompareProjectHostname(const std::string& url_1, const std::string& url_2)
 //!
 //! \return A pointer to the whitelist project if it matches.
 //!
-const Project* ResolveWhitelistProject(
+const ProjectEntry* ResolveWhitelistProject(
     const MiningProject& project,
     const WhitelistSnapshot& whitelist)
 {
@@ -282,7 +282,7 @@ std::vector<std::string> FetchProjectsXml()
 //!
 bool ShouldEnforceTeamMembership()
 {
-    return ReadCache(Section::PROTOCOL, "REQUIRE_TEAM_WHITELIST_MEMBERSHIP").value != "false";
+    return GetProtocolRegistry().GetProtocolEntryByKeyLegacy("REQUIRE_TEAM_WHITELIST_MEMBERSHIP").value != "false";
 }
 
 //!
@@ -298,7 +298,7 @@ std::set<std::string> GetTeamWhitelist()
         return { };
     }
 
-    const AppCacheEntry entry = ReadCache(Section::PROTOCOL, "TEAM_WHITELIST");
+    const AppCacheEntry entry = GetProtocolRegistry().GetProtocolEntryByKeyLegacy("TEAM_WHITELIST");
 
     if (entry.value.empty()) {
         return { "gridcoin" };
@@ -393,9 +393,9 @@ std::optional<Cpid> FallbackToCpidByEmail(
     const std::string email = Researcher::Email();
     std::vector<unsigned char> email_hash_bytes(16);
 
-    MD5(reinterpret_cast<const unsigned char*>(email.data()),
-        email.size(),
-        email_hash_bytes.data());
+    GRC__MD5(reinterpret_cast<const unsigned char*>(email.data()),
+             email.size(),
+             email_hash_bytes.data());
 
     if (HexStr(email_hash_bytes) != email_hash) {
         return std::nullopt;
@@ -674,9 +674,9 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
 {
-    if (pwalletMain->IsLocked()) {
+    if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
         return BeaconError::WALLET_LOCKED;
     }
@@ -687,9 +687,23 @@ BeaconError CheckBeaconTransactionViable(const CWallet& wallet)
     // TODO: refactor wallet so we can determine this dynamically. For now, we
     // require 1 GRC:
     //
-    if (pwalletMain->GetBalance() < COIN) {
+    if (wallet->GetBalance() < COIN) {
         LogPrintf("WARNING: %s: Insufficient funds.", __func__);
         return BeaconError::INSUFFICIENT_FUNDS;
+    }
+
+    for (const auto& [_, pool_tx] : mempool.mapTx) {
+        for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
+            if (pool_tx_contract.m_type == GRC::ContractType::BEACON) {
+                GRC::BeaconPayload pool_tx_beacon = pool_tx_contract.CopyPayloadAs<GRC::BeaconPayload>();
+
+                GRC::Cpid other_cpid = pool_tx_beacon.m_cpid;
+
+                if (cpid == other_cpid) {
+                   return BeaconError::ALEADY_IN_MEMPOOL;
+                }
+            }
+        }
     }
 
     return BeaconError::NONE;
@@ -710,7 +724,7 @@ AdvertiseBeaconResult SendBeaconContract(
     Beacon beacon,
     ContractAction action = ContractAction::ADD)
 {
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -722,8 +736,10 @@ AdvertiseBeaconResult SendBeaconContract(
         return BeaconError::MISSING_KEY;
     }
 
+    uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
     const auto result_pair = SendContract(
-        MakeContract<BeaconPayload>(action, std::move(payload)));
+        MakeContract<BeaconPayload>(contract_version, action, std::move(payload)));
 
     if (!result_pair.second.empty()) {
         return BeaconError::TX_FAILED;
@@ -747,7 +763,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
     // transaction. Otherwise, we may create a bogus beacon key that lingers in
     // the wallet:
     //
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -780,7 +796,7 @@ AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
 
     LogPrintf("%s: Renewing beacon for %s", __func__, cpid.ToString());
 
-    const BeaconError error = CheckBeaconTransactionViable(*pwalletMain);
+    const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
     if (error != BeaconError::NONE) {
         return error;
@@ -899,7 +915,7 @@ bool MiningProject::Eligible() const
     return m_error == Error::NONE;
 }
 
-const Project* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
+const ProjectEntry* MiningProject::TryWhitelist(const WhitelistSnapshot& whitelist) const
 {
     return ResolveWhitelistProject(*this, whitelist);
 }

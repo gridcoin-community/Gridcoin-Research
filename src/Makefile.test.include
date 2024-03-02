@@ -28,6 +28,7 @@ TEXT_TEST_FILES = \
 GENERATED_TEST_FILES = $(JSON_TEST_FILES:.json=.json.h) $(BINARY_TEST_FILES:.bin=.bin.h) $(TEXT_TEST_FILES:.txt=.txt.h)
 
 # test_n binary #
+
 GRIDCOIN_TESTS =\
 	test/checkpoints_tests.cpp \
 	test/dos_tests.cpp \
@@ -37,16 +38,14 @@ GRIDCOIN_TESTS =\
 	test/base32_tests.cpp \
 	test/base58_tests.cpp \
 	test/base64_tests.cpp \
-	test/bignum_tests.cpp \
 	test/bip32_tests.cpp \
 	test/compilerbug_tests.cpp \
 	test/crypto_tests.cpp \
 	test/fs_tests.cpp \
 	test/getarg_tests.cpp \
 	test/gridcoin_tests.cpp \
-	test/gridcoin/appcache_tests.cpp \
-	test/gridcoin/block_finder_tests.cpp \
 	test/gridcoin/beacon_tests.cpp \
+	test/gridcoin/block_finder_tests.cpp \
 	test/gridcoin/claim_tests.cpp \
 	test/gridcoin/contract_tests.cpp \
 	test/gridcoin/cpid_tests.cpp \
@@ -54,7 +53,10 @@ GRIDCOIN_TESTS =\
 	test/gridcoin/magnitude_tests.cpp \
 	test/gridcoin/mrc_tests.cpp \
 	test/gridcoin/project_tests.cpp \
+	test/gridcoin/protocol_tests.cpp \
 	test/gridcoin/researcher_tests.cpp \
+	test/gridcoin/scraper_registry_tests.cpp \
+	test/gridcoin/sidestake_tests.cpp \
 	test/gridcoin/superblock_tests.cpp \
 	test/key_tests.cpp \
 	test/merkle_tests.cpp \
@@ -88,7 +90,11 @@ test_test_gridcoin_LDADD += $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(LIBGR
 test_test_gridcoin_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 test_test_gridcoin_LDADD += $(LIBDB)
+else
+test_test_gridcoin_LDADD += $(BDB_LIBS)
+endif
 endif
 
 nodist_test_test_gridcoin_SOURCES = $(GENERATED_TEST_FILES)

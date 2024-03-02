@@ -16,8 +16,6 @@
 #include <string>
 #include <vector>
 
-#endif // BITCOIN_NETADDRESS_H
-
 enum Network
 {
     NET_UNROUTABLE,
@@ -180,4 +178,6 @@ class CService : public CNetAddr
              READWRITE(WrapBigEndian(port));
         }
 };
+
+#endif // BITCOIN_NETADDRESS_H
 

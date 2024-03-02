@@ -10,12 +10,14 @@
 #include "consensus/params.h"
 #include "protocol.h"
 
-// system.h included only for temporary V12 fork point overrides for testing.
+// system.h and extern reference to cs_main included only for temporary V13 fork point overrides for testing.
 #include "util/system.h"
 
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+extern CCriticalSection cs_main;
 
 typedef std::map<int, uint256> MapCheckpoints;
 typedef std::map<int, std::vector<unsigned char>> MapMasterKeys;
@@ -149,6 +151,13 @@ inline bool IsV11Enabled(int nHeight)
 inline bool IsV12Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().BlockV12Height;
+}
+
+inline bool IsV13Enabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate testing.
+
+    return nHeight >= gArgs.GetArg("-blockv13height", Params().GetConsensus().BlockV13Height);
 }
 
 inline bool IsPollV3Enabled(int nHeight)

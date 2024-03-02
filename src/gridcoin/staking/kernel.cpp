@@ -12,6 +12,8 @@
 #include "streams.h"
 #include "util.h"
 
+#include <node/blockstorage.h>
+
 using namespace std;
 using namespace GRC;
 
@@ -385,12 +387,28 @@ bool GRC::ReadStakedInput(
     CTxDB& txdb,
     const uint256 prevout_hash,
     CBlockHeader& out_header,
-    CTransaction& out_txprev)
+    CTransaction& out_txprev,
+    CBlockIndex* pindexPrev)
 {
     CTxIndex tx_index;
 
     // Get transaction index for the previous transaction
     if (!txdb.ReadTxIndex(prevout_hash, tx_index)) {
+        if (pindexPrev != nullptr) {
+            for (CBlockIndex* pindex = pindexPrev; pindex->pprev != nullptr; pindex = pindex->pprev) {
+                CBlock block;
+                ReadBlockFromDisk(block, pindex, Params().GetConsensus());
+
+                for (const auto& tx : block.vtx) {
+                    if (tx.GetHash() == prevout_hash) {
+                        error("Found tx %s in block %s", tx.GetHash().ToString(), pindex->GetBlockHash().ToString());
+                        out_txprev = tx;
+                        out_header = pindex->GetBlockHeader();
+                        return true;
+                    }
+                }
+            }
+        }
         // Previous transaction not in main chain, may occur during initial download
         return error("%s: tx index not found for input tx %s", __func__, prevout_hash.GetHex());
     }
@@ -429,7 +447,7 @@ bool GRC::CalculateLegacyV3HashProof(
     CTransaction input_tx;
     CBlockHeader input_block;
 
-    if (!ReadStakedInput(txdb, prevout.hash, input_block, input_tx)) {
+    if (!ReadStakedInput(txdb, prevout.hash, input_block, input_tx, nullptr)) {
         return coinstake.DoS(1, error("Read staked input failed."));
     }
 
@@ -443,7 +461,7 @@ bool GRC::CalculateLegacyV3HashProof(
         << coinstake.nTime
         << por_nonce;
 
-    out_hash_proof = CBigNum(out.GetHash()).getuint256();
+    out_hash_proof = out.GetHash();
 
     return true;
 }
@@ -584,7 +602,7 @@ bool GRC::CheckProofOfStakeV8(
     CBlockHeader header;
     CTransaction txPrev;
 
-    if (!ReadStakedInput(txdb, prevout.hash, header, txPrev))
+    if (!ReadStakedInput(txdb, prevout.hash, header, txPrev, pindexPrev))
         return tx.DoS(1, error("%s: read staked input failed", __func__));
 
     if (!VerifySignature(txPrev, tx, 0, 0))
@@ -613,13 +631,12 @@ bool GRC::CheckProofOfStakeV8(
 
     //Stake refactoring TomasBrod
     int64_t Weight = CalculateStakeWeightV8(txPrev, prevout.n);
-    CBigNum bnHashProof(hashProofOfStake);
+    arith_uint320 bnHashProof = arith_uint320(hashProofOfStake);
 
     // Base target
-    CBigNum bnTarget;
-    bnTarget.SetCompact(Block.nBits);
+    arith_uint320 bnTarget = arith_uint256().SetCompact(Block.nBits);
     // Weighted target
-    bnTarget *= Weight;
+    bnTarget *= arith_uint320(Weight);
 
 
     LogPrint(BCLog::LogFlags::VERBOSE,
@@ -628,7 +645,7 @@ bool GRC::CheckProofOfStakeV8(
              " Trg %72s", generated_by_me?" Local,":"",
              (double)header.nTime, (double)txPrev.nTime, (double)tx.nTime,
              Block.nBits, (double)Weight,
-             CBigNum(hashProofOfStake).GetHex(), bnTarget.GetHex()
+             hashProofOfStake.GetHex(), bnTarget.GetHex()
              );
 
     // Now check if proof-of-stake hash meets target protocol

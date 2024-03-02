@@ -4,6 +4,7 @@
 
 #include "amount.h"
 #include "gridcoin/appcache.h"
+#include "gridcoin/protocol.h"
 #include "gridcoin/staking/reward.h"
 #include "main.h"
 
@@ -41,7 +42,7 @@ CAmount GRC::GetConstantBlockReward(const CBlockIndex* index)
     const CAmount MAX_CBR = DEFAULT_CBR * 2;
 
     CAmount reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = ReadCache(Section::PROTOCOL, "blockreward1");
+    AppCacheEntry oCBReward = GetProtocolRegistry().GetProtocolEntryByKeyLegacy("blockreward1");
 
     //TODO: refactor the expire checking to subroutine
     //Note: time constant is same as GetBeaconPublicKey

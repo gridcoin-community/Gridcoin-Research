@@ -5,6 +5,9 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include "gridcoin/protocol.h"
+#include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -1443,6 +1446,10 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "Beacon transaction for this CPID is already in the mempool");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
@@ -1505,6 +1512,10 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
             throw JSONRPCError(
                 RPC_WALLET_UNLOCK_NEEDED,
                 "Wallet locked. Unlock it fully to send a beacon transaction");
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:
+            throw JSONRPCError(
+                RPC_INVALID_REQUEST,
+                "Beacon transaction for this CPID is already in the mempool");
     }
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Unexpected error occurred");
@@ -1554,8 +1565,9 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
         entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
         entry.pushKV("timestamp", beacon_pair.second->m_timestamp);
         entry.pushKV("hash", beacon_pair.second->m_hash.GetHex());
-        entry.pushKV("prev_beacon_hash", beacon_pair.second->m_prev_beacon_hash.GetHex());
+        entry.pushKV("prev_beacon_hash", beacon_pair.second->m_previous_hash.GetHex());
         entry.pushKV("status", beacon_pair.second->m_status.Raw());
+        entry.pushKV("status_text", beacon_pair.second->StatusToString());
 
         results.push_back(entry);
     }
@@ -1669,8 +1681,14 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
+        CBitcoinAddress address;
+        const CKeyID& key_id = pending_beacon_pair.first;
+
+        address.Set(key_id);
+
         entry.pushKV("cpid", pending_beacon_pair.second->m_cpid.ToString());
-        entry.pushKV("address", pending_beacon_pair.first.ToString());
+        entry.pushKV("key_id", pending_beacon_pair.first.ToString());
+        entry.pushKV("address", address.ToString());
         entry.pushKV("timestamp", pending_beacon_pair.second->m_timestamp);
 
         results.push_back(entry);
@@ -1732,7 +1750,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         active.push_back(entry);
     }
 
-    for (auto beacon_ptr : beacons.FindPending(*cpid)) {
+    for (const auto& beacon_ptr : beacons.FindPending(*cpid)) {
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("cpid", cpid->ToString());
         entry.pushKV("active", false);
@@ -1756,6 +1774,203 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue beaconaudit(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2)
+        throw runtime_error(
+            "beaconaudit [errors only] [cpid]\n"
+            "\n"
+            "[errors only] -> Boolean to provide errors only. Defaults to true.\n"
+            "[cpid] -> Optional parameter of cpid. Defaults to current cpid. * means all active CPIDs.\n"
+            "\n"
+            "Conducts consistency audit for beacon contracts and beacon chain for given CPID.\n"
+            "This is currently limited to looking at multiple renewals for the same CPID in\n"
+            "the same block and reporting inconsistencies between the normal contract order\n"
+            "and the historical beacon entries (beacon chainlet) for the CPID.\n");
+
+    bool errors_only = true;
+    bool global = false;
+
+    GRC::MiningId mining_id;
+
+    if (params.size() > 0) {
+        errors_only = params[0].get_bool();
+    }
+
+    if (params.size() > 1) {
+        if (params[1].get_str() == "*") {
+            global = true;
+        } else {
+            mining_id = GRC::MiningId::Parse(params[1].get_str());
+        }
+    } else {
+        mining_id = GRC::Researcher::Get()->Id();
+    }
+
+    if (!global && !mining_id.Valid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid CPID.");
+    }
+
+    const GRC::CpidOption cpid = mining_id.TryCpid();
+
+    if (!global && !cpid) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for investor.");
+    }
+
+    // Only allow auditing when at or above block V11 threshold.
+    if (!IsV11Enabled(pindexBest->nHeight)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "This function cannot be called when the wallet height is below the block V11"
+                                                "threshold.");
+    }
+
+    // Find Fern starting block.
+    CBlockIndex* block_index = GRC::BlockFinder::FindByHeight(Params().GetConsensus().BlockV11Height);
+
+    std::set<GRC::Cpid> cpids;
+
+    typedef std::tuple<GRC::Contract, CTransaction, unsigned int, CBlockIndex*> BeaconContext;
+
+    std::multimap<GRC::Cpid, BeaconContext> beacon_contracts;
+
+    // This form of block index traversal starts at the first V11 block and continues to pIndexBest (inclusive).
+    while (block_index) {
+        CBlock block;
+
+        if (!ReadBlockFromDisk(block, block_index, Params().GetConsensus())) {
+            throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to read block from disk. Your blockchain files are corrupted.");
+        }
+
+        std::set<GRC::Cpid> cpids_in_block;
+        std::multimap<GRC::Cpid, BeaconContext> beacon_contracts_in_block;
+
+        for (unsigned int i = 0; i < block.vtx.size(); ++i) {
+
+            for (const auto& tx_contract: block.vtx[i].GetContracts()) {
+                if (tx_contract.m_type != GRC::ContractType::BEACON) continue;
+
+                GRC::BeaconPayload beacon_payload = tx_contract.CopyPayloadAs<GRC::BeaconPayload>();
+
+                // If not global (all cpids) and payload cpid does not match input parameter (specified cpid), continue.
+                if (!global && beacon_payload.m_cpid != *cpid) continue;
+
+                cpids_in_block.insert(beacon_payload.m_cpid);
+
+                BeaconContext beacon_context {tx_contract, block.vtx[i], i, block_index};
+
+                beacon_contracts_in_block.insert({ beacon_payload.m_cpid, beacon_context });
+            }
+        }
+
+        for (const auto& cpid_in_block : cpids_in_block) {
+            if (beacon_contracts_in_block.count(cpid_in_block) > 1) {
+                cpids.insert(cpid_in_block);
+
+                auto beacons_to_insert = beacon_contracts_in_block.equal_range(cpid_in_block);
+
+                for (auto iter = beacons_to_insert.first; iter != beacons_to_insert.second; ++iter) {
+                    beacon_contracts.insert({ iter->first, iter->second });
+                }
+            }
+        }
+
+        // If we are at pIndexBest (i.e. no pnext), then break.
+        if (block_index->pnext) {
+            block_index = block_index->pnext;
+        } else {
+            break;
+        }
+    }
+
+    LogPrintf("INFO: %s: number of cpids = %u, number of beacon contracts = %u",
+              __func__,
+              cpids.size(),
+              beacon_contracts.size());
+
+    UniValue res(UniValue::VOBJ);
+    UniValue beacons_to_output(UniValue::VARR);
+
+    GRC::BeaconRegistry& beacon_registry = GRC::GetBeaconRegistry();
+
+    for (const auto& cpid_to_output : cpids) {
+        UniValue beacon_contracts_output(UniValue::VARR);
+        auto beacon_contracts_to_output = beacon_contracts.equal_range(cpid_to_output);
+
+        uint256 prev_block_hash, prev_renewal_hash, prev_renewal_hash_report;
+
+        for (auto beacon_contract_to_output = beacon_contracts_to_output.first;
+             beacon_contract_to_output != beacon_contracts_to_output.second;
+             ++beacon_contract_to_output) {
+            bool prev_hash_mismatch_error = false;
+            bool no_historical_entry_error = false;
+
+            size_t i = std::distance(beacon_contracts_to_output.first, beacon_contract_to_output);
+
+            UniValue beacon_contract_output(UniValue::VOBJ);
+
+            uint256 beacon_hash = get<1>(beacon_contract_to_output->second).GetHash();
+
+            GRC::Contract::Action action = get<0>(beacon_contract_to_output->second).m_action;
+
+            const GRC::BeaconPayload& beacon_payload = get<0>(beacon_contract_to_output->second).CopyPayloadAs<GRC::BeaconPayload>();
+
+            GRC::BeaconOption historical_beacon_entry =
+                beacon_registry.FindHistorical(get<1>(beacon_contract_to_output->second).GetHash());
+
+            if (historical_beacon_entry) {
+                if (action == GRC::ContractAction::ADD && historical_beacon_entry->m_status == GRC::BeaconStatusForStorage::RENEWAL) {
+                    if (i && prev_block_hash == get<3>(beacon_contract_to_output->second)->GetBlockHash()
+                        && prev_renewal_hash != historical_beacon_entry->m_previous_hash) {
+                        prev_hash_mismatch_error = true;
+                    }
+
+                    prev_renewal_hash_report = prev_renewal_hash;
+                    prev_renewal_hash = beacon_hash;
+                    prev_block_hash = get<3>(beacon_contract_to_output->second)->GetBlockHash();
+                }
+            } else {
+                no_historical_entry_error = true;
+            }
+
+            if (!errors_only || prev_hash_mismatch_error || no_historical_entry_error) {
+                beacon_contract_output.pushKV("height", get<3>(beacon_contract_to_output->second)->nHeight);
+                beacon_contract_output.pushKV("vtx_index", (uint64_t) get<2>(beacon_contract_to_output->second));
+                beacon_contract_output.pushKV("txid", beacon_hash.ToString());
+                beacon_contract_output.pushKV("tx_time", (int64_t) get<1>(beacon_contract_to_output->second).nTime);
+                beacon_contract_output.pushKV("tx_time_string", FormatISO8601DateTime(get<1>(beacon_contract_to_output->second).nTime));
+                beacon_contract_output.pushKV("action", action.ToString());
+
+                beacon_contract_output.pushKV("same_block_renewal_prev_hash_mismatch", prev_hash_mismatch_error);
+
+                if (prev_hash_mismatch_error) {
+                    beacon_contract_output.pushKV("previous_renewal_hash_via_contract_traversal",
+                                                  prev_renewal_hash_report.ToString());
+                    beacon_contract_output.pushKV("previous_renewal_hash_by_historical_beacon_entry",
+                                                  historical_beacon_entry->m_previous_hash.ToString());
+                }
+
+                if (!no_historical_entry_error) {
+                    beacon_contract_output.pushKV("status", historical_beacon_entry->StatusToString());
+                } else {
+                    beacon_contract_output.pushKV("status", "no historical entry");
+                }
+
+                beacon_contracts_output.push_back(beacon_contract_output);
+            }
+        }
+
+        UniValue beacon(UniValue::VOBJ);
+
+        if (!beacon_contracts_output.empty()) {
+            beacon.pushKV("cpid", cpid_to_output.ToString());
+            beacon.pushKV("contracts", beacon_contracts_output);
+            beacons_to_output.push_back(beacon);
+        }
+    }
+
+    res.pushKV("cpids_with_more_than_one_beacon_contract_in_block", beacons_to_output);
+
+    return res;
+}
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
@@ -2003,11 +2218,16 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     bool project_v2_enabled = false;
+    bool block_v13_enabled = false;
+    uint32_t contract_version = 0;
 
     {
         LOCK(cs_main);
 
         project_v2_enabled = IsProjectV2Enabled(nBestHeight);
+
+        block_v13_enabled = IsV13Enabled(nBestHeight);
+        contract_version = block_v13_enabled ? 3 : 2;
     }
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
@@ -2037,14 +2257,26 @@ UniValue addkey(const UniValue& params, bool fHelp)
         param_count_max = 5;
     }
 
-    if (type == GRC::ContractType::PROJECT && action == GRC::ContractAction::REMOVE) {
+    if ((type == GRC::ContractType::PROJECT || type == GRC::ContractType::SCRAPER)
+            && action == GRC::ContractAction::REMOVE) {
         required_param_count = 3;
 
-        // This is for compatibility with scripts for project administration that may put something in the
+        // This is for compatibility with scripts for project and scraper administration that may put something in the
         // fourth parameter because it was originally required even though ignored. The same principal applies
         // to v2, where the last two parameters for a remove can be supplied, but they will be ignored.
         if (project_v2_enabled) {
             param_count_max = 5;
+        }
+    }
+
+    // For add a mandatory sidestake, the 4th parameter is the allocation and the description (5th parameter) is optional.
+    if (type == GRC::ContractType::SIDESTAKE) {
+        if (action == GRC::ContractAction::ADD) {
+            required_param_count = 4;
+            param_count_max = 5;
+        } else {
+            required_param_count = 3;
+            param_count_max = 3;
         }
     }
 
@@ -2082,8 +2314,11 @@ UniValue addkey(const UniValue& params, bool fHelp)
                            "Error: Please enter the wallet passphrase with walletpassphrase first.");
     }
 
-    if (type == GRC::ContractType::UNKNOWN) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown contract type.");
+    if (!(type == GRC::ContractType::PROJECT
+          || type == GRC::ContractType::SCRAPER
+          || type == GRC::ContractType::PROTOCOL
+          || type == GRC::ContractType::SIDESTAKE)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     }
 
     if (action == GRC::ContractAction::UNKNOWN) {
@@ -2094,50 +2329,203 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     switch (type.Value()) {
     case GRC::ContractType::PROJECT:
+    {
         if (action == GRC::ContractAction::ADD) {
-            if (project_v2_enabled) {
+            bool gdpr_export_control = false;
+
+            if (block_v13_enabled) {
+                // We must do our own conversion to boolean here, because the 5th parameter can either be
+                // a boolean for project or a string for sidestake, which means the client.cpp entry cannot contain a
+                // unicode type specifier for the 5th parameter.
+                if (ToLower(params[4].get_str()) == "true") {
+                    gdpr_export_control = true;
+                } else if (ToLower(params[4].get_str()) != "false") {
+                    // Neither true or false - throw an exception.
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
+                            uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{2},          // Contract version number, 2
-                            params[4].getBool()); // GDPR stats export protection enforced boolean
+                            gdpr_export_control); // GDPR stats export protection enforced boolean
+
+            } else if (project_v2_enabled) {
+                // We must do our own conversion to boolean here, because the 5th parameter can either be
+                // a boolean for project or a string for sidestake, which means the client.cpp entry cannot contain a
+                // unicode type specifier for the 5th parameter.
+                if (ToLower(params[4].get_str()) == "true") {
+                    gdpr_export_control = true;
+                } else if (ToLower(params[4].get_str()) != "false") {
+                    // Neither true or false - throw an exception.
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
+                }
+
+                contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
+                            action,
+                            uint32_t{2},          // Contract payload version number, 2
+                            params[2].get_str(),  // Name
+                            params[3].get_str(),  // URL
+                            gdpr_export_control); // GDPR stats export protection enforced boolean
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                            params[3].get_str(),  // URL
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract version number, 1
+                            params[3].get_str()); // URL
             }
         } else if (action == GRC::ContractAction::REMOVE) {
-            if (project_v2_enabled) {
+            if (block_v13_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
+                            uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{2});         // Contract version number, 2
+                            false);               // GDPR status irrelevant
+
+            } else if (project_v2_enabled) {
+                contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
+                            action,
+                            uint32_t{2},          // Contract payload version number, 2
+                            params[2].get_str(),  // Name
+                            std::string{},        // URL ignored
+                            false);               // GDPR status irrelevant
 
             } else {
                 contract = GRC::MakeContract<GRC::Project>(
+                            contract_version,
                             action,
                             params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            int64_t{0},           // Default zero timestamp
-                            uint32_t{1});         // Contract version number, 1
-            }
+                            std::string{});       // URL ignored
+           }
         }
         break;
-    default:
+    }
+    case GRC::ContractType::SCRAPER:
+    {
+        std::string status_string = ToLower(params[3].get_str());
+        GRC::ScraperEntryStatus status = GRC::ScraperEntryStatus::UNKNOWN;
+
+        CBitcoinAddress scraper_address;
+        if (!scraper_address.SetString(params[2].get_str())) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the scraper is invalid.");
+        }
+
+        if (block_v13_enabled) { // Contract version will be 3.
+            CKeyID key_id;
+
+            scraper_address.GetKeyID(key_id);
+
+            if (action == GRC::ContractAction::ADD) {
+                if (status_string == "false") {
+                    status = GRC::ScraperEntryStatus::NOT_AUTHORIZED;
+                } else if (status_string == "true") {
+                    status = GRC::ScraperEntryStatus::AUTHORIZED;
+                } else if (status_string == "explorer") {
+                    status = GRC::ScraperEntryStatus::EXPLORER;
+                } else {
+                    JSONRPCError(RPC_INVALID_PARAMETER, "Status specified for the scraper is invalid.");
+                }
+            } else if (action == GRC::ContractAction::REMOVE) {
+                status = GRC::ScraperEntryStatus::DELETED;
+            }
+
+            contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        contract_version,
+                        action,
+                        uint32_t {2}, // Contract payload version number
+                        key_id,
+                        status);
+
+        } else { // Block v13 not enabled. (Contract version will be 2.)
+            if (action == GRC::ContractAction::ADD && !(status_string == "false" || status_string == "true")) {
+                JSONRPCError(RPC_INVALID_PARAMETER, "Status specified for the scraper is invalid.");
+            } else if (action == GRC::ContractAction::REMOVE) {
+                status_string = "false";
+            }
+
+            // This form of ScraperEntryPayload generation matches the payload constructor that uses the Parse
+            // function to convert legacy arguments into a native scraper entry.
+            contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
+                        contract_version,
+                        action,
+                        scraper_address.ToString(),
+                        status_string);
+        }
+        break;
+    }
+    case GRC::ContractType::PROTOCOL:
+        // There will be no legacy payload contracts past version 2. This will need to be changed before the
+        // block v13 mandatory (which also means contract v3).
         contract = GRC::MakeLegacyContract(
                     type.Value(),
                     action,
                     params[2].get_str(),   // key
                     params[3].get_str());  // value
         break;
+    case GRC::ContractType::SIDESTAKE:
+    {
+        if (block_v13_enabled) {
+            CBitcoinAddress sidestake_address;
+            if (!sidestake_address.SetString(params[2].get_str())) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the sidestake is invalid.");
+            }
+
+            std::string description;
+            if (params.size() > 4) {
+                description = params[4].get_str();
+            }
+
+            // We have to do our own conversion here because the 4th parameter type specifier cannot be set other
+            // than string in the client.cpp file.
+            double allocation = 0.0;
+            if (params.size() > 3 && !ParseDouble(params[3].get_str(), &allocation)) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid allocation specified.");
+            }
+
+            allocation /= 100.0;
+
+            if (allocation > 1.0) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Allocation specified is greater than 100.0%.");
+            }
+
+            contract = GRC::MakeContract<GRC::SideStakePayload>(
+                contract_version,                                            // Contract version number (3+)
+                action,                                                      // Contract action
+                uint32_t {1},                                                // Contract payload version number
+                sidestake_address.Get(),                                     // Sidestake destination
+                allocation,                                                  // Sidestake allocation
+                description,                                                 // Sidestake description
+                GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY // sidestake status
+                );
+        } else {
+             throw JSONRPCError(RPC_INVALID_PARAMETER, "Sidestake contracts are not valid for block version less than v13.");
+        }
+
+        break;
+    }
+    case GRC::ContractType::BEACON:
+        [[fallthrough]];
+    case GRC::ContractType::CLAIM:
+        [[fallthrough]];
+    case GRC::ContractType::MESSAGE:
+        [[fallthrough]];
+    case GRC::ContractType::MRC:
+        [[fallthrough]];
+    case GRC::ContractType::POLL:
+        [[fallthrough]];
+    case GRC::ContractType::VOTE:
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
+    case GRC::ContractType::UNKNOWN:
+        [[fallthrough]];
+    case GRC::ContractType::OUT_OF_BOUND:
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type.");
     }
 
     if (!contract.RequiresMasterKey()) {
@@ -2209,65 +2597,6 @@ UniValue debug(const UniValue& params, bool fHelp)
     return res;
 }
 
-UniValue getlistof(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getlistof <keytype>\n"
-                "\n"
-                "<keytype> -> key of requested data\n"
-                "\n"
-                "Displays data associated to a specified key type\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sType = params[0].get_str();
-
-    res.pushKV("Key Type", sType);
-
-    LOCK(cs_main);
-
-    UniValue entries(UniValue::VOBJ);
-    for(const auto& entry : ReadSortedCacheSection(StringToSection(sType)))
-    {
-        const auto& key = entry.first;
-        const auto& value = entry.second;
-
-        UniValue obj(UniValue::VOBJ);
-        obj.pushKV("value", value.value);
-        obj.pushKV("timestamp", value.timestamp);
-        entries.pushKV(key, obj);
-    }
-
-    res.pushKV("entries", entries);
-    return res;
-}
-
-UniValue listdata(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "listdata <keytype>\n"
-                "\n"
-                "<keytype> -> key in cache\n"
-                "\n"
-                "Displays data associated to a key stored in cache\n");
-
-    UniValue res(UniValue::VOBJ);
-
-    std::string sType = params[0].get_str();
-
-    res.pushKV("Key Type", sType);
-
-    LOCK(cs_main);
-
-    Section section = StringToSection(sType);
-    for(const auto& item : ReadCacheSection(section))
-        res.pushKV(item.first, item.second.value);
-
-    return res;
-}
-
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
@@ -2296,6 +2625,77 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
         res.pushKV(project.m_name, entry);
     }
+
+    return res;
+}
+
+UniValue listscrapers(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listscrapers\n"
+                "\n"
+                "Displays information about scrapers recognized by the network.\n");
+
+    UniValue res(UniValue::VOBJ);
+    UniValue scraper_entries(UniValue::VARR);
+
+    for (const auto& scraper : GRC::GetScraperRegistry().Scrapers()) {
+        UniValue entry(UniValue::VOBJ);
+
+        CBitcoinAddress address(scraper.first);
+
+        entry.pushKV("scraper_address", address.ToString());
+        entry.pushKV("current_scraper_entry_tx_hash", scraper.second->m_hash.ToString());
+        if (scraper.second->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_scraper_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_scraper_entry_tx_hash", scraper.second->m_previous_hash.ToString());
+        }
+
+        entry.pushKV("scraper_entry_timestamp", scraper.second->m_timestamp);
+        entry.pushKV("scraper_entry_time", DateTimeStrFormat(scraper.second->m_timestamp));
+        entry.pushKV("scraper_entry_status", scraper.second->StatusToString());
+
+        scraper_entries.push_back(entry);
+    }
+
+    res.pushKV("current_scraper_entries", scraper_entries);
+
+    return res;
+}
+
+UniValue listprotocolentries(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+                "listprotocolentries\n"
+                "\n"
+                "Displays the protocol entries on the network.\n");
+
+    UniValue res(UniValue::VOBJ);
+    UniValue scraper_entries(UniValue::VARR);
+
+    for (const auto& protocol : GRC::GetProtocolRegistry().ProtocolEntries()) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("protocol_entry_key", protocol.first);
+        entry.pushKV("protocol_entry_value", protocol.second->m_value);
+        entry.pushKV("current_protocol_entry_tx_hash", protocol.second->m_hash.ToString());
+        if (protocol.second->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_protocol_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_protocol_entry_tx_hash", protocol.second->m_previous_hash.ToString());
+        }
+
+        entry.pushKV("protocol_entry_timestamp", protocol.second->m_timestamp);
+        entry.pushKV("protocol_entry_time", DateTimeStrFormat(protocol.second->m_timestamp));
+        entry.pushKV("protocol_entry_status", protocol.second->StatusToString());
+
+        scraper_entries.push_back(entry);
+    }
+
+    res.pushKV("current_protocol_entries", scraper_entries);
 
     return res;
 }
@@ -2634,11 +3034,11 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
 
                 if (cpid_parsed)
                 {
-                    c.pushKV("Magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed).Floating());
+                    c.pushKV("magnitude", superblock.m_cpids.MagnitudeOf(*cpid_parsed).Floating());
                 }
 
                 if (displaycontract)
-                    c.pushKV("Contract Contents", SuperblockToJson(superblock));
+                    c.pushKV("contract_contents", SuperblockToJson(superblock));
 
                 results.push_back(c);
 
@@ -2997,7 +3397,11 @@ UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
         CWalletTx wtx;
         std::string error;
 
-        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(GRC::ContractAction::ADD, mrc));
+        uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
+
+        std::tie(wtx, error) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
+                                                                             GRC::ContractAction::ADD,
+                                                                             mrc));
         if (!error.empty()) {
             throw runtime_error(error);
         }

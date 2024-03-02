@@ -57,6 +57,7 @@ void OptionsModel::Init()
     fLimitTxnDisplay = settings.value("fLimitTxnDisplay", false).toBool();
     fMaskValues = settings.value("fMaskValues", false).toBool();
     limitTxnDate = settings.value("limitTxnDate", QDate()).toDate();
+    pollExpireNotification = settings.value("pollExpireNotification", 8.0).toDouble();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
     walletStylesheet = settings.value("walletStylesheet", "dark").toString();
@@ -78,6 +79,8 @@ void OptionsModel::Init()
     if (settings.contains("dataDir") && dataDir != GUIUtil::getDefaultDataDirectory()) {
         gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(settings.value("dataDir").toString()).string());
     }
+
+    m_sidestake_model = new SideStakeTableModel(this);
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -142,6 +145,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return QVariant(fMaskValues);
         case LimitTxnDate:
             return QVariant(limitTxnDate);
+        case PollExpireNotification:
+            return QVariant(pollExpireNotification);
         case DisableUpdateCheck:
             return QVariant(gArgs.GetBoolArg("-disableupdatecheck", false));
         case DataDir:
@@ -152,6 +157,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case EnableStakeSplit:
             // This comes from the core and is a read-write setting (see below).
             return QVariant(gArgs.GetBoolArg("-enablestakesplit"));
+        case EnableSideStaking:
+            // This comes from the core and is a read-write setting (see below).
+            return QVariant(gArgs.GetBoolArg("-enablesidestaking"));
         case StakingEfficiency:
             // This comes from the core and is a read-write setting (see below).
             return QVariant((double) gArgs.GetArg("-stakingefficiency", (int64_t) 90));
@@ -284,6 +292,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             limitTxnDate = value.toDate();
             settings.setValue("limitTxnDate", limitTxnDate);
             break;
+        case PollExpireNotification:
+            pollExpireNotification = value.toDouble();
+            settings.setValue("pollExpireNotification", pollExpireNotification);
+            break;
         case DisableUpdateCheck:
             gArgs.ForceSetArg("-disableupdatecheck", value.toBool() ? "1" : "0");
             settings.setValue("fDisableUpdateCheck", value.toBool());
@@ -303,9 +315,14 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case EnableStakeSplit:
             // This is a core setting stored in the read-write settings file and once set will override the read-only
             //config file.
-            //fStakeSplitEnabled = value.toBool();
             gArgs.ForceSetArg("-enablestakesplit", value.toBool() ? "1" : "0");
             updateRwSetting("enablestakesplit", gArgs.GetBoolArg("-enablestakesplit"));
+            break;
+        case EnableSideStaking:
+            // This is a core setting stored in the read-write settings file and once set will override the read-only
+            //config file.
+            gArgs.ForceSetArg("-enablesidestaking", value.toBool() ? "1" : "0");
+            updateRwSetting("enablesidestaking", gArgs.GetBoolArg("-enablesidestaking"));
             break;
         case StakingEfficiency:
             // This is a core setting stored in the read-write settings file and once set will override the read-only
@@ -380,6 +397,11 @@ int64_t OptionsModel::getLimitTxnDateTime()
     return limitTxnDateTime.toMSecsSinceEpoch() / 1000;
 }
 
+double OptionsModel::getPollExpireNotification()
+{
+    return pollExpireNotification;
+}
+
 bool OptionsModel::getStartAtStartup()
 {
     return fStartAtStartup;
@@ -448,4 +470,9 @@ void OptionsModel::setMaskValues(bool privacy_mode)
 QString OptionsModel::getDataDir()
 {
     return dataDir;
+}
+
+SideStakeTableModel* OptionsModel::getSideStakeTableModel()
+{
+    return m_sidestake_model;
 }

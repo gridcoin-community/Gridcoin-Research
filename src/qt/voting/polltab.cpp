@@ -134,7 +134,7 @@ private slots:
 PollTab::PollTab(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::PollTab)
-    , m_model(new PollTableModel(this))
+    , m_polltable_model(new PollTableModel(this))
     , m_no_result(new NoResult(this))
     , m_loading(new LoadingBar(this))
 {
@@ -152,7 +152,12 @@ PollTab::PollTab(QWidget* parent)
     connect(ui->cards, &PollCardView::detailsRequested, this, &PollTab::showDetailsRowDialog);
     connect(ui->table, &QAbstractItemView::doubleClicked, this, &PollTab::showPreferredDialog);
     connect(ui->table, &QWidget::customContextMenuRequested, this, &PollTab::showTableContextMenu);
-    connect(m_model.get(), &PollTableModel::layoutChanged, this, &PollTab::finishRefresh);
+    connect(m_polltable_model.get(), &PollTableModel::layoutChanged, this, &PollTab::finishRefresh);
+
+    // Forward the polltable model signal to the Poll Tab signal to avoid having to directly include the PollTableModel
+    // in the voting page.
+    connect(m_polltable_model.get(), &PollTableModel::newVoteReceivedAndPollMarkedDirty,
+            this, &PollTab::newVoteReceivedAndPollMarkedDirty);
 }
 
 PollTab::~PollTab()
@@ -163,15 +168,15 @@ PollTab::~PollTab()
 void PollTab::setVotingModel(VotingModel* model)
 {
     m_voting_model = model;
-    m_model->setModel(model);
+    m_polltable_model->setModel(model);
 
-    ui->cards->setModel(m_model.get());
-    ui->table->setModel(m_model.get());
+    ui->cards->setModel(m_polltable_model.get());
+    ui->table->setModel(m_polltable_model.get());
 }
 
 void PollTab::setPollFilterFlags(PollFilterFlag flags)
 {
-    m_model->setPollFilterFlags(flags);
+    m_polltable_model->setPollFilterFlags(flags);
 }
 
 void PollTab::changeViewMode(const ViewId view_id)
@@ -181,26 +186,26 @@ void PollTab::changeViewMode(const ViewId view_id)
 
 void PollTab::refresh()
 {
-    if (m_model->empty()) {
+    if (m_polltable_model->empty()) {
         m_no_result->showDefaultLoadingTitle();
         m_no_result->contentWidgetAs<QLabel>()->setText(WaitMessage());
     }
 
     m_loading->start();
-    m_model->refresh();
+    m_polltable_model->refresh();
 }
 
 void PollTab::filter(const QString& needle)
 {
     if (needle != m_last_filter) {
-        m_model->changeTitleFilter(needle);
+        m_polltable_model->changeTitleFilter(needle);
         m_last_filter = needle;
     }
 }
 
 void PollTab::sort(const int column)
 {
-    const Qt::SortOrder order = m_model->sort(column);
+    const Qt::SortOrder order = m_polltable_model->custom_sort(column);
     ui->table->horizontalHeader()->setSortIndicator(column, order);
 }
 
@@ -215,7 +220,7 @@ const PollItem* PollTab::selectedTableItem() const
         return nullptr;
     }
 
-    return m_model->rowItem(
+    return m_polltable_model->rowItem(
         ui->table->selectionModel()->selectedIndexes().first().row());
 }
 
@@ -228,10 +233,10 @@ void PollTab::resizeEvent(QResizeEvent* event)
 void PollTab::finishRefresh()
 {
     m_loading->finish();
-    ui->stack->setVisible(!m_model->empty());
-    m_no_result->setVisible(m_model->empty());
+    ui->stack->setVisible(!m_polltable_model->empty());
+    m_no_result->setVisible(m_polltable_model->empty());
 
-    if (m_model->empty()) {
+    if (m_polltable_model->empty()) {
         m_no_result->showDefaultNoResultTitle();
         m_no_result->contentWidgetAs<QLabel>()->setText(FullRefreshMessage());
     }
@@ -239,7 +244,7 @@ void PollTab::finishRefresh()
 
 void PollTab::showVoteRowDialog(int row)
 {
-    if (const PollItem* const poll_item = m_model->rowItem(row)) {
+    if (const PollItem* const poll_item = m_polltable_model->rowItem(row)) {
         showVoteDialog(*poll_item);
     }
 }
@@ -251,7 +256,7 @@ void PollTab::showVoteDialog(const PollItem& poll_item)
 
 void PollTab::showDetailsRowDialog(int row)
 {
-    if (const PollItem* const poll_item = m_model->rowItem(row)) {
+    if (const PollItem* const poll_item = m_polltable_model->rowItem(row)) {
         showDetailsDialog(*poll_item);
     }
 }
@@ -263,7 +268,7 @@ void PollTab::showDetailsDialog(const PollItem& poll_item)
 
 void PollTab::showPreferredDialog(const QModelIndex& index)
 {
-    if (const PollItem* const poll_item = m_model->rowItem(index.row())) {
+    if (const PollItem* const poll_item = m_polltable_model->rowItem(index.row())) {
         if (poll_item->m_finished) {
             showDetailsDialog(*poll_item);
         } else {

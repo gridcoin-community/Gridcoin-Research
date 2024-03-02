@@ -14,8 +14,12 @@ BOOST_AUTO_TEST_SUITE(sync_tests)
 BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
 {
     #ifdef DEBUG_LOCKORDER
-    bool prev = g_debug_lockorder_abort;
+    bool prev_lockorder_abort = g_debug_lockorder_abort;
+    bool prev_lockorder_throw_exception = g_debug_lockorder_throw_exception;
+
     g_debug_lockorder_abort = false;
+    g_debug_lockorder_throw_exception = true;
+
     #endif
 
     CCriticalSection mutex1, mutex2;
@@ -38,7 +42,8 @@ BOOST_AUTO_TEST_CASE(potential_deadlock_detected)
     #endif
 
     #ifdef DEBUG_LOCKORDER
-    g_debug_lockorder_abort = prev;
+    g_debug_lockorder_abort = prev_lockorder_abort;
+    g_debug_lockorder_throw_exception = prev_lockorder_throw_exception;
     #endif
 }
 

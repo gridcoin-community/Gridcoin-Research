@@ -23,7 +23,7 @@ LIBUNIVALUE = $(UNIVALUE_LIBS)
 endif
 
 GRIDCOIN_CONFIG_INCLUDES=-I$(builddir)/config
-GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -I$(builddir)/bdb53 $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
+GRIDCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj -I$(srcdir)/secp256k1/include $(BDB_CFLAGS) -I$(builddir)/bdb53 $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS) $(UNIVALUE_CFLAGS) $(CURL_CFLAGS) $(LIBZIP_CFLAGS)
 
 LIBGRIDCOIN_UTIL=libgridcoin_util.a
 LIBGRIDCOINQT=qt/libgridcoinqt.a
@@ -81,7 +81,6 @@ GRIDCOIN_CORE_H = \
     attributes.h \
     banman.h \
     base58.h \
-    bignum.h \
     chainparams.h \
     chainparamsbase.h \
     checkpoints.h \
@@ -115,17 +114,22 @@ GRIDCOIN_CORE_H = \
     gridcoin/contract/handler.h \
     gridcoin/contract/message.h \
     gridcoin/contract/payload.h \
+    gridcoin/contract/registry.h \
+    gridcoin/contract/registry_db.h \
     gridcoin/cpid.h \
     gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
     gridcoin/mrc.h \
     gridcoin/project.h \
+    gridcoin/protocol.h \
     gridcoin/quorum.h \
     gridcoin/researcher.h \
     gridcoin/scraper/fwd.h \
     gridcoin/scraper/http.h \
     gridcoin/scraper/scraper.h \
     gridcoin/scraper/scraper_net.h \
+    gridcoin/scraper/scraper_registry.h \
+    gridcoin/sidestake.h \
     gridcoin/staking/chain_trust.h \
     gridcoin/staking/difficulty.h \
     gridcoin/staking/exceptions.h \
@@ -237,22 +241,25 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     crypter.cpp \
     dbwrapper.cpp \
     fs.cpp \
-    gridcoin/appcache.cpp \
     gridcoin/backup.cpp \
     gridcoin/beacon.cpp \
     gridcoin/boinc.cpp \
     gridcoin/claim.cpp \
     gridcoin/contract/contract.cpp \
     gridcoin/contract/message.cpp \
+    gridcoin/contract/registry.cpp \
     gridcoin/cpid.cpp \
     gridcoin/gridcoin.cpp \
     gridcoin/mrc.cpp \
     gridcoin/project.cpp \
+    gridcoin/protocol.cpp \
     gridcoin/quorum.cpp \
     gridcoin/researcher.cpp \
     gridcoin/scraper/http.cpp \
     gridcoin/scraper/scraper.cpp \
     gridcoin/scraper/scraper_net.cpp \
+    gridcoin/scraper/scraper_registry.cpp \
+    gridcoin/sidestake.cpp \
     gridcoin/staking/difficulty.cpp \
     gridcoin/staking/exceptions.cpp \
     gridcoin/staking/kernel.cpp \
@@ -352,6 +359,7 @@ nodist_libgridcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 
 
 # crypto primitives library
+crypto_libgridcoin_crypto_base_a_CFLAGS = $(AM_CFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_CPPFLAGS = $(AM_CPPFLAGS)
 crypto_libgridcoin_crypto_base_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 crypto_libgridcoin_crypto_base_a_SOURCES = \
@@ -377,7 +385,9 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/sha512.cpp \
     crypto/sha512.h \
     crypto/siphash.cpp \
-    crypto/siphash.h
+    crypto/siphash.h \
+    gridcoin/md5.c \
+    gridcoin/md5.h
 
 if USE_ASM
 crypto_libgridcoin_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -429,7 +439,11 @@ gridcoinresearchd_LDADD = \
  $(LIBSECP256K1)
 
 if ENABLE_WALLET
+if EMBEDDED_BDB
 gridcoinresearchd_LDADD += $(LIBDB)
+else
+gridcoinresearchd_LDADD += $(BDB_LIBS)
+endif
 endif
 
 gridcoinresearchd_LDADD += $(CURL_LIBS) $(BOOST_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZIP_LIBS)

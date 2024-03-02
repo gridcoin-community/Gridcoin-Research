@@ -87,6 +87,18 @@ public:
         MRC
     };
 
+    static constexpr std::initializer_list<Type> TYPES {Other,
+                                                       Generated,
+                                                       SendToAddress,
+                                                       RecvWithAddress,
+                                                       RecvFromOther,
+                                                       SendToSelf,
+                                                       BeaconAdvertisement,
+                                                       Poll,
+                                                       Vote,
+                                                       Message,
+                                                       MRC};
+
     /** Number of confirmation recommended for accepting a transaction */
     static const int RecommendedNumConfirmations = 10;
 
@@ -113,6 +125,9 @@ public:
      */
     static bool showTransaction(const CWalletTx &wtx, bool datetime_limit_flag = false, const int64_t &datetime_limit = 0);
     static QList<TransactionRecord> decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx);
+
+    QString TypeToString() const;
+    static QString TypeToString(const Type& type, const bool& translated = true);
 
     /** @name Immutable transaction attributes
       @{*/

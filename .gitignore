@@ -12,7 +12,7 @@ src/test/test_gridcoin.log
 src/test/test_gridcoin.trs
 
 src/build.h
-src/obj
+src/obj/build.h
 src/qt/forms/*.h
 src/qt/forms/voting/*.h
 src/qt/moc_*.cpp
@@ -99,7 +99,6 @@ config.status
 configure
 libtool
 src/config/gridcoin-config.h
-src/config/gridcoin-config.h.in
 src/config/stamp-h1
 share/setup.nsi
 share/qt/Info.plist

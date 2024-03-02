@@ -216,7 +216,7 @@ public:
             //
             // If a status update is needed (blocks came in since last check),
             //  update the status of this transaction from the wallet. Otherwise,
-            // simply re-use the cached status.
+            // simply reuse the cached status.
             TRY_LOCK(cs_main, lockMain);
             if(lockMain)
             {

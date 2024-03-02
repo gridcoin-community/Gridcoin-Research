@@ -165,7 +165,7 @@ bool CKey::Check(const unsigned char *vch) {
 
 void CKey::MakeNewKey(bool fCompressedIn) {
     do {
-        GetStrongRandBytes(keydata.data(), keydata.size());
+        GetStrongRandBytes(keydata);
     } while (!Check(keydata.data()));
     fValid = true;
     fCompressed = fCompressedIn;
@@ -239,7 +239,7 @@ bool CKey::Sign(const uint256 &hash, std::vector<unsigned char>& vchSig, bool gr
     secp256k1_pubkey pk;
     ret = secp256k1_ec_pubkey_create(secp256k1_context_sign, &pk, begin());
     assert(ret);
-    ret = secp256k1_ecdsa_verify(GetVerifyContext(), &sig, hash.begin(), &pk);
+    ret = secp256k1_ecdsa_verify(secp256k1_context_static, &sig, hash.begin(), &pk);
     assert(ret);
     return true;
 }
@@ -250,7 +250,7 @@ bool CKey::VerifyPubKey(const CPubKey& pubkey) const {
     }
     unsigned char rnd[8];
     std::string str = "Bitcoin key verification\n";
-    GetRandBytes(rnd, sizeof(rnd));
+    GetRandBytes(rnd);
     uint256 hash;
     CHash256().Write(MakeUCharSpan(str)).Write(rnd).Finalize(hash);
     std::vector<unsigned char> vchSig;
@@ -274,9 +274,9 @@ bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) 
     secp256k1_pubkey epk, rpk;
     ret = secp256k1_ec_pubkey_create(secp256k1_context_sign, &epk, begin());
     assert(ret);
-    ret = secp256k1_ecdsa_recover(GetVerifyContext(), &rpk, &rsig, hash.begin());
+    ret = secp256k1_ecdsa_recover(secp256k1_context_static, &rpk, &rsig, hash.begin());
     assert(ret);
-    ret = secp256k1_ec_pubkey_cmp(GetVerifyContext(), &epk, &rpk);
+    ret = secp256k1_ec_pubkey_cmp(secp256k1_context_static, &epk, &rpk);
     assert(ret == 0);
     return true;
 }
@@ -372,13 +372,13 @@ bool ECC_InitSanityCheck() {
 void ECC_Start() {
     assert(secp256k1_context_sign == nullptr);
 
-    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_NONE);
     assert(ctx != nullptr);
 
     {
         // Pass in a random blinding seed to the secp256k1 context.
         std::vector<unsigned char, secure_allocator<unsigned char>> vseed(32);
-        GetRandBytes(vseed.data(), 32);
+        GetRandBytes(vseed);
         bool ret = secp256k1_context_randomize(ctx, vseed.data());
         assert(ret);
     }

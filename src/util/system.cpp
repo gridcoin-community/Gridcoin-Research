@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "node/ui_interface.h"
 #include <util/system.h>
 #include <util/strencodings.h>
 #include <util/check.h>
@@ -1154,6 +1155,9 @@ bool updateRwSetting(const std::string& name, const util::SettingsValue& value)
             settings.rw_settings[name] = value;
         }
     });
+
+    uiInterface.RwSettingsUpdated();
+
     return gArgs.WriteSettingsFile();
 }
 
@@ -1169,6 +1173,9 @@ bool updateRwSettings(const std::vector<std::pair<std::string, util::SettingsVal
             }
         }
     });
+
+    uiInterface.RwSettingsUpdated();
+
     return gArgs.WriteSettingsFile();
 }
 

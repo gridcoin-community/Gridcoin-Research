@@ -20,6 +20,7 @@
 #include "signverifymessagedialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
+#include "voting/polltab.h"
 #include "voting/votingpage.h"
 #include "clientmodel.h"
 #include "walletmodel.h"
@@ -43,6 +44,8 @@
 #include "univalue.h"
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
+#include "voting/polltablemodel.h"
+#include "updatedialog.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -106,7 +109,14 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , nWeight(0)
 {
     QSettings settings;
-    if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
+
+    QString window_geometry_key = "MainWindowGeometry";
+
+    if (GetDataDir() != GetDefaultDataDir()) {
+        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
+    }
+
+    if (!restoreGeometry(settings.value(window_geometry_key).toByteArray())) {
         // Restore failed (perhaps missing setting), center the window
         setGeometry(QStyle::alignedRect(Qt::LeftToRight,Qt::AlignCenter,QDesktopWidget().availableGeometry(this).size()
                                         * 0.4,QDesktopWidget().availableGeometry(this)));
@@ -236,7 +246,14 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
 BitcoinGUI::~BitcoinGUI()
 {
     QSettings settings;
-    settings.setValue("MainWindowGeometry", saveGeometry());
+
+    QString window_geometry_key = "MainWindowGeometry";
+
+    if (GetDataDir() != GetDefaultDataDir()) {
+        window_geometry_key += "_" + QString().fromStdString(SanitizeString(GetDataDir().string()));
+    }
+
+    settings.setValue(window_geometry_key, saveGeometry());
     if(trayIcon) // Hide tray icon, as deleting will let it linger until quit (on Ubuntu)
         trayIcon->hide();
 #ifdef Q_OS_MAC
@@ -539,7 +556,8 @@ void BitcoinGUI::createMenuBar()
     file->addAction(verifyMessageAction);
     file->addSeparator();
 
-    if (!gArgs.GetBoolArg("-testnet", false))
+    // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
+    if (/* !gArgs.GetBoolArg("-testnet", false) */ false)
     {
         file->addAction(snapshotAction);
     }
@@ -1142,22 +1160,20 @@ void BitcoinGUI::error(const QString &title, const QString &message, bool modal)
     }
 }
 
-void BitcoinGUI::update(const QString &title, const QString& version, const QString &message)
+void BitcoinGUI::update(const QString &title, const QString& version, const int& upgrade_type, const QString &message)
 {
-    // Create our own message box; A dialog can go here in future for qt if we choose
-
-    updateMessageDialog.reset(new QMessageBox);
+    updateMessageDialog.reset(new UpdateDialog);
 
     updateMessageDialog->setWindowTitle(title);
-    updateMessageDialog->setText(version);
-    updateMessageDialog->setDetailedText(message);
-    updateMessageDialog->setIcon(QMessageBox::Information);
-    updateMessageDialog->setStandardButtons(QMessageBox::Ok);
+    updateMessageDialog->setVersion(version);
+    updateMessageDialog->setUpgradeType(static_cast<GRC::Upgrade::UpgradeType>(upgrade_type));
+    updateMessageDialog->setDetails(message);
     updateMessageDialog->setModal(false);
-    connect(updateMessageDialog.get(), &QMessageBox::finished, [this](int) { updateMessageDialog.reset(); });
+
+    connect(updateMessageDialog.get(), &QDialog::finished, this, [this]() { updateMessageDialog.reset(); });
+
     // Due to slight delay in gui load this could appear behind the gui ui
     // The only other option available would make the message box stay on top of all applications
-
     QTimer::singleShot(5000, updateMessageDialog.get(), [this]() { updateMessageDialog->show(); });
 }
 
@@ -1870,7 +1886,7 @@ void BitcoinGUI::updateBeaconIcon()
 
     if (researcherModel->hasPendingBeacon()) {
         labelBeaconIcon->setToolTip(tr("CPID: %1\n"
-                                       "Time left to activate: %2"
+                                       "Time left to activate: %2\n"
                                        "%3")
                                     .arg(researcherModel->formatCpid(),
                                          researcherModel->formatTimeToPendingBeaconExpiration(),
@@ -1917,16 +1933,54 @@ void BitcoinGUI::handleNewPoll()
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
 }
 
+//!
+//! \brief BitcoinGUI::extracted. Helper function to avoid container detach on range loop warning.
+//! \param expiring_polls
+//! \param notification
+//!
+void BitcoinGUI::extracted(QStringList& expiring_polls, QString& notification)
+{
+    for (const auto& expiring_poll : expiring_polls) {
+        notification += expiring_poll + "\n";
+    }
+}
+
 void BitcoinGUI::handleExpiredPoll()
 {
-    // The only difference between this and handleNewPoll() is no call to the event notifier.
+    if (!clientModel) {
+        return;
+    }
 
-    if (!clientModel || !clientModel->getOptionsModel()) {
+    if (!clientModel->getOptionsModel()) {
         return;
     }
 
     if (!votingModel) {
         return;
+    }
+
+    // Only do if in sync.
+    if (researcherModel && !researcherModel->outOfSync() && votingPage->getActiveTab()) {
+
+        // First refresh the active poll tab and underlying table
+        votingPage->getActiveTab()->refresh();
+
+        if (!clientModel->getOptionsModel()->getDisablePollNotifications()) {
+            QStringList expiring_polls = votingModel->getExpiringPollsNotNotified();
+
+            if (!expiring_polls.isEmpty()) {
+                QString notification = tr("The following poll(s) are about to expire:\n");
+
+                extracted(expiring_polls, notification);
+
+                notification += tr("Open Gridcoin to vote.");
+
+                notificator->notify(
+                    Notificator::Information,
+                    tr("Poll(s) about to expire"),
+                    notification);
+            }
+        }
     }
 
     overviewPage->setCurrentPollTitle(votingModel->getCurrentPollTitle());
