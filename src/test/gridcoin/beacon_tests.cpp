@@ -1268,10 +1268,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     tx1.nTime = int64_t {1};
     uint256 tx1_hash = tx1.GetHash();
 
-    CBlockIndex* pindex1 = new CBlockIndex;
-    pindex1->nVersion = 13;
-    pindex1->nHeight = 1;
-    pindex1->nTime = tx1.nTime;
+    CBlockIndex pindex1 {};
+    pindex1.nVersion = 13;
+    pindex1.nHeight = 1;
+    pindex1.nTime = tx1.nTime;
 
     GRC::Beacon beacon1 {TestKey::Public(), tx1.nTime, tx1_hash};
     beacon1.m_cpid = TestKey::Cpid();
@@ -1280,7 +1280,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, pindex1};
+    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1305,18 +1305,18 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     }
 
     // Activation
-    CBlockIndex* pindex2 = new CBlockIndex;
-    pindex2->nVersion = 13;
-    pindex2->nHeight = 2;
-    pindex2->nTime = int64_t {2};
-    uint256* block2_phash = new uint256 {rng.rand256()};
-    pindex2->phashBlock = block2_phash;
+    CBlockIndex pindex2 {};
+    pindex2.nVersion = 13;
+    pindex2.nHeight = 2;
+    pindex2.nTime = int64_t {2};
+    uint256 block2_phash = rng.rand256();
+    pindex2.phashBlock = &block2_phash;
 
     std::vector<uint160> beacon_ids {TestKey::Public().GetID()};
 
-    registry.ActivatePending(beacon_ids, pindex2->nTime, *pindex2->phashBlock, pindex2->nHeight);
+    registry.ActivatePending(beacon_ids, pindex2.nTime, *pindex2.phashBlock, pindex2.nHeight);
 
-    uint256 activated_beacon_hash = Hash(*block2_phash, pending_beacons[0]->m_hash);
+    uint256 activated_beacon_hash = Hash(block2_phash, pending_beacons[0]->m_hash);
 
     BOOST_CHECK(registry.GetBeaconDB().size() == 2);
 
@@ -1475,10 +1475,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     tx1.nTime = int64_t {1};
     uint256 tx1_hash = tx1.GetHash();
 
-    CBlockIndex* pindex1 = new CBlockIndex;
-    pindex1->nVersion = 13;
-    pindex1->nHeight = 1;
-    pindex1->nTime = tx1.nTime;
+    CBlockIndex pindex1 {};
+    pindex1.nVersion = 13;
+    pindex1.nHeight = 1;
+    pindex1.nTime = tx1.nTime;
 
     GRC::Beacon beacon1 {TestKey::Public(), tx1.nTime, tx1_hash};
     beacon1.m_cpid = TestKey::Cpid();
@@ -1487,7 +1487,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, pindex1};
+    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1512,18 +1512,18 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     }
 
     // Activation
-    CBlockIndex* pindex2 = new CBlockIndex;
-    pindex2->nVersion = 13;
-    pindex2->nHeight = 2;
-    pindex2->nTime = int64_t {2};
-    uint256* block2_phash = new uint256 {rng.rand256()};
-    pindex2->phashBlock = block2_phash;
+    CBlockIndex pindex2 {};
+    pindex2.nVersion = 13;
+    pindex2.nHeight = 2;
+    pindex2.nTime = int64_t {2};
+    uint256 block2_phash = rng.rand256();
+    pindex2.phashBlock = &block2_phash;
 
     std::vector<uint160> beacon_ids {TestKey::Public().GetID()};
 
-    registry.ActivatePending(beacon_ids, pindex2->nTime, *pindex2->phashBlock, pindex2->nHeight);
+    registry.ActivatePending(beacon_ids, pindex2.nTime, *pindex2.phashBlock, pindex2.nHeight);
 
-    uint256 activated_beacon_hash = Hash(*block2_phash, pending_beacons[0]->m_hash);
+    uint256 activated_beacon_hash = Hash(block2_phash, pending_beacons[0]->m_hash);
 
     BOOST_CHECK(registry.GetBeaconDB().size() == 2);
 
