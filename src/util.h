@@ -684,7 +684,14 @@ private:
 
         if (a < 0 && b < 0) {
             // Remember b is negative here, so the difference below is GREATER than std::numeric_limits<int64_t>::min().
-            if (a >= std::numeric_limits<int64_t>::min() - b) {
+            //
+            // The reason for the + 1 below is that the first case handled in the addition overflow operator method above,
+            // the fraction addition with a common denominator, also specifies simplification of the resultant fraction.
+            // This will call std::gcd on the numerator and denominator, which then calls std::abs. If std::abs is called on
+            // std::numeric_limits<int64_t>::min(), and -D_GLIBCXX_ASSERTIONS is set, then the program will abort on a glibc
+            // assertion, because the abs will overflow. To prevent this, we increase (make less negative) by 1, which will
+            // ensure the call to std::abs will succeed at the extreme case.
+            if (a >= std::numeric_limits<int64_t>::min() + 1 - b) {
                 return a + b;
             } else {
                 throw std::overflow_error("fraction addition of a + b where a < 0 and b < 0 results in an overflow");

@@ -1648,8 +1648,8 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_2)
 
 BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_3)
 {
-    Fraction lhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
-    Fraction rhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
+    Fraction lhs(std::numeric_limits<int64_t>::min() / 2 + 1, 1);
+    Fraction rhs(std::numeric_limits<int64_t>::min() / 2, 1);
 
     std::string err;
 
@@ -1664,8 +1664,8 @@ BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_3)
 
 BOOST_AUTO_TEST_CASE(util_Fraction_addition_overflow_4)
 {
-    Fraction lhs(-(std::numeric_limits<int64_t>::max() / 2 + 1), 1);
-    Fraction rhs(-(std::numeric_limits<int64_t>::max() / 2 + 2), 1);
+    Fraction lhs(std::numeric_limits<int64_t>::min() / 2, 1);
+    Fraction rhs(std::numeric_limits<int64_t>::min() / 2, 1);
 
     std::string err;
 
