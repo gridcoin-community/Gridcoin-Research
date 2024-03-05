@@ -1173,7 +1173,7 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
     g_timer.InitTimer("msb_test", true);
 
     for (unsigned int i = 0; i < iterations; ++i) {
-        msb(rand.rand64());
+        msb((int64_t)rand.rand64());
     }
 
     int64_t msb_test_time = g_timer.GetTimes(strprintf("msb %u iterations", iterations), "msb_test").time_since_last_check;
@@ -1181,7 +1181,7 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
     FastRandomContext rand2(uint256 {0});
 
     for (unsigned int i = 0; i < iterations; ++i) {
-        msb2(rand2.rand64());
+        msb2((int64_t)rand2.rand64());
     }
 
     int64_t msb2_test_time = g_timer.GetTimes(strprintf("msb2 %u iterations", iterations), "msb_test").time_since_last_check;
@@ -1189,7 +1189,7 @@ BOOST_AUTO_TEST_CASE(Fraction_msb_performance_test)
     FastRandomContext rand3(uint256 {0});
 
     for (unsigned int i = 0; i < iterations; ++i) {
-        msb3(rand3.rand64());
+        msb3((int64_t)rand3.rand64());
     }
 
     int64_t msb3_test_time = g_timer.GetTimes(strprintf("msb3 %u iterations", iterations), "msb_test").time_since_last_check;
