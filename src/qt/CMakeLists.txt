@@ -194,7 +194,7 @@ if(UNIX AND NOT APPLE)
         DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
     )
     install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearch.1"
-        DESTINATION "${CMAKE_INSTALL_MANDIR}"
+        DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
     )
 endif()
 
