@@ -17,6 +17,7 @@ $(package)_patches += qtbase-moc-ignore-gcc-macro.patch
 $(package)_patches += no_qrhi.patch
 $(package)_patches += drop_lrelease_dependency.patch
 $(package)_patches += subdirs.pro
+$(package)_patches += fix-macos-linker.patch
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
 $(package)_qttranslations_sha256_hash=c92af4171397a0ed272330b4fa0669790fcac8d050b07c8b8cc565ebeba6735e
@@ -255,6 +256,7 @@ endef
 # CROSS_LIBRARY_PATH. See #15277.
 define $(package)_preprocess_cmds
   rm -f $(BASEDIR)/.qmake.stash && \
+  patch -p1 -i $($(package)_patch_dir)/fix-macos-linker.patch && \
   patch -p1 -i $($(package)_patch_dir)/drop_lrelease_dependency.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_x86_64.patch && \
