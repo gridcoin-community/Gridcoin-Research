@@ -428,6 +428,21 @@ public:
     //!
     std::string GetDescription() const;
     //!
+    //! \brief Gets the timestamp of the transaction that contains the mandatory sidestake contract (now entry)
+    //! \return
+    //!
+    int64_t GetTimeStamp() const;
+    //!
+    //! \brief Gets the hash of the transaction that contains the mandatory sidestake contract (now entry)
+    //! \return uint256 hash
+    //!
+    uint256 GetHash() const;
+    //!
+    //! \brief Gets the hash of the transaction that contains the previous mandatory sidestake contract for the same key (address)
+    //! \return uint256 hash
+    //!
+    uint256 GetPreviousHash() const;
+    //!
     //! \brief Gets a variant containing either the mandatory sidestake status or local sidestake status, whichever
     //! is applicable.
     //! \return std::variant of the applicable sidestake status
