@@ -453,6 +453,33 @@ std::string SideStake::GetDescription() const
     return std::string {};
 }
 
+int64_t SideStake::GetTimeStamp() const
+{
+    if (m_type == Type::MANDATORY && m_mandatory_sidestake_ptr != nullptr) {
+        return m_mandatory_sidestake_ptr->m_timestamp;
+    }
+
+    return int64_t {0};
+}
+
+uint256 SideStake::GetHash() const
+{
+    if (m_type == Type::MANDATORY && m_mandatory_sidestake_ptr != nullptr) {
+        return m_mandatory_sidestake_ptr->m_hash;
+    }
+
+    return uint256 {};
+}
+
+uint256 SideStake::GetPreviousHash() const
+{
+    if (m_type == Type::MANDATORY && m_mandatory_sidestake_ptr != nullptr) {
+        return m_mandatory_sidestake_ptr->m_previous_hash;
+    }
+
+    return uint256 {};
+}
+
 SideStake::Status SideStake::GetStatus() const
 {
     // For trivial initializer case

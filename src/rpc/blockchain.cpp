@@ -2700,6 +2700,41 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp)
     return res;
 }
 
+UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "listprotocolentries\n"
+            "\n"
+            "Displays the mandatory sidestakes on the network.\n");
+
+    UniValue res(UniValue::VOBJ);
+    UniValue scraper_entries(UniValue::VARR);
+
+    for (const auto& sidestake : GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false)) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("mandatory_sidestake_entry_address", CBitcoinAddress(sidestake->GetDestination()).ToString());
+        entry.pushKV("mandatory_sidestake_entry_allocation", sidestake->GetAllocation().ToPercent());
+        entry.pushKV("mandatory_sidestake_entry_tx_hash", sidestake->GetHash().ToString());
+        if (sidestake->GetPreviousHash().IsNull()) {
+            entry.pushKV("previous_mandatory_sidestake_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_mandatory_sidestake_entry_tx_hash", sidestake->GetPreviousHash().ToString());
+        }
+
+        entry.pushKV("mandatory_sidestake_entry_timestamp", sidestake->GetTimeStamp());
+        entry.pushKV("mandatory_sidestake_entry_time", DateTimeStrFormat(sidestake->GetTimeStamp()));
+        entry.pushKV("mandatory_sidestake_entry_status", sidestake->StatusToString());
+
+        scraper_entries.push_back(entry);
+    }
+
+    res.pushKV("current_mandatory_sidestake_entries", scraper_entries);
+
+    return res;
+}
+
 UniValue network(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
