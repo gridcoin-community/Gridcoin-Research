@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.7.0], 2024-03-13, leisure
+
+### Added
+ - net, consensus: Ban nodes 5.4.5.0 and below #2751 (@jamescowens)
+
+### Changed
+
+### Removed
+
+### Fixed
+ - util: Adjust Fraction class addition overload overflow tests #2748 (@jamescowens)
+
 ## [5.4.6.0], 2024-03-02, leisure, "Miss Piggy"
 
 ### Added
