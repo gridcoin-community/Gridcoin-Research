@@ -2049,11 +2049,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Note the std::max is there to deal with the rollover of BlockV12Height + DISCONNECT_GRACE_PERIOD if
         // BlockV12Height is set to std::numeric_limits<int>::max() which is the case during testing.
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
-                || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
-                    && pfrom->nVersion < PROTOCOL_VERSION
-                    && pindexBest->nHeight > std::max(Params().GetConsensus().BlockV12Height,
-                                                      Params().GetConsensus().BlockV12Height + DISCONNECT_GRACE_PERIOD)))
-        {
+            || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
+                && pfrom->nVersion < PROTOCOL_VERSION
+                && pindexBest->nHeight > std::max(Params().GetConsensus().BlockV12Height,
+                                                  Params().GetConsensus().BlockV12Height + DISCONNECT_GRACE_PERIOD)
+                )
+            ) {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::LogFlags::NOISY, "partner %s using obsolete version %i; disconnecting",
                      pfrom->addr.ToString(), pfrom->nVersion);
@@ -2064,8 +2065,27 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         if (!vRecv.empty())
             vRecv >> addrFrom >> nNonce;
-        if (!vRecv.empty())
+
+        if (!vRecv.empty()) {
             vRecv >> pfrom->strSubVer;
+
+            // This handles the special disconnect for clients between the mandatory 5.4.0.0 and the 5.4.5.0 since
+            // 5.4.6.0 effectively became a mandatory due to the contract version error in TxMessage. The protocol version
+            // was not incremented since 5.4.6.0 was originally a leisure and so this is the only reasonable way to distinguish
+            // in this situation.
+            if (pfrom->strSubVer.find("5.4.5") != std::string::npos
+                || pfrom->strSubVer.find("5.4.4") != std::string::npos
+                || pfrom->strSubVer.find("5.4.3") != std::string::npos
+                || pfrom->strSubVer.find("5.4.2") != std::string::npos
+                || pfrom->strSubVer.find("5.4.1") != std::string::npos
+                || pfrom->strSubVer.find("5.4.0") != std::string::npos
+                ) {
+
+                pfrom->fDisconnect = true;
+                return false;
+            }
+        }
+
         if (!vRecv.empty())
             vRecv >> pfrom->nStartingHeight;
 
