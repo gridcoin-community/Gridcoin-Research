@@ -2,7 +2,7 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 5)
 define(_CLIENT_VERSION_MINOR, 4)
-define(_CLIENT_VERSION_REVISION, 6)
+define(_CLIENT_VERSION_REVISION, 7)
 define(_CLIENT_VERSION_BUILD, 1)
 define(_CLIENT_VERSION_IS_RELEASE, false)
 define(_COPYRIGHT_YEAR, 2024)
@@ -277,6 +277,16 @@ if test "$CXXFLAGS_overridden" = "no"; then
   dnl For Qt versions < 5.14 with GCC 9+:
   AX_CHECK_COMPILE_FLAG([-Wdeprecated-copy],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-copy"],,[[$CXXFLAG_WERROR]])
 fi
+
+
+dnl x87 FP operations on x86 hosts can break assumptions made about the floating point values.
+dnl See the commit message which introduced this change for more details.
+case $host in
+ i?86-*|x86_64-*)
+    AX_CHECK_COMPILE_FLAG([-msse2],[CXXFLAGS="$CXXFLAGS -msse2 -mfpmath=sse"],[AC_MSG_ERROR([SSE2 support is required on x86 targets.])],[[$CXXFLAG_WERROR]])
+    ;;
+ *) ;;
+esac
 
 enable_sse42=no
 enable_sse41=no
@@ -1009,9 +1019,19 @@ dnl Check for Boost libs
 AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST])
 AX_BOOST_SYSTEM
 AX_BOOST_FILESYSTEM
-AX_BOOST_THREAD
 AX_BOOST_ZLIB
 AX_BOOST_IOSTREAMS
+
+dnl Prevent use of std::unary_function, which was removed in C++17,
+dnl and will generate warnings with newer compilers for Boost
+dnl older than 1.80.
+dnl See: https://github.com/boostorg/config/pull/430.
+AX_CHECK_PREPROC_FLAG([-DBOOST_NO_CXX98_FUNCTION_BASE], [BOOST_CPPFLAGS="$BOOST_CPPFLAGS -DBOOST_NO_CXX98_FUNCTION_BASE"], [], [$CXXFLAG_WERROR],
+                      [AC_LANG_PROGRAM([[#include <boost/config.hpp>]])])
+
+dnl AX_BOOST_THREAD check also triggers the same issue, so it has to be checked after
+dnl setting -DBOOST_NO_CXX98_FUNCTION_BASE.
+AX_BOOST_THREAD
 
 dnl Boost 1.56 through 1.62 allow using std::atomic instead of its own atomic
 dnl counter implementations. In 1.63 and later the std::atomic approach is default.
