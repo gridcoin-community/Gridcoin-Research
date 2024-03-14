@@ -266,7 +266,7 @@ if(ENABLE_DAEMON)
             DESTINATION "${CMAKE_INSTALL_BINDIR}"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1"
-            DESTINATION "${CMAKE_INSTALL_MANDIR}"
+            DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd.service"
             DESTINATION /lib/systemd/system
