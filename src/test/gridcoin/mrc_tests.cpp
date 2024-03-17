@@ -103,6 +103,7 @@ struct Setup {
 
         mapBlockIndex.erase(pindexGenesisBlock->GetBlockHash());
         delete pindexGenesisBlock->phashBlock;
+        delete wallet;
     }
 };
 } // Anonymous namespace

@@ -456,8 +456,9 @@ private:
 
         for (size_t x = 0; x < binary_size && binary_size - x >= 18; x += 18) {
             magnitudes.AddLegacy(
-                *reinterpret_cast<const Cpid*>(byte_ptr + x),
-                be16toh(*reinterpret_cast<const int16_t*>(byte_ptr + x + 16)));
+                Cpid(std::vector<unsigned char>(byte_ptr + x, byte_ptr + x + 16)),
+                (((uint16_t)byte_ptr[x + 16] & 0xFF) << 8) | ((uint16_t)byte_ptr[x + 17] & 0xFF)
+            );
         }
 
         return magnitudes;

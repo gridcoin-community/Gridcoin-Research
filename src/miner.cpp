@@ -310,8 +310,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
     int nHeight = pindexPrev->nHeight + 1;
 
     // This is specifically for BlockValidateContracts, and only the nHeight is filled in.
-    CBlockIndex* pindex_contract_validate = new CBlockIndex();
-    pindex_contract_validate->nHeight = nHeight;
+    CBlockIndex pindex_contract_validate;
+    pindex_contract_validate.nHeight = nHeight;
 
     // Create coinbase tx
     CTransaction &CoinBase = block.vtx[0];
@@ -385,7 +385,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             // pindex_contract_validate only has the block height filled out.
             //
             int DoS = 0; // Unused here.
-            if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(pindex_contract_validate, tx, DoS)) {
+            if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(&pindex_contract_validate, tx, DoS)) {
                 LogPrint(BCLog::LogFlags::MINER,
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,

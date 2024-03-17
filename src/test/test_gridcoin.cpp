@@ -14,6 +14,8 @@
 #include "random.h"
 #include "wallet/wallet.h"
 
+leveldb::Env* txdb_env;
+
 extern CWallet* pwalletMain;
 extern leveldb::DB *txdb;
 extern CClientUIInterface uiInterface;
@@ -48,7 +50,7 @@ struct TestingSetup {
 
         // TODO: Refactor CTxDB to something like bitcoin's current CDBWrapper and remove this workaround.
         leveldb::Options db_options;
-        db_options.env = leveldb::NewMemEnv(leveldb::Env::Default()); // Use a memory environment to avoid polluting the production leveldb.
+        db_options.env = txdb_env = leveldb::NewMemEnv(leveldb::Env::Default()); // Use a memory environment to avoid polluting the production leveldb.
         db_options.create_if_missing = true;
         db_options.error_if_exists = true;
         assert(leveldb::DB::Open(db_options, "", &txdb).ok());
@@ -71,7 +73,9 @@ struct TestingSetup {
         bitdb.Flush(true);
         g_banman.reset();
         delete txdb;
+        delete txdb_env;
         txdb = nullptr;
+        txdb_env = nullptr;
         g_mock_deterministic_tests = false;
         ECC_Stop();
     }
