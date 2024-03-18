@@ -630,7 +630,7 @@ public:
     {
         if (nEntropyBit > 1)
             return false;
-        nFlags |= (nEntropyBit? BLOCK_STAKE_ENTROPY : 0);
+        nFlags |= (nEntropyBit ? BLOCK_STAKE_ENTROPY : (uint32_t) 0);
         return true;
     }
 
