@@ -50,6 +50,12 @@ jobs:
         - name: test
           run: |
             ./ci/test_run_all.sh
+        - name: upload artifacts
+          uses: actions/upload-artifact@v3
+          with:
+            name: ${{ env.ARTIFACT_FILENAME }}
+            path: ${{ env.ARTIFACT_FILE }}
+            retention-days: 30
     test-macos:
         name: macOS 12 native  [GOAL install]  [GUI]  [no depends]
         runs-on: macos-12
