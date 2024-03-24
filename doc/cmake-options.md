@@ -23,6 +23,10 @@ ccmake .
 
   `cmake .. -DENABLE_PIE=ON -DUSE_ASM=OFF`
 
+* Build a static binary:
+
+  `cmake .. -DSTATIC_LIBS=ON -DSTATIC_RUNTIME=ON`
+
 * Build tests and docs, run `lupdate`:
 
   `cmake .. -DENABLE_DOCS=ON -DENABLE_TESTS=ON -DLUPDATE=ON`

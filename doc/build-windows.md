@@ -1,7 +1,8 @@
 WINDOWS BUILD NOTES
 ====================
 
-> This document is outdated.
+> [!NOTE]
+> See also: [Windows (MSYS2) Build Notes](build-msys2.md)
 
 Below are some notes on how to build Gridcoin for Windows.
 

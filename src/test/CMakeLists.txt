@@ -57,6 +57,7 @@ add_executable(test_gridcoin
 add_subdirectory(data)
 
 target_link_libraries(test_gridcoin PRIVATE
+    ${RUNTIME_LIBS}
     Boost::unit_test_framework
     gridcoin_util
 )

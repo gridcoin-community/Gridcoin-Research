@@ -1,7 +1,14 @@
 include(ExternalProject)
 
+set(LIBDB_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+set(LIBDB_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/libdb_build")
+set(libdb_cxx_library "${LIBDB_BUILD_DIR}/libdb_cxx.a")
+set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM 1)
+
+
 # Configure flags
 # ===============
+
 set(BDB_FLAGS
     --disable-java
     --disable-jdbc
@@ -13,9 +20,13 @@ if(ENABLE_PIE)
         --with-pic
     )
 endif()
-if(MINGW)
+if(WIN32)
+    # configure script doesn't support DOS-style paths
+    cmake_path(SET relative_dist_dir "${LIBDB_DIST_DIR}")
+    cmake_path(RELATIVE_PATH relative_dist_dir BASE_DIRECTORY "${LIBDB_BUILD_DIR}")
     list(APPEND BDB_FLAGS
         --enable-mingw
+        --srcdir "${relative_dist_dir}"
     )
 endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -40,14 +51,10 @@ set(MAKEOPTS "-j${N}" CACHE STRING "Options for the 'make' program")
 # External project
 # ================
 
-set(LIBDB_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/libdb_build)
-set(libdb_cxx_library ${LIBDB_BUILD_DIR}/libdb_cxx.a)
-set_directory_properties(PROPERTIES CLEAN_NO_CUSTOM 1)
-
 ExternalProject_Add(BerkeleyDB_Project
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     BINARY_DIR ${LIBDB_BUILD_DIR}
-    CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/dist/configure ${BDB_FLAGS}
+    CONFIGURE_COMMAND ${SH_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/dist/configure ${BDB_FLAGS}
     BUILD_COMMAND
         COMMAND ${MAKE_EXE} ${MAKEOPTS} clean
         COMMAND ${MAKE_EXE} ${MAKEOPTS} libdb_cxx.a
