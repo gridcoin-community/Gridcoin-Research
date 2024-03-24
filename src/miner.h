@@ -31,6 +31,7 @@ bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficie
 bool CreateMRCRewards(CBlock &blocknew,
                       std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
                       std::map<GRC::Cpid, uint256>& mrc_tx_map,
+                      CAmount& reward,
                       uint32_t& claim_contract_version,
                       GRC::Claim& claim,
                       CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
