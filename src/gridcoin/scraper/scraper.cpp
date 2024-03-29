@@ -4479,7 +4479,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
         CDataStream part(std::move(vchData), SER_NETWORK, 1);
 
-        manifest->addPartData(std::move(part));
+        manifest->addPartData(std::move(part), true);
 
         iPartNum++;
 
@@ -4512,7 +4512,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
                 part << ScraperVerifiedBeacons.mVerifiedMap;
 
-                manifest->addPartData(std::move(part));
+                manifest->addPartData(std::move(part), true);
 
                 iPartNum++;
             }
@@ -4592,7 +4592,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
             CDataStream part(vchData, SER_NETWORK, 1);
 
-            manifest->addPartData(std::move(part));
+            manifest->addPartData(std::move(part), true);
 
             iPartNum++;
         }
@@ -4602,6 +4602,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
 
     LOCK(CSplitBlob::cs_mapParts);
 
+    // addManifest will also call Complete() after signing to send the manifest over the network.
     bool bAddManifestSuccessful = CScraperManifest::addManifest(manifest, Key);
 
     if (bAddManifestSuccessful)
