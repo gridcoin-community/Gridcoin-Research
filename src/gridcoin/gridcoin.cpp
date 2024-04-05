@@ -27,6 +27,7 @@ extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
 extern bool fScraperActive;
+extern bool fQtActive;
 
 void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
@@ -40,17 +41,29 @@ namespace {
 //!
 void ShowChainCorruptedMessage()
 {
-    uiInterface.ThreadSafeMessageBox(
-        _("WARNING: Blockchain data may be corrupted.\n\n"
-            "Gridcoin detected bad index entries. This may occur because of an "
-            "unexpected exit, a power failure, or a late software upgrade.\n\n"
-            "Please exit Gridcoin, open the data directory, and delete:\n"
-            " - the blk****.dat files\n"
-            " - the txleveldb folder\n\n"
-            "Your wallet will re-download the blockchain. Your balance may "
-            "appear incorrect until the synchronization finishes.\n" ),
-        "Gridcoin",
-        CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    fResetBlockchainRequest = true;
+
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
+              "Gridcoin detected bad index entries. This may occur because of a "
+              "late software upgrade, unexpected exit, or a power failure. "
+              "Your blockchain data is being reset and your wallet will resync "
+              "from genesis when you restart. Your balance may appear incorrect "
+              "until the synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    } else {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
+              "Gridcoin detected bad index entries. This may occur because of a "
+              "late software upgrade, unexpected exit, or a power failure. "
+              "Please run gridcoinresearchd with the -resetblockchaindata "
+              "parameter. Your wallet will re-download the blockchain. Your "
+              "balance may appear incorrect until the synchronization finishes." ),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    }
 }
 
 //!
