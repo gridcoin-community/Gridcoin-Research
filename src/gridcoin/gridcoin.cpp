@@ -484,11 +484,8 @@ void ScheduleRegistriesPassivation(CScheduler& scheduler)
 {
     // Run registry database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    // TODO: Turn into a loop using extension of RegistryBookmarks
-    scheduler.scheduleEvery(BeaconRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(ScraperRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(ProtocolRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(Whitelist::RunDBPassivation, std::chrono::minutes{5});
+
+    scheduler.scheduleEvery(RunDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -608,3 +605,13 @@ skip:;
     return true;
 }
 
+void GRC::RunDBPassivation()
+{
+    LOCK(cs_main);
+
+    for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
+
+        registry.PassivateDB();
+    }
+}

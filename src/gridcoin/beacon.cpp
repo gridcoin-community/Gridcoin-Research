@@ -1391,21 +1391,6 @@ BeaconRegistry::BeaconDB &BeaconRegistry::GetBeaconDB()
     return m_beacon_db;
 }
 
-// This is static and called by the scheduler.
-void BeaconRegistry::RunDBPassivation()
-{
-    TRY_LOCK(cs_main, locked_main);
-
-    if (!locked_main)
-    {
-        return;
-    }
-
-    BeaconRegistry& beacons = GetBeaconRegistry();
-
-    beacons.PassivateDB();
-}
-
 template<> const std::string BeaconRegistry::BeaconDB::KeyType()
 {
     return std::string("beacon");

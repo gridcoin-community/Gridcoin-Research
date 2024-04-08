@@ -603,19 +603,14 @@ public:
     void ResetInMemoryOnly();
 
     //!
-    //! \brief Passivates the elements in the scraper db, which means remove from memory elements in the
+    //! \brief Passivates the elements in the project db, which means remove from memory elements in the
     //! historical map that are not referenced by m_projects. The backing store of the element removed
     //! from memory is retained and will be transparently restored if find() is called on the hash key
     //! for the element.
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB();
-
-    //!
-    //! \brief A static function that is called by the scheduler to run the project entry database passivation.
-    //!
-    static void RunDBPassivation();
+    uint64_t PassivateDB() override;
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
