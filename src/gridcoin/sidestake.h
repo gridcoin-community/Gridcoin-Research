@@ -830,18 +830,13 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB();
+    uint64_t PassivateDB() override;
 
     //!
     //! \brief This method parses the config file for local sidestakes. It is based on the original GetSideStakingStatusAndAlloc()
     //! that was in miner.cpp prior to the implementation of the SideStake class.
     //!
     void LoadLocalSideStakesFromConfig();
-
-    //!
-    //! \brief A static function that is called by the scheduler to run the sidestake entry database passivation.
-    //!
-    static void RunDBPassivation();
 
     //!
     //! \brief Specializes the template RegistryDB for the SideStake class. Note that std::set<MandatorySideStake>

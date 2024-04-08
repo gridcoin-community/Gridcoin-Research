@@ -1164,21 +1164,6 @@ SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
     return m_sidestake_db;
 }
 
-// This is static and called by the scheduler.
-void SideStakeRegistry::RunDBPassivation()
-{
-    TRY_LOCK(cs_main, locked_main);
-
-    if (!locked_main)
-    {
-        return;
-    }
-
-    SideStakeRegistry& SideStake_entries = GetSideStakeRegistry();
-
-    SideStake_entries.PassivateDB();
-}
-
 template<> const std::string SideStakeRegistry::SideStakeDB::KeyType()
 {
     return std::string("SideStake");
