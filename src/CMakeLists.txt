@@ -78,10 +78,10 @@ else()
     endif()
 
     add_subdirectory(secp256k1 EXCLUDE_FROM_ALL)
-    target_include_directories(secp256k1 PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/include"
+    target_include_directories(secp256k1_static PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/include>
     )
-    set(LIBSECP256K1 secp256k1)
+    set(LIBSECP256K1 secp256k1_static)
 endif()
 
 if(SYSTEM_UNIVALUE)
@@ -221,13 +221,17 @@ target_include_directories(gridcoin_util PUBLIC
 target_link_libraries(gridcoin_util PUBLIC
     -lm ${ATOMICS_LIBRARIES} ${RT_LIBRARIES}
     ${LIBBDB_CXX} ${LIBLEVELDB} ${LIBSECP256K1} ${LIBUNIVALUE}
-    Boost::filesystem Boost::headers Boost::iostreams Boost::thread
+    Boost::boost Boost::filesystem Boost::iostreams Boost::thread
     CURL::libcurl
     OpenSSL::Crypto OpenSSL::SSL
     Threads::Threads
     libzip::zip
 )
 target_link_libraries(gridcoin_util PUBLIC ${LIBGRIDCOIN_CRYPTO})
+
+if(WIN32)
+    target_link_libraries(gridcoin_util PUBLIC wsock32 Ws2_32)
+endif()
 
 target_compile_definitions(gridcoin_util PUBLIC
     HAVE_CONFIG_H
@@ -254,10 +258,13 @@ endif()
 
 if(ENABLE_DAEMON)
     add_executable(gridcoinresearchd gridcoinresearchd.cpp)
-    target_link_libraries(gridcoinresearchd PUBLIC gridcoin_util)
+    target_link_libraries(gridcoinresearchd PUBLIC ${RUNTIME_LIBS} gridcoin_util)
 
     if(WIN32)
         target_sources(gridcoinresearchd PRIVATE gridcoinresearchd-res.rc)
+        set_source_files_properties(gridcoinresearchd-res.rc PROPERTIES
+            COMPILE_DEFINITIONS WINDRES_PREPROC
+        )
     endif()
 
     if(UNIX AND NOT APPLE)
@@ -266,10 +273,10 @@ if(ENABLE_DAEMON)
             DESTINATION "${CMAKE_INSTALL_BINDIR}"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/doc/gridcoinresearchd.1"
-            DESTINATION "${CMAKE_INSTALL_MANDIR}"
+            DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
         )
         install(FILES "${CMAKE_SOURCE_DIR}/contrib/init/gridcoinresearchd.service"
-            DESTINATION /lib/systemd/system
+            DESTINATION "lib/systemd/system"
         )
     endif()
 endif()

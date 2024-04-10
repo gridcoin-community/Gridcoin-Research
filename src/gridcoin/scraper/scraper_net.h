@@ -65,7 +65,7 @@ public:
     void addPart(const uint256& ihash);
 
     /** Create a part from specified data and add reference to it into vParts. */
-    int addPartData(CDataStream&& vData);
+    int addPartData(CDataStream&& vData, const bool &publish_in_progress = false);
 
     /** Unref all parts referenced by this. Removes parts with no references */
     virtual ~CSplitBlob();
@@ -86,6 +86,11 @@ public:
 
     std::vector<CPart*> vParts GUARDED_BY(cs_manifest);
     size_t cntPartsRcvd GUARDED_BY(cs_manifest) = 0;
+
+    //!
+    //! \brief Used by the scraper when building manifests part by part to prevent triggering Complete() prematurely.
+    //!
+    bool m_publish_in_progress GUARDED_BY(cs_manifest) = false;
 };
 
 /** An objects holding info about the scraper data file we have or are downloading. */

@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_CONTRACT_HANDLER_H
 #define GRIDCOIN_CONTRACT_HANDLER_H
 
+#include <cstdint>
 #include <string>
 
 class CBlockIndex;
@@ -153,6 +154,20 @@ struct IContractHandler
     //! \param height
     //!
     virtual void SetDBHeight(int& height);
+
+    //!
+    //! \brief Passivates the elements in the underlying db, which means remove from memory elements in the
+    //! historical map that are not referenced by any of the in memory maps. The backing store of
+    //! the element removed from memory is retained and will be transparently restored if find()
+    //! is called on the hash key for the element.
+    //!
+    //! \return The number of elements passivated.
+    //!
+    virtual uint64_t PassivateDB()
+    {
+        // The default method here does nothing.
+        return uint64_t {0};
+    };
 };
 
 } // namespace GRC

@@ -528,21 +528,6 @@ ProtocolRegistry::ProtocolEntryDB &ProtocolRegistry::GetProtocolEntryDB()
     return m_protocol_db;
 }
 
-// This is static and called by the scheduler.
-void ProtocolRegistry::RunDBPassivation()
-{
-    TRY_LOCK(cs_main, locked_main);
-
-    if (!locked_main)
-    {
-        return;
-    }
-
-    ProtocolRegistry& protocol_entries = GetProtocolRegistry();
-
-    protocol_entries.PassivateDB();
-}
-
 template<> const std::string ProtocolRegistry::ProtocolEntryDB::KeyType()
 {
     return std::string("protocol");

@@ -603,21 +603,21 @@ bool GRC::CheckProofOfStakeV8(
     CTransaction txPrev;
 
     if (!ReadStakedInput(txdb, prevout.hash, header, txPrev, pindexPrev))
-        return tx.DoS(1, error("%s: read staked input failed", __func__));
+        return tx.DoS(10, error("%s: read staked input failed", __func__));
 
     if (!VerifySignature(txPrev, tx, 0, 0))
         return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
     // Check times
     if (tx.nTime < txPrev.nTime)
-        return error("%s: nTime violation", __func__);
+        return tx.DoS(100, error("%s: nTime violation", __func__));
 
     if (header.nTime + nStakeMinAge > tx.nTime)
-        return error("%s: min age violation", __func__);
+        return tx.DoS(100, error("%s: min age violation", __func__));
 
     if (Block.nVersion >= 12) {
         if (tx.nTime != MaskStakeTime(tx.nTime)) {
-            return error("%s: mask violation", __func__);
+            return tx.DoS(100, error("%s: mask violation", __func__));
         }
     }
 
@@ -649,5 +649,9 @@ bool GRC::CheckProofOfStakeV8(
              );
 
     // Now check if proof-of-stake hash meets target protocol
-    return bnHashProof <= bnTarget;
+    if (bnHashProof > bnTarget) {
+        return tx.DoS(100, error("%s: invalid proof (proof: %s, target: %s)", __func__, bnHashProof.GetHex(), bnTarget.GetHex()));
+    }
+
+    return true;
 }

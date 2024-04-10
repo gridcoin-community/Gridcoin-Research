@@ -573,21 +573,6 @@ ScraperRegistry::ScraperEntryDB &ScraperRegistry::GetScraperDB()
     return m_scraper_db;
 }
 
-// This is static and called by the scheduler.
-void ScraperRegistry::RunDBPassivation()
-{
-    TRY_LOCK(cs_main, locked_main);
-
-    if (!locked_main)
-    {
-        return;
-    }
-
-    ScraperRegistry& scraper_entries = GetScraperRegistry();
-
-    scraper_entries.PassivateDB();
-}
-
 template<> const std::string ScraperRegistry::ScraperEntryDB::KeyType()
 {
     return std::string("scraper");

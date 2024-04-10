@@ -541,21 +541,6 @@ Whitelist::ProjectEntryDB &Whitelist::GetProjectDB()
     return m_project_db;
 }
 
-// This is static and called by the scheduler.
-void Whitelist::RunDBPassivation()
-{
-    TRY_LOCK(cs_main, locked_main);
-
-    if (!locked_main)
-    {
-        return;
-    }
-
-    Whitelist& project_entries = GetWhitelist();
-
-    project_entries.PassivateDB();
-}
-
 template<> const std::string Whitelist::ProjectEntryDB::KeyType()
 {
     return std::string("project");

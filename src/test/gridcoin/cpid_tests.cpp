@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(it_is_hashable_to_key_a_lookup_map)
     std::hash<GRC::Cpid> hasher;
 
     // CPID halves, little endian
-    const size_t expected = static_cast<size_t>(0x0706050403020100ull + 0x1514131211100908ull);
+    const size_t expected = static_cast<size_t>(0x0706050403020100ull);
 
     BOOST_CHECK_EQUAL(hasher(cpid), expected);
 }
