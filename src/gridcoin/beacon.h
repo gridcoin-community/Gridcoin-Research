@@ -768,7 +768,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB();
+    uint64_t PassivateDB() override;
 
     //!
     //! \brief This function walks the linked beacon entries back (using the m_previous_hash member) from a provided
@@ -794,11 +794,6 @@ public:
     //! \return
     //!
     bool SetNeedsIsContractCorrection(bool flag);
-
-    //!
-    //! \brief A static function that is called by the scheduler to run the beacon database passivation.
-    //!
-    static void RunDBPassivation();
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class

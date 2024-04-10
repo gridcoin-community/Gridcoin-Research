@@ -125,14 +125,14 @@ public:
     //! incoming reward claims and can index those calculated values without
     //! this field. It can be considered informational.
     //!
-    CAmount m_research_subsidy;
+    CAmount m_research_subsidy = 0;
 
     //!
     //! \brief The value of the fees charged to the MRC claimant. These will be
     //! subtracted from the research subsidy and distributed to the staker and
     //! the foundation according to protocol rules encapsulated in ComputeMRCFee().
     //!
-    CAmount m_fee;
+    CAmount m_fee = 0;
 
     //!
     //! \brief The researcher magnitude value from the superblock at the time
@@ -145,14 +145,14 @@ public:
     //!
     //! Previous protocol versions used the magnitude in reward calculations.
     //!
-    uint16_t m_magnitude;
+    uint16_t m_magnitude = 0;
 
     //!
     //! \brief The magnitude ratio of the network at the time of the claim.
     //!
     //! Informational.
     //!
-    double m_magnitude_unit;
+    double m_magnitude_unit = 0.0;
 
     //!
     //! \brief The hash of the last block (head of the chain) for the MRC

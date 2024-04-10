@@ -78,13 +78,13 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
 
 
     wtx.mapValue["comment"] = "y";
-    --wtx.nLockTime;  // Just to change the hash :)
+    ++wtx.nLockTime;  // Just to change the hash :)
     pwalletMain->AddToWallet(wtx, &walletdb);
     vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
     vpwtx[1]->nTimeReceived = (unsigned int)1333333336;
 
     wtx.mapValue["comment"] = "x";
-    --wtx.nLockTime;  // Just to change the hash :)
+    ++wtx.nLockTime;  // Just to change the hash :)
     pwalletMain->AddToWallet(wtx, &walletdb);
     vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
     vpwtx[2]->nTimeReceived = (unsigned int)1333333329;

@@ -7,12 +7,31 @@
 # CMake support is experimental. Use with caution and report any bugs.
 
 cmake_minimum_required(VERSION 3.18)
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
+
+
+# Hunter Package Manager
+# ======================
+
+# Windows doesn't yet have a package manager that can be used for managing
+# dependencies, so we use Hunter on it.
+option(HUNTER_ENABLED "Enable Hunter package manager" OFF)
+include(HunterGate)
+HunterGate(
+    URL "https://github.com/cpp-pm/hunter/archive/refs/tags/v0.25.3.tar.gz"
+    SHA1 "0dfbc2cb5c4cf7e83533733bdfd2125ff96680cb"
+    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake/Hunter/config.cmake"
+)
+
+
+# Project configuration
+# =====================
 
 project("Gridcoin"
-    VERSION 5.4.7.0
+    VERSION 5.4.8.0
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
-    LANGUAGES ASM C CXX
+    LANGUAGES C CXX
 )
 
 set(CLIENT_VERSION_IS_RELEASE "true")
@@ -24,32 +43,37 @@ set(COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers")
 # =======================
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-# Remove '-DNDEBUG' from flags because we need asserts
-string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-string(REPLACE "NDEBUG" "_NDEBUG" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+if(MSVC)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        message(FATAL_ERROR "It's not yet possible to build Gridcoin with MSVC")
+    endif()
+    add_compile_options(/U NDEBUG)
+else()
+    add_compile_options(-UNDEBUG)
+endif()
 
 
-# Load modules from the source tree
-# =================================
-
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake")
+# Load CMake modules
+# ==================
 
 include(CheckCXXSymbolExists)
 include(CheckFunctionExists)
 include(CheckIncludeFile)
 include(CheckPIESupported)
+include(CheckSymbolExists)
+
 include(CheckSSE)
 include(CheckStrerrorR)
-include(CheckSymbolExists)
+include(HunterGate)
 include(VersionFromGit)
+
 
 # Define options
 # ==============
@@ -60,6 +84,8 @@ option(ENABLE_GUI       "Enable Qt-based GUI" OFF)
 option(ENABLE_DOCS      "Build Doxygen documentation" OFF)
 option(ENABLE_TESTS     "Build tests" OFF)
 option(LUPDATE          "Update translation files" OFF)
+option(STATIC_LIBS      "Prefer static variants of system libraries" ${WIN32})
+option(STATIC_RUNTIME   "Link runtime statically" ${WIN32})
 
 # CPU-dependent options
 option(ENABLE_SSE41     "Build code that uses SSE4.1 intrinsics" ${HAS_SSE41})
@@ -74,30 +100,51 @@ option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" O
 option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
 option(USE_DBUS         "Enable DBus support" OFF)
+
+# Bundled packages
 option(SYSTEM_BDB	    "Find system installation of Berkeley DB CXX 5.3" OFF)
 option(SYSTEM_LEVELDB   "Find system installation of leveldb" OFF)
 option(SYSTEM_SECP256K1 "Find system installation of libsecp256k1 with pkg-config" OFF)
 option(SYSTEM_UNIVALUE  "Find system installation of Univalue with pkg-config" OFF)
 option(SYSTEM_XXD       "Find system xxd binary" OFF)
 
+# Hunter packages
+option(BUNDLED_BOOST    "Use the bundled version of Boost" ${HUNTER_ENABLED})
+option(BUNDLED_CURL     "Use the bundled version of cURL" ${HUNTER_ENABLED})
+option(BUNDLED_LIBZIP   "Use the bundled version of libzip" ${HUNTER_ENABLED})
+option(BUNDLED_OPENSSL  "Use the bundled version of OpenSSL" ${HUNTER_ENABLED})
+option(BUNDLED_QT       "Use the bundled version of Qt" ${HUNTER_ENABLED})
 
-# Find dependencies
-# =================
+
+# Handle dependencies
+# ===================
+
+set(QT5_MINIMUM_VERSION 5.9.5)
+set(QT5_COMPONENTS Concurrent Core Gui LinguistTools Network Widgets)
+set(QT5_HUNTER_COMPONENTS qtbase qttools)
+if(USE_DBUS)
+    list(APPEND QT5_COMPONENTS DBus)
+endif()
+if(ENABLE_TESTS)
+    list(APPEND QT5_COMPONENTS Test)
+endif()
 
 set(BOOST_MINIMUM_VERSION 1.63.0)
-set(QT5_MINIMUM_VERSION 5.15.0)
+set(BOOST_COMPONENTS filesystem iostreams thread)
+set(BOOST_HUNTER_COMPONENTS ${BOOST_COMPONENTS})
+if(ENABLE_TESTS)
+    list(APPEND BOOST_COMPONENTS unit_test_framework)
+    list(APPEND BOOST_HUNTER_COMPONENTS test)
+endif()
 
 find_package(Atomics REQUIRED)
-find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS filesystem iostreams thread REQUIRED)
-find_package(CURL COMPONENTS HTTP HTTPS SSL REQUIRED)
-find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(libzip REQUIRED)
 
 if(SYSTEM_BDB)
     find_package(BerkeleyDB 5.3...<5.4 COMPONENTS CXX REQUIRED)
 else()
-    find_program(MAKE_EXE NAMES gmake nmake make)
+    find_program(SH_EXE NAMES sh bash REQUIRED)
+    find_program(MAKE_EXE NAMES gmake nmake make REQUIRED)
 endif()
 
 if(SYSTEM_LEVELDB)
@@ -114,26 +161,51 @@ if(SYSTEM_UNIVALUE)
     pkg_check_modules(UNIVALUE REQUIRED IMPORTED_TARGET libunivalue)
 endif()
 
+if(BUNDLED_BOOST)
+    hunter_add_package(Boost COMPONENTS ${BOOST_HUNTER_COMPONENTS})
+endif()
+find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} CONFIG REQUIRED)
+
+if(BUNDLED_OPENSSL)
+    hunter_add_package(OpenSSL)
+endif()
+find_package(OpenSSL REQUIRED)
+
+if(BUNDLED_CURL)
+    hunter_add_package(CURL)
+    find_package(CURL CONFIG REQUIRED)
+else()
+    find_package(CURL REQUIRED)
+endif()
+
+if(BUNDLED_LIBZIP)
+    hunter_add_package(libzip)
+endif()
+find_package(libzip CONFIG REQUIRED)
+
+if(USE_ASM)
+    enable_language(ASM)
+endif()
+
 if(ENABLE_GUI)
-    find_package(Qt5 ${QT5_MINIMUM_VERSION} REQUIRED COMPONENTS
-        Concurrent
-        Core
-        Gui
-        LinguistTools
-        Network
-        Widgets
-    )
-
-    if(USE_DBUS)
-        find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS DBus REQUIRED)
+    if(BUNDLED_QT)
+        hunter_add_package(Qt COMPONENTS ${QT5_HUNTER_COMPONENTS})
     endif()
-
-    if(ENABLE_TESTS)
-        find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS Test REQUIRED)
-    endif()
+    find_package(Qt5 ${QT5_MINIMUM_VERSION} COMPONENTS ${QT5_COMPONENTS} REQUIRED)
 
     if(ENABLE_QRENCODE)
         pkg_check_modules(QRENCODE REQUIRED IMPORTED_TARGET libqrencode)
+    endif()
+
+    # Compatibility macros
+    if(Qt5Core_VERSION VERSION_LESS 5.15.0)
+        macro(qt_create_translation)
+            qt5_create_translation(${ARGN})
+        endmacro()
+
+        macro(qt_add_translation)
+            qt5_add_translation(${ARGN})
+        endmacro()
     endif()
 endif()
 
@@ -142,7 +214,6 @@ if(ENABLE_UPNP)
 endif()
 
 if(ENABLE_TESTS)
-    find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS unit_test_framework REQUIRED)
     enable_testing()
 
     if(SYSTEM_XXD)
@@ -175,10 +246,23 @@ endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 
 # Set compiler flags
-if (APPLE)
+if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
     add_compile_options(-Wno-error=thread-safety-analysis)
     add_compile_options(-Wno-error=thread-safety-reference)
+endif()
+
+if(STATIC_LIBS)
+    set(CMAKE_LINK_SEARCH_START_STATIC ON)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_STATIC_LIBRARY_SUFFIX}")
+endif()
+
+if(STATIC_RUNTIME)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang)\$")
+        list(APPEND RUNTIME_LIBS -static-libgcc -static-libstdc++)
+    elseif(MSVC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 endif()
 
 # Set endianness

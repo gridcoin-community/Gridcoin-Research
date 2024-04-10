@@ -97,7 +97,7 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
 
 bool CSplitBlob::isComplete() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest)
 {
-    return cntPartsRcvd == vParts.size();
+    return (!m_publish_in_progress && cntPartsRcvd == vParts.size());
 }
 
 void CSplitBlob::addPart(const uint256& ihash)
@@ -119,9 +119,11 @@ void CSplitBlob::addPart(const uint256& ihash)
     part.refs.emplace(this, n);
 }
 
-int CSplitBlob::addPartData(CDataStream&& vData)
+int CSplitBlob::addPartData(CDataStream&& vData, const bool& publish_in_progress)
 {
     LOCK2(cs_mapParts, cs_manifest);
+
+    m_publish_in_progress = publish_in_progress;
 
     uint256 hash(Hash(vData));
 
@@ -138,11 +140,9 @@ int CSplitBlob::addPartData(CDataStream&& vData)
     if (!part.present())
     {
         /* missing data; use the supplied data */
-        /* prevent calling the Complete callback FIXME: make this look better */
-        cntPartsRcvd--;
         CSplitBlob::RecvPart(nullptr, vData);
-        cntPartsRcvd++;
     }
+
     return n;
 }
 
@@ -802,7 +802,7 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
     if (it.second == false)
         return false;
 
-    // Release lock on cs_manifest before taking a lonk on cs_ConvergedScraperStatsCache to avoid potential deadlocks.
+    // Release lock on cs_manifest before taking a lock on cs_ConvergedScraperStatsCache to avoid potential deadlocks.
     {
         CScraperManifest& manifest = *it.first->second;
 
@@ -836,6 +836,8 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest, cs_mapParts)
 
 void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
 {
+    m_publish_in_progress = false;
+
     // Notify peers that we have a new manifest
     LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(), (unsigned)vParts.size());
     {

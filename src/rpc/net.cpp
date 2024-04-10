@@ -241,8 +241,9 @@ UniValue setban(const UniValue& params, bool fHelp)
 
     if (!isSubnet) {
         std::vector<CNetAddr> resolved;
-        LookupHost(params[0].get_str().c_str(), resolved, 1, false);
-        netAddr = resolved[0];
+        if (LookupHost(params[0].get_str().c_str(), resolved, 1, false)) {
+            netAddr = resolved[0];
+        }
     }
     else
         LookupSubNet(params[0].get_str().c_str(), subNet);

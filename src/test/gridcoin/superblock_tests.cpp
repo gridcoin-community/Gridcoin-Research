@@ -33,7 +33,7 @@ struct Legacy
     struct BinaryResearcher
     {
         std::array<unsigned char, 16> cpid;
-        int16_t magnitude;
+        uint16_t magnitude;
     };
 
     static std::string ExtractValue(std::string data, std::string delimiter, int pos)

@@ -27,6 +27,7 @@ The following are developer notes on how to build Gridcoin on your native platfo
 - [OS X Build Notes](build-macos.md)
 - [Unix Build Notes](build-unix.md)
 - [Windows Build Notes](build-windows.md)
+- [Windows (MSYS2) Build Notes](build-msys2.md)
 - [FreeBSD Build Notes](build-freebsd.md)
 - [OpenBSD Build Notes](build-openbsd.md)
 

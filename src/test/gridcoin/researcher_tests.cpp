@@ -183,26 +183,6 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
     registry.Add({contract, dummy_tx, &dummy_index});
 }
-
-// Unfortunately, GCC 13 on openSUSE i386 is misbehaving and exhibiting weird errors in the last decimal places for things
-// even as straightforward as
-//
-// double foo = 0.0;
-// text >> foo.
-//
-// This comparison function works around that by allowing a small error band to pass the tests, but not enough to invalidate
-// the tests on compilers that work.
-bool comp_double(double lhs, double rhs)
-{
-    // Require exact match if 0=0.
-    if (std::min(lhs, rhs) == 0.0) {
-        return (lhs == rhs);
-    } else {
-        double unsigned_rel_error = std::abs(lhs - rhs) / std::min(lhs, rhs);
-
-        return (unsigned_rel_error <= double {1e-8});
-    }
-}
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -225,7 +205,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_with_project_data)
     BOOST_CHECK(project.m_cpid == expected);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "url");
-    BOOST_CHECK(comp_double(project.m_rac, 0.0));
+    BOOST_CHECK(project.m_rac == 0.0);
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 }
 
@@ -254,7 +234,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_project_xml_string)
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "https://example.com/");
-    BOOST_CHECK(comp_double(project.m_rac, 123.45));
+    BOOST_CHECK(project.m_rac == 123.45);
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
@@ -289,7 +269,7 @@ BOOST_AUTO_TEST_CASE(it_falls_back_to_compute_a_missing_external_cpid)
     BOOST_CHECK(project.m_cpid == cpid);
     BOOST_CHECK(project.m_team == "team name");
     BOOST_CHECK(project.m_url == "https://example.com/");
-    BOOST_CHECK(comp_double(project.m_rac, 123.45));
+    BOOST_CHECK(project.m_rac == 123.45);
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::NONE);
 
     // Clean up:
@@ -508,7 +488,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
         BOOST_CHECK(project1->m_url == "https://example.com/1");
-        BOOST_CHECK(comp_double(project1->m_rac, 123.45));
+        BOOST_CHECK(project1->m_rac == 123.45);
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -520,7 +500,7 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
         BOOST_CHECK(project2->m_url == "https://example.com/2");
-        BOOST_CHECK(comp_double(project2->m_rac, 567.89));
+        BOOST_CHECK(project2->m_rac == 567.89);
         BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -875,7 +855,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
         BOOST_CHECK(project1->m_url == "https://example.com/1");
-        BOOST_CHECK(comp_double(project1->m_rac, 1.1));
+        BOOST_CHECK(project1->m_rac == 1.1);
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -887,7 +867,7 @@ BOOST_AUTO_TEST_CASE(it_parses_project_xml_to_a_global_researcher_singleton)
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
         BOOST_CHECK(project2->m_url == "https://example.com/2");
-        BOOST_CHECK(comp_double(project2->m_rac, 2.2));
+        BOOST_CHECK(project2->m_rac == 2.2);
         BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -929,7 +909,7 @@ BOOST_AUTO_TEST_CASE(it_looks_up_loaded_boinc_projects_by_name)
         BOOST_CHECK(project->m_cpid == cpid);
         BOOST_CHECK(project->m_team == "gridcoin");
         BOOST_CHECK(project->m_url == "https://example.com/");
-        BOOST_CHECK(comp_double(project->m_rac, 1.1));
+        BOOST_CHECK(project->m_rac == 1.1);
         BOOST_CHECK(project->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project->Eligible() == true);
     } else {
@@ -1068,7 +1048,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "not gridcoin");
-        BOOST_CHECK(comp_double(project1->m_rac, 1.1));
+        BOOST_CHECK(project1->m_rac == 1.1);
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project1->Eligible() == false);
     } else {
@@ -1079,7 +1059,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid);
         BOOST_CHECK(project2->m_team.empty() == true);
-        BOOST_CHECK(comp_double(project2->m_rac, 2.2));
+        BOOST_CHECK(project2->m_rac == 2.2);
         BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project2->Eligible() == false);
     } else {
@@ -1090,7 +1070,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project3->m_name == "project name 3");
         BOOST_CHECK(project3->m_cpid == GRC::Cpid());
         BOOST_CHECK(project3->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project3->m_rac, 3.3));
+        BOOST_CHECK(project3->m_rac == 3.3);
         BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::MALFORMED_CPID);
         BOOST_CHECK(project3->Eligible() == false);
     } else {
@@ -1101,7 +1081,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project4->m_name == "project name 4");
         BOOST_CHECK(project4->m_cpid == GRC::Cpid());
         BOOST_CHECK(project4->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project4->m_rac, 4.4));
+        BOOST_CHECK(project4->m_rac == 4.4);
         BOOST_CHECK(project4->m_error == GRC::MiningProject::Error::MALFORMED_CPID);
         BOOST_CHECK(project4->Eligible() == false);
     } else {
@@ -1112,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project5->m_name == "project name 5");
         BOOST_CHECK(project5->m_cpid == cpid);
         BOOST_CHECK(project5->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project5->m_rac, 5.5));
+        BOOST_CHECK(project5->m_rac == 5.5);
         BOOST_CHECK(project5->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project5->Eligible() == false);
     } else {
@@ -1123,7 +1103,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project6->m_name == "project name 6");
         BOOST_CHECK(project6->m_cpid == cpid);
         BOOST_CHECK(project6->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project6->m_rac, 6.6));
+        BOOST_CHECK(project6->m_rac == 6.6);
         BOOST_CHECK(project6->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project6->Eligible() == false);
     } else {
@@ -1132,7 +1112,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
 
     if (const GRC::ProjectOption project7 = projects.Try("project name 7")) {
         BOOST_CHECK(project7->m_name == "project name 7");
-        BOOST_CHECK(comp_double(project7->m_rac, 7.7));
+        BOOST_CHECK(project7->m_rac == 7.7);
         BOOST_CHECK(project7->m_error == GRC::MiningProject::Error::POOL);
         BOOST_CHECK(project7->Eligible() == false);
     } else {
@@ -1142,7 +1122,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
     if (const GRC::ProjectOption project8 = projects.Try("project name 8")) {
         BOOST_CHECK(project8->m_name == "project name 8");
         BOOST_CHECK(project8->m_cpid.IsZero() == true);
-        BOOST_CHECK(comp_double(project8->m_rac, 8.8));
+        BOOST_CHECK(project8->m_rac == 8.8);
         BOOST_CHECK(project8->m_error == GRC::MiningProject::Error::POOL);
         BOOST_CHECK(project8->Eligible() == false);
     } else {
@@ -1153,7 +1133,7 @@ BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
         BOOST_CHECK(project9->m_name == "project name 9");
         BOOST_CHECK(project9->m_cpid == cpid);
         BOOST_CHECK(project9->m_team == "not gridcoin");
-        BOOST_CHECK(comp_double(project9->m_rac, 0.0));
+        BOOST_CHECK(project9->m_rac == 0.0);
         BOOST_CHECK(project9->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project9->Eligible() == false);
     } else {
@@ -1232,7 +1212,7 @@ BOOST_AUTO_TEST_CASE(it_skips_the_team_requirement_when_set_by_protocol)
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "! not gridcoin !");
-        BOOST_CHECK(comp_double(project1->m_rac, 1.1));
+        BOOST_CHECK(project1->m_rac == 1.1);
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
     } else {
@@ -1302,7 +1282,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         BOOST_CHECK(project1->m_name == "project name 1");
         BOOST_CHECK(project1->m_cpid == cpid);
         BOOST_CHECK(project1->m_team == "! not gridcoin !");
-        BOOST_CHECK(comp_double(project1->m_rac, 1.1));
+        BOOST_CHECK(project1->m_rac == 1.1);
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::INVALID_TEAM);
         BOOST_CHECK(project1->Eligible() == false);
     } else {
@@ -1313,7 +1293,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         BOOST_CHECK(project2->m_name == "project name 2");
         BOOST_CHECK(project2->m_cpid == cpid);
         BOOST_CHECK(project2->m_team == "team 1");
-        BOOST_CHECK(comp_double(project2->m_rac, 0));
+        BOOST_CHECK(project2->m_rac == 0);
         BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
     } else {
@@ -1324,7 +1304,7 @@ BOOST_AUTO_TEST_CASE(it_applies_the_team_whitelist_when_set_by_the_protocol)
         BOOST_CHECK(project3->m_name == "project name 3");
         BOOST_CHECK(project3->m_cpid == cpid);
         BOOST_CHECK(project3->m_team == "team 2");
-        BOOST_CHECK(comp_double(project3->m_rac, 0));
+        BOOST_CHECK(project3->m_rac == 0);
         BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project3->Eligible() == true);
     } else {
@@ -1649,7 +1629,7 @@ void it_parses_project_xml_from_a_client_state_xml_file()
         BOOST_CHECK(project1->m_name == "valid project 1");
         BOOST_CHECK(project1->m_cpid == cpid_1);
         BOOST_CHECK(project1->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project1->m_rac, 1.1));
+        BOOST_CHECK(project1->m_rac == 1.1);
         BOOST_CHECK(project1->m_url == "https://project1.example.com/boinc/");
         BOOST_CHECK(project1->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project1->Eligible() == true);
@@ -1661,7 +1641,7 @@ void it_parses_project_xml_from_a_client_state_xml_file()
         BOOST_CHECK(project2->m_name == "valid project 2");
         BOOST_CHECK(project2->m_cpid == cpid_2);
         BOOST_CHECK(project2->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project2->m_rac, 2.2));
+        BOOST_CHECK(project2->m_rac == 2.2);
         BOOST_CHECK(project2->m_url == "https://project2.example.com/boinc/");
         BOOST_CHECK(project2->m_error == GRC::MiningProject::Error::NONE);
         BOOST_CHECK(project2->Eligible() == true);
@@ -1674,7 +1654,7 @@ void it_parses_project_xml_from_a_client_state_xml_file()
         BOOST_CHECK(project3->m_name == "invalid project 3");
         BOOST_CHECK(project3->m_cpid == cpid_2);
         BOOST_CHECK(project3->m_team == "gridcoin");
-        BOOST_CHECK(comp_double(project3->m_rac, 3.3));
+        BOOST_CHECK(project3->m_rac == 3.3);
         BOOST_CHECK(project3->m_url == "https://project3.example.com/boinc/");
         BOOST_CHECK(project3->m_error == GRC::MiningProject::Error::MISMATCHED_CPID);
         BOOST_CHECK(project3->Eligible() == false);

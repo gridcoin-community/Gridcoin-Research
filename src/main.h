@@ -478,7 +478,7 @@ public:
     int nHeight;
 
     unsigned int nFlags;  // ppcoin: block index flags
-    enum
+    enum : uint32_t
     {
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY  = (1 << 1), // entropy bit for stake modifier
@@ -630,7 +630,7 @@ public:
     {
         if (nEntropyBit > 1)
             return false;
-        nFlags |= (nEntropyBit? BLOCK_STAKE_ENTROPY : 0);
+        nFlags |= (nEntropyBit ? BLOCK_STAKE_ENTROPY : (uint32_t) 0);
         return true;
     }
 

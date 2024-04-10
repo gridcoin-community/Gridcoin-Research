@@ -27,6 +27,7 @@ extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
 extern bool fScraperActive;
+extern bool fQtActive;
 
 void Scraper(bool bSingleShot = false);
 void ScraperSubscriber();
@@ -40,17 +41,29 @@ namespace {
 //!
 void ShowChainCorruptedMessage()
 {
-    uiInterface.ThreadSafeMessageBox(
-        _("WARNING: Blockchain data may be corrupted.\n\n"
-            "Gridcoin detected bad index entries. This may occur because of an "
-            "unexpected exit, a power failure, or a late software upgrade.\n\n"
-            "Please exit Gridcoin, open the data directory, and delete:\n"
-            " - the blk****.dat files\n"
-            " - the txleveldb folder\n\n"
-            "Your wallet will re-download the blockchain. Your balance may "
-            "appear incorrect until the synchronization finishes.\n" ),
-        "Gridcoin",
-        CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    fResetBlockchainRequest = true;
+
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
+              "Gridcoin detected bad index entries. This may occur because of a "
+              "late software upgrade, unexpected exit, or a power failure. "
+              "Your blockchain data is being reset and your wallet will resync "
+              "from genesis when you restart. Your balance may appear incorrect "
+              "until the synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    } else {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
+              "Gridcoin detected bad index entries. This may occur because of a "
+              "late software upgrade, unexpected exit, or a power failure. "
+              "Please run gridcoinresearchd with the -resetblockchaindata "
+              "parameter. Your wallet will re-download the blockchain. Your "
+              "balance may appear incorrect until the synchronization finishes." ),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    }
 }
 
 //!
@@ -361,20 +374,23 @@ void InitializeExplorerFeatures()
 //! whether the index contains invalid state caused by an unclean shutdown.
 //! This condition was originally detected by an assertion in a routine for
 //! stake modifier checksum verification. Because Gridcoin removed modifier
-//! checksums and checkpoints, we reinstate that assertion here as a formal
-//! inspection.
+//! checksums, we reinstate that assertion here as a formal inspection done
+//! at initialization before the VerifyCheckpoints.
 //!
 //! This function checks that no block index entries contain a null pointer
 //! to a previous block. The symptom may indicate a deeper problem that can
 //! be resolved by tuning disk synchronization in LevelDB. Until then, this
 //! heuristic has proven itself to be effective for identifying a corrupted
-//! database.
+//! database. This type of error has not been seen in the wild in several
+//! years as of Gridcoin 5.4.7.0, but is retained for thoroughness.
 //!
-void CheckBlockIndexJob()
+bool CheckBlockIndex()
 {
     LogPrintf("Gridcoin: checking block index...");
+    uiInterface.InitMessage(_("Checking block index..."));
 
-    bool corrupted = false;
+    // Block index integrity status
+    bool status = true;
 
     if (pindexGenesisBlock) {
         LOCK(cs_main);
@@ -383,18 +399,20 @@ void CheckBlockIndexJob()
             const CBlockIndex* const pindex = index_pair.second;
 
             if (!pindex || !(pindex->pprev || pindex == pindexGenesisBlock)) {
-                corrupted = true;
+                status = false;
                 break;
             }
         }
     }
 
-    if (!corrupted) {
+    if (status) {
         LogPrintf("Gridcoin: block index is clean");
-        return;
+        return status;
     }
 
     ShowChainCorruptedMessage();
+
+    return status;
 }
 
 //!
@@ -466,11 +484,8 @@ void ScheduleRegistriesPassivation(CScheduler& scheduler)
 {
     // Run registry database passivation every 5 minutes. This is a very thin call most of the time.
     // Please see the PassivateDB function and passivate_db.
-    // TODO: Turn into a loop using extension of RegistryBookmarks
-    scheduler.scheduleEvery(BeaconRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(ScraperRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(ProtocolRegistry::RunDBPassivation, std::chrono::minutes{5});
-    scheduler.scheduleEvery(Whitelist::RunDBPassivation, std::chrono::minutes{5});
+
+    scheduler.scheduleEvery(RunDBPassivation, std::chrono::minutes{5});
 }
 } // Anonymous namespace
 
@@ -490,6 +505,9 @@ bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
     LogPrintf("Gridcoin: initializing...");
 
+    if (!CheckBlockIndex()) {
+        return false;
+    }
     if (!VerifyCheckpoints(pindexBest)) {
         return false;
     }
@@ -518,8 +536,6 @@ void GRC::CloseResearcherRegistryFile()
 
 void GRC::ScheduleBackgroundJobs(CScheduler& scheduler)
 {
-    scheduler.schedule(CheckBlockIndexJob, std::chrono::system_clock::now());
-
     // Primitive, but this is what the scraper does in the scraper housekeeping
     // loop. It checks to see if the logs need to be archived by default every
     // 5 mins. Note that passing false to the archive function means that if we
@@ -589,3 +605,13 @@ skip:;
     return true;
 }
 
+void GRC::RunDBPassivation()
+{
+    LOCK(cs_main);
+
+    for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
+        Registry& registry = RegistryBookmarks::GetRegistryWithDB(contract_type);
+
+        registry.PassivateDB();
+    }
+}

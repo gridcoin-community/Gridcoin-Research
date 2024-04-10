@@ -598,12 +598,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB();
-
-    //!
-    //! \brief A static function that is called by the scheduler to run the scraper entry database passivation.
-    //!
-    static void RunDBPassivation();
+    uint64_t PassivateDB() override;
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ScraperEntry> is

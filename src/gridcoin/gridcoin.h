@@ -40,6 +40,12 @@ void ScheduleBackgroundJobs(CScheduler& scheduler);
 //! \return \c true if no errors occurred.
 //!
 bool CleanConfig();
+
+//!
+//! \brief Function to allow cycling through DB passivation for all contract types backed
+//! with registry db.
+//!
+void RunDBPassivation();
 } // namespace GRC
 
 #endif // GRIDCOIN_GRIDCOIN_H

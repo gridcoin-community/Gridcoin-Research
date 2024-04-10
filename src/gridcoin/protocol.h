@@ -559,12 +559,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB();
-
-    //!
-    //! \brief A static function that is called by the scheduler to run the protocol entry database passivation.
-    //!
-    static void RunDBPassivation();
+    uint64_t PassivateDB() override;
 
     //!
     //! \brief Specializes the template RegistryDB for the ProtocolEntry class. Note that std::set<ProtocolEntry>

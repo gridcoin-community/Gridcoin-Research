@@ -2,7 +2,7 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 5)
 define(_CLIENT_VERSION_MINOR, 4)
-define(_CLIENT_VERSION_REVISION, 7)
+define(_CLIENT_VERSION_REVISION, 8)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2024)
@@ -209,6 +209,12 @@ AC_ARG_ENABLE([debug],
     [enable_debug=$enableval],
     [enable_debug=no])
 
+dnl Enable different -fsanitize options
+AC_ARG_WITH([sanitizers],
+    [AS_HELP_STRING([--with-sanitizers],
+                    [comma separated list of extra sanitizers to build with (default is none enabled)])],
+    [use_sanitizers=$withval])
+
 # Turn warnings into errors
 AC_ARG_ENABLE([werror],
     [AS_HELP_STRING([--enable-werror],
@@ -228,6 +234,33 @@ if test "$enable_debug" = "yes"; then
     if test "$GXX" = "yes"; then
         CXXFLAGS="$CXXFLAGS -g3 -O0"
     fi
+fi
+
+if test "$use_sanitizers" != ""; then
+  dnl First check if the compiler accepts flags. If an incompatible pair like
+  dnl -fsanitize=address,thread is used here, this check will fail. This will also
+  dnl fail if a bad argument is passed, e.g. -fsanitize=undfeined
+  AX_CHECK_COMPILE_FLAG(
+    [-fsanitize=$use_sanitizers],
+    [SANITIZER_CXXFLAGS="-fsanitize=$use_sanitizers"],
+    [AC_MSG_ERROR([compiler did not accept requested flags])])
+
+  dnl Some compilers (e.g. GCC) require additional libraries like libasan,
+  dnl libtsan, libubsan, etc. Make sure linking still works with the sanitize
+  dnl flag. This is a separate check so we can give a better error message when
+  dnl the sanitize flags are supported by the compiler but the actual sanitizer
+  dnl libs are missing.
+  AX_CHECK_LINK_FLAG(
+    [-fsanitize=$use_sanitizers],
+    [SANITIZER_LDFLAGS="-fsanitize=$use_sanitizers"],
+    [AC_MSG_ERROR([linker did not accept requested flags, you are missing required libraries])],
+    [],
+    [AC_LANG_PROGRAM([[
+    #include <cstdint>
+    #include <cstddef>
+    extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) { return 0; }
+    __attribute__((weak)) // allow for libFuzzer linking
+    ]],[[]])])
 fi
 
 ERROR_CXXFLAGS=
@@ -277,6 +310,16 @@ if test "$CXXFLAGS_overridden" = "no"; then
   dnl For Qt versions < 5.14 with GCC 9+:
   AX_CHECK_COMPILE_FLAG([-Wdeprecated-copy],[CXXFLAGS="$CXXFLAGS -Wno-deprecated-copy"],,[[$CXXFLAG_WERROR]])
 fi
+
+
+dnl x87 FP operations on x86 hosts can break assumptions made about the floating point values.
+dnl See the commit message which introduced this change for more details.
+case $host in
+ i?86-*|x86_64-*)
+    AX_CHECK_COMPILE_FLAG([-msse2],[CXXFLAGS="$CXXFLAGS -msse2 -mfpmath=sse"],[AC_MSG_ERROR([SSE2 support is required on x86 targets.])],[[$CXXFLAG_WERROR]])
+    ;;
+ *) ;;
+esac
 
 enable_sse42=no
 enable_sse41=no
@@ -1009,9 +1052,19 @@ dnl Check for Boost libs
 AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST])
 AX_BOOST_SYSTEM
 AX_BOOST_FILESYSTEM
-AX_BOOST_THREAD
 AX_BOOST_ZLIB
 AX_BOOST_IOSTREAMS
+
+dnl Prevent use of std::unary_function, which was removed in C++17,
+dnl and will generate warnings with newer compilers for Boost
+dnl older than 1.80.
+dnl See: https://github.com/boostorg/config/pull/430.
+AX_CHECK_PREPROC_FLAG([-DBOOST_NO_CXX98_FUNCTION_BASE], [BOOST_CPPFLAGS="$BOOST_CPPFLAGS -DBOOST_NO_CXX98_FUNCTION_BASE"], [], [$CXXFLAG_WERROR],
+                      [AC_LANG_PROGRAM([[#include <boost/config.hpp>]])])
+
+dnl AX_BOOST_THREAD check also triggers the same issue, so it has to be checked after
+dnl setting -DBOOST_NO_CXX98_FUNCTION_BASE.
+AX_BOOST_THREAD
 
 dnl Boost 1.56 through 1.62 allow using std::atomic instead of its own atomic
 dnl counter implementations. In 1.63 and later the std::atomic approach is default.
@@ -1292,6 +1345,8 @@ AC_SUBST(HARDENED_CPPFLAGS)
 AC_SUBST(HARDENED_LDFLAGS)
 AC_SUBST(PIC_FLAGS)
 AC_SUBST(PIE_FLAGS)
+AC_SUBST(SANITIZER_CXXFLAGS)
+AC_SUBST(SANITIZER_LDFLAGS)
 AC_SUBST(SSE42_CXXFLAGS)
 AC_SUBST(SSE41_CXXFLAGS)
 AC_SUBST(AVX2_CXXFLAGS)
@@ -1398,6 +1453,7 @@ echo "  with zmq      = $use_zmq"
 echo "  with test     = $use_tests"
 echo "  with bench    = $use_bench"
 echo "  with upnp     = $use_upnp"
+echo "  sanitizers    = $use_sanitizers"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"
 echo

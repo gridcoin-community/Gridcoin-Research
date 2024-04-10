@@ -23,6 +23,11 @@ jobs:
                     script-id: native
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
                     script-id: native_old
+                  - name: x86_64 Linux  [ASan]  [LSan]  [UBSan]  [integer]  [jammy]  [no depends]
+                    script-id: native_asan
+                  # FIXME: depends is unable to compile Qt with clang.
+                  # - name: x86_64 Linux  [TSan]  [GUI]  [jammy]
+                  #  script-id: native_tsan
                   - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
         env:

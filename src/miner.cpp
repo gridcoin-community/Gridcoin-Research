@@ -150,7 +150,7 @@ bool TrySignClaim(
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
 bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
-                      std::map<GRC::Cpid, uint256>& mrc_tx_map, uint32_t& claim_contract_version,
+                      std::map<GRC::Cpid, uint256>& mrc_tx_map, CAmount& reward, uint32_t& claim_contract_version,
                       GRC::Claim& claim, CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For convenience
@@ -160,7 +160,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
     // coinstake.vout size should be 2 at this point. If not something is really wrong so assert immediately.
     assert(coinstake.vout.size() == 2);
 
-    CAmount rewards = 0;
+    CAmount mrc_rewards = 0;
     CAmount staker_fees = 0;
     CAmount foundation_fees = 0;
 
@@ -202,7 +202,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 
                 if (reward) {
                     mrc_outputs.push_back(CTxOut(reward, script_beacon_key));
-                    rewards += reward;
+                    mrc_rewards += reward;
                 }
 
                 if (foundation_fee_fraction.IsNonZero()) {
@@ -236,7 +236,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
                          FormatMoney(mrc.m_research_subsidy),
                          mrc.m_version,
                          FormatMoney(reward),
-                         FormatMoney(rewards),
+                         FormatMoney(mrc_rewards),
                          FormatMoney(staker_fees + foundation_fees),
                          FormatMoney(staker_fees),
                          FormatMoney(foundation_fees));
@@ -246,6 +246,9 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
 
         // Now that the MRC outputs are created, add the fees to the staker to the coinstake output 1 value.
         coinstake.vout[1].nValue += staker_fees;
+
+        // Increment the reward parameter to include the staker_fees. This is important for mandatory sidestakes later.
+        reward += staker_fees;
 
         if (foundation_fees > 0) {
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
@@ -287,7 +290,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
              FormatMoney(claim.m_block_subsidy),
              FormatMoney(staker_fees),
              FormatMoney(foundation_fees),
-             FormatMoney(rewards));
+             FormatMoney(mrc_rewards));
 
     // Now the claim is complete. Put on the coinbase.
     blocknew.vtx[0].vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
@@ -310,8 +313,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
     int nHeight = pindexPrev->nHeight + 1;
 
     // This is specifically for BlockValidateContracts, and only the nHeight is filled in.
-    CBlockIndex* pindex_contract_validate = new CBlockIndex();
-    pindex_contract_validate->nHeight = nHeight;
+    CBlockIndex pindex_contract_validate;
+    pindex_contract_validate.nHeight = nHeight;
 
     // Create coinbase tx
     CTransaction &CoinBase = block.vtx[0];
@@ -385,7 +388,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             // pindex_contract_validate only has the block height filled out.
             //
             int DoS = 0; // Unused here.
-            if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(pindex_contract_validate, tx, DoS)) {
+            if (!tx.GetContracts().empty() && !GRC::BlockValidateContracts(&pindex_contract_validate, tx, DoS)) {
                 LogPrint(BCLog::LogFlags::MINER,
                     "%s: contract failed contextual validation. Skipped tx %s",
                     __func__,
@@ -1439,7 +1442,8 @@ void StakeMiner(CWallet *pwallet)
 
         // * Add MRC outputs to coinstake. This has to be done before the coinstake splitting/sidestaking, because
         // Some of the MRC fees go to the miner as part of the reward, and this affects the SplitCoinStakeOutput calculation.
-        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, claim_contract_version, claim, pwallet)) continue;
+        // Note that nReward here now includes the mrc fees to the staker.
+        if (!CreateMRCRewards(StakeBlock, mrc_map, mrc_tx_map, nReward, claim_contract_version, claim, pwallet)) continue;
 
         g_timer.GetTimes(function + "CreateMRC", "miner");
 
@@ -1466,6 +1470,28 @@ void StakeMiner(CWallet *pwallet)
         LogPrintf("INFO: %s: signed boinchash, coinstake, wholeblock", __func__);
 
         g_miner_status.IncrementBlocksCreated();
+
+        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
+            COutPoint stake_prevout = StakeBlock.vtx[1].vin[0].prevout;
+            CTransaction stake_input;
+            ReadTxFromDisk(stake_input, stake_prevout);
+
+            LogPrintf("INFO: %s: stake input = %s",
+                      __func__,
+                      FormatMoney(stake_input.vout[stake_prevout.n].nValue));
+
+            for (unsigned int i = 1; i < StakeBlock.vtx[1].vout.size(); ++i) {
+                CTxDestination destination;
+
+                ExtractDestination(StakeBlock.vtx[1].vout[i].scriptPubKey, destination);
+
+                LogPrintf("INFO: %s: stake output[%u] = %s, destination = %s",
+                          __func__,
+                          i,
+                          FormatMoney(StakeBlock.vtx[1].vout[i].nValue),
+                          CBitcoinAddress(destination).ToString());
+            }
+        }
 
         // * delegate to ProcessBlock
         if (!ProcessBlock(nullptr, &StakeBlock, true)) {
