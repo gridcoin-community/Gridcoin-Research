@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.8.0], 2024-04-10, leisure
+
+### Added
+ - build: add option for sanitizers #2553 (@div72)
+ - build: CMake: Initial Windows support (MSYS2) #2733 (@CyberTailor)
+
+### Changed
+ - build: enforce SSE2 on x86 targets #2746 (@div72)
+ - consensus: Update checkpoint data for mainnet and testnet #2756 (@jamescowens)
+ - gui, util: Enhance verify checkpoints fail handling; use RegistryBookmarks for DB passivation #2758 (@jamescowens)
+
+### Removed
+
+### Fixed
+ - build, depends: fix compilation with XCode 15 #2747 (@div72)
+ - Fix man page installation path for cmake builds #2749 (@theMarix)
+ - consensus, mrc, sidestake: add mrc fees to staker to rewards to be allocated via sidestaking #2753 (@jamescowens)
+ - Fix Systemd unit install location #2754 (@theMarix)
+ - scraper: Corrections to scraper_net after removal of cntPartsRcvd decrement and increment #2755 (@jamescowens)
+ - rpc: fix setban segfault #2757 (@div72)
+
 ## [5.4.7.0], 2024-03-13, leisure
 
 ### Added
