@@ -13,6 +13,9 @@ if [[ $HOST = *-apple-* ]]; then
 	VER=${KV#OSX_MIN_VERSION=}
 	for f in /tmp/release/*.dmg; do
 		mv $f ${f%.dmg}-min-$VER.dmg
+                if [[ $HOST = aarch64-apple-darwin ]]; then
+                  mv ${f%.dmg}-min-$VER.dmg ${f%.dmg}_arm64-min-$VER.dmg
+                fi
 	done
 fi
 
