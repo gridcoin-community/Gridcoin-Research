@@ -7,14 +7,26 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
-        script-id: [win32, win64, mac]
+        include:
+          - script-id: win32
+            runs-on: ubuntu-latest
+            OS_NAME: linux
+          - script-id: win64
+            runs-on: ubuntu-latest
+            OS_NAME: linux
+          - script-id: mac
+            runs-on: ubuntu-latest
+            OS_NAME: linux
+          - script-id: mac_arm64_host
+            runs-on: macos-14
+            OS_NAME: macos
     env:
       FILE_ENV: ./cd/00_setup_env_${{ matrix.script-id }}.sh
-      OS_NAME: linux
+      OS_NAME: ${{ matrix.OS_NAME }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout
