@@ -468,22 +468,24 @@ struct hash<GRC::Cpid>
     //!
     //! \return A hash as the sum of the two halves of the bytes in the CPID.
     //!
+
     size_t operator()(const GRC::Cpid& cpid) const
     {
         // Just convert the CPID into a value that we can store in a size_t
         // object. CPIDs are already unique identifiers.
         //
         const auto& data = cpid.Raw();
-        size_t ret = ((size_t)(data[0] & 255)       | (size_t)(data[1] & 255) << 8 |
-                      (size_t)(data[2] & 255) << 16 | (size_t)(data[3] & 255) << 24);
 
-        if (sizeof(size_t) == 8) {
-            ret |= ((size_t)(data[4] & 255) << 32 | (size_t)(data[5] & 255) << 40 |
-                    (size_t)(data[6] & 255) << 48 | (size_t)(data[7] & 255) << 56);
+        size_t ret = 0;
+
+        for (size_t i = 0; i < sizeof(size_t) && i < 8; ++i) {
+            ret |= (size_t)(data[i] & 255) << (i * 8);
         }
 
         return ret;
     }
+
+
 };
 }
 
