@@ -2137,10 +2137,10 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
         CTxDB txdb("r");
         if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, block, generated_by_me, hashProof))
         {
-            return error("%s: invalid proof-of-stake for block %s, prev %s",
-                __func__,
-                hash.ToString(),
-                pindexPrev->GetBlockHash().ToString());
+            return block.DoS(block.vtx[1].nDoS, error("%s: invalid proof-of-stake for block %s, prev %s",
+                                                      __func__,
+                                                      hash.ToString(),
+                                                      pindexPrev->GetBlockHash().ToString()));
         }
 
         if (g_seen_stakes.ContainsProof(hashProof)
