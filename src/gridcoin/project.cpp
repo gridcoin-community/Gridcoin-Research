@@ -97,6 +97,8 @@ std::string ProjectEntry::StatusToString(const ProjectEntryStatus& status, const
         switch(status) {
         case ProjectEntryStatus::UNKNOWN:         return _("Unknown");
         case ProjectEntryStatus::DELETED:         return _("Deleted");
+        case ProjectEntryStatus::MAN_GREYLISTED:  return _("Manually Greylisted");
+        case ProjectEntryStatus::AUTO_GREYLISTED: return _("Automatically Greylisted");
         case ProjectEntryStatus::ACTIVE:          return _("Active");
         case ProjectEntryStatus::OUT_OF_BOUND:    break;
         }
@@ -107,6 +109,8 @@ std::string ProjectEntry::StatusToString(const ProjectEntryStatus& status, const
         switch(status) {
         case ProjectEntryStatus::UNKNOWN:         return "Unknown";
         case ProjectEntryStatus::DELETED:         return "Deleted";
+        case ProjectEntryStatus::MAN_GREYLISTED:  return "Manually Greylisted";
+        case ProjectEntryStatus::AUTO_GREYLISTED: return "Automatically Greylisted";
         case ProjectEntryStatus::ACTIVE:          return "Active";
         case ProjectEntryStatus::OUT_OF_BOUND:    break;
         }
@@ -196,6 +200,14 @@ Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_
 {
 }
 
+Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, bool manual_greylist)
+    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+{
+    if (manual_greylist) {
+        m_status = ProjectEntryStatus::MAN_GREYLISTED;
+    }
+}
+
 Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, int64_t timestamp)
     : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, timestamp)
 {
@@ -215,8 +227,9 @@ Project::Project(ProjectEntry entry)
 // Class: WhitelistSnapshot
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot::WhitelistSnapshot(ProjectListPtr projects)
+WhitelistSnapshot::WhitelistSnapshot(ProjectListPtr projects, const ProjectEntry::ProjectFilterFlag& filter_used)
     : m_projects(std::move(projects))
+      , m_filter(filter_used)
 {
 }
 
@@ -258,6 +271,11 @@ bool WhitelistSnapshot::Contains(const std::string& name) const
     return false;
 }
 
+ProjectEntry::ProjectFilterFlag WhitelistSnapshot::FilterUsed() const
+{
+    return m_filter;
+}
+
 WhitelistSnapshot WhitelistSnapshot::Sorted() const
 {
     ProjectList sorted(m_projects->begin(), m_projects->end());
@@ -275,26 +293,70 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
 
     std::sort(sorted.begin(), sorted.end(), ascending_by_name);
 
-    return WhitelistSnapshot(std::make_shared<ProjectList>(sorted));
+    return WhitelistSnapshot(std::make_shared<ProjectList>(sorted), m_filter);
 }
 
 // -----------------------------------------------------------------------------
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot Whitelist::Snapshot() const
+WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter) const
 {
     LOCK(cs_lock);
 
     ProjectList projects;
 
     for (const auto& iter : m_project_entries) {
-        if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {
+        switch (filter) {
+        case ProjectEntry::ProjectFilterFlag::ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::MAN_GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::AUTO_GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::DELETED:
+            if (iter.second->m_status == ProjectEntryStatus::DELETED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::NOT_ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::DELETED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE
+                || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ALL:
             projects.push_back(*iter.second);
+            break;
+        case ProjectEntry::ProjectFilterFlag::NONE:
+            break;
         }
     }
 
-    return WhitelistSnapshot(std::make_shared<ProjectList>(projects));
+    return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
 }
 
 void Whitelist::Reset()
@@ -325,7 +387,12 @@ void Whitelist::AddDelete(const ContractContext& ctx)
     // If the contract status is ADD, then ProjectEntryStatus will be ACTIVE. If contract status
     // is REMOVE then ProjectEntryStatus will be DELETED.
     if (ctx->m_action == ContractAction::ADD) {
+        // Normal add/delete contracts are constructed with "unknown" status. The status is recorded on the local client
+        // based on the add/delete action. The manual greylist status is specified in the contract as constructed, and will carry
+        // through here for the contract add with the greylist flag set.
+        if (payload.m_status == ProjectEntryStatus::UNKNOWN) {
         payload.m_status = ProjectEntryStatus::ACTIVE;
+        }
     } else if (ctx->m_action == ContractAction::REMOVE) {
         payload.m_status = ProjectEntryStatus::DELETED;
     }
@@ -545,4 +612,3 @@ template<> const std::string Whitelist::ProjectEntryDB::KeyType()
 {
     return std::string("project");
 }
-

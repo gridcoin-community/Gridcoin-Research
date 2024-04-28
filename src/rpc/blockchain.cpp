@@ -2167,23 +2167,35 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 //! To whitelist a project:
 //!
-//!     addkey add project projectname url
+//!     addkey add project projectname url (< v2)
+//!
+//!     addkey add project projectname url gdpr_controls (v2)
+//!
+//!     addkey add project projectname url gdpr_controls manual_greylist (v3)
 //!
 //! To de-whitelist a project:
 //!
-//!     addkey delete project projectname
+//!     addkey delete project projectname 1 (<= v2)
 //!
-//!     or
-//!
-//!     addkey delete project projectname 1
+//!     addkey delete project projectname (>= v3)
 //!
 //! Key examples:
 //!
+//!     To add:
+//!
 //!     v1: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
 //!     v2: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true
+//!
+//!     To manually greylist:
+//!
+//!     v3: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true true
+//!
+//!     To delete:
+//!
 //!     v1 or v2: addkey delete project milkyway@home
 //!     v1 or v2: addkey delete project milkyway@home 1 (last parameter is a dummy)
 //!     v2: addkey delete project milkyway@home 1 false (last two parameters are dummies)
+//!     v3: addkey delete project milkyway@home (the dummy parameters are no longer needed for v3 deletes)
 //!
 //! GRC will only memorize the *last* value it finds for a key in the highest
 //! block.
@@ -2227,7 +2239,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
             && action == GRC::ContractAction::ADD
             && type == GRC::ContractType::PROJECT) {
         required_param_count = 5;
-        param_count_max = 5;
+
+        block_v13_enabled ? param_count_max = 6 : param_count_max = 5;
     }
 
     if ((type == GRC::ContractType::PROJECT || type == GRC::ContractType::SCRAPER)
@@ -2305,6 +2318,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
     {
         if (action == GRC::ContractAction::ADD) {
             bool gdpr_export_control = false;
+            bool manually_greylist = false;
 
             if (block_v13_enabled) {
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
@@ -2317,13 +2331,20 @@ UniValue addkey(const UniValue& params, bool fHelp)
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
                 }
 
+                if (params.size() == 6) {
+                    if (ToLower(params[4].get_str()) == "true") {
+                        manually_greylist = true;
+                    }
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
                             uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            gdpr_export_control); // GDPR stats export protection enforced boolean
+                            gdpr_export_control,  // GDPR stats export protection enforced boolean
+                            manually_greylist);   // manual greylist flag
 
             } else if (project_v2_enabled) {
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
@@ -2359,7 +2380,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
                             uint32_t{3},          // Contract payload version number, 3
                             params[2].get_str(),  // Name
                             std::string{},        // URL ignored
-                            false);               // GDPR status irrelevant
+                            false,                // GDPR status irrelevant
+                            false);               // manual greylisting irrelevant
 
             } else if (project_v2_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
