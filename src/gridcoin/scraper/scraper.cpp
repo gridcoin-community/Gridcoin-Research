@@ -1571,7 +1571,7 @@ void Scraper(bool bSingleShot)
             uiInterface.NotifyScraperEvent(scrapereventtypes::Stats, CT_UPDATING, {});
 
             // Get a read-only view of the current project whitelist:
-            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot();
+            const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
             // Delete manifest entries not on whitelist. Take a lock on cs_StructScraperFileManifest for this.
             {
@@ -3636,7 +3636,8 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
 
         // At the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
         statsentry.statsvalue.dAvgRAC = statsentry.statsvalue.dRAC;
-        // Mag is dealt with on the second pass... so is left at 0.0 on the first pass.
+        // Mag is dealt with on the second pass, so is set to 0.0 on the first pass.
+        statsentry.statsvalue.dMag = 0.0;
 
         statsentry.statskey.objecttype = statsobjecttype::byCPIDbyProject;
         statsentry.statskey.objectID = project + "," + cpid;
@@ -3654,20 +3655,24 @@ bool ProcessProjectStatsFromStreamByCPID(const std::string& project, boostio::fi
     // The mScraperStats here is scoped to only this project so we do not need project filtering here.
     ScraperStats::iterator entry;
 
-    for (auto const& entry : mScraperStats)
-    {
-        ScraperObjectStats statsentry;
+    // Statistics tracked for greylisted projects have zero project magnitude, so no need to go through
+    // and update the CPID level mags. They are all zero if project magnitude is zero.
+    if (projectmag > 0) {
+        for (auto const& entry : mScraperStats)
+        {
+            ScraperObjectStats statsentry;
 
-        statsentry.statskey = entry.first;
-        statsentry.statsvalue.dTC = entry.second.statsvalue.dTC;
-        statsentry.statsvalue.dRAT = entry.second.statsvalue.dRAT;
-        statsentry.statsvalue.dRAC = entry.second.statsvalue.dRAC;
-        // As per the above the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
-        statsentry.statsvalue.dAvgRAC = entry.second.statsvalue.dAvgRAC;
-        statsentry.statsvalue.dMag = MagRound(entry.second.statsvalue.dRAC / dProjectRAC * projectmag);
+            statsentry.statskey = entry.first;
+            statsentry.statsvalue.dTC = entry.second.statsvalue.dTC;
+            statsentry.statsvalue.dRAT = entry.second.statsvalue.dRAT;
+            statsentry.statsvalue.dRAC = entry.second.statsvalue.dRAC;
+            // As per the above the individual (byCPIDbyProject) level the AvgRAC is the same as the RAC.
+            statsentry.statsvalue.dAvgRAC = entry.second.statsvalue.dAvgRAC;
+            statsentry.statsvalue.dMag = MagRound(entry.second.statsvalue.dRAC / dProjectRAC * projectmag);
 
-        // Update map entry with the magnitude.
-        mScraperStats[statsentry.statskey] = statsentry;
+            // Update map entry with the magnitude.
+            mScraperStats[statsentry.statskey] = statsentry;
+        }
     }
 
     // Due to rounding to MAG_ROUND, the actual total project magnitude will not be exactly projectmag,
@@ -3802,6 +3807,9 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
 {
     _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState", "Beginning stats processing.");
 
+    // Get a read-only view of the current project greylist
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
+
     // Enumerate the count of active projects from the file manifest. Since the manifest is
     // constructed starting with the whitelist, and then using only the current files, this
     // will always be less than or equal to the whitelist count from whitelist.
@@ -3809,10 +3817,11 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
     {
         LOCK(cs_StructScraperFileManifest);
 
-        for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
-        {
-            //
-            if (entry.second.current && !entry.second.excludefromcsmanifest) nActiveProjects++;
+        for (const auto& entry : StructScraperFileManifest.mScraperFileManifest) {
+            // Count as active if current, not marked as to be excluded, and also not greylisted.
+            if (entry.second.current
+                    && !entry.second.excludefromcsmanifest
+                    && !greylist.Contains(entry.second.project)) nActiveProjects++;
         }
     }
     double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
@@ -3837,7 +3846,12 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
                 _log(logattribute::INFO, "GetScraperStatsByCurrentFileManifestState",
                      "Processing stats for project: " + project);
 
-                LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mProjectScraperStats);
+                if (!greylist.Contains(entry.second.project)) {
+                    LoadProjectFileToStatsByCPID(project, file, dMagnitudePerProject, mProjectScraperStats);
+                } else {
+                    // Project magnitude for a greylisted project is zero.
+                    LoadProjectFileToStatsByCPID(project, file, 0.0, mProjectScraperStats);
+                }
 
                 // Insert into overall map.
                 for (auto const& entry2 : mProjectScraperStats)
@@ -3874,6 +3888,9 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
 {
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Beginning stats processing.");
 
+    // Get a read-only view of the current project greylist
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
+
     ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
 
     // Enumerate the count of active projects from the dummy converged manifest. One of the parts
@@ -3903,6 +3920,14 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
     stats_and_verified_beacons.mVerifiedMap = VerifiedBeaconMap;
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
+
+    // If a project part is greylisted, do not count it as an active project, even though stats have been collected.
+    for (const auto& project : StructConvergedManifest.ConvergedManifestPartPtrsMap) {
+        if (greylist.Contains(project.first)) {
+            --nActiveProjects;
+        }
+    }
+
     _log(logattribute::INFO, "GetScraperStatsByConvergedManifest",
          "Number of active projects in converged manifest = " + ToString(nActiveProjects));
 
@@ -3922,7 +3947,12 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
         {
             _log(logattribute::INFO, "GetScraperStatsByConvergedManifest", "Processing stats for project: " + project);
 
-            LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+            if (!greylist.Contains(project)) {
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+            } else {
+                // Project magnitude for a greylisted project is zero.
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats);
+            }
 
             // Insert into overall map.
             for (auto const& entry2 : mProjectScraperStats)
@@ -3944,6 +3974,9 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const Converge
 ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest)
 {
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Beginning stats processing.");
+
+    // Get a read-only view of the current project greylist
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED);
 
     // Create a dummy converged manifest and fill out the dummy ConvergedManifest structure from the provided
     // manifest.
@@ -3979,6 +4012,14 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
 
     unsigned int nActiveProjects = StructDummyConvergedManifest.ConvergedManifestPartPtrsMap.size()
             - exclude_parts_from_count;
+
+    // If a project part is greylisted, do not count it as an active project, even though stats have been collected.
+    for (const auto& project : StructDummyConvergedManifest.ConvergedManifestPartPtrsMap) {
+        if (greylist.Contains(project.first)) {
+            --nActiveProjects;
+        }
+    }
+
     _log(logattribute::INFO, "GetScraperStatsFromSingleManifest",
          "Number of active projects in converged manifest = " + ToString(nActiveProjects));
 
@@ -3995,7 +4036,12 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsFromSingleManifest(CScraperManifes
         {
             _log(logattribute::INFO, "GetScraperStatsFromSingleManifest", "Processing stats for project: " + project);
 
-            LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+            if (!greylist.Contains(project)) {
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, dMagnitudePerProject, mProjectScraperStats);
+            } else {
+                // Project magnitude for a greylisted project is zero.
+                LoadProjectObjectToStatsByCPID(project, entry->second->data, 0.0, mProjectScraperStats);
+            }
 
             // Insert into overall map.
             stats_and_verified_beacons.mScraperStats.insert(mProjectScraperStats.begin(), mProjectScraperStats.end());
@@ -4855,7 +4901,7 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
 
     // Get a read-only view of the current project whitelist to fill out the
     // excluded projects vector later on:
-    const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot();
+    const WhitelistSnapshot projectWhitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
 
     if (bConvergenceSuccessful)
     {
@@ -4884,6 +4930,12 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
             // to try and recover project by project.
             for (const auto& iProjects : projectWhitelist)
             {
+                // If project is greylisted, push project name to greylist vector.
+                if (iProjects.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED
+                        || iProjects.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
+                    StructConvergedManifest.vGreylistedProjects.push_back(iProjects.m_name);
+                }
+
                 if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name)
                         == StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
                 {
@@ -4967,6 +5019,12 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
     for (const auto& iWhitelistProject : projectWhitelist)
     {
+        // If project is greylisted, push project name to greylist vector for later use.
+        if (iWhitelistProject.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED
+                ||iWhitelistProject.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
+            StructConvergedManifest.vGreylistedProjects.push_back(iWhitelistProject.m_name);
+        }
+
         // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project
         // Objects (Parts), the content hash is the object hash. We also need the consensus block here, because we are
         // "composing" the manifest by parts, so we will need to choose the latest consensus block by manifest time. This
@@ -5138,8 +5196,10 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
 
     auto convergence_by_project_ratio = [](){ LOCK(cs_ScraperGlobals); return CONVERGENCE_BY_PROJECT_RATIO; };
 
-    // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map.
-    if ((double)iCountSuccessfulConvergedProjects / (double)projectWhitelist.size() >= convergence_by_project_ratio())
+    // If we meet the rule of CONVERGENCE_BY_PROJECT_RATIO, then proceed to fill out the rest of the map. Note that the greylisted
+    // projects are excluded from the count in the denominator as it is not expected to necessarily achieve convergence on those.
+    if ((double)iCountSuccessfulConvergedProjects /
+            (double)(projectWhitelist.size() - StructConvergedManifest.vGreylistedProjects.size()) >= convergence_by_project_ratio())
     {
         AppCacheSection mScrapers = GetScrapersCache();
 
