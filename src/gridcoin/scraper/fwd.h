@@ -159,6 +159,11 @@ struct ConvergedManifest
      */
     std::vector<std::string> vExcludedProjects;
 
+    //!
+    //! \brief The list of projects that have been greylisted.
+    //!
+    std::vector<std::string> vGreylistedProjects;
+
     /** Populates the part pointers map in the convergence */
     bool PopulateConvergedManifestPartPtrsMap();
 
