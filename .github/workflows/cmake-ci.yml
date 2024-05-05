@@ -130,7 +130,7 @@ jobs:
                           qt@5
                       options: >-
                           -DENABLE_GUI=ON
-                          -DQt5_DIR=/usr/local/opt/qt@5/lib/cmake/Qt5
+                          -DQt5_DIR=$(brew --prefix qt@5)/lib/cmake/Qt5
                           -DENABLE_QRENCODE=ON
                           -DENABLE_UPNP=ON
                     - tag: system-libs
@@ -140,8 +140,8 @@ jobs:
                           vim
                       options: >-
                           -DSYSTEM_BDB=ON
-                          -DBerkeleyDB_INCLUDE_DIR=/usr/local/opt/berkeley-db@5/include
-                          -DBerkeleyDB_CXX_LIBRARY=/usr/local/opt/berkeley-db@5/lib/libdb_cxx.dylib
+                          -DBerkeleyDB_INCLUDE_DIR=$(brew --prefix berkeley-db@5)/include
+                          -DBerkeleyDB_CXX_LIBRARY=$(brew --prefix berkeley-db@5)/lib/libdb_cxx.dylib
                           -DSYSTEM_SECP256K1=ON
                           -DSYSTEM_XXD=ON
         steps:
@@ -159,9 +159,6 @@ jobs:
                   pkg-config
             - name: Prepare source
               run: |
-                  PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:${PKG_CONFIG_PATH}"
-                  echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH}" >> "${GITHUB_ENV}"
-
                   pushd src
                   ../contrib/nomacro.pl
                   popd
