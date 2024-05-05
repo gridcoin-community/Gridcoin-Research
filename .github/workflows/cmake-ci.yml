@@ -47,9 +47,9 @@ jobs:
                           -DSYSTEM_UNIVALUE=ON
         steps:
             - name: Checkout
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
             - name: Install dependencies
-              uses: awalsh128/cache-apt-pkgs-action@latest
+              uses: awalsh128/cache-apt-pkgs-action@v1
               with:
                   packages: >-
                       ${{matrix.deps}}
@@ -82,7 +82,7 @@ jobs:
                   ${{matrix.options}}
                   -DENABLE_TESTS=ON
             - name: Restore cache
-              uses: actions/cache/restore@v3
+              uses: actions/cache/restore@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -91,7 +91,7 @@ jobs:
             - name: Build
               run: cmake --build ${{github.workspace}}/build -v -j $(nproc)
             - name: Save cache
-              uses: actions/cache/save@v3
+              uses: actions/cache/save@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -99,7 +99,7 @@ jobs:
             - name: Run tests
               run: ctest --test-dir ${{github.workspace}}/build -j $(nproc)
             - name: Upload test logs
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: testlog-linux-${{matrix.tag}}
@@ -146,7 +146,7 @@ jobs:
                           -DSYSTEM_XXD=ON
         steps:
             - name: Checkout
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
             - name: Install dependencies
               run: brew install
                   ${{matrix.deps}}
@@ -170,7 +170,7 @@ jobs:
                   ${{matrix.options}}
                   -DENABLE_TESTS=ON
             - name: Restore cache
-              uses: actions/cache/restore@v3
+              uses: actions/cache/restore@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -179,7 +179,7 @@ jobs:
             - name: Build
               run: cmake --build ${{github.workspace}}/build -v -j $(sysctl -n hw.logicalcpu)
             - name: Save cache
-              uses: actions/cache/save@v3
+              uses: actions/cache/save@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -187,7 +187,7 @@ jobs:
             - name: Run tests
               run: ctest --test-dir ${{github.workspace}}/build -j $(sysctl -n hw.logicalcpu)
             - name: Upload test logs
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: testlog-macos-${{matrix.tag}}
@@ -225,7 +225,7 @@ jobs:
                           -DENABLE_UPNP=ON
         steps:
             - name: Checkout
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
             - name: Setup MSYS2
               uses: msys2/setup-msys2@v2
               with:
@@ -251,7 +251,7 @@ jobs:
                   ${{matrix.options}}
                   -DBUILD_SHARED_LIBS=OFF -DENABLE_TESTS=ON
             - name: Restore cache
-              uses: actions/cache/restore@v3
+              uses: actions/cache/restore@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -260,7 +260,7 @@ jobs:
             - name: Build
               run: cmake --build ./build -v -j $NUMBER_OF_PROCESSORS
             - name: Save cache
-              uses: actions/cache/save@v3
+              uses: actions/cache/save@v4
               if: always()
               with:
                   path: ${{env.CCACHE_DIR}}
@@ -268,7 +268,7 @@ jobs:
             - name: Run tests
               run: ctest --test-dir ./build -j $NUMBER_OF_PROCESSORS
             - name: Upload test logs
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               if: always()
               with:
                   name: testlog-msys-${{matrix.tag}}
