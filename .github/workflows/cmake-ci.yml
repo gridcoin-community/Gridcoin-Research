@@ -54,9 +54,12 @@ jobs:
                   packages: |
                       ${{matrix.deps}}
                       ccache
+                      cmake
                       libcurl4-openssl-dev
+                      libssl-dev
                       libzip-dev
                       ninja-build
+                      pkgconf
                       zipcmp
                       zipmerge
                       ziptool
@@ -150,7 +153,15 @@ jobs:
               uses: actions/checkout@v3
             - name: Install dependencies
               run: |
-                  brew install boost ccache ninja ${{matrix.deps}}
+                  brew install \
+                      ${{matrix.deps}} \
+                      boost \
+                      ccache \
+                      libzip \
+                      ninja \
+                      openssl@3 \
+                      perl \
+                      pkg-config
             - name: Configure
               run: |
                   PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:${PKG_CONFIG_PATH}"
