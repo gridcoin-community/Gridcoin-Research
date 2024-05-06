@@ -11,6 +11,6 @@ export DOCKER_NAME_TAG=ubuntu:20.04  # Check that focal can cross-compile to win
 export HOST=x86_64-w64-mingw32
 export PACKAGES="python3 nsis g++-mingw-w64-x86-64 wine-binfmt wine-stable winehq-stable"
 export DPKG_ADD_ARCH="i386"
-export GOAL=""
+export GOAL="deploy"
 export GRIDCOIN_CONFIG="--enable-reduce-exports --with-gui=qt5"
 export NEED_XVFB="true"

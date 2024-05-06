@@ -59,3 +59,30 @@ if [ "$RUN_FUZZ_TESTS" = "true" ]; then
   DOCKER_EXEC LD_LIBRARY_PATH=$DEPENDS_DIR/$HOST/lib test/fuzz/test_runner.py ${FUZZ_TESTS_CONFIG} $MAKEJOBS -l DEBUG ${DIR_FUZZ_IN}
   END_FOLD
 fi
+
+if [ -n "$GITHUB_ENV" ]; then
+    FILES=
+
+    ARTIFACT_FILENAME="gridcoin-$(DOCKER_EXEC make print-VERSION | cut -d = -f 2-)-$(git rev-parse --short HEAD)-$CONTAINER_NAME.tar.gz"
+    DAEMON_BIN="$(DOCKER_EXEC make print-BITCOIND_BIN | cut -d = -f 2-)"
+    QT_BIN="$(DOCKER_EXEC make print-BITCOIN_QT_BIN | cut -d = -f 2-)"
+    WIN_INSTALLER="$(DOCKER_EXEC make print-BITCOIN_WIN_INSTALLER | cut -d = -f 2-)"
+    OSX_DMG="$(DOCKER_EXEC make print-OSX_DMG | cut -d = -f 2-)"
+
+    if DOCKER_EXEC test -f "$DAEMON_BIN"; then
+      FILES="$FILES $DAEMON_BIN"
+    fi
+    if DOCKER_EXEC test -f "$QT_BIN"; then
+      FILES="$FILES $QT_BIN"
+    fi
+    if DOCKER_EXEC test -f "$WIN_INSTALLER"; then
+      FILES="$FILES $WIN_INSTALLER"
+    fi
+    if DOCKER_EXEC test -f "$OSX_DMG"; then
+      FILES="$FILES $OSX_DMG"
+    fi
+
+    DOCKER_EXEC tar --create --file="$DEPENDS_DIR/$ARTIFACT_FILENAME" --gzip --strip-components=2 $FILES
+    echo "ARTIFACT_FILENAME=$ARTIFACT_FILENAME" >> $GITHUB_ENV
+    echo "ARTIFACT_FILE=$DEPENDS_DIR/$ARTIFACT_FILENAME" >> $GITHUB_ENV
+fi
