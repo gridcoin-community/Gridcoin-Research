@@ -18,11 +18,11 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: current time for cache
         run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
       - name: cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
               ./depends/built
