@@ -27,7 +27,7 @@ namespace {
 //!
 bool SelectMasterInputOutput(CCoinControl& coin_control)
 {
-    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight).Get();
+    const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight);
 
     // Send change back to the master address:
     coin_control.destChange = master_address;
@@ -86,7 +86,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
         coin_control_out.destChange = out_address;
 
         LogPrintf("INFO: %s: Change sent to %s for contract transaction per contractchangetoinputaddress setting.",
-                  __func__, CBitcoinAddress(coin_control_out.destChange).ToString());
+                  __func__, EncodeDestination(coin_control_out.destChange));
     }
 
     for (const auto& contract : wtx_out.vContracts) {

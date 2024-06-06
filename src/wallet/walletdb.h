@@ -7,7 +7,7 @@
 #define BITCOIN_WALLET_WALLETDB_H
 
 #include "wallet/db.h"
-#include "base58.h"
+#include <key_io.h>
 
 class CKeyPool;
 class CAccount;

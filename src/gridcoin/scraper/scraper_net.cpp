@@ -13,7 +13,7 @@
 #include "rpc/server.h"
 #include "rpc/protocol.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
-#include "base58.h"
+#include <key_io.h>
 #endif
 #include "gridcoin/appcache.h"
 #include "gridcoin/project.h"
@@ -352,11 +352,10 @@ EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)
 
     CKeyID ManifestKeyID = PubKey.GetID();
 
-    CBitcoinAddress ManifestAddress;
-    ManifestAddress.Set(ManifestKeyID);
+    CTxDestination ManifestAddress(ManifestKeyID);
 
     // This is the address corresponding to the manifest public key.
-    std::string sManifestAddress = ManifestAddress.ToString();
+    std::string sManifestAddress = EncodeDestination(ManifestAddress);
 
     AppCacheSectionExt mScrapersExtended = GetExtendedScrapersCache();
 
@@ -857,7 +856,7 @@ UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::c
     UniValue r(UniValue::VOBJ);
 
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
-    r.pushKV("pubkey", CBitcoinAddress(pubkey.GetID()).ToString());
+    r.pushKV("pubkey", EncodeDestination(pubkey.GetID()));
 #else
     r.pushKV("pubkey", pubkey.GetID().ToString());
 #endif
@@ -950,7 +949,7 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
         else
         {
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
-            subset.pushKV("scraper (manifest) address", CBitcoinAddress(manifest.pubkey.GetID()).ToString());
+            subset.pushKV("scraper (manifest) address", EncodeDestination(manifest.pubkey.GetID()));
 #else
             subset.pushKV("scraper (manifest) pubkey", manifest.pubkey.GetID().ToString());
 #endif
@@ -973,7 +972,7 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
             else
             {
     #ifdef SCRAPER_NET_PK_AS_ADDRESS
-                subset.pushKV("scraper (manifest) address", CBitcoinAddress(manifest.pubkey.GetID()).ToString());
+                subset.pushKV("scraper (manifest) address", EncodeDestination(manifest.pubkey.GetID()));
     #else
                 subset.pushKV("scraper (manifest) pubkey", manifest.pubkey.GetID().ToString());
     #endif

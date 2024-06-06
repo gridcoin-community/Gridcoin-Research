@@ -2,7 +2,8 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
+#include <base58.h>
+#include <key_io.h>
 #include "logging.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
@@ -105,7 +106,7 @@ bool Beacon::WellFormed() const
 
 std::pair<std::string, std::string> Beacon::KeyValueToString() const
 {
-    return std::make_pair(m_cpid.ToString(), GetAddress().ToString());
+    return std::make_pair(m_cpid.ToString(), EncodeDestination(GetAddress()));
 }
 
 std::string Beacon::StatusToString() const
@@ -184,9 +185,9 @@ CKeyID Beacon::GetId() const
     return m_public_key.GetID();
 }
 
-CBitcoinAddress Beacon::GetAddress() const
+CTxDestination Beacon::GetAddress() const
 {
-    return CBitcoinAddress(CTxDestination(m_public_key.GetID()));
+    return CTxDestination(m_public_key.GetID());
 }
 
 std::string Beacon::GetVerificationCode() const
@@ -209,7 +210,7 @@ std::string Beacon::ToString() const
 {
     return EncodeBase64(
         "0;0;"  // Unused: [CPIDv2];[nonce];
-        + GetAddress().ToString()
+        + EncodeDestination(GetAddress())
         + ";"
         + HexStr(m_public_key));
 }
@@ -429,7 +430,7 @@ bool BeaconRegistry::TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, con
                                    "contracts in the same block get stored/replayed.",
                  __func__,
                  renewal.m_cpid.ToString(),
-                 renewal.GetAddress().ToString(),
+                 EncodeDestination(renewal.GetAddress()),
                  renewal.m_hash.GetHex());
     }
 
@@ -498,7 +499,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
                                        "contracts in the same block get stored/replayed.",
                      __func__,
                      historical.m_cpid.ToString(),
-                     historical.GetAddress().ToString(),
+                     EncodeDestination(historical.GetAddress()),
                      historical.m_hash.GetHex());
         }
         m_beacons[payload.m_cpid] = m_beacon_db.find(ctx.m_tx.GetHash())->second;
@@ -530,7 +531,7 @@ void BeaconRegistry::Add(const ContractContext& ctx)
                                    "contracts in the same block get stored/replayed.",
                  __func__,
                  pending.m_cpid.ToString(),
-                 pending.GetAddress().ToString(),
+                 EncodeDestination(pending.GetAddress()),
                  pending.m_hash.GetHex());
     }
 
@@ -1072,7 +1073,7 @@ void BeaconRegistry::ActivatePending(
         LogPrint(LogFlags::BEACON, "INFO: %s: Activating beacon for cpid %s, address %s, hash %s.",
                  __func__,
                  activated_beacon.m_cpid.ToString(),
-                 activated_beacon.GetAddress().ToString(),
+                 EncodeDestination(activated_beacon.GetAddress()),
                  activated_beacon.m_hash.GetHex());
 
         m_beacon_db.insert(activated_beacon.m_hash, height, activated_beacon);
@@ -1108,7 +1109,7 @@ void BeaconRegistry::ActivatePending(
             LogPrint(LogFlags::BEACON, "INFO: %s: Marking pending beacon expired for cpid %s, address %s, hash %s.",
                      __func__,
                      pending_beacon.m_cpid.ToString(),
-                     pending_beacon.GetAddress().ToString(),
+                     EncodeDestination(pending_beacon.GetAddress()),
                      pending_beacon.m_hash.GetHex());
 
             // Insert the expired pending beacon into the db.
@@ -1194,7 +1195,7 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
                       pending_beacon_entry->second->m_hash.GetHex(),
                       pending_beacon_entry->second->m_cpid.ToString(),
                       superblock_hash.GetHex(),
-                      pending_beacon_entry->second->GetAddress().ToString()
+                      EncodeDestination(pending_beacon_entry->second->GetAddress())
                       );
         }
     }

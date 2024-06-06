@@ -4,10 +4,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include <base58.h>
 #include "init.h"
 #include "sync.h"
+#include <key_io.h>
 #include "node/ui_interface.h"
-#include "base58.h"
 #include "server.h"
 #include "client.h"
 #include "protocol.h"

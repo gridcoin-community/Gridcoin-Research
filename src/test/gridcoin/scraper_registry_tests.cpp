@@ -15,10 +15,10 @@ void AddRemoveScraperEntryV1(const std::string& address, const std::string& valu
     GRC::ScraperRegistry& registry = GRC::GetScraperRegistry();
 
     std::string status_string = ToLower(value);
-    CBitcoinAddress scraper_address;
+    CTxDestination scraper_address = DecodeDestination(address);
 
     // Assert if not a valid address.
-    assert(scraper_address.SetString(address));
+    assert(IsValidDestination(scraper_address));
 
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
@@ -54,12 +54,8 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
 {
     GRC::ScraperRegistry& registry = GRC::GetScraperRegistry();
 
-    CBitcoinAddress scraper_address;
-    CKeyID key_id;
-
-    scraper_address.SetString(address);
-
-    scraper_address.GetKeyID(key_id);
+    CTxDestination scraper_address = DecodeDestination(address);
+    CKeyID key_id = std::get<CKeyID>(scraper_address);
 
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
@@ -119,11 +115,9 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
 
     // Native format from legacy adds.
     for (const auto& entry : scraper_entries) {
-        CBitcoinAddress address;
-        address.SetString(entry);
+        CTxDestination address = DecodeDestination(entry);
 
-        CKeyID key_id;
-        address.GetKeyID(key_id);
+        CKeyID key_id = std::get<CKeyID>(address);
 
         auto registry_entry = scraper_map.find(key_id);
 
@@ -185,11 +179,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     // Native format from legacy adds.
     for (const auto& entry : scraper_entries) {
-        CBitcoinAddress address;
-        address.SetString(entry);
+        CTxDestination address = DecodeDestination(entry);
 
-        CKeyID key_id;
-        address.GetKeyID(key_id);
+        CKeyID key_id = std::get<CKeyID>(address);
 
         auto registry_entry = scraper_map.find(key_id);
 
@@ -254,11 +246,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     // Native format from legacy adds, deauthorize, and delete for active scraper map..
     for (const auto& entry : scraper_entries) {
-        CBitcoinAddress address;
-        address.SetString(entry);
+        CTxDestination address = DecodeDestination(entry);
 
-        CKeyID key_id;
-        address.GetKeyID(key_id);
+        CKeyID key_id = std::get<CKeyID>(address);
 
         auto registry_entry = scraper_map.find(key_id);
 
@@ -385,11 +375,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     // Native format from native adds.
     for (const auto& entry : scraper_entries) {
-        CBitcoinAddress address;
-        address.SetString(entry);
+        CTxDestination address = DecodeDestination(entry);
 
-        CKeyID key_id;
-        address.GetKeyID(key_id);
+        CKeyID key_id = std::get<CKeyID>(address);
 
         auto registry_entry = scraper_map.find(key_id);
 
@@ -430,11 +418,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     GRC::Contract contract;
 
-    CBitcoinAddress address;
-    address.SetString("SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
+    CTxDestination address = DecodeDestination("SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
 
-    CKeyID key_id;
-    address.GetKeyID(key_id)
+    CKeyID key_id = std::get<CKeyID>(address);
 ;
     contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
                 uint32_t {3}, // Contract version (pre v13)
@@ -460,11 +446,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     // Native format from legacy adds, deauthorize, and delete for active scraper map..
     for (const auto& entry : scraper_entries) {
-        CBitcoinAddress address;
-        address.SetString(entry);
+        CTxDestination address = DecodeDestination(entry);
 
-        CKeyID key_id;
-        address.GetKeyID(key_id);
+        CKeyID key_id = std::get<CKeyID>(address);
 
         auto registry_entry = scraper_map.find(key_id);
 

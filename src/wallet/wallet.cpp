@@ -55,12 +55,9 @@ struct CompareValueOnly
 // Class: CWallet
 // -----------------------------------------------------------------------------
 
-const CBitcoinAddress CWallet::MasterAddress(int height)
+const CTxDestination CWallet::MasterAddress(int height)
 {
-    CBitcoinAddress master_address;
-    master_address.Set(CPubKey(Params().MasterKey(height)).GetID());
-
-    return master_address;
+    return CPubKey(Params().MasterKey(height)).GetID();
 }
 
 CKey CWallet::MasterPrivateKey(int height) const
@@ -208,7 +205,7 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
      * these. Do not add them to the wallet and warn. */
     if (redeemScript.size() > MAX_SCRIPT_ELEMENT_SIZE)
     {
-        std::string strAddr = CBitcoinAddress(redeemScript.GetID()).ToString();
+        std::string strAddr = EncodeDestination(redeemScript.GetID());
         LogPrintf("%s: Warning: This wallet contains a redeemScript of size %" PRIszu " which exceeds maximum size %i thus can never be redeemed. Do not use address %s.",
             __func__, redeemScript.size(), MAX_SCRIPT_ELEMENT_SIZE, strAddr);
         return true;
@@ -2136,7 +2133,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     // coin control: send change to custom address
                     if (coinControl && !std::get_if<CNoDestination>(&coinControl->destChange)) {
                         LogPrintf("INFO: %s: Setting custom change address: %s", __func__,
-                                  CBitcoinAddress(coinControl->destChange).ToString());
+                                  EncodeDestination(coinControl->destChange));
 
                         scriptChange.SetDestination(coinControl->destChange);
                     } else { // no coin control
@@ -2155,7 +2152,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                                 }
 
                                 LogPrintf("INFO: %s: Sending change to input address %s", __func__,
-                                          CBitcoinAddress(change_address).ToString());
+                                          EncodeDestination(change_address));
                             }
                         } else { // send change to newly generated address
                             //  Note: We use a new key here to keep it from being obvious which side is the change.
@@ -2469,7 +2466,7 @@ bool CWallet::SetAddressBookName(const CTxDestination& address, const string& st
                              (fUpdated ? CT_UPDATED : CT_NEW) );
     if (!fFileBacked)
         return false;
-    return CWalletDB(strWalletFile).WriteName(CBitcoinAddress(address).ToString(), strName);
+    return CWalletDB(strWalletFile).WriteName(EncodeDestination(address), strName);
 }
 
 bool CWallet::DelAddressBookName(const CTxDestination& address)
@@ -2484,7 +2481,7 @@ bool CWallet::DelAddressBookName(const CTxDestination& address)
 
     if (!fFileBacked)
         return false;
-    return CWalletDB(strWalletFile).EraseName(CBitcoinAddress(address).ToString());
+    return CWalletDB(strWalletFile).EraseName(EncodeDestination(address));
 }
 
 
