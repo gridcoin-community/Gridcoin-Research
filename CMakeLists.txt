@@ -71,6 +71,7 @@ include(CheckSymbolExists)
 
 include(CheckSSE)
 include(CheckStrerrorR)
+include(FindPkgConfig)
 include(HunterGate)
 include(VersionFromGit)
 
