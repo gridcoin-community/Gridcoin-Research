@@ -211,7 +211,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
         CKeyID keyid = key.GetPubKey().GetID();
 
         if (pwalletMain->HaveKey(keyid)) {
-            LogPrintf("Skipping import of %s (key already present)", CBitcoinAddress(keyid).ToString());
+            LogPrintf("Skipping import of %s (key already present)", EncodeDestination(keyid));
             continue;
         }
         int64_t nTime = DecodeDumpTime(vstr[1]);
@@ -232,7 +232,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
                 fLabel = true;
             }
         }
-        LogPrintf("Importing %s...", CBitcoinAddress(keyid).ToString());
+        LogPrintf("Importing %s...", EncodeDestination(keyid));
         if (!pwalletMain->AddKey(key)) {
             fGood = false;
             continue;
@@ -281,26 +281,25 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    string strAddress = params[0].get_str();
-    CBitcoinAddress address;
-    if (!address.SetString(strAddress))
+    CTxDestination address = DecodeDestination(params[0].get_str());
+    if (!IsValidDestination(address))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
     if (fWalletUnlockStakingOnly)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is unlocked for staking only.");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    CKeyID keyID;
-    if (!address.GetKeyID(keyID))
+    CKeyID* keyID = std::get_if<CKeyID>(&address);
+    if (!keyID)
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
     CKey vchSecret;
-    if (!pwalletMain->GetKey(keyID, vchSecret))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
+    if (!pwalletMain->GetKey(*keyID, vchSecret))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + params[0].get_str() + " is not known");
 
 
     if (params.size() == 2 && params[1].isBool() && params[1].get_bool()) {
         CKey key_out;
-        pwalletMain->GetKey(keyID, key_out);
+        pwalletMain->GetKey(*keyID, key_out);
 
         UniValue result(UniValue::VOBJ);
 
@@ -380,7 +379,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
         const CKeyID &keyid = it->second;
         std::string strTime = EncodeDumpTime(it->first);
-        std::string strAddr = CBitcoinAddress(keyid).ToString();
+        std::string strAddr = EncodeDestination(keyid);
 
         CKey key;
         if (pwalletMain->GetKey(keyid, key)) {

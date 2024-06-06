@@ -192,9 +192,9 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             const GRC::BeaconOption beacon = GRC::GetBeaconRegistry().TryActive(cpid, mrc_index->nTime);
 
             if (beacon && mrc_outputs.size() <= output_limit) {
-                CBitcoinAddress beacon_address = beacon->GetAddress();
+                CTxDestination beacon_address = beacon->GetAddress();
                 CScript script_beacon_key;
-                script_beacon_key.SetDestination(beacon_address.Get());
+                script_beacon_key.SetDestination(beacon_address);
 
                 // The net reward paid to the MRC beacon address is the requested research subsidy (reward)
                 // minus the fees for the MRC.
@@ -254,7 +254,7 @@ bool CreateMRCRewards(CBlock &blocknew, std::map<GRC::Cpid, std::pair<uint256, G
             // TODO: Make foundation address a defaulted but protocol overridable parameter.
 
             CScript script_foundation_key;
-            script_foundation_key.SetDestination(FoundationSideStakeAddress().Get());
+            script_foundation_key.SetDestination(FoundationSideStakeAddress());
 
             // Put the foundation "sidestake" (MRC fees to the foundation) on the coinstake.
             coinstake.vout.push_back(CTxOut(foundation_fees, script_foundation_key));
@@ -948,13 +948,13 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
              && (nOutputsUsed <= output_limit);
              ++iterSideStake)
         {
-            CBitcoinAddress address(iterSideStake->get()->GetDestination());
+            CTxDestination address = iterSideStake->get()->GetDestination();
             GRC::Allocation allocation = iterSideStake->get()->GetAllocation();
 
-            if (!address.IsValid())
+            if (!IsValidDestination(address))
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: ignoring sidestake invalid address %s.",
-                          address.ToString());
+                          EncodeDestination(address));
                 continue;
             }
 
@@ -972,7 +972,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             {
                 LogPrintf("WARN: SplitCoinStakeOutput: distribution %f too small to address %s.",
                           CoinToDouble((allocation * nReward).ToCAmount()),
-                          address.ToString()
+                          EncodeDestination(address)
                           );
                 continue;
             }
@@ -987,7 +987,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             // Push to an output the (reward times the allocation) to the address, increment the accumulator for allocation,
             // decrement the remaining stake output value, and increment outputs used.
 
-            SideStakeScriptPubKey.SetDestination(address.Get());
+            SideStakeScriptPubKey.SetDestination(address);
 
             // It is entirely possible that the coinstake could be from an address that is specified in one of the sidestake
             // entries if the sidestake address(es) are local to the staking wallet. There is no reason to sidestake in that
@@ -1014,7 +1014,7 @@ void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStake
             LogPrintf("SplitCoinStakeOutput: create sidestake UTXO %i value %f to address %s",
                       nOutputsUsed,
                       CoinToDouble((allocation * nReward).ToCAmount()),
-                      address.ToString()
+                      EncodeDestination(address)
                       );
             SumAllocation += allocation;
             nRemainingStakeOutputValue -= nSideStake;
@@ -1489,7 +1489,7 @@ void StakeMiner(CWallet *pwallet)
                           __func__,
                           i,
                           FormatMoney(StakeBlock.vtx[1].vout[i].nValue),
-                          CBitcoinAddress(destination).ToString());
+                          EncodeDestination(destination));
             }
         }
 

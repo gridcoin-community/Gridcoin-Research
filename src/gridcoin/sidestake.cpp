@@ -235,7 +235,7 @@ LocalSideStake::LocalSideStake(CTxDestination destination,
 
 bool LocalSideStake::WellFormed() const
 {
-    return CBitcoinAddress(m_destination).IsValid() && m_allocation >= 0 && m_allocation <= 1;
+    return IsValidDestination(m_destination) && m_allocation >= 0 && m_allocation <= 1;
 }
 
 std::string LocalSideStake::StatusToString() const
@@ -328,7 +328,7 @@ MandatorySideStake::MandatorySideStake(CTxDestination destination,
 
 bool MandatorySideStake::WellFormed() const
 {
-    return CBitcoinAddress(m_destination).IsValid() && m_allocation >= 0 && m_allocation <= 1;
+    return IsValidDestination(m_destination) && m_allocation >= 0 && m_allocation <= 1;
 }
 
 CTxDestination MandatorySideStake::Key() const
@@ -338,7 +338,7 @@ CTxDestination MandatorySideStake::Key() const
 
 std::pair<std::string, std::string> MandatorySideStake::KeyValueToString() const
 {
-    return std::make_pair(CBitcoinAddress(m_destination).ToString(), StatusToString());
+    return std::make_pair(EncodeDestination(m_destination), StatusToString());
 }
 
 std::string MandatorySideStake::StatusToString() const
@@ -718,7 +718,7 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
              __func__,
              ctx->m_version,
              payload.m_version,
-             CBitcoinAddress(payload.m_entry.m_destination).ToString(),
+             EncodeDestination(payload.m_entry.m_destination),
              payload.m_entry.m_allocation.ToPercent(),
              payload.m_entry.m_timestamp,
              payload.m_entry.m_hash.ToString(),
@@ -734,7 +734,7 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
                                      "the SideStake entry db record already exists. This can be expected on a restart "
                                      "of the wallet to ensure multiple contracts in the same block get stored/replayed.",
                  __func__,
-                 CBitcoinAddress(historical.m_destination).ToString(),
+                 EncodeDestination(historical.m_destination),
                  historical.m_allocation.ToPercent(),
                  historical.m_hash.GetHex());
     }
@@ -796,7 +796,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_mandatory_sidestake_entries.end()) {
         error("%s: The SideStake entry for key %s to revert was not found in the SideStake entry map.",
               __func__,
-              CBitcoinAddress(entry_to_revert->second->m_destination).ToString());
+              EncodeDestination(entry_to_revert->second->m_destination));
 
         // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
         // should not occur.
@@ -813,7 +813,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
         if (m_mandatory_sidestake_entries.erase(payload->m_entry.m_destination) == 0) {
             error("%s: The SideStake entry to erase during a SideStake entry revert for key %s was not found.",
                   __func__,
-                  CBitcoinAddress(key).ToString());
+                  EncodeDestination(key));
             // If the record to revert is not found in the m_sidestake_entries map, no point in continuing.
             return;
         }
@@ -822,7 +822,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
         if (!m_sidestake_db.erase(ctx.m_tx.GetHash())) {
             error("%s: The db entry to erase during a SideStake entry revert for key %s was not found.",
                   __func__,
-                  CBitcoinAddress(key).ToString());
+                  EncodeDestination(key));
 
             // Unlike the above we will keep going even if this record is not found, because it is identical to the
             // m_sidestake_entries record above. This should not happen, because during contract adds and removes,
@@ -838,7 +838,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
         if (resurrect_entry == m_sidestake_db.end()) {
             error("%s: The prior entry to resurrect during a SideStake entry ADD revert for key %s was not found.",
                   __func__,
-                  CBitcoinAddress(key).ToString());
+                  EncodeDestination(key));
             return;
         }
 
@@ -1021,8 +1021,8 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
         std::string sAllocation = std::get<1>(entry);
         std::string sDescription = std::get<2>(entry);
 
-        CBitcoinAddress address(sAddress);
-        if (!address.IsValid())
+        CTxDestination address = DecodeDestination(sAddress);
+        if (!IsValidDestination(address))
         {
             LogPrintf("WARN: %s: ignoring sidestake invalid address %s.", __func__, sAddress);
             continue;
@@ -1060,7 +1060,7 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
             break;
         }
 
-        LocalSideStake sidestake(address.Get(),
+        LocalSideStake sidestake(address,
                                  allocation,
                                  sDescription,
                                  LocalSideStake::LocalSideStakeStatus::ACTIVE);
@@ -1117,7 +1117,7 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
             separator = ",";
         }
 
-        addresses += separator + CBitcoinAddress(iter.second->m_destination).ToString();
+        addresses += separator + EncodeDestination(iter.second->m_destination);
         allocations += separator + ToString(iter.second->m_allocation.ToPercent());
         descriptions += separator + iter.second->m_description;
 

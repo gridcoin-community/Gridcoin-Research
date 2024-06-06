@@ -135,7 +135,7 @@ public:
     //!
     //! \return Address as calculated from the master public key.
     //!
-    static const CBitcoinAddress MasterAddress(int height);
+    static const CTxDestination MasterAddress(int height);
 
     //!
     //! \brief Get the imported master private key used to sign administrative

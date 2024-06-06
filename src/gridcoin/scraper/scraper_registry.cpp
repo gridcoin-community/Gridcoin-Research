@@ -52,7 +52,7 @@ ScraperEntry::ScraperEntry(CKeyID key_id, Status status, int64_t tx_timestamp, u
 
 bool ScraperEntry::WellFormed() const
 {
-    return (CBitcoinAddress(m_key).IsValid()
+    return (IsValidDestination(m_key)
             && m_status != ScraperEntryStatus::UNKNOWN
             && m_status != ScraperEntryStatus::OUT_OF_BOUND);
 }
@@ -64,7 +64,7 @@ CKeyID ScraperEntry::Key() const
 
 std::pair<std::string, std::string> ScraperEntry::KeyValueToString() const
 {
-    return std::make_pair(CBitcoinAddress(m_key).ToString(), StatusToString());
+    return std::make_pair(EncodeDestination(m_key), StatusToString());
 }
 
 CKeyID ScraperEntry::GetId() const
@@ -72,9 +72,9 @@ CKeyID ScraperEntry::GetId() const
     return m_key;
 }
 
-CBitcoinAddress ScraperEntry::GetAddress() const
+CTxDestination ScraperEntry::GetAddress() const
 {
-    return CBitcoinAddress(m_key);
+    return CTxDestination(m_key);
 }
 
 std::string ScraperEntry::StatusToString() const
@@ -125,7 +125,7 @@ AppCacheEntryExt ScraperEntry::GetLegacyScraperEntry()
 {
     AppCacheEntryExt entry;
 
-    entry.value = CBitcoinAddress(m_key).ToString();
+    entry.value = EncodeDestination(m_key);
     entry.timestamp = m_timestamp;
     entry.deleted = (m_status == ScraperEntryStatus::DELETED);
 
@@ -186,11 +186,9 @@ ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::stri
 {
     m_version = 1;
 
-    CBitcoinAddress address;
+    CTxDestination address = DecodeDestination(m_key);
 
-    address.SetString(m_key);
-
-    if (!address.IsValid()) {
+    if (!IsValidDestination(address)) {
         error("%s: Error during initialization of ScraperEntryPayload from legacy format: key = %s, value = %s",
               __func__,
               key,
@@ -198,7 +196,7 @@ ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::stri
         return;
     }
 
-    address.GetKeyID(m_scraper_entry.m_key);
+    m_scraper_entry.m_key = std::get<CKeyID>(address);
 
     if (ToLower(m_value) == "true") {
         m_scraper_entry.m_status = ScraperEntryStatus::AUTHORIZED;
@@ -210,16 +208,13 @@ ScraperEntryPayload::ScraperEntryPayload(const std::string& key, const std::stri
 
 ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std::string& value)
 {
-    CBitcoinAddress address;
+    CTxDestination address = DecodeDestination(key);
+    CKeyID* key_id = std::get_if<CKeyID>(&address);
 
-    address.SetString(key);
-
-    if (!address.IsValid()) {
+    if (!IsValidDestination(address) || !key_id) {
         return ScraperEntryPayload();
     }
 
-    CKeyID key_id;
-    address.GetKeyID(key_id);
     ScraperEntryStatus scraper_entry_status = ScraperEntryStatus::UNKNOWN;
 
     if (ToLower(value) == "true") {
@@ -229,7 +224,7 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
         scraper_entry_status = ScraperEntryStatus::NOT_AUTHORIZED;
     }
 
-    ScraperEntryPayload payload(1, ScraperEntry(key_id, scraper_entry_status));
+    ScraperEntryPayload payload(1, ScraperEntry(*key_id, scraper_entry_status));
     // The above constructor doesn't carry over the legacy K-V which we need.
     payload.m_key = key;
     payload.m_value = value;
@@ -270,7 +265,7 @@ const AppCacheSectionExt ScraperRegistry::GetScrapersLegacyExt(const bool& autho
 
     for (const auto& entry : m_scrapers) {
 
-        std::string key = CBitcoinAddress(entry.first).ToString();
+        std::string key = EncodeDestination(entry.first);
 
         switch (entry.second->m_status.Value()) {
         case ScraperEntryStatus::DELETED:
@@ -383,8 +378,7 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
         payload.m_scraper_entry.m_previous_hash = uint256 {};
     }
 
-    CBitcoinAddress address;
-    address.Set(payload.m_scraper_entry.m_key);
+    CTxDestination address(payload.m_scraper_entry.m_key);
 
     LogPrint(LogFlags::SCRAPER, "INFO: %s: scraper entry add/delete: contract m_version = %u, payload "
                                 "m_version = %u, address for m_key = %s, m_timestamp = %" PRId64 ", "
@@ -392,7 +386,7 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
              __func__,
              ctx->m_version,
              payload.m_version,
-             address.ToString(),
+             EncodeDestination(address),
              payload.m_scraper_entry.m_timestamp,
              payload.m_scraper_entry.m_hash.ToString(),
              payload.m_scraper_entry.m_previous_hash.ToString(),
@@ -407,7 +401,7 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
                                     "db record already exists. This can be expected on a restart of the wallet to ensure "
                                     "multiple contracts in the same block get stored/replayed.",
                  __func__,
-                 historical.GetAddress().ToString(),
+                 EncodeDestination(historical.GetAddress()),
                  historical.m_hash.GetHex());
     }
 
@@ -441,14 +435,14 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_scrapers.end()) {
         error("%s: The scraper entry for address %s to revert was not found in the scraper entry map.",
               __func__,
-              entry_to_revert->second->GetAddress().ToString());
+              EncodeDestination(entry_to_revert->second->GetAddress()));
 
         // If there is no record in the current m_scrapers map, then there is nothing to do here. This
         // should not occur.
         return;
     }
 
-    CBitcoinAddress address = entry_to_revert->second->GetAddress();
+    CTxDestination address = entry_to_revert->second->GetAddress();
 
     // If this is not a null hash, then there will be a prior entry to resurrect.
     uint256 resurrect_hash = entry_to_revert->second->m_previous_hash;
@@ -459,7 +453,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
         if (m_scrapers.erase(payload->m_scraper_entry.m_key) == 0) {
             error("%s: The scraper entry to erase during a scraper entry revert for address %s was not found.",
                   __func__,
-                  address.ToString());
+                  EncodeDestination(address));
             // If the record to revert is not found in the m_scrapers map, no point in continuing.
             return;
         }
@@ -468,7 +462,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
         if (!m_scraper_db.erase(ctx.m_tx.GetHash())) {
             error("%s: The db entry to erase during a scraper entry revert for address %s was not found.",
                   __func__,
-                  address.ToString());
+                  EncodeDestination(address));
 
             // Unlike the above we will keep going even if this record is not found, because it is identical to the
             // m_scrapers record above. This should not happen, because during contract adds and removes, entries are
@@ -484,7 +478,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
         if (resurrect_entry == m_scraper_db.end()) {
             error("%s: The prior entry to resurrect during a scraper entry ADD revert for address %s was not found.",
                   __func__,
-                  address.ToString());
+                  EncodeDestination(address));
             return;
         }
 
