@@ -1418,7 +1418,7 @@ esac
 AC_CONFIG_SUBDIRS([src/univalue])
 AC_CONFIG_SUBDIRS([src/secp256k1])
 if test "$enable_embedded_bdb" = "yes"; then
-  AX_SUBDIRS_CONFIGURE([src/bdb53], [[CFLAGS="-Wno-error=implicit-function-declaration"], [CXXFLAGS="-Wno-error=implicit-function-declaration"], [--disable-java], [--disable-jdbc], [--disable-replication], [--enable-cxx], [$ADDITIONAL_BDB_FLAGS]], [], [], [])
+  AX_SUBDIRS_CONFIGURE([src/bdb53], [[CFLAGS=-Wno-error=implicit-function-declaration -Wno-error=implicit-int], [CXXFLAGS=-Wno-error=implicit-function-declaration -Wno-error=implicit-int], [--disable-java], [--disable-jdbc], [--disable-replication], [--enable-cxx], [$ADDITIONAL_BDB_FLAGS]], [], [], [])
 fi
 
 AC_OUTPUT
