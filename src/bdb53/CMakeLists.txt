@@ -34,7 +34,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         CFLAGS=-Wno-implicit-function-declaration
     )
 endif()
-
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    list(APPEND BDB_FLAGS
+        CFLAGS=-Wno-error=implicit-int
+    )
+endif()
 
 # Make flags
 # ==========
