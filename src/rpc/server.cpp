@@ -932,7 +932,7 @@ std::vector<std::string> CRPCTable::listCommands() const
                     boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
     // remove deprecated commands from autocomplete
     for(auto &command: DEPRECATED_RPCS) {
-        std::remove(commandList.begin(), commandList.end(), command);
+        commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
     }
     return commandList;
 }
