@@ -6,7 +6,7 @@
 #define GRIDCOIN_SCRAPER_SCRAPER_REGISTRY_H
 
 #include "amount.h"
-#include "base58.h"
+#include <key_io.h>
 #include "dbwrapper.h"
 #include "serialize.h"
 #include "gridcoin/scraper/fwd.h"
@@ -136,9 +136,9 @@ public:
     //!
     //! \brief Return the address from the m_key.
     //!
-    //! \return \c CBitcoinAddress derived from the m_key.
+    //! \return \c CTxDestination derived from the m_key.
     //!
-    CBitcoinAddress GetAddress() const;
+    CTxDestination GetAddress() const;
 
     //!
     //! \brief Returns the string representation of the current scraper entry status
@@ -346,11 +346,7 @@ public:
     //!
     std::string LegacyKeyString() const override
     {
-        CBitcoinAddress address;
-
-        address.Set(m_scraper_entry.m_key);
-
-        return address.ToString();
+        return EncodeDestination(m_scraper_entry.m_key);
     }
 
     //!

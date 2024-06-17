@@ -7,7 +7,7 @@
 #include "sync.h"
 #include "node/ui_interface.h"
 #include "protocol.h"
-#include "base58.h"
+#include <key_io.h>
 #include "wallet/db.h"
 #include "util.h"
 
