@@ -16,6 +16,7 @@ be32dec(const void *pp)
 }
 */
 
+#ifndef __FreeBSD__
 static inline void
 be32enc(void *pp, uint32_t x)
 {
@@ -26,7 +27,7 @@ be32enc(void *pp, uint32_t x)
     p[1] = (x >> 16) & 0xff;
     p[0] = (x >> 24) & 0xff;
 }
-
+#endif
 
 /**
  * PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, c, buf, dkLen):
