@@ -331,9 +331,10 @@ if(NOT HAVE_GMTIME_R)
     endif()
 endif()
 
-check_symbol_exists(SYS_getrandom "sys/syscall.h" HAVE_SYS_GETRANDOM)
-check_symbol_exists(getentropy "unistd.h" HAVE_GETENTROPY)
-check_symbol_exists(KERN_ARND "sys/sysctl.h" HAVE_SYSCTL_ARND)
+check_symbol_exists(getrandom "sys/random.h" HAVE_GETRANDOM)
+check_symbol_exists(getentropy "sys/random.h" HAVE_GETENTROPY_RAND)
+check_symbol_exists(sysctl "sys/sysctl.h" "sys/types.h" HAVE_SYSCTL)
+check_symbol_exists(KERN_ARND "sys/sysctl.h" "sys/types.h" HAVE_SYSCTL_ARND)
 
 check_symbol_exists(O_CLOEXEC "fcntl.h" HAVE_O_CLOEXEC)
 check_symbol_exists(getauxval "sys/auxv.h" HAVE_STRONG_GETAUXVAL)
