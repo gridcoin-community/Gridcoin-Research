@@ -27,7 +27,7 @@ To build, run:
 
 * With CMake:
 
-  `mkdir build && cmake build && cmake .. && cmake --build .`
+  `mkdir -p build && cd build && cmake .. && cmake --build .`
 
 * With Autotools:
 
