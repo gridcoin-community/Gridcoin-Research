@@ -627,12 +627,16 @@ void SetupServerArgs()
     hidden_args.emplace_back("-activebeforesb");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
-    // registry with a backing db. This is currently beacon, project, protocol, and scraper.
+    // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
+    // at V13 height.
     for (const auto& contract_type : GRC::RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {
         std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
 
         hidden_args.emplace_back(history_arg);
     }
+
+    // Also allow the -clearallregistryhistory hidden argument to support clearing all of the registries.
+    hidden_args.emplace_back("-clearallregistryhistory");
 
     // -boinckey should now be removed entirely. It is put here to prevent the executable erroring out on
     // an invalid parameter for old clients that may have left the argument in.

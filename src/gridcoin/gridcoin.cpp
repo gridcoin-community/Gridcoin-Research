@@ -170,7 +170,7 @@ void InitializeContracts(CBlockIndex* pindexBest)
         uiInterface.InitMessage(_("Loading history for contract type ") + tr_contract_type_string + "...");
 
         std::string history_arg = "-clear" + GRC::Contract::Type::ToString(contract_type) + "history";
-        if (gArgs.GetBoolArg(history_arg, false)) {
+        if (gArgs.GetBoolArg(history_arg, false) || gArgs.GetBoolArg("-clearallregistryhistory", false)) {
             registry.Reset();
         }
 
