@@ -66,11 +66,9 @@
 #cmakedefine01 HAVE_SYSTEM
 #cmakedefine HAVE_GMTIME_R
 
-// Define if the Linux getrandom system call is available
-#cmakedefine HAVE_SYS_GETRANDOM
-// Define if the BSD getentropy system call is available
-#cmakedefine HAVE_GETENTROPY
-// Define if the BSD sysctl(KERN_ARND) is available
+#cmakedefine HAVE_GETRANDOM
+#cmakedefine HAVE_GETENTROPY_RAND
+#cmakedefine HAVE_SYSCTL
 #cmakedefine HAVE_SYSCTL_ARND
 
 #cmakedefine01 HAVE_O_CLOEXEC
