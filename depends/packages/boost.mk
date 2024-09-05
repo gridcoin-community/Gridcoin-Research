@@ -1,9 +1,9 @@
 package=boost
 GCCFLAGS?=
-$(package)_version=1.73.0
-$(package)_download_path=https://boostorg.jfrog.io/artifactory/main/release/$($(package)_version)/source/
-$(package)_file_name=boost_$(subst .,_,$($(package)_version)).tar.bz2
-$(package)_sha256_hash=4eb3b8d442b426dc35346235c8733b5ae35ba431690e38c6a8263dce9fcbb402
+$(package)_version=1.81.0
+$(package)_download_path=https://archives.boost.io/release/$($(package)_version)/source/
+$(package)_file_name=boost_$(subst .,_,$($(package)_version)).tar.gz
+$(package)_sha256_hash=205666dea9f6a7cfed87c7a6dfbeb52a2c1b9de55712c9c1a87735d7181452b6
 $(package)_dependencies=zlib
 
 define $(package)_set_vars
