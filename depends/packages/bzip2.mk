@@ -17,7 +17,8 @@ define $(package)_set_vars
 endef
 
 define $(package)_preprocess_cmds
-    patch -p0 < $($(package)_patch_dir)/Makefile.patch
+    patch -p0 < $($(package)_patch_dir)/Makefile.patch && \
+    cp -f $(BASEDIR)/config.guess $(BASEDIR)/config.sub .
 endef
 
 define $(package)_config_cmds
