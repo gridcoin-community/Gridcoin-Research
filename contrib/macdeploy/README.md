@@ -12,43 +12,41 @@ When complete, it will have produced `Gridcoin.dmg`.
 
 ### Step 1: Obtaining `Xcode.app`
 
-Our current macOS SDK
-(`Xcode-12.1-12A7403-extracted-SDK-with-libcxx-headers.tar.gz`) can be
-extracted from
-[Xcode_12.1.xip](https://download.developer.apple.com/Developer_Tools/Xcode_12.1/Xcode_12.1.xip).
+Our current macOS SDK can be extracted from
+[Xcode_15.xip](https://download.developer.apple.com/Developer_Tools/Xcode_15/Xcode_15.xip).
 An Apple ID is needed to download this.
 
-After Xcode version 7.x, Apple started shipping the `Xcode.app` in a `.xip`
-archive. This makes the SDK less-trivial to extract on non-macOS machines. One
-approach (tested on Debian Buster) is outlined below:
+The `sha256sum` of the downloaded XIP archive should be `4daaed2ef2253c9661779fa40bfff50655dc7ec45801aba5a39653e7bcdde48e`.
+
+To extract the `.xip` on Linux:
 
 ```bash
 # Install/clone tools needed for extracting Xcode.app
 apt install cpio
 git clone https://github.com/bitcoin-core/apple-sdk-tools.git
 
-# Unpack Xcode_12.1.xip and place the resulting Xcode.app in your current
+# Unpack the xip and place the resulting Xcode.app in your current
 # working directory
-python3 apple-sdk-tools/extract_xcode.py -f Xcode_12.1.xip | cpio -d -i
+python3 apple-sdk-tools/extract_xcode.py -f Xcode_15.xip | cpio -d -i
 ```
 
-On macOS the process is more straightforward:
+On macOS:
 
 ```bash
-xip -x Xcode_12.1.xip
+xip -x Xcode_15.xip
 ```
 
-### Step 2: Generating `Xcode-12.1-12A7403-extracted-SDK-with-libcxx-headers.tar.gz` from `Xcode.app`
+### Step 2: Generating the SDK tarball from `Xcode.app`
 
-To generate `Xcode-12.1-12A7403-extracted-SDK-with-libcxx-headers.tar.gz`, run
-the script [`gen-sdk`](./gen-sdk) with the path to `Xcode.app` (extracted in the
-previous stage) as the first argument.
+To generate the SDK, run the script [`gen-sdk`](./gen-sdk) with the
+path to `Xcode.app` (extracted in the previous stage) as the first argument.
 
 ```bash
-# Generate a Xcode-12.1-12A7403-extracted-SDK-with-libcxx-headers.tar.gz from
-# the supplied Xcode.app
 ./contrib/macdeploy/gen-sdk '/path/to/Xcode.app'
 ```
+
+The generated archive should be: `Xcode-15.0-15A240d-extracted-SDK-with-libcxx-headers.tar.gz`.
+The `sha256sum` should be `c0c2e7bb92c1fee0c4e9f3a485e4530786732d6c6dd9e9f418c282aa6892f55d`.
 
 ## Cross Platform Building
 
@@ -95,17 +93,7 @@ This version of `cctools` has been patched to use the current version of `clang`
 and its `libLTO.so` rather than those from `llvmgcc`, as it was originally done in `toolchain4`.
 
 To complicate things further, all builds must target an Apple SDK. These SDKs are free to
-download, but not redistributable. To obtain it, register for an Apple Developer Account,
-then download [Xcode_12.1.xip](https://download.developer.apple.com/Developer_Tools/Xcode_12.1/Xcode_12.1.xip).
-
-This file is many gigabytes in size, but most (but not all) of what we need is
-contained only in a single directory:
-
-```bash
-Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-```
-
-See the SDK Extraction notes above for how to obtain it.
+download, but not redistributable. See the SDK Extraction notes above for how to obtain it.
 
 The Gitian descriptors build 2 sets of files: Linux tools, then Apple binaries which are
 created using these tools. The build process has been designed to avoid including the
