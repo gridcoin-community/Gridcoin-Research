@@ -772,6 +772,19 @@ fs::path GetDefaultDataDir()
     } else {
         pathRet = fs::path(pszHome);
     }
+
+    char* container = getenv("container");
+
+    if (container && strcmp(container, "flatpak") == 0) {
+        char* state_home = getenv("XDG_STATE_HOME");
+
+        if (!state_home) {
+            return pathRet / ".local" / "state" / "GridcoinResearch";
+        }
+
+        return fs::path(state_home) / "GridcoinResearch";
+    }
+
 #ifdef MAC_OSX
     // The pathRet here represents the HOME directory. Apple
     // applications are expected to store their files in
