@@ -14,6 +14,9 @@ $(package)_patches += fix_montery_include.patch
 $(package)_patches += fix_android_jni_static.patch
 $(package)_patches += dont_hardcode_pwd.patch
 $(package)_patches += qtbase-moc-ignore-gcc-macro.patch
+$(package)_patches += no_warnings_for_symbols.patch
+$(package)_patches += duplicate_lcqpafonts.patch
+$(package)_patches += clang_18_libpng.patch
 $(package)_patches += no_qrhi.patch
 $(package)_patches += drop_lrelease_dependency.patch
 $(package)_patches += subdirs.pro
@@ -39,7 +42,7 @@ $(package)_config_opts_release += -silent
 $(package)_config_opts_debug = -debug
 $(package)_config_opts_debug += -optimized-tools
 $(package)_config_opts += -bindir $(build_prefix)/bin
-$(package)_config_opts += -c++std
+$(package)_config_opts += -c++std $(CXX_STANDARD)
 $(package)_config_opts += -confirm-license
 $(package)_config_opts += -hostprefix $(build_prefix)
 $(package)_config_opts += -no-compile-examples
@@ -139,7 +142,7 @@ ifneq ($(build_os),darwin)
 $(package)_config_opts_darwin += -xplatform macx-clang-linux
 $(package)_config_opts_darwin += -device-option MAC_SDK_PATH=$(OSX_SDK)
 $(package)_config_opts_darwin += -device-option MAC_SDK_VERSION=$(OSX_SDK_VERSION)
-$(package)_config_opts_darwin += -device-option CROSS_COMPILE="$(host)-"
+$(package)_config_opts_darwin += -device-option CROSS_COMPILE="llvm-"
 $(package)_config_opts_darwin += -device-option MAC_MIN_VERSION=$(OSX_MIN_VERSION)
 $(package)_config_opts_darwin += -device-option MAC_TARGET=$(host)
 $(package)_config_opts_darwin += -device-option XCODE_VERSION=$(XCODE_VERSION)
@@ -264,6 +267,9 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/fix_android_jni_static.patch && \
   patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
   patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
+  patch -p1 -i $($(package)_patch_dir)/no_warnings_for_symbols.patch && \
+  patch -p1 -i $($(package)_patch_dir)/clang_18_libpng.patch && \
+  patch -p1 -i $($(package)_patch_dir)/duplicate_lcqpafonts.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_montery_include.patch && \
   patch -p1 -i $($(package)_patch_dir)/no_qrhi.patch && \
   cp $($(package)_patch_dir)/subdirs.pro subdirs.pro && \
