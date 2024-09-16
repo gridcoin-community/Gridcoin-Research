@@ -28,7 +28,7 @@ jobs:
                   # FIXME: depends is unable to compile Qt with clang.
                   # - name: x86_64 Linux  [TSan]  [GUI]  [jammy]
                   #  script-id: native_tsan
-                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
+                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [noble]
                     script-id: mac
                   - name: arm64 macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [noble]
                     script-id: mac_arm64_cross
