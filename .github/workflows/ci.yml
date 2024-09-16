@@ -30,6 +30,8 @@ jobs:
                   #  script-id: native_tsan
                   - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
                     script-id: mac
+                  - name: arm64 macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [noble]
+                    script-id: mac_arm64_cross
         env:
             FILE_ENV: ./ci/test/00_setup_env_${{ matrix.script-id }}.sh
             OS_NAME: linux
