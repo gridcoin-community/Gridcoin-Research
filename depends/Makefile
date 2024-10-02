@@ -1,5 +1,9 @@
 .NOTPARALLEL :
 
+# Pattern rule to print variables, e.g. make print-top_srcdir
+print-%: FORCE
+	@echo '$*'='$($*)'
+
 SOURCES_PATH ?= $(BASEDIR)/sources
 BASE_CACHE ?= $(BASEDIR)/built
 SDK_PATH ?= $(BASEDIR)/SDKs
@@ -7,6 +11,9 @@ NO_QT ?=
 NO_WALLET ?=
 NO_UPNP ?=
 FALLBACK_DOWNLOAD_PATH ?= https://bitcoincore.org/depends-sources
+
+C_STANDARD ?= gnu11
+CXX_STANDARD ?= c++17
 
 BUILD = $(shell ./config.guess)
 HOST ?= $(BUILD)
@@ -145,6 +152,8 @@ $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_
             -e 's|@RANLIB@|$(host_RANLIB)|' \
             -e 's|@NM@|$(host_NM)|' \
             -e 's|@STRIP@|$(host_STRIP)|' \
+            -e 's|@OBJDUMP@|$(host_OBJDUMP)|' \
+            -e 's|@DSYMUTIL@|$(host_DSYMUTIL)|' \
             -e 's|@build_os@|$(build_os)|' \
             -e 's|@host_os@|$(host_os)|' \
             -e 's|@CFLAGS@|$(strip $(host_CFLAGS) $(host_$(release_type)_CFLAGS))|' \
@@ -196,4 +205,5 @@ download-win:
 download: download-osx download-linux download-win
 
 .PHONY: install cached download-one download-osx download-linux download-win download check-packages check-sources
+.PHONY: FORCE
 $(V).SILENT:

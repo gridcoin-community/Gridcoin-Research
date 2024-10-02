@@ -9,8 +9,6 @@ $(package)_config_opts= CC="$($(package)_cc)"
 $(package)_config_opts+=CFLAGS="$($(package)_cflags) $($(package)_cppflags) -fPIC"
 $(package)_config_opts+=RANLIB="$($(package)_ranlib)"
 $(package)_config_opts+=AR="$($(package)_ar)"
-$(package)_config_opts_darwin+=AR="$($(package)_libtool)"
-$(package)_config_opts_darwin+=ARFLAGS="-o"
 $(package)_config_opts_android+=CHOST=$(host)
 endef
 
