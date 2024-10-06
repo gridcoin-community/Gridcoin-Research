@@ -2,9 +2,10 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
+#include <base58.h>
 #include "dbwrapper.h"
 #include "gridcoin/beacon.h"
+#include <key_io.h>
 #include "rpc/blockchain.h"
 #include "test/data/testnet_beacon.bin.h"
 #include "test/data/mainnet_beacon.bin.h"
@@ -71,9 +72,9 @@ struct TestKey
     //!
     //! \brief Create an address from the test public key.
     //!
-    static CBitcoinAddress Address()
+    static CTxDestination Address()
     {
-        return CBitcoinAddress(CTxDestination(KeyId()));
+        return CTxDestination(KeyId());
     }
 
     //!
@@ -210,7 +211,7 @@ public:
                                   << "blockheight = " << ctx.m_pindex->nHeight
                                   << ", cpid = " << beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(beacon->m_public_key)
-                                  << ", address = " << beacon->GetAddress().ToString()
+                                  << ", address = " << EncodeDestination(beacon->GetAddress())
                                   << ", timestamp = " << beacon->m_timestamp
                                   << ", hash = " << beacon->m_hash.GetHex()
                                   << ", prev beacon hash = " << beacon->m_previous_hash.GetHex()
@@ -230,7 +231,7 @@ public:
                                   << "blockheight = " << ctx.m_pindex->nHeight
                                   << ", cpid = " << beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(beacon->m_public_key)
-                                  << ", address = " << beacon->GetAddress().ToString()
+                                  << ", address = " << EncodeDestination(beacon->GetAddress())
                                   << ", timestamp = " << beacon->m_timestamp
                                   << ", hash = " << beacon->m_hash.GetHex()
                                   << ", prev beacon hash = " << beacon->m_previous_hash.GetHex()
@@ -268,7 +269,7 @@ public:
                                   << "blockheight = " << pindex->nHeight
                                   << ", cpid = " << activated_beacon->m_cpid.ToString()
                                   << ", public key = " << HexStr(activated_beacon->m_public_key)
-                                  << ", address = " << activated_beacon->GetAddress().ToString()
+                                  << ", address = " << EncodeDestination(activated_beacon->GetAddress())
                                   << ", timestamp = " << activated_beacon->m_timestamp
                                   << ", hash = " << activated_beacon->m_hash.GetHex()
                                   << ", prev beacon hash = " << activated_beacon->m_previous_hash.GetHex()
@@ -283,7 +284,7 @@ public:
                                   << "blockheight = " << pindex->nHeight
                                   << ", cpid = " << iter->m_cpid.ToString()
                                   << ", public key = " << HexStr(iter->m_public_key)
-                                  << ", address = " << iter->GetAddress().ToString()
+                                  << ", address = " << EncodeDestination(iter->GetAddress())
                                   << ", timestamp = " << iter->m_timestamp
                                   << ", hash = " << iter->m_hash.GetHex()
                                   << ", prev beacon hash = " << iter->m_previous_hash.GetHex()
@@ -328,7 +329,7 @@ public:
             std::cout << "init beacon db record: "
                       << ", cpid = " << beacon_ptr->m_cpid.ToString()
                       << ", public key = " << HexStr(beacon_ptr->m_public_key)
-                      << ", address = " << beacon_ptr->GetAddress().ToString()
+                      << ", address = " << EncodeDestination(beacon_ptr->GetAddress())
                       << ", timestamp = " << beacon_ptr->m_timestamp
                       << ", hash = " << beacon_ptr->m_hash.GetHex()
                       << ", prev beacon hash = " << beacon_ptr->m_previous_hash.GetHex()
@@ -379,7 +380,7 @@ public:
             std::cout << "init beacon db record: "
                       << ", cpid = " << beacon_ptr->m_cpid.ToString()
                       << ", public key = " << HexStr(beacon_ptr->m_public_key)
-                      << ", address = " << beacon_ptr->GetAddress().ToString()
+                      << ", address = " << EncodeDestination(beacon_ptr->GetAddress())
                       << ", timestamp = " << beacon_ptr->m_timestamp
                       << ", hash = " << beacon_ptr->m_hash.GetHex()
                       << ", prev beacon hash = " << beacon_ptr->m_previous_hash.GetHex()
@@ -431,7 +432,7 @@ public:
                           << "hash = " << hash.GetHex()
                           << ", cpid = " << left.second->m_cpid.ToString()
                           << ", public key = " << HexStr(left.second->m_public_key)
-                          << ", address = " << left.second->GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left.second->GetAddress())
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
                           << ", prev beacon hash = " << left.second->m_previous_hash.GetHex()
@@ -457,8 +458,8 @@ public:
                 std::cout << "init_beacon public key = " << HexStr(left_beacon_ptr->m_public_key)
                           << ", reinit_beacon public key = " << HexStr(right_beacon_iter->second->m_public_key) << std::endl;
 
-                std::cout << "init_beacon address = " << left_beacon_ptr->GetAddress().ToString()
-                          << ", reinit_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
+                std::cout << "init_beacon address = " << EncodeDestination(left_beacon_ptr->GetAddress())
+                          << ", reinit_beacon address = " << EncodeDestination(right_beacon_iter->second->GetAddress()) << std::endl;
 
                 std::cout << "init_beacon timestamp = " << left_beacon_ptr->m_timestamp
                           << ", reinit_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
@@ -493,7 +494,7 @@ public:
                           << "hash = " << hash.GetHex()
                           << ", cpid = " << left.second->m_cpid.ToString()
                           << ", public key = " << HexStr(left.second->m_public_key)
-                          << ", address = " << left.second->GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left.second->GetAddress())
                           << ", timestamp = " << left.second->m_timestamp
                           << ", hash = " << left.second->m_hash.GetHex()
                           << ", prev beacon hash = " << left.second->m_previous_hash.GetHex()
@@ -519,8 +520,8 @@ public:
                 std::cout << "reinit_beacon public key = " << HexStr(left_beacon_ptr->m_public_key)
                           << ", init_beacon public key = " << HexStr(right_beacon_iter->second->m_public_key) << std::endl;
 
-                std::cout << "reinit_beacon address = " << left_beacon_ptr->GetAddress().ToString()
-                          << ", init_beacon address = " << right_beacon_iter->second->GetAddress().ToString() << std::endl;
+                std::cout << "reinit_beacon address = " << EncodeDestination(left_beacon_ptr->GetAddress())
+                          << ", init_beacon address = " << EncodeDestination(right_beacon_iter->second->GetAddress()) << std::endl;
 
                 std::cout << "reinit_beacon timestamp = " << left_beacon_ptr->m_timestamp
                           << ", init_beacon timestamp = " << right_beacon_iter->second->m_timestamp << std::endl;
@@ -557,7 +558,7 @@ public:
                 // You should be in the src directory for that, so the command would be ./test/test_gridcoin.
                 std::cout << "init_beacon cpid = " << cpid.ToString()
                           << ", public key = " << HexStr(beacon.m_public_key)
-                          << ", address = " << beacon.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(beacon.GetAddress())
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << beacon.m_previous_hash.GetHex()
@@ -574,7 +575,7 @@ public:
                 // You should be in the src directory for that, so the command would be ./test/test_gridcoin.
                 std::cout << "reinit beacon cpid = " << cpid.ToString()
                           << ", public key = " << HexStr(beacon.m_public_key)
-                          << ", address = " << beacon.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(beacon.GetAddress())
                           << ", timestamp = " << beacon.m_timestamp
                           << ", hash = " << beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << beacon.m_previous_hash.GetHex()
@@ -603,7 +604,7 @@ public:
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
                           << ", public key = " << HexStr(left.second.m_public_key)
-                          << ", address = " << left.second.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left.second.GetAddress())
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_previous_hash.GetHex()
@@ -656,7 +657,7 @@ public:
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
                           << ", public key = " << HexStr(left.second.m_public_key)
-                          << ", address = " << left.second.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left.second.GetAddress())
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_previous_hash.GetHex()
@@ -720,7 +721,7 @@ public:
                           << "hash = " << left_beacon.m_hash.GetHex()
                           << ", cpid = " << left_beacon.m_cpid.ToString()
                           << ", public key = " << HexStr(left_beacon.m_public_key)
-                          << ", address = " << left_beacon.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left_beacon.GetAddress())
                           << ", timestamp = " << left_beacon.m_timestamp
                           << ", hash = " << left_beacon.m_hash.GetHex()
                           << ", prev beacon hash = " << left_beacon.m_previous_hash.GetHex()
@@ -775,7 +776,7 @@ public:
                           << "hash = " << left.second.m_hash.GetHex()
                           << ", cpid = " << left.second.m_cpid.ToString()
                           << ", public key = " << HexStr(left.second.m_public_key)
-                          << ", address = " << left.second.GetAddress().ToString()
+                          << ", address = " << EncodeDestination(left.second.GetAddress())
                           << ", timestamp = " << left.second.m_timestamp
                           << ", hash = " << left.second.m_hash.GetHex()
                           << ", prev beacon hash = " << left.second.m_previous_hash.GetHex()
@@ -962,7 +963,7 @@ BOOST_AUTO_TEST_CASE(it_represents_itself_as_a_legacy_string)
 
     const std::string expected = EncodeBase64(
         "0;0;"
-        + TestKey::Address().ToString()
+        + EncodeDestination(TestKey::Address())
         + ";"
         + HexStr(TestKey::Public()));
 

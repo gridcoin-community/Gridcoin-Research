@@ -2,7 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
+#include <key_io.h>
 #include "key.h"
 #include "qt/decoration.h"
 #include "qt/forms/ui_researcherwizardpoolpage.h"
@@ -105,7 +105,7 @@ void ResearcherWizardPoolPage::getNewAddress()
     }
 
     ui->addressLabel->setText(
-        QString::fromStdString(CBitcoinAddress(public_key.GetID()).ToString()));
+        QString::fromStdString(EncodeDestination(public_key.GetID())));
     ui->copyToClipboardButton->setVisible(true);
 }
 

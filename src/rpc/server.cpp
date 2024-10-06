@@ -4,10 +4,11 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
+#include <base58.h>
 #include "init.h"
 #include "sync.h"
+#include <key_io.h>
 #include "node/ui_interface.h"
-#include "base58.h"
 #include "server.h"
 #include "client.h"
 #include "protocol.h"
@@ -288,7 +289,6 @@ static const CRPCCommand vRPCCommands[] =
   // Wallet commands
     { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
     { "addredeemscript",         &addredeemscript,         cat_wallet        },
-    { "backupprivatekeys",       &backupprivatekeys,       cat_wallet        },
     { "backupwallet",            &backupwallet,            cat_wallet        },
     { "burn",                    &burn,                    cat_wallet        },
     { "checkwallet",             &checkwallet,             cat_wallet        },

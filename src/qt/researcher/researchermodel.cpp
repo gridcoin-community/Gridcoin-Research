@@ -2,7 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "base58.h"
+#include <key_io.h>
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
@@ -462,7 +462,7 @@ QString ResearcherModel::formatBeaconAddress() const
         return QString();
     }
 
-    return QString::fromStdString(m_beacon->GetAddress().ToString());
+    return QString::fromStdString(EncodeDestination(m_beacon->GetAddress()));
 }
 
 QString ResearcherModel::formatBeaconVerificationCode() const
