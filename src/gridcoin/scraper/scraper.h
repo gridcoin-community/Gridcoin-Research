@@ -27,6 +27,7 @@
 extern CCriticalSection cs_Scraper;
 extern CCriticalSection cs_ScraperGlobals;
 extern CCriticalSection cs_StructScraperFileManifest;
+extern CCriticalSection cs_ConvergedStats;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern CCriticalSection cs_TeamIDMap;
 extern CCriticalSection cs_VerifiedBeacons;
