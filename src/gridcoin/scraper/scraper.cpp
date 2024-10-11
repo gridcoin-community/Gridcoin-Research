@@ -65,6 +65,10 @@ CCriticalSection cs_ScraperGlobals;
  */
 CCriticalSection cs_StructScraperFileManifest;
 /**
+ * @brief Protects access to the ConvergedStats.csv.gz compressed statistics map output file.
+ */
+CCriticalSection cs_ConvergedStats;
+/**
  * @brief Protects the global converged scraper stats cache, which is populated by periodic runs of the scraper and/or
  * subscriber loop, and is used to validate superblocks.
  */
@@ -3452,6 +3456,8 @@ bool StoreScraperFileManifest(const fs::path& file)
 
 bool StoreStats(const fs::path& file, const ScraperStats& mScraperStats)
 {
+    LOCK(cs_ConvergedStats);
+
     if (fs::exists(file))
         fs::remove(file);
 
@@ -6069,13 +6075,13 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     {
         LOCK(cs_ConvergedScraperStatsCache);
 
-		if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
-		{
-		    UniValue error(UniValue::VOBJ);
-		    error.pushKV("Error:", "Wait until a convergence is formed.");
+        if (!ConvergedScraperStatsCache.NewFormatSuperblock.WellFormed())
+        {
+            UniValue error(UniValue::VOBJ);
+            error.pushKV("Error:", "Wait until a convergence is formed.");
 
-		    return error;
-		}
+            return error;
+        }
 
         _log(logattribute::INFO, "testnewsb",
              "Size of the PastConvergences map = " + ToString(ConvergedScraperStatsCache.PastConvergences.size()));
