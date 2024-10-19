@@ -1,8 +1,8 @@
 package=libzip
-$(package)_version=1.10.1
+$(package)_version=1.11.1
 $(package)_download_path=https://libzip.org/download/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
-$(package)_sha256_hash=9669ae5dfe3ac5b3897536dc8466a874c8cf2c0e3b1fdd08d75b273884299363
+$(package)_sha256_hash=c0e6fa52a62ba11efd30262290dc6970947aef32e0cc294ee50e9005ceac092a
 $(package)_dependencies=zlib
 
 define $(package)_set_vars
@@ -20,6 +20,7 @@ $(package)_config_opts+=-DBUILD_REGRESS=OFF
 $(package)_config_opts+=-DBUILD_OSSFUZZ=OFF
 $(package)_config_opts+=-DBUILD_EXAMPLES=OFF
 $(package)_config_opts+=-DBUILD_DOC=OFF
+$(package)_config_opts_mingw32+=-DCMAKE_SYSTEM_IGNORE_PATH=/usr/include
 endef
 
 define $(package)_config_cmds
