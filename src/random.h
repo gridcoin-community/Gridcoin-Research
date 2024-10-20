@@ -158,7 +158,7 @@ private:
         if (requires_seed) {
             RandomSeed();
         }
-        rng.Keystream(bytebuf, sizeof(bytebuf));
+        rng.Keystream(MakeWritableByteSpan(bytebuf));
         bytebuf_size = sizeof(bytebuf);
     }
 
