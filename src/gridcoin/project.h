@@ -31,6 +31,8 @@ namespace GRC
 //!
 //! ACTIVE corresponds to an active entry.
 //!
+//! GREYLISTED means that the project temporarily does not meet the whitelist qualification criteria.
+//!
 //! OUT_OF_BOUND must go at the end and be retained for the EnumBytes wrapper.
 //!
 enum class ProjectEntryStatus
@@ -38,6 +40,8 @@ enum class ProjectEntryStatus
     UNKNOWN,
     DELETED,
     ACTIVE,
+    MAN_GREYLISTED,
+    AUTO_GREYLISTED,
     OUT_OF_BOUND
 };
 
@@ -48,6 +52,23 @@ public:
     //! \brief Wrapped Enumeration of scraper entry status, mainly for serialization/deserialization.
     //!
     using Status = EnumByte<ProjectEntryStatus>;
+
+    //!
+    //! \brief Project filter flag enumeration.
+    //!
+    //! This controls what project entries by status are in the project whitelist snapshot.
+    //!
+    enum ProjectFilterFlag : uint8_t {
+        NONE            = 0b0000,
+        DELETED         = 0b0001,
+        MAN_GREYLISTED  = 0b0010,
+        AUTO_GREYLISTED = 0b0100,
+        GREYLISTED      = MAN_GREYLISTED | AUTO_GREYLISTED,
+        ACTIVE          = 0b1000,
+        NOT_ACTIVE      = 0b0111,
+        ALL_BUT_DELETED = 0b1110,
+        ALL             = 0b1111
+    };
 
     //!
     //! \brief Version number of the current format for a serialized project.
@@ -287,6 +308,17 @@ public:
     //!
     //! \brief Initialize a \c Project using data from the contract.
     //!
+    //! \param version         Project payload version.
+    //! \param name            Project name from contract message key.
+    //! \param url             Project URL from contract message value.
+    //! \param gdpr_controls   Boolean to indicate gdpr stats export controls enforced
+    //! \param manual_greylist Boolean to force manual greylisting of project
+    //!
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, bool manual_greylist);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
     //! \param version       Project payload version.
     //! \param name          Project name from contract message key.
     //! \param url           Project URL from contract message value.
@@ -307,7 +339,7 @@ public:
     Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls);
 
     //!
-    //! \brief Initialize a \c Project payloard from a provided project entry
+    //! \brief Initialize a \c Project payload from a provided project entry
     //! \param version. Project Payload version.
     //! \param entry. Project entry to place in the payload.
     //!
@@ -426,8 +458,10 @@ public:
     //! \brief Initialize a snapshot for the provided project list from the project entry map.
     //!
     //! \param projects A copy of the smart pointer to the project list.
+    //! \param filter_used The project status filter used for the project list.
     //!
-    WhitelistSnapshot(ProjectListPtr projects);
+    WhitelistSnapshot(ProjectListPtr projects,
+                      const ProjectEntry::ProjectFilterFlag& filter_used = ProjectEntry::ProjectFilterFlag::ACTIVE);
 
     //!
     //! \brief Returns an iterator to the beginning.
@@ -464,6 +498,13 @@ public:
     bool Contains(const std::string& name) const;
 
     //!
+    //! \brief Returns the project status filter flag used to populate the snapshot.
+    //!
+    //! \return ProjectFilterFlag used for whitelist snapshot.
+    //!
+    ProjectEntry::ProjectFilterFlag FilterUsed() const;
+
+    //!
     //! \brief Create a snapshot copy sorted alphabetically by project name.
     //!
     //! \return A sorted copy of the snapshot.
@@ -472,6 +513,7 @@ public:
 
 private:
     const ProjectListPtr m_projects;  //!< The vector of whitelisted projects.
+    const ProjectEntry::ProjectFilterFlag m_filter; //!< The filter used to populate the readonly list.
 };
 
 //!
@@ -513,9 +555,10 @@ public:
     typedef std::map<uint256, ProjectEntry_ptr> HistoricalProjectEntryMap;
 
     //!
-    //! \brief Get a read-only view of the projects in the whitelist.
+    //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
+    //! provides the original ACTIVE project only view.
     //!
-    WhitelistSnapshot Snapshot() const;
+    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
