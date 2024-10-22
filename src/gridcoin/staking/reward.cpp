@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
-#include "gridcoin/appcache.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/staking/reward.h"
 #include "main.h"
@@ -33,25 +32,64 @@ CAmount GetCoinYearReward(int64_t nTime)
 
 CAmount GRC::GetConstantBlockReward(const CBlockIndex* index)
 {
+    CAmount reward = 0;
+    CAmount MIN_CBR = 0;
+    CAmount MAX_CBR = 0;
+
+    // GetConstantBlockReward is called with a CBlockIndex pointer as an argument, which means it is expected to
+    // return the correct value at that position in the chain. The TryActive call in the protocol registry returns
+    // the CURRENT active value if that exists. This is not what we need if index is not actually pIndexBest.
+    // Here we find the last protocol entry in the historical linked list of protocol entries for the key "blockreward1"
+    // that has a timestamp that is less than or equal to the block time. This will filter for the correct historical
+    // value of blockreward1 that was valid at the index given. One could argue there is some fuzziness here in using
+    // the block time versus the transaction context time implied by the protocol registry entry; however the actual
+    // change of CBR must occur on a block boundary anyway, and as long as there is consistent application for consensus
+    // for V13+ we are safe.
+    ProtocolEntryOption reward_entry = GetProtocolRegistry().TryLastBeforeTimestamp("blockreward1",
+                                                                                    index->GetBlockTime());
+
     // The constant block reward is set to a default, voted on value, but this can
     // be overridden using an admin message. This allows us to change the reward
     // amount without having to release a mandatory with updated rules. In the case
-    // there is a breach or leaked admin keys the rewards are clamped to twice that
-    // of the default value.
-    const CAmount MIN_CBR = 0;
-    const CAmount MAX_CBR = DEFAULT_CBR * 2;
+    // there is a breach or leaked admin keys the rewards are clamped.
 
-    CAmount reward = DEFAULT_CBR;
-    AppCacheEntry oCBReward = GetProtocolRegistry().GetProtocolEntryByKeyLegacy("blockreward1");
+    // Note that the use of the IsV13Enabled test here on the block index does not consider the possibility of
+    // an administrative contract entry prior to v13 that has aged out from the lookback window which could affect consensus.
+    // However this possibility is actually covered because 5.4.8.0 was actually a mandatory due to a problem with
+    // message contracts, and this included the registry for protocol entries, eliminating the lookback window limitation.
+    // There has been no administrative entry to change the CBR in mainnet prior to 5.4.8.0, so in fact this is a moot issue.
+    if (IsV13Enabled(index->nHeight)) {
+        // The default and the clamp for block v13+ is controlled by blockchain consensus parameters.
+        reward = Params().GetConsensus().DefaultConstantBlockReward;
+        MIN_CBR = Params().GetConsensus().ConstantBlockRewardFloor;
+        MAX_CBR = Params().GetConsensus().ConstantBlockRewardCeiling;
 
-    //TODO: refactor the expire checking to subroutine
-    //Note: time constant is same as GetBeaconPublicKey
-    if ((index->nTime - oCBReward.timestamp) <= (60 * 24 * 30 * 6 * 60)) {
-        // This is a little slippery, because if we ever change CAmount from a int64_t, this will
-        // break. It is unlikely to ever change, however, and avoids an extra copy/implicit cast.
-        if (!ParseInt64(oCBReward.value, &reward)) {
-            error("%s: Cannot parse constant block reward from protocol entry: %s",
-                  __func__, oCBReward.value);
+        if (reward_entry != nullptr && reward_entry->m_status == ProtocolEntryStatus::ACTIVE) {
+            // There is no contract lookback limitation v13+.
+            if (!ParseInt64(reward_entry->m_value, &reward)) {
+                error("%s: Cannot parse constant block reward from protocol entry: %s",
+                      __func__, reward_entry->m_value);
+            }
+        }
+    } else {
+        // This is the default and clamp pre block v13. Note that an administrative entry to change the CBR prior to block v13
+        // that is outside the pre v13 clamp rules could cause the CBR to change at the v13 height as the new clamp rules above
+        // would then apply on the existing protocol entry.
+        reward = 10 * COIN;
+        MIN_CBR = 0;
+        MAX_CBR = Params().GetConsensus().DefaultConstantBlockReward * 2;
+
+        if (reward_entry != nullptr && reward_entry->m_status == ProtocolEntryStatus::ACTIVE) {
+            // The contract lookback window here for block version less than v13 is the same as the standard contract
+            // replay lookback.
+            if (index->nTime - reward_entry->m_timestamp <= Params().GetConsensus().StandardContractReplayLookback) {
+                // This is a little slippery, because if we ever change CAmount from a int64_t, this will
+                // break. It is unlikely to ever change, however, and avoids an extra copy/implicit cast.
+                if (!ParseInt64(reward_entry->m_value, &reward)) {
+                    error("%s: Cannot parse constant block reward from protocol entry: %s",
+                          __func__, reward_entry->m_value);
+                }
+            }
         }
     }
 
