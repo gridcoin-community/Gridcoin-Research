@@ -291,6 +291,45 @@ ProtocolEntryOption ProtocolRegistry::TryActive(const std::string& key) const
     return nullptr;
 }
 
+ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& key, const int64_t& timestamp)
+{
+    LOCK(cs_lock);
+
+    // Find the latest protocol entry by key if it exists.
+    const auto iter = m_protocol_entries.find(key);
+
+    // If there is no current entry, return nullptr. If there is no current entry, then there is also no historical entry for the same
+    // key.
+    if (iter == m_protocol_entries.end()) {
+        return nullptr;
+    }
+
+    // If the latest (current) protocol entry for the given key has a timestamp before or equal to the provided timestamp then
+    // return the latest entry.
+    if (iter->second->m_timestamp <= timestamp) {
+        return iter->second;
+    }
+
+    // If the latest (current) active protocol entry does not satisfy the above conditions, and there is no preceding entry,
+    // then return nullptr.
+    if (iter->second->m_previous_hash.IsNull()) {
+        return nullptr;
+    }
+
+    // Walk the revision history chain for the protocol entries with the provided key to find an active historical entry
+    // with a timestamp that is equal to or less than the provided timestamp, if it exists.
+     HistoricalProtocolEntryMap::iterator hist_protocol_entry_iter = m_protocol_db.find(iter->second->m_previous_hash);
+
+    while (hist_protocol_entry_iter != m_protocol_db.end()
+           && !hist_protocol_entry_iter->second->m_previous_hash.IsNull()
+           && hist_protocol_entry_iter->second->m_timestamp > timestamp)
+    {
+        hist_protocol_entry_iter = m_protocol_db.find(hist_protocol_entry_iter->second->m_previous_hash);
+    }
+
+    return hist_protocol_entry_iter->second;
+}
+
 void ProtocolRegistry::Reset()
 {
     LOCK(cs_lock);
