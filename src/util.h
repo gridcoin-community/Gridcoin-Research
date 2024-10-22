@@ -340,6 +340,22 @@ public:
         return strprintf("%" PRId64 "/" "%" PRId64, m_numerator, m_denominator);
     }
 
+    Fraction FromString(const std::string& string) const
+    {
+        std::vector<std::string> string_fraction = split(string, "/");
+
+        int64_t numerator;
+        int64_t denominator;
+
+        if (string_fraction.size() != 2
+            || !ParseInt64(string_fraction[0], &numerator)
+            || !ParseInt64(string_fraction[1], &denominator)) {
+            throw std::out_of_range("Fraction input string cannot be parsed to fraction.");
+        }
+
+        return Fraction(numerator, denominator, true);
+    }
+
     bool operator!()
     {
         return IsZero();
