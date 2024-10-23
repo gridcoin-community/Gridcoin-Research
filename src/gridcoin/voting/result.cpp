@@ -788,7 +788,7 @@ public:
     //! \param supply     The total network money supply as of the latest
     //! block in the poll window in units of 1/100000000 GRC.
     //!
-    void EnableMagnitudeWeight(SuperblockPtr superblock, const uint64_t supply, const Fraction magnitude_weight_factor)
+    void EnableMagnitudeWeight(SuperblockPtr superblock, const uint64_t supply)
     {
         const uint64_t total_mag = superblock->m_cpids.TotalMagnitude();
 
@@ -798,8 +798,8 @@ public:
 
         // Use integer arithmetic to avoid floating-point discrepancies:
         m_magnitude_factor = supply / total_mag
-                             * (uint64_t) magnitude_weight_factor.GetNumerator()
-                             / (uint64_t) magnitude_weight_factor.GetDenominator();
+                             * (uint64_t) m_poll.m_magnitude_weight_factor.GetNumerator()
+                             / (uint64_t) m_poll.m_magnitude_weight_factor.GetDenominator();
         m_resolver.SetSuperblock(std::move(superblock));
     }
 
@@ -1137,29 +1137,6 @@ CAmount ResolveMoneySupplyForPoll(const Poll& poll)
     return pindex->nMoneySupply;
 }
 
-//!
-//! \brief Fetch the applicable magnitude factor for the poll. This is the magnitude factor of the last entry in the
-//! protocol registry database that has a timestamp at or before the poll start timestamp.
-//!
-//! \param poll Poll for which to fetch the Magnitude Weight Factor.
-//! \return Fraction Magnitude factor expressed as a Fraction.
-//!
-Fraction ResolveMagnitudeWeightFactorForPoll(const Poll& poll)
-{
-    Fraction magnitude_weight_factor = Params().GetConsensus().DefaultMagnitudeWeightFactor;
-
-    // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
-    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", poll.m_timestamp);
-
-    // If their is an entry prior or equal in timestemp to the start of the poll and it is active then set the magnitude weight
-    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
-    if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
-        magnitude_weight_factor = Fraction().FromString(protocol_entry->m_value);
-    }
-
-    return magnitude_weight_factor;
-}
-
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -1213,8 +1190,7 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         if (result.m_poll.IncludesMagnitudeWeight()) {
             counter.EnableMagnitudeWeight(
                 ResolveSuperblockForPoll(result.m_poll),
-                ResolveMoneySupplyForPoll(result.m_poll),
-                ResolveMagnitudeWeightFactorForPoll(result.m_poll));
+                ResolveMoneySupplyForPoll(result.m_poll));
         }
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
