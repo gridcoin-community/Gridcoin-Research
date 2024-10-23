@@ -331,6 +331,7 @@ PollReference::PollReference()
     , m_timestamp(0)
     , m_duration_days(0)
     , m_votes({})
+    , m_magnitude_weight_factor(Fraction())
 {
 }
 
@@ -346,7 +347,12 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
     for (auto& contract : tx.PullContracts()) {
         if (contract.m_type == ContractType::POLL) {
             auto payload = contract.PullPayloadAs<PollPayload>();
-            payload.m_poll.m_timestamp = m_timestamp;
+            // The time for the poll is the time of the containing transaction.
+            payload.m_poll.m_timestamp = tx.nTime;
+
+            // This is a critical initialization, because the magnitude weight factor is only stored
+            // in memory and is not serialized.
+            payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor();
 
             return std::move(payload.m_poll);
         }
@@ -549,8 +555,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
             const arith_uint256 scaled_network_magnitude)
     {
         active_vote_weight_tally += net_weight + money_supply * (scaled_network_magnitude - scaled_pool_magnitude)
-                                                              * arith_uint256(100)
-                                                              / arith_uint256(567)
+                                                              * arith_uint256(m_magnitude_weight_factor.GetNumerator())
+                                                              / arith_uint256(m_magnitude_weight_factor.GetDenominator())
                                                               / scaled_network_magnitude;
 
         ++blocks;
@@ -1004,6 +1010,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
+        poll_ref.m_magnitude_weight_factor = payload->m_poll.ResolveMagnitudeWeightFactor();
 
         m_latest_poll = &poll_ref;
 

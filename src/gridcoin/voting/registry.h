@@ -10,6 +10,7 @@
 #include "gridcoin/voting/fwd.h"
 #include "sync.h"
 #include "uint256.h"
+#include "util.h"
 #include <atomic>
 #include <map>
 
@@ -175,14 +176,15 @@ public:
     void UnlinkVote(const uint256 txid);
 
 private:
-    uint256 m_txid;               //!< Hash of the poll transaction.
-    uint32_t m_payload_version;   //!< Version of the poll (payload).
-    PollType m_type;              //!< Type of the poll.
-    const std::string* m_ptitle;  //!< Title of the poll for indexing/mapping purposes.
-    std::string m_title;          //!< Original title of the poll for display purposes.
-    int64_t m_timestamp;          //!< Timestamp of the poll transaction.
-    uint32_t m_duration_days;     //!< Number of days the poll remains active.
-    std::vector<uint256> m_votes; //!< Hashes of the linked vote transactions.
+    uint256 m_txid;                     //!< Hash of the poll transaction.
+    uint32_t m_payload_version;         //!< Version of the poll (payload).
+    PollType m_type;                    //!< Type of the poll.
+    const std::string* m_ptitle;        //!< Title of the poll for indexing/mapping purposes.
+    std::string m_title;                //!< Original title of the poll for display purposes.
+    int64_t m_timestamp;                //!< Timestamp of the poll transaction.
+    uint32_t m_duration_days;           //!< Number of days the poll remains active.
+    std::vector<uint256> m_votes;       //!< Hashes of the linked vote transactions.
+    Fraction m_magnitude_weight_factor; //!< Magnitude weight factor for the poll (defined at poll start).
 }; // PollReference
 
 //!

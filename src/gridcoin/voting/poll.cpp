@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/protocol.h"
 #include "main.h"
 #include "gridcoin/support/xml.h"
 #include "gridcoin/voting/poll.h"
@@ -92,7 +93,12 @@ Poll::Poll()
     , m_weight_type(PollWeightType::UNKNOWN)
     , m_response_type(PollResponseType::UNKNOWN)
     , m_duration_days(0)
+    , m_title({})
+    , m_url({})
+    , m_question({})
+    , m_choices(ChoiceList())
     , m_timestamp(0)
+    , m_magnitude_weight_factor(Fraction())
 {
 }
 
@@ -105,7 +111,8 @@ Poll::Poll(
     std::string url,
     std::string question,
     ChoiceList choices,
-    int64_t timestamp)
+    int64_t timestamp,
+    Fraction magnitude_weight_factor)
     : m_type(type)
     , m_weight_type(weight_type)
     , m_response_type(response_type)
@@ -115,6 +122,7 @@ Poll::Poll(
     , m_question(std::move(question))
     , m_choices(std::move(choices))
     , m_timestamp(timestamp)
+    , m_magnitude_weight_factor(magnitude_weight_factor)
 {
 }
 
@@ -130,7 +138,8 @@ Poll Poll::Parse(const std::string& title, const std::string& contract)
         ExtractXML(contract, "<URL>", "</URL>"),
         ExtractXML(contract, "<QUESTION>", "</QUESTION>"),
         ParseChoices(ExtractXML(contract, "<ANSWERS>", "</ANSWERS>")),
-        0);
+        0,
+        Params().GetConsensus().DefaultMagnitudeWeightFactor);
 }
 
 bool Poll::WellFormed() const
@@ -204,6 +213,22 @@ bool Poll::Expired(const int64_t now) const
 int64_t Poll::Expiration() const
 {
     return m_timestamp + (m_duration_days * 86400);
+}
+
+Fraction Poll::ResolveMagnitudeWeightFactor() const
+{
+    Fraction magnitude_weight_factor = Params().GetConsensus().DefaultMagnitudeWeightFactor;
+
+           // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
+    ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", m_timestamp);
+
+           // If their is an entry prior or equal in timestemp to the start of the poll and it is active then set the magnitude weight
+           // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+    if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
+        magnitude_weight_factor = Fraction().FromString(protocol_entry->m_value);
+    }
+
+    return magnitude_weight_factor;
 }
 
 const Poll::ChoiceList& Poll::Choices() const
