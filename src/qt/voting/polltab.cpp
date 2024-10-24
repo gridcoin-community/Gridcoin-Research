@@ -25,14 +25,14 @@ QString RefreshMessage()
     return QCoreApplication::translate("PollTab", "Press \"Refresh\" to update the list.");
 }
 
-QString WaitMessage()
+QString PollWaitMessage()
 {
     return QCoreApplication::translate("PollTab", "This may take several minutes.");
 }
 
 QString FullRefreshMessage()
 {
-    return QStringLiteral("%1 %2").arg(RefreshMessage()).arg(WaitMessage());
+    return QStringLiteral("%1 %2").arg(RefreshMessage()).arg(PollWaitMessage());
 }
 } // Anonymous namespace
 
@@ -188,7 +188,7 @@ void PollTab::refresh()
 {
     if (m_polltable_model->empty()) {
         m_no_result->showDefaultLoadingTitle();
-        m_no_result->contentWidgetAs<QLabel>()->setText(WaitMessage());
+        m_no_result->contentWidgetAs<QLabel>()->setText(PollWaitMessage());
     }
 
     m_loading->start();
