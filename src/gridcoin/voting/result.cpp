@@ -1198,6 +1198,11 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
 
         counter.CountVotes(result, poll_ref.Votes());
 
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.GetMagnitudeWeightFactor() = %s",
+                 __func__,
+                 poll_ref.Time(),
+                 poll_ref.GetMagnitudeWeightFactor().ToString());
+
         if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
             result.m_active_vote_weight = active_vote_weight;
 

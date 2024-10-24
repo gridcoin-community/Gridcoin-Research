@@ -154,6 +154,13 @@ public:
     std::optional<int> GetEndingHeight() const;
 
     //!
+    //! \brief Get the magnitude weight factor at the poll start.
+    //!
+    //! \return Fraction representing magnitude weight factor.
+    //!
+    Fraction GetMagnitudeWeightFactor() const;
+
+    //!
     //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
     //! \param result: The actual tabulated votes (poll result)
     //! \return ActiveVoteWeight
@@ -176,15 +183,15 @@ public:
     void UnlinkVote(const uint256 txid);
 
 private:
-    uint256 m_txid;                     //!< Hash of the poll transaction.
-    uint32_t m_payload_version;         //!< Version of the poll (payload).
-    PollType m_type;                    //!< Type of the poll.
-    const std::string* m_ptitle;        //!< Title of the poll for indexing/mapping purposes.
-    std::string m_title;                //!< Original title of the poll for display purposes.
-    int64_t m_timestamp;                //!< Timestamp of the poll transaction.
-    uint32_t m_duration_days;           //!< Number of days the poll remains active.
-    std::vector<uint256> m_votes;       //!< Hashes of the linked vote transactions.
-    Fraction m_magnitude_weight_factor; //!< Magnitude weight factor for the poll (defined at poll start).
+    uint256 m_txid;                             //!< Hash of the poll transaction.
+    uint32_t m_payload_version;                 //!< Version of the poll (payload).
+    PollType m_type;                            //!< Type of the poll.
+    const std::string* m_ptitle;                //!< Title of the poll for indexing/mapping purposes.
+    std::string m_title;                        //!< Original title of the poll for display purposes.
+    mutable int64_t m_timestamp;                //!< Timestamp of the poll transaction.
+    uint32_t m_duration_days;                   //!< Number of days the poll remains active.
+    std::vector<uint256> m_votes;               //!< Hashes of the linked vote transactions.
+    mutable Fraction m_magnitude_weight_factor; //!< Magnitude weight factor for the poll (defined at poll start).
 }; // PollReference
 
 //!
