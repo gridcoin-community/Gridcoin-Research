@@ -331,6 +331,7 @@ PollReference::PollReference()
     , m_timestamp(0)
     , m_duration_days(0)
     , m_votes({})
+    , m_magnitude_weight_factor(Fraction())
 {
 }
 
@@ -346,7 +347,21 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
     for (auto& contract : tx.PullContracts()) {
         if (contract.m_type == ContractType::POLL) {
             auto payload = contract.PullPayloadAs<PollPayload>();
-            payload.m_poll.m_timestamp = m_timestamp;
+            // The time for the poll is the time of the containing transaction.
+            payload.m_poll.m_timestamp = tx.nTime;
+            m_timestamp = tx.nTime;
+
+            // This is a critical initialization, because the magnitude weight factor is only stored
+            // in memory and is not serialized.
+            payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor();
+            m_magnitude_weight_factor = payload.m_poll.m_magnitude_weight_factor;
+
+            LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
+                     "poll.m_magnitude_weight_factor = %s",
+                     __func__,
+                     m_timestamp,
+                     payload.m_poll.m_timestamp,
+                     payload.m_poll.m_magnitude_weight_factor.ToString());
 
             return std::move(payload.m_poll);
         }
@@ -476,6 +491,11 @@ std::optional<int> PollReference::GetEndingHeight() const EXCLUSIVE_LOCKS_REQUIR
     return std::nullopt;
 }
 
+Fraction PollReference::GetMagnitudeWeightFactor() const
+{
+    return m_magnitude_weight_factor;
+}
+
 std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
 {
     // Instrument this so we can log real time performance.
@@ -549,8 +569,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
             const arith_uint256 scaled_network_magnitude)
     {
         active_vote_weight_tally += net_weight + money_supply * (scaled_network_magnitude - scaled_pool_magnitude)
-                                                              * arith_uint256(100)
-                                                              / arith_uint256(567)
+                                                              * arith_uint256(m_magnitude_weight_factor.GetNumerator())
+                                                              / arith_uint256(m_magnitude_weight_factor.GetDenominator())
                                                               / scaled_network_magnitude;
 
         ++blocks;
@@ -647,13 +667,15 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
         // If voting logging category is active, log the first block and every superblock
         if (blocks == 1 || pindex->IsSuperblock()) {
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tally_active_vote_weight: net_weight = %f, money_supply = %f, "
-                                            "pool_magnitude = %f, network_magnitude = %f, block height = %i, "
-                                            "blocks = %u, active_vote_weight_tally = %f, active_vote_weight = %f.",
+                                            "pool_magnitude = %f, network_magnitude = %f, magnitude weight factor = %s, "
+                                            "block height = %i, blocks = %u, active_vote_weight_tally = %f, "
+                                            "active_vote_weight = %f.",
                      __func__,
                      net_weight.getdouble() / (double) COIN,
                      money_supply.getdouble() / (double) COIN,
                      scaled_pool_magnitude.getdouble() / 100.0,
                      scaled_network_magnitude.getdouble() / 100.0,
+                     m_magnitude_weight_factor.ToString(),
                      pindex->nHeight,
                      blocks,
                      active_vote_weight_tally.getdouble() / (double) COIN,
@@ -664,13 +686,15 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
         // Log the last block and break if at pindex_end.
         if (pindex == pindex_end) {
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tally_active_vote_weight: net_weight = %f, money_supply = %f, "
-                                            "pool_magnitude = %f, network_magnitude = %f, block height = %i, "
-                                            "blocks = %u, active_vote_weight_tally = %f, active_vote_weight = %f.",
+                                            "pool_magnitude = %f, network_magnitude = %f, magnitude weight factor = %s, "
+                                            "block height = %i, blocks = %u, active_vote_weight_tally = %f, "
+                                            "active_vote_weight = %f.",
                      __func__,
                      net_weight.getdouble() / (double) COIN,
                      money_supply.getdouble() / (double) COIN,
                      scaled_pool_magnitude.getdouble() / 100.0,
                      scaled_network_magnitude.getdouble() / 100.0,
+                     m_magnitude_weight_factor.ToString(),
                      pindex->nHeight,
                      blocks,
                      active_vote_weight_tally.getdouble() / (double) COIN,
@@ -1004,6 +1028,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
+        poll_ref.m_magnitude_weight_factor = payload->m_poll.ResolveMagnitudeWeightFactor();
 
         m_latest_poll = &poll_ref;
 

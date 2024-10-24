@@ -2,6 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/protocol.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/quorum.h"
@@ -796,7 +797,9 @@ public:
         }
 
         // Use integer arithmetic to avoid floating-point discrepancies:
-        m_magnitude_factor = supply / total_mag * 100 / 567;
+        m_magnitude_factor = supply / total_mag
+                             * (uint64_t) m_poll.m_magnitude_weight_factor.GetNumerator()
+                             / (uint64_t) m_poll.m_magnitude_weight_factor.GetDenominator();
         m_resolver.SetSuperblock(std::move(superblock));
     }
 
@@ -1133,6 +1136,7 @@ CAmount ResolveMoneySupplyForPoll(const Poll& poll)
 
     return pindex->nMoneySupply;
 }
+
 } // Anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -1193,6 +1197,11 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
                  __func__, poll_ref.Votes().size(), result.m_poll.m_title);
 
         counter.CountVotes(result, poll_ref.Votes());
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.GetMagnitudeWeightFactor() = %s",
+                 __func__,
+                 poll_ref.Time(),
+                 poll_ref.GetMagnitudeWeightFactor().ToString());
 
         if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
             result.m_active_vote_weight = active_vote_weight;

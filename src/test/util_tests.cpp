@@ -1326,6 +1326,18 @@ BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_int64_t)
     BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
 }
 
+BOOST_AUTO_TEST_CASE(util_Fraction_Initialization_from_string)
+{
+    Fraction fraction = Fraction().FromString("100/-567");
+
+    BOOST_CHECK_EQUAL(fraction.GetNumerator(), -100);
+    BOOST_CHECK_EQUAL(fraction.GetDenominator(), 567);
+    BOOST_CHECK_EQUAL(fraction.IsSimplified(), true);
+    BOOST_CHECK_EQUAL(fraction.IsZero(), false);
+    BOOST_CHECK_EQUAL(fraction.IsPositive(), false);
+    BOOST_CHECK_EQUAL(fraction.IsNonNegative(), false);
+}
+
 BOOST_AUTO_TEST_CASE(util_Fraction_Simplify)
 {
     Fraction fraction(-4, -6);
