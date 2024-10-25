@@ -797,6 +797,19 @@ public:
         }
 
         // Use integer arithmetic to avoid floating-point discrepancies:
+
+        // Overflow analysis:
+        //
+        // Current supply as of block 3404576 = 493424753.
+        // network magnitude = 115000
+        // max value for uint64_t = 2^64 - 1
+        //
+        // 2^64 - 1 >= (493424753 / 115000) * mwf numerator
+        //
+        // This means mwf numerator <= (2^64 - 1) * (115000 / 493424753)
+        //                         ~<= 4.3E15
+        // Even if money supply is approximately doubled we can safely handle 2E15, which means 15 decimal
+        // places in the fraction numerator
         m_magnitude_factor = supply / total_mag
                              * (uint64_t) m_poll.m_magnitude_weight_factor.GetNumerator()
                              / (uint64_t) m_poll.m_magnitude_weight_factor.GetDenominator();

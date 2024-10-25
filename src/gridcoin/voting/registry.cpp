@@ -568,6 +568,11 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
             const arith_uint256 scaled_pool_magnitude,
             const arith_uint256 scaled_network_magnitude)
     {
+        // Unlike the complementary calculation in EnableMagnitudeWeight for vote weights, this calculation is not
+        // subject to overflow because it uses 256 bit integers. In the end it the RESULT is cast to a 64 bit integer, but
+        // by then all of the multiplication and division are done. m_magnitude_weight_factor as a fraction something that is
+        // not expected to stray any farther than the interval [1/10, 1/1], where the current default value of 100 / 567 is
+        // in that interval. So we should never have an overflow problem here.
         active_vote_weight_tally += net_weight + money_supply * (scaled_network_magnitude - scaled_pool_magnitude)
                                                               * arith_uint256(m_magnitude_weight_factor.GetNumerator())
                                                               / arith_uint256(m_magnitude_weight_factor.GetDenominator())
