@@ -353,7 +353,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
 
             // This is a critical initialization, because the magnitude weight factor is only stored
             // in memory and is not serialized.
-            payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor();
+            payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor(GetStartingBlockIndexPtr());
             m_magnitude_weight_factor = payload.m_poll.m_magnitude_weight_factor;
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
@@ -1033,12 +1033,13 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_type = payload->m_poll.m_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
-        poll_ref.m_magnitude_weight_factor = payload->m_poll.ResolveMagnitudeWeightFactor();
 
         m_latest_poll = &poll_ref;
 
         auto result_pair = m_polls_by_txid.emplace(ctx.m_tx.GetHash(), &poll_ref);
         poll_ref.m_txid = result_pair.first->first;
+
+        poll_ref.m_magnitude_weight_factor = payload->m_poll.ResolveMagnitudeWeightFactor(poll_ref.GetStartingBlockIndexPtr());
 
         if (fQtActive && !poll_ref.Expired(GetAdjustedTime())) {
             uiInterface.NewPollReceived(poll_ref.Time());

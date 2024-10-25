@@ -215,15 +215,20 @@ int64_t Poll::Expiration() const
     return m_timestamp + (m_duration_days * 86400);
 }
 
-Fraction Poll::ResolveMagnitudeWeightFactor() const
+Fraction Poll::ResolveMagnitudeWeightFactor(CBlockIndex *index) const
 {
     Fraction magnitude_weight_factor = Params().GetConsensus().DefaultMagnitudeWeightFactor;
 
-           // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
+    // Before V13 magnitude weight factor is 1 / 5.67.
+    if (!IsV13Enabled(index->nHeight)) {
+        return Fraction(100, 567);
+    }
+
+    // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
     ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeweightfactor", m_timestamp);
 
-           // If their is an entry prior or equal in timestemp to the start of the poll and it is active then set the magnitude weight
-           // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+    // If their is an entry prior or equal in timestemp to the start of the poll and it is active then set the magnitude weight
+    // factor to that value. If the last entry is not active (i.e. deleted), then leave at the default.
     if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
         magnitude_weight_factor = Fraction().FromString(protocol_entry->m_value);
     }
