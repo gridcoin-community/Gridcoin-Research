@@ -657,13 +657,7 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
             }
         }
 
-        // Please refer to https://gridcoin.us/assets/docs/grc-bluepaper-section-1.pdf equations 1 and 16 and footnote 5.
-        // This method of computing net_weight is from first principles using the target from the nBits representation
-        // recorded in the index, rather than the GetEstimatedNetworkWeight() function, which uses double fp arithmetic.
-        arith_uint256 target;
-        target.SetCompact(pindex->nBits);
-
-        arith_uint256 net_weight = ~arith_uint256() / arith_uint256(450) / target * arith_uint256(COIN);
+        arith_uint256 net_weight = GetAvgNetworkWeight(pindex);
 
         arith_uint256 money_supply = pindex->nMoneySupply;
 

@@ -270,6 +270,95 @@ double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval)
     return result;
 }
 
+uint64_t GRC::GetAvgNetworkWeight(const unsigned int& block_interval, CBlockIndex* index_start)
+{
+    CBlockIndex* pindex = nullptr;
+    arith_uint256 weight_sum = 0;
+    unsigned int blocks = 0;
+
+    auto block_net_weight = [](CBlockIndex* index)
+    {
+        arith_uint256 target;
+
+        target.SetCompact(index->nBits);
+
+        return ~arith_uint256() / arith_uint256(450) / target * arith_uint256(COIN);
+    };
+
+    if (index_start != nullptr) {
+         pindex = index_start;
+    }
+
+    while (pindex && blocks < block_interval)
+    {
+        if (pindex->IsProofOfStake())
+        {
+            weight_sum += block_net_weight(pindex);
+            ++blocks;
+        }
+
+        pindex = pindex->pprev;
+    }
+
+    return blocks ? (weight_sum / blocks).GetLow64() : 0;
+}
+
+uint64_t GRC::GetAvgNetworkWeight(CBlockIndex* index_start, CBlockIndex* index_end)
+{
+    auto block_net_weight = [](CBlockIndex* index)
+    {
+        arith_uint256 target;
+
+        target.SetCompact(index->nBits);
+
+        return ~arith_uint256() / arith_uint256(450) / target * arith_uint256(COIN);
+    };
+
+    // These conditionals are ordered so that the no argument case quickly evaluates to the net weight of the current block.
+    if (index_end == nullptr) {
+        if (index_start == nullptr) {
+            return block_net_weight(pindexBest).GetLow64();
+        } else {
+            return block_net_weight(index_start).GetLow64();
+        }
+    } else {
+        if (index_start != nullptr) {
+            {
+                CBlockIndex* index;
+                arith_uint256 weight_sum;
+                unsigned int block_count;
+
+                // If we are here, both index_start and index_end are not nullptrs.
+
+                if (!index_start->IsInMainChain()) {
+                    throw std::invalid_argument("Specified start index is not in main chain.");
+                }
+
+                if (!index_end->IsInMainChain()) {
+                    throw std::invalid_argument("Specified end index is not in main chain.");
+                }
+
+                if (index_start->nHeight >= index_end-> nHeight) {
+                    throw std::invalid_argument("End index if specified must be at a higher height than start index.");
+                }
+
+                for (index = index_start, block_count = 0; index != index_end; index = index->pnext, ++block_count)
+                {
+                    weight_sum += block_net_weight(index);
+                }
+
+                // Get last block for inclusive interval
+                weight_sum += block_net_weight(index->pnext);
+                ++block_count;
+
+                return (weight_sum / arith_uint256(block_count)).GetLow64();
+            }
+        } else {
+            throw std::invalid_argument("End index was specified with start index = nullptr.");
+        }
+    }
+}
+
 double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double dConfidence)
 {
     /*
