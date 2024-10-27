@@ -186,6 +186,7 @@ private:
     uint256 m_txid;                             //!< Hash of the poll transaction.
     uint32_t m_payload_version;                 //!< Version of the poll (payload).
     PollType m_type;                            //!< Type of the poll.
+    mutable PollWeightType m_weight_type;       //!< Weight type of the poll.
     const std::string* m_ptitle;                //!< Title of the poll for indexing/mapping purposes.
     std::string m_title;                        //!< Original title of the poll for display purposes.
     mutable int64_t m_timestamp;                //!< Timestamp of the poll transaction.

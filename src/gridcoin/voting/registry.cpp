@@ -355,6 +355,7 @@ PollOption PollReference::TryReadFromDisk(CTxDB& txdb) const
             // in memory and is not serialized.
             payload.m_poll.m_magnitude_weight_factor = payload.m_poll.ResolveMagnitudeWeightFactor(GetStartingBlockIndexPtr());
             m_magnitude_weight_factor = payload.m_poll.m_magnitude_weight_factor;
+            m_weight_type = payload.m_poll.m_weight_type.Value();
 
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: reference.m_timestamp = %" PRId64 " , poll.m_timestamp = %" PRId64 " , "
                      "poll.m_magnitude_weight_factor = %s",
@@ -527,6 +528,36 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
                  __func__, pindex_end->nHeight);
     }
 
+    arith_uint256 active_vote_weight_tally = 0;
+    unsigned int blocks = 0;
+
+    // If poll weight type is balance only, then simply sum up the netweights over the block range of the poll.
+    if (m_weight_type == PollWeightType::BALANCE) {
+        for (CBlockIndex* pindex = pindex_start; pindex ; pindex = pindex->pnext) {
+
+            arith_uint256 net_weight = GetAvgNetworkWeight(pindex);
+
+            active_vote_weight_tally += net_weight;
+            ++blocks;
+
+            if (pindex == pindex_end) {
+                break;
+            }
+        }
+
+        if (!blocks) {
+            return std::nullopt;
+        }
+
+        return (active_vote_weight_tally / blocks).GetLow64();
+
+        // If it is not balance only (handled by above), and is not BALANCE_AND_MAGNITUDE (everything else) then return nullopt.
+        // In reality all weight types other than BALANCE and BALANCE_AND_MAGNITUDE are deprecated in Fern onwards, so this
+        // only applies for legacy polls.
+    } else if (m_weight_type != PollWeightType::BALANCE_AND_MAGNITUDE) {
+        return std::nullopt;
+    }
+
     // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
     // vote contribute to the magnitude correction for pools.
     std::vector<MiningPool> pools_not_voting;
@@ -556,10 +587,8 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     // Note we must use bignums here, because the second term of the active_vote_weight_tally will overflow
     // otherwise. We are also avoiding floating point calculations, because avw will be used in consensus rules in
     // the future.
-    arith_uint256 active_vote_weight_tally = 0;
     arith_uint256 scaled_pool_magnitude = 0;
     arith_uint256 scaled_network_magnitude = 0;
-    unsigned int blocks = 0;
 
     // Lambda for active_vote_weight tally.
     const auto tally_active_vote_weight = [&](
