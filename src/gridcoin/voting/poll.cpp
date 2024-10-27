@@ -217,6 +217,10 @@ int64_t Poll::Expiration() const
 
 Fraction Poll::ResolveMagnitudeWeightFactor(CBlockIndex *index) const
 {
+    if (index == nullptr) {
+        return Fraction();
+    }
+
     Fraction magnitude_weight_factor = Params().GetConsensus().DefaultMagnitudeWeightFactor;
 
     // Before V13 magnitude weight factor is 1 / 5.67.
