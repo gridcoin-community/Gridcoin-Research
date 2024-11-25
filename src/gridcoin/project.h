@@ -13,6 +13,7 @@
 #include "serialize.h"
 #include "pubkey.h"
 #include "sync.h"
+#include "node/ui_interface.h"
 
 #include <memory>
 #include <vector>
@@ -666,6 +667,11 @@ public:
                        PendingProjectEntryMap,
                        std::set<ProjectEntry>,
                        HistoricalProjectEntryMap> ProjectEntryDB;
+
+    //!
+    //! \brief Core signal to indicate that a project status has changed.
+    //!
+    boost::signals2::signal<void (const ProjectEntry_ptr project, ChangeType status)> NotifyProjectChanged;
 
 private:
     //!

@@ -446,8 +446,32 @@ void Whitelist::AddDelete(const ContractContext& ctx)
                  historical.m_hash.GetHex());
     }
 
+    auto project_iter = m_project_db.find(ctx.m_tx.GetHash());
+
     // Finally, insert the new project entry (payload) smart pointer into the m_project_entries map.
-    m_project_entries[payload.m_name] = m_project_db.find(ctx.m_tx.GetHash())->second;
+    m_project_entries[payload.m_name] = project_iter->second;
+
+    ChangeType status;
+
+    if (project_iter->second->m_status == ProjectEntryStatus::DELETED) {
+        status = CT_DELETED;
+    } else if (current_project_entry_present) {
+        status = CT_UPDATED;
+    } else {
+        status = CT_NEW;
+    }
+
+    NotifyProjectChanged(project_iter->second, status);
+
+    // notify an external script when a project is added to the whitelist, or a project status changes.
+    #if HAVE_SYSTEM
+    std::string cmd = gArgs.GetArg("-projectnotify", "");
+
+    if (!cmd.empty()) {
+        std::thread t(runCommand, cmd);
+        t.detach(); // thread runs free
+    }
+    #endif
 
     return;
 
