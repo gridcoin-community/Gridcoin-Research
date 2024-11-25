@@ -148,7 +148,7 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
             - name: Install dependencies
-              run: brew install
+              run: brew install --overwrite
                   ${{matrix.deps}}
                   boost
                   ccache
