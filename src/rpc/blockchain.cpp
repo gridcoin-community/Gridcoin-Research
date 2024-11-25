@@ -2592,15 +2592,23 @@ UniValue debug(const UniValue& params, bool fHelp)
 
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "listprojects\n"
+                "listprojects <bool>\n"
+                "\n"
+                "<bool> -> true to show all projects, including greylisted and deleted. Defaults to false.\n"
                 "\n"
                 "Displays information about whitelisted projects.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    for (const auto& project : GRC::GetWhitelist().Snapshot().Sorted()) {
+    GRC::Project::ProjectFilterFlag filter = GRC::Project::ProjectFilterFlag::ACTIVE;
+
+    if (params.size() && params[0].get_bool() == true) {
+        filter = GRC::Project::ProjectFilterFlag::ALL;
+    }
+
+    for (const auto& project : GRC::GetWhitelist().Snapshot(filter).Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -2615,6 +2623,7 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         }
 
         entry.pushKV("time", DateTimeStrFormat(project.m_timestamp));
+        entry.pushKV("status", project.StatusToString());
 
         res.pushKV(project.m_name, entry);
     }
