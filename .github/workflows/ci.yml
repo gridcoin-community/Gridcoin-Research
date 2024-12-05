@@ -53,8 +53,8 @@ jobs:
           run: |
             ./ci/test_run_all.sh
     test-macos:
-        name: macOS 12 native  [GOAL install]  [GUI]  [no depends]
-        runs-on: macos-12
+        name: macOS 13 native  [GOAL install]  [GUI]  [no depends]
+        runs-on: macos-13
         env:
             DANGER_RUN_CI_ON_HOST: true
             CI_USE_APT_INSTALL: no
