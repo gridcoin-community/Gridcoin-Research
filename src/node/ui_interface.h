@@ -1,12 +1,13 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2012-2020 The Bitcoin developers
-// Copyright (c) 2014-2022 The Gridcoin developers
+// Copyright (c) 2014-2024 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_NODE_UI_INTERFACE_H
 #define BITCOIN_NODE_UI_INTERFACE_H
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
