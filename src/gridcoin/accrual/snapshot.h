@@ -13,7 +13,10 @@
 #include "gridcoin/accrual/computer.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
+#include "gridcoin/protocol.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/superblock.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/filehash.h"
 #include "node/blockstorage.h"
 #include "serialize.h"
@@ -29,6 +32,7 @@ namespace {
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
+/*
 //!
 //! \brief Numerator of the static magnitude unit coefficient for snapshot
 //! accrual (block version 11 and greater).
@@ -40,6 +44,7 @@ constexpr int64_t MAG_UNIT_NUMERATOR = 1;
 //! accrual (block version 11 and greater).
 //!
 constexpr int64_t MAG_UNIT_DENOMINATOR = 4;
+*/
 
 //!
 //! \brief Calculates the current accrual for a CPID by adding the snapshot of
@@ -62,6 +67,66 @@ public:
     }
 
     //!
+    //! \brief Returns the current magnitude unit allocation fraction as of the provided superblock. Prior to block v13 this is
+    //! fixed at 1/4.
+    //!
+    //! The magnitude unit here will only change along superblock boundaries. Whatever the active value of the magnitude unit is
+    //! at the superblock provided will be used for accruals.
+    //!
+    //! \return Allocation Fraction representing Magnitude Unit.
+    //!
+    Allocation GetMagnitudeUnit() const
+    {
+        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
+
+        // Before V13 magnitude unit is 1/4.
+        if (!IsV13Enabled(m_superblock.m_height)) {
+            return Allocation(1, 4);
+        }
+
+        // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
+        ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", m_superblock.m_timestamp);
+
+        // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
+            magnitude_unit = Fraction().FromString(protocol_entry->m_value);
+        }
+
+        return magnitude_unit;
+    }
+
+    //!
+    //! \brief Static version of GetMagnitudeUnit used in Tally class.
+    //!
+    //! \param index for which to return the current magnitude unit.
+    //!
+    //! \return Allocation fraction representing magnitude unit.
+    //!
+    static Allocation GetMagnitudeUnit(CBlockIndex* index)
+    {
+        CBlockIndex* sb_index = BlockFinder::FindLatestSuperblock(index);
+
+        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
+
+               // Before V13 magnitude unit is 1/4.
+        if (!IsV13Enabled(sb_index->nHeight)) {
+            return Allocation(1, 4);
+        }
+
+               // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
+        ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", sb_index->GetBlockTime());
+
+               // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
+               // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
+            magnitude_unit = Fraction().FromString(protocol_entry->m_value);
+        }
+
+        return magnitude_unit;
+    }
+
+    //!
     //! \brief Get the magnitude unit factored into the reward calculation.
     //!
     //! CONSENSUS: This method produces a semantic floating-point value for
@@ -72,7 +137,7 @@ public:
     //!
     //! \return Amount paid per unit of magnitude per day in units of GRC.
     //!
-    static double MagnitudeUnit()
+    double MagnitudeUnit() const
     {
         // Superblock-based accrual calculations do not rely on the rolling
         // two-week network payment average. Instead, we calculate research
@@ -80,7 +145,7 @@ public:
         // quantity of the formula used to determine the magnitude unit for
         // the legacy research age accrual calculations.
         //
-        // Where...
+        // Where (prior to block v13) ...
         //
         //   blocks_per_day = 960
         //   grc_per_block = 50
@@ -95,7 +160,8 @@ public:
         //
         // ...rounded-up to 0.25:
         //
-        return static_cast<double>(MAG_UNIT_NUMERATOR) / MAG_UNIT_DENOMINATOR;
+        // V13+, the magnitude unit can be set by protocol entry.
+        return GetMagnitudeUnit().ToDouble();
     }
 
     //!
@@ -142,7 +208,7 @@ public:
         //
         const uint64_t base_accrual = accrual_timespan
             * CurrentMagnitude(cpid).Scaled()
-            * MAG_UNIT_NUMERATOR;
+            * GetMagnitudeUnit().GetNumerator();
 
         // If the accrual calculation will overflow a 64-bit integer, we need
         // more bits. Arithmetic with the big integer type is much slower and
@@ -155,7 +221,7 @@ public:
             accrual_bn *= COIN;
             accrual_bn /= 86400;
             accrual_bn /= Magnitude::SCALE_FACTOR;
-            accrual_bn /= MAG_UNIT_DENOMINATOR;
+            accrual_bn /= GetMagnitudeUnit().GetDenominator();
 
             accrual = accrual_bn.GetLow64();
         } else {
@@ -163,7 +229,7 @@ public:
                     * COIN
                     / 86400
                     / Magnitude::SCALE_FACTOR
-                    / MAG_UNIT_DENOMINATOR;
+                    / GetMagnitudeUnit().GetDenominator();
         }
 
         LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: CPID = %s, LastRewardHeight() = %u, accrual_timespan = %" PRId64 ", "
@@ -263,7 +329,7 @@ public:
         // the amount of accrual that a CPID can collect over two days when the
         // CPID achieves the maximum magnitude value supported in a superblock.
         //
-        // Where...
+        // Where... (for block versions below V13)
         //
         //   max_magnitude = 32767
         //   magnitude_unit = 0.25
@@ -272,9 +338,10 @@ public:
         //
         //   max_magnitude * magnitude_unit * 2 = max_accrual = 16383.5
         //
-        // ...rounded-up to:
+        // ...rounded-up to 16384.
         //
-        return 16384 * COIN;
+        // For V13+, the magnitude unit can be set by protocol entry.
+        return (GetMagnitudeUnit() * 32768 * 2 * COIN).ToCAmount();
     }
 
     //!
@@ -290,7 +357,7 @@ public:
     //!
     double MagnitudeUnit() const override
     {
-        return SnapshotCalculator::MagnitudeUnit();
+        return GetMagnitudeUnit().ToDouble();
     }
 
     int64_t AccrualAge() const override

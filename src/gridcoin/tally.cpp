@@ -1063,10 +1063,10 @@ CAmount Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(const CBlockIndex* const pindex)
+double Tally::GetMagnitudeUnit(CBlockIndex* const pindex)
 {
     if (pindex->nVersion >= 11) {
-        return SnapshotCalculator::MagnitudeUnit();
+        return SnapshotCalculator::GetMagnitudeUnit(pindex).ToDouble();
     }
 
     return g_network_tally.GetMagnitudeUnit(pindex->nTime);
@@ -1158,7 +1158,9 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
     const auto tally_accrual_period = [&](
         const int64_t low_time,
         const int64_t high_time,
-        const GRC::Magnitude magnitude)
+        const GRC::Magnitude magnitude,
+        const Allocation magnitude_unit,
+        CAmount max_reward)
     {
         int64_t time_interval = high_time - low_time;
 
@@ -1175,7 +1177,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
         // correctly in the bignumber calculations.
         const uint64_t base_accrual = abs_time_interval
             * magnitude.Scaled()
-            * MAG_UNIT_NUMERATOR;
+            * magnitude_unit.GetNumerator();
 
         int64_t period = 0;
 
@@ -1184,7 +1186,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
             accrual_bn *= COIN;
             accrual_bn /= 86400;
             accrual_bn /= Magnitude::SCALE_FACTOR;
-            accrual_bn /= MAG_UNIT_DENOMINATOR;
+            accrual_bn /= magnitude_unit.GetDenominator();
 
             period = accrual_bn.GetLow64() * (int64_t) sign;
         }
@@ -1194,13 +1196,10 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
                     * COIN
                     / 86400
                     / Magnitude::SCALE_FACTOR
-                    / MAG_UNIT_DENOMINATOR;
+                    / magnitude_unit.GetDenominator();
         }
 
         accrual += period;
-
-        // TODO: Change this to refer to MaxReward() from the snapshot computer.
-        int64_t max_reward = 16384 * COIN;
 
         if (accrual > max_reward)
         {
@@ -1267,7 +1266,12 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
             // Stop the accrual when we get to a superblock that is before the beacon advertisement.
             if (pindex->nTime < beacon_ptr->m_timestamp) break;
 
-            CAmount period = tally_accrual_period(pindex->nTime, pindex_high->nTime, magnitude);
+            // We are only going to use the accrual computer here for the magnitude unit and max_reward.
+            AccrualComputer computer = GetSnapshotComputer(cpid, pindex->GetBlockTime(), pindex);
+
+            int64_t max_reward = computer->MaxReward();
+
+            CAmount period = tally_accrual_period(pindex->nTime, pindex_high->nTime, magnitude, computer->MagnitudeUnit(), max_reward);
 
             LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: period_num = %u, "
                      "low height = %i, high height = %u, magnitude at low height SB = %f, "

@@ -57,7 +57,7 @@ UniValue MRCToJson(const GRC::MRC& mrc) {
     return json;
 }
 
-UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
+UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -155,7 +155,7 @@ UniValue SuperblockToJson(const GRC::SuperblockPtr& superblock)
     return SuperblockToJson(*superblock);
 }
 
-UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
+UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     UniValue result(UniValue::VOBJ);
 

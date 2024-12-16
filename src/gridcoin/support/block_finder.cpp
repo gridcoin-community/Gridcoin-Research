@@ -57,16 +57,38 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 }
 
 // The arguments are passed by value on purpose.
-CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* index)
+CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in)
 {
+    CBlockIndex* index = index_in;
+
     // If no starting index is provided (i.e. second parameter is omitted or nullptr is passed in,
     // then start at the Genesis Block. This is in general expensive and should be avoided.
-    if (!index) {
+    if (index == nullptr) {
         index = pindexGenesisBlock;
     }
 
     while (index && index->pnext && index->nTime < time) {
         index = index->pnext;
+    }
+
+    return index;
+}
+
+CBlockIndex* BlockFinder::FindLatestSuperblock(CBlockIndex* const index_in)
+{
+    CBlockIndex* index = index_in;
+
+    // If no input index is provided, start at the head of the chain.
+    if (index == nullptr) {
+        index = pindexBest;
+    }
+
+    while (index && index->pprev) {
+        if (index->IsSuperblock()) {
+            break;
+        }
+
+        index = index->pprev;
     }
 
     return index;
