@@ -32,7 +32,7 @@ export HOST=${HOST:-$("$BASE_ROOT_DIR/depends/config.guess")}
 # Whether to prefer BusyBox over GNU utilities
 export USE_BUSY_BOX=${USE_BUSY_BOX:-false}
 export CONTAINER_NAME=${CONTAINER_NAME:-ci_unnamed}
-export DOCKER_NAME_TAG=${DOCKER_NAME_TAG:-ubuntu:18.04}
+export DOCKER_NAME_TAG=${DOCKER_NAME_TAG:-ubuntu:20.04}
 # See man 7 debconf
 export DEBIAN_FRONTEND=noninteractive
 export CCACHE_SIZE=${CCACHE_SIZE:-300M}
