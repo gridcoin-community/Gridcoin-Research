@@ -143,17 +143,18 @@ public:
     bool connect(const std::string& server, const std::string& port)
     {
         boost::asio::ip::tcp::resolver resolver(GetIOService(stream));
-        boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(server, port);
-        boost::asio::ip::tcp::resolver::iterator end;
-        boost::system::error_code error = boost::asio::error::host_not_found;
-        while (error && endpoint_iterator != end)
-        {
+        boost::system::error_code error;
+
+        for (const auto& res : resolver.resolve(server, port)) {
             stream.lowest_layer().close();
-            stream.lowest_layer().connect(*endpoint_iterator++, error);
+            stream.lowest_layer().connect(res, error);
+
+            if (!error) {
+                return true;
+            }
         }
-        if (error)
-            return false;
-        return true;
+
+        return false;
     }
 
 private:
