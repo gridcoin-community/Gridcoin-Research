@@ -15,7 +15,7 @@ bool Diagnose::m_hasPoolProjects = false;
 bool Diagnose::m_configured_for_investor_mode = false;
 std::unordered_map<Diagnose::TestNames, Diagnose*> Diagnose::m_name_to_test_map;
 CCriticalSection Diagnose::cs_diagnostictests;
-boost::asio::io_service Diagnose::s_ioService;
+boost::asio::io_context Diagnose::s_ioService;
 
 /**
  * The function check the time is correct on your PC. It checks the skew in the clock.
@@ -102,102 +102,39 @@ void VerifyClock::timerHandle(
 void VerifyClock::connectToNTPHost()
 {
     m_startedTesting = true;
-    boost::asio::ip::udp::resolver resolver(s_ioService);
 
     try {
         FastRandomContext rng;
 
         std::string ntp_host = m_ntp_hosts[rng.randrange(m_ntp_hosts.size())];
 
-#if BOOST_VERSION > 106501
-        // results_type is only in boost 1.66 and above.
-        boost::asio::ip::udp::resolver::results_type receiver_endpoint;
+        boost::asio::ip::udp::resolver resolver(s_ioService);
+        auto resolved = resolver.resolve(boost::asio::ip::udp::v4(), ntp_host, "ntp");
 
-        receiver_endpoint = resolver.resolve(boost::asio::ip::udp::v4(), ntp_host, "ntp");
+        if (m_udpSocket.is_open())
+            m_udpSocket.close();
+        m_udpSocket.open(boost::asio::ip::udp::v4());
+        boost::asio::connect(m_udpSocket, resolved);
 
-        if (receiver_endpoint == boost::asio::ip::udp::resolver::iterator()) {
-            // If can not connect to server, then finish the test with a warning.
+        size_t bytes_transferred = m_udpSocket.send(boost::asio::buffer(m_sendBuf));
+
+        if (bytes_transferred != 48) {
             clkReportResults(0, true);
         } else {
-            if (m_udpSocket.is_open())
-                m_udpSocket.close();
-            m_udpSocket.open(boost::asio::ip::udp::v4());
-
-            // Let's put the send here to reduce the complexity of this. No need for the send to be async.
-            size_t bytes_transferred = 0;
-
-            try {
-                bytes_transferred = m_udpSocket.send_to(boost::asio::buffer(m_sendBuf), *receiver_endpoint);
-            } catch (boost::system::error_code& e) {
-                clkReportResults(0, true);
-            }
-
-            if (bytes_transferred != 48) {
-                clkReportResults(0, true);
-            } else {
-                m_udpSocket.async_receive_from(
-                            boost::asio::buffer(m_recvBuf),
-                            m_sender_endpoint,
-                            boost::bind(&VerifyClock::sockRecvHandle, this,
-                                        boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-            }
+            m_udpSocket.async_receive(
+                        boost::asio::buffer(m_recvBuf),
+                        boost::bind(&VerifyClock::sockRecvHandle, this,
+                                    boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
         }
-
-#else
-        boost::asio::ip::udp::resolver::query query(
-                    boost::asio::ip::udp::v4(),
-                    ntp_host,
-                    "ntp");
-
-        boost::asio::ip::udp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-
-        if (endpoint_iterator == boost::asio::ip::udp::resolver::iterator()) {
-            // If can not connect to server, then finish the test with a warning.
-            clkReportResults(0, true);
-        } else {
-            if (m_udpSocket.is_open())
-                m_udpSocket.close();
-            m_udpSocket.open(boost::asio::ip::udp::v4());
-
-            // Let's put the send here to reduce the complexity of this. No need for the send to be async.
-            size_t bytes_transferred = 0;
-
-            try {
-                bytes_transferred = m_udpSocket.send_to(boost::asio::buffer(m_sendBuf), *endpoint_iterator);
-            } catch (boost::system::error_code& e) {
-                clkReportResults(0, true);
-            }
-
-            if (bytes_transferred != 48) {
-                clkReportResults(0, true);
-            } else {
-                boost::asio::ip::udp::endpoint sender_endpoint;
-
-                m_udpSocket.async_receive_from(
-                            boost::asio::buffer(m_recvBuf),
-                            sender_endpoint,
-                            boost::bind(&VerifyClock::sockRecvHandle, this,
-                                        boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
-            }
-        }
-#endif
     } catch (...) {
         clkReportResults(0, true);
     }
 }
 
-void VerifyTCPPort::handle_connect(const boost::system::error_code& err,
-                                   boost::asio::ip::tcp::resolver::iterator endpoint_iterator)
+void VerifyTCPPort::handle_connect(const boost::system::error_code& err)
 {
     if (!err) {
         this->TCPFinished();
-    } else if (endpoint_iterator != boost::asio::ip::tcp::resolver::iterator()) {
-        // The connection failed. Try the next endpoint in the list.
-        m_tcpSocket.close();
-        boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
-        m_tcpSocket.async_connect(endpoint,
-                                  boost::bind(&VerifyTCPPort::handle_connect, this,
-                                              boost::asio::placeholders::error, ++endpoint_iterator));
     } else {
         m_tcpSocket.close();
         m_results = WARNING;
