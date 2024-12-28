@@ -344,13 +344,25 @@ public:
     {
         std::vector<std::string> string_fraction = split(string, "/");
 
+        if (string_fraction.size() > 2 || string_fraction.size() < 1) {
+            throw std::out_of_range("fraction input string cannot be parsed to fraction");
+        }
+
         int64_t numerator;
         int64_t denominator;
 
-        if (string_fraction.size() != 2
-            || !ParseInt64(string_fraction[0], &numerator)
-            || !ParseInt64(string_fraction[1], &denominator)) {
-            throw std::out_of_range("Fraction input string cannot be parsed to fraction.");
+        if (string_fraction.size() == 1) {
+            if (!ParseInt64(string_fraction[0], &numerator)) {
+                throw std::out_of_range("fraction input string cannot be parsed to fraction");
+            }
+
+            denominator = 1;
+        } else {
+            // There must be two elements to the string fraction if we are here.
+            if (!ParseInt64(string_fraction[0], &numerator)
+                || !ParseInt64(string_fraction[1], &denominator)) {
+                throw std::out_of_range("fraction input string cannot be parsed to fraction");
+            }
         }
 
         return Fraction(numerator, denominator, true);
