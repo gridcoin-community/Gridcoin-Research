@@ -204,13 +204,27 @@ CAmount MRC::ComputeMRCFee() const
     //
     // If the MRC is exactly at the end of the zero_payout_interval, the fees are effectively
     // fee_fraction * m_research_subsidy.
-    //
-    // Overflow analysis. The accrual limit in the snapshot computer is 16384. For a zero_payout_interval of 14 days,
-    // m_research_subsidy * zero_payout_interval = 19818086400. std::numeric_limits<int64_t>::max() / 19818086400
-    // = 465401747207, which means the numerator of the fee_fraction would have to be that number or higher to cause an
-    // overflow of the below. This is not likely to happen for any reasonable choice of the fee_fraction.
-    fee = m_research_subsidy * zero_payout_interval * fee_fraction.GetNumerator()
-                             / mrc_payment_interval / fee_fraction.GetDenominator();
+
+    // To accommodate V13+ blocks which can have much larger magnitude units (up to 5), we have changed the fee calculation
+    // to switch to 256 bit integer calculations if necessary similar to what is in AccrualDelta(). The rationale for the overflow
+    // test is as follows. The m_research_subsidy converted back to GRC (which divides by 100,000,000 and therefore rounds down) + 1
+    // to get the equivalent of rounding up, then multipled by the zero_payout_interval and the fee_fraction numerator is checked
+    // against the max numeric limit of CAmount divided by 100,000,000. If it is greater than this, then 256 bit integer arithmetic
+    // is used else the original calculation is used.
+    CAmount overflow_test = (m_research_subsidy / COIN + 1) * zero_payout_interval * fee_fraction.GetNumerator();
+
+    if (overflow_test > std::numeric_limits<CAmount>::max() / COIN) {
+        arith_uint256 fee_bn = m_research_subsidy;
+        fee_bn *= zero_payout_interval;
+        fee_bn *= fee_fraction.GetNumerator();
+        fee_bn /= mrc_payment_interval;
+        fee_bn /= fee_fraction.GetDenominator();
+
+        fee = fee_bn.GetLow64();
+    } else {
+        fee = m_research_subsidy * zero_payout_interval * fee_fraction.GetNumerator()
+                                 / mrc_payment_interval / fee_fraction.GetDenominator();
+    }
 
     return fee;
 }

@@ -32,20 +32,6 @@ namespace {
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
-/*
-//!
-//! \brief Numerator of the static magnitude unit coefficient for snapshot
-//! accrual (block version 11 and greater).
-//!
-constexpr int64_t MAG_UNIT_NUMERATOR = 1;
-
-//!
-//! \brief Denominator of the static magnitude unit coefficient for snapshot
-//! accrual (block version 11 and greater).
-//!
-constexpr int64_t MAG_UNIT_DENOMINATOR = 4;
-*/
-
 //!
 //! \brief Calculates the current accrual for a CPID by adding the snapshot of
 //! accrued research rewards of the CPID's research account to rewards accrued
@@ -77,12 +63,13 @@ public:
     //!
     Allocation GetMagnitudeUnit() const
     {
-        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
-
-        // Before V13 magnitude unit is 1/4.
+        // Fern+ and before V13 magnitude unit is fixed at 1/4.
         if (!IsV13Enabled(m_superblock.m_height)) {
             return Allocation(1, 4);
         }
+
+        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
+        Allocation max_magnitude_unit = Params().GetConsensus().MaxMagnitudeUnit;
 
         // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", m_superblock.m_timestamp);
@@ -91,6 +78,15 @@ public:
         // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction().FromString(protocol_entry->m_value);
+        }
+
+        // Clamp to MaxMagnitudeUnit if necessary
+        if (magnitude_unit > max_magnitude_unit) {
+            magnitude_unit = max_magnitude_unit;
+            LogPrintf("WARN: %s: Magnitude Unit specified by protocol is greater than %s. Clamping to %s.",
+                      __func__,
+                      max_magnitude_unit.ToString(),
+                      max_magnitude_unit.ToString());
         }
 
         return magnitude_unit;
@@ -107,20 +103,30 @@ public:
     {
         CBlockIndex* sb_index = BlockFinder::FindLatestSuperblock(index);
 
-        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
-
-               // Before V13 magnitude unit is 1/4.
+        // Before V13 magnitude unit is 1/4.
         if (!IsV13Enabled(sb_index->nHeight)) {
             return Allocation(1, 4);
         }
 
-               // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
+        Allocation magnitude_unit = Params().GetConsensus().DefaultMagnitudeUnit;
+        Allocation max_magnitude_unit = Params().GetConsensus().MaxMagnitudeUnit;
+
+        // Find the current protocol entry value for Magnitude Weight Factor, if it exists.
         ProtocolEntryOption protocol_entry = GetProtocolRegistry().TryLastBeforeTimestamp("magnitudeunit", sb_index->GetBlockTime());
 
-               // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
-               // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
+        // If their is an entry prior or equal in timestamp to the superblock and it is active then set the magnitude unit
+        // to that value. If the last entry is not active (i.e. deleted), then leave at the default.
         if (protocol_entry != nullptr && protocol_entry->m_status == ProtocolEntryStatus::ACTIVE) {
             magnitude_unit = Fraction().FromString(protocol_entry->m_value);
+        }
+
+        // Clamp to MaxMagnitudeUnit if necessary
+        if (magnitude_unit > max_magnitude_unit) {
+            magnitude_unit = max_magnitude_unit;
+            LogPrintf("WARN: %s: Magnitude Unit specified by protocol is greater than %s. Clamping to %s.",
+                      __func__,
+                      max_magnitude_unit.ToString(),
+                      max_magnitude_unit.ToString());
         }
 
         return magnitude_unit;
