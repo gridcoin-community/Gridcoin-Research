@@ -63,7 +63,9 @@ public:
     enum WhiteListStatus
     {
         False,
-        Greylisted,
+        Excluded,
+        Manually_Greylisted,
+        Automatically_Greylisted,
         True
     };
 

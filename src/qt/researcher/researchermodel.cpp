@@ -486,7 +486,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
     // projects behave in the network.
     //
 
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
     std::vector<std::string> excluded_projects;
 
     {
@@ -531,8 +531,14 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
             if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
                 != excluded_projects.end()) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
-                row.m_error = tr("Greylisted");
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+                row.m_error = tr("Excluded");
+            } else if (whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
+                row.m_error = tr("Manually Greylisted");
+            } else if (whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
+                row.m_error = tr("Automatically Greylisted");
             } else {
                 row.m_whitelisted = ProjectRow::WhiteListStatus::True;
             }
@@ -565,7 +571,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
     // Add any whitelisted projects not detected from the local BOINC client:
     //
-    for (const auto& project : GetWhitelist().Snapshot()) {
+    for (const auto& project : GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
         if (rows.find(project.m_name) != rows.end()) {
             continue;
         }
@@ -583,11 +589,17 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         } else {
             row.m_error = tr("Uses external adapter");
         }
-
+        
         if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
             != excluded_projects.end()) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
-            row.m_error = tr("Greylisted");
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+            row.m_error = tr("Excluded");
+        } else if (project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
+            row.m_error = tr("Manually Greylisted");
+        } else if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
+            row.m_error = tr("Automatically Greylisted");
         } else {
             row.m_whitelisted = ProjectRow::WhiteListStatus::True;
         }
