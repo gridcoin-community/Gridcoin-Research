@@ -5688,7 +5688,18 @@ ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global)
 Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContractDirectFromStatsUpdate,
                                         bool bFromHousekeeping)
 {
-    Superblock empty_superblock;
+    // This selects the correct superblock contract version, since it may or may not be aligned with block V13 mandatory height.
+    uint32_t superblock_contract_version = Superblock::CURRENT_VERSION;
+
+    {
+        LOCK(cs_main);
+
+        if (!IsSuperblockV3Enabled(nBestHeight)) {
+            superblock_contract_version = 2;
+        }
+    }
+
+    Superblock empty_superblock(superblock_contract_version);
 
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
@@ -5762,7 +5773,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 
                     ConvergedScraperStatsCache.Convergence = StructConvergedManifest;
 
-                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache);
+                    superblock = Superblock::FromConvergence(ConvergedScraperStatsCache, superblock_contract_version);
 
                     if (!superblock.WellFormed())
                     {
@@ -5819,7 +5830,7 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
             // Notice there is NO update to the ConvergedScraperStatsCache here, as that is not
             // appropriate for the single shot.
             ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByCurrentFileManifestState();
-            superblock = Superblock::FromStats(stats_and_verified_beacons);
+            superblock = Superblock::FromStats(stats_and_verified_beacons, superblock_contract_version);
 
             // Signal the UI there is a contract.
             if(superblock.WellFormed())

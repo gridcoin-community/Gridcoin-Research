@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_SUPERBLOCK_H
 #define GRIDCOIN_SUPERBLOCK_H
 
+#include "gridcoin/project.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/scraper/fwd.h"
@@ -258,7 +259,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief The maximum allowed size of a serialized superblock in bytes.
@@ -1186,6 +1187,21 @@ public:
         uint64_t m_total_rac;
     }; // ProjectIndex
 
+    struct ProjectStatus
+    {
+        ProjectStatus() {};
+
+        std::vector<ProjectEntry::Status> m_project_status;
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_project_status);
+        }
+    };
+
     struct VerifiedBeacons
     {
         //!
@@ -1239,6 +1255,7 @@ public:
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magnitudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
+    ProjectStatus m_project_status; //!< Wrapped project_status vector
 
     ADD_SERIALIZE_METHODS;
 
@@ -1254,6 +1271,10 @@ public:
         READWRITE(m_cpids);
         READWRITE(m_projects);
         READWRITE(m_verified_beacons);
+
+        if (m_version > 2) {
+            READWRITE(m_project_status);
+        }
     }
 
     //!

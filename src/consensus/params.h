@@ -39,6 +39,10 @@ struct Params {
     int PollV3Height;
     /** Block height at which project v2 contracts are allowed */
     int ProjectV2Height;
+    /**
+     * @brief Block height at which superblock v3 contracts are allowed/required
+     */
+    int SuperblockV3Height;
     /** The fraction of rewards taken as fees in an MRC after the zero payment interval. Only consesnus critical
       * at BlockV12Height or above.
       */
