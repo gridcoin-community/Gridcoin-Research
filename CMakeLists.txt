@@ -18,8 +18,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-
 option(HUNTER_ENABLED "Enable Hunter package manager" OFF)
 include(HunterGate)
 HunterGate(
-    URL "https://github.com/cpp-pm/hunter/archive/refs/tags/v0.25.3.tar.gz"
-    SHA1 "0dfbc2cb5c4cf7e83533733bdfd2125ff96680cb"
+    URL "https://github.com/cpp-pm/hunter/archive/v0.25.8.tar.gz"
+    SHA1 "26c79d587883ec910bce168e25f6ac4595f97033"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake/Hunter/config.cmake"
 )
 
