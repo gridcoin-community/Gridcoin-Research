@@ -132,7 +132,7 @@ endif()
 
 set(BOOST_MINIMUM_VERSION 1.63.0)
 set(BOOST_COMPONENTS filesystem iostreams thread)
-set(BOOST_HUNTER_COMPONENTS ${BOOST_COMPONENTS})
+set(BOOST_HUNTER_COMPONENTS system atomic regex ${BOOST_COMPONENTS})
 if(ENABLE_TESTS)
     list(APPEND BOOST_COMPONENTS unit_test_framework)
     list(APPEND BOOST_HUNTER_COMPONENTS test)
@@ -169,7 +169,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
     # Allow to find old Boost (pre 1.70) with new CMake (3.30 and later).
     cmake_policy(SET CMP0167 OLD)
 endif()
-find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
+find_package(Boost ${BOOST_MINIMUM_VERSION}...<1.87.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
 
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
