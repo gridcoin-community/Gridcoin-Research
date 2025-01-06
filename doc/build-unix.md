@@ -97,21 +97,21 @@ Dependency Build Instructions: OpenSUSE
 Build requirements:
 
     sudo zypper install -t pattern devel_basis
-    sudo zypper install cmake libtool automake autoconf pkg-config libopenssl-devel libevent-devel
+    sudo zypper install cmake libtool automake autoconf pkg-config libcurl-devel libopenssl-devel libevent-devel libzip-devel libzip-tools
 
 Tumbleweed:
 
-    sudo zypper install libboost_system1_*_0-devel libboost_filesystem1_*_0-devel libboost_test1_*_0-devel libboost_thread1_*_0-devel
+    sudo zypper install libboost_system1*-devel libboost_filesystem1*-devel libboost_iostreams1*-devel libboost_test1*-devel libboost_thread1*-devel libboost_atomic1*-devel libboost_regex1*-devel
 
 Leap:
 
-    sudo zypper install libboost_system1_61_0-devel libboost_filesystem1_61_0-devel libboost_test1_61_0-devel libboost_thread1_61_0-devel
+    sudo zypper install libboost_system1_66_0-devel libboost_iostreams1_66_0-devel libboost_filesystem1_66_0-devel libboost_test1_66_0-devel libboost_thread1_66_0-devel libboost_atomic1_66_0-devel libboost_regex1_66_0-devel
 
 If that doesn't work, you can install all boost development packages with:
 
 Leap:
 
-    sudo zypper install boost_1_61-devel
+    sudo zypper install libboost_*1_66_0-devel
 
 Optional (see `ENABLE_UPNP / DEFAULT_UPNP` options for CMake and
 `--with-miniupnpc / --enable-upnp-default` for Autotools):
