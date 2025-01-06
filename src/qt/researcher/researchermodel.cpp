@@ -589,7 +589,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         } else {
             row.m_error = tr("Uses external adapter");
         }
-        
+
         if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
             != excluded_projects.end()) {
             row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;

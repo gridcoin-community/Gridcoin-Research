@@ -6,6 +6,7 @@
 #include "chainparams.h"
 #include "blockchain.h"
 #include "gridcoin/protocol.h"
+#include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
@@ -2627,6 +2628,38 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
         res.pushKV(project.m_name, entry);
     }
+
+    return res;
+}
+
+UniValue getautogreylist(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 0) {
+        throw runtime_error(
+            "getautogreylist \n"
+            "\n"
+            "Displays information about projects that meet auto greylisting criteria.");
+    }
+
+    UniValue res(UniValue::VOBJ);
+
+    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
+
+    greylist_ptr->Refresh();
+
+    UniValue autogreylist(UniValue::VARR);
+
+    for (auto iter : *greylist_ptr) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("project:", iter.first);
+        entry.pushKV("zcd", iter.second.GetZCD());
+        entry.pushKV("WAS", iter.second.GetWAS().ToDouble());
+
+        autogreylist.push_back(entry);
+    }
+
+    res.pushKV("auto_greylist_projects", autogreylist);
 
     return res;
 }

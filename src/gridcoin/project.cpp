@@ -2,8 +2,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/claim.h"
 #include "main.h"
+#include "node/blockstorage.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
 #include "node/ui_interface.h"
 
 #include <algorithm>
@@ -297,12 +301,148 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
 }
 
 // -----------------------------------------------------------------------------
+// Class: AutoGreylist - automatic greylisting
+// -----------------------------------------------------------------------------
+
+AutoGreylist::AutoGreylist()
+    : m_greylist_ptr(std::make_shared<Greylist>())
+    , m_superblock_hash(uint256 {})
+{
+    //m_greylist_ptr = std::make_shared<Greylist>();
+
+    Refresh();
+}
+
+AutoGreylist::Greylist::const_iterator AutoGreylist::begin() const
+{
+    return m_greylist_ptr->begin();
+}
+
+AutoGreylist::Greylist::const_iterator AutoGreylist::end() const
+{
+    return m_greylist_ptr->end();
+}
+
+AutoGreylist::Greylist::size_type AutoGreylist::size() const
+{
+    return m_greylist_ptr->size();
+}
+
+void AutoGreylist::Refresh()
+{
+    LOCK(cs_main);
+
+    // If the current superblock has not changed, then no need to do anything.
+    if (!m_superblock_hash.IsNull() && Quorum::CurrentSuperblock()->GetHash() == m_superblock_hash) {
+        return;
+    }
+
+    SuperblockPtr superblock_ptr = Quorum::CurrentSuperblock();
+
+    if (!superblock_ptr.IsEmpty()) {
+        RefreshWithSuperblock(superblock_ptr);
+    }
+}
+
+void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
+{
+    LOCK(lock);
+
+    // We need the current whitelist, including all records except deleted. This will include greylisted projects,
+    // whether currently marked as manually greylisted from protocol or overridden to auto greylisted by the auto greylist class.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
+    m_greylist_ptr->clear();
+
+    for (const auto& iter : whitelist) {
+        if (auto project = superblock_ptr_in->m_projects.Try(iter.m_name)) {
+            // Record new greylist candidate entry baseline with the total credit for each project present in superblock.
+            m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name, project->m_total_credit)));
+        } else {
+            // Record new greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
+            // but does not have a project entry in the superblock. This would be because the scrapers could not converge on the
+            // project.
+            m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name,
+                                                                                      std::optional<uint64_t>(std::nullopt))));
+        }
+    }
+
+    CBlockIndex* index_ptr;
+    {
+        // Find the block index entry for the block before the provided superblock_ptr.
+        index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
+    }
+
+    //SuperblockPtr superblock_ptr;
+    unsigned int superblock_count = 1; // The 0 (baseline) superblock was processed above. Here we start with 1 and go up to 40
+
+    while (index_ptr != nullptr && index_ptr->pprev != nullptr && superblock_count <= 40) {
+
+        if (!index_ptr->IsSuperblock()) {
+            index_ptr = index_ptr->pprev;
+            continue;
+        }
+
+        // For some reason this is not working.
+        //superblock_ptr.ReadFromDisk(index_ptr);
+
+        CBlock block;
+        if (!ReadBlockFromDisk(block, index_ptr, Params().GetConsensus())) {
+            error("%s: Failed to read block from disk with requested height %u",
+                  __func__,
+                  index_ptr->nHeight);
+            continue;
+        }
+
+        SuperblockPtr superblock_ptr = block.GetClaim().m_superblock;
+
+        for (const auto& iter : whitelist) {
+            // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
+            auto greylist_entry = m_greylist_ptr->find(iter.m_name);
+
+            if (auto project = superblock_ptr->m_projects.Try(iter.m_name)) {
+                // Update greylist candidate entry with the total credit for each project present in superblock.
+                greylist_entry->second.UpdateGreylistCandidateEntry(project->m_total_credit, superblock_count);
+            } else {
+                // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
+                // but does not have a project entry in this superblock. This would be because the scrapers could not converge on the
+                // project for this superblock.
+                greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
+            }
+        }
+
+        ++superblock_count;
+        index_ptr = index_ptr->pprev;
+    }
+
+    // Purge candidate elements that do not meet auto greylist criteria.
+    for (auto iter = m_greylist_ptr->begin(); iter != m_greylist_ptr->end(); ) {
+        if (iter->second.GetZCD() < 7 && iter->second.GetWAS() >= Fraction(1, 10)) {
+            // Candidate greylist entry does not meet auto greylist criteria, so remove from greylist entry map.
+            iter = m_greylist_ptr->erase(iter);
+        } else {
+            iter++;
+        }
+    }
+}
+
+// This is the global cached (singleton) for the auto greylist.
+std::shared_ptr<AutoGreylist> g_autogreylist_ptr = std::make_shared<AutoGreylist>();
+
+std::shared_ptr<AutoGreylist> AutoGreylist::GetAutoGreylistCache()
+{
+    return g_autogreylist_ptr;
+}
+
+// -----------------------------------------------------------------------------
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
 WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter) const
 {
     LOCK(cs_lock);
+
+    //AutoGreylist::GetAutoGreylistCache()->Refresh();
 
     ProjectList projects;
 

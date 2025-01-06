@@ -7,6 +7,8 @@
 
 #include "amount.h"
 #include "contract/contract.h"
+#include "gridcoin/fwd.h"
+#include "gridcoin/superblock.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/contract/registry_db.h"
@@ -21,30 +23,8 @@
 
 namespace GRC
 {
-//!
-//! \brief Enumeration of project entry status. Unlike beacons this is for both storage
-//! and memory.
-//!
-//! UNKNOWN status is only encountered in trivially constructed empty
-//! project entries and should never be seen on the blockchain.
-//!
-//! DELETED status corresponds to a removed entry.
-//!
-//! ACTIVE corresponds to an active entry.
-//!
-//! GREYLISTED means that the project temporarily does not meet the whitelist qualification criteria.
-//!
-//! OUT_OF_BOUND must go at the end and be retained for the EnumBytes wrapper.
-//!
-enum class ProjectEntryStatus
-{
-    UNKNOWN,
-    DELETED,
-    ACTIVE,
-    MAN_GREYLISTED,
-    AUTO_GREYLISTED,
-    OUT_OF_BOUND
-};
+// See gridcoin/fwd.h for ProjectEntryStatus. It is in the forward declaration file because it is
+// also needed in the superblock class, and this prevents recursive includes.
 
 class ProjectEntry
 {
@@ -515,6 +495,186 @@ public:
 private:
     const ProjectListPtr m_projects;  //!< The vector of whitelisted projects.
     const ProjectEntry::ProjectFilterFlag m_filter; //!< The filter used to populate the readonly list.
+};
+
+class AutoGreylist
+{
+public:
+    class GreylistCandidateEntry
+    {
+    public:
+        GreylistCandidateEntry()
+            : m_project_name(std::string {})
+            , m_zcd_20_SB_count(0)
+            , m_TC_7_SB_sum(0)
+            , m_TC_40_SB_sum(0)
+            , m_TC_initial_bookmark(0)
+            , m_TC_bookmark(0)
+            , m_sb_from_baseline_processed(0)
+            , m_updates(0)
+        {}
+
+        GreylistCandidateEntry(std::string project_name, std::optional<uint64_t> TC_initial_bookmark)
+            : m_project_name(project_name)
+            , m_zcd_20_SB_count(0)
+            , m_TC_7_SB_sum(0)
+            , m_TC_40_SB_sum(0)
+            , m_TC_initial_bookmark(TC_initial_bookmark)
+            , m_TC_bookmark(0)
+            , m_sb_from_baseline_processed(0)
+            , m_updates(0)
+        {}
+
+        uint8_t GetZCD()
+        {
+            return m_zcd_20_SB_count;
+        }
+
+        Fraction GetWAS()
+        {
+            if (!m_sb_from_baseline_processed) {
+                return Fraction(0);
+            }
+
+            // The Fraction class is implemented with int64_t as the underlying data type for the numerator and denominator;
+            // however, the total credit is stored in the superblock as a uint64_t. To be thorough, check if either of the unsigned
+            // 64 bit TC averages will overflow a signed 64 integer, and if so, then simply divide by 2 before constructing the
+            // fraction. This is extremely unlikely, given that the number of SB's processed from the baseline would have to be
+            // one, and then the sum overflow the int64_t max.
+            uint64_t TC_7_SB_avg = m_TC_7_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 7);
+            uint64_t TC_40_SB_avg = m_TC_40_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 40);
+
+            if (TC_7_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()
+                || TC_40_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()) {
+                TC_7_SB_avg /= 2;
+                TC_40_SB_avg /= 2;
+            }
+
+            if (TC_7_SB_avg == 0 && TC_40_SB_avg == 0) {
+                return Fraction(0);
+            } else {
+                return Fraction(TC_7_SB_avg, TC_40_SB_avg);
+            }
+        }
+
+        void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
+        {
+            uint8_t sbs_from_baseline_no_update = sb_from_baseline - m_sb_from_baseline_processed - 1;
+
+            m_sb_from_baseline_processed = sb_from_baseline;
+
+            // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
+            // the bookmark, then we have zero or even negative project total credit between superblocks, so
+            // this qualifies as a ZCD.
+            if (m_sb_from_baseline_processed <= 20) {
+                // Skipped updates count as ZCDs. We stop counting at 20 superblocks (back) from
+                // the initial SB baseline. The skipped updates may actually not be used in practice, because we are
+                // iterating over the entire whitelist for each SB and inserting std::nullopt TC updates for each project.
+                m_zcd_20_SB_count += sbs_from_baseline_no_update;
+
+                // If total credit is greater than the bookmark, this means that (going forward in time) credit actually
+                // declined, so in addition to the zero credit days recorded for the skipped updates, we must add an
+                // additional day for the credit decline (going forward in time). If total credit is std::nullopt, then
+                // this means no statistics available, which also is a ZCD.
+                if ((total_credit && total_credit >= m_TC_bookmark) || !total_credit){
+                    ++m_zcd_20_SB_count;
+                }
+            }
+
+            // WAS part. Here we deal with two numbers, the 40 SB from baseline, and the 7 SB from baseline. We use
+            // the initial bookmark, and compute the difference, which is the same as adding up the deltas between
+            // the TC's in each superblock. For updates with no total credit entry (i.e. std::optional is nullopt),
+            // do not change the sums.
+            if (total_credit && m_TC_initial_bookmark && m_TC_initial_bookmark > total_credit) {
+                if (m_sb_from_baseline_processed <= 7) {
+                    m_TC_7_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                }
+
+                if (m_sb_from_baseline_processed <= 40) {
+                    m_TC_40_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                }
+            }
+
+            // Update bookmark.
+            if (total_credit) {
+                m_TC_bookmark = *total_credit;
+            }
+
+            ++m_updates;
+        }
+
+        const std::string m_project_name;
+
+        uint8_t m_zcd_20_SB_count;
+        uint64_t m_TC_7_SB_sum;
+        uint64_t m_TC_40_SB_sum;
+
+    private:
+        std::optional<uint64_t> m_TC_initial_bookmark; //!< This is a "reverse" bookmark - we are going backwards in SB's.
+        uint64_t m_TC_bookmark;
+        uint8_t m_sb_from_baseline_processed;
+        uint8_t m_updates;
+    };
+
+    typedef std::map<std::string, GreylistCandidateEntry> Greylist;
+
+    //!
+    //! \brief Smart pointer around a collection of projects.
+    //!
+    typedef std::shared_ptr<Greylist> GreylistPtr;
+
+    typedef Greylist::size_type size_type;
+    typedef Greylist::iterator iterator;
+    typedef Greylist::const_iterator const_iterator;
+
+    AutoGreylist();
+
+    //!
+    //! \brief Returns an iterator to the beginning.
+    //!
+    const_iterator begin() const;
+
+    //!
+    //! \brief Returns an iterator to the end.
+    //!
+    const_iterator end() const;
+
+    //!
+    //! \brief Get the number of projects in the auto greylist.
+    //!
+    size_type size() const;
+
+    //!
+    //! \brief Determine whether the specified project exists in the auto greylist.
+    //!
+    //! \param name Project name matching the contract key.
+    //!
+    //! \return \c true if the auto greylist contains a project with matching name.
+    //!
+    bool Contains(const std::string& name) const;
+
+    void Refresh();
+
+    //!
+    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock. This mode is used
+    //! in the scraper during the construction of the superblock contract.
+    //!
+    //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
+    //! object
+    //!
+    //! \param superblock The superblock with which to refresh the automatic greylist. This can be a candidate superblock
+    //! from a scraper convergence, or in the instance of this being called from Refresh(), could be the current
+    //! superblock on the chain.
+    //!
+    void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in);
+
+    static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+
+private:
+    CCriticalSection lock;
+
+    GreylistPtr m_greylist_ptr;
+    uint256 m_superblock_hash;
 };
 
 //!

@@ -5,10 +5,11 @@
 #ifndef GRIDCOIN_SUPERBLOCK_H
 #define GRIDCOIN_SUPERBLOCK_H
 
-#include "gridcoin/project.h"
+#include "gridcoin/fwd.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/scraper/fwd.h"
+#include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
 #include "uint256.h"
 
@@ -1187,11 +1188,15 @@ public:
         uint64_t m_total_rac;
     }; // ProjectIndex
 
+    //!
+    //! \brief This is a wrapper around m_project_status. To conserve space, project status entries with a status
+    //! of ACTIVE are omitted.
+    //!
     struct ProjectStatus
     {
         ProjectStatus() {};
 
-        std::vector<ProjectEntry::Status> m_project_status;
+        std::vector<std::pair<std::string, EnumByte<ProjectEntryStatus>>> m_project_status;
 
         ADD_SERIALIZE_METHODS;
 
@@ -1482,6 +1487,15 @@ public:
     int64_t Age(const int64_t now) const
     {
         return now - m_timestamp;
+    }
+
+    bool IsEmpty()
+    {
+        if (m_superblock == nullptr && m_height == 0 && m_timestamp == 0) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     ADD_SERIALIZE_METHODS;
