@@ -18,8 +18,8 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/build-
 option(HUNTER_ENABLED "Enable Hunter package manager" OFF)
 include(HunterGate)
 HunterGate(
-    URL "https://github.com/cpp-pm/hunter/archive/refs/tags/v0.25.3.tar.gz"
-    SHA1 "0dfbc2cb5c4cf7e83533733bdfd2125ff96680cb"
+    URL "https://github.com/cpp-pm/hunter/archive/v0.25.8.tar.gz"
+    SHA1 "26c79d587883ec910bce168e25f6ac4595f97033"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/build-aux/cmake/Hunter/config.cmake"
 )
 
@@ -132,7 +132,7 @@ endif()
 
 set(BOOST_MINIMUM_VERSION 1.63.0)
 set(BOOST_COMPONENTS filesystem iostreams thread)
-set(BOOST_HUNTER_COMPONENTS ${BOOST_COMPONENTS})
+set(BOOST_HUNTER_COMPONENTS system atomic regex ${BOOST_COMPONENTS})
 if(ENABLE_TESTS)
     list(APPEND BOOST_COMPONENTS unit_test_framework)
     list(APPEND BOOST_HUNTER_COMPONENTS test)
@@ -165,7 +165,11 @@ endif()
 if(BUNDLED_BOOST)
     hunter_add_package(Boost COMPONENTS ${BOOST_HUNTER_COMPONENTS})
 endif()
-find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} CONFIG REQUIRED)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
+    # Allow to find old Boost (pre 1.70) with new CMake (3.30 and later).
+    cmake_policy(SET CMP0167 OLD)
+endif()
+find_package(Boost ${BOOST_MINIMUM_VERSION}...<1.87.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
 
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
