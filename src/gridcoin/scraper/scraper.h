@@ -80,6 +80,8 @@ struct ScraperFileManifestEntry
     bool current = true;
     bool excludefromcsmanifest = true;
     std::string filetype;
+    double all_cpid_total_credit = 0;
+    bool no_records = true;
 };
 
 /**

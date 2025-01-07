@@ -372,9 +372,10 @@ bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
  * @param filetype
  * @param sProject
  * @param excludefromcsmanifest
+ * @param all_cpid_total_credit
  */
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype, const std::string& sProject,
-                                     const bool& excludefromcsmanifest);
+                                     const bool& excludefromcsmanifest, const double& all_cpid_total_credit, const bool& no_records);
 /**
  * @brief Constructs the scraper statistics from the current state of the scraper, which is all of the in scope files at the
  * time the function is called
@@ -527,11 +528,12 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist);
  * @param Consensus
  * @param GlobalVerifiedBeaconsCopy
  * @param IncomingVerifiedBeacons
+ * @param all_cpid_total_credit
  * @return bool true if successful
  */
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
-                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons);
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit);
 /**
  * @brief Clears the authentication ETag auth.dat file
  */
@@ -2111,7 +2113,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
         }
 
         // Save host xml files to file manifest map with exclude from CSManifest flag set to true.
-        AlignScraperFileManifestEntries(host_file, "host", prjs.m_name, true);
+        AlignScraperFileManifestEntries(host_file, "host", prjs.m_name, true, 0, false);
     }
 
     return true;
@@ -2285,7 +2287,7 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
         // If in explorer mode and new file downloaded, save team xml files to file manifest map with exclude from CSManifest
         // flag set to true. If not in explorer mode, this is not necessary, because the team xml file is just temporary and
         // can be discarded after processing.
-        if (explorer_mode() && bDownloadFlag) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true);
+        if (explorer_mode() && bDownloadFlag) AlignScraperFileManifestEntries(team_file, "team", prjs.m_name, true, 0, false);
 
         // If require team whitelist is set and bETagChanged is true, then process the file. This also populates/updated the
         // team whitelist TeamIDs in the TeamIDMap and the ETag entries in the ProjTeamETags map.
@@ -2561,13 +2563,15 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
             continue;
         }
 
-        // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set
-        // to true.
-        if (explorer_mode()) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true);
+        double all_cpid_total_credit = 0.0;
 
         // Now that the source file is handled, process the file.
         ProcessProjectRacFileByCPID(prjs.m_name, rac_file, sRacETag, Consensus,
-                                    GlobalVerifiedBeaconsCopy, IncomingVerifiedBeacons);
+                                    GlobalVerifiedBeaconsCopy, IncomingVerifiedBeacons, all_cpid_total_credit);
+
+        // If in explorer mode, save user (rac) source xml files to file manifest map with exclude from CSManifest flag set
+        // to true.
+        if (explorer_mode()) AlignScraperFileManifestEntries(rac_file, "user_source", prjs.m_name, true, all_cpid_total_credit, false);
     } // for prjs : projectWhitelist
 
     // Get the global verified beacons and copy the incoming verified beacons from the
@@ -2615,13 +2619,13 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
 // This version uses a consensus beacon map (and teamid, if team filtering is specified by policy) to filter statistics.
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
-                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons)
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
 
-    // Set fileerror flag to true until made false by the completion of one successful injection of user stats into stream.
-    bool bfileerror = true;
+    // Set no_records to true until made false by the completion of one successful injection of user stats into stream.
+    bool no_records = true;
 
     // If passed an empty file, immediately return false.
     if (file.string().empty())
@@ -2721,6 +2725,18 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
                 }
             }
 
+            // We need to accumulate total credit across ALL project cpids, regardless of their beacon status, to get
+            // an "all cpid" total credit sum to be used for automatic greylisting purposes.
+            std::string s_cpid_total_credit = ExtractXML(data, "<total_credit>", "</total_credit>");
+            double cpid_total_credit = 0;
+
+            if (!ParseDouble(s_cpid_total_credit, &cpid_total_credit)) {
+                _log(logattribute::ERR, __func__, "Bad cpid total credit in user stats file data.");
+                continue;
+            }
+
+            all_cpid_total_credit += cpid_total_credit;
+
             // We do NOT want to add a just verified CPID to the statistics this iteration, if it was
             // not already active, because we may be halfway through processing the set of projects.
             // Instead, add to the incoming verification map (above), which will be handled in the
@@ -2764,40 +2780,20 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
             }
 
             // User beacon verified. Append its statistics to the CSV output.
-            out << ExtractXML(data, "<total_credit>", "</total_credit>") << ","
+            out << s_cpid_total_credit << ","
                 << ExtractXML(data, "<expavg_time>", "</expavg_time>") << ","
                 << ExtractXML(data, "<expavg_credit>", "</expavg_credit>") << ","
                 << cpid
                 << std::endl;
 
             // If we get here at least once then there is at least one CPID being put in the file.
-            // So set the bfileerror flag to false.
-            bfileerror = false;
+            // So set the no_records flag to false.
+            no_records = false;
         }
         else
         {
             builder.append(line);
         }
-    }
-
-    if (bfileerror)
-    {
-        _log(logattribute::WARNING, "ProcessProjectRacFileByCPID", "Data processing of " + file.string()
-             + " yielded no CPIDs with stats; file may have been truncated. Removing source file.");
-
-        ingzfile.close();
-        outgzfile.flush();
-        outgzfile.close();
-
-        // Remove the source file because it was bad. (Probable incomplete download.)
-        if (fs::exists(file))
-            fs::remove(file);
-
-        // Remove the errored out processed file.
-        if (fs::exists(gzetagfile))
-            fs::remove(gzetagfile);
-
-        return false;
     }
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Finished processing " + file.string());
@@ -2835,7 +2831,7 @@ bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& fil
 
     // Here, regardless of explorer mode, save processed rac files to file manifest map with exclude from CSManifest flag
     // set to false.
-    AlignScraperFileManifestEntries(gzetagfile, "user", project, false);
+    AlignScraperFileManifestEntries(gzetagfile, "user", project, false, all_cpid_total_credit, no_records);
 
     _log(logattribute::INFO, "ProcessProjectRacFileByCPID", "Complete Process");
 
@@ -3221,7 +3217,8 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest)
 }
 
 void AlignScraperFileManifestEntries(const fs::path& file, const std::string& filetype,
-                                     const std::string& sProject, const bool& excludefromcsmanifest)
+                                     const std::string& sProject, const bool& excludefromcsmanifest,
+                                     const double& all_cpid_total_credit, const bool& no_records)
 {
     ScraperFileManifestEntry NewRecord;
 
@@ -3238,6 +3235,8 @@ void AlignScraperFileManifestEntries(const fs::path& file, const std::string& fi
     NewRecord.current = true;
     NewRecord.excludefromcsmanifest = excludefromcsmanifest;
     NewRecord.filetype = filetype;
+    NewRecord.all_cpid_total_credit = all_cpid_total_credit;
+    NewRecord.no_records = no_records;
 
     // Code block to lock StructScraperFileManifest during record insertion and delete because we want this atomic.
     {
@@ -3381,6 +3380,40 @@ bool LoadScraperFileManifest(const fs::path& file)
             LoadEntry.filetype = "user";
         }
 
+        // This handles startup with legacy manifest file without the all_cpid_total_credit column.
+        if (vline.size() >= 9) {
+            // In scraper for superblock v3 and autogreylist, we have to record total credit across all cpids, regardless
+            // of whether they are active beaconholders to support auto greylisting.
+
+            double all_cpid_total_credit = 0.0;
+
+            if (!ParseDouble(vline[7], &all_cpid_total_credit)) {
+                // This shouldn't happen given the conditional above, but to be thorough...
+                _log(logattribute::ERR, __func__, "The \"all_cpid_total_credit\" field not parsed correctly for a manifest "
+                                                  "entry. Skipping.");
+                continue;
+            }
+
+            LoadEntry.all_cpid_total_credit = all_cpid_total_credit;
+
+            uint32_t uint32_no_records = 0;
+
+            if (!ParseUInt32(vline[8], &uint32_no_records)) {
+                // This shouldn't happen given the conditional above, but to be thorough...
+                _log(logattribute::ERR, __func__, "The \"no_records\" field not parsed correctly for a manifest "
+                                                  "entry. Skipping.");
+                continue;
+            }
+
+            LoadEntry.no_records = (bool) uint32_no_records;
+
+        } else {
+            // This defaults to zero for earlier manifests, since this data was not collected.
+            LoadEntry.all_cpid_total_credit = 0.0;
+            // This defaults to false, since the older logic was to only retain files with records.
+            LoadEntry.no_records = false;
+        }
+
         // Lock cs_StructScraperFileManifest before updating
         // global structure.
         {
@@ -3413,7 +3446,7 @@ bool StoreScraperFileManifest(const fs::path& file)
 
     _log(logattribute::INFO, "StoreScraperFileManifest", "Started processing " + file.string());
 
-    //Lock StructScraperFileManifest during serialize to string.
+    // Lock StructScraperFileManifest during serialize to string.
     {
         LOCK(cs_StructScraperFileManifest);
 
@@ -3424,7 +3457,9 @@ bool StoreScraperFileManifest(const fs::path& file)
                << "Project,"
                << "Filename,"
                << "ExcludeFromCSManifest,"
-               << "Filetype"
+               << "Filetype,"
+               << "All_cpid_total_credit,"
+               << "No_records"
                << "\n";
 
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
@@ -3437,7 +3472,10 @@ bool StoreScraperFileManifest(const fs::path& file)
                     + entry.second.project + ","
                     + entry.first + ","
                     + ToString(entry.second.excludefromcsmanifest) + ","
-                    + entry.second.filetype + "\n";
+                    + entry.second.filetype + ","
+                    + ToString(entry.second.all_cpid_total_credit) + ","
+                    + ToString((uint32_t) entry.second.no_records)
+                    + "\n";
             stream << sScraperFileManifestEntry;
         }
     }
@@ -3818,10 +3856,13 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
         LOCK(cs_StructScraperFileManifest);
 
         for (const auto& entry : StructScraperFileManifest.mScraperFileManifest) {
-            // Count as active if current, not marked as to be excluded, and also not greylisted.
+            // Count as active if current, not marked as to be excluded, not greylisted, and file has records.
             if (entry.second.current
                     && !entry.second.excludefromcsmanifest
-                    && !greylist.Contains(entry.second.project)) nActiveProjects++;
+                    && !greylist.Contains(entry.second.project)
+                    && !entry.second.no_records) {
+                nActiveProjects++;
+            }
         }
     }
     double dMagnitudePerProject = NETWORK_MAGNITUDE / nActiveProjects;
@@ -3837,7 +3878,7 @@ ScraperStatsAndVerifiedBeacons GetScraperStatsByCurrentFileManifestState()
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
 
-            if (entry.second.current && !entry.second.excludefromcsmanifest)
+            if (entry.second.current && !entry.second.excludefromcsmanifest && !entry.second.no_records)
             {
                 std::string project = entry.first;
                 fs::path file = pathScraper / entry.second.filename;
@@ -4573,9 +4614,10 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
                     []() { LOCK(cs_ScraperGlobals); return SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES; };
 
             // If SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES is false, only include current files to send across the
-            // network. Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true).
+            // network. Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true) or
+            // if it has no records.
             if ((!scraper_cmanifest_include_noncurrent_proj_files() && !entry.second.current)
-                    || entry.second.excludefromcsmanifest)
+                    || entry.second.excludefromcsmanifest || entry.second.no_records)
                 continue;
 
             fs::path inputfile = entry.first;
