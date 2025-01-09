@@ -196,8 +196,6 @@ jobs:
                   retention-days: 7
 
     test-msys2:
-        # MSYS2 is rolling release, only latest Boost is available.
-        if: false
         runs-on: windows-latest
         defaults:
             run:
