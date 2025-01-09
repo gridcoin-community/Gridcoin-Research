@@ -150,7 +150,7 @@ jobs:
             - name: Install dependencies
               run: brew install --overwrite
                   ${{matrix.deps}}
-                  boost@1.85
+                  boost
                   ccache
                   libzip
                   ninja
@@ -168,7 +168,6 @@ jobs:
                   -DCMAKE_C_COMPILER_LAUNCHER=ccache
                   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
                   ${{matrix.options}}
-                  -DBOOST_ROOT=$(brew --prefix boost@1.85)
                   -DENABLE_TESTS=ON
             - name: Restore cache
               uses: actions/cache/restore@v4
