@@ -168,7 +168,13 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.30)
     # Allow to find old Boost (pre 1.70) with new CMake (3.30 and later).
     cmake_policy(SET CMP0167 OLD)
 endif()
-find_package(Boost ${BOOST_MINIMUM_VERSION}...<1.87.0 COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
+find_package(Boost ${BOOST_MINIMUM_VERSION} REQUIRED)
+if(Boost_VERSION VERSION_LESS 1.70.0)
+    find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
+else()
+    # Better upstream-provided CMake config is available.
+    find_package(Boost ${BOOST_MINIMUM_VERSION} COMPONENTS ${BOOST_COMPONENTS} CONFIG REQUIRED)
+endif()
 
 if(BUNDLED_OPENSSL)
     hunter_add_package(OpenSSL)
