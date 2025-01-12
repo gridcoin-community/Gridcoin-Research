@@ -7,11 +7,11 @@ env:
 jobs:
     test-linux:
         name: ${{ matrix.name }}
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-24.04
         strategy:
             matrix:
                 include:
-                  - name: ARM  [GOAL install]  [buster]
+                  - name: ARM  [GOAL install]  [bullseye]
                     script-id: arm
                   - name: Win32
                     script-id: win32
@@ -21,7 +21,7 @@ jobs:
                     script-id: linux_i386
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [focal]  [no depends]
                     script-id: native
-                  - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
+                  - name: x86_64 Linux  [GOAL install]  [GUI]  [noble]  [no depends]
                     script-id: native_old
                   - name: x86_64 Linux  [ASan]  [LSan]  [UBSan]  [integer]  [jammy]  [no depends]
                     script-id: native_asan

@@ -185,7 +185,7 @@ protected:
     static CCriticalSection cs_diagnostictests;                                   //!< used to protect the critical sections, for multithreading
     TestNames m_test_name;                                                        //!< This must be defined for derived classes. Each derived class must declare the name of the test and add to the TestNames enum
     static std::unordered_map<Diagnose::TestNames, Diagnose*> m_name_to_test_map; //!< a map to save the test and a pointer to it. Some tests are related and need to access the results of each other.
-    static boost::asio::io_service s_ioService;
+    static boost::asio::io_context s_ioService;
 };
 
 /**
@@ -349,7 +349,6 @@ private:
     boost::array<unsigned char, 48> m_sendBuf = {0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
     boost::array<unsigned char, 1024> m_recvBuf;
     bool m_startedTesting = false;
-    boost::asio::ip::udp::endpoint m_sender_endpoint; // This has to be here to guarantee it is available for the callback
 
     void clkReportResults(const int64_t& time_offset, const bool& timeout_during_check = false);
     void sockRecvHandle(const boost::system::error_code& error, std::size_t bytes_transferred);
@@ -381,7 +380,7 @@ public:
 
             connectToNTPHost();
 
-            s_ioService.reset();
+            s_ioService.restart();
             s_ioService.run();
         }
     }
@@ -637,8 +636,7 @@ class VerifyTCPPort : public Diagnose
 {
 private:
     boost::asio::ip::tcp::socket m_tcpSocket;
-    void handle_connect(const boost::system::error_code& err,
-                        boost::asio::ip::tcp::resolver::iterator endpoint_iterator);
+    void handle_connect(const boost::system::error_code& err);
 
     void TCPFinished();
 
@@ -649,7 +647,7 @@ public:
     ~VerifyTCPPort() {}
     void runCheck()
     {
-        s_ioService.reset();
+        s_ioService.restart();
 
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
@@ -662,34 +660,12 @@ public:
         }
 
         boost::asio::ip::tcp::resolver resolver(s_ioService);
-#if BOOST_VERSION > 106501
-        auto endpoint_iterator = resolver.resolve("portquiz.net", "http");
-#else
-        boost::asio::ip::tcp::resolver::query query(
-                    "portquiz.net",
-                    "http");
-        auto endpoint_iterator = resolver.resolve(query);
-#endif
+        auto resolved = resolver.resolve("portquiz.net", "http");
 
-        if (endpoint_iterator == boost::asio::ip::tcp::resolver::iterator()) {
-            m_tcpSocket.close();
-            m_results = WARNING;
-            m_results_tip = _("Outbound communication to TCP port %1 appears to be blocked.");
-            std::string ss = ToString(GetListenPort());
-            m_results_string_arg.push_back(ss);
-        } else {
-            // Attempt a connection to the first endpoint in the list. Each endpoint
-            // will be tried until we successfully establish a connection.
-            boost::asio::ip::tcp::endpoint endpoint = *endpoint_iterator;
-            if (m_tcpSocket.is_open())
-                m_tcpSocket.close();
+        // FIXME(div72): This whole portion was/is a BLOCKING asynchronous segment, what the hell.
+        boost::asio::async_connect(m_tcpSocket, resolved, boost::bind(&VerifyTCPPort::handle_connect, this, boost::asio::placeholders::error));
 
-            m_tcpSocket.async_connect(endpoint,
-                                      boost::bind(&VerifyTCPPort::handle_connect, this,
-                                                  boost::asio::placeholders::error, (++endpoint_iterator)));
-
-            s_ioService.run();
-        }
+        s_ioService.run();
     }
 };
 
