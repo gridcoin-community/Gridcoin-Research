@@ -508,6 +508,7 @@ public:
             , m_zcd_20_SB_count(0)
             , m_TC_7_SB_sum(0)
             , m_TC_40_SB_sum(0)
+            , m_meets_greylisting_crit(0)
             , m_TC_initial_bookmark(0)
             , m_TC_bookmark(0)
             , m_sb_from_baseline_processed(0)
@@ -519,6 +520,7 @@ public:
             , m_zcd_20_SB_count(0)
             , m_TC_7_SB_sum(0)
             , m_TC_40_SB_sum(0)
+            , m_meets_greylisting_crit(0)
             , m_TC_initial_bookmark(TC_initial_bookmark)
             , m_TC_bookmark(0)
             , m_sb_from_baseline_processed(0)
@@ -608,6 +610,7 @@ public:
         uint8_t m_zcd_20_SB_count;
         uint64_t m_TC_7_SB_sum;
         uint64_t m_TC_40_SB_sum;
+        bool m_meets_greylisting_crit;
 
     private:
         std::optional<uint64_t> m_TC_initial_bookmark; //!< This is a "reverse" bookmark - we are going backwards in SB's.
@@ -649,24 +652,39 @@ public:
     //!
     //! \param name Project name matching the contract key.
     //!
+    //! \param only_auto_greylisted A boolean that specifies whether the search is against all projects or only those
+    //! that meet auto greylisting criteria.
+    //!
     //! \return \c true if the auto greylist contains a project with matching name.
     //!
-    bool Contains(const std::string& name) const;
+    bool Contains(const std::string& name, const bool& only_auto_greylisted = true) const;
 
     void Refresh();
 
     //!
-    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock. This mode is used
-    //! in the scraper during the construction of the superblock contract.
+    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock pointer.
     //!
     //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
     //! object
     //!
-    //! \param superblock The superblock with which to refresh the automatic greylist. This can be a candidate superblock
+    //! \param superblock_ptr The superblock pointer with which to refresh the automatic greylist. This can be a candidate superblock
     //! from a scraper convergence, or in the instance of this being called from Refresh(), could be the current
     //! superblock on the chain.
     //!
     void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in);
+
+    //!
+    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock that is going to be associated
+    //! with the current head of the chain. This mode is used in the scraper during the construction of the superblock contract.
+    //!
+    //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
+    //! object
+    //!
+    //! \param superblock The superblock with which to refresh the automatic greylist. This will generally be a candidate superblock
+    //! from a scraper convergence, and is used in the call chain from the miner loop. The superblock object project status
+    //! will be updated.
+    //!
+    void RefreshWithSuperblock(Superblock& superblock);
 
     static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
 
@@ -717,9 +735,11 @@ public:
 
     //!
     //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
-    //! provides the original ACTIVE project only view.
+    //! provides the original ACTIVE project only view. The refresh_greylist filter is used to refresh
+    //! the AutoGreylist as part of taking the snapshot.
     //!
-    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE) const;
+    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
+                               const bool& refresh_greylist = false) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical

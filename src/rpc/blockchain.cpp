@@ -2634,11 +2634,19 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
 UniValue getautogreylist(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0) {
+    if (fHelp || params.size() > 1) {
         throw runtime_error(
-            "getautogreylist \n"
+            "getautogreylist <bool> \n"
+            "\n"
+            "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
             "\n"
             "Displays information about projects that meet auto greylisting criteria.");
+    }
+
+    bool show_all_projects = false;
+
+    if (params.size()) {
+        show_all_projects = params[0].get_bool();
     }
 
     UniValue res(UniValue::VOBJ);
@@ -2650,11 +2658,16 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
     UniValue autogreylist(UniValue::VARR);
 
     for (auto iter : *greylist_ptr) {
+        if (!show_all_projects && !iter.second.m_meets_greylisting_crit) {
+            continue;
+        }
+
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("project:", iter.first);
         entry.pushKV("zcd", iter.second.GetZCD());
         entry.pushKV("WAS", iter.second.GetWAS().ToDouble());
+        entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
 
         autogreylist.push_back(entry);
     }

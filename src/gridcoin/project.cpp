@@ -308,8 +308,6 @@ AutoGreylist::AutoGreylist()
     : m_greylist_ptr(std::make_shared<Greylist>())
     , m_superblock_hash(uint256 {})
 {
-    //m_greylist_ptr = std::make_shared<Greylist>();
-
     Refresh();
 }
 
@@ -326,6 +324,21 @@ AutoGreylist::Greylist::const_iterator AutoGreylist::end() const
 AutoGreylist::Greylist::size_type AutoGreylist::size() const
 {
     return m_greylist_ptr->size();
+}
+
+bool AutoGreylist::Contains(const std::string& name, const bool& only_auto_greylisted) const
+{
+    auto iter = m_greylist_ptr->find(name);
+
+    if (iter != m_greylist_ptr->end()) {
+        if (only_auto_greylisted) {
+            return (only_auto_greylisted && iter->second.m_meets_greylisting_crit);
+        } else {
+            return true;
+        }
+    } else {
+        return false;
+    }
 }
 
 void AutoGreylist::Refresh()
@@ -349,15 +362,28 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
     LOCK(lock);
 
     // We need the current whitelist, including all records except deleted. This will include greylisted projects,
-    // whether currently marked as manually greylisted from protocol or overridden to auto greylisted by the auto greylist class.
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+    // whether currently marked as manually greylisted from protocol or overridden to auto greylisted by the auto greylist class,
+    // based on the current state of the autogreylist. NOTE that the refresh_greylist is set to false here and MUST be this
+    // when called in the AutoGreylist class itself, to avoid an infinite loop.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
 
     m_greylist_ptr->clear();
 
+    unsigned int v3_superblock_count = 0;
+
+    if (superblock_ptr_in->m_version > 2) {
+        ++v3_superblock_count;
+    }
+
+    // Notice the superblock_ptr_in m_projects_all_cpid_total_credits MUST ALEADY BE POPULATED to record the TC state into
+    // the auto greylist.
     for (const auto& iter : whitelist) {
-        if (auto project = superblock_ptr_in->m_projects.Try(iter.m_name)) {
+        auto project = superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
+
+        if (project != superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
             // Record new greylist candidate entry baseline with the total credit for each project present in superblock.
-            m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name, project->m_total_credit)));
+            m_greylist_ptr->insert(std::make_pair(iter.m_name,
+                                                  GreylistCandidateEntry(iter.m_name, std::nearbyint(project->second))));
         } else {
             // Record new greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
             // but does not have a project entry in the superblock. This would be because the scrapers could not converge on the
@@ -373,7 +399,6 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
         index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
     }
 
-    //SuperblockPtr superblock_ptr;
     unsigned int superblock_count = 1; // The 0 (baseline) superblock was processed above. Here we start with 1 and go up to 40
 
     while (index_ptr != nullptr && index_ptr->pprev != nullptr && superblock_count <= 40) {
@@ -396,32 +421,67 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
 
         SuperblockPtr superblock_ptr = block.GetClaim().m_superblock;
 
-        for (const auto& iter : whitelist) {
-            // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
-            auto greylist_entry = m_greylist_ptr->find(iter.m_name);
+        if (superblock_ptr->m_version > 2) {
+            for (const auto& iter : whitelist) {
+                // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
+                auto greylist_entry = m_greylist_ptr->find(iter.m_name);
 
-            if (auto project = superblock_ptr->m_projects.Try(iter.m_name)) {
-                // Update greylist candidate entry with the total credit for each project present in superblock.
-                greylist_entry->second.UpdateGreylistCandidateEntry(project->m_total_credit, superblock_count);
-            } else {
-                // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
-                // but does not have a project entry in this superblock. This would be because the scrapers could not converge on the
-                // project for this superblock.
-                greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
+                auto project = superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
+
+                if (project != superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
+                    // Update greylist candidate entry with the total credit for each project present in superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count);
+                } else {
+                    // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
+                    // but does not have a project entry in this superblock. This would be because the scrapers could not converge on the
+                    // project for this superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
+                }
             }
+
+            ++v3_superblock_count;
         }
 
         ++superblock_count;
+
         index_ptr = index_ptr->pprev;
     }
 
-    // Purge candidate elements that do not meet auto greylist criteria.
-    for (auto iter = m_greylist_ptr->begin(); iter != m_greylist_ptr->end(); ) {
-        if (iter->second.GetZCD() < 7 && iter->second.GetWAS() >= Fraction(1, 10)) {
-            // Candidate greylist entry does not meet auto greylist criteria, so remove from greylist entry map.
-            iter = m_greylist_ptr->erase(iter);
-        } else {
-            iter++;
+    // Mark elements with whether they meet greylist criteria.
+    for (auto iter = m_greylist_ptr->begin(); iter != m_greylist_ptr->end(); ++iter) {
+        // the v3_superblock_count >= 2 test is to ensure there are at least two v3 superblocks with the total credits
+        // filled in to sample for the auto greylist determination. A two sb sample with positive change in TC will
+        // cause the ZCD and WAS rules to pass.
+        if (iter->second.GetZCD() < 7 && iter->second.GetWAS() >= Fraction(1, 10) && v3_superblock_count >= 2) {
+            iter->second.m_meets_greylisting_crit = true;
+         }
+    }
+}
+
+void AutoGreylist::RefreshWithSuperblock(Superblock& superblock)
+{
+    SuperblockPtr superblock_ptr;
+
+    // For the purposes of forming a superblock as the mining of a new block adding to the head of the chain, we will
+    // form a superblock ptr referencing the current head of the chain. The actual superblock will be the next block if it
+    // is added to the chain, for for the purposes here, this is what we want, because it is simply used to feed the
+    // overloaded version which takes the superblock_ptr and follows the chain backwards to do the greylist calculations.
+    superblock_ptr.Replace(superblock);
+
+    {
+        LOCK(cs_main);
+
+        superblock_ptr.Rebind(pindexBest);
+    }
+
+    RefreshWithSuperblock(superblock_ptr);
+
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
+
+    // Update the superblock object with the project greylist status.
+    for (const auto& project : whitelist) {
+        if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED || project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+            superblock.m_project_status.m_project_status.insert(std::make_pair(project.m_name, project.m_status));
         }
     }
 }
@@ -438,15 +498,27 @@ std::shared_ptr<AutoGreylist> AutoGreylist::GetAutoGreylistCache()
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter) const
+WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter, const bool& refresh_greylist) const
 {
     LOCK(cs_lock);
 
-    //AutoGreylist::GetAutoGreylistCache()->Refresh();
+    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
+
+    if (refresh_greylist) {
+        greylist_ptr->Refresh();
+    }
 
     ProjectList projects;
 
-    for (const auto& iter : m_project_entries) {
+    // This is the override for automatic greylisting. If the AutoGreylist class refresh determines
+    // that the project meets greylisting criteria, it will be in the AutoGreylist object pointed to
+    // by the greylist_ptr. This will override the whitelist entries from the project whitelist registry.
+    for (auto iter : m_project_entries) {
+        if ((iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
+            && greylist_ptr->Contains(iter.first)) {
+            iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
+        }
+
         switch (filter) {
         case ProjectEntry::ProjectFilterFlag::ACTIVE:
             if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {

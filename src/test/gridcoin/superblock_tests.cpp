@@ -656,9 +656,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
 {
     const ScraperStatsMeta meta;
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true)); // Set fallback by project flag
+        GetTestConvergence(meta, true), 2); // Set fallback by project flag
 
-    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
     // Manifest content hint not set for fallback convergence:
     BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);

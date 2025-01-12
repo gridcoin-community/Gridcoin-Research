@@ -4,6 +4,7 @@
 
 #include "chainparams.h"
 #include "compat/endian.h"
+#include "gridcoin/project.h"
 #include "hash.h"
 #include "main.h"
 #include <gridcoin/md5.h>
@@ -607,20 +608,29 @@ Superblock Superblock::FromConvergence(
     if (!stats.Convergence.bByParts) {
         superblock.m_manifest_content_hint
             = stats.Convergence.nUnderlyingManifestContentHash.GetUint64(0) >> 32;
+    } else {
+        ProjectIndex& projects = superblock.m_projects;
 
-        return superblock;
+               // Add hints created from the hashes of converged manifest parts to each
+               // superblock project section to assist receiving nodes with validation:
+               //
+        for (const auto& part_pair : stats.Convergence.ConvergedManifestPartPtrsMap) {
+            const std::string& project_name = part_pair.first;
+            const CSplitBlob::CPart* part_data_ptr = part_pair.second;
+
+            projects.SetHint(project_name, part_data_ptr);
+        }
     }
 
-    ProjectIndex& projects = superblock.m_projects;
+    if (version > 2) {
+        // Populate the total credits into the superblock object from the convergence. This must be done BEFORE
+        // the auto greylist RefreshWithSuperblock is called.
+        superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map);
 
-    // Add hints created from the hashes of converged manifest parts to each
-    // superblock project section to assist receiving nodes with validation:
-    //
-    for (const auto& part_pair : stats.Convergence.ConvergedManifestPartPtrsMap) {
-        const std::string& project_name = part_pair.first;
-        const CSplitBlob::CPart* part_data_ptr = part_pair.second;
+        // Refresh the auto greylist and refresh this superblock with the greylist status.
+        std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
 
-        projects.SetHint(project_name, part_data_ptr);
+        greylist_ptr->RefreshWithSuperblock(superblock);
     }
 
     return superblock;
