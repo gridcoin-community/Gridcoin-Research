@@ -567,9 +567,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_the_specified_version)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromStats(GetTestScraperStats(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromStats(GetTestScraperStats(meta), 2);
 
-    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == 2);
     BOOST_CHECK(superblock.m_convergence_hint == 0);
     BOOST_CHECK(superblock.m_manifest_content_hint == 0);
 
@@ -609,9 +609,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
 
-    BOOST_CHECK(superblock.m_version == GRC::Superblock::CURRENT_VERSION);
+    BOOST_CHECK(superblock.m_version == 2);
 
     // This initialization mode must set the convergence hint derived from
     // the content hash of the convergence:
@@ -1002,7 +1002,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream)
         << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
-    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta));
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 2);
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -1142,7 +1142,7 @@ BOOST_AUTO_TEST_CASE(it_serializes_to_a_stream_for_fallback_convergences)
         << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 };
 
     GRC::Superblock superblock = GRC::Superblock::FromConvergence(
-        GetTestConvergence(meta, true)); // Set fallback by project flag
+        GetTestConvergence(meta, true), 2); // Set fallback by project flag
 
     BOOST_CHECK(GetSerializeSize(superblock, SER_NETWORK, 1) == expected.size());
 
@@ -2118,7 +2118,7 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
     const uint256 expected = expected_hasher.GetHash();
 
     const GRC::QuorumHash hash = GRC::QuorumHash::Hash(
-        GRC::Superblock::FromStats(GetTestScraperStats(meta)));
+        GRC::Superblock::FromStats(GetTestScraperStats(meta), 2));
 
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
@@ -2131,7 +2131,7 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
     const ScraperStatsMeta meta;
     const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetTestScraperStats(meta);
 
-    GRC::Superblock superblock = GRC::Superblock::FromStats(stats_and_verified_beacons);
+    GRC::Superblock superblock = GRC::Superblock::FromStats(stats_and_verified_beacons, 2);
     GRC::QuorumHash quorum_hash = GRC::QuorumHash::Hash(stats_and_verified_beacons);
 
     BOOST_CHECK(quorum_hash == superblock.GetHash());
@@ -2263,7 +2263,7 @@ BOOST_AUTO_TEST_CASE(it_compares_another_quorum_hash_for_equality)
 
 BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
 {
-    const GRC::Superblock superblock;
+    const GRC::Superblock superblock(2);
     CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
 
     expected_hasher
@@ -2288,7 +2288,7 @@ BOOST_AUTO_TEST_CASE(it_compares_a_sha256_hash_for_equality)
 
 BOOST_AUTO_TEST_CASE(it_compares_a_string_for_equality)
 {
-    const GRC::Superblock superblock;
+    const GRC::Superblock superblock(2);
     GRC::QuorumHash hash = GRC::QuorumHash::Hash(superblock);
 
     CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
