@@ -20,8 +20,8 @@
 using namespace GRC;
 
 // TODO: use a header
-ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -822,7 +822,7 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
+            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1392,7 +1392,7 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest_shared_ptr& manifest) const
     {
-        const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1663,7 +1663,7 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // Although the map is ordered, the keys begin with project names, so we
     // cannot binary search for a block of CPID entries yet:
     //
-    for (const auto& entry : ConvergedScraperStatsCache.mScraperConvergedStats) {
+    for (const auto& entry : ConvergedScraperStatsCache.mScraperConvergedStats.mScraperStats) {
         if (entry.first.objecttype == statsobjecttype::byCPIDbyProject) {
             const Span<const char> project_name = try_item(entry.first.objectID);
 

@@ -297,9 +297,9 @@ struct ScraperStatsMeta
 //!
 //! \param meta Contains the values to initialize the scraper stats object with.
 //!
-const ScraperStatsAndVerifiedBeacons GetTestScraperStats(const ScraperStatsMeta& meta)
+const ScraperStatsVerifiedBeaconsTotalCredits GetTestScraperStats(const ScraperStatsMeta& meta)
 {
-    ScraperStatsAndVerifiedBeacons stats_and_verified_beacons;
+    ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons;
 
     ScraperObjectStats p1c1;
     p1c1.statskey.objecttype = statsobjecttype::byCPIDbyProject;
@@ -432,14 +432,14 @@ ConvergedScraperStats GetTestConvergence(
 {
     LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
-    const ScraperStatsAndVerifiedBeacons stats = GetTestScraperStats(meta);
+    const ScraperStatsVerifiedBeaconsTotalCredits stats = GetTestScraperStats(meta);
     ConvergedScraperStats convergence;
 
     auto CScraperConvergedManifest_ptr = std::shared_ptr<CScraperManifest>(new CScraperManifest());
 
     LOCK(CScraperConvergedManifest_ptr->cs_manifest);
 
-    convergence.mScraperConvergedStats = stats.mScraperStats;
+    convergence.mScraperConvergedStats = stats;
 
     convergence.Convergence.bByParts = by_parts;
     convergence.Convergence.nContentHash
@@ -1950,7 +1950,7 @@ BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_collection)
 BOOST_AUTO_TEST_CASE(it_replaces_the_collection_from_scraper_statistics)
 {
     const ScraperStatsMeta meta;
-    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+    const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetTestScraperStats(meta);
 
     GRC::Superblock::VerifiedBeacons beacon_ids;
 
@@ -2129,7 +2129,7 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 BOOST_AUTO_TEST_CASE(it_hashes_a_set_of_scraper_statistics_like_a_superblock)
 {
     const ScraperStatsMeta meta;
-    const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetTestScraperStats(meta);
+    const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetTestScraperStats(meta);
 
     GRC::Superblock superblock = GRC::Superblock::FromStats(stats_and_verified_beacons);
     GRC::QuorumHash quorum_hash = GRC::QuorumHash::Hash(stats_and_verified_beacons);

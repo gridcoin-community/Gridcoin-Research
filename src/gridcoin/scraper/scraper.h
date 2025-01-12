@@ -124,9 +124,9 @@ uint256 GetFileHash(const fs::path& inputfile);
 /**
  * @brief Provides the computed scraper stats and verified beacons from the input converged manifest
  * @param StructConvergedManifest
- * @return ScraperStatsAndVerifiedBeacons
+ * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 /**
  * @brief Gets a copy of the extended scrapers cache global. This global is an extension of the appcache in that it
  * retains deleted entries with a deleted flag.
@@ -203,9 +203,9 @@ std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& Verifie
 /**
  * @brief Returns the scraper stats and verified beacons in one structure from the input ConvergedScraperStats
  * @param stats
- * @return ScraperStatsAndVerifiedBeacons
+ * @return ScraperStatsVerifiedBeaconsTotalCredits
  */
-ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats &stats);
+ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsVerifiedBeaconsTotalCredits(const ConvergedScraperStats &stats);
 /**
  * @brief Returns a map of pending beacons
  * @return ScraperPendingBeaconMap of pending beacons

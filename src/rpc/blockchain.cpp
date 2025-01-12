@@ -1142,7 +1142,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         LOCK(cs_ConvergedScraperStatsCache);
 
         // Make a local copy of the cached stats in the convergence and release the lock.
-        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats.mScraperStats;
     }
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());

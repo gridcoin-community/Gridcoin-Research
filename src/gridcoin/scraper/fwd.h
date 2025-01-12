@@ -281,13 +281,32 @@ struct ScraperVerifiedBeacons
     }
 };
 
+/**
+ * @brief Used to hold total credits across ALL cpids for each project. This is to support auto greylisting.
+ */
+struct ScraperProjectsAllCpidTotalCredit
+{
+    int64_t m_timestamp = GetAdjustedTime();
+    std::map<std::string, double> m_all_cpid_total_credit_map;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(m_timestamp);
+        READWRITE(m_all_cpid_total_credit_map);
+    }
+};
+
 /** A combination of scraper stats and verified beacons. For convenience in the interface between the scraper and the
  * quorum/superblock code.
  */
-struct ScraperStatsAndVerifiedBeacons
+struct ScraperStatsVerifiedBeaconsTotalCredits
 {
     ScraperStats mScraperStats;
     ScraperPendingBeaconMap mVerifiedMap;
+    std::map<std::string, double> m_total_credit_map;
 };
 
 #endif // GRIDCOIN_SCRAPER_FWD_H

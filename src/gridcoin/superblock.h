@@ -23,7 +23,7 @@ extern CCriticalSection cs_ScraperGlobals;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
-extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
 struct ConvergedScraperStats; // Forward for Superblock
@@ -113,7 +113,7 @@ public:
     //!
     //! \return A SHA256 quorum hash of the scraper statistics.
     //!
-    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats);
+    static QuorumHash Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats);
 
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
@@ -1196,7 +1196,7 @@ public:
     {
         ProjectStatus() {};
 
-        std::vector<std::pair<std::string, EnumByte<ProjectEntryStatus>>> m_project_status;
+        std::map<std::string, EnumByte<ProjectEntryStatus>> m_project_status;
 
         ADD_SERIALIZE_METHODS;
 
@@ -1232,6 +1232,27 @@ public:
     };
 
     //!
+    //! \brief This is a wrapper around projects all cpid total credits. This supports automatic
+    //! greylisting.
+    //!
+    struct ProjectsAllCpidTotalCredits
+    {
+        ProjectsAllCpidTotalCredits() {};
+
+        std::map<std::string, uint64_t> m_projects_all_cpid_total_credits;
+
+        void Reset(const std::map<std::string, double>& projects_all_cpid_total_credits);
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_projects_all_cpid_total_credits);
+        }
+    };
+
+    //!
     //! \brief Version number of the serialized superblock format.
     //!
     //! Defaults to the most recent version for a new superblock instance.
@@ -1242,8 +1263,10 @@ public:
     //!
     //! Version 2: Superblock data serializable using the built-in serialize.h
     //! facilities. Stored in the superblock field of a block rather than in a
-    //! transaction to provide for a greater size. It includes total credit of
-    //! each project to facilitate automated greylisting.
+    //! transaction to provide for a greater size.
+    //!
+    //! Version 3: Adds project status and project "all cpid" total credits to
+    //! support automatic greylisting.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -1260,7 +1283,8 @@ public:
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magnitudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
-    ProjectStatus m_project_status; //!< Wrapped project_status vector
+    ProjectStatus m_project_status; //!< Wrapped project_status map
+    ProjectsAllCpidTotalCredits m_projects_all_cpids_total_credits; //!< Wrapper all cpids project level total credit map
 
     ADD_SERIALIZE_METHODS;
 
@@ -1279,6 +1303,7 @@ public:
 
         if (m_version > 2) {
             READWRITE(m_project_status);
+            READWRITE(m_projects_all_cpids_total_credits);
         }
     }
 
@@ -1329,7 +1354,7 @@ public:
     //! statistics.
     //!
     static Superblock FromStats(
-        const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons,
+        const ScraperStatsVerifiedBeaconsTotalCredits& stats_and_verified_beacons,
         const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
@@ -1597,7 +1622,7 @@ struct ConvergedScraperStats
     {
         nTime = nTime_in;
 
-        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence).mScraperStats;
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence);
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
@@ -1617,7 +1642,7 @@ struct ConvergedScraperStats
     bool bMinHousekeepingComplete = false;
 
     int64_t nTime = 0;
-    ScraperStats mScraperConvergedStats;
+    ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats;
     ConvergedManifest Convergence;
 
     // There is a small chance of collision on the key, but given this is really a hint map,
