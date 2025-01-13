@@ -881,17 +881,16 @@ UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::c
         if (part.project != "ProjectsAllCpidTotalCredits") {
             projects.push_back(part.ToJson());
 
-        } else {
-            CDataStream ss(SER_NETWORK, 1);
-
-            ss << vParts[part.part1]->data;
+        } else if (!vParts[part.part1]->data.empty()) {
+            CDataStream ss(vParts[part.part1]->data, SER_NETWORK, 1);
 
             ss >> total_credit_map;
 
             for (const auto& iter : total_credit_map) {
                 UniValue tc_entry(UniValue::VOBJ);
 
-                tc_entry.pushKV("project", iter.second);
+                tc_entry.pushKV("project", iter.first);
+                tc_entry.pushKV("all_cpid_total_credit", iter.second);
 
                 project_all_cpid_total_credits.push_back(tc_entry);
             }

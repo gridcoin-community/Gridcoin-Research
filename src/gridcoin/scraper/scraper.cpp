@@ -3937,8 +3937,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
     // Enumerate the count of active projects from the dummy converged manifest. One of the parts
     // is the beacon list, is not a project, which is why that should not be included in the count.
     // Populate the verified beacons map, and if it is don't count that either.
-    ScraperPendingBeaconMap VerifiedBeaconMap;
-
     int exclude_parts_from_count = 1;
 
     auto iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("VerifiedBeacons");
@@ -3948,7 +3946,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         try
         {
-            part >> VerifiedBeaconMap;
+            part >> stats_verified_beacons_tc.mVerifiedMap;
         }
         catch (const std::exception& e)
         {
@@ -3958,10 +3956,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
         ++exclude_parts_from_count;
     }
 
-    stats_verified_beacons_tc.mVerifiedMap = VerifiedBeaconMap;
-
-    std::map<std::string, double> projects_all_cpid_total_credits_map;
-
     iter = StructConvergedManifest.ConvergedManifestPartPtrsMap.find("ProjectsAllCpidTotalCredits");
     if (iter != StructConvergedManifest.ConvergedManifestPartPtrsMap.end())
     {
@@ -3969,7 +3963,7 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         try
         {
-            part >> projects_all_cpid_total_credits_map;
+            part >> stats_verified_beacons_tc.m_total_credit_map;
         }
         catch (const std::exception& e)
         {
@@ -3978,8 +3972,6 @@ ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const
 
         ++exclude_parts_from_count;
     }
-
-    stats_verified_beacons_tc.m_total_credit_map = projects_all_cpid_total_credits_map;
 
     unsigned int nActiveProjects = StructConvergedManifest.ConvergedManifestPartPtrsMap.size() - exclude_parts_from_count;
 
@@ -4660,20 +4652,20 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             auto scraper_cmanifest_include_noncurrent_proj_files =
                     []() { LOCK(cs_ScraperGlobals); return SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES; };
 
+            // Populate the all cpid total credit map from current entries only. Keep track of the timestamps and assign
+            // the latest manifest file entry timestamp to the total_credit_map_timestamp.
+            if (entry.second.current && !entry.second.excludefromcsmanifest) {
+                total_credit_map.insert(std::make_pair(entry.second.project, entry.second.all_cpid_total_credit));
+
+                total_credit_map_timestamp = std::max(entry.second.timestamp, total_credit_map_timestamp);
+            }
+
             // If SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES is false, only include current files to send across the
             // network. Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true) or
             // if it has no records.
             if ((!scraper_cmanifest_include_noncurrent_proj_files() && !entry.second.current)
                     || entry.second.excludefromcsmanifest || entry.second.no_records) {
                 continue;
-            }
-
-            // Populate the all cpid total credit map from current entries only. Keep track of the timestamps and assign
-            // the latest manifest file entry timestamp to the total_credit_map_timestamp.
-            if (entry.second.current) {
-                total_credit_map.insert(std::make_pair(entry.first, entry.second.all_cpid_total_credit));
-
-                total_credit_map_timestamp = std::max(entry.second.timestamp, total_credit_map_timestamp);
             }
 
             fs::path inputfile = entry.first;
@@ -5358,29 +5350,23 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
             // The vParts[0] is always the BeaconList.
             StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("BeaconList", manifest->vParts[0]));
 
-            // Also include the VerifiedBeaconList "project" if present in the parts.
-            int nPart = -1;
+            // Also include the VerifiedBeaconList and ProjectsAllCpidTotalCredits "projects" if present in the parts.
             for (const auto& iter : manifest->projects)
             {
-                if (iter.project == "VerifiedBeacons")
-                {
-                    nPart = iter.part1;
-                    break;
+                // The normal (active) beacon list is always part 0, so skip part 0 for this loop.
+                if (iter.part1 == 0) {
+                    continue;
+                }
+
+                if (iter.project == "VerifiedBeacons" || iter.project == "ProjectsAllCpidTotalCredits") {
+                    StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair(iter.project,
+                                                                                               manifest->vParts[iter.part1]));
                 }
             }
 
-            // The normal (active) beacon list is always part 0, so nPart from the above loop
-            // must be greater than zero, or else the VerifiedBeacons was not included in the
-            // manifest. Note it does NOT have to be present, but needs to be put in the
-            // converged manifest if it is.
-            if (nPart > 0)
-            {
-                StructConvergedManifest.ConvergedManifestPartPtrsMap.insert(std::make_pair("VerifiedBeacons",
-                                                                                           manifest->vParts[nPart]));
-            }
-
             _log(logattribute::INFO, __func__,
-                 "After BeaconList and VerifiedBeacons insert StructConvergedManifest.ConvergedManifestPartPtrsMap.size() = "
+                 "After BeaconList, VerifiedBeacons, and ProjectsAllCpidTotalCredits insert "
+                 "StructConvergedManifest.ConvergedManifestPartPtrsMap.size() = "
                  + ToString(StructConvergedManifest.ConvergedManifestPartPtrsMap.size()));
 
             StructConvergedManifest.ConsensusBlock = nConvergedConsensusBlock;
