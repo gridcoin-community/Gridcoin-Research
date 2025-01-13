@@ -141,12 +141,39 @@ UniValue SuperblockToJson(const GRC::Superblock& superblock)
         beacons.push_back(key_id.ToString());
     }
 
+    UniValue project_greylist_status(UniValue::VARR);
+
+    for (const auto& project : superblock.m_project_status.m_project_status) {
+        UniValue status(UniValue::VOBJ);
+
+        // construct a dummy project entry to use the status to string.
+        auto dummy = GRC::ProjectEntry(GRC::ProjectEntry::CURRENT_VERSION, project.first, "foo", false, project.second, 0);
+
+        status.pushKV("project", project.first);
+        status.pushKV("status", dummy.StatusToString());
+
+        project_greylist_status.push_back(status);
+    }
+
+    UniValue project_all_cpid_total_credits(UniValue::VARR);
+
+    for (const auto& project : superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("project", project.first);
+        entry.pushKV("all_cpid_total_credit", project.second);
+
+        project_all_cpid_total_credits.push_back(entry);
+    }
+
     UniValue json(UniValue::VOBJ);
 
     json.pushKV("version", (int)superblock.m_version);
-    json.pushKV("magnitudes", std::move(magnitudes));
-    json.pushKV("projects", std::move(projects));
-    json.pushKV("beacons", std::move(beacons));
+    json.pushKV("magnitudes", magnitudes);
+    json.pushKV("projects", projects);
+    json.pushKV("beacons", beacons);
+    json.pushKV("project_greylist_status", project_greylist_status);
+    json.pushKV("project_all_cpid_total_credits", project_all_cpid_total_credits);
 
     return json;
 }
