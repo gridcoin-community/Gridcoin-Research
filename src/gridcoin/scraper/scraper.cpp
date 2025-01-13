@@ -4650,6 +4650,11 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             }
         }
 
+        // This will be populated from the all cpid total credits of current entries, and used to inject into the
+        // ProjectsAllCpidTotalCredits "project".
+        std::map<std::string, double> total_credit_map;
+        int64_t total_credit_map_timestamp = 0;
+
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
             auto scraper_cmanifest_include_noncurrent_proj_files =
@@ -4659,8 +4664,17 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             // network. Also continue (exclude) if it is a non-publishable entry (excludefromcsmanifest is true) or
             // if it has no records.
             if ((!scraper_cmanifest_include_noncurrent_proj_files() && !entry.second.current)
-                    || entry.second.excludefromcsmanifest || entry.second.no_records)
+                    || entry.second.excludefromcsmanifest || entry.second.no_records) {
                 continue;
+            }
+
+            // Populate the all cpid total credit map from current entries only. Keep track of the timestamps and assign
+            // the latest manifest file entry timestamp to the total_credit_map_timestamp.
+            if (entry.second.current) {
+                total_credit_map.insert(std::make_pair(entry.first, entry.second.all_cpid_total_credit));
+
+                total_credit_map_timestamp = std::max(entry.second.timestamp, total_credit_map_timestamp);
+            }
 
             fs::path inputfile = entry.first;
 
@@ -4724,6 +4738,33 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
             manifest->projects.push_back(ProjectEntry);
 
             CDataStream part(vchData, SER_NETWORK, 1);
+
+            manifest->addPartData(std::move(part), true);
+
+            iPartNum++;
+        }
+
+        // Projects all cpid total credit map "project" part.
+        if (!total_credit_map.empty())
+        {
+            CScraperManifest::dentry ProjectEntry;
+
+            ProjectEntry.project = "ProjectsAllCpidTotalCredits";
+            ProjectEntry.LastModified = total_credit_map_timestamp;
+            ProjectEntry.current = true;
+
+            // For now each object will only have one part.
+            ProjectEntry.part1 = iPartNum;
+            ProjectEntry.partc = 0;
+            ProjectEntry.GridcoinTeamID = -1; //Not used anymore
+
+            ProjectEntry.last = 1;
+
+            manifest->projects.push_back(ProjectEntry);
+
+            CDataStream part(SER_NETWORK, 1);
+
+            part << total_credit_map;
 
             manifest->addPartData(std::move(part), true);
 
