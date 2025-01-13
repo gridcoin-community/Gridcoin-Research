@@ -24,3 +24,11 @@ void ParseString(const string& str, char c, vector<string>& v)
         i1 = i2+1;
     }
 }
+
+std::string FromDoubleToString(const double& t, const int& precision)
+{
+    std::ostringstream oss;
+    oss.imbue(std::locale::classic());
+    oss << std::scientific << std::setprecision(precision) << t;
+    return oss.str();
+}

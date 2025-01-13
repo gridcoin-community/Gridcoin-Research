@@ -3472,7 +3472,7 @@ bool StoreScraperFileManifest(const fs::path& file)
                     + entry.first + ","
                     + ToString(entry.second.excludefromcsmanifest) + ","
                     + entry.second.filetype + ","
-                    + ToString(entry.second.all_cpid_total_credit) + ","
+                    + FromDoubleToString(entry.second.all_cpid_total_credit, 12) + ","
                     + ToString((uint32_t) entry.second.no_records)
                     + "\n";
             stream << sScraperFileManifestEntry;

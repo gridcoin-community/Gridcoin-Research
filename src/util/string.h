@@ -11,6 +11,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
 #include <locale>
 #include <sstream>
 #include <string>
@@ -86,6 +87,16 @@ std::string ToString(const T& t)
     oss << t;
     return oss.str();
 }
+
+/**
+ * @brief Locale-independent version of ToString specifically for doubles with
+ * the ability to specificy the precision.
+ *
+ * @param t Input double floating point
+ * @param precision
+ * @return string
+ */
+std::string FromDoubleToString(const double& t, const int& precision);
 
 /**
  * Check whether a container begins with the given prefix.
