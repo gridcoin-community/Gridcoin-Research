@@ -308,7 +308,7 @@ AutoGreylist::AutoGreylist()
     : m_greylist_ptr(std::make_shared<Greylist>())
     , m_superblock_hash(uint256 {})
 {
-    Refresh();
+    //Refresh();
 }
 
 AutoGreylist::Greylist::const_iterator AutoGreylist::begin() const
