@@ -510,10 +510,24 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
 
     ProjectList projects;
 
-    // This is the override for automatic greylisting. If the AutoGreylist class refresh determines
-    // that the project meets greylisting criteria, it will be in the AutoGreylist object pointed to
-    // by the greylist_ptr. This will override the whitelist entries from the project whitelist registry.
-    for (auto iter : m_project_entries) {
+    // This is the override for automatic greylisting integrated with the switch. If the AutoGreylist class refresh
+    // determines that the project meets greylisting criteria, it will be in the AutoGreylist object pointed to
+    // by the greylist_ptr. This will override the corresponding project entry from the project whitelist registry.
+    //
+    // We do NOT want to actually change the registry entries map with the auto greylist output, because the
+    // greylist output is a dynamic override and when the override is removed, the underlying value of the
+    // project status enforced by the project entries from addkey should return. This effectively means the greylist
+    // override is applied on superblock boundaries, because the AutoGreylist global (singleton) cache is updated
+    // when the superblock stakes.
+    //
+    // Make a copy of the registry project entries map for override purposes. This is not too bad because the number of
+    // projects is relatively small.
+    ProjectEntryMap project_entries = m_project_entries;
+
+    for (auto iter : project_entries) {
+        // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
+        // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
+        // disturbing the underlying projects registry.
         if ((iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
             && greylist_ptr->Contains(iter.first)) {
             iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
