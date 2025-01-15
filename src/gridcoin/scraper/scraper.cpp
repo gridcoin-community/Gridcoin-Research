@@ -3792,7 +3792,7 @@ bool ProcessNetworkWideFromProjectStats(ScraperStats& mScraperStats)
     unsigned int nCPIDProjectCount = 0;
 
     //Also track the network wide rollup.
-    ScraperObjectStats NetworkWideStatsEntry;
+    ScraperObjectStats NetworkWideStatsEntry {};
 
     NetworkWideStatsEntry.statskey.objecttype = statsobjecttype::NetworkWide;
     // ObjectID is blank string for network-wide.
