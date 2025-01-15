@@ -328,6 +328,10 @@ AutoGreylist::Greylist::size_type AutoGreylist::size() const
 
 bool AutoGreylist::Contains(const std::string& name, const bool& only_auto_greylisted) const
 {
+    if (m_greylist_ptr->empty()) {
+        return false;
+    }
+
     auto iter = m_greylist_ptr->find(name);
 
     if (iter != m_greylist_ptr->end()) {
@@ -364,8 +368,9 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
     // We need the current whitelist, including all records except deleted. This will include greylisted projects,
     // whether currently marked as manually greylisted from protocol or overridden to auto greylisted by the auto greylist class,
     // based on the current state of the autogreylist. NOTE that the refresh_greylist is set to false here and MUST be this
-    // when called in the AutoGreylist class itself, to avoid an infinite loop.
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
+    // when called in the AutoGreylist class itself, to avoid an infinite loop; include_override is also set to false
+    // because each refresh of the auto greylist must start with the underlying whitelist state.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false, false);
 
     m_greylist_ptr->clear();
 
@@ -452,9 +457,9 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in)
         // the v3_superblock_count >= 2 test is to ensure there are at least two v3 superblocks with the total credits
         // filled in to sample for the auto greylist determination. A two sb sample with positive change in TC will
         // cause the ZCD and WAS rules to pass.
-        if (iter->second.GetZCD() < 7 && iter->second.GetWAS() >= Fraction(1, 10) && v3_superblock_count >= 2) {
-            iter->second.m_meets_greylisting_crit = true;
-         }
+        iter->second.m_meets_greylisting_crit = v3_superblock_count >= 2
+                                                && (iter->second.GetZCD() > 7
+                                                    || iter->second.GetWAS() < Fraction(1, 10));
     }
 }
 
@@ -476,7 +481,9 @@ void AutoGreylist::RefreshWithSuperblock(Superblock& superblock)
 
     RefreshWithSuperblock(superblock_ptr);
 
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
+    // Here we want to get the whitelist with the greylist override applied, but do NOT want to refresh the auto grey list, since
+    // we are in a refresh method within the auto greylist class.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false, true);
 
     // Update the superblock object with the project greylist status.
     for (const auto& project : whitelist) {
@@ -498,7 +505,9 @@ std::shared_ptr<AutoGreylist> AutoGreylist::GetAutoGreylistCache()
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter, const bool& refresh_greylist) const
+WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter,
+                                      const bool& refresh_greylist,
+                                      const bool& include_override) const
 {
     LOCK(cs_lock);
 
@@ -525,12 +534,17 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
     ProjectEntryMap project_entries = m_project_entries;
 
     for (auto iter : project_entries) {
-        // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
-        // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
-        // disturbing the underlying projects registry.
-        if ((iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
-            && greylist_ptr->Contains(iter.first)) {
-            iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
+        if (include_override) {
+            // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
+            // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
+            // disturbing the underlying projects registry.
+
+            bool in_greylist = greylist_ptr->Contains(iter.first);
+
+            if ((iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
+                && in_greylist) {
+                iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
+            }
         }
 
         switch (filter) {

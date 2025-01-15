@@ -508,7 +508,7 @@ public:
             , m_zcd_20_SB_count(0)
             , m_TC_7_SB_sum(0)
             , m_TC_40_SB_sum(0)
-            , m_meets_greylisting_crit(0)
+            , m_meets_greylisting_crit(false)
             , m_TC_initial_bookmark(0)
             , m_TC_bookmark(0)
             , m_sb_from_baseline_processed(0)
@@ -520,7 +520,7 @@ public:
             , m_zcd_20_SB_count(0)
             , m_TC_7_SB_sum(0)
             , m_TC_40_SB_sum(0)
-            , m_meets_greylisting_crit(0)
+            , m_meets_greylisting_crit(false)
             , m_TC_initial_bookmark(TC_initial_bookmark)
             , m_TC_bookmark(0)
             , m_sb_from_baseline_processed(0)
@@ -739,7 +739,7 @@ public:
     //! the AutoGreylist as part of taking the snapshot.
     //!
     WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
-                               const bool& refresh_greylist = false) const;
+                               const bool& refresh_greylist = true, const bool &include_override = true) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
