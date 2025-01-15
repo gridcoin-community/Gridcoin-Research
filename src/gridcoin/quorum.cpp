@@ -4,6 +4,7 @@
 
 #include <key_io.h>
 #include "chainparams.h"
+#include "gridcoin/project.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
@@ -1641,6 +1642,9 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // TODO: unwrap this from ScraperGetSuperblockContract()
     CreateSuperblock();
 
+    // Get a read-only view of the current project greylist
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, false, true);
+
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};
 
@@ -1667,7 +1671,9 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
         if (entry.first.objecttype == statsobjecttype::byCPIDbyProject) {
             const Span<const char> project_name = try_item(entry.first.objectID);
 
-            if (project_name.size() > 0) {
+            std::string s_project_name = std::string(project_name.begin(), project_name.end());
+
+            if (project_name.size() > 0 && !greylist.Contains(s_project_name)) {
                 projects.emplace_back(
                     std::string(project_name.begin(), project_name.end()),
                     entry.second.statsvalue.dRAC,
