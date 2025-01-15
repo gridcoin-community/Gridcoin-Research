@@ -521,7 +521,7 @@ int ScraperRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_scraper_db.Initialize(m_scrapers, m_pending_scrapers, m_expired_scraper_entries);
+    int height = m_scraper_db.Initialize(m_scrapers, m_pending_scrapers, m_expired_scraper_entries, m_first_scraper_entries, false);
 
     LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scraper_db size after load: %u", __func__, m_scraper_db.size());
     LogPrint(LogFlags::SCRAPER, "INFO: %s: m_scrapers size after load: %u", __func__, m_scrapers.size());

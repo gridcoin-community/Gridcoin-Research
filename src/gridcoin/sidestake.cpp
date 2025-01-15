@@ -887,7 +887,11 @@ int SideStakeRegistry::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_sidestake_db.Initialize(m_mandatory_sidestake_entries, m_pending_sidestake_entries, m_expired_sidestake_entries);
+    int height = m_sidestake_db.Initialize(m_mandatory_sidestake_entries,
+                                           m_pending_sidestake_entries,
+                                           m_expired_sidestake_entries,
+                                           m_sidestake_first_entries,
+                                           false);
 
     SubscribeToCoreSignals();
 

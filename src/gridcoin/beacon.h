@@ -830,6 +830,8 @@ private:
     //!
     std::set<Beacon_ptr> m_expired_pending;
 
+    BeaconMap m_beacon_first_entries {}; //!< Not used here. Only to satisfy the template.
+
     //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
     //! beacon registry and is only accessible by beacon registry functions.

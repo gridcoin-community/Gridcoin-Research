@@ -482,7 +482,7 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     BOOST_CHECK(whitelist.Snapshot().size() == 0);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
 
-    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
+    AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, false);
 
     BOOST_CHECK(whitelist.Snapshot().size() == 1);
     BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);

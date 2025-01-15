@@ -2693,7 +2693,7 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
 
         entry.pushKV("project:", iter.first);
         entry.pushKV("zcd", iter.second.GetZCD());
-        entry.pushKV("WAS", iter.second.GetWAS().ToDouble());
+        entry.pushKV("was", iter.second.GetWAS().ToDouble());
         entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
 
         autogreylist.push_back(entry);

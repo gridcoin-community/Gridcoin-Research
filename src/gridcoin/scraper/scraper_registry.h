@@ -627,6 +627,8 @@ private:
 
     std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
 
+    ScraperMap m_first_scraper_entries {};   //!< Not used here. To satisfy the template only.
+
     ScraperEntryDB m_scraper_db;
 
 public:

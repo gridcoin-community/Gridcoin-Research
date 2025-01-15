@@ -592,6 +592,8 @@ private:
 
     std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
 
+    ProtocolEntryMap m_protocol_first_entries {};          //!< Not used. Only to satisfy the template.
+
     ProtocolEntryDB m_protocol_db;
 
 public:

@@ -659,10 +659,13 @@ public:
     //!
     bool Contains(const std::string& name, const bool& only_auto_greylisted = true) const;
 
+    //!
+    //! \brief This refreshes the AutoGreylist object from the last superblock in the chain.
+    //!
     void Refresh();
 
     //!
-    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock pointer.
+    //! \brief This refreshes the AutoGreylist object from an input Superblock pointer.
     //!
     //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
     //! object
@@ -674,7 +677,7 @@ public:
     void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in);
 
     //!
-    //! \brief This refreshes a local instantiation of the AutoGreylist from an input Superblock that is going to be associated
+    //! \brief This refreshes the AutoGreylist object from an input Superblock that is going to be associated
     //! with the current head of the chain. This mode is used in the scraper during the construction of the superblock contract.
     //!
     //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
@@ -686,13 +689,15 @@ public:
     //!
     void RefreshWithSuperblock(Superblock& superblock);
 
+    void Reset();
+
     static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
 
 private:
-    CCriticalSection lock;
+    mutable CCriticalSection autogreylist_lock;
 
     GreylistPtr m_greylist_ptr;
-    uint256 m_superblock_hash;
+    QuorumHash m_superblock_hash;
 };
 
 //!
@@ -837,6 +842,12 @@ public:
     uint64_t PassivateDB() override;
 
     //!
+    //! \brief This returns m_project_first_actives.
+    //! \return
+    //!
+    const ProjectEntryMap GetProjectsFirstActive() const;
+
+    //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
     //! actually used.
     //!
@@ -872,7 +883,9 @@ private:
 
     std::set<ProjectEntry> m_expired_project_entries {}; //!< Not actually used. Only to satisfy the template.
 
-    ProjectEntryDB m_project_db; //!< The project db member
+    ProjectEntryMap m_project_first_actives;             //!< Tracks when projects were first activated for auto greylisting purposes.
+
+    ProjectEntryDB m_project_db;                         //!< The project db member
 public:
 
     ProjectEntryDB& GetProjectDB();

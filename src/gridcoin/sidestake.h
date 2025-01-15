@@ -887,6 +887,8 @@ private:
 
     std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
 
+    MandatorySideStakeMap m_sidestake_first_entries {};   //!< Not used. Only to satisfy the template.
+
     SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
 
     bool m_local_entry_already_saved_to_config = false;   //!< Flag to prevent reload on signal if individual entry saved already.
