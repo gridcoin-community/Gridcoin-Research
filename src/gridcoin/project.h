@@ -295,9 +295,9 @@ public:
     //! \param name            Project name from contract message key.
     //! \param url             Project URL from contract message value.
     //! \param gdpr_controls   Boolean to indicate gdpr stats export controls enforced
-    //! \param manual_greylist Boolean to force manual greylisting of project
+    //! \param status          ProjectEntryStatus to force project status.
     //!
-    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, bool manual_greylist);
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, ProjectEntryStatus status);
 
     //!
     //! \brief Initialize a \c Project using data from the contract.

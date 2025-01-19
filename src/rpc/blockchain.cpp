@@ -2297,7 +2297,20 @@ UniValue addkey(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
         std::string error_string;
 
-        if (project_v2_enabled) {
+        if (block_v13_enabled) {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> <status> \n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "For project keytype only\n"
+                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
+                           "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
+                           "\n"
+                           "Add a key to the network";
+        } else if (project_v2_enabled) {
             error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
                            "\n"
                            "<action> ---> Specify add or delete of key\n"
@@ -2346,7 +2359,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
     {
         if (action == GRC::ContractAction::ADD) {
             bool gdpr_export_control = false;
-            bool manually_greylist = false;
+            //bool manually_greylist = false;
+            GRC::ProjectEntryStatus status = GRC::ProjectEntryStatus::UNKNOWN;
 
             if (block_v13_enabled) {
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
@@ -2360,8 +2374,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 }
 
                 if (params.size() == 6) {
-                    if (ToLower(params[4].get_str()) == "true") {
-                        manually_greylist = true;
+                    if (ToLower(params[5].get_str()) == "man_greylist") {
+                        status = GRC::ProjectEntryStatus::MAN_GREYLISTED;
+                    } else if (ToLower(params[5].get_str()) == "auto_greylist_override") {
+                        status = GRC::ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE;
+                    } else {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "project status specifier, if provided, must be either man_greylist "
+                                                                  "or auto_greylist_override");
                     }
                 }
 
@@ -2372,7 +2391,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
                             gdpr_export_control,  // GDPR stats export protection enforced boolean
-                            manually_greylist);   // manual greylist flag
+                            status);   // manual greylist flag
 
             } else if (project_v2_enabled) {
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
@@ -2405,11 +2424,11 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
-                            uint32_t{3},          // Contract payload version number, 3
-                            params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            false,                // GDPR status irrelevant
-                            false);               // manual greylisting irrelevant
+                            uint32_t{3},                       // Contract payload version number, 3
+                            params[2].get_str(),               // Name
+                            std::string{},                     // URL ignored
+                            false,                             // GDPR status irrelevant
+                            GRC::ProjectEntryStatus::UNKNOWN); // manual greylisting or auto greylist override irrelevant
 
             } else if (project_v2_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(

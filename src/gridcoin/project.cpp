@@ -216,11 +216,28 @@ Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_
 {
 }
 
-Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, bool manual_greylist)
+Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, ProjectEntryStatus status)
     : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
-    if (manual_greylist) {
+    // The only two values that make sense for status using this constructor overload are MAN_GREYLISTED and
+    // AUTO_GREYLIST_OVERRIDE. The other are handled by the contract action context and the other overloads.
+    switch (status) {
+    case ProjectEntryStatus::MAN_GREYLISTED:
         m_status = ProjectEntryStatus::MAN_GREYLISTED;
+        break;
+    case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE:
+        m_status = ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE;
+        break;
+    case ProjectEntryStatus::ACTIVE:
+        break;
+    case ProjectEntryStatus::DELETED:
+        break;
+    case ProjectEntryStatus::AUTO_GREYLISTED:
+        break;
+    case ProjectEntryStatus::UNKNOWN:
+        break;
+    case ProjectEntryStatus::OUT_OF_BOUND:
+        break;
     }
 }
 
