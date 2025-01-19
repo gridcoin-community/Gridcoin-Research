@@ -1,4 +1,5 @@
 // Copyright (c) 2019 The Bitcoin Core developers
+// Copyright (c) 2025 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -221,9 +222,9 @@ UniValue help(const UniValue& params, bool fHelp)
             "developer -----> Returns help for developer commands\n"
             "network -------> Returns help for network related commands\n"
             "voting --------> Returns help for voting related commands\n"
-	    "\n"
-	    "You can support the development of Gridcoin by donating GRC to the\n"
-	    "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
+            "\n"
+            "You can support the development of Gridcoin by donating GRC to the\n"
+            "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
 
     // Allow to process through if params size is > 0
     string strCommand;

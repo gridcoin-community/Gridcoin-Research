@@ -1,3 +1,7 @@
+// Copyright (c) 2014-2025 The Gridcoin developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
 #define BOOST_TEST_MODULE Gridcoin Test Suite
 #include <boost/test/unit_test.hpp>
 
