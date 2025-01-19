@@ -29,6 +29,7 @@ enum class ProjectEntryStatus
     ACTIVE,
     MAN_GREYLISTED,
     AUTO_GREYLISTED,
+    AUTO_GREYLIST_OVERRIDE,
     OUT_OF_BOUND
 };
 } // namespace GRC

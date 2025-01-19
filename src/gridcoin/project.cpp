@@ -109,24 +109,26 @@ std::string ProjectEntry::StatusToString(const ProjectEntryStatus& status, const
 {
     if (translated) {
         switch(status) {
-        case ProjectEntryStatus::UNKNOWN:         return _("Unknown");
-        case ProjectEntryStatus::DELETED:         return _("Deleted");
-        case ProjectEntryStatus::MAN_GREYLISTED:  return _("Manually Greylisted");
-        case ProjectEntryStatus::AUTO_GREYLISTED: return _("Automatically Greylisted");
-        case ProjectEntryStatus::ACTIVE:          return _("Active");
-        case ProjectEntryStatus::OUT_OF_BOUND:    break;
+        case ProjectEntryStatus::UNKNOWN:                return _("Unknown");
+        case ProjectEntryStatus::DELETED:                return _("Deleted");
+        case ProjectEntryStatus::MAN_GREYLISTED:         return _("Manually Greylisted");
+        case ProjectEntryStatus::AUTO_GREYLISTED:        return _("Automatically Greylisted");
+        case ProjectEntryStatus::ACTIVE:                 return _("Active");
+        case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE: return _("Active by Greylist Override");
+        case ProjectEntryStatus::OUT_OF_BOUND:           break;
         }
 
         assert(false); // Suppress warning
     } else {
         // The untranslated versions are really meant to serve as the string equivalent of the enum values.
         switch(status) {
-        case ProjectEntryStatus::UNKNOWN:         return "Unknown";
-        case ProjectEntryStatus::DELETED:         return "Deleted";
-        case ProjectEntryStatus::MAN_GREYLISTED:  return "Manually Greylisted";
-        case ProjectEntryStatus::AUTO_GREYLISTED: return "Automatically Greylisted";
-        case ProjectEntryStatus::ACTIVE:          return "Active";
-        case ProjectEntryStatus::OUT_OF_BOUND:    break;
+        case ProjectEntryStatus::UNKNOWN:                return "Unknown";
+        case ProjectEntryStatus::DELETED:                return "Deleted";
+        case ProjectEntryStatus::MAN_GREYLISTED:         return "Manually Greylisted";
+        case ProjectEntryStatus::AUTO_GREYLISTED:        return "Automatically Greylisted";
+        case ProjectEntryStatus::ACTIVE:                 return "Active";
+        case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE: return "Active by Greylist Override";
+        case ProjectEntryStatus::OUT_OF_BOUND:           break;
         }
 
         assert(false); // Suppress warning
@@ -604,15 +606,24 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
 
             bool in_greylist = greylist_ptr->Contains(iter.first);
 
-            if ((iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
+            // If the project does NOT have a status of auto greylist override, and it is either active or already manually
+            // greylisted, then if it is in the greylist, mark with the status auto greylisted.
+            if (!(iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE)
+                && (iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
                 && in_greylist) {
                 iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
             }
         }
 
         switch (filter) {
-        case ProjectEntry::ProjectFilterFlag::ACTIVE:
+        case ProjectEntry::ProjectFilterFlag::REG_ACTIVE:
             if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
                 projects.push_back(*iter.second);
             }
             break;
@@ -623,6 +634,11 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
             break;
         case ProjectEntry::ProjectFilterFlag::AUTO_GREYLISTED:
             if (iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::AUTO_GREYLIST_OVERRIDE:
+            if (iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
                 projects.push_back(*iter.second);
             }
             break;
@@ -647,7 +663,8 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
         case ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED:
             if (iter.second->m_status == ProjectEntryStatus::ACTIVE
                 || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
-                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
                 projects.push_back(*iter.second);
             }
             break;
@@ -671,6 +688,9 @@ void Whitelist::Reset()
     m_expired_project_entries.clear();
     m_project_first_actives.clear();
     m_project_db.clear();
+
+    // If the whitelist registry is reset, the auto greylist cache should be reset as well.
+    AutoGreylist::GetAutoGreylistCache()->Reset();
 }
 
 void Whitelist::AddDelete(const ContractContext& ctx)

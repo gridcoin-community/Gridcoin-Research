@@ -40,15 +40,17 @@ public:
     //! This controls what project entries by status are in the project whitelist snapshot.
     //!
     enum ProjectFilterFlag : uint8_t {
-        NONE            = 0b0000,
-        DELETED         = 0b0001,
-        MAN_GREYLISTED  = 0b0010,
-        AUTO_GREYLISTED = 0b0100,
-        GREYLISTED      = MAN_GREYLISTED | AUTO_GREYLISTED,
-        ACTIVE          = 0b1000,
-        NOT_ACTIVE      = 0b0111,
-        ALL_BUT_DELETED = 0b1110,
-        ALL             = 0b1111
+        NONE                   = 0b00000,
+        DELETED                = 0b00001,
+        MAN_GREYLISTED         = 0b00010,
+        AUTO_GREYLISTED        = 0b00100,
+        GREYLISTED             = MAN_GREYLISTED | AUTO_GREYLISTED,
+        REG_ACTIVE             = 0b01000,
+        AUTO_GREYLIST_OVERRIDE = 0b10000,
+        ACTIVE                 = REG_ACTIVE | AUTO_GREYLIST_OVERRIDE,
+        NOT_ACTIVE             = 0b00111,
+        ALL_BUT_DELETED        = 0b11110,
+        ALL                    = 0b11111
     };
 
     //!
