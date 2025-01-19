@@ -216,6 +216,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listmanifests"          , 0 },
     { "listprojects"           , 0 },
     { "getautogreylist"        , 0 },
+    { "getautogreylist"        , 1 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
     { "sendalert"              , 4 },

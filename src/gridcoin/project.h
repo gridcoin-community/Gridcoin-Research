@@ -655,6 +655,11 @@ public:
             std::optional<bool> m_meets_greylisting_crit;
         };
 
+        const std::vector<UpdateHistoryEntry> GetUpdateHistory() const
+        {
+            return m_update_history;
+        }
+
         const std::string m_project_name;
 
         uint8_t m_zcd_20_SB_count;

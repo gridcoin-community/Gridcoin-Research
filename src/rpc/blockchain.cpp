@@ -2680,19 +2680,26 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
 UniValue getautogreylist(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1) {
+    if (fHelp || params.size() > 2) {
         throw runtime_error(
-            "getautogreylist <bool> \n"
+            "getautogreylist <bool> <bool> \n"
             "\n"
             "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
+            "\n"
+            "<bool> -> true to show greylist history for each project. Defaults to false. \n"
             "\n"
             "Displays information about projects that meet auto greylisting criteria.");
     }
 
     bool show_all_projects = false;
+    bool show_history = false;
 
     if (params.size()) {
         show_all_projects = params[0].get_bool();
+    }
+
+    if (params.size() >= 2) {
+        show_history = params[1].get_bool();
     }
 
     UniValue res(UniValue::VOBJ);
@@ -2714,6 +2721,44 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
         entry.pushKV("zcd", iter.second.GetZCD());
         entry.pushKV("was", iter.second.GetWAS().ToDouble());
         entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
+
+        if (show_history) {
+            UniValue entry_history(UniValue::VARR);
+
+            for (const auto& hist_entry : iter.second.GetUpdateHistory()) {
+                UniValue historical_entry(UniValue::VOBJ);
+
+                historical_entry.pushKV("superblocks_from_baseline", hist_entry.m_sb_from_baseline_processed);
+
+                if (hist_entry.m_total_credit) {
+                    historical_entry.pushKV("total_credit", *hist_entry.m_total_credit);
+                } else {
+                    historical_entry.pushKV("total_credit", "NA");
+                }
+
+                if (hist_entry.m_zcd) {
+                    historical_entry.pushKV("zcd", *hist_entry.m_zcd);
+                } else {
+                    historical_entry.pushKV("zcd", "NA");
+                }
+
+                if (hist_entry.m_was) {
+                    historical_entry.pushKV("was", hist_entry.m_was->ToDouble());
+                } else {
+                    historical_entry.pushKV("was", "NA");
+                }
+
+                if (hist_entry.m_meets_greylisting_crit) {
+                    historical_entry.pushKV("meets_greylisting_criteria", *hist_entry.m_meets_greylisting_crit);
+                } else {
+                    historical_entry.pushKV("meets_greylisting_criteria", "NA");
+                }
+
+                entry_history.push_back(historical_entry);
+            }
+
+            entry.pushKV("history", entry_history);
+        }
 
         autogreylist.push_back(entry);
     }
