@@ -432,11 +432,12 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
 
     const Whitelist::ProjectEntryMap& project_first_actives = GetWhitelist().GetProjectsFirstActive();
 
-    unsigned int v3_superblock_count = 0;
-
-    if (superblock_ptr_in->m_version > 2) {
-        ++v3_superblock_count;
+    // If this superblock version is less than 3, then all prior ones must also be less than 3, so bail.
+    if (superblock_ptr_in->m_version < 3) {
+        return;
     }
+
+    unsigned int superblock_count = 0;
 
     // Notice the superblock_ptr_in m_projects_all_cpid_total_credits MUST ALEADY BE POPULATED to record the TC state into
     // the auto greylist.
@@ -466,13 +467,14 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
         }
     }
 
+    ++superblock_count;
+
     CBlockIndex* index_ptr;
     {
         // Find the block index entry for the block before the provided superblock_ptr.
         index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
     }
 
-    unsigned int superblock_count = 1; // The 0 (baseline) superblock was processed above. Here we start with 1 and go up to 40
 
     while (index_ptr != nullptr && index_ptr->pprev != nullptr && superblock_count <= 40) {
 
@@ -495,50 +497,42 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
         SuperblockPtr superblock_ptr = block.GetClaim().m_superblock;
         superblock_ptr.Rebind(index_ptr);
 
-        if (superblock_ptr->m_version > 2) {
-            for (const auto& iter : whitelist) {
-                // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
-                auto greylist_entry = m_greylist_ptr->find(iter.m_name);
+        // Stop if superblocks less than version 3 are encountered while going backwards. This will happen until we are 40
+        // superblocks past the 1st superblock after the height specified for the changeover to v3 superblocks.
+        if (superblock_ptr->m_version < 3) {
+            break;
+        }
 
-                auto project = superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
+        for (const auto& iter : whitelist) {
+            // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
+            auto greylist_entry = m_greylist_ptr->find(iter.m_name);
 
-                // This record MUST be found, because for the record to be in the whitelist, it must have at least a first record.
-                auto project_first_active = project_first_actives.find(iter.m_name);
+            auto project = superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
 
-                // The purpose of this time comparison is to ONLY post greylist candidate entry (updates) for superblocks that are
-                // equal to or after the first entry date. Remember we are going backwards here. There cannot be entries held against
-                // a whitelisted project from before it was ever whitelisted. This check is required to ensure the greylist rules work
-                // correctly for newly whitelisted projects that are within the 40 day window for WAS and 20 day window for ZCD.
-                if (project_first_active != project_first_actives.end()
-                    && superblock_ptr.m_timestamp >= project_first_active->second->m_timestamp) {
-                    if (project != superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
-                        // Update greylist candidate entry with the total credit for each project present in superblock.
-                        greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count);
-                    } else {
-                        // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the
-                        // whitelist, but does not have a project entry in this superblock. This would be because the scrapers could
-                        // not converge on the project for this superblock.
-                        greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
-                    }
+                   // This record MUST be found, because for the record to be in the whitelist, it must have at least a first record.
+            auto project_first_active = project_first_actives.find(iter.m_name);
+
+                   // The purpose of this time comparison is to ONLY post greylist candidate entry (updates) for superblocks that are
+                   // equal to or after the first entry date. Remember we are going backwards here. There cannot be entries held against
+                   // a whitelisted project from before it was ever whitelisted. This check is required to ensure the greylist rules work
+                   // correctly for newly whitelisted projects that are within the 40 day window for WAS and 20 day window for ZCD.
+            if (project_first_active != project_first_actives.end()
+                && superblock_ptr.m_timestamp >= project_first_active->second->m_timestamp) {
+                if (project != superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
+                    // Update greylist candidate entry with the total credit for each project present in superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count);
+                } else {
+                    // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the
+                    // whitelist, but does not have a project entry in this superblock. This would be because the scrapers could
+                    // not converge on the project for this superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
                 }
             }
-
-            ++v3_superblock_count;
         }
 
         ++superblock_count;
 
         index_ptr = index_ptr->pprev;
-    }
-
-    // Mark elements with whether they meet greylist criteria.
-    for (auto iter = m_greylist_ptr->begin(); iter != m_greylist_ptr->end(); ++iter) {
-        // the v3_superblock_count >= 2 test is to ensure there are at least two v3 superblocks with the total credits
-        // filled in to sample for the auto greylist determination. A two sb sample with positive change in TC will
-        // cause the ZCD and WAS rules to pass.
-        iter->second.m_meets_greylisting_crit = v3_superblock_count >= 2
-                                                && (iter->second.GetZCD() > 7
-                                                    || iter->second.GetWAS() < Fraction(1, 10));
     }
 
     m_superblock_hash = superblock_ptr_in->GetHash();
