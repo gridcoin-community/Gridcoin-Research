@@ -37,7 +37,10 @@ public:
     //!
     //! \brief Project filter flag enumeration.
     //!
-    //! This controls what project entries by status are in the project whitelist snapshot.
+    //! This controls what project entries by status are in the project whitelist snapshot. Note that REG_ACTIVE
+    //! is the original "ACTIVE" and represents project entries with a status of "ACTIVE" in the registry. The
+    //! filter flag "ACTIVE" here includes both REG_ACTIVE and AUTO_GREYLIST_OVERRIDE project entry statuses from
+    //! the registry, since both mean the project is active assuming a convergence can be formed.
     //!
     enum ProjectFilterFlag : uint8_t {
         NONE                   = 0b00000,
@@ -495,16 +498,42 @@ public:
     WhitelistSnapshot Sorted() const;
 
 private:
-    const ProjectListPtr m_projects;  //!< The vector of whitelisted projects.
+    const ProjectListPtr m_projects;                //!< The vector of whitelisted projects.
     const ProjectEntry::ProjectFilterFlag m_filter; //!< The filter used to populate the readonly list.
 };
 
+//!
+//! \brief The AutoGreylist class. This class is a caching, thread-safe object that is generally intended to be (and currently
+//! implemented as) a singleton, global object with a cached state, where a need for an actual refresh is determined
+//! by a change in the superblock hash.
+//!
+//! The object is initialized in anonymous namespace in project.cpp and is accessed by the GetAutoGreylistCache()
+//! static method. While this object is _internally_ thread safe via the autogreylist_lock, several methods access
+//! external structures for which safe access can only be obtained by holding the cs_main lock. These methods are marked by
+//! EXCLUSIVE_LOCKS_REQUIRED accordingly to facilitate static lock analysis when available by the compiler.
+//!
+//! The object implements the current "Zero Credit Days" and "Work Availability Score" rules. The projects that qualify
+//! for greylisting override the "ACTIVE" status entries in the registry. This override is NOT permanent, but instead
+//! only persists while the project qualifies for greylisting using the rules, which are updated for each superblock change.
+//! In turn, there is a project entry that can be made in the registry to override the auto greylist, AUTO_GREYLIST_OVERRIDE,
+//! which prevents the application of the AUTO_GREYLIST status to that project. This will prevent greylisting of that
+//! project, even though by the rules it would be required. This override is to provide an ability to deal with unanticipated
+//! situations concerning a project that render the normal rules not applicable.
+//!
 class AutoGreylist
 {
 public:
+    //!
+    //! \brief This provides a class that formalizes a greylist candidate entry. If the requirements for auto
+    //! greylisting are met, the candidate entry becomes an override to the corresponding project entry on the
+    //! whitelist.
+    //!
     class GreylistCandidateEntry
     {
     public:
+        //!
+        //! \brief This is the trivial, empty constructor.
+        //!
         GreylistCandidateEntry()
             : m_project_name(std::string {})
             , m_zcd_20_SB_count(0)
@@ -517,6 +546,13 @@ public:
             , m_update_history({})
         {}
 
+        //!
+        //! \brief This parameterized constructor is used to construct the initial (baseline) greylist candidate
+        //! entry with the initial total credit value for the project.
+        //!
+        //! \param project_name
+        //! \param TC_initial_bookmark
+        //!
         GreylistCandidateEntry(std::string project_name, std::optional<uint64_t> TC_initial_bookmark)
             : m_project_name(project_name)
             , m_zcd_20_SB_count(0)
@@ -538,11 +574,36 @@ public:
             m_update_history.push_back(entry);
         }
 
+        //!
+        //! \brief Computes the number of "Zero Credit Days" (ZCD) in the last 20 SB from the superblock baseline.
+        //!
+        //! The number of zero credit days is counted starting at the current (or converged if part of the miner loop)
+        //! superblock backwards by superblock history. If the backwards history is limited by either the project
+        //! whitelisting initial active entry, or the number of v3 superblocks, then the zcd will be computed based
+        //! on the superblock history available.
+        //!
+        //! \return uint8_t of zcd count.
+        //!
         uint8_t GetZCD()
         {
             return m_zcd_20_SB_count;
         }
 
+        //!
+        //! \brief Computes the "Work Availability Score" (WAS) in the last 40 SB from the superblock baseline.
+        //!
+        //! The WAS is determined by computing the change in total credit over the last seven superblocks back from the
+        //! current (or converged if part of the miner loop) superblock, divided by the change in total credit over the
+        //! last 40 superblocks. This is represented internally as a fraction rather than floating point to avoid
+        //! consensus issues. Note that for display, the ToDouble method on the Fraction class is used to convert to
+        //! a human readable double. If 40 superblocks of history are not available, either because the project
+        //! was just whitelisted via an initial active project entry, or there are not enough v3 superblocks, then
+        //! the WAS is computed using the history that is available. This means for newly listed projects, or where the
+        //! v3 superblock history is less than 7, the WAS will be equal to 1.0 unless there are no collected statistics
+        //! on two superblocks during that interval, in which case the WAS will be 0.0.
+        //!
+        //! \return Fraction of Work Availablity Score.
+        //!
         Fraction GetWAS()
         {
             if (!m_sb_from_baseline_processed) {
@@ -570,6 +631,12 @@ public:
             }
         }
 
+        //!
+        //! \brief UpdateGreylistCandidateEntry
+        //!
+        //! \param total_credit
+        //! \param sb_from_baseline
+        //!
         void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
         {
             uint8_t sbs_from_baseline_no_update = sb_from_baseline - m_sb_from_baseline_processed - 1;
@@ -598,6 +665,13 @@ public:
             // the initial bookmark, and compute the difference, which is the same as adding up the deltas between
             // the TC's in each superblock. For updates with no total credit entry (i.e. std::optional is nullopt),
             // do not change the sums.
+            //
+            // If the initial bookmark TC is not available (i.e. the current SB did not have stats for this project),
+            // but this update does, then update the initial bookmark to this total credit.
+            if (!m_TC_initial_bookmark && total_credit) {
+                m_TC_initial_bookmark = total_credit;
+            }
+
             if (total_credit && m_TC_initial_bookmark && m_TC_initial_bookmark > total_credit) {
                 if (m_sb_from_baseline_processed <= 7) {
                     m_TC_7_SB_sum = *m_TC_initial_bookmark - *total_credit;
@@ -625,7 +699,7 @@ public:
         }
 
         //!
-        //! \brief This is used to store a update entry for historical purposes.
+        //! \brief This is used to store an update entry for historical purposes.
         //!
         struct UpdateHistoryEntry
         {
@@ -655,6 +729,10 @@ public:
             std::optional<bool> m_meets_greylisting_crit;
         };
 
+        //!
+        //! \brief This provides the update history vector for the greylist candidate entry.
+        //! \return
+        //!
         const std::vector<UpdateHistoryEntry> GetUpdateHistory() const
         {
             return m_update_history;
@@ -686,6 +764,9 @@ public:
     typedef Greylist::iterator iterator;
     typedef Greylist::const_iterator const_iterator;
 
+    //!
+    //! \brief The trivial constructor for the AutoGreylist class.
+    //!
     AutoGreylist();
 
     //!
@@ -699,7 +780,8 @@ public:
     const_iterator end() const;
 
     //!
-    //! \brief Get the number of projects in the auto greylist.
+    //! \brief Get the number of projects in the auto greylist. This should be equal to the number of whitelisted projects,
+    //! since the auto greylist tracks "candidate" entries, and they are marked as to whether they qualify for greylisting.
     //!
     size_type size() const;
 
@@ -745,8 +827,18 @@ public:
     //!
     void RefreshWithSuperblock(Superblock& superblock);
 
+    //!
+    //! \brief Resets the AutoGreylist object. This is called by the Whitelist Reset().
+    //!
     void Reset();
 
+    //!
+    //! \brief Static method to provide the shared pointer to the global auto greylist cache object. The actual
+    //! global is in an anonymous namespace to ensure the access is only through this method and also prevents having
+    //! to have extern statements all over.
+    //!
+    //! \return shared pointer to the auto greylist global cache object.
+    //!
     static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
 
 private:
@@ -766,11 +858,11 @@ public:
     //! \brief Initializes the project whitelist manager. The version must be incremented when
     //! introducing a breaking change in the storage format (serialization) of the project entry.
     //!
-    //! Version 0: <= 5.4.2.0 where there was no backing db.
-    //! Version 1: TBD.
+    //! Version 0: <= 5.4.5.0 where there was no backing db.
+    //! Version 1: >= 5.4.6.0.
     //!
     Whitelist()
-        :m_project_db(1)
+        : m_project_db(1)
     {
     };
 
