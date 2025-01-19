@@ -628,7 +628,7 @@ Superblock Superblock::FromConvergence(
         superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map);
 
         // Refresh the auto greylist and refresh this superblock with the greylist status.
-        std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
+        std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
 
         greylist_ptr->RefreshWithSuperblock(superblock);
     }

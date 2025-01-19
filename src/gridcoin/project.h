@@ -832,14 +832,7 @@ public:
     //!
     void Reset();
 
-    //!
-    //! \brief Static method to provide the shared pointer to the global auto greylist cache object. The actual
-    //! global is in an anonymous namespace to ensure the access is only through this method and also prevents having
-    //! to have extern statements all over.
-    //!
-    //! \return shared pointer to the auto greylist global cache object.
-    //!
-    static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+    //static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
 
 private:
     mutable CCriticalSection autogreylist_lock;
@@ -862,9 +855,13 @@ public:
     //! Version 1: >= 5.4.6.0.
     //!
     Whitelist()
-        : m_project_db(1)
-    {
-    };
+        : m_project_entries()
+        , m_pending_project_entries()
+        , m_expired_project_entries()
+        , m_project_first_actives()
+        , m_project_db(1)
+        , m_auto_greylist(std::make_shared<AutoGreylist>())
+    {}
 
     //!
     //! \brief The type that keys project entries by their key strings. Note that the entries
@@ -996,6 +993,13 @@ public:
     const ProjectEntryMap GetProjectsFirstActive() const;
 
     //!
+    //! \brief Method to provide the shared pointer to the global auto greylist cache object.
+    //!
+    //! \return shared pointer to the auto greylist global cache object.
+    //!
+    std::shared_ptr<AutoGreylist> GetAutoGreylist();
+
+    //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
     //! actually used.
     //!
@@ -1027,13 +1031,16 @@ private:
     void AddDelete(const ContractContext& ctx);
 
     ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
-    PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
 
-    std::set<ProjectEntry> m_expired_project_entries {}; //!< Not actually used. Only to satisfy the template.
+    PendingProjectEntryMap m_pending_project_entries;    //!< Not actually used. Only to satisfy the template.
+
+    std::set<ProjectEntry> m_expired_project_entries;    //!< Not actually used. Only to satisfy the template.
 
     ProjectEntryMap m_project_first_actives;             //!< Tracks when projects were first activated for auto greylisting purposes.
 
     ProjectEntryDB m_project_db;                         //!< The project db member
+
+    std::shared_ptr<AutoGreylist> m_auto_greylist;       //!< Smart shared pointer to the AutoGreylist cache object
 public:
 
     ProjectEntryDB& GetProjectDB();
@@ -1045,6 +1052,15 @@ public:
 //! \return Current global whitelist registry instance.
 //!
 Whitelist& GetWhitelist();
+
+//!
+//! \brief Global scope function to provide the shared pointer to the global auto greylist cache object. The AutoGreylist
+//! cache is originally constructed and a pointer held in m_auto_greylist in the Whitelist class global singleton, g_whitelist.
+//!
+//! \return shared pointer to the auto greylist global cache object.
+//!
+std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+
 } // namespace GRC
 
 #endif // GRIDCOIN_PROJECT_H

@@ -2704,7 +2704,7 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
+    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
 
     greylist_ptr->Refresh();
 

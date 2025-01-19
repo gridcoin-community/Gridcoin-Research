@@ -17,11 +17,8 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
-// This is the global singleton for the whitelist.
+// This is the global singleton for the whitelist. It also contains a smart pointer to the AutoGreylist cache singleton object.
 Whitelist g_whitelist;
-
-// This is the global cached (singleton) for the auto greylist.
-std::shared_ptr<AutoGreylist> g_autogreylist_ptr = std::make_shared<AutoGreylist>();
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -33,9 +30,9 @@ Whitelist& GRC::GetWhitelist()
     return g_whitelist;
 }
 
-std::shared_ptr<AutoGreylist> AutoGreylist::GetAutoGreylistCache()
+std::shared_ptr<AutoGreylist> GRC::GetAutoGreylistCache()
 {
-    return g_autogreylist_ptr;
+    return GRC::GetWhitelist().GetAutoGreylist();
 }
 
 
@@ -589,10 +586,8 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
         return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
     }
 
-    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::AutoGreylist::GetAutoGreylistCache();
-
     if (refresh_greylist) {
-        greylist_ptr->Refresh();
+        m_auto_greylist->Refresh();
     }
 
     // This contains the override for automatic greylisting integrated with the switch. If the AutoGreylist class refresh
@@ -615,7 +610,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
             // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
             // disturbing the underlying projects registry.
 
-            bool in_greylist = greylist_ptr->Contains(iter.first);
+            bool in_greylist = m_auto_greylist->Contains(iter.first);
 
             // If the project does NOT have a status of auto greylist override, and it is either active or already manually
             // greylisted, then if it is in the greylist, mark with the status auto greylisted.
@@ -701,7 +696,7 @@ void Whitelist::Reset()
     m_project_db.clear();
 
     // If the whitelist registry is reset, the auto greylist cache should be reset as well.
-    AutoGreylist::GetAutoGreylistCache()->Reset();
+    m_auto_greylist->Reset();
 }
 
 void Whitelist::AddDelete(const ContractContext& ctx)
@@ -998,6 +993,11 @@ const Whitelist::ProjectEntryMap Whitelist::GetProjectsFirstActive() const
     LOCK(cs_lock);
 
     return m_project_first_actives;
+}
+
+std::shared_ptr<AutoGreylist> Whitelist::GetAutoGreylist()
+{
+    return m_auto_greylist;
 }
 
 Whitelist::ProjectEntryDB &Whitelist::GetProjectDB()
