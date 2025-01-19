@@ -529,17 +529,28 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         // between local projects and whitelisted projects:
         //
         if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
-            if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
-                != excluded_projects.end()) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
-                row.m_error = tr("Excluded");
-            } else if (whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+            if (whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
                 row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
                 row.m_error = tr("Manually Greylisted");
             } else if (whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
                 row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
                 row.m_error = tr("Automatically Greylisted");
+                   // Only mark as excluded if the project is not greylisted. A greylisted project will
+                   // have the same effect on statistics from a CPID perspective whether the project is
+                   // excluded by the scrapers.
+            } else if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
+                       != excluded_projects.end()
+                       && !(whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED)
+                       && !(whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+                row.m_error = tr("Excluded");
+                   // an unknown status should never happen for a project record on the main chain, but to be
+                   // thorough, handle that here.
+            } else if (whitelist_project->m_status == ProjectEntryStatus::UNKNOWN){
+                row.m_whitelisted = ProjectRow::WhiteListStatus::False;
             } else {
+                // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
+                // as the whitelist filter of ACTIVE.
                 row.m_whitelisted = ProjectRow::WhiteListStatus::True;
             }
 
@@ -590,17 +601,28 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
             row.m_error = tr("Uses external adapter");
         }
 
-        if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
-            != excluded_projects.end()) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
-            row.m_error = tr("Excluded");
-        } else if (project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+        if (project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
             row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
             row.m_error = tr("Manually Greylisted");
         } else if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
             row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
             row.m_error = tr("Automatically Greylisted");
+               // Only mark as excluded if the project is not greylisted. A greylisted project will
+               // have the same effect on statistics from a CPID perspective whether the project is
+               // excluded by the scrapers.
+        } else if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
+                       != excluded_projects.end()
+                   && !(project.m_status == ProjectEntryStatus::AUTO_GREYLISTED)
+                   && !(project.m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+            row.m_error = tr("Excluded");
+               // an unknown status should never happen for a project record on the main chain, but to be
+               // thorough, handle that here.
+        } else if (project.m_status == ProjectEntryStatus::UNKNOWN){
+            row.m_whitelisted = ProjectRow::WhiteListStatus::False;
         } else {
+            // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
+            // as the whitelist filter of ACTIVE.
             row.m_whitelisted = ProjectRow::WhiteListStatus::True;
         }
 
