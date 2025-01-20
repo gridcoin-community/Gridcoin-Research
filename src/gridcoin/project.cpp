@@ -11,7 +11,6 @@
 #include "node/ui_interface.h"
 
 #include <algorithm>
-#include <atomic>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -565,6 +564,8 @@ void AutoGreylist::Reset()
 {
     if (m_greylist_ptr != nullptr) {
         m_greylist_ptr->clear();
+    } else {
+        m_greylist_ptr = std::make_shared<Greylist>();
     }
 
     m_superblock_hash = Superblock().GetHash(true);
@@ -586,7 +587,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
         return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
     }
 
-    if (refresh_greylist) {
+    if (refresh_greylist && m_auto_greylist != nullptr) {
         m_auto_greylist->Refresh();
     }
 
@@ -610,7 +611,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
             // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
             // disturbing the underlying projects registry.
 
-            bool in_greylist = m_auto_greylist->Contains(iter.first);
+            bool in_greylist = m_auto_greylist != nullptr ? m_auto_greylist->Contains(iter.first) : false;
 
             // If the project does NOT have a status of auto greylist override, and it is either active or already manually
             // greylisted, then if it is in the greylist, mark with the status auto greylisted.

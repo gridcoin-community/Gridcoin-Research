@@ -479,19 +479,19 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     int height = 0;
     int64_t time = 0;
 
-    BOOST_CHECK(whitelist.Snapshot().size() == 0);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, false);
 
-    BOOST_CHECK(whitelist.Snapshot().size() == 1);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
 
     AddProjectEntry(2, "Foo", "http://foo.test", false, height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot().size() == 2);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 2);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
@@ -503,13 +503,13 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
 
-    BOOST_CHECK(whitelist.Snapshot().size() == 1);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
 
     DeleteProjectEntry(1, "Enigma", height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot().size() == 0);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
@@ -522,14 +522,14 @@ BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Foo", "http://foo.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot();
+    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false);
 
     DeleteProjectEntry(1, "Enigma", height, time, false);
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
 
-    BOOST_CHECK(whitelist.Snapshot().Contains("Enigma") == false);
-    BOOST_CHECK(whitelist.Snapshot().Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
@@ -542,7 +542,7 @@ BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Enigma", "http://new.enigma.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot();
+    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false);
     BOOST_CHECK(snapshot.size() == 1);
 
     for (const auto& project : snapshot) {

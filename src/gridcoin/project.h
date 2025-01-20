@@ -548,7 +548,7 @@ public:
 
         //!
         //! \brief This parameterized constructor is used to construct the initial (baseline) greylist candidate
-        //! entry with the initial total credit value for the project.
+        //! entry with the initial total credit value for the project. This also inserts the baseline history entry.
         //!
         //! \param project_name
         //! \param TC_initial_bookmark
@@ -560,7 +560,7 @@ public:
             , m_TC_40_SB_sum(0)
             , m_meets_greylisting_crit(false)
             , m_TC_initial_bookmark(TC_initial_bookmark)
-            , m_TC_bookmark(0)
+            , m_TC_bookmark(TC_initial_bookmark)
             , m_sb_from_baseline_processed(0)
             , m_update_history()
         {
@@ -639,52 +639,46 @@ public:
         //!
         void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
         {
-            uint8_t sbs_from_baseline_no_update = sb_from_baseline - m_sb_from_baseline_processed - 1;
-
-            m_sb_from_baseline_processed = sb_from_baseline;
-
-            // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
-            // the bookmark, then we have zero or even negative project total credit between superblocks, so
-            // this qualifies as a ZCD.
-            if (m_sb_from_baseline_processed <= 20) {
-                // Skipped updates count as ZCDs. We stop counting at 20 superblocks (back) from
-                // the initial SB baseline. The skipped updates may actually not be used in practice, because we are
-                // iterating over the entire whitelist for each SB and inserting std::nullopt TC updates for each project.
-                m_zcd_20_SB_count += sbs_from_baseline_no_update;
-
-                // If total credit is greater than the bookmark, this means that (going forward in time) credit actually
-                // declined, so in addition to the zero credit days recorded for the skipped updates, we must add an
-                // additional day for the credit decline (going forward in time). If total credit is std::nullopt, then
-                // this means no statistics available, which also is a ZCD.
-                if ((total_credit && total_credit >= m_TC_bookmark) || !total_credit){
-                    ++m_zcd_20_SB_count;
-                }
-            }
-
-            // WAS part. Here we deal with two numbers, the 40 SB from baseline, and the 7 SB from baseline. We use
-            // the initial bookmark, and compute the difference, which is the same as adding up the deltas between
-            // the TC's in each superblock. For updates with no total credit entry (i.e. std::optional is nullopt),
-            // do not change the sums.
-            //
-            // If the initial bookmark TC is not available (i.e. the current SB did not have stats for this project),
-            // but this update does, then update the initial bookmark to this total credit.
-            if (!m_TC_initial_bookmark && total_credit) {
-                m_TC_initial_bookmark = total_credit;
-            }
-
-            if (total_credit && m_TC_initial_bookmark && m_TC_initial_bookmark > total_credit) {
-                if (m_sb_from_baseline_processed <= 7) {
-                    m_TC_7_SB_sum = *m_TC_initial_bookmark - *total_credit;
+            if (sb_from_baseline > 0) {
+                // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
+                // the bookmark, then we have zero or even negative project total credit between superblocks, so
+                // this qualifies as a ZCD.
+                if (sb_from_baseline <= 20) {
+                    // If total credit is greater than the bookmark, this means that (going forward in time) credit actually
+                    // declined, so we must add a day for the credit decline (going forward in time). If total credit
+                    // is std::nullopt, then this means no statistics available, which also is a ZCD.
+                    if ((total_credit && total_credit >= m_TC_bookmark) || !total_credit){
+                        ++m_zcd_20_SB_count;
+                    }
                 }
 
-                if (m_sb_from_baseline_processed <= 40) {
-                    m_TC_40_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                // WAS part. Here we deal with two numbers, the 40 SB from baseline, and the 7 SB from baseline. We use
+                // the initial bookmark, and compute the difference, which is the same as adding up the deltas between
+                // the TC's in each superblock. For updates with no total credit entry (i.e. std::optional is nullopt),
+                // do not change the sums.
+                //
+                // If the initial bookmark TC is not available (i.e. the current SB did not have stats for this project),
+                // but this update does, then update the initial bookmark to this total credit.
+                if (!m_TC_initial_bookmark && total_credit) {
+                    m_TC_initial_bookmark = total_credit;
                 }
+
+                if (total_credit && m_TC_initial_bookmark > total_credit) {
+                    if (sb_from_baseline <= 7) {
+                        m_TC_7_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                    }
+
+                    if (sb_from_baseline <= 40) {
+                        m_TC_40_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                    }
+                }
+
+                m_sb_from_baseline_processed = sb_from_baseline;
             }
 
-            // Update bookmark.
+            // Update bookmark only if total_credit is actually there.
             if (total_credit) {
-                m_TC_bookmark = *total_credit;
+                m_TC_bookmark = total_credit;
             }
 
             uint8_t zcd = GetZCD();
@@ -747,7 +741,7 @@ public:
 
     private:
         std::optional<uint64_t> m_TC_initial_bookmark; //!< This is a "reverse" bookmark - we are going backwards in SB's.
-        uint64_t m_TC_bookmark;
+        std::optional<uint64_t> m_TC_bookmark;
         uint8_t m_sb_from_baseline_processed;
 
         std::vector<UpdateHistoryEntry> m_update_history;
@@ -831,8 +825,6 @@ public:
     //! \brief Resets the AutoGreylist object. This is called by the Whitelist Reset().
     //!
     void Reset();
-
-    //static std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
 
 private:
     mutable CCriticalSection autogreylist_lock;
