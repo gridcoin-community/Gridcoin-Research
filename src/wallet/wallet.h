@@ -35,7 +35,7 @@ class CReserveKey;
 class COutput;
 class CCoinControl;
 
-MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
 
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 static const unsigned int DEFAULT_KEYPOOL_SIZE_PRE_HD = 1000;
@@ -887,7 +887,7 @@ public:
 
     bool RevalidateTransaction(CTxDB& txdb);
 
-    MinedType GetGeneratedType(uint32_t vout_offset) const
+    GRC::MinedType GetGeneratedType(uint32_t vout_offset) const
     {
         return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
     }

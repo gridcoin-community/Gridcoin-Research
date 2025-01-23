@@ -567,9 +567,9 @@ public:
             // Populate the initial historical entry from the initial baseline.
             UpdateHistoryEntry entry = UpdateHistoryEntry(0,
                                                           TC_initial_bookmark,
-                                                          std::optional<uint8_t> {},
-                                                          std::optional<Fraction> {},
-                                                          std::optional<bool> {});
+                                                          std::optional<uint8_t>(),
+                                                          std::optional<Fraction>(),
+                                                          std::optional<bool>());
 
             m_update_history.push_back(entry);
         }
@@ -642,7 +642,7 @@ public:
             if (sb_from_baseline > 0) {
                 // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
                 // the bookmark, then we have zero or even negative project total credit between superblocks, so
-                // this qualifies as a ZCD.
+                // this qualifies as a ZCD. We look back up to 20 from baseline.
                 if (sb_from_baseline <= 20) {
                     // If total credit is greater than the bookmark, this means that (going forward in time) credit actually
                     // declined, so we must add a day for the credit decline (going forward in time). If total credit
@@ -684,8 +684,9 @@ public:
             uint8_t zcd = GetZCD();
             Fraction was = GetWAS();
 
-            // Apply rules and determine if greylisting criteria is met.
-            m_meets_greylisting_crit = (sb_from_baseline >= 2 && (zcd > 7 || was < Fraction(1, 10)));
+            // Apply rules and determine if greylisting criteria is met. To allow the statistics to stabilize before the
+            // rules are applied, a seven day grace period is provided after the whitelisting of the project.
+            m_meets_greylisting_crit = (sb_from_baseline >= 7 && (zcd > 7 || was < Fraction(1, 10)));
 
             // Insert historical entry.
             UpdateHistoryEntry entry(sb_from_baseline, total_credit, zcd, was, m_meets_greylisting_crit);
@@ -702,6 +703,8 @@ public:
             //!
             //! \param sb_from_baseline_processed
             //! \param total_credit
+            //! \param zcd
+            //! \param was
             //! \param meets_greylisting_crit
             //!
             UpdateHistoryEntry(uint8_t sb_from_baseline_processed,
@@ -806,7 +809,13 @@ public:
     //! from a scraper convergence, or in the instance of this being called from Refresh(), could be the current
     //! superblock on the chain.
     //!
-    void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in);
+    //! \param unit_test_blocks This is a map that is indexed by height, with linked CBlockIndex* pointers and paired
+    //! Superblock objects. This is intended as a substitute input structure for unit testing. It is optional and defaults to
+    //! nullptr, in which case the live chain data is used. One of the entries in the map must correspond to the Superblock_ptr
+    //! passed as the first parameter.
+    //!
+    void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
+                               std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks = nullptr);
 
     //!
     //! \brief This refreshes the AutoGreylist object from an input Superblock that is going to be associated

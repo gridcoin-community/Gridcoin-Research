@@ -405,7 +405,9 @@ void AutoGreylist::Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main)
     RefreshWithSuperblock(superblock_ptr);
 }
 
-void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
+                                         std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
+    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
 {
     if (superblock_ptr_in.IsEmpty()) {
         return;
@@ -419,7 +421,7 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
 
     LOCK(autogreylist_lock);
 
-     m_greylist_ptr->clear();
+    m_greylist_ptr->clear();
 
     // No need to go further if the whitelist is empty (ignoring deleted records).
     if (!whitelist.Populated()) {
@@ -452,13 +454,13 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
             if (project != superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
                 // Record new greylist candidate entry baseline with the total credit for each project present in superblock.
                 m_greylist_ptr->insert(std::make_pair(iter.m_name,
-                                                      GreylistCandidateEntry(iter.m_name, std::nearbyint(project->second))));
+                                                      GreylistCandidateEntry(iter.m_name, project->second)));
             } else {
                 // Record new greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
                 // but does not have a project entry in the superblock. This would be because the scrapers could not converge on the
                 // project.
                 m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name,
-                                                                                          std::optional<uint64_t>(std::nullopt))));
+                                                                                          std::optional<uint64_t>())));
             }
         }
     }
@@ -467,8 +469,24 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
 
     CBlockIndex* index_ptr;
     {
-        // Find the block index entry for the block before the provided superblock_ptr.
-        index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
+        // Find the block index entry for the block before the provided superblock_ptr. This also implements the unit test
+        // substitute input structure.
+        if (unit_test_blocks == nullptr) {
+            index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
+        } else {
+            // This only works if the unit_test_blocks are all superblocks, which they should be based on the setup of the
+            // unit test.
+            auto iter = unit_test_blocks->find(superblock_ptr_in.m_height - 1);
+
+            if (iter != unit_test_blocks->end()) {
+                // Get the unit test entry that corresponds to the superblock_ptr_in, which was processed above, and then
+                // get CBlockIndex* entry.
+                index_ptr = iter->second.first;
+            } else {
+                index_ptr = nullptr;
+            }
+
+        }
     }
 
 
@@ -479,19 +497,30 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in) EXCLUS
             continue;
         }
 
-        // For some reason this is not working.
-        //superblock_ptr.ReadFromDisk(index_ptr);
+        SuperblockPtr superblock_ptr;
 
-        CBlock block;
-        if (!ReadBlockFromDisk(block, index_ptr, Params().GetConsensus())) {
-            error("%s: Failed to read block from disk with requested height %u",
-                  __func__,
-                  index_ptr->nHeight);
-            continue;
+        if (unit_test_blocks == nullptr) {
+            // For some reason this is not working.
+            //superblock_ptr.ReadFromDisk(index_ptr);
+
+            CBlock block;
+
+            if (!ReadBlockFromDisk(block, index_ptr, Params().GetConsensus())) {
+                error("%s: Failed to read block from disk with requested height %u",
+                      __func__,
+                      index_ptr->nHeight);
+                continue;
+            }
+
+            superblock_ptr = block.GetClaim().m_superblock;
+            superblock_ptr.Rebind(index_ptr);
+        } else {
+            auto iter = unit_test_blocks->find(index_ptr->nHeight);
+
+            if (iter != unit_test_blocks->end()) {
+                superblock_ptr = iter->second.second;
+            }
         }
-
-        SuperblockPtr superblock_ptr = block.GetClaim().m_superblock;
-        superblock_ptr.Rebind(index_ptr);
 
         // Stop if superblocks less than version 3 are encountered while going backwards. This will happen until we are 40
         // superblocks past the 1st superblock after the height specified for the changeover to v3 superblocks.
