@@ -71,6 +71,7 @@ public:
         consensus.BlockV13Height = std::numeric_limits<int>::max();
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
+        consensus.ProjectV4Height = std::numeric_limits<int>::max();
         consensus.SuperblockV3Height = std::numeric_limits<int>::max();
         // Immediately post zero payment interval fees 40% for mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
@@ -189,6 +190,7 @@ public:
         consensus.BlockV13Height = std::numeric_limits<int>::max();
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
+        consensus.ProjectV4Height = std::numeric_limits<int>::max();
         consensus.SuperblockV3Height = std::numeric_limits<int>::max();
         // Immediately post zero payment interval fees 40% for testnet, the same as mainnet
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);

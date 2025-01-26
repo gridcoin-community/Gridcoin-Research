@@ -593,7 +593,9 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
 
-        if (std::find(external_adapter_projects.begin(),
+        // the external adapter code below only appears here because if the project is in BOINC it does not need
+        // an external adapter.
+        if (!project.RequiresExtAdapter() && std::find(external_adapter_projects.begin(),
                       external_adapter_projects.end(),
                       project.m_name) == external_adapter_projects.end()) {
             row.m_error = tr("Not attached");

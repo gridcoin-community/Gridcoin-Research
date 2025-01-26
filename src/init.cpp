@@ -622,6 +622,9 @@ void SetupServerArgs()
     // Temporary hidden option for block v13 height override to facilitate testing.
     hidden_args.emplace_back("-blockv13height");
 
+    // Temporary hidden option for project v4 height override to facilitate testing.
+    hidden_args.emplace_back("-projectv4height");
+
     // Temporary hidden option for superblock v3 height override to facilitate testing.
     hidden_args.emplace_back("-superblockv3height");
 

@@ -63,7 +63,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 4;
 
     //!
     //! \brief Version number of the serialized project format.
@@ -78,6 +78,7 @@ public:
     uint256 m_hash;                      //!< The txid of the transaction that contains the project entry.
     uint256 m_previous_hash;             //!< The m_hash of the previous project entry with the same key.
     bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
+    bool m_requires_ext_adapter;         //!< Boolean to indicate whether project requires external adapter.
     CPubKey m_public_key;                //!< Project public key.
     Status m_status;                     //!< The status of the project entry. (Note serialization converts to/from int.)
 
@@ -113,10 +114,12 @@ public:
     //! \param name. The key of the project entry.
     //! \param url. The value of the project entry.
     //! \param gdpr_controls. The gdpr control flag of the project entry
+    //! \param requires_ext_adapter. The flag that indicates whether the project requires an external adapter for stats.
     //! \param status. the status of the project entry.
     //! \param timestamp. The timestamp of the project entry that comes from the containing transaction
     //!
-    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls, Status status, int64_t timestamp);
+    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+                 bool requires_ext_adapter, Status status, int64_t timestamp);
 
     //!
     //! \brief Determine whether a project entry contains each of the required elements.
@@ -183,6 +186,11 @@ public:
     //! \brief Returns true if project has project stats GDPR export controls
     //!
     std::optional<bool> HasGDPRControls() const;
+
+    //!
+    //! \brief Returns true if project requires an externel adapter for statistics collection.
+    //!
+    std::optional<bool> RequiresExtAdapter() const;
 
     //!
     //! \brief Comparison operator overload used in the unit test harness.
@@ -300,7 +308,8 @@ public:
     //! \param gdpr_controls   Boolean to indicate gdpr stats export controls enforced
     //! \param status          ProjectEntryStatus to force project status.
     //!
-    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, ProjectEntryStatus status);
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+            bool requires_ext_adapter, ProjectEntryStatus status);
 
     //!
     //! \brief Initialize a \c Project using data from the contract.
@@ -415,6 +424,10 @@ public:
             READWRITE(m_hash);
             READWRITE(m_previous_hash);
             READWRITE(m_status);
+        }
+
+        if (m_version >= 4) {
+            READWRITE(m_requires_ext_adapter);
         }
     }
 }; // Project (entry payload)

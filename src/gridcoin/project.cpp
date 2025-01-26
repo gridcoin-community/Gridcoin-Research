@@ -49,23 +49,24 @@ ProjectEntry::ProjectEntry(uint32_t version)
     , m_hash()
     , m_previous_hash()
     , m_gdpr_controls(false)
+    , m_requires_ext_adapter(false)
     , m_public_key(CPubKey {})
     , m_status(ProjectEntryStatus::UNKNOWN)
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, false, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url,
-                           bool gdpr_controls, Status status, int64_t timestamp)
+                           bool gdpr_controls, bool requires_ext_adapter, Status status, int64_t timestamp)
     : m_version(version)
     , m_name(name)
     , m_url(url)
@@ -73,6 +74,7 @@ ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url,
     , m_hash()
     , m_previous_hash()
     , m_gdpr_controls(gdpr_controls)
+    , m_requires_ext_adapter(requires_ext_adapter)
     , m_public_key(CPubKey {})
     , m_status(status)
 {
@@ -181,6 +183,17 @@ std::optional<bool> ProjectEntry::HasGDPRControls() const
     return has_gdpr_controls;
 }
 
+std::optional<bool> ProjectEntry::RequiresExtAdapter() const
+{
+    std::optional<bool> requires_ext_adapter;
+
+    if (m_version >= 4) {
+        requires_ext_adapter = m_requires_ext_adapter;
+    }
+
+    return requires_ext_adapter;
+}
+
 // -----------------------------------------------------------------------------
 // Class: Project
 // -----------------------------------------------------------------------------
@@ -193,27 +206,28 @@ Project::Project(uint32_t version)
 }
 
 Project::Project(std::string name, std::string url)
-    : ProjectEntry(1, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(1, name, url, false, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 Project::Project(uint32_t version, std::string name, std::string url)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, false, false,ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 Project::Project(std::string name, std::string url, int64_t timestamp, uint32_t version)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, false, false, ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 
 Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
-Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, ProjectEntryStatus status)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+                 bool requires_ext_adapter, ProjectEntryStatus status)
+    : ProjectEntry(version, name, url, gdpr_controls, requires_ext_adapter, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
     // The only two values that make sense for status using this constructor overload are MAN_GREYLISTED and
     // AUTO_GREYLIST_OVERRIDE. The other are handled by the contract action context and the other overloads.
@@ -238,12 +252,12 @@ Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_
 }
 
 Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, int64_t timestamp)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 
 Project::Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, gdpr_controls, false,  ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 

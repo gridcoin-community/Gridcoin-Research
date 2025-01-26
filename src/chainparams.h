@@ -178,6 +178,13 @@ inline bool IsSuperblockV3Enabled(int nHeight)
     return nHeight >= gArgs.GetArg("-superblockv3height", Params().GetConsensus().SuperblockV3Height);
 }
 
+inline bool IsProjectV4Enabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate testing.
+
+    return nHeight >= gArgs.GetArg("-projectv4height", Params().GetConsensus().ProjectV4Height);
+}
+
 inline int GetSuperblockAgeSpacing(int nHeight)
 {
     return (fTestNet ? 86400 : (nHeight > 364500) ? 86400 : 43200);
