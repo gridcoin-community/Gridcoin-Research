@@ -960,6 +960,8 @@ bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &
 
     const auto payload = contract.SharePayloadAs<Project>();
 
+    // Contract version 3 is tied to block v13. Payloads of less than v3 are not allowed at or above the v13 height with
+    // contract v3.
     if (contract.m_version >= 3 && payload->m_version < 3) {
         DoS = 25;
         error("%s: Project entry contract in contract v3 is wrong version.", __func__);
@@ -977,6 +979,15 @@ bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &
 
 bool Whitelist::BlockValidate(const ContractContext& ctx, int& DoS) const
 {
+    const auto payload = ctx.m_contract.SharePayloadAs<Project>();
+
+    // This ensures v4 projects do not appear before the v4 project height in protocol.
+    if (payload->m_version > 3 && !IsProjectV4Enabled(ctx.m_pindex->nHeight)) {
+        DoS = 25;
+        error("%s: Project entry contract in contract v3 with project v4 enabled is wrong version.", __func__);
+        return false;
+    }
+
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 

@@ -1539,12 +1539,16 @@ bool Quorum::ValidateSuperblockClaim(
     const CBlockIndex* const pindex)
 {
     if (!SuperblockNeeded(pindex->nTime)) {
-        return error("ValidateSuperblockClaim(): superblock too early.");
+        return error("%s: superblock too early.", __func__);
     }
 
     if (pindex->nVersion >= 11) {
         if (superblock->m_version < 2) {
-            return error("ValidateSuperblockClaim(): rejected legacy version.");
+            return error("%s: rejected legacy version.", __func__);
+        }
+
+        if (IsSuperblockV3Enabled(pindex->nHeight) && superblock->m_version < 3) {
+            return error("%s: superblock rejected: version < 3 with superblock v3 enabld.", __func__);
         }
 
         // Superblocks are not included in the input for the claim hash
@@ -1552,7 +1556,7 @@ bool Quorum::ValidateSuperblockClaim(
         // protect the integrity of the superblock data:
         //
         if (superblock->GetHash() != claim.m_quorum_hash) {
-            return error("ValidateSuperblockClaim(): quorum hash mismatch.");
+            return error("%s: quorum hash mismatch.", __func__);
         }
 
         return ValidateSuperblock(superblock);
@@ -1561,23 +1565,24 @@ bool Quorum::ValidateSuperblockClaim(
     const CTxDestination address = DecodeDestination(claim.m_quorum_address);
 
     if (!IsValidDestination(address)) {
-        return error("ValidateSuperblockClaim(): "
-            "invalid quorum address: %s", claim.m_quorum_address);
+        return error("%s: "
+                     "invalid quorum address: %s", __func__, claim.m_quorum_address);
     }
 
     if (!Participating(claim.m_quorum_address, pindex->nTime)) {
-        return error("ValidateSuperblockClaim(): "
-            "ineligible quorum participant: %s", claim.m_quorum_address);
+        return error("%s: "
+                     "ineligible quorum participant: %s", __func__, claim.m_quorum_address);
     }
 
-    // Popular hash search begins from the block before:
+           // Popular hash search begins from the block before:
     const QuorumHash popular_hash = FindPopularHash(pindex->pprev);
 
     if (superblock->GetHash() != popular_hash) {
-        return error("ValidateSuperblockClaim(): "
-            "superblock hash mismatch: %s popular: %s",
-            superblock->GetHash().ToString(),
-            popular_hash.ToString());
+        return error("%s: "
+                     "superblock hash mismatch: %s popular: %s",
+                     __func__,
+                     superblock->GetHash().ToString(),
+                     popular_hash.ToString());
     }
 
     return true;
