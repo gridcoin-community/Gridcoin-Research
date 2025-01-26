@@ -5062,7 +5062,8 @@ bool ScraperConstructConvergedManifest(ConvergedManifest& StructConvergedManifes
                     // If project is greylisted, push project name to greylist vector.
                     if (iProjects.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED
                             || iProjects.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
-                        StructConvergedManifest.vGreylistedProjects.push_back(iProjects.m_name);
+                        StructConvergedManifest.vGreylistedProjects.push_back(std::make_pair(iProjects.m_name,
+                                                                                             iProjects.m_status.Value()));
                     }
 
                     if (StructConvergedManifest.ConvergedManifestPartPtrsMap.find(iProjects.m_name)
@@ -5138,7 +5139,8 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
         // If project is greylisted, push project name to greylist vector for later use.
         if (iWhitelistProject.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED
                 ||iWhitelistProject.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
-            StructConvergedManifest.vGreylistedProjects.push_back(iWhitelistProject.m_name);
+            StructConvergedManifest.vGreylistedProjects.push_back(std::make_pair(iWhitelistProject.m_name,
+                                                                                 iWhitelistProject.m_status.Value()));
         }
 
         // Do a map for unique ProjectObject times ordered by descending time then content hash. Note that for Project
@@ -6221,6 +6223,22 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
 
         result.pushKV("excluded_projects", ExcludedProjects);
 
+        UniValue GreylistedProjects(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.vGreylistedProjects) {
+            ProjectEntry::Status status = GRC::EnumByte<GRC::ProjectEntryStatus>(entry.second);
+
+            ProjectEntry dummy_project(3, entry.first, "foo", false, status, 0);
+
+            UniValue greylisted_project_entry(UniValue::VOBJ);
+
+            greylisted_project_entry.pushKV("project_name", dummy_project.m_name);
+            greylisted_project_entry.pushKV("status", dummy_project.StatusToString());
+
+            GreylistedProjects.push_back(greylisted_project_entry);
+        }
+
+        result.pushKV("greylisted_projects", GreylistedProjects);
 
         UniValue IncludedScrapers(UniValue::VARR);
 

@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "gridcoin/fwd.h"
 #include "gridcoin/scraper/scraper_net.h"
 #include "util.h"
 #include "streams.h"
@@ -160,9 +161,10 @@ struct ConvergedManifest
     std::vector<std::string> vExcludedProjects;
 
     //!
-    //! \brief The list of projects that have been greylisted.
+    //! \brief The list of projects that have been greylisted, with the greylisting status, indicating whether they are
+    //! manually or automatically greylisted.
     //!
-    std::vector<std::string> vGreylistedProjects;
+    std::vector<std::pair<std::string, GRC::ProjectEntryStatus>> vGreylistedProjects;
 
     /** Populates the part pointers map in the convergence */
     bool PopulateConvergedManifestPartPtrsMap();
