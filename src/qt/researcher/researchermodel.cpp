@@ -713,11 +713,15 @@ void ResearcherModel::updateBeacon()
 
     if (!cpid) {
         commitBeacon(BeaconStatus::NO_CPID);
+        emit beaconChanged();
+        emit researcherChanged();
         return;
     }
 
     if (outOfSync()) {
         commitBeacon(BeaconStatus::UNKNOWN);
+        emit beaconChanged();
+        emit researcherChanged();
         return;
     }
 
@@ -762,6 +766,9 @@ void ResearcherModel::updateBeacon()
             commitBeacon(BeaconStatus::ACTIVE, beacon, pending_beacon);
         }
     }
+
+    emit beaconChanged();
+    emit researcherChanged();
 }
 
 BeaconStatus ResearcherModel::advertiseBeacon()
@@ -815,5 +822,6 @@ void ResearcherModel::commitBeacon(
 
     if (changed) {
         emit beaconChanged();
+        emit researcherChanged();
     }
 }
