@@ -28,14 +28,14 @@ HunterGate(
 # =====================
 
 project("Gridcoin"
-    VERSION 5.4.8.4
+    VERSION 5.4.8.5
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES C CXX
 )
 
 set(CLIENT_VERSION_IS_RELEASE "false")
-set(COPYRIGHT_YEAR "2024")
+set(COPYRIGHT_YEAR "2025")
 set(COPYRIGHT_HOLDERS_FINAL "The Gridcoin developers")
 
 
