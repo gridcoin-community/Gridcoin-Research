@@ -648,7 +648,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
     // projects is relatively small.
     ProjectEntryMap project_entries = m_project_entries;
 
-    for (auto iter : project_entries) {
+    for (auto& iter : project_entries) {
         if (include_override) {
             // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
             // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
