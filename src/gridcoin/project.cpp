@@ -1044,10 +1044,8 @@ uint64_t Whitelist::PassivateDB()
     return m_project_db.passivate_db();
 }
 
-const Whitelist::ProjectEntryMap Whitelist::GetProjectsFirstActive() const
+const Whitelist::ProjectEntryMap Whitelist::GetProjectsFirstActive() const EXCLUSIVE_LOCKS_REQUIRED(Whitelist::cs_lock)
 {
-    LOCK(cs_lock);
-
     return m_project_first_actives;
 }
 

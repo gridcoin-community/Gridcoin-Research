@@ -1001,8 +1001,10 @@ public:
     uint64_t PassivateDB() override;
 
     //!
-    //! \brief This returns m_project_first_actives.
-    //! \return
+    //! \brief This returns m_project_first_actives. Note that unlike other methods here, this does not take the cs_lock
+    //! internally but rather requires it. The reason for this is that this function is used by the AutoGreylist class update
+    //! where the cs_lock is already taken before, and the AutoGreylist class has its own lock. If cs_lock is then taken again,
+    //! a potential deadlock can result.
     //!
     const ProjectEntryMap GetProjectsFirstActive() const;
 
