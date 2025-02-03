@@ -17,7 +17,6 @@
 #include "main.h"
 #include "random.h"
 #include "wallet/wallet.h"
-#include "gridcoin/project.h"
 
 leveldb::Env* txdb_env;
 

@@ -593,7 +593,7 @@ BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
 BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
 {
     std::vector<std::tuple<std::optional<uint64_t>,
-                           AutoGreylistEntryState>> input_expected_result_proj_tc_history;
+                           AutoGreylistEntryState>> input_expected_result;
 
     /**
      * This is the input data for a HORRIBLE whitelisted project. This series of total credit
@@ -608,7 +608,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
      **/
 
     // superblock 0 - baseline after whitelisting, but no stats due to problem with project.
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             std::optional<uint64_t>(),
             AutoGreylistEntryState(
@@ -622,7 +622,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 1 - first stats collection from project, TC = 1000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             1000,
             AutoGreylistEntryState(
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 2 - no stats again due to problem with project
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             std::optional<uint64_t>(),
             AutoGreylistEntryState(
@@ -650,7 +650,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 3 - no status again due to continuing problem with project
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             std::optional<uint64_t>(),
             AutoGreylistEntryState(
@@ -664,7 +664,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 4 - successful stats collection, but TC = 1000 still
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             1000,
             AutoGreylistEntryState(
@@ -678,7 +678,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 5 - successful stats collection, TC = 2000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             2000,
             AutoGreylistEntryState(
@@ -692,7 +692,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 6 - successful stats collection, TC = 3000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             3000,
             AutoGreylistEntryState(
@@ -706,7 +706,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 7 - problem with stats collection
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             std::optional<uint64_t>(),
             AutoGreylistEntryState(
@@ -720,7 +720,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 8 - successful stats collection, TC = 3000 still
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             3000,
             AutoGreylistEntryState(
@@ -734,7 +734,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 9 - successful stats collection, TC = 4000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             4000,
             AutoGreylistEntryState(
@@ -748,7 +748,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 10 - successful stats collection, TC = 5000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5000,
             AutoGreylistEntryState(
@@ -762,7 +762,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 11 - successful stats collection, TC = 5000 still
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5000,
             AutoGreylistEntryState(
@@ -776,7 +776,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 12 - problem with stats collection
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             std::optional<uint64_t>(),
             AutoGreylistEntryState(
@@ -790,7 +790,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 13 - successful stats collection, reduced output TC = 5001
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5001,
             AutoGreylistEntryState(
@@ -804,7 +804,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 14 - successful stats collection, reduced output TC = 5002
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5002,
             AutoGreylistEntryState(
@@ -818,7 +818,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 15 - successful stats collection, reduced output TC = 5003
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5003,
             AutoGreylistEntryState(
@@ -832,7 +832,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 16 - successful stats collection, reduced output TC = 5004
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5004,
             AutoGreylistEntryState(
@@ -846,7 +846,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 17 - successful stats collection, slightly improved output TC = 5200
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5200,
             AutoGreylistEntryState(
@@ -860,7 +860,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 18 - successful stats collection, degraded output TC = 5225
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5225,
             AutoGreylistEntryState(
@@ -874,7 +874,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 19 - successful stats collection, degraded output TC = 5230
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5230,
             AutoGreylistEntryState(
@@ -888,7 +888,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 20 - successful stats collection, further degraded output TC = 5231
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5231,
             AutoGreylistEntryState(
@@ -902,7 +902,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 21 - successful stats collection, further degraded output TC = 5232
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5232,
             AutoGreylistEntryState(
@@ -916,7 +916,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 22 - successful stats collection, further degraded output TC = 5233
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5233,
             AutoGreylistEntryState(
@@ -930,7 +930,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 23 - successful stats collection, further degraded output TC = 5234
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5234,
             AutoGreylistEntryState(
@@ -944,7 +944,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 24 - successful stats collection, further degraded output TC = 5235
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5235,
             AutoGreylistEntryState(
@@ -958,7 +958,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 25 - successful stats collection, degraded output TC = 5250
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             5250,
             AutoGreylistEntryState(
@@ -972,7 +972,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 26 - successful stats collection, resume "normal" output TC = 6250
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             6250,
             AutoGreylistEntryState(
@@ -986,7 +986,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 27 - successful stats collection, TC = 7000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             7000,
             AutoGreylistEntryState(
@@ -1000,7 +1000,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 28 - successful stats collection, TC = 8000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             8000,
             AutoGreylistEntryState(
@@ -1014,7 +1014,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 29 - successful stats collection, TC = 9000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             9000,
             AutoGreylistEntryState(
@@ -1028,7 +1028,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 30 - successful stats collection, TC = 10000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             10000,
             AutoGreylistEntryState(
@@ -1042,7 +1042,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 31 - successful stats collection, TC = 11000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             11000,
             AutoGreylistEntryState(
@@ -1056,7 +1056,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 32 - successful stats collection, TC = 12000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             12000,
             AutoGreylistEntryState(
@@ -1070,7 +1070,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 33 - successful stats collection, TC = 13000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             13000,
             AutoGreylistEntryState(
@@ -1084,7 +1084,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 34 - successful stats collection, TC = 14000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             14000,
             AutoGreylistEntryState(
@@ -1098,7 +1098,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 35 - successful stats collection, TC = 15000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             15000,
             AutoGreylistEntryState(
@@ -1112,7 +1112,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
      // superblock 36 - successful stats collection, TC = 16000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             16000,
             AutoGreylistEntryState(
@@ -1126,7 +1126,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
      // superblock 37 - successful stats collection, TC = 17000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             17000,
             AutoGreylistEntryState(
@@ -1140,7 +1140,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
      // superblock 38 - successful stats collection, TC = 18000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             18000,
             AutoGreylistEntryState(
@@ -1154,7 +1154,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
      // superblock 39 - successful stats collection, TC = 19000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             19000,
             AutoGreylistEntryState(
@@ -1168,7 +1168,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
      // superblock 40 - successful stats collection, TC = 20000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             20000,
             AutoGreylistEntryState(
@@ -1182,7 +1182,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 41 - successful stats collection, TC = 21000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             21000,
             AutoGreylistEntryState(
@@ -1196,7 +1196,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 42 - successful stats collection, TC = 22000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             22000,
             AutoGreylistEntryState(
@@ -1210,7 +1210,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 43 - successful stats collection, TC = 23000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             23000,
             AutoGreylistEntryState(
@@ -1224,7 +1224,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 44 - successful stats collection, TC = 24000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             24000,
             AutoGreylistEntryState(
@@ -1238,7 +1238,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 45 - successful stats collection, TC = 25000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             25000,
             AutoGreylistEntryState(
@@ -1252,7 +1252,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
         );
 
     // superblock 46 - successful stats collection, TC = 26000
-    input_expected_result_proj_tc_history.push_back(
+    input_expected_result.push_back(
         std::make_tuple(
             26000,
             AutoGreylistEntryState(
@@ -1298,7 +1298,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
     CBlockIndex* index_ptr = whitelist_index_entry;
     CBlockIndex* index_ptr_prev = nullptr;
 
-    for (auto iter : input_expected_result_proj_tc_history) {
+    for (auto iter : input_expected_result) {
         // Reset the auto greylist
         auto_greylist->Reset();
 
@@ -1368,7 +1368,7 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
     }
 
     // delete CBlockIndex pointers and clear map to prevent leaking memory.
-    for (auto iter : *unit_test_blocks) {
+    for (auto& iter : *unit_test_blocks) {
         delete iter.second.first;
     }
 

@@ -520,15 +520,16 @@ private:
 //! implemented as) a singleton, global object with a cached state, where a need for an actual refresh is determined
 //! by a change in the superblock hash.
 //!
-//! The object is initialized in anonymous namespace in project.cpp and is accessed by the GetAutoGreylistCache()
-//! static method. While this object is _internally_ thread safe via the autogreylist_lock, several methods access
-//! external structures for which safe access can only be obtained by holding the cs_main lock. These methods are marked by
-//! EXCLUSIVE_LOCKS_REQUIRED accordingly to facilitate static lock analysis when available by the compiler.
+//! The object is initialized in anonymous namespace in project.cpp as part of the Whitelist (project registry) initialization
+//! and is accessed by the GetAutoGreylistCache() global namespace function, or alternatively by the GetAutoGreylist method on
+//! the Whitelist class. While this object is _internally_ thread safe via the autogreylist_lock, several methods access
+//! external structures for which safe access can only be obtained by holding the cs_main lock beforehand. These methods are
+//! marked by EXCLUSIVE_LOCKS_REQUIRED accordingly to facilitate static lock analysis when available by the compiler.
 //!
 //! The object implements the current "Zero Credit Days" and "Work Availability Score" rules. The projects that qualify
-//! for greylisting override the "ACTIVE" status entries in the registry. This override is NOT permanent, but instead
-//! only persists while the project qualifies for greylisting using the rules, which are updated for each superblock change.
-//! In turn, there is a project entry that can be made in the registry to override the auto greylist, AUTO_GREYLIST_OVERRIDE,
+//! for greylisting override the ACTIVE and MAN_GREYLISTED status entries in the registry. This override is NOT permanent,
+//! but instead only persists while the project qualifies for greylisting using the rules, which are updated for each superblock
+//! change. In turn, there is a project entry that can be made in the registry to override the auto greylist, AUTO_GREYLIST_OVERRIDE,
 //! which prevents the application of the AUTO_GREYLIST status to that project. This will prevent greylisting of that
 //! project, even though by the rules it would be required. This override is to provide an ability to deal with unanticipated
 //! situations concerning a project that render the normal rules not applicable.
@@ -815,9 +816,6 @@ public:
     //!
     //! \brief This refreshes the AutoGreylist object from an input Superblock pointer.
     //!
-    //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
-    //! object
-    //!
     //! \param superblock_ptr The superblock pointer with which to refresh the automatic greylist. This can be a candidate superblock
     //! from a scraper convergence, or in the instance of this being called from Refresh(), could be the current
     //! superblock on the chain.
@@ -863,7 +861,9 @@ class Whitelist : public IContractHandler
 public:
     //!
     //! \brief Initializes the project whitelist manager. The version must be incremented when
-    //! introducing a breaking change in the storage format (serialization) of the project entry.
+    //! introducing a breaking change in the storage format (serialization) of the project entry. It does not
+    //! have to be incremented if the serialization change is versioned and protected by that version
+    //! in the project entry class itself.
     //!
     //! Version 0: <= 5.4.5.0 where there was no backing db.
     //! Version 1: >= 5.4.6.0.

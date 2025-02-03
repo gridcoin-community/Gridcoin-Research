@@ -514,9 +514,6 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
         SuperblockPtr superblock_ptr;
 
         if (unit_test_blocks == nullptr) {
-            // For some reason this is not working.
-            //superblock_ptr.ReadFromDisk(index_ptr);
-
             CBlock block;
 
             if (!ReadBlockFromDisk(block, index_ptr, Params().GetConsensus())) {
@@ -1034,6 +1031,10 @@ void Whitelist::ResetInMemoryOnly()
     m_expired_project_entries.clear();
     m_project_first_actives.clear();
     m_project_db.clear_in_memory_only();
+
+    // If the whitelist registry is reset, the auto greylist cache should be reset as well.
+    m_auto_greylist->Reset();
+
 }
 
 uint64_t Whitelist::PassivateDB()
