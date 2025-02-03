@@ -103,12 +103,9 @@ public:
     end_build_from_stats_loop:
         m_superblock.m_verified_beacons.Reset(stats_verified_beacons_tc.mVerifiedMap);
 
-        {
-            LOCK(cs_main);
-
-            if (IsSuperblockV3Enabled(nBestHeight)) {
-                m_superblock.m_projects_all_cpids_total_credits.Reset(stats_verified_beacons_tc.m_total_credit_map);
-            }
+        // This is equivalent to superblock v3+ and doesn't require a lock on cs_main.
+        if (!stats_verified_beacons_tc.m_total_credit_map.empty()) {
+            m_superblock.m_projects_all_cpids_total_credits.Reset(stats_verified_beacons_tc.m_total_credit_map);
         }
     }
 private:
@@ -1110,7 +1107,7 @@ QuorumHash::QuorumHash(const std::vector<unsigned char>& bytes) : QuorumHash()
 QuorumHash QuorumHash::Hash(const Superblock& superblock)
 {
     if (superblock.m_version > 1) {
-        return QuorumHash(SerializeHash(superblock));
+        return QuorumHash(SerializeHash(SuperblockForHash(superblock)));
     }
 
     std::string input;

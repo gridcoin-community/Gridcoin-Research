@@ -94,6 +94,15 @@ public:
     //!
     //! \brief Hash the provided superblock.
     //!
+    //! Note the m_project_status map is NOT hashed. While this data is serialized, the hash is computed from a specialization
+    //! of the Superblock class (SuperblockForHash) with the serialization of that map removed. The reason for this is twofold.
+    //! 1) The project status is populated from the AutoGreylist class, which when used in the miner context is using a candidate
+    //! superblock generated from the scraper. The QuorumHasher proxies which use the scraper statistics do not have the project
+    //! status information available for all call paths. 2) The project status map is extra information that is not required to
+    //! assure uniqueness and/or validation of a superblock, as it can (and is) derived by the AutoGreylist class. This map is
+    //! provided in the superblock as a convenience so that this does not have to be recalculated if looking at statistics over
+    //! a large block range in reporting.
+    //!
     //! \param superblock Superblock object containing the data to hash.
     //!
     //! \return The appropriate quorum hash variant digest depending on the
@@ -1423,6 +1432,35 @@ private:
     //!
     mutable QuorumHash m_hash_cache;
 }; // Superblock
+
+class SuperblockForHash : public Superblock
+{
+public:
+    SuperblockForHash(const Superblock& superblock)
+        : Superblock(superblock)
+    {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(m_version);
+            READWRITE(m_convergence_hint);
+            READWRITE(m_manifest_content_hint);
+        }
+
+        READWRITE(m_cpids);
+        READWRITE(m_projects);
+        READWRITE(m_verified_beacons);
+
+        if (m_version > 2) {
+            // Note that project status is left out of the serialization here for hashing purposes.
+            READWRITE(m_projects_all_cpids_total_credits);
+        }
+    }
+};
 
 //!
 //! \brief A smart pointer that wraps a superblock object for shared ownership

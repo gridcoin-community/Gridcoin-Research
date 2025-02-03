@@ -9,6 +9,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/xml.h"
 #include <key_io.h>
+#include "main.h"
 #include "streams.h"
 
 #include <array>
@@ -200,8 +201,13 @@ struct Legacy
 //!
 struct ScraperStatsMeta
 {
-    // Make clang happy
     ScraperStatsMeta()
+        : m_version(2)
+    {
+    }
+
+    ScraperStatsMeta(uint32_t version)
+        : m_version(version)
     {
     }
 
@@ -290,7 +296,13 @@ struct ScraperStatsMeta
 
     uint160 beacon_id_1 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x01));
     uint160 beacon_id_2 = uint160(std::vector<uint8_t>(sizeof(uint160), 0x02));
+
+    double p1_all_cpid_tc = 10000;
+    double p2_all_cpid_tc = 13000;
+
+    uint32_t m_version;
 };
+
 
 //!
 //! \brief Build a mock scraper statistics data object.
@@ -417,6 +429,11 @@ const ScraperStatsVerifiedBeaconsTotalCredits GetTestScraperStats(const ScraperS
         EncodeBase58(meta.beacon_id_2.begin(), meta.beacon_id_2.end()),
         pendingBeaconEntry2);
 
+    if (meta.m_version > 2) {
+        stats_and_verified_beacons.m_total_credit_map.emplace(meta.project1, meta.p1_all_cpid_tc);
+        stats_and_verified_beacons.m_total_credit_map.emplace(meta.project2, meta.p2_all_cpid_tc);
+    }
+
     return stats_and_verified_beacons;
 }
 
@@ -504,6 +521,28 @@ ConvergedScraperStats GetTestConvergence(
 
     convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("project_2",
                                                                  CScraperConvergedManifest_ptr->vParts[2]);
+
+    std::map<std::string, double> total_credit_map;
+
+    total_credit_map.emplace(meta.project1, meta.p1_all_cpid_tc);
+    total_credit_map.emplace(meta.project2, meta.p2_all_cpid_tc);
+
+    CDataStream projects_all_cpid_tc_part_data(SER_NETWORK, PROTOCOL_VERSION);
+    projects_all_cpid_tc_part_data
+        << total_credit_map;
+
+    ProjectEntry.project = "ProjectsAllCpidTotalCredits";
+    ProjectEntry.current = true;
+    ProjectEntry.part1 = 3;
+    ProjectEntry.partc = 0;
+    ProjectEntry.last = 1;
+
+    CScraperConvergedManifest_ptr->projects.push_back(ProjectEntry);
+
+    CScraperConvergedManifest_ptr->addPartData(std::move(projects_all_cpid_tc_part_data));
+
+    convergence.Convergence.ConvergedManifestPartPtrsMap.emplace("ProjectsAllCpidTotalCredits",
+                                                                 CScraperConvergedManifest_ptr->vParts[3]);
 
     // Inject underlying manifest into CScraperManifest::mapManifest without signing, this is part of the
     // normal CScraperManifest::addManifest call.
@@ -606,6 +645,66 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics)
     }
 }
 
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_set_of_scraper_statistics_v3)
+{
+    const ScraperStatsMeta meta(3);
+    GRC::Superblock superblock = GRC::Superblock::FromStats(GetTestScraperStats(meta), 3);
+
+    BOOST_CHECK(superblock.m_version == 3);
+    BOOST_CHECK(superblock.m_convergence_hint == 0);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0);
+
+    auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
+
+    auto& projects = superblock.m_projects;
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
+
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+
+    auto& tcs = superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits;
+
+    auto project_1_tc = tcs.find(meta.project1);
+
+    if (project_1_tc == tcs.end()) {
+        BOOST_FAIL("Project 1 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_1_tc->second == meta.p1_all_cpid_tc);
+    }
+
+    auto project_2_tc = tcs.find(meta.project2);
+
+    if (project_2_tc == tcs.end()) {
+        BOOST_FAIL("Project 2 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_2_tc->second == meta.p2_all_cpid_tc);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
 {
     const ScraperStatsMeta meta;
@@ -650,6 +749,76 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
+{
+    // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
+    // cannot have a pindex with random data.
+    pindexBest = new CBlockIndex;
+
+    const ScraperStatsMeta meta(3);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(GetTestConvergence(meta), 3);
+
+    BOOST_CHECK(superblock.m_version == 3);
+
+           // This initialization mode must set the convergence hint derived from
+           // the content hash of the convergence:
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x22222222);
+
+    auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
+
+    auto& projects = superblock.m_projects;
+    BOOST_CHECK(projects.m_converged_by_project == false);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
+
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
+        BOOST_CHECK(project_1->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
+        BOOST_CHECK(project_2->m_convergence_hint == 0);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+
+    auto& tcs = superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits;
+
+    auto project_1_tc = tcs.find(meta.project1);
+
+    if (project_1_tc == tcs.end()) {
+        BOOST_FAIL("Project 1 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_1_tc->second == meta.p1_all_cpid_tc);
+    }
+
+    auto project_2_tc = tcs.find(meta.project2);
+
+    if (project_2_tc == tcs.end()) {
+        BOOST_FAIL("Project 2 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_2_tc->second == meta.p2_all_cpid_tc);
+    }
+
+    delete pindexBest;
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
@@ -711,6 +880,91 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
     } else {
         BOOST_FAIL("Project 2 not found in superblock.");
     }
+}
+
+BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence_v3)
+{
+    // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
+    // cannot have a pindex with random data.
+    pindexBest = new CBlockIndex;
+
+    const ScraperStatsMeta meta(3);
+    GRC::Superblock superblock = GRC::Superblock::FromConvergence(
+        GetTestConvergence(meta, true), 3); // Set fallback by project flag
+
+    BOOST_CHECK(superblock.m_version == 3);
+    BOOST_CHECK(superblock.m_convergence_hint == 0x11111111);
+    // Manifest content hint not set for fallback convergence:
+    BOOST_CHECK(superblock.m_manifest_content_hint == 0x00000000);
+
+    auto& cpids = superblock.m_cpids;
+    BOOST_CHECK(cpids.size() == meta.cpid_count);
+    BOOST_CHECK_EQUAL(cpids.TotalMagnitude(), meta.cpid_total_mag);
+    BOOST_CHECK_CLOSE(cpids.AverageMagnitude(), meta.cpid_average_mag, 0.00000001);
+
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid1) == meta.c1_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid2) == meta.c2_mag_obj);
+    BOOST_CHECK(cpids.MagnitudeOf(meta.cpid3) == meta.c3_mag_obj);
+
+    auto& projects = superblock.m_projects;
+
+           // By project flag must be true in a fallback-to-project convergence:
+    BOOST_CHECK(projects.m_converged_by_project == true);
+    BOOST_CHECK(projects.size() == meta.project_count);
+    BOOST_CHECK(projects.TotalRac() == meta.project_total_rac);
+    BOOST_CHECK(projects.AverageRac() == meta.project_average_rac);
+
+    if (const auto project_1 = projects.Try(meta.project1)) {
+        BOOST_CHECK(project_1->m_total_credit == meta.p1_tc);
+        BOOST_CHECK(project_1->m_average_rac == meta.p1_avg_rac_rounded);
+        BOOST_CHECK(project_1->m_rac == meta.p1_rac);
+
+        CDataStream project_1_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_1_part_data << "foo";
+
+        uint32_t calc_convergence_hint = Hash(project_1_part_data).GetUint64(0) >> 32;
+
+               // The convergence hint must be set in fallback-to-project convergence.
+        BOOST_CHECK(project_1->m_convergence_hint == calc_convergence_hint);
+    } else {
+        BOOST_FAIL("Project 1 not found in superblock.");
+    }
+
+    if (const auto project_2 = projects.Try(meta.project2)) {
+        BOOST_CHECK(project_2->m_total_credit == meta.p2_tc);
+        BOOST_CHECK(project_2->m_average_rac == meta.p2_avg_rac_rounded);
+        BOOST_CHECK(project_2->m_rac == meta.p2_rac);
+
+        CDataStream project_2_part_data(SER_NETWORK, PROTOCOL_VERSION);
+        project_2_part_data << "fi";
+
+        uint32_t calc_convergence_hint = Hash(project_2_part_data).GetUint64(0) >> 32;
+
+               // The convergence hint must be set in fallback-to-project convergence.
+        BOOST_CHECK(project_2->m_convergence_hint == calc_convergence_hint);
+    } else {
+        BOOST_FAIL("Project 2 not found in superblock.");
+    }
+
+    auto& tcs = superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits;
+
+    auto project_1_tc = tcs.find(meta.project1);
+
+    if (project_1_tc == tcs.end()) {
+        BOOST_FAIL("Project 1 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_1_tc->second == meta.p1_all_cpid_tc);
+    }
+
+    auto project_2_tc = tcs.find(meta.project2);
+
+    if (project_2_tc == tcs.end()) {
+        BOOST_FAIL("Project 2 tc not found in superblock");
+    } else {
+        BOOST_CHECK(project_2_tc->second == meta.p2_all_cpid_tc);
+    }
+
+    delete pindexBest;
 }
 
 BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
@@ -2119,6 +2373,63 @@ BOOST_AUTO_TEST_CASE(it_hashes_a_superblock)
 
     const GRC::QuorumHash hash = GRC::QuorumHash::Hash(
         GRC::Superblock::FromStats(GetTestScraperStats(meta), 2));
+
+    BOOST_CHECK(hash.Valid() == true);
+    BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
+    BOOST_CHECK(hash == expected);
+    BOOST_CHECK(hash.ToString() == expected.ToString());
+}
+
+BOOST_AUTO_TEST_CASE(it_hashes_a_superblock_v3)
+{
+    const ScraperStatsMeta meta(3);
+    CHashWriter expected_hasher(SER_GETHASH, PROTOCOL_VERSION);
+
+           // Note: convergence hints embedded in a superblock are NOT considered
+           // when generating the superblock hash, and the container sizes aren't
+           // either:
+           //
+
+    std::map<std::string, uint64_t> expected_project_tcs;
+    expected_project_tcs.emplace(meta.project1, std::nearbyint<uint64_t>(meta.p1_all_cpid_tc));
+    expected_project_tcs.emplace(meta.project2, std::nearbyint<uint64_t>(meta.p2_all_cpid_tc));
+
+    expected_hasher
+                    // To allow for direct hashing of scraper stats data without
+                    // allocating a superblock, we generate an intermediate hash
+                    // of the segments of CPID-to-magnitude mappings:
+                    //
+        << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid3
+                << static_cast<uint8_t>(meta.c3_mag_obj.Compact()))
+                   .GetHash()
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid2
+                << static_cast<uint8_t>(meta.c2_mag_obj.Compact()))
+                   .GetHash()
+            << (CHashWriter(SER_GETHASH, PROTOCOL_VERSION)
+                << meta.cpid1
+                << COMPACTSIZE(uint64_t{meta.c1_mag_obj.Compact()}))
+                   .GetHash())
+               .GetHash()
+        << VARINT(uint32_t{0}) // Zero-mag count
+        << meta.project1
+        << VARINT((uint64_t)std::nearbyint(meta.p1_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p1_rac))
+        << meta.project2
+        << VARINT((uint64_t)std::nearbyint(meta.p2_tc))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_avg_rac))
+        << VARINT((uint64_t)std::nearbyint(meta.p2_rac))
+        << std::vector<uint160> { meta.beacon_id_1, meta.beacon_id_2 }
+        // Notice that the project status map is NOT serialized. This is on purpose.
+        << expected_project_tcs;
+
+    const uint256 expected = expected_hasher.GetHash();
+
+    const GRC::QuorumHash hash = GRC::QuorumHash::Hash(
+        GRC::Superblock::FromStats(GetTestScraperStats(meta), 3));
 
     BOOST_CHECK(hash.Valid() == true);
     BOOST_CHECK(hash.Which() == GRC::QuorumHash::Kind::SHA256);
