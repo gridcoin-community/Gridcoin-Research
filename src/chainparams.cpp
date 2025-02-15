@@ -72,7 +72,7 @@ public:
         consensus.ProjectV2Height = 2671700;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
-        consensus.ConstantBlockRewardCeiling = 200 * COIN;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         consensus.MRCZeroPaymentInterval = 14 * 24 * 60 * 60;
         consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
@@ -188,7 +188,7 @@ public:
         consensus.ProjectV2Height = 1944820;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
-        consensus.ConstantBlockRewardCeiling = 100 * COIN;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
         consensus.MRCZeroPaymentInterval = 10 * 60;
         consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
