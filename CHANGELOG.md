@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.4.9.0], 2025-02-16, leisure
+
+### Added
+ - depends: add cross arm64-darwin support #2775 (@div72)
+ - build: add missing randomness checks #2772 (@div72)
+ - init, registry: Support -clearallregistryhistory startup parameter #2773 (@jamescowens)
+
+### Changed
+ - build: omit _FORTIFY_SOURCE on debug #2793 (@div72)
+ - doc: cmake is required for Windows depends #2791 (@barton2526)
+ - CMake: Set maximum supported Boost version #2788 (@CyberTailor)
+ - ci: bump to MacOS 13 #2784 (@div72)
+ - build/cmake: disable LevelDB tests #2776 (@div72)
+ - util: use XDG_STATE_HOME for datadir on Flatpak #2774 (@div72)
+ - util, build: Support miniupnp API version 18+ #2771 (@jamescowens)
+ - build: explicitly include FindPkgConfig for CMake #2769 (@jamescowens)
+ - ci, cd: bump action versions #2763 (@div72)
+ - Sync CMake CI #2762 (@CyberTailor)
+ - cpid: Modify CPID local hasher to eliminate compiler warnings on 32 bit archs #2760 (@jamescowens)
+
+### Removed
+ - refactor, misc: remove CBitcoin(Address|Secret) #2634 (@div72)
+
+### Fixed
+ - poll, gui: Disable choice add button in poll wizard when choice limit is reached #2792 (@jamescowens)
+ - diagnose, rpc: fix compilation with boost 1.87 #2786 (@div72)
+ - node: fix build with GCC 15 #2783 (@CyberTailor)
+ - ci: use overwrite with brew install on MacOS CMake #2782 (@div72)
+ - scraper: Protect access to ConvergedStats.csv.gz with a lock #2779 (@jamescowens)
+ - fix build on FreeBSD #2770 (@wilkart)
+ - rpc/server: fix removing deprecated commands from command list #2768 (@lrusak)
+ - cmake bdb53: disable error for implicit-int with gcc #2767 (@lrusak)
+
 ## [5.4.8.0], 2024-04-10, leisure
 
 ### Added
