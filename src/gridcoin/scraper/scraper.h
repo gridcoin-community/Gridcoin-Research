@@ -27,6 +27,7 @@
 extern CCriticalSection cs_Scraper;
 extern CCriticalSection cs_ScraperGlobals;
 extern CCriticalSection cs_StructScraperFileManifest;
+extern CCriticalSection cs_ConvergedStats;
 extern CCriticalSection cs_ConvergedScraperStatsCache;
 extern CCriticalSection cs_TeamIDMap;
 extern CCriticalSection cs_VerifiedBeacons;
@@ -159,7 +160,7 @@ bool IsScraperAuthorized();
  * modified to bypass this check, so messages sent will also be validated on receipt by the complement
  * to this function, IsManifestAuthorized(CKey& Key) in the CScraperManifest class.
  */
-bool IsScraperAuthorizedToBroadcastManifests(CBitcoinAddress& AddressOut, CKey& KeyOut);
+bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& KeyOut);
 /**
  * @brief Returns whether the scraper with the input public key at the input time has exceeded the maximum allowable
  * manifest publishing rate. This is a DoS function and is used to issue misbehavior points, which could result in banning

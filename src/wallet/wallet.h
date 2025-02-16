@@ -135,7 +135,7 @@ public:
     //!
     //! \return Address as calculated from the master public key.
     //!
-    static const CBitcoinAddress MasterAddress(int height);
+    static const CTxDestination MasterAddress(int height);
 
     //!
     //! \brief Get the imported master private key used to sign administrative
@@ -286,7 +286,6 @@ public:
     bool GetKeyFromPool(CPubKey &key, bool fAllowReuse=true);
     int64_t GetOldestKeyPoolTime();
     void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
-    std::vector<std::pair<CBitcoinAddress, CBitcoinSecret>> GetAllPrivateKeys(std::string& sError) const;
 
 
     std::set< std::set<CTxDestination> > GetAddressGroupings();

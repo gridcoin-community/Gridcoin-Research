@@ -228,6 +228,11 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
             ui->removeChoiceButton->setVisible(!selected.isEmpty());
         });
     connect(ui->addChoiceButton, &QAbstractButton::clicked, this, [=]() {
+        if ((size_t) ui->choicesList->model()->rowCount() >= GRC::POLL_MAX_CHOICES_SIZE - 1) {
+            ui->addChoiceButton->setDisabled(true);
+            ui->addChoiceButton->setToolTip(tr("Cannot have more than 20 choices in a poll."));
+        }
+
         ui->choicesList->edit(m_choices_model->addItem());
         ui->choicesList->scrollToBottom();
     });
@@ -236,6 +241,11 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
     });
     connect(ui->removeChoiceButton, &QAbstractButton::clicked, this, [=]() {
         m_choices_model->removeItem(ui->choicesList->selectionModel()->selectedIndexes().first());
+
+        if ((size_t) ui->choicesList->model()->rowCount() < GRC::POLL_MAX_CHOICES_SIZE) {
+            ui->addChoiceButton->setEnabled(true);
+            ui->addChoiceButton->setToolTip("");
+        }
     });
     connect(m_choices_model.get(), &ChoicesListModel::completeChanged, this, [=]() {
         emit completeChanged();

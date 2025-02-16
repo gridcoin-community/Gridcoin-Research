@@ -1,38 +1,38 @@
 [
     [
 	"SE8hQCjzRxWye3p7D4hdYeeYaNuGUMWKaV",
-	"B174A85C22C917563A4E8425082A9B2302691814",
+	"76a914b174a85c22c917563a4e8425082a9b230269181488ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
 	"bE9beycFciNiykheLUmSPn5txcsvAMvA8v",
-	"0F91EFD3FE4DC089C6E2F4E259705F3A37716733",       
+	"a9140f91efd3fe4dc089c6e2f4e259705f3a3771673387",
 	{
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
 	"mtocGjbyzLqgMjqnjsTXJB29DpF4Xycg8Q",
-	"91BFFE0E06D0B15F74896B1F3967307EF7C73B73",
+	"76a91491bffe0e06d0b15f74896b1f3967307ef7c73b7388ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
-        "2Mua2yKphS8HcpmT15YTQ7crCey6sXohv9y", 
-	"197EF56DD6D0BDEC3D9D8B09297FF02293400FEF", 
+    "2Mua2yKphS8HcpmT15YTQ7crCey6sXohv9y",
+	"a914197ef56dd6d0bdec3d9d8b09297ff02293400fef87",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -41,7 +41,7 @@
 	{
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -50,7 +50,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -59,7 +59,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -68,43 +68,43 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "RxN1HEdC2HqHEAk469wN39mDXknG4Dp2ZX", 
-        "0476FA5D10A4D4FEB6FE00146AC6E2AB503BB9B3", 
+        "76a9140476fa5d10a4d4feb6fe00146ac6e2ab503bb9b388ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "bJkYuAPAqyxJDAfFoSP8t4Sg5g7vfFEG5G", 
-        "420EB2D228DBE7611D797BABFD720A198DCE488F", 
+        "a914420eb2d228dbe7611d797babfd720a198dce488f87",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "mmwJ4FJUQ5kez7F1hm7S7AY8vHuqg5fChS", 
-        "466B3BF6CC306568A8E754A3455ECF0D216B8782", 
+        "76a914466b3bf6cc306568a8e754a3455ecf0d216b878288ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "2N5B1qtneGpC9cchdKw9nsGSG74yRv2desu", 
-        "82D5B52C470B024BD9CBC6A03FA401C1302FC5A5", 
+        "a91482d5b52c470b024bd9cbc6a03fa401c1302fc5a587",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -113,7 +113,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -122,7 +122,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -131,7 +131,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -140,43 +140,43 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "S5GgFVTsorwKffDSsgZAFRHcV3sWNngz8z", 
-        "503DE4A5E4DCCF882CC81A401653F9864E34B3EF", 
+        "76a914503de4a5e4dccf882cc81a401653f9864e34b3ef88ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "bbpiXYwBzX3JFdVvTmiKGwZb4tbU5mgkLU", 
-        "FD5289882CCF46545266F122243B352A64AE9729", 
+        "a914fd5289882ccf46545266f122243b352a64ae972987",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "mwJ3qHbM193N6r2cJt3uNfCnGbun3dZiac", 
-        "AD113A74A31FB178B87AA9C8338A15D9AE064821", 
+        "76a914ad113a74a31fb178b87aa9c8338a15d9ae06482188ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "2N7wZC6QBYmp24rQtyR17evyhuA3wj2LNow", 
-        "A1326E08A14B3202D77B53635CB3736355103697", 
+        "a914a1326e08a14b3202d77b53635cb373635510369787",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -185,7 +185,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -194,7 +194,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -203,7 +203,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -212,43 +212,43 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "SGeyeAC18vCZdW3wrBr3fgtbzyax9zuoRT", 
-        "CD1EF1EFC1F9E1720693B8AFBCE39A829C04F54E", 
+        "76a914cd1ef1efc1f9e1720693b8afbce39a829c04f54e88ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "bGDhyPqUcykcEXHP2h8umYWvyF6zhUkTH7", 
-        "26492038BEA91C03B677BFCE591C9B84A033AEE3", 
+        "a91426492038bea91c03b677bfce591c9b84a033aee387",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "mfprNrD49kcdxQcmA4o2qLosLmg43ocm8Q", 
-        "03628C3B3C51F1634E260C948E376E6479122489", 
+        "76a91403628c3b3c51f1634e260c948e376e647912248988ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "2N45K8B7KHgmZ8CufhvFX15jaidmYaTV7WK", 
-        "76C982E8E14D3B61B55DA51DA0ED2E1C3CF634E0", 
+        "a91476c982e8e14d3b61b55da51da0ed2e1c3cf634e087",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -257,7 +257,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -266,7 +266,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -275,7 +275,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -284,43 +284,43 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "S4tBgEy9mYTex8g5mDVvBwnMo1uEKm8D8N", 
-        "4BFCE3E6060BCC52B14158543478F898D89270D0", 
+        "76a9144bfce3e6060bcc52b14158543478f898d89270d088ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "bTp4nL6vhz5nvKJTt8gePcqXjkv1adUQKQ", 
-        "A57205DA5628AF7BC2FC0796976D32E83C0A2168", 
+        "a914a57205da5628af7bc2fc0796976d32e83c0a216887",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "mrZd1vneUmE4YkPg4P6wWWDgvuev45qpAh", 
-        "792A89FCFADFDFB5E0571A8A06B9B51F6D447483", 
+        "76a914792a89fcfadfdfb5e0571a8a06b9b51f6d44748388ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "2N1UMtU75Ua1cvDzAMCuhM1bQSGrU9j9NcG", 
-        "5A3D02150EAF6F3FC5FAEE1964996525526D28D8", 
+        "a9145a3d02150eaf6f3fc5faee1964996525526d28d887",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -329,7 +329,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -338,7 +338,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -347,7 +347,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -356,43 +356,43 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "S7vE1RM32kdRyoA2x4nRnba86Z25JVaL6m", 
-        "6D480B886118FB6E6D3FFC35B62F2C5BFD98DD2B", 
+        "76a9146d480b886118fb6e6d3ffc35b62f2c5bfd98dd2b88ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "bDtPuxX6bY4j6hxF4w2gbUz1LPvS36MhQ9", 
-        "0CB1E55B1E593DEEE37D75895576BD3CAB52430B2", 
+        "a9140cb1e55b1e593deee37d75895576bd3cab52430b87",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
         "mjFCEneHB5n1pzE5ZinZV6uiqrcxHJRpUG", 
-        "28E57CC2E23A4A20B22D0201A20C2A736E7C296B", 
+        "76a91428e57cc2e23a4a20b22d0201a20c2a736e7c296b88ac",
         {
             "addrType": "pubkey", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
         "2MybDkUBALd9Ga8X4DqWfzhbFdNzvUaQEYE", 
-        "4598E00770AC4D4521DF3F847D0573C75071E47A", 
+        "a9144598e00770ac4d4521df3f847d0573c75071e47a87",
         {
             "addrType": "script", 
             "isPrivkey": false, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -401,7 +401,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -410,7 +410,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": false
+            "chain": "main"
         }
     ], 
     [
@@ -419,7 +419,7 @@
         {
             "isCompressed": false, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ], 
     [
@@ -428,7 +428,7 @@
         {
             "isCompressed": true, 
             "isPrivkey": true, 
-            "isTestnet": true
+            "chain": "test"
         }
     ]
 ]

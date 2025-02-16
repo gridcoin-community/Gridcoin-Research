@@ -117,7 +117,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     // sidestakes are always included.
     for (const auto& alloc : vSideStakeAlloc)
     {
-        sidestakingalloc.pushKV("address", CBitcoinAddress(alloc->GetDestination()).ToString());
+        sidestakingalloc.pushKV("address", EncodeDestination(alloc->GetDestination()));
         sidestakingalloc.pushKV("allocation_pct", alloc->GetAllocation().ToPercent());
         sidestakingalloc.pushKV("status", alloc->StatusToString());
 
@@ -213,7 +213,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     CTxDestination dest;
 
     if (ExtractDestination(stake_tx->vout[1].scriptPubKey, dest)) {
-        json.pushKV("address", CBitcoinAddress(dest).ToString());
+        json.pushKV("address", EncodeDestination(dest));
     } else {
         json.pushKV("address", "");
     }

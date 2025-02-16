@@ -9,6 +9,7 @@
 #include "sync.h"
 #include "version.h"
 #include "node/ui_interface.h"
+#include <random.h>
 #include "util.h"
 #include <util/strencodings.h>
 #include <util/string.h>
@@ -189,7 +190,7 @@ bool TryCreateDirectories(const fs::path& p)
 
 bool DirIsWritable(const fs::path& directory)
 {
-    fs::path tmpFile = directory / fs::unique_path();
+    fs::path tmpFile = directory / fs::path(HexStr(FastRandomContext().randbytes(8)));
 
     FILE* file = fsbridge::fopen(tmpFile, "a");
     if (!file) return false;

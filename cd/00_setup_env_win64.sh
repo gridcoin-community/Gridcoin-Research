@@ -9,5 +9,5 @@ export LC_ALL=C.UTF-8
 export CONTAINER_NAME=ci_win64
 export DOCKER_NAME_TAG=ubuntu:20.04
 export HOST=x86_64-w64-mingw32
-export PACKAGES="python3 nsis g++-mingw-w64-x86-64 wine-binfmt wine64"
+export PACKAGES="cmake python3 nsis g++-mingw-w64-x86-64 wine-binfmt wine64"
 export GRIDCOIN_CONFIG="--enable-reduce-exports --with-gui=qt5"

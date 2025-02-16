@@ -1081,31 +1081,6 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue backupprivatekeys(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "backupprivatekeys\n"
-                "\n"
-                "Backup wallet private keys to file (Wallet must be fully unlocked!)\n");
-
-    string sErrors;
-    string sTarget;
-    UniValue res(UniValue::VOBJ);
-
-    bool bBackupPrivateKeys = GRC::BackupPrivateKeys(*pwalletMain, sTarget, sErrors);
-
-    if (!bBackupPrivateKeys)
-        res.pushKV("error", sErrors);
-
-    else
-        res.pushKV("location", sTarget);
-
-    res.pushKV("result", bBackupPrivateKeys);
-
-    return res;
-}
-
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
     if (fHelp || (params.size() < 2 || params.size() > 4))
@@ -1181,7 +1156,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     const int64_t now = GetAdjustedTime(); // Time to calculate beacon expiration from
 
     //------- CPID -------------- beacon address -- Mag --- payment - suppressed
-    std::map<GRC::Cpid, std::tuple<CBitcoinAddress, double, CAmount, bool>> mCPIDRain;
+    std::map<GRC::Cpid, std::tuple<CTxDestination, double, CAmount, bool>> mCPIDRain;
 
     for (const auto& entry : mScraperConvergedStats)
     {
@@ -1209,7 +1184,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
             // Zero mag CPIDs do not get paid.
             if (!dCPIDMag) continue;
 
-            CBitcoinAddress address;
+            CTxDestination address;
 
             // If the beacon is active get the address and insert an entry into the map for payment,
             // otherwise skip.
@@ -1266,7 +1241,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
         // Make it easier to read.
         const GRC::Cpid& cpid = iter.first;
-        const CBitcoinAddress& address = std::get<0>(iter.second);
+        const CTxDestination& address = std::get<0>(iter.second);
         const double& magnitude = std::get<1>(iter.second);
 
         // This is not a const reference on purpose because it has to be renormalized.
@@ -1279,18 +1254,18 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         payment = roundint64((double) payment * (double) amount / (double) total_amount_1st_pass);
 
         CScript scriptPubKey;
-        scriptPubKey.SetDestination(address.Get());
+        scriptPubKey.SetDestination(address);
 
         LogPrint(BCLog::LogFlags::VERBOSE, "INFO: %s: cpid = %s. address = %s, magnitude = %.2f, "
                                            "payment = %s, dust_suppressed = %u",
-                 __func__, cpid.ToString(), address.ToString(), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
+                 __func__, cpid.ToString(), EncodeDestination(address), magnitude, ValueFromAmount(payment).getValStr(), suppressed);
 
         if (output_details)
         {
             UniValue detail_entry(UniValue::VOBJ);
 
             detail_entry.pushKV("cpid", cpid.ToString());
-            detail_entry.pushKV("address", address.ToString());
+            detail_entry.pushKV("address", EncodeDestination(address));
             detail_entry.pushKV("magnitude", magnitude);
             detail_entry.pushKV("amount", ValueFromAmount(payment));
             detail_entry.pushKV("suppressed", suppressed);
@@ -1562,7 +1537,7 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
         if (active_only && beacon_pair.second->Expired(now)) continue;
 
         entry.pushKV("cpid", beacon_pair.first.ToString());
-        entry.pushKV("address", beacon_pair.second->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon_pair.second->GetAddress()));
         entry.pushKV("timestamp", beacon_pair.second->m_timestamp);
         entry.pushKV("hash", beacon_pair.second->m_hash.GetHex());
         entry.pushKV("prev_beacon_hash", beacon_pair.second->m_previous_hash.GetHex());
@@ -1681,14 +1656,12 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
     {
         UniValue entry(UniValue::VOBJ);
 
-        CBitcoinAddress address;
         const CKeyID& key_id = pending_beacon_pair.first;
-
-        address.Set(key_id);
+        CTxDestination address(key_id);
 
         entry.pushKV("cpid", pending_beacon_pair.second->m_cpid.ToString());
         entry.pushKV("key_id", pending_beacon_pair.first.ToString());
-        entry.pushKV("address", address.ToString());
+        entry.pushKV("address", EncodeDestination(address));
         entry.pushKV("timestamp", pending_beacon_pair.second->m_timestamp);
 
         results.push_back(entry);
@@ -1740,7 +1713,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("expired", beacon->Expired(now));
         entry.pushKV("renewable", beacon->Renewable(now));
         entry.pushKV("timestamp", TimestampToHRDate(beacon->m_timestamp));
-        entry.pushKV("address", beacon->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon->GetAddress()));
         entry.pushKV("public_key", HexStr(beacon->m_public_key));
         entry.pushKV("private_key_available", beacon->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", GRC::Quorum::GetMagnitude(*cpid).Floating());
@@ -1758,7 +1731,7 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
         entry.pushKV("expired", beacon_ptr->Expired(now));
         entry.pushKV("renewable", false);
         entry.pushKV("timestamp", TimestampToHRDate(beacon_ptr->m_timestamp));
-        entry.pushKV("address", beacon_ptr->GetAddress().ToString());
+        entry.pushKV("address", EncodeDestination(beacon_ptr->GetAddress()));
         entry.pushKV("public_key", HexStr(beacon_ptr->m_public_key));
         entry.pushKV("private_key_available", beacon_ptr->WalletHasPrivateKey(pwalletMain));
         entry.pushKV("magnitude", 0);
@@ -2412,15 +2385,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
         std::string status_string = ToLower(params[3].get_str());
         GRC::ScraperEntryStatus status = GRC::ScraperEntryStatus::UNKNOWN;
 
-        CBitcoinAddress scraper_address;
-        if (!scraper_address.SetString(params[2].get_str())) {
+        CTxDestination scraper_address = DecodeDestination(params[2].get_str());
+        if (!IsValidDestination(scraper_address)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the scraper is invalid.");
         }
 
         if (block_v13_enabled) { // Contract version will be 3.
-            CKeyID key_id;
-
-            scraper_address.GetKeyID(key_id);
+            CKeyID key_id = std::get<CKeyID>(scraper_address);
 
             if (action == GRC::ContractAction::ADD) {
                 if (status_string == "false") {
@@ -2455,7 +2426,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
             contract = GRC::MakeContract<GRC::ScraperEntryPayload>(
                         contract_version,
                         action,
-                        scraper_address.ToString(),
+                        EncodeDestination(scraper_address),
                         status_string);
         }
         break;
@@ -2472,8 +2443,8 @@ UniValue addkey(const UniValue& params, bool fHelp)
     case GRC::ContractType::SIDESTAKE:
     {
         if (block_v13_enabled) {
-            CBitcoinAddress sidestake_address;
-            if (!sidestake_address.SetString(params[2].get_str())) {
+            CTxDestination sidestake_address = DecodeDestination(params[2].get_str());
+            if (!IsValidDestination(sidestake_address)) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Address specified for the sidestake is invalid.");
             }
 
@@ -2499,7 +2470,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 contract_version,                                            // Contract version number (3+)
                 action,                                                      // Contract action
                 uint32_t {1},                                                // Contract payload version number
-                sidestake_address.Get(),                                     // Sidestake destination
+                sidestake_address,                                           // Sidestake destination
                 allocation,                                                  // Sidestake allocation
                 description,                                                 // Sidestake description
                 GRC::MandatorySideStake::MandatorySideStakeStatus::MANDATORY // sidestake status
@@ -2643,9 +2614,9 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
     for (const auto& scraper : GRC::GetScraperRegistry().Scrapers()) {
         UniValue entry(UniValue::VOBJ);
 
-        CBitcoinAddress address(scraper.first);
+        CTxDestination address(scraper.first);
 
-        entry.pushKV("scraper_address", address.ToString());
+        entry.pushKV("scraper_address", EncodeDestination(address));
         entry.pushKV("current_scraper_entry_tx_hash", scraper.second->m_hash.ToString());
         if (scraper.second->m_previous_hash.IsNull()) {
             entry.pushKV("previous_scraper_entry_tx_hash", "null");
@@ -2714,7 +2685,7 @@ UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
     for (const auto& sidestake : GRC::GetSideStakeRegistry().ActiveSideStakeEntries(GRC::SideStake::FilterFlag::MANDATORY, false)) {
         UniValue entry(UniValue::VOBJ);
 
-        entry.pushKV("mandatory_sidestake_entry_address", CBitcoinAddress(sidestake->GetDestination()).ToString());
+        entry.pushKV("mandatory_sidestake_entry_address", EncodeDestination(sidestake->GetDestination()));
         entry.pushKV("mandatory_sidestake_entry_allocation", sidestake->GetAllocation().ToPercent());
         entry.pushKV("mandatory_sidestake_entry_tx_hash", sidestake->GetHash().ToString());
         if (sidestake->GetPreviousHash().IsNull()) {

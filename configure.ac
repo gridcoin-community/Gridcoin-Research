@@ -2,10 +2,10 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 5)
 define(_CLIENT_VERSION_MINOR, 4)
-define(_CLIENT_VERSION_REVISION, 8)
+define(_CLIENT_VERSION_REVISION, 9)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
-define(_COPYRIGHT_YEAR, 2024)
+define(_COPYRIGHT_YEAR, 2025)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Gridcoin]])
 AC_INIT([Gridcoin],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/gridcoin/Gridcoin-Research/issues],[gridcoin],[https://gridcoin.us/])
@@ -90,6 +90,7 @@ AC_PATH_PROG([GIT], [git])
 AC_PATH_PROG(CCACHE,ccache)
 AC_PATH_PROG(XGETTEXT,xgettext)
 AC_PATH_PROG(HEXDUMP,hexdump)
+AC_PATH_TOOL([OBJDUMP], [objdump])
 AC_PATH_TOOL(READELF, readelf)
 AC_PATH_TOOL(CPPFILT, c++filt)
 AC_PATH_TOOL(OBJCOPY, objcopy)
@@ -559,7 +560,6 @@ case $host in
          *)
            AC_PATH_TOOL([DSYMUTIL], [dsymutil], dsymutil)
            AC_PATH_TOOL([INSTALLNAMETOOL], [install_name_tool], install_name_tool)
-           AC_PATH_TOOL([OTOOL], [otool], otool)
            AC_PATH_PROGS([XORRISOFS], [xorrisofs], xorrisofs)
            AC_PATH_PROGS([DMG], [dmg], dmg)
            AC_PATH_PROGS([RSVG_CONVERT], [rsvg-convert rsvg],rsvg-convert)
@@ -716,12 +716,14 @@ if test "$use_hardening" != "no"; then
       ;;
   esac
 
-  AX_CHECK_PREPROC_FLAG([-D_FORTIFY_SOURCE=2],[
-    AX_CHECK_PREPROC_FLAG([-U_FORTIFY_SOURCE],[
-      HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -U_FORTIFY_SOURCE"
-    ])
-    HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -D_FORTIFY_SOURCE=2"
-  ])
+  if test "$enable_debug" != "yes"; then
+      AX_CHECK_PREPROC_FLAG([-D_FORTIFY_SOURCE=2],[
+        AX_CHECK_PREPROC_FLAG([-U_FORTIFY_SOURCE],[
+          HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -U_FORTIFY_SOURCE"
+        ])
+        HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -D_FORTIFY_SOURCE=2"
+      ])
+  fi
 
   AX_CHECK_LINK_FLAG([[-Wl,--dynamicbase]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,--dynamicbase"])
   AX_CHECK_LINK_FLAG([[-Wl,--nxcompat]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,--nxcompat"])
@@ -912,22 +914,43 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <ctime>]],
 )
 
 # Check for different ways of gathering OS randomness
-AC_MSG_CHECKING(for Linux getrandom syscall)
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <unistd.h>
-  #include <sys/syscall.h>
-  #include <linux/random.h>]],
- [[ syscall(SYS_getrandom, nullptr, 32, 0); ]])],
- [ AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYS_GETRANDOM, 1,[Define this symbol if the Linux getrandom system call is available]) ],
- [ AC_MSG_RESULT(no)]
+AC_MSG_CHECKING([for Linux getrandom function])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+  #include <sys/random.h>]],
+ [[ getrandom(nullptr, 32, 0); ]])],
+ [ AC_MSG_RESULT([yes]); AC_DEFINE([HAVE_GETRANDOM], [1], [Define this symbol if the Linux getrandom function call is available]) ],
+ [ AC_MSG_RESULT([no])]
 )
 
-AC_MSG_CHECKING(for sysctl KERN_ARND)
+AC_MSG_CHECKING([for getentropy via sys/random.h])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+ #include <sys/random.h>]],
+ [[ getentropy(nullptr, 32) ]])],
+ [ AC_MSG_RESULT([yes]); AC_DEFINE([HAVE_GETENTROPY_RAND], [1], [Define this symbol if the BSD getentropy system call is available with sys/random.h]) ],
+ [ AC_MSG_RESULT([no])]
+)
+
+AC_MSG_CHECKING([for sysctl])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
   #include <sys/sysctl.h>]],
- [[ static const int name[2] = {CTL_KERN, KERN_ARND};
+ [[ #ifdef __linux__
+    #error "Don't use sysctl on Linux, it's deprecated even when it works"
+    #endif
+    sysctl(nullptr, 2, nullptr, nullptr, nullptr, 0); ]])],
+ [ AC_MSG_RESULT([yes]); AC_DEFINE([HAVE_SYSCTL], [1], [Define this symbol if the BSD sysctl() is available]) ],
+ [ AC_MSG_RESULT([no])]
+)
+
+AC_MSG_CHECKING([for sysctl KERN_ARND])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
+  #include <sys/sysctl.h>]],
+ [[ #ifdef __linux__
+    #error "Don't use sysctl on Linux, it's deprecated even when it works"
+    #endif
+    static int name[2] = {CTL_KERN, KERN_ARND};
     sysctl(name, 2, nullptr, nullptr, nullptr, 0); ]])],
- [ AC_MSG_RESULT(yes); AC_DEFINE(HAVE_SYSCTL_ARND, 1,[Define this symbol if the BSD sysctl(KERN_ARND) is available]) ],
- [ AC_MSG_RESULT(no)]
+ [ AC_MSG_RESULT([yes]); AC_DEFINE([HAVE_SYSCTL_ARND], [1], [Define this symbol if the BSD sysctl(KERN_ARND) is available]) ],
+ [ AC_MSG_RESULT([no])]
 )
 
 # LevelDB platform checks
@@ -1418,7 +1441,7 @@ esac
 AC_CONFIG_SUBDIRS([src/univalue])
 AC_CONFIG_SUBDIRS([src/secp256k1])
 if test "$enable_embedded_bdb" = "yes"; then
-  AX_SUBDIRS_CONFIGURE([src/bdb53], [[CFLAGS="-Wno-error=implicit-function-declaration"], [CXXFLAGS="-Wno-error=implicit-function-declaration"], [--disable-java], [--disable-jdbc], [--disable-replication], [--enable-cxx], [$ADDITIONAL_BDB_FLAGS]], [], [], [])
+  AX_SUBDIRS_CONFIGURE([src/bdb53], [[CFLAGS=-Wno-error=implicit-function-declaration -Wno-error=implicit-int], [CXXFLAGS=-Wno-error=implicit-function-declaration -Wno-error=implicit-int], [--disable-java], [--disable-jdbc], [--disable-replication], [--enable-cxx], [$ADDITIONAL_BDB_FLAGS]], [], [], [])
 fi
 
 AC_OUTPUT

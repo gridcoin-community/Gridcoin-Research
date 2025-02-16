@@ -349,8 +349,8 @@ bool SendCoinsDialog::handleURI(const QString &uri)
     // URI has to be valid
     if (GUIUtil::parseBitcoinURI(uri, &rv))
     {
-        CBitcoinAddress address(rv.address.toStdString());
-        if (!address.IsValid())
+        CTxDestination address = DecodeDestination(rv.address.toStdString());
+        if (!IsValidDestination(address))
             return false;
         pasteEntry(rv);
         return true;
@@ -509,7 +509,7 @@ void SendCoinsDialog::coinControlChangeChecked(int state)
     if (model)
     {
         if (state == Qt::Checked)
-            coinControl->destChange = CBitcoinAddress(ui->coinControlChangeEdit->text().toStdString()).Get();
+            coinControl->destChange = DecodeDestination(ui->coinControlChangeEdit->text().toStdString());
         else
             coinControl->destChange = CNoDestination();
     }
@@ -525,13 +525,13 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
 {
     if (model)
     {
-        coinControl->destChange = CBitcoinAddress(text.toStdString()).Get();
+        coinControl->destChange = DecodeDestination(text.toStdString());
 
         // label for the change address
         ui->coinControlChangeAddressLabel->setStyleSheet(QString());
         if (text.isEmpty())
             ui->coinControlChangeAddressLabel->setText(QString());
-        else if (!CBitcoinAddress(text.toStdString()).IsValid())
+        else if (!IsValidDestination(DecodeDestination(text.toStdString())))
         {
             ui->coinControlChangeAddressLabel->setStyleSheet("QLabel{color:red;}");
             ui->coinControlChangeAddressLabel->setText(tr("WARNING: Invalid Gridcoin address"));
@@ -544,9 +544,9 @@ void SendCoinsDialog::coinControlChangeEdited(const QString & text)
             else
             {
                 CPubKey pubkey;
-                CKeyID keyid;
-                CBitcoinAddress(text.toStdString()).GetKeyID(keyid);
-                if (model->getPubKey(keyid, pubkey))
+                CTxDestination dest = DecodeDestination(text.toStdString());
+                CKeyID* keyid = std::get_if<CKeyID>(&dest);
+                if (keyid && model->getPubKey(*keyid, pubkey))
                     ui->coinControlChangeAddressLabel->setText(tr("(no label)"));
                 else
                 {

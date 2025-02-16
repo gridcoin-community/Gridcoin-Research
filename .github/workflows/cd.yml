@@ -11,18 +11,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script-id: [win32, win64, mac]
+        script-id: [win32, win64, mac, mac_arm64_cross]
     env:
       FILE_ENV: ./cd/00_setup_env_${{ matrix.script-id }}.sh
       OS_NAME: linux
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: current time for cache
         run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
       - name: cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
               ./depends/built

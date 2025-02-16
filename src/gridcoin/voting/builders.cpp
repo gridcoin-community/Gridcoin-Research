@@ -24,21 +24,6 @@ using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
-//! \brief Get the string representation of an output destination for logging.
-//!
-//! \param dest Destination to convert to an address string.
-//!
-//! \return Base58-encoded string of the address.
-//!
-std::string DestinationToAddressString(const CTxDestination dest)
-{
-    CBitcoinAddress address;
-    address.Set(dest);
-
-    return address.ToString();
-}
-
-//!
 //! \brief A set of outputs associated with an address for a voting claim.
 //!
 //! This intermediate container holds context about the unspent outputs for
@@ -166,7 +151,7 @@ private:
         void operator()(const CKeyID& keyId, const COutput& output) const
         {
             LogPrint(LogFlags::VOTE, "  added output for address: %s",
-                DestinationToAddressString(keyId));
+                EncodeDestination(keyId));
 
             auto result_pair = m_by_address.emplace(keyId, keyId);
             AddressOutputs& address_outputs = result_pair.first->second;
@@ -184,7 +169,7 @@ private:
         {
             // Voting does not support redemption script outputs yet.
             LogPrint(LogFlags::VOTE, "  skipped script address: %s",
-                DestinationToAddressString(scriptId));
+                EncodeDestination(scriptId));
         }
 
     private:
@@ -219,14 +204,14 @@ private:
             //
             if (txo.tx->vout[txo.i].nValue < COIN) {
                 LogPrint(LogFlags::VOTE, "  skipped < 1 GRC outputs for: %s",
-                    DestinationToAddressString(dest));
+                    EncodeDestination(dest));
 
                 break; // The input set is sorted so the rest are too small.
             }
 
             if (!txo.tx->IsTrusted() || !txo.tx->IsConfirmed()) {
                 LogPrint(LogFlags::VOTE, "  skipped unconfirmed output for %s",
-                    DestinationToAddressString(dest));
+                    EncodeDestination(dest));
                 continue;
             }
 
@@ -302,7 +287,7 @@ public:
         if (!m_wallet.GetPubKey(address_outputs.m_key_id, claim.m_public_key)) {
             error("%s: failed to fetch public key for address %s",
                 __func__,
-                DestinationToAddressString(address_outputs.m_key_id));
+                EncodeDestination(address_outputs.m_key_id));
 
             return std::nullopt;
         }
@@ -310,8 +295,8 @@ public:
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: building address claim for address_outputs.m_key_id %s, "
                                         "claim.m_public_key address %s.",
                  __func__,
-                 DestinationToAddressString(address_outputs.m_key_id),
-                 DestinationToAddressString(claim.m_public_key.GetID()));
+                 EncodeDestination(address_outputs.m_key_id),
+                 EncodeDestination(claim.m_public_key.GetID()));
 
         // An address claim must submit outputs in ascending order. This
         // improves the performance of duplicate output validation:
@@ -337,25 +322,25 @@ public:
         if (!m_wallet.GetKey(key_id, private_key)) {
             return error("%s: failed to fetch private key for address %s",
                 __func__,
-                DestinationToAddressString(key_id));
+                EncodeDestination(key_id));
         }
 
         if (!private_key.IsValid()) {
             return error("%s: invalid private key for address %s",
                 __func__,
-                DestinationToAddressString(key_id));
+                EncodeDestination(key_id));
         }
 
         if (!claim.Sign(private_key, message)) {
             return error("%s: failed to sign address claim for address %s",
                 __func__,
-                DestinationToAddressString(key_id));
+                EncodeDestination(key_id));
         }
 
         LogPrint(LogFlags::VOTE,
             "%s: signed address claim for address: %s",
             __func__,
-            DestinationToAddressString(key_id));
+            EncodeDestination(key_id));
 
         return true;
     }
@@ -420,7 +405,7 @@ public:
         for (auto& address_claim : claim.m_address_claims) {
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: signing claim address %s",
                      __func__,
-                     DestinationToAddressString(address_claim.m_public_key.GetID())
+                     EncodeDestination(address_claim.m_public_key.GetID())
                      );
 
             if (!builder.SignClaim(address_claim, message)) {
@@ -459,7 +444,7 @@ private:
 
             LogPrint(LogFlags::VOTE, "%s: trimmed output claim from %s",
                 __func__,
-                DestinationToAddressString(address.m_key_id));
+                EncodeDestination(address.m_key_id));
 
             address.m_outpoints.pop_back();
             bytes_estimate -= txo_bytes;
@@ -467,7 +452,7 @@ private:
             if (address.m_outpoints.empty()) {
                 LogPrint(LogFlags::VOTE, "%s: trimmed address claim %s",
                     __func__,
-                    DestinationToAddressString(address.m_key_id));
+                    EncodeDestination(address.m_key_id));
 
                 by_address.pop_back();
                 bytes_estimate -= address_claim_bytes;
@@ -716,7 +701,7 @@ private:
             if (address.m_total_amount < POLL_REQUIRED_BALANCE) {
                 LogPrint(LogFlags::VOTE, "%s: exceeded max outputs for %s",
                     __func__,
-                    DestinationToAddressString(address.m_key_id));
+                    EncodeDestination(address.m_key_id));
 
                 return false;
             }
@@ -1225,7 +1210,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim address %s, poll title %s.",
              __func__,
-             DestinationToAddressString(poll_payload.m_claim.m_address_claim.m_public_key.GetID()),
+             EncodeDestination(poll_payload.m_claim.m_address_claim.m_public_key.GetID()),
              poll_payload.m_poll.m_title
              );
 

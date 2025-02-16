@@ -154,7 +154,7 @@ QVariant SideStakeTableModel::data(const QModelIndex &index, int role) const
     if (role == Qt::DisplayRole) {
         switch (column) {
         case Address:
-            return QString::fromStdString(CBitcoinAddress(rec->GetDestination()).ToString());
+            return QString::fromStdString(EncodeDestination(rec->GetDestination()));
         case Allocation:
             return QString().setNum(rec->GetAllocation().ToPercent(), 'f', 2) + QString("\%");
         case Description:
@@ -166,7 +166,7 @@ QVariant SideStakeTableModel::data(const QModelIndex &index, int role) const
     } else if (role == Qt::EditRole) {
         switch (column) {
         case Address:
-            return QString::fromStdString(CBitcoinAddress(rec->GetDestination()).ToString());
+            return QString::fromStdString(EncodeDestination(rec->GetDestination()));
         case Allocation:
             return QString().setNum(rec->GetAllocation().ToPercent(), 'f', 2);
         case Description:
@@ -342,19 +342,18 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
 {
     GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
 
-    CBitcoinAddress sidestake_address;
-    sidestake_address.SetString(address.toStdString());
+    CTxDestination sidestake_address = DecodeDestination(address.toStdString());
 
     m_edit_status = OK;
 
-    if (!sidestake_address.IsValid()) {
+    if (!IsValidDestination(sidestake_address)) {
         m_edit_status = INVALID_ADDRESS;
         return QString();
     }
 
     // Check for duplicate local sidestakes. Here we use the actual core sidestake registry rather than the
     // UI model.
-    std::vector<GRC::SideStake_ptr> core_local_sidestake = registry.Try(sidestake_address.Get(), GRC::SideStake::FilterFlag::LOCAL);
+    std::vector<GRC::SideStake_ptr> core_local_sidestake = registry.Try(sidestake_address, GRC::SideStake::FilterFlag::LOCAL);
 
     if (!core_local_sidestake.empty()) {
         m_edit_status = DUPLICATE_ADDRESS;
@@ -393,14 +392,14 @@ QString SideStakeTableModel::addRow(const QString &address, const QString &alloc
         return QString();
     }
 
-    registry.NonContractAdd(GRC::LocalSideStake(sidestake_address.Get(),
+    registry.NonContractAdd(GRC::LocalSideStake(sidestake_address,
                                                 sidestake_allocation,
                                                 sanitized_description,
                                                 GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE));
 
     updateSideStakeTableModel();
 
-    return QString::fromStdString(sidestake_address.ToString());
+    return QString::fromStdString(EncodeDestination(sidestake_address));
 }
 
 bool SideStakeTableModel::removeRows(int row, int count, const QModelIndex &parent)

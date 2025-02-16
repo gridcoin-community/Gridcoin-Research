@@ -1,31 +1,9 @@
 // Copyright (c) 2013 NovaCoin Developers
 
+#include <crypto/common.h>
+#include <pbkdf2.h>
+
 #include <string.h>
-#include "pbkdf2.h"
-
-// Only commented out since it will be used in Big endian support
-// in the future.
-/*
-static inline uint32_t
-be32dec(const void *pp)
-{
-    const uint8_t *p = (uint8_t const *)pp;
-
-    return ((uint32_t)(p[3]) + ((uint32_t)(p[2]) << 8) +
-        ((uint32_t)(p[1]) << 16) + ((uint32_t)(p[0]) << 24));
-}
-*/
-
-static inline void
-be32enc(void *pp, uint32_t x)
-{
-    uint8_t * p = (uint8_t *)pp;
-
-    p[3] = x & 0xff;
-    p[2] = (x >> 8) & 0xff;
-    p[1] = (x >> 16) & 0xff;
-    p[0] = (x >> 24) & 0xff;
-}
 
 
 /**
@@ -53,7 +31,7 @@ PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
     /* Iterate through the blocks. */
     for (i = 0; i * 32 < dkLen; i++) {
         /* Generate INT(i + 1). */
-        be32enc(ivec, (uint32_t)(i + 1));
+        WriteBE32(ivec, (uint32_t)(i + 1));
 
         /* Compute U_1 = PRF(P, S || INT(i)). */
         CHMAC_SHA256 U_1 = salted;

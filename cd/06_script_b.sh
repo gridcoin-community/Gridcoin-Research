@@ -12,7 +12,11 @@ if [[ $HOST = *-apple-* ]]; then
 	KV=$(cat $BASE_ROOT_DIR/depends/hosts/darwin.mk | grep "OSX_MIN_VERSION=")
 	VER=${KV#OSX_MIN_VERSION=}
 	for f in /tmp/release/*.dmg; do
-		mv $f ${f%.dmg}-min-$VER.dmg
+ 		if [[ $HOST = x86_64-* ]]; then
+			mv $f ${f%.dmg}-min-$VER.dmg
+		else
+			mv $f ${f%.dmg}_arm64-min-$VER.dmg
+		fi
 	done
 fi
 

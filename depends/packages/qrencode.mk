@@ -15,6 +15,7 @@ define $(package)_set_vars
 endef
 
 define $(package)_config_cmds
+  autoreconf -fi && \
   $($(package)_autoconf)
 endef
 

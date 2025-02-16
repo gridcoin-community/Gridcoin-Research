@@ -7,11 +7,11 @@ env:
 jobs:
     test-linux:
         name: ${{ matrix.name }}
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-24.04
         strategy:
             matrix:
                 include:
-                  - name: ARM  [GOAL install]  [buster]
+                  - name: ARM  [GOAL install]  [bullseye]
                     script-id: arm
                   - name: Win32
                     script-id: win32
@@ -21,25 +21,27 @@ jobs:
                     script-id: linux_i386
                   - name: x86_64 Linux  [GOAL install]  [GUI]  [focal]  [no depends]
                     script-id: native
-                  - name: x86_64 Linux  [GOAL install]  [GUI]  [bionic]  [no depends]
+                  - name: x86_64 Linux  [GOAL install]  [GUI]  [noble]  [no depends]
                     script-id: native_old
                   - name: x86_64 Linux  [ASan]  [LSan]  [UBSan]  [integer]  [jammy]  [no depends]
                     script-id: native_asan
                   # FIXME: depends is unable to compile Qt with clang.
                   # - name: x86_64 Linux  [TSan]  [GUI]  [jammy]
                   #  script-id: native_tsan
-                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [focal]
+                  - name: macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [noble]
                     script-id: mac
+                  - name: arm64 macOS 10.14  [GOAL deploy]  [GUI]  [no tests]  [noble]
+                    script-id: mac_arm64_cross
         env:
             FILE_ENV: ./ci/test/00_setup_env_${{ matrix.script-id }}.sh
             OS_NAME: linux
         steps:
         - name: checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: current time for cache
           run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v3
+          uses: actions/cache@v4
           with:
             path: |
                 ./depends/built
@@ -51,8 +53,8 @@ jobs:
           run: |
             ./ci/test_run_all.sh
     test-macos:
-        name: macOS 12 native  [GOAL install]  [GUI]  [no depends]
-        runs-on: macos-12
+        name: macOS 13 native  [GOAL install]  [GUI]  [no depends]
+        runs-on: macos-13
         env:
             DANGER_RUN_CI_ON_HOST: true
             CI_USE_APT_INSTALL: no
@@ -60,11 +62,11 @@ jobs:
             OS_NAME: macos
         steps:
         - name: checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: current time for cache
           run: echo "TIMESTAMP=$(date +%s)" >> $GITHUB_ENV
         - name: cache
-          uses: actions/cache@v3
+          uses: actions/cache@v4
           with:
             path: |
                 ./ci/scratch/.ccache
@@ -82,9 +84,9 @@ jobs:
         runs-on: ubuntu-22.04
         steps:
         - name: checkout
-          uses: actions/checkout@v3
+          uses: actions/checkout@v4
         - name: setup-python
-          uses: actions/setup-python@v4
+          uses: actions/setup-python@v5
           with:
             python-version: 3.11
         - name: lint
