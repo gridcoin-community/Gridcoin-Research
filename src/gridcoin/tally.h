@@ -99,7 +99,7 @@ public:
     //!
     //! \return Current magnitude unit adjusted for the specified block.
     //!
-    static double GetMagnitudeUnit(const CBlockIndex* const pindex);
+    static double GetMagnitudeUnit(CBlockIndex * const pindex);
 
     //!
     //! \brief Get a traversable object for the research accounts stored in

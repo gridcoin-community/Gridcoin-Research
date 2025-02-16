@@ -878,7 +878,7 @@
                    </size>
                   </property>
                   <property name="toolTip">
-                   <string>You are approaching the accrual limit of 16384 GRC. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</string>
+                   <string>You are approaching the accrual limit. If you have a relatively low balance, you should request payment via MRC so that you do not lose earned rewards.</string>
                   </property>
                   <property name="text">
                    <string/>

@@ -48,7 +48,14 @@ public:
     //! \return CBlockIndex pointing to the youngest block which is not older than \p time, or
     //! the head of the chain if it is older than \p time.
     //!
-    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* index = nullptr);
+    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in = nullptr);
+
+    //!
+    //! \brief Find the last superblock at or before the provided index.
+    //! \param CBlockIndex from where to start.
+    //! \return CBlockIndex pointing to the block containing the last superblock contract.
+    //!
+    static CBlockIndex* FindLatestSuperblock(CBlockIndex * const index_in = nullptr);
 };
 } // namespace GRC
 

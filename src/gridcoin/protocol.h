@@ -461,6 +461,17 @@ public:
     ProtocolEntryOption TryActive(const std::string& key) const;
 
     //!
+    //! \brief Get the last protocol entry for the specified key string at or before the specified timestamp
+    //!
+    //! \param key The key string of the protocol entry.
+    //! \param timestamp The desired timestamp to limit the find.
+    //!
+    //! \return An object that either contains a reference to some protocol entry if it exists
+    //! for the key at or before the provided timestamp or does not.
+    //!
+    ProtocolEntryOption TryLastBeforeTimestamp(const std::string& key, const int64_t& timestamp);
+
+    //!
     //! \brief Destroy the contract handler state in case of an error in loading
     //! the protocol entry registry state from LevelDB to prepare for reload from contract
     //! replay. This is not used for protocol entries, unless -clearprotocolentryhistory is specified

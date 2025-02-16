@@ -70,17 +70,16 @@ public:
         consensus.BlockV13Height = std::numeric_limits<int>::max();
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
-        // Immediately post zero payment interval fees 40% for mainnet
+        consensus.DefaultConstantBlockReward = 10 * COIN;
+        consensus.ConstantBlockRewardFloor = 0;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
-        // Zero day interval is 14 days on mainnet
         consensus.MRCZeroPaymentInterval = 14 * 24 * 60 * 60;
-        // The maximum ratio of rewards that can be allocated to all of the mandatory sidestakes.
         consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
-        // The "standard" contract replay lookback for those contract types
-        // that do not have a registry db.
+        consensus.DefaultMagnitudeUnit = Fraction(1, 4);
+        consensus.MaxMagnitudeUnit = Fraction(5, 1);
+        consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
-        // "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
-        // Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -187,16 +186,16 @@ public:
         consensus.BlockV13Height = std::numeric_limits<int>::max();
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
-        // Immediately post zero payment interval fees 40% for testnet, the same as mainnet
+        consensus.DefaultConstantBlockReward = 10 * COIN;
+        consensus.ConstantBlockRewardFloor = 0;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
         consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
-        // Zero day interval is 10 minutes on testnet. The very short interval facilitates testing.
         consensus.MRCZeroPaymentInterval = 10 * 60;
-        // The maximum ratio of rewards that can be allocated to all of the mandatory sidestakes.
         consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
-        // The "standard" contract replay lookback for those contract types
-        // that do not have a registry db.
+        consensus.DefaultMagnitudeUnit = Fraction(1, 4);
+        consensus.MaxMagnitudeUnit = Fraction(5, 1);
+        consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
         consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
-        // Equivalent to ~arith_uint256() >> 16 or 1f00ffff in compact notation.
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         pchMessageStart[0] = 0xcd;

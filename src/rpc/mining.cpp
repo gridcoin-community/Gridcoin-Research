@@ -375,7 +375,9 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                 const uint64_t height,
                 const int64_t low_time,
                 const int64_t high_time,
-                const int64_t claimed)
+                const int64_t claimed,
+                const Allocation magnitude_unit,
+                CAmount max_reward)
         {
             const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(*cpid);
 
@@ -393,7 +395,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             // correctly in the bignumber calculations.
             const uint64_t base_accrual = abs_time_interval
                     * magnitude.Scaled()
-                    * MAG_UNIT_NUMERATOR;
+                    * magnitude_unit.GetNumerator();
 
             int64_t period = 0;
 
@@ -402,7 +404,7 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                 accrual_bn *= COIN;
                 accrual_bn /= 86400;
                 accrual_bn /= Magnitude::SCALE_FACTOR;
-                accrual_bn /= MAG_UNIT_DENOMINATOR;
+                accrual_bn /= magnitude_unit.GetDenominator();
 
                 period = accrual_bn.GetLow64() * (int64_t) sign;
             }
@@ -412,13 +414,10 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                         * COIN
                         / 86400
                         / Magnitude::SCALE_FACTOR
-                        / MAG_UNIT_DENOMINATOR;
+                        / magnitude_unit.GetDenominator();
             }
 
             accrual += period;
-
-            // TODO: Change this to refer to MaxReward() from the snapshot computer.
-            int64_t max_reward = 16384 * COIN;
 
             if (accrual > max_reward)
             {
@@ -450,13 +449,21 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         };
 
         for (; pindex; pindex = pindex->pnext) {
+            // We are only going to use the accrual computer here for the magnitude unit and max_reward.
+            AccrualComputer computer = GRC::Tally::GetSnapshotComputer(*cpid, pindex->GetBlockTime(), pindex);
+
+            int64_t max_reward = computer->MaxReward();
+
             if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
+
                 tally_accrual_period(
                             "stake",
                             pindex->nHeight,
                             pindex_low->nTime,
                             pindex->nTime,
-                            pindex->ResearchSubsidy());
+                            pindex->ResearchSubsidy(),
+                            computer->MagnitudeUnit(),
+                            max_reward);
 
                 accrual = 0;
                 pindex_low = pindex;
@@ -466,13 +473,16 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                 for (const auto& mrc : pindex->m_mrc_researchers) {
                     // mrc payments are on the block previous to the staked block (the head of the chain when the mrc
                     // was submitted.
+
                     if (mrc->m_cpid == *cpid) {
                         tally_accrual_period(
                                     "mrc payment",
                                     pindex->nHeight,
                                     pindex_low->nTime,
                                     pindex->pprev->nTime,
-                                    mrc->m_research_subsidy);
+                                    mrc->m_research_subsidy,
+                                    computer->MagnitudeUnit(),
+                                    max_reward);
 
                         accrual = 0;
                         pindex_low = pindex->pprev;
@@ -487,7 +497,9 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
                             pindex->nHeight,
                             pindex_low->nTime,
                             pindex->nTime,
-                            0);
+                            0,
+                            computer->MagnitudeUnit(),
+                            max_reward);
 
                 pindex_low = pindex;
             }
@@ -497,8 +509,13 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
             }
         }
 
+        // We are only going to use the accrual computer here for the magnitude unit and max_reward.
+        AccrualComputer computer = GRC::Tally::GetSnapshotComputer(*cpid, pindex_low->GetBlockTime(), pindex_low);
+
+        int64_t max_reward = computer->MaxReward();
+
         // The final period is from the last event till "now".
-        int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0);
+        int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0, computer->MagnitudeUnit(), max_reward);
 
         result.pushKV("cpid", cpid->ToString());
         result.pushKV("accrual_account_exists", accrual_account_exists);

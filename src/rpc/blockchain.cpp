@@ -57,7 +57,7 @@ UniValue MRCToJson(const GRC::MRC& mrc) {
     return json;
 }
 
-UniValue ClaimToJson(const GRC::Claim& claim, const CBlockIndex* const pindex)
+UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -155,7 +155,7 @@ UniValue SuperblockToJson(const GRC::SuperblockPtr& superblock)
     return SuperblockToJson(*superblock);
 }
 
-UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
+UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail)
 {
     UniValue result(UniValue::VOBJ);
 
@@ -2432,14 +2432,32 @@ UniValue addkey(const UniValue& params, bool fHelp)
         break;
     }
     case GRC::ContractType::PROTOCOL:
-        // There will be no legacy payload contracts past version 2. This will need to be changed before the
-        // block v13 mandatory (which also means contract v3).
-        contract = GRC::MakeLegacyContract(
-                    type.Value(),
-                    action,
-                    params[2].get_str(),   // key
-                    params[3].get_str());  // value
+    {
+        if (block_v13_enabled) {
+            GRC::ProtocolEntryStatus status = GRC::ProtocolEntryStatus::UNKNOWN;
+
+            if (action == GRC::ContractAction::ADD) {
+                status = GRC::ProtocolEntryStatus::ACTIVE;
+            } else if (action == GRC::ContractAction::REMOVE) {
+                status = GRC::ProtocolEntryStatus::DELETED;
+            }
+
+            contract = GRC::MakeContract<GRC::ProtocolEntryPayload>(
+                        contract_version,
+                        action,
+                        uint32_t {2},         // Contract payload version number
+                        params[2].get_str(),  // key
+                        params[3].get_str(),  // value
+                        status);
+        } else {
+            contract = GRC::MakeLegacyContract(
+                type.Value(),
+                action,
+                params[2].get_str(),   // key
+                params[3].get_str());  // value
+        }
         break;
+    }
     case GRC::ContractType::SIDESTAKE:
     {
         if (block_v13_enabled) {

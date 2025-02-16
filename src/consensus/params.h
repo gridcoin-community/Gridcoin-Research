@@ -39,8 +39,25 @@ struct Params {
     int PollV3Height;
     /** Block height at which project v2 contracts are allowed */
     int ProjectV2Height;
+    /**
+      * @brief The default GRC paid for a constant block reward.
+      *
+      * Note that the GRC paid for CBR can be specified by an administrative protocol entry with the key name "blockreward1" for
+      * V13+ blocks. The value is specified in HALFORDS.
+      */
+    int64_t DefaultConstantBlockReward;
+    /**
+      * @brief The minimum GRC that can be set by administrative contract for a constant block reward (clamp floor). This is valid
+      * for block v13+. Note that this is typed as int64_t rather than CAmount to avoid the extra include.
+      */
+    int64_t ConstantBlockRewardFloor;
+    /**
+      * @brief The maximum GRC that can be set by administrative contract for a constant block reward (clamp ceiling). This is valid
+      * for block v13+. Note that this is typed as int64_t rather than CAmount to avoid the extra include.
+      */
+    int64_t ConstantBlockRewardCeiling;
     /** The fraction of rewards taken as fees in an MRC after the zero payment interval. Only consesnus critical
-      * at BlockV12Height or above.
+      * at BlockV12Height or above. Note that this is typed as int64_t rather than CAmount to avoid the extra include.
       */
     Fraction InitialMRCFeeFractionPostZeroInterval;
     /** The amount of time from the last reward payment to a researcher where submitting an MRC will resort in 100%
@@ -51,9 +68,32 @@ struct Params {
      * @brief The maximum allocation (as a Fraction) that can be used by all of the mandatory sidestakes
      */
     Fraction MaxMandatorySideStakeTotalAlloc;
-
+    /**
+      * @brief The multiplier applied to network magnitude to determine the rate of accrual. Nominally 1/4 from Fern onwards.
+      *
+      * Note that the magnitude unit can be set by an administrative protocol entry with the key name "magnitudeunit" for
+      * V13+ blocks. The value is specified as a whole number or fraction. For example, 0.25 would be "1/4", 5 would be "5".
+      */
+    Fraction DefaultMagnitudeUnit;
+    /**
+      * @brief The maximum magnitude unit allowed to be specified. This is an upper clamp that is set at 5.
+      */
+    Fraction MaxMagnitudeUnit;
+    /**
+      * @brief The multiplier applied to (money supply / network magnitude) to scale the network magnitude into equivalent GRC
+      * for purposes of computing voting weight. Nominally 1 / 5.67 from Fern onwards.
+      *
+      * The magnitude weight factor can be set by an administrative protocol entry with the key name "magnitudeweightfactor" for
+     * V13+ blocks. The value is specified as a whole number or fraction. For example, 1 / 5.67 would be "100/567", 2 would be "2".
+      */
+    Fraction DefaultMagnitudeWeightFactor;
+    /** The "standard" contract replay lookback for those contract types that do not have a registry db.
+      */
     int64_t StandardContractReplayLookback;
-
+    /**
+      * "standard" scrypt target limit for proof of work, results in 0,000244140625 proof-of-work difficulty.
+      * Equivalent to ~arith_uint256() >> 20 or 1e0fffff in compact notation.
+      */
     uint256 powLimit;
 };
 } // namespace Consensus
