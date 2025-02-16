@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -621,6 +622,12 @@ void SetupServerArgs()
     // Temporary hidden option for block v13 height override to facilitate testing.
     hidden_args.emplace_back("-blockv13height");
 
+    // Temporary hidden option for project v4 height override to facilitate testing.
+    hidden_args.emplace_back("-projectv4height");
+
+    // Temporary hidden option for superblock v3 height override to facilitate testing.
+    hidden_args.emplace_back("-superblockv3height");
+
     // Additional hidden options
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
@@ -902,7 +909,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     //6-10-2014: R Halford: Updating Boost version to 1.5.5 to prevent sync issues; print the boost version to verify:
-	//5-04-2018: J Owens: Boost now needs to be 1.65 or higher to avoid thread sleep problems with system clock resets.
+    //5-04-2018: J Owens: Boost now needs to be 1.65 or higher to avoid thread sleep problems with system clock resets.
     std::string boost_version = "";
     std::ostringstream s;
     s << boost_version  << "Using Boost "

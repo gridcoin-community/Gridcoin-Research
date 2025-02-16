@@ -3040,39 +3040,39 @@ void CWallet::StoreLastBackupTime(const int64_t backup_time)
     CWalletDB(strWalletFile).WriteBackupTime(backup_time);
 }
 
-MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout)
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout)
 {
     CWalletTx wallettx;
     uint256 hashblock;
 
     if (!GetTransaction(tx, wallettx, hashblock))
-        return MinedType::ORPHANED;
+        return GRC::MinedType::ORPHANED;
 
     BlockMap::iterator mi = mapBlockIndex.find(hashblock);
 
     if (mi == mapBlockIndex.end()) {
-        return MinedType::UNKNOWN;
+        return GRC::MinedType::UNKNOWN;
     }
 
     CBlockIndex* blkindex = mi->second;
 
     // If we are calling GetGeneratedType, this is a transaction
     // that corresponds (is integral to) the block. We check whether
-    // the block is a superblock, and if so we set the MinedType to
+    // the block is a superblock, and if so we set the GRC::MinedType to
     // SUPERBLOCK if vout is 1 as that should override the others here.
     if (vout == 1 && blkindex->IsSuperblock())
     {
-        return MinedType::SUPERBLOCK;
+        return GRC::MinedType::SUPERBLOCK;
     }
 
     // Basic CoinStake Support
     if (wallettx.vout.size() == 2)
     {
         if (blkindex->ResearchSubsidy() == 0)
-            return MinedType::POS;
+            return GRC::MinedType::POS;
 
         else
-            return MinedType::POR;
+            return GRC::MinedType::POR;
     }
 
     // Side/Split Stake Support
@@ -3091,10 +3091,10 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         if (fIsCoinStakeMine && wallettx.vout[vout].scriptPubKey == wallettx.vout[1].scriptPubKey)
         {
             if (blkindex->ResearchSubsidy() == 0)
-                return MinedType::POS;
+                return GRC::MinedType::POS;
 
             else
-                return MinedType::POR;
+                return GRC::MinedType::POR;
         }
         else
         {
@@ -3105,20 +3105,20 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                 if (fIsOutputMine)
                 {
                     if (blkindex->ResearchSubsidy() == 0)
-                        return MinedType::POS_SIDE_STAKE_RCV;
+                        return GRC::MinedType::POS_SIDE_STAKE_RCV;
                     else
-                        return MinedType::POR_SIDE_STAKE_RCV;
+                        return GRC::MinedType::POR_SIDE_STAKE_RCV;
                 }
                 // ... or the output is not mine, then this must be a
                 // sidestake sent to someone else or an MRC payment.
                 else
                 {
                     if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
-                        return MinedType::POS_SIDE_STAKE_SEND;
+                        return GRC::MinedType::POS_SIDE_STAKE_SEND;
                     } else if (vout >= mrc_index_start) {
-                        return MinedType::MRC_SEND;
+                        return GRC::MinedType::MRC_SEND;
                     } else {
-                        return MinedType::POR_SIDE_STAKE_SEND;
+                        return GRC::MinedType::POR_SIDE_STAKE_SEND;
                     }
                 }
             }
@@ -3130,11 +3130,11 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
                 if (fIsOutputMine)
                 {
                     if (blkindex->ResearchSubsidy() == 0 && vout < mrc_index_start) {
-                        return MinedType::POS_SIDE_STAKE_RCV;
+                        return GRC::MinedType::POS_SIDE_STAKE_RCV;
                     } else if (vout >= mrc_index_start) {
-                        return MinedType::MRC_RCV;
+                        return GRC::MinedType::MRC_RCV;
                     } else {
-                        return MinedType::POR_SIDE_STAKE_RCV;
+                        return GRC::MinedType::POR_SIDE_STAKE_RCV;
                     }
                 }
 
@@ -3144,7 +3144,7 @@ MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned in
         }
     }
 
-    return MinedType::UNKNOWN;
+    return GRC::MinedType::UNKNOWN;
 }
 
 bool CWallet::UpgradeWallet(int version, std::string& error)

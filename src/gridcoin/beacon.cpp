@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -1239,14 +1239,16 @@ void BeaconRegistry::Deactivate(const uint256 superblock_hash)
 //! \param recnum
 //! \param key_type
 //!
-template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::BeaconRegistry::BeaconMap& entries,
-                                               GRC::BeaconRegistry::PendingBeaconMap& pending_entries,
+ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::BeaconRegistry::BeaconMap& entries,
+                                                               GRC::BeaconRegistry::PendingBeaconMap& pending_entries,
                                                                std::set<Beacon_ptr>& expired_entries,
-                                               const Beacon& entry,
-                                               entry_ptr& historical_entry_ptr,
-                                               const uint64_t& recnum,
-                                               const std::string& key_type)
-{
+                                                               GRC::BeaconRegistry::BeaconMap& first_entries,
+                                                               const Beacon& entry,
+                                                               entry_ptr& historical_entry_ptr,
+                                                               const uint64_t& recnum,
+                                                               const std::string& key_type,
+                                                               const bool& populate_first_entries)
+ {
     // Note that in this specialization, entry.m_cpid and entry.GetId() are used for the map keys. In the general template,
     // entry.Key() is used (which here is the same as entry.m_cpid). No generalized method to implement entry.PendingKey()
     // has been implemented up to this point, because the pending map is actually only used here in the beacon
@@ -1366,7 +1368,7 @@ template<> void BeaconRegistry::BeaconDB::HandleCurrentHistoricalEntries(GRC::Be
 
 int BeaconRegistry::Initialize()
 {
-    int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending);
+    int height = m_beacon_db.Initialize(m_beacons, m_pending, m_expired_pending, m_beacon_first_entries, false);
 
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacon_db size after load: %u", __func__, m_beacon_db.size());
     LogPrint(LogFlags::BEACON, "INFO: %s: m_beacons size after load: %u", __func__, m_beacons.size());

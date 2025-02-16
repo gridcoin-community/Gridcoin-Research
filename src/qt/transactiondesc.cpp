@@ -114,38 +114,38 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
         // Update support for Side Stake and correctly show POS/POR as well
         strHTML += "<b>" + tr("Source") + ":</b> ";
 
-        MinedType gentype = GetGeneratedType(wallet, wtx.GetHash(), vout);
+        GRC::MinedType gentype = GetGeneratedType(wallet, wtx.GetHash(), vout);
 
         switch (gentype)
         {
-        case MinedType::POS:
+        case GRC::MinedType::POS:
             strHTML += tr("Mined - PoS");
             break;
-        case MinedType::POR:
+        case GRC::MinedType::POR:
             strHTML += tr("Mined - PoS+RR");
             break;
-        case MinedType::ORPHANED:
+        case GRC::MinedType::ORPHANED:
             strHTML += tr("Mined - Orphaned");
             break;
-        case MinedType::POS_SIDE_STAKE_RCV:
+        case GRC::MinedType::POS_SIDE_STAKE_RCV:
             strHTML += tr("PoS Side Stake Received");
             break;
-        case MinedType::POR_SIDE_STAKE_RCV:
+        case GRC::MinedType::POR_SIDE_STAKE_RCV:
             strHTML += tr("PoS+RR Side Stake Received");
             break;
-        case MinedType::POS_SIDE_STAKE_SEND:
+        case GRC::MinedType::POS_SIDE_STAKE_SEND:
             strHTML += tr("PoS Side Stake Sent");
             break;
-        case MinedType::POR_SIDE_STAKE_SEND:
+        case GRC::MinedType::POR_SIDE_STAKE_SEND:
             strHTML += tr("PoS+RR Side Stake Sent");
             break;
-        case MinedType::MRC_RCV:
+        case GRC::MinedType::MRC_RCV:
             strHTML += tr("MRC Payment Received");
             break;
-        case MinedType::MRC_SEND:
+        case GRC::MinedType::MRC_SEND:
             strHTML += tr("MRC Payment Sent");
             break;
-        case MinedType::SUPERBLOCK:
+        case GRC::MinedType::SUPERBLOCK:
             strHTML += tr("Mined - Superblock");
             break;
         default:

@@ -1,13 +1,15 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #ifndef GRIDCOIN_SUPERBLOCK_H
 #define GRIDCOIN_SUPERBLOCK_H
 
+#include "gridcoin/fwd.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/magnitude.h"
 #include "gridcoin/scraper/fwd.h"
+#include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
 #include "uint256.h"
 
@@ -21,7 +23,7 @@ extern CCriticalSection cs_ScraperGlobals;
 
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ConvergedManifest& StructConvergedManifest);
 extern std::vector<uint160> GetVerifiedBeaconIDs(const ScraperPendingBeaconMap& VerifiedBeaconMap);
-extern ScraperStatsAndVerifiedBeacons GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
 
 class CBlockIndex;
 struct ConvergedScraperStats; // Forward for Superblock
@@ -92,6 +94,15 @@ public:
     //!
     //! \brief Hash the provided superblock.
     //!
+    //! Note the m_project_status map is NOT hashed. While this data is serialized, the hash is computed from a specialization
+    //! of the Superblock class (SuperblockForHash) with the serialization of that map removed. The reason for this is twofold.
+    //! 1) The project status is populated from the AutoGreylist class, which when used in the miner context is using a candidate
+    //! superblock generated from the scraper. The QuorumHasher proxies which use the scraper statistics do not have the project
+    //! status information available for all call paths. 2) The project status map is extra information that is not required to
+    //! assure uniqueness and/or validation of a superblock, as it can (and is) derived by the AutoGreylist class. This map is
+    //! provided in the superblock as a convenience so that this does not have to be recalculated if looking at statistics over
+    //! a large block range in reporting.
+    //!
     //! \param superblock Superblock object containing the data to hash.
     //!
     //! \return The appropriate quorum hash variant digest depending on the
@@ -111,7 +122,7 @@ public:
     //!
     //! \return A SHA256 quorum hash of the scraper statistics.
     //!
-    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats);
+    static QuorumHash Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats);
 
     //!
     //! \brief Initialize a quorum hash object by parsing the supplied string
@@ -258,7 +269,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 2;
+    static constexpr uint32_t CURRENT_VERSION = 3;
 
     //!
     //! \brief The maximum allowed size of a serialized superblock in bytes.
@@ -1186,6 +1197,25 @@ public:
         uint64_t m_total_rac;
     }; // ProjectIndex
 
+    //!
+    //! \brief This is a wrapper around m_project_status. To conserve space, project status entries with a status
+    //! of ACTIVE are omitted.
+    //!
+    struct ProjectStatus
+    {
+        ProjectStatus() {};
+
+        std::map<std::string, EnumByte<ProjectEntryStatus>> m_project_status;
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_project_status);
+        }
+    };
+
     struct VerifiedBeacons
     {
         //!
@@ -1211,6 +1241,27 @@ public:
     };
 
     //!
+    //! \brief This is a wrapper around projects all cpid total credits. This supports automatic
+    //! greylisting.
+    //!
+    struct ProjectsAllCpidTotalCredits
+    {
+        ProjectsAllCpidTotalCredits() {};
+
+        std::map<std::string, uint64_t> m_projects_all_cpid_total_credits;
+
+        void Reset(const std::map<std::string, double>& projects_all_cpid_total_credits);
+
+        ADD_SERIALIZE_METHODS;
+
+        template <typename Stream, typename Operation>
+        inline void SerializationOp(Stream& s, Operation ser_action)
+        {
+            READWRITE(m_projects_all_cpid_total_credits);
+        }
+    };
+
+    //!
     //! \brief Version number of the serialized superblock format.
     //!
     //! Defaults to the most recent version for a new superblock instance.
@@ -1221,8 +1272,10 @@ public:
     //!
     //! Version 2: Superblock data serializable using the built-in serialize.h
     //! facilities. Stored in the superblock field of a block rather than in a
-    //! transaction to provide for a greater size. It includes total credit of
-    //! each project to facilitate automated greylisting.
+    //! transaction to provide for a greater size.
+    //!
+    //! Version 3: Adds project status and project "all cpid" total credits to
+    //! support automatic greylisting.
     //!
     uint32_t m_version = CURRENT_VERSION;
 
@@ -1239,6 +1292,8 @@ public:
     CpidIndex m_cpids;       //!< Maps superblock CPIDs to magnitudes.
     ProjectIndex m_projects; //!< Whitelisted projects statistics.
     VerifiedBeacons m_verified_beacons; //!< Wrapped verified beacons vector
+    ProjectStatus m_project_status; //!< Wrapped project_status map
+    ProjectsAllCpidTotalCredits m_projects_all_cpids_total_credits; //!< Wrapper all cpids project level total credit map
 
     ADD_SERIALIZE_METHODS;
 
@@ -1254,6 +1309,11 @@ public:
         READWRITE(m_cpids);
         READWRITE(m_projects);
         READWRITE(m_verified_beacons);
+
+        if (m_version > 2) {
+            READWRITE(m_project_status);
+            READWRITE(m_projects_all_cpids_total_credits);
+        }
     }
 
     //!
@@ -1303,7 +1363,7 @@ public:
     //! statistics.
     //!
     static Superblock FromStats(
-        const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons,
+        const ScraperStatsVerifiedBeaconsTotalCredits& stats_and_verified_beacons,
         const uint32_t version = Superblock::CURRENT_VERSION);
 
     //!
@@ -1372,6 +1432,35 @@ private:
     //!
     mutable QuorumHash m_hash_cache;
 }; // Superblock
+
+class SuperblockForHash : public Superblock
+{
+public:
+    SuperblockForHash(const Superblock& superblock)
+        : Superblock(superblock)
+    {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(m_version);
+            READWRITE(m_convergence_hint);
+            READWRITE(m_manifest_content_hint);
+        }
+
+        READWRITE(m_cpids);
+        READWRITE(m_projects);
+        READWRITE(m_verified_beacons);
+
+        if (m_version > 2) {
+            // Note that project status is left out of the serialization here for hashing purposes.
+            READWRITE(m_projects_all_cpids_total_credits);
+        }
+    }
+};
 
 //!
 //! \brief A smart pointer that wraps a superblock object for shared ownership
@@ -1461,6 +1550,15 @@ public:
     int64_t Age(const int64_t now) const
     {
         return now - m_timestamp;
+    }
+
+    bool IsEmpty()
+    {
+        if (m_superblock == nullptr && m_height == 0 && m_timestamp == 0) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     ADD_SERIALIZE_METHODS;
@@ -1562,7 +1660,7 @@ struct ConvergedScraperStats
     {
         nTime = nTime_in;
 
-        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence).mScraperStats;
+        mScraperConvergedStats = GetScraperStatsByConvergedManifest(Convergence);
     }
 
     // Flag to indicate cache is clean or dirty (i.e. state change of underlying statistics has occurred.
@@ -1582,7 +1680,7 @@ struct ConvergedScraperStats
     bool bMinHousekeepingComplete = false;
 
     int64_t nTime = 0;
-    ScraperStats mScraperConvergedStats;
+    ScraperStatsVerifiedBeaconsTotalCredits mScraperConvergedStats;
     ConvergedManifest Convergence;
 
     // There is a small chance of collision on the key, but given this is really a hint map,

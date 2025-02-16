@@ -20,7 +20,7 @@ public:
         , sortKey("")
         , matures_in(0)
         , status(Offline)
-        , generated_type(MinedType::UNKNOWN)
+        , generated_type(GRC::MinedType::UNKNOWN)
         , depth(0)
         , open_for(0)
         , cur_num_blocks(-1)
@@ -54,7 +54,7 @@ public:
     /** @name Reported status
        @{*/
     Status status;
-    MinedType generated_type;
+    GRC::MinedType generated_type;
     int64_t depth;
     int64_t open_for; /**< Timestamp if status==OpenUntilDate, otherwise number
                        of additional blocks that need to be mined before

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -486,7 +486,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
     // projects behave in the network.
     //
 
-    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot();
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
     std::vector<std::string> excluded_projects;
 
     {
@@ -529,11 +529,28 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         // between local projects and whitelisted projects:
         //
         if (const ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
-            if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
-                != excluded_projects.end()) {
-                row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
-                row.m_error = tr("Greylisted");
+            if (whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
+                row.m_error = tr("Manually Greylisted");
+            } else if (whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
+                row.m_error = tr("Automatically Greylisted");
+                   // Only mark as excluded if the project is not greylisted. A greylisted project will
+                   // have the same effect on statistics from a CPID perspective whether the project is
+                   // excluded by the scrapers.
+            } else if (std::find(excluded_projects.begin(), excluded_projects.end(), whitelist_project->m_name)
+                       != excluded_projects.end()
+                       && !(whitelist_project->m_status == ProjectEntryStatus::AUTO_GREYLISTED)
+                       && !(whitelist_project->m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
+                row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+                row.m_error = tr("Excluded");
+                   // an unknown status should never happen for a project record on the main chain, but to be
+                   // thorough, handle that here.
+            } else if (whitelist_project->m_status == ProjectEntryStatus::UNKNOWN){
+                row.m_whitelisted = ProjectRow::WhiteListStatus::False;
             } else {
+                // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
+                // as the whitelist filter of ACTIVE.
                 row.m_whitelisted = ProjectRow::WhiteListStatus::True;
             }
 
@@ -565,7 +582,7 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
     // Add any whitelisted projects not detected from the local BOINC client:
     //
-    for (const auto& project : GetWhitelist().Snapshot()) {
+    for (const auto& project : GetWhitelist().Snapshot(ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
         if (rows.find(project.m_name) != rows.end()) {
             continue;
         }
@@ -576,7 +593,9 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
         row.m_name = QString::fromStdString(project.DisplayName()).toLower();
         row.m_magnitude = 0.0;
 
-        if (std::find(external_adapter_projects.begin(),
+        // the external adapter code below only appears here because if the project is in BOINC it does not need
+        // an external adapter.
+        if (!project.RequiresExtAdapter() && std::find(external_adapter_projects.begin(),
                       external_adapter_projects.end(),
                       project.m_name) == external_adapter_projects.end()) {
             row.m_error = tr("Not attached");
@@ -584,11 +603,28 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
             row.m_error = tr("Uses external adapter");
         }
 
-        if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
-            != excluded_projects.end()) {
-            row.m_whitelisted = ProjectRow::WhiteListStatus::Greylisted;
-            row.m_error = tr("Greylisted");
+        if (project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Manually_Greylisted;
+            row.m_error = tr("Manually Greylisted");
+        } else if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Automatically_Greylisted;
+            row.m_error = tr("Automatically Greylisted");
+               // Only mark as excluded if the project is not greylisted. A greylisted project will
+               // have the same effect on statistics from a CPID perspective whether the project is
+               // excluded by the scrapers.
+        } else if (std::find(excluded_projects.begin(), excluded_projects.end(), project.m_name)
+                       != excluded_projects.end()
+                   && !(project.m_status == ProjectEntryStatus::AUTO_GREYLISTED)
+                   && !(project.m_status == ProjectEntryStatus::MAN_GREYLISTED)) {
+            row.m_whitelisted = ProjectRow::WhiteListStatus::Excluded;
+            row.m_error = tr("Excluded");
+               // an unknown status should never happen for a project record on the main chain, but to be
+               // thorough, handle that here.
+        } else if (project.m_status == ProjectEntryStatus::UNKNOWN){
+            row.m_whitelisted = ProjectRow::WhiteListStatus::False;
         } else {
+            // This covers the remaining REG_ACTIVE and AUTO_GREYLIST_OVERRIDE, which is the same
+            // as the whitelist filter of ACTIVE.
             row.m_whitelisted = ProjectRow::WhiteListStatus::True;
         }
 
@@ -677,11 +713,15 @@ void ResearcherModel::updateBeacon()
 
     if (!cpid) {
         commitBeacon(BeaconStatus::NO_CPID);
+        emit beaconChanged();
+        emit researcherChanged();
         return;
     }
 
     if (outOfSync()) {
         commitBeacon(BeaconStatus::UNKNOWN);
+        emit beaconChanged();
+        emit researcherChanged();
         return;
     }
 
@@ -726,6 +766,9 @@ void ResearcherModel::updateBeacon()
             commitBeacon(BeaconStatus::ACTIVE, beacon, pending_beacon);
         }
     }
+
+    emit beaconChanged();
+    emit researcherChanged();
 }
 
 BeaconStatus ResearcherModel::advertiseBeacon()
@@ -779,5 +822,6 @@ void ResearcherModel::commitBeacon(
 
     if (changed) {
         emit beaconChanged();
+        emit researcherChanged();
     }
 }

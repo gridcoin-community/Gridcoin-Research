@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2020 The Bitcoin Core developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -168,6 +169,20 @@ inline bool IsPollV3Enabled(int nHeight)
 inline bool IsProjectV2Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().ProjectV2Height;
+}
+
+inline bool IsSuperblockV3Enabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate testing.
+
+    return nHeight >= gArgs.GetArg("-superblockv3height", Params().GetConsensus().SuperblockV3Height);
+}
+
+inline bool IsProjectV4Enabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate testing.
+
+    return nHeight >= gArgs.GetArg("-projectv4height", Params().GetConsensus().ProjectV4Height);
 }
 
 inline int GetSuperblockAgeSpacing(int nHeight)

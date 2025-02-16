@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -870,12 +870,35 @@ UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::c
     r.pushKV("BeaconList_c", (int64_t) BeaconList_c);
 
     UniValue projects(UniValue::VARR);
+    UniValue project_all_cpid_total_credits(UniValue::VARR);
+
+    std::map<std::string, double> total_credit_map;
+
     for (const dentry& part : this->projects)
     {
-        projects.push_back(part.ToJson());
+        UniValue project(UniValue::VOBJ);
+
+        if (part.project != "ProjectsAllCpidTotalCredits") {
+            projects.push_back(part.ToJson());
+
+        } else if (!vParts[part.part1]->data.empty()) {
+            CDataStream ss(vParts[part.part1]->data, SER_NETWORK, 1);
+
+            ss >> total_credit_map;
+
+            for (const auto& iter : total_credit_map) {
+                UniValue tc_entry(UniValue::VOBJ);
+
+                tc_entry.pushKV("project", iter.first);
+                tc_entry.pushKV("all_cpid_total_credit", iter.second);
+
+                project_all_cpid_total_credits.push_back(tc_entry);
+            }
+        }
     }
 
     r.pushKV("projects", projects);
+    r.pushKV("project_all_cpid_total_credits", project_all_cpid_total_credits);
 
     UniValue parts(UniValue::VARR);
     for (const CPart* part : this->vParts)

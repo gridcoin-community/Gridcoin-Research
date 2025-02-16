@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -39,6 +40,12 @@ struct Params {
     int PollV3Height;
     /** Block height at which project v2 contracts are allowed */
     int ProjectV2Height;
+    /** Block height at which project v4 contracts are allowed */
+    int ProjectV4Height;
+    /**
+     * @brief Block height at which superblock v3 contracts are allowed/required
+     */
+    int SuperblockV3Height;
     /** The fraction of rewards taken as fees in an MRC after the zero payment interval. Only consesnus critical
       * at BlockV12Height or above.
       */

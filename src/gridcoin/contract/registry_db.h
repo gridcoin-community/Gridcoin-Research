@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -66,10 +66,14 @@ public:
     //! specialization.
     //! \param expired_entries. The map of expired pending entries. This is not used in the general template, only in the
     //! beacons specialization.
+    //! \param first_entries: The map of the first entry for the given key. This is only currently used for the whitelist
+    //! (projects).
+    //!
+    //! \param populate_first_entries. This is a boolean that controls whether the first entries map is populated.
     //!
     //! \return block height up to and including which the entry records were stored.
     //!
-    int Initialize(M& entries, P& pending_entries, X& expired_entries)
+    int Initialize(M& entries, P& pending_entries, X& expired_entries, M& first_entries, const bool& populate_first_entries)
     {
         bool status = true;
         int height = 0;
@@ -173,8 +177,8 @@ public:
             m_historical[iter.second.m_hash] = std::make_shared<E>(entry);
             entry_ptr& historical_entry_ptr = m_historical[iter.second.m_hash];
 
-            HandleCurrentHistoricalEntries(entries, pending_entries, expired_entries, entry,
-                                                historical_entry_ptr, recnum, key_type);
+            HandleCurrentHistoricalEntries(entries, pending_entries, expired_entries, first_entries, entry,
+                                                historical_entry_ptr, recnum, key_type, populate_first_entries);
 
             number_passivated += (uint64_t) HandlePreviousHistoricalEntries(historical_entry_ptr);
         } // storage_by_record_num iteration
@@ -198,14 +202,16 @@ public:
     //!
     //! \param entries
     //! \param pending_entries
+    //! \param expired_entries
+    //! \param first_entries
     //! \param entry
     //! \param historical_entry_ptr
     //! \param recnum
     //! \param key_type
     //!
-    void HandleCurrentHistoricalEntries(M& entries, P& pending_entries, X& expired_entries, const E& entry,
+    void HandleCurrentHistoricalEntries(M& entries, P& pending_entries, X& expired_entries, M& first_entries, const E& entry,
                                         entry_ptr& historical_entry_ptr, const uint64_t& recnum,
-                                        const std::string& key_type)
+                                        const std::string& key_type, const bool& populate_first_entries)
     {
         // The unknown or out of bound status conditions should have never made it into leveldb to begin with, since
         // the entry contract will fail validation, but to be thorough, include the filter condition anyway.
@@ -226,6 +232,10 @@ public:
 
             // Insert or replace the existing map entry with the latest.
             entries[entry.Key()] = historical_entry_ptr;
+
+            if (populate_first_entries && historical_entry_ptr->m_previous_hash.IsNull()) {
+                first_entries[entry.Key()] = historical_entry_ptr;
+            }
         }
     }
 

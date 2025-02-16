@@ -1,19 +1,23 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "gridcoin/claim.h"
 #include "main.h"
+#include "node/blockstorage.h"
+#include "gridcoin/support/block_finder.h"
 #include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
 #include "node/ui_interface.h"
 
 #include <algorithm>
-#include <atomic>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
-    Whitelist g_whitelist;
+// This is the global singleton for the whitelist. It also contains a smart pointer to the AutoGreylist cache singleton object.
+Whitelist g_whitelist;
 } // anonymous namespace
 
 // -----------------------------------------------------------------------------
@@ -24,6 +28,12 @@ Whitelist& GRC::GetWhitelist()
 {
     return g_whitelist;
 }
+
+std::shared_ptr<AutoGreylist> GRC::GetAutoGreylistCache()
+{
+    return GRC::GetWhitelist().GetAutoGreylist();
+}
+
 
 // -----------------------------------------------------------------------------
 // Class: ProjectEntry
@@ -39,23 +49,24 @@ ProjectEntry::ProjectEntry(uint32_t version)
     , m_hash()
     , m_previous_hash()
     , m_gdpr_controls(false)
+    , m_requires_ext_adapter(false)
     , m_public_key(CPubKey {})
     , m_status(ProjectEntryStatus::UNKNOWN)
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, false, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url,
-                           bool gdpr_controls, Status status, int64_t timestamp)
+                           bool gdpr_controls, bool requires_ext_adapter, Status status, int64_t timestamp)
     : m_version(version)
     , m_name(name)
     , m_url(url)
@@ -63,6 +74,7 @@ ProjectEntry::ProjectEntry(uint32_t version, std::string name, std::string url,
     , m_hash()
     , m_previous_hash()
     , m_gdpr_controls(gdpr_controls)
+    , m_requires_ext_adapter(requires_ext_adapter)
     , m_public_key(CPubKey {})
     , m_status(status)
 {
@@ -95,20 +107,26 @@ std::string ProjectEntry::StatusToString(const ProjectEntryStatus& status, const
 {
     if (translated) {
         switch(status) {
-        case ProjectEntryStatus::UNKNOWN:         return _("Unknown");
-        case ProjectEntryStatus::DELETED:         return _("Deleted");
-        case ProjectEntryStatus::ACTIVE:          return _("Active");
-        case ProjectEntryStatus::OUT_OF_BOUND:    break;
+        case ProjectEntryStatus::UNKNOWN:                return _("Unknown");
+        case ProjectEntryStatus::DELETED:                return _("Deleted");
+        case ProjectEntryStatus::MAN_GREYLISTED:         return _("Manually Greylisted");
+        case ProjectEntryStatus::AUTO_GREYLISTED:        return _("Automatically Greylisted");
+        case ProjectEntryStatus::ACTIVE:                 return _("Active");
+        case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE: return _("Active by Greylist Override");
+        case ProjectEntryStatus::OUT_OF_BOUND:           break;
         }
 
         assert(false); // Suppress warning
     } else {
         // The untranslated versions are really meant to serve as the string equivalent of the enum values.
         switch(status) {
-        case ProjectEntryStatus::UNKNOWN:         return "Unknown";
-        case ProjectEntryStatus::DELETED:         return "Deleted";
-        case ProjectEntryStatus::ACTIVE:          return "Active";
-        case ProjectEntryStatus::OUT_OF_BOUND:    break;
+        case ProjectEntryStatus::UNKNOWN:                return "Unknown";
+        case ProjectEntryStatus::DELETED:                return "Deleted";
+        case ProjectEntryStatus::MAN_GREYLISTED:         return "Manually Greylisted";
+        case ProjectEntryStatus::AUTO_GREYLISTED:        return "Automatically Greylisted";
+        case ProjectEntryStatus::ACTIVE:                 return "Active";
+        case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE: return "Active by Greylist Override";
+        case ProjectEntryStatus::OUT_OF_BOUND:           break;
         }
 
         assert(false); // Suppress warning
@@ -165,6 +183,17 @@ std::optional<bool> ProjectEntry::HasGDPRControls() const
     return has_gdpr_controls;
 }
 
+std::optional<bool> ProjectEntry::RequiresExtAdapter() const
+{
+    std::optional<bool> requires_ext_adapter;
+
+    if (m_version >= 4) {
+        requires_ext_adapter = m_requires_ext_adapter;
+    }
+
+    return requires_ext_adapter;
+}
+
 // -----------------------------------------------------------------------------
 // Class: Project
 // -----------------------------------------------------------------------------
@@ -177,32 +206,58 @@ Project::Project(uint32_t version)
 }
 
 Project::Project(std::string name, std::string url)
-    : ProjectEntry(1, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(1, name, url, false, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 Project::Project(uint32_t version, std::string name, std::string url)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, false, false,ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
 Project::Project(std::string name, std::string url, int64_t timestamp, uint32_t version)
-    : ProjectEntry(version, name, url, false, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, false, false, ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 
 Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, int64_t {0})
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, int64_t {0})
 {
 }
 
+Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+                 bool requires_ext_adapter, ProjectEntryStatus status)
+    : ProjectEntry(version, name, url, gdpr_controls, requires_ext_adapter, ProjectEntryStatus::UNKNOWN, int64_t {0})
+{
+    // The only two values that make sense for status using this constructor overload are MAN_GREYLISTED and
+    // AUTO_GREYLIST_OVERRIDE. The other are handled by the contract action context and the other overloads.
+    switch (status) {
+    case ProjectEntryStatus::MAN_GREYLISTED:
+        m_status = ProjectEntryStatus::MAN_GREYLISTED;
+        break;
+    case ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE:
+        m_status = ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE;
+        break;
+    case ProjectEntryStatus::ACTIVE:
+        break;
+    case ProjectEntryStatus::DELETED:
+        break;
+    case ProjectEntryStatus::AUTO_GREYLISTED:
+        break;
+    case ProjectEntryStatus::UNKNOWN:
+        break;
+    case ProjectEntryStatus::OUT_OF_BOUND:
+        break;
+    }
+}
+
 Project::Project(uint32_t version, std::string name, std::string url, bool gdpr_controls, int64_t timestamp)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, gdpr_controls, false, ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 
 Project::Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls)
-    : ProjectEntry(version, name, url, gdpr_controls, ProjectEntryStatus::UNKNOWN, timestamp)
+    : ProjectEntry(version, name, url, gdpr_controls, false,  ProjectEntryStatus::UNKNOWN, timestamp)
 {
 }
 
@@ -215,8 +270,9 @@ Project::Project(ProjectEntry entry)
 // Class: WhitelistSnapshot
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot::WhitelistSnapshot(ProjectListPtr projects)
+WhitelistSnapshot::WhitelistSnapshot(ProjectListPtr projects, const ProjectEntry::ProjectFilterFlag& filter_used)
     : m_projects(std::move(projects))
+      , m_filter(filter_used)
 {
 }
 
@@ -242,7 +298,15 @@ bool WhitelistSnapshot::Populated() const
 
 bool WhitelistSnapshot::Contains(const std::string& name) const
 {
+    if (m_projects == nullptr) {
+        return false;
+    }
+
     if (name.empty()) {
+        return false;
+    }
+
+    if (m_projects->empty()) {
         return false;
     }
 
@@ -256,6 +320,11 @@ bool WhitelistSnapshot::Contains(const std::string& name) const
     }
 
     return false;
+}
+
+ProjectEntry::ProjectFilterFlag WhitelistSnapshot::FilterUsed() const
+{
+    return m_filter;
 }
 
 WhitelistSnapshot WhitelistSnapshot::Sorted() const
@@ -275,26 +344,386 @@ WhitelistSnapshot WhitelistSnapshot::Sorted() const
 
     std::sort(sorted.begin(), sorted.end(), ascending_by_name);
 
-    return WhitelistSnapshot(std::make_shared<ProjectList>(sorted));
+    return WhitelistSnapshot(std::make_shared<ProjectList>(sorted), m_filter);
+}
+
+// -----------------------------------------------------------------------------
+// Class: AutoGreylist - automatic greylisting
+// -----------------------------------------------------------------------------
+
+AutoGreylist::AutoGreylist()
+    : m_greylist_ptr(std::make_shared<Greylist>())
+    , m_superblock_hash(Superblock().GetHash(true))
+{
+}
+
+AutoGreylist::Greylist::const_iterator AutoGreylist::begin() const
+{
+    LOCK(autogreylist_lock);
+
+    return m_greylist_ptr->begin();
+}
+
+AutoGreylist::Greylist::const_iterator AutoGreylist::end() const
+{
+    LOCK(autogreylist_lock);
+
+    return m_greylist_ptr->end();
+}
+
+AutoGreylist::Greylist::size_type AutoGreylist::size() const
+{
+    LOCK(autogreylist_lock);
+
+    return m_greylist_ptr->size();
+}
+
+bool AutoGreylist::Contains(const std::string& name, const bool& only_auto_greylisted) const
+{
+    LOCK(autogreylist_lock);
+
+    if (m_greylist_ptr == nullptr) {
+        return false;
+    }
+
+    if (m_greylist_ptr->empty()) {
+        return false;
+    }
+
+    auto iter = m_greylist_ptr->find(name);
+
+    if (iter != m_greylist_ptr->end()) {
+        if (only_auto_greylisted) {
+            return (only_auto_greylisted && iter->second.m_meets_greylisting_crit);
+        } else {
+            return true;
+        }
+    } else {
+        return false;
+    }
+}
+
+void AutoGreylist::Refresh() EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    SuperblockPtr superblock_ptr = Quorum::CurrentSuperblock();
+
+    if (superblock_ptr.IsEmpty()) {
+        return;
+    }
+
+    // If the m_superblock_hash has been populated and the current superblock has not changed, then no need to do anything.
+    if (m_superblock_hash != Superblock().GetHash() && superblock_ptr->GetHash() == m_superblock_hash) {
+        return;
+    }
+
+    RefreshWithSuperblock(superblock_ptr);
+}
+
+void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
+                                         std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks)
+    EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    if (superblock_ptr_in.IsEmpty()) {
+        return;
+    }
+
+    // We need the current whitelist, including all records except deleted. This will include greylisted projects.
+    // NOTE that the refresh_greylist is set to false here and MUST be this when called in the AutoGreylist class itself,
+    // to avoid an infinite loop; include_override is also set to false because each refresh of the auto greylist must start
+    // with the underlying whitelist state.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false, false);
+
+    LOCK(autogreylist_lock);
+
+    m_greylist_ptr->clear();
+
+    // No need to go further if the whitelist is empty (ignoring deleted records).
+    if (!whitelist.Populated()) {
+        return;
+    }
+
+    const Whitelist::ProjectEntryMap& project_first_actives = GetWhitelist().GetProjectsFirstActive();
+
+    // If this superblock version is less than 3, then all prior ones must also be less than 3, so bail.
+    if (superblock_ptr_in->m_version < 3) {
+        return;
+    }
+
+    unsigned int superblock_count = 0;
+
+    // Notice the superblock_ptr_in m_projects_all_cpid_total_credits MUST ALEADY BE POPULATED to record the TC state into
+    // the auto greylist.
+    for (const auto& iter : whitelist) {
+        auto project = superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
+
+        // This record MUST be found, because for the record to be in the whitelist, it must have at least a first record.
+        auto project_first_active = project_first_actives.find(iter.m_name);
+
+        // The purpose of this time comparison is to ONLY post greylist candidate entry (updates) for superblocks that are equal
+        // to or after the first entry date. Remember we are going backwards here. There cannot be entries held against a
+        // whitelisted project from before it was ever whitelisted. This check is required to ensure the greylist rules work
+        // correctly for newly whitelisted projects that are within the 40 day window for WAS and 20 day window for ZCD.
+        if (project_first_active != project_first_actives.end()
+            && superblock_ptr_in.m_timestamp >= project_first_active->second->m_timestamp) {
+            if (project != superblock_ptr_in->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
+                // Record new greylist candidate entry baseline with the total credit for each project present in superblock.
+                m_greylist_ptr->insert(std::make_pair(iter.m_name,
+                                                      GreylistCandidateEntry(iter.m_name, project->second)));
+            } else {
+                // Record new greylist candidate entry with nullopt total credit. This is for a project that is in the whitelist,
+                // but does not have a project entry in the superblock. This would be because the scrapers could not converge on the
+                // project.
+                m_greylist_ptr->insert(std::make_pair(iter.m_name, GreylistCandidateEntry(iter.m_name,
+                                                                                          std::optional<uint64_t>())));
+            }
+        }
+    }
+
+    ++superblock_count;
+
+    CBlockIndex* index_ptr;
+    {
+        // Find the block index entry for the block before the provided superblock_ptr. This also implements the unit test
+        // substitute input structure.
+        if (unit_test_blocks == nullptr) {
+            index_ptr = GRC::BlockFinder::FindByHeight(superblock_ptr_in.m_height - 1);
+        } else {
+            // This only works if the unit_test_blocks are all superblocks, which they should be based on the setup of the
+            // unit test.
+            auto iter = unit_test_blocks->find(superblock_ptr_in.m_height - 1);
+
+            if (iter != unit_test_blocks->end()) {
+                // Get the unit test entry that corresponds to the superblock_ptr_in, which was processed above, and then
+                // get CBlockIndex* entry.
+                index_ptr = iter->second.first;
+            } else {
+                index_ptr = nullptr;
+            }
+
+        }
+    }
+
+
+    while (index_ptr != nullptr && index_ptr->pprev != nullptr && superblock_count <= 40) {
+
+        if (!index_ptr->IsSuperblock()) {
+            index_ptr = index_ptr->pprev;
+            continue;
+        }
+
+        SuperblockPtr superblock_ptr;
+
+        if (unit_test_blocks == nullptr) {
+            CBlock block;
+
+            if (!ReadBlockFromDisk(block, index_ptr, Params().GetConsensus())) {
+                error("%s: Failed to read block from disk with requested height %u",
+                      __func__,
+                      index_ptr->nHeight);
+                continue;
+            }
+
+            superblock_ptr = block.GetClaim().m_superblock;
+            superblock_ptr.Rebind(index_ptr);
+        } else {
+            auto iter = unit_test_blocks->find(index_ptr->nHeight);
+
+            if (iter != unit_test_blocks->end()) {
+                superblock_ptr = iter->second.second;
+            }
+        }
+
+        // Stop if superblocks less than version 3 are encountered while going backwards. This will happen until we are 40
+        // superblocks past the 1st superblock after the height specified for the changeover to v3 superblocks.
+        if (superblock_ptr->m_version < 3) {
+            break;
+        }
+
+        for (const auto& iter : whitelist) {
+            // This is guaranteed to succeed, because every whitelisted project was inserted as a new baseline entry above.
+            auto greylist_entry = m_greylist_ptr->find(iter.m_name);
+
+            auto project = superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.find(iter.m_name);
+
+                   // This record MUST be found, because for the record to be in the whitelist, it must have at least a first record.
+            auto project_first_active = project_first_actives.find(iter.m_name);
+
+                   // The purpose of this time comparison is to ONLY post greylist candidate entry (updates) for superblocks that are
+                   // equal to or after the first entry date. Remember we are going backwards here. There cannot be entries held against
+                   // a whitelisted project from before it was ever whitelisted. This check is required to ensure the greylist rules work
+                   // correctly for newly whitelisted projects that are within the 40 day window for WAS and 20 day window for ZCD.
+            if (project_first_active != project_first_actives.end()
+                && superblock_ptr.m_timestamp >= project_first_active->second->m_timestamp) {
+                if (project != superblock_ptr->m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits.end()) {
+                    // Update greylist candidate entry with the total credit for each project present in superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(project->second, superblock_count);
+                } else {
+                    // Record updated greylist candidate entry with nullopt total credit. This is for a project that is in the
+                    // whitelist, but does not have a project entry in this superblock. This would be because the scrapers could
+                    // not converge on the project for this superblock.
+                    greylist_entry->second.UpdateGreylistCandidateEntry(std::optional<uint64_t>(std::nullopt), superblock_count);
+                }
+            }
+        }
+
+        ++superblock_count;
+
+        index_ptr = index_ptr->pprev;
+    }
+
+    m_superblock_hash = superblock_ptr_in->GetHash();
+}
+
+void AutoGreylist::RefreshWithSuperblock(Superblock& superblock) EXCLUSIVE_LOCKS_REQUIRED (cs_main)
+{
+    SuperblockPtr superblock_ptr;
+
+    // For the purposes of forming a superblock as the mining of a new block adding to the head of the chain, we will
+    // form a superblock ptr referencing the current head of the chain. The actual superblock will be the next block if it
+    // is added to the chain, for for the purposes here, this is what we want, because it is simply used to feed the
+    // overloaded version which takes the superblock_ptr and follows the chain backwards to do the greylist calculations.
+    superblock_ptr.Replace(superblock);
+
+    superblock_ptr.Rebind(pindexBest);
+
+    RefreshWithSuperblock(superblock_ptr);
+
+    // Here we want to get the whitelist with the greylist override applied, but do NOT want to refresh the auto grey list, since
+    // we are in a refresh method within the auto greylist class.
+    const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false, true);
+
+    // Update the superblock object with the project greylist status.
+    for (const auto& project : whitelist) {
+        if (project.m_status == ProjectEntryStatus::AUTO_GREYLISTED || project.m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+            superblock.m_project_status.m_project_status.insert(std::make_pair(project.m_name, project.m_status));
+        }
+    }
+}
+
+void AutoGreylist::Reset()
+{
+    if (m_greylist_ptr != nullptr) {
+        m_greylist_ptr->clear();
+    } else {
+        m_greylist_ptr = std::make_shared<Greylist>();
+    }
+
+    m_superblock_hash = Superblock().GetHash(true);
 }
 
 // -----------------------------------------------------------------------------
 // Class: Whitelist (Registry)
 // -----------------------------------------------------------------------------
 
-WhitelistSnapshot Whitelist::Snapshot() const
+WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& filter,
+                                      const bool& refresh_greylist,
+                                      const bool& include_override) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    LOCK(cs_lock);
-
     ProjectList projects;
 
-    for (const auto& iter : m_project_entries) {
-        if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {
+    LOCK(cs_lock);
+
+    if (m_project_entries.empty()) {
+        return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
+    }
+
+    if (refresh_greylist && m_auto_greylist != nullptr) {
+        m_auto_greylist->Refresh();
+    }
+
+    // This contains the override for automatic greylisting integrated with the switch. If the AutoGreylist class refresh
+    // determines that the project meets greylisting criteria, it will be in the AutoGreylist object pointed to
+    // by the greylist_ptr. This will override the corresponding project entry from the project whitelist registry.
+    //
+    // We do NOT want to actually change the registry entries map with the auto greylist output, because the
+    // greylist output is a dynamic override and when the override is removed, the underlying value of the
+    // project status enforced by the project entries from addkey should return. This effectively means the greylist
+    // override is applied on superblock boundaries, because the AutoGreylist global (singleton) cache is updated
+    // when the superblock stakes.
+    //
+    // Make a copy of the registry project entries map for override purposes. This is not too bad because the number of
+    // projects is relatively small.
+    ProjectEntryMap project_entries = m_project_entries;
+
+    for (auto& iter : project_entries) {
+        if (include_override) {
+            // This is the actual override. The most important thing here is the greylist_ptr->Contains(iter.first) part. This
+            // applies the current state of the greylist at the time of the construction of the whitelist snapshot, without
+            // disturbing the underlying projects registry.
+
+            bool in_greylist = m_auto_greylist != nullptr ? m_auto_greylist->Contains(iter.first) : false;
+
+            // If the project does NOT have a status of auto greylist override, and it is either active or already manually
+            // greylisted, then if it is in the greylist, mark with the status auto greylisted.
+            if (!(iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE)
+                && (iter.second->m_status == ProjectEntryStatus::ACTIVE || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED)
+                && in_greylist) {
+                iter.second->m_status = ProjectEntryStatus::AUTO_GREYLISTED;
+            }
+        }
+
+        switch (filter) {
+        case ProjectEntry::ProjectFilterFlag::REG_ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::MAN_GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::AUTO_GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::AUTO_GREYLIST_OVERRIDE:
+            if (iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::GREYLISTED:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::DELETED:
+            if (iter.second->m_status == ProjectEntryStatus::DELETED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::NOT_ACTIVE:
+            if (iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::DELETED) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED:
+            if (iter.second->m_status == ProjectEntryStatus::ACTIVE
+                || iter.second->m_status == ProjectEntryStatus::MAN_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLISTED
+                || iter.second->m_status == ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE) {
+                projects.push_back(*iter.second);
+            }
+            break;
+        case ProjectEntry::ProjectFilterFlag::ALL:
             projects.push_back(*iter.second);
+            break;
+        case ProjectEntry::ProjectFilterFlag::NONE:
+            break;
         }
     }
 
-    return WhitelistSnapshot(std::make_shared<ProjectList>(projects));
+    return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
 }
 
 void Whitelist::Reset()
@@ -302,7 +731,13 @@ void Whitelist::Reset()
     LOCK(cs_lock);
 
     m_project_entries.clear();
+    m_pending_project_entries.clear();
+    m_expired_project_entries.clear();
+    m_project_first_actives.clear();
     m_project_db.clear();
+
+    // If the whitelist registry is reset, the auto greylist cache should be reset as well.
+    m_auto_greylist->Reset();
 }
 
 void Whitelist::AddDelete(const ContractContext& ctx)
@@ -325,7 +760,12 @@ void Whitelist::AddDelete(const ContractContext& ctx)
     // If the contract status is ADD, then ProjectEntryStatus will be ACTIVE. If contract status
     // is REMOVE then ProjectEntryStatus will be DELETED.
     if (ctx->m_action == ContractAction::ADD) {
+        // Normal add/delete contracts are constructed with "unknown" status. The status is recorded on the local client
+        // based on the add/delete action. The manual greylist status is specified in the contract as constructed, and will carry
+        // through here for the contract add with the greylist flag set.
+        if (payload.m_status == ProjectEntryStatus::UNKNOWN) {
         payload.m_status = ProjectEntryStatus::ACTIVE;
+        }
     } else if (ctx->m_action == ContractAction::REMOVE) {
         payload.m_status = ProjectEntryStatus::DELETED;
     }
@@ -336,10 +776,13 @@ void Whitelist::AddDelete(const ContractContext& ctx)
 
     ProjectEntry_ptr current_project_entry_ptr = nullptr;
 
+    bool first_entry = false;
+
     // Is there an existing project entry in the map?
     bool current_project_entry_present = (project_entry_pair_iter != m_project_entries.end());
 
-    // If so, then get a smart pointer to it.
+    // If so, then get a smart pointer to it. If not then set first_entry to true to place an entry in
+    // the m_project_first_actives map later.
     if (current_project_entry_present) {
         current_project_entry_ptr = project_entry_pair_iter->second;
 
@@ -347,6 +790,8 @@ void Whitelist::AddDelete(const ContractContext& ctx)
         payload.m_previous_hash = current_project_entry_ptr->m_hash;
     } else { // Original entry for this project entry key
         payload.m_previous_hash = uint256 {};
+
+        first_entry = true;
     }
 
     LogPrint(LogFlags::CONTRACT, "INFO: %s: project entry add/delete: contract m_version = %u, payload "
@@ -379,8 +824,40 @@ void Whitelist::AddDelete(const ContractContext& ctx)
                  historical.m_hash.GetHex());
     }
 
+    auto project_iter = m_project_db.find(ctx.m_tx.GetHash());
+
     // Finally, insert the new project entry (payload) smart pointer into the m_project_entries map.
-    m_project_entries[payload.m_name] = m_project_db.find(ctx.m_tx.GetHash())->second;
+    m_project_entries[payload.m_name] = project_iter->second;
+
+    // The downside of this is that this map will hold a reference to each project that was ever active and they will
+    // be ineligible for passivation as a result. However, the memory use for this is minimal given the relatively
+    // small number of projects. It is worth it given the alternative of having to walk each project chainlet to determine
+    // first active for every update of the auto greylist.
+    if (first_entry) {
+        m_project_first_actives.insert(std::make_pair(payload.m_name, project_iter->second));
+    }
+
+    ChangeType status;
+
+    if (project_iter->second->m_status == ProjectEntryStatus::DELETED) {
+        status = CT_DELETED;
+    } else if (current_project_entry_present) {
+        status = CT_UPDATED;
+    } else {
+        status = CT_NEW;
+    }
+
+    NotifyProjectChanged(project_iter->second, status);
+
+    // notify an external script when a project is added to the whitelist, or a project status changes.
+    #if HAVE_SYSTEM
+    std::string cmd = gArgs.GetArg("-projectnotify", "");
+
+    if (!cmd.empty()) {
+        std::thread t(runCommand, cmd);
+        t.detach(); // thread runs free
+    }
+    #endif
 
     return;
 
@@ -444,6 +921,15 @@ void Whitelist::Revert(const ContractContext& ctx)
         }
 
         if (resurrect_hash.IsNull()) {
+            // The reverted record was the first record, so we need to revert (remove) the entry in the
+            // m_project_first_actives map.
+            if (!m_project_first_actives.erase(key)) {
+                error("%S: The project first active entry for project \"%s\" in the first actives map was not found "
+                      "to erase during a revert. This condition should not occur.",
+                      __func__,
+                      key);
+            }
+
             return;
         }
 
@@ -471,6 +957,8 @@ bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &
 
     const auto payload = contract.SharePayloadAs<Project>();
 
+    // Contract version 3 is tied to block v13. Payloads of less than v3 are not allowed at or above the v13 height with
+    // contract v3.
     if (contract.m_version >= 3 && payload->m_version < 3) {
         DoS = 25;
         error("%s: Project entry contract in contract v3 is wrong version.", __func__);
@@ -488,6 +976,15 @@ bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &
 
 bool Whitelist::BlockValidate(const ContractContext& ctx, int& DoS) const
 {
+    const auto payload = ctx.m_contract.SharePayloadAs<Project>();
+
+    // This ensures v4 projects do not appear before the v4 project height in protocol.
+    if (payload->m_version > 3 && !IsProjectV4Enabled(ctx.m_pindex->nHeight)) {
+        DoS = 25;
+        error("%s: Project entry contract in contract v3 with project v4 enabled is wrong version.", __func__);
+        return false;
+    }
+
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
 
@@ -495,7 +992,11 @@ int Whitelist::Initialize()
 {
     LOCK(cs_lock);
 
-    int height = m_project_db.Initialize(m_project_entries, m_pending_project_entries, m_expired_project_entries);
+    int height = m_project_db.Initialize(m_project_entries,
+                                         m_pending_project_entries,
+                                         m_expired_project_entries,
+                                         m_project_first_actives,
+                                         true);
 
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_project_db size after load: %u", __func__, m_project_db.size());
     LogPrint(LogFlags::CONTRACT, "INFO: %s: m_project_entries size after load: %u", __func__, m_project_entries.size());
@@ -526,7 +1027,14 @@ void Whitelist::ResetInMemoryOnly()
     LOCK(cs_lock);
 
     m_project_entries.clear();
+    m_pending_project_entries.clear();
+    m_expired_project_entries.clear();
+    m_project_first_actives.clear();
     m_project_db.clear_in_memory_only();
+
+    // If the whitelist registry is reset, the auto greylist cache should be reset as well.
+    m_auto_greylist->Reset();
+
 }
 
 uint64_t Whitelist::PassivateDB()
@@ -534,6 +1042,16 @@ uint64_t Whitelist::PassivateDB()
     LOCK(cs_lock);
 
     return m_project_db.passivate_db();
+}
+
+const Whitelist::ProjectEntryMap Whitelist::GetProjectsFirstActive() const EXCLUSIVE_LOCKS_REQUIRED(Whitelist::cs_lock)
+{
+    return m_project_first_actives;
+}
+
+std::shared_ptr<AutoGreylist> Whitelist::GetAutoGreylist()
+{
+    return m_auto_greylist;
 }
 
 Whitelist::ProjectEntryDB &Whitelist::GetProjectDB()
@@ -545,4 +1063,3 @@ template<> const std::string Whitelist::ProjectEntryDB::KeyType()
 {
     return std::string("project");
 }
-

@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -214,6 +215,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockstats"          , 2 },
     { "inspectaccrualsnapshot" , 0 },
     { "listmanifests"          , 0 },
+    { "listprojects"           , 0 },
+    { "getautogreylist"        , 0 },
+    { "getautogreylist"        , 1 },
     { "sendalert"              , 2 },
     { "sendalert"              , 3 },
     { "sendalert"              , 4 },

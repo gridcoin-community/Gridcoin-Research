@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2023 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -626,6 +626,8 @@ private:
     PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
 
     std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
+
+    ScraperMap m_first_scraper_entries {};   //!< Not used here. To satisfy the template only.
 
     ScraperEntryDB m_scraper_db;
 
