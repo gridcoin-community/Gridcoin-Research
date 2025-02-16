@@ -588,7 +588,7 @@ uint256 GetRandHash() noexcept
 void FastRandomContext::RandomSeed()
 {
     uint256 seed = GetRandHash();
-    rng.SetKey(seed.begin(), 32);
+    rng.SetKey(MakeByteSpan(seed));
     requires_seed = false;
 }
 
@@ -608,15 +608,12 @@ std::vector<unsigned char> FastRandomContext::randbytes(size_t len)
     if (requires_seed) RandomSeed();
     std::vector<unsigned char> ret(len);
     if (len > 0) {
-        rng.Keystream(ret.data(), len);
+        rng.Keystream(MakeWritableByteSpan(ret));
     }
     return ret;
 }
 
-FastRandomContext::FastRandomContext(const uint256& seed) noexcept : requires_seed(false), bytebuf_size(0), bitbuf_size(0)
-{
-    rng.SetKey(seed.begin(), 32);
-}
+FastRandomContext::FastRandomContext(const uint256& seed) noexcept : requires_seed(false), rng(MakeByteSpan(seed)), bytebuf_size(0), bitbuf_size(0) {}
 
 bool Random_SanityCheck()
 {
@@ -664,13 +661,15 @@ bool Random_SanityCheck()
     return true;
 }
 
-FastRandomContext::FastRandomContext(bool fDeterministic) noexcept : requires_seed(!fDeterministic), bytebuf_size(0), bitbuf_size(0)
+static constexpr std::array<std::byte, ChaCha20::KEYLEN> ZERO_KEY{};
+
+FastRandomContext::FastRandomContext(bool fDeterministic) noexcept : requires_seed(!fDeterministic), rng(ZERO_KEY), bytebuf_size(0), bitbuf_size(0)
 {
     if (!fDeterministic) {
         return;
     }
     uint256 seed;
-    rng.SetKey(seed.begin(), 32);
+    rng.SetKey(MakeByteSpan(seed));
 }
 
 FastRandomContext& FastRandomContext::operator=(FastRandomContext&& from) noexcept
