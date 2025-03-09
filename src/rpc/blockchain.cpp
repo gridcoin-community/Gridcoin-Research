@@ -1,11 +1,13 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
 #include "blockchain.h"
 #include "gridcoin/protocol.h"
+#include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
@@ -140,12 +142,39 @@ UniValue SuperblockToJson(const GRC::Superblock& superblock)
         beacons.push_back(key_id.ToString());
     }
 
+    UniValue project_greylist_status(UniValue::VARR);
+
+    for (const auto& project : superblock.m_project_status.m_project_status) {
+        UniValue status(UniValue::VOBJ);
+
+        // construct a dummy project entry to use the status to string.
+        auto dummy = GRC::ProjectEntry(GRC::ProjectEntry::CURRENT_VERSION, project.first, "foo", false, false, project.second, 0);
+
+        status.pushKV("project", project.first);
+        status.pushKV("status", dummy.StatusToString());
+
+        project_greylist_status.push_back(status);
+    }
+
+    UniValue project_all_cpid_total_credits(UniValue::VARR);
+
+    for (const auto& project : superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits) {
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("project", project.first);
+        entry.pushKV("all_cpid_total_credit", project.second);
+
+        project_all_cpid_total_credits.push_back(entry);
+    }
+
     UniValue json(UniValue::VOBJ);
 
     json.pushKV("version", (int)superblock.m_version);
-    json.pushKV("magnitudes", std::move(magnitudes));
-    json.pushKV("projects", std::move(projects));
-    json.pushKV("beacons", std::move(beacons));
+    json.pushKV("magnitudes", magnitudes);
+    json.pushKV("projects", projects);
+    json.pushKV("beacons", beacons);
+    json.pushKV("project_greylist_status", project_greylist_status);
+    json.pushKV("project_all_cpid_total_credits", project_all_cpid_total_credits);
 
     return json;
 }
@@ -1141,7 +1170,7 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         LOCK(cs_ConvergedScraperStatsCache);
 
         // Make a local copy of the cached stats in the convergence and release the lock.
-        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats;
+        mScraperConvergedStats = ConvergedScraperStatsCache.mScraperConvergedStats.mScraperStats;
     }
 
     LogPrint(BCLog::LogFlags::VERBOSE, "rainbymagnitude: mScraperConvergedStats size = %u", mScraperConvergedStats.size());
@@ -2167,23 +2196,35 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 //! To whitelist a project:
 //!
-//!     addkey add project projectname url
+//!     addkey add project projectname url (< v2)
+//!
+//!     addkey add project projectname url gdpr_controls (v2)
+//!
+//!     addkey add project projectname url gdpr_controls manual_greylist (v3)
 //!
 //! To de-whitelist a project:
 //!
-//!     addkey delete project projectname
+//!     addkey delete project projectname 1 (<= v2)
 //!
-//!     or
-//!
-//!     addkey delete project projectname 1
+//!     addkey delete project projectname (>= v3)
 //!
 //! Key examples:
 //!
+//!     To add:
+//!
 //!     v1: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@
 //!     v2: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true
+//!
+//!     To manually greylist:
+//!
+//!     v3: addkey add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true true
+//!
+//!     To delete:
+//!
 //!     v1 or v2: addkey delete project milkyway@home
 //!     v1 or v2: addkey delete project milkyway@home 1 (last parameter is a dummy)
 //!     v2: addkey delete project milkyway@home 1 false (last two parameters are dummies)
+//!     v3: addkey delete project milkyway@home (the dummy parameters are no longer needed for v3 deletes)
 //!
 //! GRC will only memorize the *last* value it finds for a key in the highest
 //! block.
@@ -2191,6 +2232,7 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 UniValue addkey(const UniValue& params, bool fHelp)
 {
     bool project_v2_enabled = false;
+    bool project_v4_enabled = false;
     bool block_v13_enabled = false;
     uint32_t contract_version = 0;
 
@@ -2198,6 +2240,7 @@ UniValue addkey(const UniValue& params, bool fHelp)
         LOCK(cs_main);
 
         project_v2_enabled = IsProjectV2Enabled(nBestHeight);
+        project_v4_enabled = IsProjectV4Enabled(nBestHeight);
 
         block_v13_enabled = IsV13Enabled(nBestHeight);
         contract_version = block_v13_enabled ? 3 : 2;
@@ -2227,7 +2270,17 @@ UniValue addkey(const UniValue& params, bool fHelp)
             && action == GRC::ContractAction::ADD
             && type == GRC::ContractType::PROJECT) {
         required_param_count = 5;
-        param_count_max = 5;
+
+        if (block_v13_enabled) {
+            param_count_max = 6;
+
+            if (project_v4_enabled) {
+                required_param_count = 6;
+                param_count_max = 7;
+            }
+        } else {
+            param_count_max = 5;
+        }
     }
 
     if ((type == GRC::ContractType::PROJECT || type == GRC::ContractType::SCRAPER)
@@ -2256,7 +2309,37 @@ UniValue addkey(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
         std::string error_string;
 
-        if (project_v2_enabled) {
+        if (block_v13_enabled) {
+            if (project_v4_enabled) {
+                error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> "
+                               "<requires_external_adapter> <status> \n"
+                               "\n"
+                               "<action> ---> Specify add or delete of key\n"
+                               "<keytype> --> Specify keytype ex: project\n"
+                               "<keyname> --> Specify keyname ex: milky\n"
+                               "<keyvalue> -> Specify keyvalue ex: 1\n"
+                               "\n"
+                               "For project keytype only\n"
+                               "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
+                               "<requires_external_adapter> true if project requires an external adapter to collect stats\n"
+                               "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
+                               "\n"
+                               "Add a key to the network";
+            } else {
+            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> <status> \n"
+                           "\n"
+                           "<action> ---> Specify add or delete of key\n"
+                           "<keytype> --> Specify keytype ex: project\n"
+                           "<keyname> --> Specify keyname ex: milky\n"
+                           "<keyvalue> -> Specify keyvalue ex: 1\n"
+                           "\n"
+                           "For project keytype only\n"
+                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
+                           "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
+                           "\n"
+                           "Add a key to the network";
+            }
+        } else if (project_v2_enabled) {
             error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
                            "\n"
                            "<action> ---> Specify add or delete of key\n"
@@ -2305,8 +2388,12 @@ UniValue addkey(const UniValue& params, bool fHelp)
     {
         if (action == GRC::ContractAction::ADD) {
             bool gdpr_export_control = false;
+            GRC::ProjectEntryStatus status = GRC::ProjectEntryStatus::UNKNOWN;
 
             if (block_v13_enabled) {
+                bool requires_ext_adapter = false;
+                uint32_t payload_version = 3;
+
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
                 // a boolean for project or a string for sidestake, which means the client.cpp entry cannot contain a
                 // unicode type specifier for the 5th parameter.
@@ -2317,13 +2404,53 @@ UniValue addkey(const UniValue& params, bool fHelp)
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "GDPR export parameter invalid. Must be true or false.");
                 }
 
+                if (project_v4_enabled) {
+                    payload_version = 4;
+
+                    if (params.size() == 6) {
+                        if (ToLower(params[5].get_str()) == "true"){
+                            requires_ext_adapter = true;
+                        }
+                    } else if (ToLower(params[5].get_str()) != "false") {
+                        // Neither true or false - throw an exception.
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "Requires external adapter parameter invalid. "
+                                                                  "Must be true or false.");
+                    }
+
+                    if (params.size() == 7) {
+                        if (ToLower(params[6].get_str()) == "man_greylist") {
+                            status = GRC::ProjectEntryStatus::MAN_GREYLISTED;
+                        } else if (ToLower(params[5].get_str()) == "auto_greylist_override") {
+                            status = GRC::ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE;
+                        } else {
+                            throw JSONRPCError(RPC_INVALID_PARAMETER, "project status specifier, if provided, "
+                                                                      "must be either man_greylist "
+                                                                      "or auto_greylist_override");
+                        }
+                    }
+                } else {
+                    if (params.size() == 6) {
+                        if (ToLower(params[5].get_str()) == "man_greylist") {
+                            status = GRC::ProjectEntryStatus::MAN_GREYLISTED;
+                        } else if (ToLower(params[5].get_str()) == "auto_greylist_override") {
+                            status = GRC::ProjectEntryStatus::AUTO_GREYLIST_OVERRIDE;
+                        } else {
+                            throw JSONRPCError(RPC_INVALID_PARAMETER, "project status specifier, if provided, must "
+                                                                      "be either man_greylist "
+                                                                      "or auto_greylist_override");
+                        }
+                    }
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
-                            uint32_t{3},          // Contract payload version number, 3
+                            payload_version,      // Contract payload version number, 3 or 4
                             params[2].get_str(),  // Name
                             params[3].get_str(),  // URL
-                            gdpr_export_control); // GDPR stats export protection enforced boolean
+                            gdpr_export_control,  // GDPR stats export protection enforced boolean
+                            requires_ext_adapter, // Requires external adapter flag
+                            status);   // manual greylist flag
 
             } else if (project_v2_enabled) {
                 // We must do our own conversion to boolean here, because the 5th parameter can either be
@@ -2353,13 +2480,21 @@ UniValue addkey(const UniValue& params, bool fHelp)
             }
         } else if (action == GRC::ContractAction::REMOVE) {
             if (block_v13_enabled) {
+                uint32_t payload_version = 3;
+
+                if (project_v4_enabled) {
+                    payload_version = 4;
+                }
+
                 contract = GRC::MakeContract<GRC::Project>(
                             contract_version,
                             action,
-                            uint32_t{3},          // Contract payload version number, 3
-                            params[2].get_str(),  // Name
-                            std::string{},        // URL ignored
-                            false);               // GDPR status irrelevant
+                            payload_version,                   // Contract payload version number, 3 or 4
+                            params[2].get_str(),               // Name
+                            std::string{},                     // URL ignored
+                            false,                             // GDPR status irrelevant
+                            false,                             // Requires external adapter flag irrelevant
+                            GRC::ProjectEntryStatus::UNKNOWN); // manual greylisting or auto greylist override irrelevant
 
             } else if (project_v2_enabled) {
                 contract = GRC::MakeContract<GRC::Project>(
@@ -2570,15 +2705,23 @@ UniValue debug(const UniValue& params, bool fHelp)
 
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-                "listprojects\n"
+                "listprojects <bool>\n"
+                "\n"
+                "<bool> -> true to show all projects, including greylisted and deleted. Defaults to false.\n"
                 "\n"
                 "Displays information about whitelisted projects.\n");
 
     UniValue res(UniValue::VOBJ);
 
-    for (const auto& project : GRC::GetWhitelist().Snapshot().Sorted()) {
+    GRC::Project::ProjectFilterFlag filter = GRC::Project::ProjectFilterFlag::ACTIVE;
+
+    if (params.size() && params[0].get_bool() == true) {
+        filter = GRC::Project::ProjectFilterFlag::ALL;
+    }
+
+    for (const auto& project : GRC::GetWhitelist().Snapshot(filter).Sorted()) {
         UniValue entry(UniValue::VOBJ);
 
         entry.pushKV("version", (int)project.m_version);
@@ -2592,10 +2735,105 @@ UniValue listprojects(const UniValue& params, bool fHelp)
             entry.pushKV("gdpr_controls", *project.HasGDPRControls());
         }
 
+        if (project.RequiresExtAdapter()) {
+            entry.pushKV("requires_external_adapter", *project.RequiresExtAdapter());
+        }
+
         entry.pushKV("time", DateTimeStrFormat(project.m_timestamp));
+        entry.pushKV("status", project.StatusToString());
 
         res.pushKV(project.m_name, entry);
     }
+
+    return res;
+}
+
+UniValue getautogreylist(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 2) {
+        throw runtime_error(
+            "getautogreylist <bool> <bool> \n"
+            "\n"
+            "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
+            "\n"
+            "<bool> -> true to show greylist history for each project. Defaults to false. \n"
+            "\n"
+            "Displays information about projects that meet auto greylisting criteria.");
+    }
+
+    bool show_all_projects = false;
+    bool show_history = false;
+
+    if (params.size()) {
+        show_all_projects = params[0].get_bool();
+    }
+
+    if (params.size() >= 2) {
+        show_history = params[1].get_bool();
+    }
+
+    UniValue res(UniValue::VOBJ);
+
+    std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
+
+    greylist_ptr->Refresh();
+
+    UniValue autogreylist(UniValue::VARR);
+
+    for (auto iter : *greylist_ptr) {
+        if (!show_all_projects && !iter.second.m_meets_greylisting_crit) {
+            continue;
+        }
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("project:", iter.first);
+        entry.pushKV("zcd", iter.second.GetZCD());
+        entry.pushKV("was", iter.second.GetWAS().ToDouble());
+        entry.pushKV("meets_greylist_criteria", iter.second.m_meets_greylisting_crit);
+
+        if (show_history) {
+            UniValue entry_history(UniValue::VARR);
+
+            for (const auto& hist_entry : iter.second.GetUpdateHistory()) {
+                UniValue historical_entry(UniValue::VOBJ);
+
+                historical_entry.pushKV("superblocks_from_baseline", hist_entry.m_sb_from_baseline_processed);
+
+                if (hist_entry.m_total_credit) {
+                    historical_entry.pushKV("total_credit", *hist_entry.m_total_credit);
+                } else {
+                    historical_entry.pushKV("total_credit", "NA");
+                }
+
+                if (hist_entry.m_zcd) {
+                    historical_entry.pushKV("zcd", *hist_entry.m_zcd);
+                } else {
+                    historical_entry.pushKV("zcd", "NA");
+                }
+
+                if (hist_entry.m_was) {
+                    historical_entry.pushKV("was", hist_entry.m_was->ToDouble());
+                } else {
+                    historical_entry.pushKV("was", "NA");
+                }
+
+                if (hist_entry.m_meets_greylisting_crit) {
+                    historical_entry.pushKV("meets_greylisting_criteria", *hist_entry.m_meets_greylisting_crit);
+                } else {
+                    historical_entry.pushKV("meets_greylisting_criteria", "NA");
+                }
+
+                entry_history.push_back(historical_entry);
+            }
+
+            entry.pushKV("history", entry_history);
+        }
+
+        autogreylist.push_back(entry);
+    }
+
+    res.pushKV("auto_greylist_projects", autogreylist);
 
     return res;
 }

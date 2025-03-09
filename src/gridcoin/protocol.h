@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -591,6 +591,8 @@ private:
     PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
 
     std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
+
+    ProtocolEntryMap m_protocol_first_entries {};          //!< Not used. Only to satisfy the template.
 
     ProtocolEntryDB m_protocol_db;
 

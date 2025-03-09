@@ -1,9 +1,10 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <key_io.h>
 #include "chainparams.h"
+#include "gridcoin/project.h"
 #include "main.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/magnitude.h"
@@ -20,8 +21,8 @@
 using namespace GRC;
 
 // TODO: use a header
-ScraperStatsAndVerifiedBeacons  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
-ScraperStatsAndVerifiedBeacons  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsByConvergedManifest(const ConvergedManifest& StructConvergedManifest);
+ScraperStatsVerifiedBeaconsTotalCredits  GetScraperStatsFromSingleManifest(CScraperManifest_shared_ptr& manifest);
 unsigned int NumScrapersForSupermajority(unsigned int nScraperCount);
 mmCSManifestsBinnedByScraper ScraperCullAndBinCScraperManifests();
 Superblock ScraperGetSuperblockContract(
@@ -822,7 +823,7 @@ private: // SuperblockValidator classes
         //!
         QuorumHash ComputeQuorumHash() const
         {
-            const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
+            const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsByConvergedManifest(m_convergence);
 
             return QuorumHash::Hash(stats_and_verified_beacons);
         }
@@ -1392,7 +1393,7 @@ private: // SuperblockValidator methods
     //!
     bool TryManifest(CScraperManifest_shared_ptr& manifest) const
     {
-        const ScraperStatsAndVerifiedBeacons stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
+        const ScraperStatsVerifiedBeaconsTotalCredits stats_and_verified_beacons = GetScraperStatsFromSingleManifest(manifest);
 
         return QuorumHash::Hash(stats_and_verified_beacons) == m_quorum_hash;
     }
@@ -1538,12 +1539,16 @@ bool Quorum::ValidateSuperblockClaim(
     const CBlockIndex* const pindex)
 {
     if (!SuperblockNeeded(pindex->nTime)) {
-        return error("ValidateSuperblockClaim(): superblock too early.");
+        return error("%s: superblock too early.", __func__);
     }
 
     if (pindex->nVersion >= 11) {
         if (superblock->m_version < 2) {
-            return error("ValidateSuperblockClaim(): rejected legacy version.");
+            return error("%s: rejected legacy version.", __func__);
+        }
+
+        if (IsSuperblockV3Enabled(pindex->nHeight) && superblock->m_version < 3) {
+            return error("%s: superblock rejected: version < 3 with superblock v3 enabld.", __func__);
         }
 
         // Superblocks are not included in the input for the claim hash
@@ -1551,7 +1556,7 @@ bool Quorum::ValidateSuperblockClaim(
         // protect the integrity of the superblock data:
         //
         if (superblock->GetHash() != claim.m_quorum_hash) {
-            return error("ValidateSuperblockClaim(): quorum hash mismatch.");
+            return error("%s: quorum hash mismatch.", __func__);
         }
 
         return ValidateSuperblock(superblock);
@@ -1560,23 +1565,24 @@ bool Quorum::ValidateSuperblockClaim(
     const CTxDestination address = DecodeDestination(claim.m_quorum_address);
 
     if (!IsValidDestination(address)) {
-        return error("ValidateSuperblockClaim(): "
-            "invalid quorum address: %s", claim.m_quorum_address);
+        return error("%s: "
+                     "invalid quorum address: %s", __func__, claim.m_quorum_address);
     }
 
     if (!Participating(claim.m_quorum_address, pindex->nTime)) {
-        return error("ValidateSuperblockClaim(): "
-            "ineligible quorum participant: %s", claim.m_quorum_address);
+        return error("%s: "
+                     "ineligible quorum participant: %s", __func__, claim.m_quorum_address);
     }
 
-    // Popular hash search begins from the block before:
+           // Popular hash search begins from the block before:
     const QuorumHash popular_hash = FindPopularHash(pindex->pprev);
 
     if (superblock->GetHash() != popular_hash) {
-        return error("ValidateSuperblockClaim(): "
-            "superblock hash mismatch: %s popular: %s",
-            superblock->GetHash().ToString(),
-            popular_hash.ToString());
+        return error("%s: "
+                     "superblock hash mismatch: %s popular: %s",
+                     __func__,
+                     superblock->GetHash().ToString(),
+                     popular_hash.ToString());
     }
 
     return true;
@@ -1641,6 +1647,9 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // TODO: unwrap this from ScraperGetSuperblockContract()
     CreateSuperblock();
 
+    // Get a read-only view of the current project greylist
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, false, true);
+
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};
 
@@ -1663,11 +1672,13 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // Although the map is ordered, the keys begin with project names, so we
     // cannot binary search for a block of CPID entries yet:
     //
-    for (const auto& entry : ConvergedScraperStatsCache.mScraperConvergedStats) {
+    for (const auto& entry : ConvergedScraperStatsCache.mScraperConvergedStats.mScraperStats) {
         if (entry.first.objecttype == statsobjecttype::byCPIDbyProject) {
             const Span<const char> project_name = try_item(entry.first.objectID);
 
-            if (project_name.size() > 0) {
+            std::string s_project_name = std::string(project_name.begin(), project_name.end());
+
+            if (project_name.size() > 0 && !greylist.Contains(s_project_name)) {
                 projects.emplace_back(
                     std::string(project_name.begin(), project_name.end()),
                     entry.second.statsvalue.dRAC,

@@ -6,6 +6,7 @@
 #define BITCOIN_WALLET_GENERATED_TYPE_H
 
 /** (POS/POR) enums for CoinStake Transactions -- We should never get unknown but just in case!*/
+namespace GRC {
 enum MinedType
 {
     UNKNOWN = 0,
@@ -20,5 +21,6 @@ enum MinedType
     MRC_RCV = 9,
     MRC_SEND = 10
 };
+}
 
 #endif // BITCOIN_WALLET_GENERATED_TYPE_H

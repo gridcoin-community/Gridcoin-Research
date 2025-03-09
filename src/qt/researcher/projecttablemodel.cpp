@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -200,7 +200,11 @@ QVariant ProjectTableModel::data(const QModelIndex &index, int role) const
                 case Whitelisted:
                     if (row->m_whitelisted == ProjectRow::WhiteListStatus::True) {
                         return QIcon(":/icons/round_green_check");
-                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Greylisted) {
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Excluded) {
+                        return QIcon(":/icons/warning");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Manually_Greylisted) {
+                        return QIcon(":/icons/warning");
+                    } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::Automatically_Greylisted) {
                         return QIcon(":/icons/warning");
                     } else if (row->m_whitelisted == ProjectRow::WhiteListStatus::False) {
                         return QIcon(":/icons/white_and_red_x");

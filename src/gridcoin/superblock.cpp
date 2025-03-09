@@ -1,9 +1,10 @@
-// Copyright (c) 2014-2021 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
 #include "compat/endian.h"
+#include "gridcoin/project.h"
 #include "hash.h"
 #include "main.h"
 #include <gridcoin/md5.h>
@@ -17,7 +18,7 @@
 
 using namespace GRC;
 
-extern ScraperStatsAndVerifiedBeacons GetScraperStatsAndVerifiedBeacons(const ConvergedScraperStats& stats);
+extern ScraperStatsVerifiedBeaconsTotalCredits GetScraperStatsVerifiedBeaconsTotalCredits(const ConvergedScraperStats& stats);
 
 namespace {
 //!
@@ -53,54 +54,59 @@ public:
     //! \param stats A complete set of scraper statistics to build a superblock
     //! from.
     //!
-    void BuildFromStats(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons)
+    void BuildFromStats(const ScraperStatsVerifiedBeaconsTotalCredits& stats_verified_beacons_tc)
     {
-        for (const auto& entry : stats_and_verified_beacons.mScraperStats) {
+        for (const auto& entry : stats_verified_beacons_tc.mScraperStats) {
             // A CPID, project name, or project name/CPID pair that identifies
             // the current statistics record:
             const std::string& object_id = entry.first.objectID;
 
             switch (entry.first.objecttype) {
-                // This map starts with a single, network-wide statistics entry.
-                // Skip it because superblock objects will recalculate the stats
-                // as needed after deserialization.
-                //
-                case statsobjecttype::NetworkWide:
-                    continue;
+            // This map starts with a single, network-wide statistics entry.
+            // Skip it because superblock objects will recalculate the stats
+            // as needed after deserialization.
+            //
+            case statsobjecttype::NetworkWide:
+                continue;
 
-                case statsobjecttype::byCPID:
-                    m_superblock.m_cpids.Add(
-                        Cpid::Parse(object_id),
-                        Magnitude::RoundFrom(entry.second.statsvalue.dMag));
+            case statsobjecttype::byCPID:
+                m_superblock.m_cpids.Add(
+                    Cpid::Parse(object_id),
+                    Magnitude::RoundFrom(entry.second.statsvalue.dMag));
 
-                    break;
+                break;
 
-                case statsobjecttype::byProject:
-                    m_superblock.m_projects.Add(
-                        object_id,
-                        Superblock::ProjectStats(
-                            std::nearbyint(entry.second.statsvalue.dTC),
-                            std::nearbyint(entry.second.statsvalue.dAvgRAC),
-                            std::nearbyint(entry.second.statsvalue.dRAC))
+            case statsobjecttype::byProject:
+                m_superblock.m_projects.Add(
+                    object_id,
+                    Superblock::ProjectStats(
+                        std::nearbyint(entry.second.statsvalue.dTC),
+                        std::nearbyint(entry.second.statsvalue.dAvgRAC),
+                        std::nearbyint(entry.second.statsvalue.dRAC))
                     );
 
-                    break;
+                break;
 
-                // The scraper statistics map orders the entries by "objecttype"
-                // starting with "byCPID" and "byProject". After importing these
-                // sections into the superblock, we can exit this loop.
-                //
-                default:
-                    goto end_build_from_stats_loop;
+            // The scraper statistics map orders the entries by "objecttype"
+            // starting with "byCPID" and "byProject". After importing these
+            // sections into the superblock, we can exit this loop.
+            //
+            default:
+                goto end_build_from_stats_loop;
             }
         }
 
-        // ScraperStatsQuorumHasher expects the verified beacons data after the
-        // CPID and project data, so we use a goto statement to break the above
-        // loop instead or reordering the logic to use a return statement:
-        //
-        end_build_from_stats_loop:
-        m_superblock.m_verified_beacons.Reset(stats_and_verified_beacons.mVerifiedMap);
+    // ScraperStatsQuorumHasher expects the verified beacons data after the
+    // CPID and project data, so we use a goto statement to break the above
+    // loop instead or reordering the logic to use a return statement:
+    //
+    end_build_from_stats_loop:
+        m_superblock.m_verified_beacons.Reset(stats_verified_beacons_tc.mVerifiedMap);
+
+        // This is equivalent to superblock v3+ and doesn't require a lock on cs_main.
+        if (!stats_verified_beacons_tc.m_total_credit_map.empty()) {
+            m_superblock.m_projects_all_cpids_total_credits.Reset(stats_verified_beacons_tc.m_total_credit_map);
+        }
     }
 private:
     T& m_superblock; //!< Superblock-like object to fill with supplied stats.
@@ -129,7 +135,7 @@ public:
     //!
     //! \param stats The scraper statistics to generate a hash from.
     //!
-    ScraperStatsQuorumHasher(const ScraperStatsAndVerifiedBeacons& stats) : m_stats(stats)
+    ScraperStatsQuorumHasher(const ScraperStatsVerifiedBeaconsTotalCredits& stats) : m_stats(stats)
     {
     }
 
@@ -140,7 +146,7 @@ public:
     //!
     //! \return A hash that matches the hash of a corresponding superblock.
     //!
-    static QuorumHash Hash(const ScraperStatsAndVerifiedBeacons& stats)
+    static QuorumHash Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats)
     {
         return ScraperStatsQuorumHasher(stats).GetHash();
     }
@@ -281,6 +287,17 @@ private:
                 m_hasher << key_ids;
             }
 
+            void Reset(const std::map<std::string, double>& projects_all_cpids_total_credits)
+            {
+                std::map<std::string, uint64_t> tc_map;
+
+                for (const auto& entry : projects_all_cpids_total_credits) {
+                    tc_map.insert(std::make_pair(entry.first, std::nearbyint(entry.second)));
+                }
+
+                m_hasher << tc_map;
+            }
+
             //!
             //! \brief Get the final hash of the provided superblock data.
             //!
@@ -296,14 +313,19 @@ private:
         HasherProxy& m_cpids;            //!< Proxies calls for Superblock::CpidIndex.
         HasherProxy& m_projects;         //!< Proxies calls for Superblock::ProjectIndex.
         HasherProxy& m_verified_beacons; //!< Proxies calls for Superblock.m_verified_beacons.
+        HasherProxy& m_projects_all_cpids_total_credits; //!< Proxies calls for Superblock.mm_projects_all_cpids_total_credits
 
         //!
         //! \brief Initialize a mock superblock object.
         //!
-        SuperblockMock() : m_cpids(m_proxy), m_projects(m_proxy), m_verified_beacons(m_proxy) { }
+        SuperblockMock() : m_cpids(m_proxy)
+                         , m_projects(m_proxy)
+                         , m_verified_beacons(m_proxy)
+                         , m_projects_all_cpids_total_credits(m_proxy)
+        {}
     };
 
-    const ScraperStatsAndVerifiedBeacons& m_stats; //!< The stats to hash like a Superblock.
+    const ScraperStatsVerifiedBeaconsTotalCredits& m_stats; //!< The stats to hash like a Superblock.
 };
 
 //!
@@ -576,38 +598,47 @@ Superblock Superblock::FromConvergence(
     const ConvergedScraperStats& stats,
     const uint32_t version)
 {
-    Superblock superblock = Superblock::FromStats(GetScraperStatsAndVerifiedBeacons(stats), version);
+    Superblock superblock = Superblock::FromStats(stats.mScraperConvergedStats, version);
 
     superblock.m_convergence_hint = stats.Convergence.nContentHash.GetUint64(0) >> 32;
 
     if (!stats.Convergence.bByParts) {
         superblock.m_manifest_content_hint
             = stats.Convergence.nUnderlyingManifestContentHash.GetUint64(0) >> 32;
+    } else {
+        ProjectIndex& projects = superblock.m_projects;
 
-        return superblock;
+               // Add hints created from the hashes of converged manifest parts to each
+               // superblock project section to assist receiving nodes with validation:
+               //
+        for (const auto& part_pair : stats.Convergence.ConvergedManifestPartPtrsMap) {
+            const std::string& project_name = part_pair.first;
+            const CSplitBlob::CPart* part_data_ptr = part_pair.second;
+
+            projects.SetHint(project_name, part_data_ptr);
+        }
     }
 
-    ProjectIndex& projects = superblock.m_projects;
+    if (version > 2) {
+        // Populate the total credits into the superblock object from the convergence. This must be done BEFORE
+        // the auto greylist RefreshWithSuperblock is called.
+        superblock.m_projects_all_cpids_total_credits.Reset(stats.mScraperConvergedStats.m_total_credit_map);
 
-    // Add hints created from the hashes of converged manifest parts to each
-    // superblock project section to assist receiving nodes with validation:
-    //
-    for (const auto& part_pair : stats.Convergence.ConvergedManifestPartPtrsMap) {
-        const std::string& project_name = part_pair.first;
-        const CSplitBlob::CPart* part_data_ptr = part_pair.second;
+        // Refresh the auto greylist and refresh this superblock with the greylist status.
+        std::shared_ptr<GRC::AutoGreylist> greylist_ptr = GRC::GetAutoGreylistCache();
 
-        projects.SetHint(project_name, part_data_ptr);
+        greylist_ptr->RefreshWithSuperblock(superblock);
     }
 
     return superblock;
 }
 
-Superblock Superblock::FromStats(const ScraperStatsAndVerifiedBeacons& stats_and_verified_beacons, const uint32_t version)
+Superblock Superblock::FromStats(const ScraperStatsVerifiedBeaconsTotalCredits& stats_verified_beacons_tc, const uint32_t version)
 {
     Superblock superblock(version);
     ScraperStatsSuperblockBuilder<Superblock> builder(superblock);
 
-    builder.BuildFromStats(stats_and_verified_beacons);
+    builder.BuildFromStats(stats_verified_beacons_tc);
 
     return superblock;
 }
@@ -996,6 +1027,15 @@ void Superblock::VerifiedBeacons::Reset(
     std::sort(m_verified.begin(), m_verified.end());
 }
 
+void Superblock::ProjectsAllCpidTotalCredits::Reset(const std::map<std::string, double>& projects_all_cpid_total_credits)
+{
+    m_projects_all_cpid_total_credits.clear();
+
+    for (const auto& entry : projects_all_cpid_total_credits) {
+        m_projects_all_cpid_total_credits.insert(make_pair(entry.first, std::nearbyint(entry.second)));
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Class: SuperblockPtr
 // -----------------------------------------------------------------------------
@@ -1067,7 +1107,7 @@ QuorumHash::QuorumHash(const std::vector<unsigned char>& bytes) : QuorumHash()
 QuorumHash QuorumHash::Hash(const Superblock& superblock)
 {
     if (superblock.m_version > 1) {
-        return QuorumHash(SerializeHash(superblock));
+        return QuorumHash(SerializeHash(SuperblockForHash(superblock)));
     }
 
     std::string input;
@@ -1089,7 +1129,7 @@ QuorumHash QuorumHash::Hash(const Superblock& superblock)
     return QuorumHash(output);
 }
 
-QuorumHash QuorumHash::Hash(const ScraperStatsAndVerifiedBeacons& stats)
+QuorumHash QuorumHash::Hash(const ScraperStatsVerifiedBeaconsTotalCredits& stats)
 {
     ScraperStatsQuorumHasher hasher(stats);
 

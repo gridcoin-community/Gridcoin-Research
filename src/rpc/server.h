@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2012 The Bitcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -195,6 +196,7 @@ extern UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 extern UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 extern UniValue listalerts(const UniValue& params, bool fHelp);
 extern UniValue listprojects(const UniValue& params, bool fHelp);
+extern UniValue getautogreylist(const UniValue& params, bool fHelp);
 extern UniValue listprotocolentries(const UniValue& params, bool fHelp);
 extern UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
 extern UniValue listscrapers(const UniValue& params, bool fHelp);

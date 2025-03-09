@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -7,12 +7,15 @@
 
 #include "amount.h"
 #include "contract/contract.h"
+#include "gridcoin/fwd.h"
+#include "gridcoin/superblock.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/contract/registry_db.h"
 #include "serialize.h"
 #include "pubkey.h"
 #include "sync.h"
+#include "node/ui_interface.h"
 
 #include <memory>
 #include <vector>
@@ -20,26 +23,8 @@
 
 namespace GRC
 {
-//!
-//! \brief Enumeration of project entry status. Unlike beacons this is for both storage
-//! and memory.
-//!
-//! UNKNOWN status is only encountered in trivially constructed empty
-//! project entries and should never be seen on the blockchain.
-//!
-//! DELETED status corresponds to a removed entry.
-//!
-//! ACTIVE corresponds to an active entry.
-//!
-//! OUT_OF_BOUND must go at the end and be retained for the EnumBytes wrapper.
-//!
-enum class ProjectEntryStatus
-{
-    UNKNOWN,
-    DELETED,
-    ACTIVE,
-    OUT_OF_BOUND
-};
+// See gridcoin/fwd.h for ProjectEntryStatus. It is in the forward declaration file because it is
+// also needed in the superblock class, and this prevents recursive includes.
 
 class ProjectEntry
 {
@@ -50,13 +35,35 @@ public:
     using Status = EnumByte<ProjectEntryStatus>;
 
     //!
+    //! \brief Project filter flag enumeration.
+    //!
+    //! This controls what project entries by status are in the project whitelist snapshot. Note that REG_ACTIVE
+    //! is the original "ACTIVE" and represents project entries with a status of "ACTIVE" in the registry. The
+    //! filter flag "ACTIVE" here includes both REG_ACTIVE and AUTO_GREYLIST_OVERRIDE project entry statuses from
+    //! the registry, since both mean the project is active assuming a convergence can be formed.
+    //!
+    enum ProjectFilterFlag : uint8_t {
+        NONE                   = 0b00000,
+        DELETED                = 0b00001,
+        MAN_GREYLISTED         = 0b00010,
+        AUTO_GREYLISTED        = 0b00100,
+        GREYLISTED             = MAN_GREYLISTED | AUTO_GREYLISTED,
+        REG_ACTIVE             = 0b01000,
+        AUTO_GREYLIST_OVERRIDE = 0b10000,
+        ACTIVE                 = REG_ACTIVE | AUTO_GREYLIST_OVERRIDE,
+        NOT_ACTIVE             = 0b00111,
+        ALL_BUT_DELETED        = 0b11110,
+        ALL                    = 0b11111
+    };
+
+    //!
     //! \brief Version number of the current format for a serialized project.
     //!
     //! CONSENSUS: Increment this value when introducing a breaking change and
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint32_t CURRENT_VERSION = 3;
+    static constexpr uint32_t CURRENT_VERSION = 4;
 
     //!
     //! \brief Version number of the serialized project format.
@@ -71,6 +78,7 @@ public:
     uint256 m_hash;                      //!< The txid of the transaction that contains the project entry.
     uint256 m_previous_hash;             //!< The m_hash of the previous project entry with the same key.
     bool m_gdpr_controls;                //!< Boolean to indicate whether project has GDPR stats export controls.
+    bool m_requires_ext_adapter;         //!< Boolean to indicate whether project requires external adapter.
     CPubKey m_public_key;                //!< Project public key.
     Status m_status;                     //!< The status of the project entry. (Note serialization converts to/from int.)
 
@@ -106,10 +114,12 @@ public:
     //! \param name. The key of the project entry.
     //! \param url. The value of the project entry.
     //! \param gdpr_controls. The gdpr control flag of the project entry
+    //! \param requires_ext_adapter. The flag that indicates whether the project requires an external adapter for stats.
     //! \param status. the status of the project entry.
     //! \param timestamp. The timestamp of the project entry that comes from the containing transaction
     //!
-    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls, Status status, int64_t timestamp);
+    ProjectEntry(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+                 bool requires_ext_adapter, Status status, int64_t timestamp);
 
     //!
     //! \brief Determine whether a project entry contains each of the required elements.
@@ -176,6 +186,11 @@ public:
     //! \brief Returns true if project has project stats GDPR export controls
     //!
     std::optional<bool> HasGDPRControls() const;
+
+    //!
+    //! \brief Returns true if project requires an externel adapter for statistics collection.
+    //!
+    std::optional<bool> RequiresExtAdapter() const;
 
     //!
     //! \brief Comparison operator overload used in the unit test harness.
@@ -287,6 +302,18 @@ public:
     //!
     //! \brief Initialize a \c Project using data from the contract.
     //!
+    //! \param version         Project payload version.
+    //! \param name            Project name from contract message key.
+    //! \param url             Project URL from contract message value.
+    //! \param gdpr_controls   Boolean to indicate gdpr stats export controls enforced
+    //! \param status          ProjectEntryStatus to force project status.
+    //!
+    Project(uint32_t version, std::string name, std::string url, bool gdpr_controls,
+            bool requires_ext_adapter, ProjectEntryStatus status);
+
+    //!
+    //! \brief Initialize a \c Project using data from the contract.
+    //!
     //! \param version       Project payload version.
     //! \param name          Project name from contract message key.
     //! \param url           Project URL from contract message value.
@@ -307,7 +334,7 @@ public:
     Project(std::string name, std::string url, int64_t timestamp, uint32_t version, bool gdpr_controls);
 
     //!
-    //! \brief Initialize a \c Project payloard from a provided project entry
+    //! \brief Initialize a \c Project payload from a provided project entry
     //! \param version. Project Payload version.
     //! \param entry. Project entry to place in the payload.
     //!
@@ -398,6 +425,10 @@ public:
             READWRITE(m_previous_hash);
             READWRITE(m_status);
         }
+
+        if (m_version >= 4) {
+            READWRITE(m_requires_ext_adapter);
+        }
     }
 }; // Project (entry payload)
 
@@ -426,8 +457,10 @@ public:
     //! \brief Initialize a snapshot for the provided project list from the project entry map.
     //!
     //! \param projects A copy of the smart pointer to the project list.
+    //! \param filter_used The project status filter used for the project list.
     //!
-    WhitelistSnapshot(ProjectListPtr projects);
+    WhitelistSnapshot(ProjectListPtr projects,
+                      const ProjectEntry::ProjectFilterFlag& filter_used = ProjectEntry::ProjectFilterFlag::ACTIVE);
 
     //!
     //! \brief Returns an iterator to the beginning.
@@ -464,6 +497,13 @@ public:
     bool Contains(const std::string& name) const;
 
     //!
+    //! \brief Returns the project status filter flag used to populate the snapshot.
+    //!
+    //! \return ProjectFilterFlag used for whitelist snapshot.
+    //!
+    ProjectEntry::ProjectFilterFlag FilterUsed() const;
+
+    //!
     //! \brief Create a snapshot copy sorted alphabetically by project name.
     //!
     //! \return A sorted copy of the snapshot.
@@ -471,7 +511,346 @@ public:
     WhitelistSnapshot Sorted() const;
 
 private:
-    const ProjectListPtr m_projects;  //!< The vector of whitelisted projects.
+    const ProjectListPtr m_projects;                //!< The vector of whitelisted projects.
+    const ProjectEntry::ProjectFilterFlag m_filter; //!< The filter used to populate the readonly list.
+};
+
+//!
+//! \brief The AutoGreylist class. This class is a caching, thread-safe object that is generally intended to be (and currently
+//! implemented as) a singleton, global object with a cached state, where a need for an actual refresh is determined
+//! by a change in the superblock hash.
+//!
+//! The object is initialized in anonymous namespace in project.cpp as part of the Whitelist (project registry) initialization
+//! and is accessed by the GetAutoGreylistCache() global namespace function, or alternatively by the GetAutoGreylist method on
+//! the Whitelist class. While this object is _internally_ thread safe via the autogreylist_lock, several methods access
+//! external structures for which safe access can only be obtained by holding the cs_main lock beforehand. These methods are
+//! marked by EXCLUSIVE_LOCKS_REQUIRED accordingly to facilitate static lock analysis when available by the compiler.
+//!
+//! The object implements the current "Zero Credit Days" and "Work Availability Score" rules. The projects that qualify
+//! for greylisting override the ACTIVE and MAN_GREYLISTED status entries in the registry. This override is NOT permanent,
+//! but instead only persists while the project qualifies for greylisting using the rules, which are updated for each superblock
+//! change. In turn, there is a project entry that can be made in the registry to override the auto greylist, AUTO_GREYLIST_OVERRIDE,
+//! which prevents the application of the AUTO_GREYLIST status to that project. This will prevent greylisting of that
+//! project, even though by the rules it would be required. This override is to provide an ability to deal with unanticipated
+//! situations concerning a project that render the normal rules not applicable.
+//!
+class AutoGreylist
+{
+public:
+    //!
+    //! \brief This provides a class that formalizes a greylist candidate entry. If the requirements for auto
+    //! greylisting are met, the candidate entry becomes an override to the corresponding project entry on the
+    //! whitelist.
+    //!
+    class GreylistCandidateEntry
+    {
+    public:
+        //!
+        //! \brief This is the trivial, empty constructor.
+        //!
+        GreylistCandidateEntry()
+            : m_project_name(std::string {})
+            , m_zcd_20_SB_count(0)
+            , m_TC_7_SB_sum(0)
+            , m_TC_40_SB_sum(0)
+            , m_meets_greylisting_crit(false)
+            , m_TC_initial_bookmark(0)
+            , m_TC_bookmark(0)
+            , m_sb_from_baseline_processed(0)
+            , m_update_history({})
+        {}
+
+        //!
+        //! \brief This parameterized constructor is used to construct the initial (baseline) greylist candidate
+        //! entry with the initial total credit value for the project. This also inserts the baseline history entry.
+        //!
+        //! \param project_name
+        //! \param TC_initial_bookmark
+        //!
+        GreylistCandidateEntry(std::string project_name, std::optional<uint64_t> TC_initial_bookmark)
+            : m_project_name(project_name)
+            , m_zcd_20_SB_count(0)
+            , m_TC_7_SB_sum(0)
+            , m_TC_40_SB_sum(0)
+            , m_meets_greylisting_crit(false)
+            , m_TC_initial_bookmark(TC_initial_bookmark)
+            , m_TC_bookmark(TC_initial_bookmark)
+            , m_sb_from_baseline_processed(0)
+            , m_update_history()
+        {
+            // Populate the initial historical entry from the initial baseline.
+            UpdateHistoryEntry entry = UpdateHistoryEntry(0,
+                                                          TC_initial_bookmark,
+                                                          std::optional<uint8_t>(),
+                                                          std::optional<Fraction>(),
+                                                          std::optional<bool>());
+
+            m_update_history.push_back(entry);
+        }
+
+        //!
+        //! \brief Computes the number of "Zero Credit Days" (ZCD) in the last 20 SB from the superblock baseline.
+        //!
+        //! The number of zero credit days is counted starting at the current (or converged if part of the miner loop)
+        //! superblock backwards by superblock history. If the backwards history is limited by either the project
+        //! whitelisting initial active entry, or the number of v3 superblocks, then the zcd will be computed based
+        //! on the superblock history available.
+        //!
+        //! \return uint8_t of zcd count.
+        //!
+        uint8_t GetZCD()
+        {
+            return m_zcd_20_SB_count;
+        }
+
+        //!
+        //! \brief Computes the "Work Availability Score" (WAS) in the last 40 SB from the superblock baseline.
+        //!
+        //! The WAS is determined by computing the change in total credit over the last seven superblocks back from the
+        //! current (or converged if part of the miner loop) superblock, divided by the change in total credit over the
+        //! last 40 superblocks. This is represented internally as a fraction rather than floating point to avoid
+        //! consensus issues. Note that for display, the ToDouble method on the Fraction class is used to convert to
+        //! a human readable double. If 40 superblocks of history are not available, either because the project
+        //! was just whitelisted via an initial active project entry, or there are not enough v3 superblocks, then
+        //! the WAS is computed using the history that is available. This means for newly listed projects, or where the
+        //! v3 superblock history is less than 7, the WAS will be equal to 1.0 unless there are no collected statistics
+        //! on two superblocks during that interval, in which case the WAS will be 0.0.
+        //!
+        //! \return Fraction of Work Availablity Score.
+        //!
+        Fraction GetWAS()
+        {
+            if (!m_sb_from_baseline_processed) {
+                return Fraction(0);
+            }
+
+            // The Fraction class is implemented with int64_t as the underlying data type for the numerator and denominator;
+            // however, the total credit is stored in the superblock as a uint64_t. To be thorough, check if either of the unsigned
+            // 64 bit TC averages will overflow a signed 64 integer, and if so, then simply divide by 2 before constructing the
+            // fraction. This is extremely unlikely, given that the number of SB's processed from the baseline would have to be
+            // one, and then the sum overflow the int64_t max.
+            uint64_t TC_7_SB_avg = m_TC_7_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 7);
+            uint64_t TC_40_SB_avg = m_TC_40_SB_sum / std::min<uint64_t>(m_sb_from_baseline_processed, 40);
+
+            if (TC_7_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()
+                || TC_40_SB_avg > (uint64_t) std::numeric_limits<int64_t>::max()) {
+                TC_7_SB_avg /= 2;
+                TC_40_SB_avg /= 2;
+            }
+
+            if (TC_7_SB_avg == 0 && TC_40_SB_avg == 0) {
+                return Fraction(0);
+            } else {
+                return Fraction(TC_7_SB_avg, TC_40_SB_avg);
+            }
+        }
+
+        //!
+        //! \brief UpdateGreylistCandidateEntry
+        //!
+        //! \param total_credit
+        //! \param sb_from_baseline
+        //!
+        void UpdateGreylistCandidateEntry(std::optional<uint64_t> total_credit, uint8_t sb_from_baseline)
+        {
+            if (sb_from_baseline > 0) {
+                // ZCD part. Remember we are going backwards, so if total_credit is greater than or equal to
+                // the bookmark, then we have zero or even negative project total credit between superblocks, so
+                // this qualifies as a ZCD. We look back up to 20 from baseline.
+                if (sb_from_baseline <= 20) {
+                    // If total credit is greater than the bookmark, this means that (going forward in time) credit actually
+                    // declined, so we must add a day for the credit decline (going forward in time). If total credit
+                    // is std::nullopt, then this means no statistics available, which also is a ZCD.
+                    if ((total_credit && total_credit >= m_TC_bookmark) || !total_credit){
+                        ++m_zcd_20_SB_count;
+                    }
+                }
+
+                // WAS part. Here we deal with two numbers, the 40 SB from baseline, and the 7 SB from baseline. We use
+                // the initial bookmark, and compute the difference, which is the same as adding up the deltas between
+                // the TC's in each superblock. For updates with no total credit entry (i.e. std::optional is nullopt),
+                // do not change the sums.
+                //
+                // If the initial bookmark TC is not available (i.e. the current SB did not have stats for this project),
+                // but this update does, then update the initial bookmark to this total credit.
+                if (!m_TC_initial_bookmark && total_credit) {
+                    m_TC_initial_bookmark = total_credit;
+                }
+
+                if (total_credit && m_TC_initial_bookmark > total_credit) {
+                    if (sb_from_baseline <= 7) {
+                        m_TC_7_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                    }
+
+                    if (sb_from_baseline <= 40) {
+                        m_TC_40_SB_sum = *m_TC_initial_bookmark - *total_credit;
+                    }
+                }
+
+                m_sb_from_baseline_processed = sb_from_baseline;
+            }
+
+            // Update bookmark only if total_credit is actually there.
+            if (total_credit) {
+                m_TC_bookmark = total_credit;
+            }
+
+            uint8_t zcd = GetZCD();
+            Fraction was = GetWAS();
+
+            // Apply rules and determine if greylisting criteria is met. To allow the statistics to stabilize before the
+            // rules are applied, a seven day grace period is provided after the whitelisting of the project.
+            m_meets_greylisting_crit = (sb_from_baseline >= 7 && (zcd > 7 || was < Fraction(1, 10)));
+
+            // Insert historical entry.
+            UpdateHistoryEntry entry(sb_from_baseline, total_credit, zcd, was, m_meets_greylisting_crit);
+            m_update_history.push_back(entry);
+        }
+
+        //!
+        //! \brief This is used to store an update entry for historical purposes.
+        //!
+        struct UpdateHistoryEntry
+        {
+            //!
+            //! \brief Specific constructor for UpdateHistoryEntry.
+            //!
+            //! \param sb_from_baseline_processed
+            //! \param total_credit
+            //! \param zcd
+            //! \param was
+            //! \param meets_greylisting_crit
+            //!
+            UpdateHistoryEntry(uint8_t sb_from_baseline_processed,
+                               std::optional<uint64_t>total_credit,
+                               std::optional<uint8_t> zcd,
+                               std::optional<Fraction> was,
+                               std::optional<bool> meets_greylisting_crit)
+                : m_sb_from_baseline_processed(sb_from_baseline_processed)
+                , m_total_credit(total_credit)
+                , m_zcd(zcd)
+                , m_was(was)
+                , m_meets_greylisting_crit(meets_greylisting_crit)
+            {}
+
+            uint8_t m_sb_from_baseline_processed;
+            std::optional<uint64_t> m_total_credit;
+            std::optional<uint8_t> m_zcd;
+            std::optional<Fraction> m_was;
+            std::optional<bool> m_meets_greylisting_crit;
+        };
+
+        //!
+        //! \brief This provides the update history vector for the greylist candidate entry.
+        //! \return
+        //!
+        const std::vector<UpdateHistoryEntry> GetUpdateHistory() const
+        {
+            return m_update_history;
+        }
+
+        const std::string m_project_name;
+
+        uint8_t m_zcd_20_SB_count;
+        uint64_t m_TC_7_SB_sum;
+        uint64_t m_TC_40_SB_sum;
+        bool m_meets_greylisting_crit;
+
+    private:
+        std::optional<uint64_t> m_TC_initial_bookmark; //!< This is a "reverse" bookmark - we are going backwards in SB's.
+        std::optional<uint64_t> m_TC_bookmark;
+        uint8_t m_sb_from_baseline_processed;
+
+        std::vector<UpdateHistoryEntry> m_update_history;
+    };
+
+    typedef std::map<std::string, GreylistCandidateEntry> Greylist;
+
+    //!
+    //! \brief Smart pointer around a collection of projects.
+    //!
+    typedef std::shared_ptr<Greylist> GreylistPtr;
+
+    typedef Greylist::size_type size_type;
+    typedef Greylist::iterator iterator;
+    typedef Greylist::const_iterator const_iterator;
+
+    //!
+    //! \brief The trivial constructor for the AutoGreylist class.
+    //!
+    AutoGreylist();
+
+    //!
+    //! \brief Returns an iterator to the beginning.
+    //!
+    const_iterator begin() const;
+
+    //!
+    //! \brief Returns an iterator to the end.
+    //!
+    const_iterator end() const;
+
+    //!
+    //! \brief Get the number of projects in the auto greylist. This should be equal to the number of whitelisted projects,
+    //! since the auto greylist tracks "candidate" entries, and they are marked as to whether they qualify for greylisting.
+    //!
+    size_type size() const;
+
+    //!
+    //! \brief Determine whether the specified project exists in the auto greylist.
+    //!
+    //! \param name Project name matching the contract key.
+    //!
+    //! \param only_auto_greylisted A boolean that specifies whether the search is against all projects or only those
+    //! that meet auto greylisting criteria.
+    //!
+    //! \return \c true if the auto greylist contains a project with matching name.
+    //!
+    bool Contains(const std::string& name, const bool& only_auto_greylisted = true) const;
+
+    //!
+    //! \brief This refreshes the AutoGreylist object from the last superblock in the chain.
+    //!
+    void Refresh();
+
+    //!
+    //! \brief This refreshes the AutoGreylist object from an input Superblock pointer.
+    //!
+    //! \param superblock_ptr The superblock pointer with which to refresh the automatic greylist. This can be a candidate superblock
+    //! from a scraper convergence, or in the instance of this being called from Refresh(), could be the current
+    //! superblock on the chain.
+    //!
+    //! \param unit_test_blocks This is a map that is indexed by height, with linked CBlockIndex* pointers and paired
+    //! Superblock objects. This is intended as a substitute input structure for unit testing. It is optional and defaults to
+    //! nullptr, in which case the live chain data is used. One of the entries in the map must correspond to the Superblock_ptr
+    //! passed as the first parameter.
+    //!
+    void RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
+                               std::shared_ptr<std::map<int, std::pair<CBlockIndex*, SuperblockPtr>>> unit_test_blocks = nullptr);
+
+    //!
+    //! \brief This refreshes the AutoGreylist object from an input Superblock that is going to be associated
+    //! with the current head of the chain. This mode is used in the scraper during the construction of the superblock contract.
+    //!
+    //! Note that the AutoGreylist object refreshed this way will also be used to update the referenced superblock
+    //! object
+    //!
+    //! \param superblock The superblock with which to refresh the automatic greylist. This will generally be a candidate superblock
+    //! from a scraper convergence, and is used in the call chain from the miner loop. The superblock object project status
+    //! will be updated.
+    //!
+    void RefreshWithSuperblock(Superblock& superblock);
+
+    //!
+    //! \brief Resets the AutoGreylist object. This is called by the Whitelist Reset().
+    //!
+    void Reset();
+
+private:
+    mutable CCriticalSection autogreylist_lock;
+
+    GreylistPtr m_greylist_ptr;
+    QuorumHash m_superblock_hash;
 };
 
 //!
@@ -482,15 +861,21 @@ class Whitelist : public IContractHandler
 public:
     //!
     //! \brief Initializes the project whitelist manager. The version must be incremented when
-    //! introducing a breaking change in the storage format (serialization) of the project entry.
+    //! introducing a breaking change in the storage format (serialization) of the project entry. It does not
+    //! have to be incremented if the serialization change is versioned and protected by that version
+    //! in the project entry class itself.
     //!
-    //! Version 0: <= 5.4.2.0 where there was no backing db.
-    //! Version 1: TBD.
+    //! Version 0: <= 5.4.5.0 where there was no backing db.
+    //! Version 1: >= 5.4.6.0.
     //!
     Whitelist()
-        :m_project_db(1)
-    {
-    };
+        : m_project_entries()
+        , m_pending_project_entries()
+        , m_expired_project_entries()
+        , m_project_first_actives()
+        , m_project_db(1)
+        , m_auto_greylist(std::make_shared<AutoGreylist>())
+    {}
 
     //!
     //! \brief The type that keys project entries by their key strings. Note that the entries
@@ -513,9 +898,12 @@ public:
     typedef std::map<uint256, ProjectEntry_ptr> HistoricalProjectEntryMap;
 
     //!
-    //! \brief Get a read-only view of the projects in the whitelist.
+    //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
+    //! provides the original ACTIVE project only view. The refresh_greylist filter is used to refresh
+    //! the AutoGreylist as part of taking the snapshot.
     //!
-    WhitelistSnapshot Snapshot() const;
+    WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
+                               const bool& refresh_greylist = true, const bool &include_override = true) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -613,6 +1001,21 @@ public:
     uint64_t PassivateDB() override;
 
     //!
+    //! \brief This returns m_project_first_actives. Note that unlike other methods here, this does not take the cs_lock
+    //! internally but rather requires it. The reason for this is that this function is used by the AutoGreylist class update
+    //! where the cs_lock is already taken before, and the AutoGreylist class has its own lock. If cs_lock is then taken again,
+    //! a potential deadlock can result.
+    //!
+    const ProjectEntryMap GetProjectsFirstActive() const;
+
+    //!
+    //! \brief Method to provide the shared pointer to the global auto greylist cache object.
+    //!
+    //! \return shared pointer to the auto greylist global cache object.
+    //!
+    std::shared_ptr<AutoGreylist> GetAutoGreylist();
+
+    //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ProjectEntry> is not
     //! actually used.
     //!
@@ -623,6 +1026,11 @@ public:
                        PendingProjectEntryMap,
                        std::set<ProjectEntry>,
                        HistoricalProjectEntryMap> ProjectEntryDB;
+
+    //!
+    //! \brief Core signal to indicate that a project status has changed.
+    //!
+    boost::signals2::signal<void (const ProjectEntry_ptr project, ChangeType status)> NotifyProjectChanged;
 
 private:
     //!
@@ -639,11 +1047,16 @@ private:
     void AddDelete(const ContractContext& ctx);
 
     ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
-    PendingProjectEntryMap m_pending_project_entries {}; //!< Not actually used. Only to satisfy the template.
 
-    std::set<ProjectEntry> m_expired_project_entries {}; //!< Not actually used. Only to satisfy the template.
+    PendingProjectEntryMap m_pending_project_entries;    //!< Not actually used. Only to satisfy the template.
 
-    ProjectEntryDB m_project_db; //!< The project db member
+    std::set<ProjectEntry> m_expired_project_entries;    //!< Not actually used. Only to satisfy the template.
+
+    ProjectEntryMap m_project_first_actives;             //!< Tracks when projects were first activated for auto greylisting purposes.
+
+    ProjectEntryDB m_project_db;                         //!< The project db member
+
+    std::shared_ptr<AutoGreylist> m_auto_greylist;       //!< Smart shared pointer to the AutoGreylist cache object
 public:
 
     ProjectEntryDB& GetProjectDB();
@@ -655,6 +1068,15 @@ public:
 //! \return Current global whitelist registry instance.
 //!
 Whitelist& GetWhitelist();
+
+//!
+//! \brief Global scope function to provide the shared pointer to the global auto greylist cache object. The AutoGreylist
+//! cache is originally constructed and a pointer held in m_auto_greylist in the Whitelist class global singleton, g_whitelist.
+//!
+//! \return shared pointer to the auto greylist global cache object.
+//!
+std::shared_ptr<AutoGreylist> GetAutoGreylistCache();
+
 } // namespace GRC
 
 #endif // GRIDCOIN_PROJECT_H

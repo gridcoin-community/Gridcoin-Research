@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2024 The Gridcoin developers
+// Copyright (c) 2014-2025 The Gridcoin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
@@ -829,6 +829,8 @@ private:
     //! This set is cleared and repopulated at each SB accepted by the node with the current expired pending beacons.
     //!
     std::set<Beacon_ptr> m_expired_pending;
+
+    BeaconMap m_beacon_first_entries {}; //!< Not used here. Only to satisfy the template.
 
     //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
