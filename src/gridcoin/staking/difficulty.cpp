@@ -23,7 +23,7 @@ constexpr int64_t TARGET_TIMESPAN = 16 * 60;  // 16 mins in seconds
 const arith_uint256 PROOF_OF_STAKE_LIMIT = ~arith_uint256() >> 20;
 
 // ppcoin: find last block index up to pindex
-const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake)
+const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     while (pindex && pindex->pprev && (pindex->IsProofOfStake() != fProofOfStake))
         pindex = pindex->pprev;
@@ -35,7 +35,7 @@ const CBlockIndex* GetLastBlockIndex(const CBlockIndex* pindex, bool fProofOfSta
 // Functions
 // -----------------------------------------------------------------------------
 
-unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast)
+unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindexLast == nullptr) {
         return PROOF_OF_STAKE_LIMIT.GetCompact(); // genesis block
@@ -89,7 +89,7 @@ unsigned int GRC::GetNextTargetRequired(const CBlockIndex* pindexLast)
     return bnNew.GetCompact();
 }
 
-double GRC::GetDifficulty(const CBlockIndex* blockindex)
+double GRC::GetDifficulty(const CBlockIndex* blockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Floating point number that is a multiple of the minimum difficulty,
     // minimum difficulty = 1.0.
@@ -124,18 +124,18 @@ double GRC::GetBlockDifficulty(unsigned int nBits)
     return dDiff;
 }
 
-double GRC::GetCurrentDifficulty()
+double GRC::GetCurrentDifficulty() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetDifficulty(GetLastBlockIndex(pindexBest, true));
 }
 
-double GRC::GetTargetDifficulty()
+double GRC::GetTargetDifficulty() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetBlockDifficulty(GetNextTargetRequired(pindexBest));
 }
 
 // This requires a lock on cs_main when called.
-double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
+double GRC::GetAverageDifficulty(unsigned int nPoSInterval) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     /*
      * Diff is inversely related to Target (without the coinweight multiplier), but proportional to the
@@ -182,7 +182,7 @@ double GRC::GetAverageDifficulty(unsigned int nPoSInterval)
 }
 
 // This requires a lock on cs_main when called.
-double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance)
+double GRC::GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The smoothed difficulty is derived via a two step process. There is a coupling between the desired block
     // span to compute difficulty and essentially the stakeable balance: If the balance is low, the ETTS is
@@ -255,7 +255,7 @@ uint64_t GRC::GetStakeWeight(const CWallet& wallet)
     return weight;
 }
 
-double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval)
+double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The number of stakes to include in the average has been reduced to 40 (default) from 72. 72 stakes represented 1.8 hours at
     // standard spacing. This is too long. 40 blocks is nominally 1 hour.
@@ -268,6 +268,98 @@ double GRC::GetEstimatedNetworkWeight(unsigned int nPoSInterval)
     LogPrint(BCLog::LogFlags::NOISY, "GetEstimatedNetworkWeight debug: Network Weight in GRC = %f", result / 80.0);
 
     return result;
+}
+
+uint64_t GRC::GetAvgNetworkWeight(const unsigned int& block_interval, CBlockIndex* index_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    CBlockIndex* pindex = nullptr;
+    arith_uint256 weight_sum = 0;
+    unsigned int blocks = 0;
+
+    auto block_net_weight = [](CBlockIndex* index)
+    {
+        arith_uint256 target;
+
+        target.SetCompact(index->nBits);
+
+        return ~arith_uint256() / arith_uint256(450) / target * arith_uint256(COIN);
+    };
+
+    if (index_start != nullptr) {
+        pindex = index_start;
+    }
+
+    while (pindex && blocks < block_interval)
+    {
+        if (pindex->IsProofOfStake())
+        {
+            weight_sum += block_net_weight(pindex);
+            ++blocks;
+        }
+
+        pindex = pindex->pprev;
+    }
+
+    return blocks ? (weight_sum / blocks).GetLow64() : 0;
+}
+
+uint64_t GRC::GetAvgNetworkWeight(CBlockIndex* index_start, CBlockIndex* index_end) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    auto block_net_weight = [](CBlockIndex* index)
+    {
+        arith_uint256 target;
+
+        target.SetCompact(index->nBits);
+
+        return ~arith_uint256() / arith_uint256(450) / target * arith_uint256(COIN);
+    };
+
+    // These conditionals are ordered so that the no argument case quickly evaluates to the net weight of the current block.
+    if (index_end == nullptr) {
+        if (index_start == nullptr) {
+            return block_net_weight(pindexBest).GetLow64();
+        } else {
+            return block_net_weight(index_start).GetLow64();
+        }
+    } else {
+        if (index_start != nullptr) {
+            {
+                CBlockIndex* index;
+                arith_uint256 weight_sum;
+                unsigned int block_count = 0;
+
+                // If we are here, both index_start and index_end are not nullptrs.
+
+                if (!index_start->IsInMainChain()) {
+                    throw std::invalid_argument("Specified start index is not in main chain.");
+                }
+
+                if (!index_end->IsInMainChain()) {
+                    throw std::invalid_argument("Specified end index is not in main chain.");
+                }
+
+                if (index_start->nHeight >= index_end-> nHeight) {
+                    throw std::invalid_argument("End index if specified must be at a higher height than start index.");
+                }
+
+                for (index = index_start; index != index_end; index = index->pnext)
+                {
+                    if (index->IsProofOfStake()) {
+                        weight_sum += block_net_weight(index);
+                        ++block_count;
+                    }
+                }
+
+                // Get last block for inclusive interval
+                weight_sum += block_net_weight(index->pnext);
+                ++block_count;
+
+                return (weight_sum / arith_uint256(block_count)).GetLow64();
+            }
+        } else {
+            throw std::invalid_argument("End index was specified with start index = nullptr.");
+        }
+    }
 }
 
 double GRC::GetEstimatedTimetoStake(bool ignore_staking_status, double dDiff, double dConfidence)

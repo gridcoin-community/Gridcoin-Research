@@ -9,6 +9,7 @@
 #include "gridcoin/voting/fwd.h"
 #include "serialize.h"
 #include "uint256.h"
+#include "util.h"
 
 #include <string>
 #include <vector>
@@ -398,7 +399,8 @@ public:
     AdditionalFieldList m_additional_fields; //!< The set of additional fields for the poll.
 
     // Memory only:
-    int64_t m_timestamp;          //!< Time of the poll's containing transaction.
+    int64_t m_timestamp;                     //!< Time of the poll's containing transaction.
+    Fraction m_magnitude_weight_factor;      //!< Magnitude weight factor for the poll (defined at poll start).
 
     //!
     //! \brief Initialize an empty, invalid poll instance.
@@ -408,26 +410,27 @@ public:
     //!
     //! \brief Initialize a poll instance with data from a contract.
     //!
-    //! \param type          Type of the poll.
-    //! \param weight_type   Method used to weigh votes.
-    //! \param response_type Method for choosing poll answers.
-    //! \param duration_days Number of days the poll remains active.
-    //! \param title         UTF-8 title of the poll.
-    //! \param url           UTF-8 URL of the poll discussion webpage.
-    //! \param question      UTF-8 prompt that voters shall answer.
-    //! \param choices       The set of possible answers to the poll.
-    //! \param timestamp     Timestamp of the poll's containing transaction.
+    //! \param type                    Type of the poll.
+    //! \param weight_type             Method used to weigh votes.
+    //! \param response_type           Method for choosing poll answers.
+    //! \param duration_days           Number of days the poll remains active.
+    //! \param title                   UTF-8 title of the poll.
+    //! \param url                     UTF-8 URL of the poll discussion webpage.
+    //! \param question                UTF-8 prompt that voters shall answer.
+    //! \param choices                 The set of possible answers to the poll.
+    //! \param timestamp               Timestamp of the poll's containing transaction.
+    //! \param magnitude_weight_factor The magnitude weight factor for the poll, valid at poll start.
     //!
-    Poll(
-        PollType type,
-        PollWeightType weight_type,
-        PollResponseType response_type,
-        uint32_t duration_days,
-        std::string title,
-        std::string url,
-        std::string question,
-        ChoiceList choices,
-        int64_t timestamp);
+    Poll(PollType type,
+         PollWeightType weight_type,
+         PollResponseType response_type,
+         uint32_t duration_days,
+         std::string title,
+         std::string url,
+         std::string question,
+         ChoiceList choices,
+         int64_t timestamp,
+         Fraction magnitude_weight_factor);
 
     //!
     //! \brief Initialize a poll instance from a contract that contains poll
@@ -504,6 +507,16 @@ public:
     //! \return Expiration time as the number of seconds since the UNIX epoch.
     //!
     int64_t Expiration() const;
+
+    //!
+    //! \brief Fetch the applicable magnitude factor for the poll. This is the magnitude factor of the last entry in the
+    //! protocol registry database that has a timestamp at or before the poll start timestamp.
+    //!
+    //! \param index CBlockIndex of block containing poll transaction (poll start).
+    //!
+    //! \return Fraction Magnitude factor expressed as a Fraction.
+    //!
+    Fraction ResolveMagnitudeWeightFactor(CBlockIndex* index) const;
 
     //!
     //! \brief Get the set of possible answers to the poll.
