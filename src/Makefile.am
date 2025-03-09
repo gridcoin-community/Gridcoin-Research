@@ -119,6 +119,7 @@ GRIDCOIN_CORE_H = \
     gridcoin/cpid.h \
     gridcoin/gridcoin.h \
     gridcoin/magnitude.h \
+    gridcoin/mnemonics.h \
     gridcoin/mrc.h \
     gridcoin/project.h \
     gridcoin/protocol.h \
@@ -250,6 +251,7 @@ GRIDCOIN_CORE_CPP = addrdb.cpp \
     gridcoin/contract/registry.cpp \
     gridcoin/cpid.cpp \
     gridcoin/gridcoin.cpp \
+    gridcoin/mnemonics.cpp \
     gridcoin/mrc.cpp \
     gridcoin/project.cpp \
     gridcoin/protocol.cpp \
@@ -367,6 +369,8 @@ crypto_libgridcoin_crypto_base_a_SOURCES = \
     crypto/aes.h \
     crypto/chacha20.h \
     crypto/chacha20.cpp \
+    crypto/chacha20poly1305.h \
+    crypto/chacha20poly1305.cpp \
     crypto/common.h \
     crypto/hmac_sha256.cpp \
     crypto/hmac_sha256.h \

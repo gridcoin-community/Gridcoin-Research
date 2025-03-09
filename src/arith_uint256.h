@@ -229,6 +229,10 @@ public:
     void SetHex(const std::string& str);
     std::string ToString() const;
 
+    unsigned char* data() {
+        return reinterpret_cast<unsigned char*>(pn);
+    }
+
     unsigned int size() const
     {
         return sizeof(pn);

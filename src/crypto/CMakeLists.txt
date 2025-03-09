@@ -2,6 +2,7 @@ set(LIBGRIDCOIN_CRYPTO gridcoin_crypto_base)
 add_library(gridcoin_crypto_base STATIC
     aes.cpp
     chacha20.cpp
+    chacha20poly1305.cpp
     hmac_sha256.cpp
     hmac_sha512.cpp
     poly1305.cpp

@@ -5,9 +5,11 @@
 #include "chainparams.h"
 #include "uint256.h"
 #include "gridcoin/protocol.h"
+#include <gridcoin/mnemonics.h>
 #include "util.h"
 #include "main.h"
 #include "gridcoin/staking/reward.h"
+#include <test/test_gridcoin.h>
 
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
@@ -261,6 +263,39 @@ BOOST_AUTO_TEST_CASE(gridcoin_ObsoleteConfigurableCBRShouldResortToDefault)
     }
 
     BOOST_CHECK_EQUAL(GRC::GetConstantBlockReward(&index_check), DEFAULT_CBR);
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_test_seed_phrase_coding)
+{
+    std::vector<std::byte> zeroes(44, std::byte{0});
+    std::vector<std::byte> full(44, std::byte{0xff});
+
+    BOOST_CHECK_EQUAL(GRC::Mnemonics::EncodeSeedPhrase(zeroes), SecureString("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon"));
+    BOOST_CHECK_EQUAL(GRC::Mnemonics::EncodeSeedPhrase(full), SecureString("zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo"));
+
+    FastRandomContext ctx(true);
+    for (int i = 0; i < 1024; ++i) {
+        std::vector<std::byte> bytes(GRC::Mnemonics::ENCIPHERED_LENGTH, std::byte{'\0'});
+        std::vector<std::byte> bytes_out(GRC::Mnemonics::ENCIPHERED_LENGTH, std::byte{'\0'});
+
+        auto rand_bytes = ctx.randbytes(GRC::Mnemonics::ENCIPHERED_LENGTH);
+        std::copy((std::byte*)rand_bytes.data(), (std::byte*)rand_bytes.data() + rand_bytes.size(), bytes.begin());
+
+        BOOST_CHECK(GRC::Mnemonics::DecodeSeedPhrase(GRC::Mnemonics::EncodeSeedPhrase(bytes), bytes_out));
+        BOOST_CHECK_EQUAL(bytes, bytes_out);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(gridcoin_test_mnemonics_generation)
+{
+    CKey key1;
+    CKey key2;
+
+    SecureString seed_phrase = GRC::Mnemonics::GenerateSeedPhrase(SecureString(""), key1);
+    BOOST_CHECK(GRC::Mnemonics::ParseSeedPhrase(seed_phrase, SecureString(""), key2));
+    BOOST_CHECK(key1 == key2);
+
+    BOOST_CHECK(!GRC::Mnemonics::ParseSeedPhrase(seed_phrase, SecureString("wrong password"), key2));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
