@@ -56,7 +56,9 @@ endif()
 if(SYSTEM_SECP256K1)
     set(LIBSECP256K1 PkgConfig::SECP256K1)
 else()
+    # workarounds for libsecp256k1 v0.3.0
     set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
     set(SECP256K1_BUILD_SHARED OFF)
     set(SECP256K1_BUILD_STATIC ON)
