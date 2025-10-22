@@ -434,7 +434,7 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
             if (!(fBlock && (nBestHeight < Params().Checkpoints().GetHeight())))
             {
                 // Verify signature
-                if (!VerifySignature(txPrev, tx, i, 0))
+                if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(*pindexBlock), i, 0))
                 {
                     return tx.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
                 }
@@ -1606,6 +1606,13 @@ bool GridcoinConnectBlock(
     return true;
 }
 } // Anonymous namespace
+
+unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
+{
+    unsigned int flags{SCRIPT_VERIFY_P2SH};
+
+    return flags;
+}
 
 bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {

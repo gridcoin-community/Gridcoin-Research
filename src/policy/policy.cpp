@@ -148,7 +148,7 @@ bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs)
         // beside "push data" in the scriptSig the
         // IsStandard() call returns false
         std::vector<std::vector<unsigned char>> stack;
-        if (!EvalScript(stack, tx.vin[i].scriptSig, tx, i, 0))            return false;
+        if (!EvalScript(stack, tx.vin[i].scriptSig, SCRIPT_VERIFY_NONE, tx, i))            return false;
 
         if (whichType == TX_SCRIPTHASH)
         {

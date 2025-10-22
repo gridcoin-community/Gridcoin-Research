@@ -107,6 +107,9 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW=true, bool fChe
 bool AcceptBlock(CBlock& block, bool generated_by_me);
 bool CheckBlockSignature(const CBlock& block);
 
+// Returns the script flags which should be checked for a given block
+unsigned int GetBlockScriptFlags(const CBlockIndex& block_index);
+
 unsigned int GetCoinstakeOutputLimit(const int& block_version);
 unsigned int GetMandatorySideStakeOutputLimit(const int& block_version);
 Fraction FoundationSideStakeAllocation();

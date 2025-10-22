@@ -605,7 +605,7 @@ bool GRC::CheckProofOfStakeV8(
     if (!ReadStakedInput(txdb, prevout.hash, header, txPrev, pindexPrev))
         return tx.DoS(10, error("%s: read staked input failed", __func__));
 
-    if (!VerifySignature(txPrev, tx, 0, 0))
+    if (!VerifySignature(txPrev, tx, SCRIPT_VERIFY_P2SH, 0, 0))
         return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
     // Check times

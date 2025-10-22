@@ -19,6 +19,35 @@
 
 using namespace std;
 
+static const std::map<std::string, unsigned int> mapFlagNames = {
+    {"P2SH", SCRIPT_VERIFY_P2SH},
+    {"DERSIG", SCRIPT_VERIFY_DERSIG},
+    {"NULLDUMMY", SCRIPT_VERIFY_NULLDUMMY},
+    {"STRICTENC", SCRIPT_VERIFY_STRICTENC},
+    {"MINIMALDATA", SCRIPT_VERIFY_MINIMALDATA},
+    {"DISCOURAGE_UPGRADABLE_NOPS", SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS},
+    {"CLEANSTACK", SCRIPT_VERIFY_CLEANSTACK},
+    {"LOW_S", SCRIPT_VERIFY_LOW_S},
+    {"SIGPUSHONLY", SCRIPT_VERIFY_SIGPUSHONLY},
+};
+
+unsigned int ParseScriptFlags(std::string strFlags)
+{
+    unsigned int flags = SCRIPT_VERIFY_NONE;
+    if (strFlags.empty() || strFlags == "NONE") return flags;
+
+    std::vector<std::string> words = SplitString(strFlags, ',');
+    for (const std::string& word : words)
+    {
+        if (!mapFlagNames.count(word)) {
+            BOOST_ERROR("Bad test: unknown verification flag '" << word << "'");
+            continue;
+        }
+        flags |= mapFlagNames.at(word);
+    }
+    return flags;
+}
+
 // In script_tests.cpp
 extern UniValue read_json(const std::string& jsondata);
 extern CScript ParseScript(string s);
@@ -132,7 +161,8 @@ BOOST_AUTO_TEST_CASE(tx_valid)
                     break;
                 }
 
-                BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], tx, i, 0),
+                unsigned int verify_flags = ParseScriptFlags(test[2].get_str());
+                BOOST_CHECK_MESSAGE(VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i),
                         strTest);
             }
         }
@@ -200,7 +230,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
                     break;
                 }
 
-                fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], tx, i, 0);
+                unsigned int verify_flags = ParseScriptFlags(test[2].get_str());
+                fValid = VerifyScript(tx.vin[i].scriptSig, mapprevOutScriptPubKeys[tx.vin[i].prevout], verify_flags, tx, i);
             }
 
             BOOST_CHECK_MESSAGE(!fValid, strTest);

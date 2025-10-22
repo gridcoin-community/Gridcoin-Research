@@ -22,8 +22,11 @@
 using namespace std;
 using namespace boost::algorithm;
 
+
+static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
+
+unsigned int ParseScriptFlags(string strFlags);
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
-extern bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
 CScript ParseScript(string s)
 {
@@ -33,8 +36,12 @@ CScript ParseScript(string s)
 
     if (mapOpNames.size() == 0)
     {
-        for (int op = OP_NOP; op <= OP_NOP10; op++)
+        for (int op = 0; op <= OP_NOP10; op++)
         {
+            // Allow OP_RESERVED to get into mapOpNames
+            if (op < OP_NOP && op != OP_RESERVED)
+                continue;
+
             const char* name = GetOpName((opcodetype)op);
             if (strcmp(name, "OP_UNKNOWN") == 0)
                 continue;
@@ -82,7 +89,7 @@ CScript ParseScript(string s)
         }
         else
         {
-            BOOST_ERROR("Parse error: " << s);
+            BOOST_ERROR("Parse error: " << w << " full: " << s);
             return CScript();
         }
     }
@@ -105,6 +112,47 @@ UniValue read_json(const std::string& jsondata)
 
 BOOST_AUTO_TEST_SUITE(script_tests)
 
+CTransaction BuildCreditingTransaction(const CScript& scriptPubKey)
+{
+    CTransaction txCredit;
+    txCredit.nVersion = 1;
+    txCredit.nLockTime = 0;
+    txCredit.vin.resize(1);
+    txCredit.vout.resize(1);
+    txCredit.vin[0].prevout.SetNull();
+    txCredit.vin[0].scriptSig = CScript() << CScriptNum(0) << CScriptNum(0);
+    txCredit.vin[0].nSequence = std::numeric_limits<unsigned int>::max();
+    txCredit.vout[0].scriptPubKey = scriptPubKey;
+    txCredit.vout[0].nValue = 0;
+
+    return txCredit;
+}
+
+CTransaction BuildSpendingTransaction(const CScript& scriptSig, const CTransaction& txCredit)
+{
+    CTransaction txSpend;
+    txSpend.nVersion = 1;
+    txSpend.nLockTime = 0;
+    txSpend.vin.resize(1);
+    txSpend.vout.resize(1);
+    txSpend.vin[0].prevout.hash = txCredit.GetHash();
+    txSpend.vin[0].prevout.n = 0;
+    txSpend.vin[0].scriptSig = scriptSig;
+    txSpend.vin[0].nSequence = std::numeric_limits<unsigned int>::max();
+    txSpend.vout[0].scriptPubKey = CScript();
+    txSpend.vout[0].nValue = 0;
+
+    return txSpend;
+}
+
+
+void DoTest(const CScript& scriptPubKey, const CScript& scriptSig, int flags, bool expect, const std::string& message)
+{
+    CTransaction tx = BuildSpendingTransaction(scriptSig, BuildCreditingTransaction(scriptPubKey));
+    CTransaction tx2 = tx;
+    BOOST_CHECK_MESSAGE(VerifyScript(scriptSig, scriptPubKey, flags, tx, 0) == expect, message);
+}
+
 BOOST_AUTO_TEST_CASE(script_valid)
 {
     // Read tests from test/data/script_valid.json
@@ -114,21 +162,36 @@ BOOST_AUTO_TEST_CASE(script_valid)
     // scripts.
     UniValue tests = read_json(std::string(json_tests::script_valid, json_tests::script_valid + sizeof(json_tests::script_valid)));
 
+    {
+        std::string testJson = R"(["0x48 0x304502202de8c03fc525285c9c535631019a5f2af7c6454fa9eb392a3756a4917c420edd02210046130bf2baf7cfc065067c8b9e33a066d9c15edcea9feb0ca2d233e3597925b401","0x21 0x038282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f51508 CHECKSIG","","P2PK with too much S padding but no DERSIG"])";
+        UniValue test = read_json(testJson);
+        
+        string scriptSigString = test[0].get_str();
+        CScript scriptSig = ParseScript(scriptSigString);
+        string scriptPubKeyString = test[1].get_str();
+        CScript scriptPubKey = ParseScript(scriptPubKeyString);
+        unsigned int scriptflags = ParseScriptFlags(test[2].get_str());
+
+        DoTest(scriptPubKey, scriptSig, scriptflags, true, "AWAAWA");
+    }
+
     for (unsigned int idx = 0; idx < tests.size(); idx++) {
         UniValue test = tests[idx];
         string strTest = test.write();
-        if (test.size() < 2) // Allow size > 2; extra stuff ignored (useful for comments)
+        if (test.size() < 3) // Allow size > 2; extra stuff ignored (useful for comments)
         {
-            BOOST_ERROR("Bad test: " << strTest);
+            if (test.size() != 1) {
+                BOOST_ERROR("Bad test: " << strTest);
+            }
             continue;
         }
         string scriptSigString = test[0].get_str();
         CScript scriptSig = ParseScript(scriptSigString);
         string scriptPubKeyString = test[1].get_str();
         CScript scriptPubKey = ParseScript(scriptPubKeyString);
+        unsigned int scriptflags = ParseScriptFlags(test[2].get_str());
 
-        CTransaction tx;
-        BOOST_CHECK_MESSAGE(VerifyScript(scriptSig, scriptPubKey, tx, 0, SIGHASH_NONE), strTest);
+        DoTest(scriptPubKey, scriptSig, scriptflags, true, strTest);
     }
 }
 
@@ -140,18 +203,20 @@ BOOST_AUTO_TEST_CASE(script_invalid)
     {
         UniValue test = tests[idx];
         string strTest = test.write();
-        if (test.size() < 2) // Allow size > 2; extra stuff ignored (useful for comments)
+        if (test.size() < 3) // Allow size > 2; extra stuff ignored (useful for comments)
         {
-            BOOST_ERROR("Bad test: " << strTest);
+            if (test.size() != 1) {
+                BOOST_ERROR("Bad test: " << strTest);
+            }
             continue;
         }
         string scriptSigString = test[0].get_str();
         CScript scriptSig = ParseScript(scriptSigString);
         string scriptPubKeyString = test[1].get_str();
         CScript scriptPubKey = ParseScript(scriptPubKeyString);
+        unsigned int scriptflags = ParseScriptFlags(test[2].get_str());
 
-        CTransaction tx;
-        BOOST_CHECK_MESSAGE(!VerifyScript(scriptSig, scriptPubKey, tx, 0, SIGHASH_NONE), strTest);
+        DoTest(scriptPubKey, scriptSig, scriptflags, false, strTest);
     }
 }
 
@@ -165,18 +230,18 @@ BOOST_AUTO_TEST_CASE(script_PushData)
     static const unsigned char pushdata4[] = { OP_PUSHDATA4, 1, 0, 0, 0, 0x5a };
 
     vector<vector<unsigned char> > directStack;
-    BOOST_CHECK(EvalScript(directStack, CScript(direct, direct + sizeof(direct)), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(directStack, CScript(direct, direct + sizeof(direct)), SCRIPT_VERIFY_P2SH, CTransaction(), 0));
 
     vector<vector<unsigned char> > pushdata1Stack;
-    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(pushdata1, pushdata1 + sizeof(pushdata1)), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(pushdata1, pushdata1 + sizeof(pushdata1)), SCRIPT_VERIFY_P2SH, CTransaction(), 0));
     BOOST_CHECK(pushdata1Stack == directStack);
 
     vector<vector<unsigned char> > pushdata2Stack;
-    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(pushdata2, pushdata2 + sizeof(pushdata2)), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(pushdata2, pushdata2 + sizeof(pushdata2)), SCRIPT_VERIFY_P2SH, CTransaction(), 0));
     BOOST_CHECK(pushdata2Stack == directStack);
 
     vector<vector<unsigned char> > pushdata4Stack;
-    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(pushdata4, pushdata4 + sizeof(pushdata4)), CTransaction(), 0, 0));
+    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(pushdata4, pushdata4 + sizeof(pushdata4)), SCRIPT_VERIFY_P2SH, CTransaction(), 0));
     BOOST_CHECK(pushdata4Stack == directStack);
 }
 
@@ -221,27 +286,19 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG12)
     CScript scriptPubKey12;
     scriptPubKey12 << OP_1 << key1.GetPubKey() << key2.GetPubKey() << OP_2 << OP_CHECKMULTISIG;
 
-    CTransaction txFrom12;
-    txFrom12.vout.resize(1);
-    txFrom12.vout[0].scriptPubKey = scriptPubKey12;
-
-    CTransaction txTo12;
-    txTo12.vin.resize(1);
-    txTo12.vout.resize(1);
-    txTo12.vin[0].prevout.n = 0;
-    txTo12.vin[0].prevout.hash = txFrom12.GetHash();
-    txTo12.vout[0].nValue = 1;
+    CTransaction txFrom12 = BuildCreditingTransaction(scriptPubKey12);
+    CTransaction txTo12 = BuildSpendingTransaction(CScript(), txFrom12);
 
     CScript goodsig1 = sign_multisig(scriptPubKey12, key1, txTo12);
-    BOOST_CHECK(VerifyScript(goodsig1, scriptPubKey12, txTo12, 0, 0));
+    BOOST_CHECK(VerifyScript(goodsig1, scriptPubKey12, flags, txTo12, 0));
     txTo12.vout[0].nValue = 2;
-    BOOST_CHECK(!VerifyScript(goodsig1, scriptPubKey12, txTo12, 0, 0));
+    BOOST_CHECK(!VerifyScript(goodsig1, scriptPubKey12, flags, txTo12, 0));
 
     CScript goodsig2 = sign_multisig(scriptPubKey12, key2, txTo12);
-    BOOST_CHECK(VerifyScript(goodsig2, scriptPubKey12, txTo12, 0, 0));
+    BOOST_CHECK(VerifyScript(goodsig2, scriptPubKey12, flags, txTo12, 0));
 
     CScript badsig1 = sign_multisig(scriptPubKey12, key3, txTo12);
-    BOOST_CHECK(!VerifyScript(badsig1, scriptPubKey12, txTo12, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig1, scriptPubKey12, flags, txTo12, 0));
 }
 
 BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
@@ -255,60 +312,52 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     CScript scriptPubKey23;
     scriptPubKey23 << OP_2 << key1.GetPubKey() << key2.GetPubKey() << key3.GetPubKey() << OP_3 << OP_CHECKMULTISIG;
 
-    CTransaction txFrom23;
-    txFrom23.vout.resize(1);
-    txFrom23.vout[0].scriptPubKey = scriptPubKey23;
-
-    CTransaction txTo23;
-    txTo23.vin.resize(1);
-    txTo23.vout.resize(1);
-    txTo23.vin[0].prevout.n = 0;
-    txTo23.vin[0].prevout.hash = txFrom23.GetHash();
-    txTo23.vout[0].nValue = 1;
+    CTransaction txFrom23 = BuildCreditingTransaction(scriptPubKey23);
+    CTransaction txTo23 = BuildSpendingTransaction(CScript(), txFrom23);
 
     std::vector<CKey> keys;
     keys.push_back(key1); keys.push_back(key2);
     CScript goodsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(VerifyScript(goodsig1, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(VerifyScript(goodsig1, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key1); keys.push_back(key3);
     CScript goodsig2 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(VerifyScript(goodsig2, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(VerifyScript(goodsig2, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key2); keys.push_back(key3);
     CScript goodsig3 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(VerifyScript(goodsig3, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(VerifyScript(goodsig3, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key2); keys.push_back(key2); // Can't reuse sig
     CScript badsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig1, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig1, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key2); keys.push_back(key1); // sigs must be in correct order
     CScript badsig2 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig2, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig2, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key3); keys.push_back(key2); // sigs must be in correct order
     CScript badsig3 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig3, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig3, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key4); keys.push_back(key2); // sigs must match pubkeys
     CScript badsig4 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig4, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig4, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear();
     keys.push_back(key1); keys.push_back(key4); // sigs must match pubkeys
     CScript badsig5 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig5, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig5, scriptPubKey23, flags, txTo23, 0));
 
     keys.clear(); // Must have signatures
     CScript badsig6 = sign_multisig(scriptPubKey23, keys, txTo23);
-    BOOST_CHECK(!VerifyScript(badsig6, scriptPubKey23, txTo23, 0, 0));
+    BOOST_CHECK(!VerifyScript(badsig6, scriptPubKey23, flags, txTo23, 0));
 }
 
 BOOST_AUTO_TEST_CASE(script_combineSigs)
