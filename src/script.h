@@ -105,6 +105,11 @@ enum
     // (softfork safe, BIP62 rule 6)
     // Note: CLEANSTACK should never be used without P2SH.
     SCRIPT_VERIFY_CLEANSTACK = (1U << 8),
+
+    // Verify CHECKLOCKTIMEVERIFY
+    //
+    // See BIP65 for details.
+    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY = (1U << 9),
 };
 
 
@@ -270,7 +275,8 @@ enum opcodetype
 
     // expansion
     OP_NOP1 = 0xb0,
-    OP_NOP2 = 0xb1,
+    OP_CHECKLOCKTIMEVERIFY = 0xb1,
+    OP_NOP2 = OP_CHECKLOCKTIMEVERIFY,
     OP_NOP3 = 0xb2,
     OP_NOP4 = 0xb3,
     OP_NOP5 = 0xb4,
