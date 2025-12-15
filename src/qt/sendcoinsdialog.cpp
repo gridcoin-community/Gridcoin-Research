@@ -152,7 +152,11 @@ void SendCoinsDialog::on_sendButton_clicked()
     // Format confirmation message
     QStringList formatted;
     for (const SendCoinsRecipient& rcp : recipients) {
-        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount),
+        QString amountStr = BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, rcp.amount);
+        if (rcp.fSubtractFeeFromAmount)
+            amountStr += " " + tr("(minus fee)");
+            
+        formatted.append(tr("<b>%1</b> to %2 (%3)").arg(amountStr,
               rcp.label.toHtmlEscaped(), rcp.address));
     }
 

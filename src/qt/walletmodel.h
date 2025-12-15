@@ -29,7 +29,8 @@ public:
     QString address;
     QString label;
     qint64 amount;
-	QString Message;
+    QString Message;
+    bool fSubtractFeeFromAmount;
 };
 
 /** Interface to Bitcoin wallet from Qt view code. */

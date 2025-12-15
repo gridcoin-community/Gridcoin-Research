@@ -173,6 +173,16 @@
      </item>
     </layout>
    </item>
+   <item row="7" column="1">
+    <widget class="QCheckBox" name="subtractFee">
+     <property name="toolTip">
+      <string>The transaction fee will be deducted from the amount entered</string>
+     </property>
+     <property name="text">
+      <string>Subtract fee from amount</string>
+     </property>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>
