@@ -248,7 +248,7 @@ none
  - gui: Translation updates #2599 (@jamescowens)
  - build: update CI for linter and actions version #2606 (@jamescowens)
  - gui: Update translations #2608 (@jamescowens)
- 
+
 ### Removed
  - refactor: remove unused c-string variant of atoi64() #2562 (@barton2526)
  - refactor: Remove unused CDataStream::rdbuf method #2585 (@div72)
@@ -553,9 +553,9 @@ none
  - gui: Show GUI error dialog if command line parsing fails #2218 (@jamescowens)
  - gui: Implement close confirmation. #2216 (@denravonska)
  - build: Use -fstack-reuse=none #2232 (@barton2526)
- 
+
 ### Changed
- - doc: Update build doc #2078 (@iFoggz) 
+ - doc: Update build doc #2078 (@iFoggz)
  - gui: Normalize button and input control appearance #2096 (@cyrossignol)
  - consensus: Implement GetMinimumRequiredConnectionsForStaking #2097 (@jamescowens)
  - refactor: move CTransaction to primitives #2006 (@div72)
@@ -667,7 +667,7 @@ none
  - gui: Avoid refreshing GUI researcher status while out-of-sync #2068 (@cyrossignol)
  - consensus: Reimplement checkpoint-based spam protection #2084 (@cyrossignol)
  - consensus: Verify hardened checkpoints on start up #2087 (@cyrossignol)
- 
+
 ### Changed
  - test: autogenerate data headers #2030 (@div72)
  - doc: Change copyright years to 2021 #2042 (@caraka)
@@ -681,7 +681,7 @@ none
  - log: Adjust logging #2076 (@jamescowens)
  - gui: Change scraper tab to Inconsolata monospace font #2085 (@jamescowens)
  - researcher: Change beacon deferment fix to reference nActiveBeforeSB #2092 (@jamescowens)
- 
+
 ### Removed
  - net: Clean up mandatory protocol version transition #2080 (@cyrossignol)
  - refactor: Remove LessVerbose() function #2089 (@cyrossignol)
@@ -699,7 +699,7 @@ none
  - gui: Fix shutdown response for failed core init #2088 (@cyrossignol)
  - researcher: Fix deferment of beacon renewal in superblock window #2090 (@cyrossignol)
  - gui: Fix typo in beacon status refresh #2091 (@div72)
- 
+
 ## [5.3.0.0] 2021-03-16, mandatory
 ### Fixed
  - consensus, accrual: Fix accrual post hard-fork at 2197000 #2053 (@jamescowens, @div72, @cyrossignol)
@@ -788,7 +788,7 @@ none
  - gui: Adds detection if version is below last mandatory #1939 (@jamescowens)
  - contract: Reimplement legacy administrative contract validation #1943 (@cyrossignol)
  - voting: Add poll choices to "gettransaction" RPC contract output #1948 (@cyrossignol)
- 
+
 ### Changed
  - doc: Fix link in build-openbsd.md #1924 (@Pythonix)
  - voting: Decrease poll duration to 90 days #1936 (@cyrossignol)
@@ -1170,7 +1170,7 @@ none
    - new SB format and packing for bv11
    - new SB contract hashing (native) for bv11
    - changes to accommodate new beacon approach
-   - Implement in memory versioning for team file ETags 
+   - Implement in memory versioning for team file ETags
  - Implement local dynamic team requirement removal and whitelist #1502 (@cyrossignol)
 
 ### Changed
@@ -1352,7 +1352,7 @@ none
  - Stress testing script  (@Foggyx420)
  - refhash command also on Linux (@jamescowens)
  - Documentation for out of source build (@thecharlatan)
- 
+
 ### Changed
  - More accurate time to stake and network weight estimations (@jamescowens)
  - Compressed image files (@Peppernrino)
@@ -1364,7 +1364,7 @@ none
  - Pretty-print rpc output (@denravonska)
  - Logging for debugging reward computation (@tomasbrod)
  - Clean-up beacon manipulation (@Foggyx420)
- 
+
 ### Fixed
  - Building errors on Mac related to SVG framework (@thecharlatan)
  - neural data response
@@ -1385,7 +1385,7 @@ none
  - GUI FAQ (@Lenni)
  - unusable limit from magnitude command (@Foggyx420)
  - cgminer support (@Foggyx420)
- - deprecated menu items (@jamescowens) 
+ - deprecated menu items (@jamescowens)
 
 ## [3.7.13.0] 2018-06-02, leisure
 ### Fixed
@@ -1401,7 +1401,7 @@ none
 ### Added
  - Neural Report RPC command #1063 (@tomasbrod).
  - GUI wallet redign with new icons and purple native style (@skcin).
- 
+
 ### Changed
  - Switch to autotools and Depends from Bitcoin #487 (@thecharlatan).
  - Clean and update docs for new build system, remove outdated #828 (@thecharlatan).
@@ -1423,7 +1423,7 @@ none
  - Upgrade menu #1094 (@jamescowens).
  - Acid test functions #871 (@tomasbrod).
  - Qt4 support #801 (@denravonska).
- 
+
 ## [3.7.11.0] 2018-03-15, leisure
 ### Fixed
  - Fix wallet being locked while flushing. It now requires a clean shutdown
@@ -1585,7 +1585,7 @@ Internal test version used to sort out the forks.
  - Fix an issue where multiple beacons could be advertised in rapid
    succession #604 (@Foggyx420).
  - Stake weight in the UI will no longer include old DPOR weght #602
-   (@Foggyx420). 
+   (@Foggyx420).
  - Fix stake modifier mismatch which caused nodes to get stuck on first
    V8 block #581 (@tomasbrod).
  - Fix beacon auto advertisement issue when done automatically #580 (@Foggyx420).
@@ -1651,7 +1651,7 @@ Internal test version used to sort out the forks.
 
 ## [3.6.0.0] - 2017-08-14
 ### Fixed
- - Fix a crash when starting up as a new user #488 (@Foggyx420, 
+ - Fix a crash when starting up as a new user #488 (@Foggyx420,
    @denravonska).
  - Fix an out of memory crash when syncing from 0 #508 (@tomasbrod).
 
@@ -1659,7 +1659,7 @@ Internal test version used to sort out the forks.
 ### Changed
  - Staking cleanup #301 (@tomasbrod). This also solves several other issues:
  - UI:
-    - Wallet window can now be made smaller #384 (@skcin). 
+    - Wallet window can now be made smaller #384 (@skcin).
     - Interest and Research subsidy visible in getmininginfo (@tomasbrod).
     - External links now use HTTPS where possible, and the code has been cleaned
       up #339 (@skcin).
@@ -1669,7 +1669,7 @@ Internal test version used to sort out the forks.
    the Bitcoin source tree: Arabic, Belarusian, Bulgarian, Greek, Persian,
    Hebrew, Hindi, Japanese, Georgian, Kirghiz, Serbian, Thai, Ukrainian,
    Urdu and Chinese.
- - Don't print the "Bootup" and "Signing block" messages unless fDebug (@tomasbrod). 
+ - Don't print the "Bootup" and "Signing block" messages unless fDebug (@tomasbrod).
  - Print beacons as they are loaded and debug3=true (@tomasbrod).
  - Show superblock information in getblock (@tomasbrod).
  - Code cleanup (@skcin).
@@ -1684,7 +1684,7 @@ Internal test version used to sort out the forks.
  - Client no longer has to be restarted for a beacon to activate #253
    (@Foggyx420).
  - Fixed a coin age bug which made it hard to stake on testnet (@denravonska)
- - Fixed reloading of polls in the voting GUI #431 (@skcin) 
+ - Fixed reloading of polls in the voting GUI #431 (@skcin)
  - Fix crash when listing receivedby on addresses with no transactions,
    #456 (@denravonska).
  - Fix buffer overflow in TX message unscambling #468 (@tomasbrod).
@@ -1801,7 +1801,7 @@ Internal test version used to sort out the forks.
 - Add man pages to doc folder #135 (@caraka).
 
 ### Changed
- - Windows are now resizable 
+ - Windows are now resizable
  - Replace Windows voting dialog with the new dialog.
  - Update Gridcoin icon on Windows.
  - Enable C++11.

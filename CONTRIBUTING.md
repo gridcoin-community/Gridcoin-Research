@@ -47,7 +47,7 @@ Communication Channels
 ----------------------
 
 Most communication about Gridcoin Research development happens on Slack, in the
-`#development` channel on TeamGridcoin. The invite link is in 
+`#development` channel on TeamGridcoin. The invite link is in
 [the main README](README.md#community).
 
 Discussion about code base improvements happens in GitHub issues and on pull
@@ -141,7 +141,7 @@ references to any discussions (for example other tickets or discussions).
 ### Work in Progress Changes and Requests for Comments
 
 If a pull request is not to be considered for merging (yet), please
-prefix the title with [WIP], mark the pull request as draft or 
+prefix the title with [WIP], mark the pull request as draft or
 use [Tasks Lists](https://help.github.com/articles/basic-writing-and-formatting-syntax/#task-lists)
 in the body of the pull request to indicate tasks are pending.
 
@@ -262,7 +262,7 @@ In general, all pull requests must:
 
 Patches that change Gridcoin consensus rules are considerably more involved than
 normal because they affect the entire ecosystem and so must be preceded by
-extensive discussions. While each case will be different, 
+extensive discussions. While each case will be different,
 one should be prepared to expend more time and effort than for
 other kinds of patches because of increased peer review and consensus building
 requirements.
