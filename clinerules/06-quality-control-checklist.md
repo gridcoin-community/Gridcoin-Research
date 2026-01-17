@@ -58,7 +58,8 @@ This checklist ensures contributions meet quality standards before submission. U
   - See `01-coding.md` for style guide
   - ANSI/Allman block style
   - 4-space indentation, no tabs
-  - Hungarian notation for variables
+  - Modern variable naming: lower_snake_case (m_ prefix for members)
+  - Legacy Hungarian notation only for consistency within existing modules
 
 - [ ] **Comments explain "why", not just "what"**
   - Complex logic has explanatory comments
@@ -289,7 +290,7 @@ This checklist ensures contributions meet quality standards before submission. U
   - No "fix previous commit" commits in PR
 
 - [ ] **Branch up to date**
-  - Rebased on latest master/develop
+  - Rebased on latest development branch
   - Conflicts resolved
   - Tests still pass
 
