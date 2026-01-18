@@ -73,6 +73,7 @@ public:
         consensus.ProtocolVersionGracePeriod = 900 * 7; // ~6.5 days
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
+        consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3989800;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
@@ -197,6 +198,7 @@ public:
         consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
+        consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3111000;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;

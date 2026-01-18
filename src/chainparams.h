@@ -164,6 +164,13 @@ inline bool IsProjectV2Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().ProjectV2Height;
 }
 
+inline bool IsPollMultiAddressEnabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate testing.
+
+    return nHeight >= gArgs.GetArg("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
+}
+
 inline bool IsAutoGreylistAuditEnabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().AutoGreylistAuditHeight;

@@ -178,7 +178,18 @@ public:
         const ClaimMessage message = PackPollMessage(payload.m_poll, tx);
 
         try {
-            return VerifyClaim(payload.m_claim.m_address_claim, message);
+            if (payload.m_claim.m_version == 1) {
+                // Legacy single address (converted by serialization)
+                if (payload.m_claim.m_balance_claim.m_address_claims.size() != 1) {
+                    return false;
+                }
+                return VerifyAddressClaim(
+                    payload.m_claim.m_balance_claim.m_address_claims[0],
+                    message);
+            } else {
+                // Version 2+: multiple addresses
+                return VerifyBalanceClaim(payload.m_claim.m_balance_claim, message);
+            }
         } catch (const InvalidPollError& e) {
             LogPrint(LogFlags::VOTE, "%s: bad poll claim", __func__);
             return false;
@@ -187,6 +198,36 @@ public:
 
 private:
     CTxDB& m_txdb; //!< Used to resolve unspent amount claims.
+
+    //!
+    //! \brief Determine whether the balance claim (multiple addresses)
+    //! establishes eligibility for creating the poll.
+    //!
+    //! \param claim   The balance claim to verify minimum balance for.
+    //! \param message Serialized context for claim signature verification.
+    //!
+    //! \return \c true If the resolved amount for the claim meets the
+    //! minimum balance requirement to create a poll.
+    //!
+    bool VerifyBalanceClaim(const BalanceClaim& claim, const ClaimMessage& message)
+    {
+        CAmount total_amount = 0;
+
+        for (const auto& address_claim : claim.m_address_claims) {
+            if (!address_claim.VerifySignature(message)) {
+                LogPrint(LogFlags::VOTE, "%s: bad address signature", __func__);
+                return false;
+            }
+
+            const CTxDestination address = address_claim.m_public_key.GetID();
+
+            for (const auto& txo : address_claim.m_outpoints) {
+                total_amount += Resolve(txo, address);
+            }
+        }
+
+        return total_amount >= POLL_REQUIRED_BALANCE;
+    }
 
     //!
     //! \brief Determine whether the address claim establishes eligibility for
@@ -198,7 +239,7 @@ private:
     //! \return \c true If the resolved amount for the claim meets the
     //! minimum balance requirement to create a poll.
     //!
-    bool VerifyClaim(const AddressClaim& claim, const ClaimMessage& message)
+    bool VerifyAddressClaim(const AddressClaim& claim, const ClaimMessage& message)
     {
         if (!claim.VerifySignature(message)) {
             LogPrint(LogFlags::VOTE, "%s: bad address signature", __func__);
@@ -1042,10 +1083,19 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    // This is why we had to introduce BlockValidate, and this is critical
-    // to ensure that v2 poll payloads are not allowed in blocks for the v3
-    // height and beyond.
+    // Enforce v3 polls at PollV3Height
     if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+        return false;
+    }
+
+    // Enforce multi-address claims at PollMultiAddressHeight
+    if (IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
+        && payload->m_claim.m_version < 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v1 poll claim after multi-address activation at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
         return false;
     }
 

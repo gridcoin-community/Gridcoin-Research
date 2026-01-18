@@ -305,7 +305,7 @@ public:
     //! ensure that the serialization/deserialization routines also handle all
     //! of the previous versions.
     //!
-    static constexpr uint16_t CURRENT_VERSION = 1;
+    static constexpr uint16_t CURRENT_VERSION = 2;
 
     //!
     //! \brief The maximum number of unspent outputs that a poll can claim.
@@ -320,16 +320,30 @@ public:
     uint16_t m_version; //!< Version of the serialized claim format.
 
     //!
-    //! \brief Testifies that a participant owns an address with an unspent
-    //! balance great enough to create a poll.
+    //! \brief Testifies that a participant owns the unspent balance across
+    //! one or more addresses that is great enough to create a poll.
     //!
-    AddressClaim m_address_claim;
+    BalanceClaim m_balance_claim;
 
     //!
     //! \brief Initialize an empty, invalid poll eligibility claim.
     //!
     PollEligibilityClaim() : m_version(CURRENT_VERSION)
     {
+    }
+
+    //!
+    //! \brief Get the total number of outpoints across all address claims.
+    //!
+    //! \return The total count of outpoints claimed.
+    //!
+    size_t TotalOutpoints() const
+    {
+        size_t total = 0;
+        for (const auto& addr_claim : m_balance_claim.m_address_claims) {
+            total += addr_claim.m_outpoints.size();
+        }
+        return total;
     }
 
     //!
@@ -344,8 +358,8 @@ public:
     bool WellFormed() const
     {
         return m_version > 0 && m_version <= CURRENT_VERSION
-            && m_address_claim.WellFormed()
-            && m_address_claim.m_outpoints.size() <= MAX_OUTPOINTS;
+            && m_balance_claim.WellFormed()
+            && TotalOutpoints() <= MAX_OUTPOINTS;
     }
 
     //!
@@ -356,7 +370,7 @@ public:
     CAmount RequiredBurnAmount() const
     {
         // A scaled fee based on the number of claimed outputs:
-        return m_address_claim.RequiredBurnAmount();
+        return m_balance_claim.RequiredBurnAmount();
     }
 
     //!
@@ -371,7 +385,21 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
         READWRITE(m_version);
-        READWRITE(m_address_claim);
+
+        if (m_version == 1) {
+            // Legacy: single address claim (v1)
+            AddressClaim single_address_claim;
+            READWRITE(single_address_claim);
+
+            if (ser_action.ForRead()) {
+                // Convert v1 (single address) to v2 (balance claim) format
+                m_balance_claim.m_address_claims.clear();
+                m_balance_claim.m_address_claims.push_back(std::move(single_address_claim));
+            }
+        } else {
+            // Version 2+: multiple addresses via balance claim
+            READWRITE(m_balance_claim);
+        }
     }
 }; // PollEligibilityClaim
 
