@@ -206,8 +206,40 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
         return;
     }
 
+    // Use the new TxState-aware AddToWalletIfInvolvingMe
+    // Construct appropriate TxState based on whether transaction is in a block
+    wallet::TxState state;
+
+    if (pblock && !pblock->GetHash(true).IsNull()) {
+        // Transaction is in a block - find its position and height
+        uint256 block_hash = pblock->GetHash(true);
+        int block_height = -1;
+        int position = -1;
+
+        // Find block height from mapBlockIndex
+        auto it = mapBlockIndex.find(block_hash);
+        if (it != mapBlockIndex.end()) {
+            block_height = it->second->nHeight;
+        }
+
+        // Find transaction position in block
+        for (size_t i = 0; i < pblock->vtx.size(); i++) {
+            if (pblock->vtx[i].GetHash() == tx.GetHash()) {
+                position = static_cast<int>(i);
+                break;
+            }
+        }
+
+        state = wallet::TxStateConfirmed{block_hash, block_height, position};
+    } else {
+        // Transaction not in a block - assume mempool
+        state = wallet::TxStateInMempool{};
+    }
+
+    // Call the new TxState-aware version
+    CTransactionRef ptx = MakeTransactionRef(tx);
     for (auto const& pwallet : setpwalletRegistered)
-        pwallet->AddToWalletIfInvolvingMe(tx, pblock, fUpdate);
+        pwallet->SyncTransaction(ptx, state, fUpdate);
 }
 
 // notify wallets about a new best chain
@@ -571,6 +603,17 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         pool.addUnchecked(hash, tx);
     }
 
+    // Notify registered wallets that transaction was added to mempool
+    // This enables incoming transactions to appear immediately with 0 confirmations
+    {
+        LOCK(cs_setpwalletRegistered);
+        CTransactionRef ptx = MakeTransactionRef(tx);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->transactionAddedToMempool(ptx);
+        }
+    }
+
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
     if (ptxOld)
@@ -654,14 +697,15 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    if (hashBlock.IsNull() || nIndex == -1)
-        return 0;
     AssertLockHeld(cs_main);
 
-    // Find the block it claims to be in
+    if (hashBlock.IsNull() || nIndex == -1)
+        return 0;
+
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
         return 0;
+
     CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;

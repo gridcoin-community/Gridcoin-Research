@@ -16,7 +16,9 @@ enum WalletFeature
 
     FEATURE_HD = 5040101, // Hierarchical key derivation after BIP32 (HD Wallet)
 
-    FEATURE_LATEST = FEATURE_HD
+    FEATURE_TRANSACTION_STATES = 5040102, // Transaction state tracking infrastructure - TODO: Update to proper Version
+
+    FEATURE_LATEST = FEATURE_TRANSACTION_STATES
 };
 
 bool IsFeatureSupported(int wallet_version, int feature_version);

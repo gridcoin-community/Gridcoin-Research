@@ -111,6 +111,17 @@ class CReserveKey;
 class CTxDB;
 class CTxIndex;
 
+/** Reason why transaction was removed from mempool */
+enum class MemPoolRemovalReason {
+    UNKNOWN = 0,      //!< Manually removed or unknown reason
+    EXPIRY = 1,       //!< Expired from mempool
+    SIZELIMIT = 2,    //!< Removed due to size limit
+    REORG = 3,        //!< Removed for reorganization
+    BLOCK = 4,        //!< Removed because included in block
+    CONFLICT = 5,     //!< Removed due to conflict
+    REPLACED = 6      //!< Removed due to replacement (RBF)
+};
+
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
@@ -161,6 +172,8 @@ public:
     {
         Init();
     }
+
+    virtual ~CMerkleTx() = default;
 
     void Init()
     {

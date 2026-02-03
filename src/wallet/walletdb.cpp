@@ -132,20 +132,25 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     // Probably a bad idea to change the output of this
 
     // First: get all CWalletTx and CAccountingEntry into a sorted-by-time multimap.
-    typedef pair<CWalletTx*, CAccountingEntry*> TxPair;
+    // Use value-based storage for accounting entries to avoid dangling pointers
+    // when the acentries list goes out of scope
+    typedef pair<CWalletTx*, std::optional<CAccountingEntry>> TxPair;
     typedef multimap<int64_t, TxPair > TxItems;
     TxItems txByTime;
 
     for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
     {
         CWalletTx* wtx = &(it->second);
-        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, nullptr)));
+        txByTime.insert(make_pair(wtx->nTimeReceived, TxPair(wtx, std::nullopt)));
     }
     list<CAccountingEntry> acentries;
     ListAccountCreditDebit("", acentries);
     for (auto &entry : acentries)
     {
-        txByTime.insert(make_pair(entry.nTime, TxPair(nullptr, &entry)));
+        // Store a COPY of the accounting entry, not a pointer
+        // The acentries list is local to this function and will go out of scope
+        // Storing a pointer would result in dangling pointers later
+        txByTime.insert(make_pair(entry.nTime, TxPair(nullptr, entry)));
     }
 
     int64_t& nOrderPosNext = pwallet->nOrderPosNext;
@@ -154,18 +159,33 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
     for (TxItems::iterator it = txByTime.begin(); it != txByTime.end(); ++it)
     {
         CWalletTx* const pwtx = it->second.first;
-        CAccountingEntry* const pacentry = it->second.second;
-        int64_t& nOrderPos = (pwtx != nullptr) ? pwtx->nOrderPos : pacentry->nOrderPos;
+        const auto& pacentry_opt = it->second.second;
+
+        // Get nOrderPos from whichever source exists
+        // We use a local variable since we can't bind const optional value to non-const reference
+        int64_t nOrderPos;
+        if (pwtx != nullptr) {
+            nOrderPos = pwtx->nOrderPos;
+        } else if (pacentry_opt.has_value()) {
+            nOrderPos = pacentry_opt.value().nOrderPos;
+        } else {
+            continue; // Neither exists, skip
+        }
 
         if (nOrderPos == -1)
         {
             nOrderPos = nOrderPosNext++;
             nOrderPosOffsets.push_back(nOrderPos);
 
-            if (pacentry)
+            if (pwtx != nullptr) {
+                pwtx->nOrderPos = nOrderPos;
+            } else if (pacentry_opt.has_value()) {
                 // Have to write accounting regardless, since we don't keep it in memory
-                if (!WriteAccountingEntry(pacentry->nEntryNo, *pacentry))
+                CAccountingEntry entry_copy = pacentry_opt.value();
+                entry_copy.nOrderPos = nOrderPos;
+                if (!WriteAccountingEntry(entry_copy.nEntryNo, entry_copy))
                     return DB_LOAD_FAIL;
+            }
         }
         else
         {
@@ -184,12 +204,17 @@ CWalletDB::ReorderTransactions(CWallet* pwallet)
             // Since we're changing the order, write it back
             if (pwtx)
             {
+                pwtx->nOrderPos = nOrderPos;
                 if (!WriteTx(pwtx->GetHash(), *pwtx))
                     return DB_LOAD_FAIL;
             }
-            else
-                if (!WriteAccountingEntry(pacentry->nEntryNo, *pacentry))
+            else if (pacentry_opt.has_value())
+            {
+                CAccountingEntry entry_copy = pacentry_opt.value();
+                entry_copy.nOrderPos = nOrderPos;
+                if (!WriteAccountingEntry(entry_copy.nEntryNo, entry_copy))
                     return DB_LOAD_FAIL;
+            }
         }
     }
 
@@ -502,6 +527,13 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     LogPrintf("nFileVersion = %d", wss.nFileVersion);
 
+    // Validate wallet file version is in expected range
+    if (wss.nFileVersion > wallet::FEATURE_LATEST) {
+        LogPrintf("WARNING: Wallet file version %d exceeds latest wallet feature version %d",
+                  wss.nFileVersion, wallet::FEATURE_LATEST);
+        LogPrintf("This may indicate version mismatch or corrupted wallet file");
+    }
+
     LogPrintf("Keys: %u plaintext, %u encrypted, %u w/ metadata, %u total",
            wss.nKeys, wss.nCKeys, wss.nKeyMeta, wss.nKeys + wss.nCKeys);
 
@@ -517,8 +549,10 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     if (wss.fIsEncrypted && (wss.nFileVersion == 40000 || wss.nFileVersion == 50000))
         return DB_NEED_REWRITE;
 
-    if (wss.nFileVersion < CLIENT_VERSION) // Update
-        WriteVersion(CLIENT_VERSION);
+    // Update wallet file version to latest wallet feature version (not CLIENT_VERSION)
+    // This ensures proper serialization versioning for wallet-specific features
+    if (wss.nFileVersion < wallet::FEATURE_LATEST) // Update
+        WriteVersion(wallet::FEATURE_LATEST);
 
     if (wss.fAnyUnordered)
         result = ReorderTransactions(pwallet);

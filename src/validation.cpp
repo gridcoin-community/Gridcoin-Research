@@ -1804,9 +1804,15 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
             return error("%s: WriteBlockIndex failed", __func__);
     }
 
-    // Watch for transactions paying to me
-    for (auto const& tx : block.vtx)
-        SyncWithWallets(tx, &block, true);
+    // Notify registered wallets that block was connected
+    // This updates transactions from mempool to confirmed state
+    {
+        LOCK(cs_setpwalletRegistered);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->blockConnected(block, pindex->nHeight);
+        }
+    }
 
     return true;
 }
@@ -2463,4 +2469,3 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
 
     return true;
 }
-

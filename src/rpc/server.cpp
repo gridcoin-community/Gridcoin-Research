@@ -316,6 +316,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getwalletinfo",           &getwalletinfo,           cat_wallet        },
     { "importprivkey",           &importprivkey,           cat_wallet        },
     { "importwallet",            &importwallet,            cat_wallet        },
+    { "inspectwalletstate",      &inspectwalletstate,      cat_wallet        },
     { "keypoolrefill",           &keypoolrefill,           cat_wallet        },
     { "listaccounts",            &listaccounts,            cat_wallet        },
     { "listaddressgroupings",    &listaddressgroupings,    cat_wallet        },

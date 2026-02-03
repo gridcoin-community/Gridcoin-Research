@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "wallet/db.h"
+#include "wallet/walletutil.h"
 #include "dbwrapper.h"
 #include "net.h"
 #include "main.h"
@@ -291,7 +292,8 @@ CDB::CDB(const std::string& strFilename, const char* pszMode, bool fFlushOnClose
             {
                 bool fTmp = fReadOnly;
                 fReadOnly = false;
-                WriteVersion(CLIENT_VERSION);
+                // Write wallet feature version, not CLIENT_VERSION
+                WriteVersion(wallet::FEATURE_LATEST);
                 fReadOnly = fTmp;
             }
 
@@ -409,9 +411,9 @@ bool CDB::Rewrite(const string& strFile, const char* pszSkip)
                                 continue;
                             if (strncmp((const char*)&ssKey[0], "\x07version", 8) == 0)
                             {
-                                // Update version:
+                                // Update version to wallet feature version, not CLIENT_VERSION
                                 ssValue.clear();
-                                ssValue << CLIENT_VERSION;
+                                ssValue << static_cast<int>(wallet::FEATURE_LATEST);
                             }
                             Dbt datKey(&ssKey[0], ssKey.size());
                             Dbt datValue(&ssValue[0], ssValue.size());

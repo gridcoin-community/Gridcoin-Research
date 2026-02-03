@@ -7,6 +7,7 @@
 #define BITCOIN_PRIMITIVES_TRANSACTION_H
 
 #include "amount.h"
+#include "fwd.h"
 #include "gridcoin/contract/contract.h"
 #include "script.h"
 #include "serialize.h"
@@ -63,7 +64,7 @@ public:
     {
         return !(a == b);
     }
-    
+
     std::string ToString() const;
 };
 
@@ -306,7 +307,7 @@ public:
     {
         return !(a == b);
     }
-    
+
     bool IsNewerThan(const CTransaction& old) const;
 
     std::string ToStringShort() const;
@@ -341,5 +342,11 @@ public:
     }
 
 };
+
+/** Helper function to create a shared transaction reference */
+inline CTransactionRef MakeTransactionRef(const CTransaction& tx)
+{
+    return std::make_shared<const CTransaction>(tx);
+}
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

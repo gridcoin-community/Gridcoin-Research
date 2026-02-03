@@ -18,11 +18,13 @@
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
+#include "primitives/transaction.h"
 #include "script.h"
 #include "streams.h"
 #include "node/ui_interface.h"
 #include <util/string.h>
 #include "wallet/generated_type.h"
+#include "wallet/transaction.h"
 #include "wallet/walletdb.h"
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
@@ -177,6 +179,59 @@ public:
 
     std::map<CTxDestination, std::string> mapAddressBook GUARDED_BY(cs_wallet);
 
+    /**
+     * Transaction Spending Tracker (mapTxSpends)
+     *
+     * WHY THIS EXISTS:
+     * Essential for detecting transaction conflicts (double-spends) and tracking
+     * which transactions spend which outputs. When two transactions attempt to
+     * spend the same output, we need to quickly identify the conflict.
+     *
+     * STRUCTURE:
+     * - Key: COutPoint (txid + vout index) - identifies a specific output
+     * - Value: txid - the transaction that spends this output
+     * - multimap because during reorgs, temporarily multiple txs may reference same output
+     *
+     * USAGE PATTERNS:
+     * 1. When transaction added: Record all inputs in mapTxSpends
+     * 2. When checking conflicts: Look up each input to see if already spent
+     * 3. When transaction removed: Clean up spending records
+     *
+     * EXAMPLE:
+     *   Transaction A (txid=aaa) creates output 0
+     *   Transaction B (txid=bbb) spends A:0 as input
+     *   → mapTxSpends[COutPoint(aaa, 0)] = bbb
+     *
+     * THREAD SAFETY: Protected by cs_wallet
+     */
+    std::multimap<COutPoint, uint256> mapTxSpends GUARDED_BY(cs_wallet);
+
+    /**
+     * Last Block Processing Markers (m_last_block_processed)
+     *
+     * WHY THIS EXISTS:
+     * Tracks which block the wallet last processed to enable incremental
+     * updates and proper reorg handling. Without this, we couldn't tell if
+     * we're seeing a new block or reprocessing an old one.
+     *
+     * USAGE:
+     * - Updated when blockConnected() or blockDisconnected() is called
+     * - Used to detect gaps in block processing
+     * - Helps determine if we need to rescan
+     * - Critical for proper reorg detection
+     *
+     * REORG SCENARIO:
+     *   Chain was: A -> B -> C (m_last_block_processed = C)
+     *   Reorg to:  A -> B -> D -> E
+     *   1. blockDisconnected(C) called (m_last_block_processed = B)
+     *   2. blockConnected(D) called (m_last_block_processed = D)
+     *   3. blockConnected(E) called (m_last_block_processed = E)
+     *
+     * THREAD SAFETY: Protected by cs_wallet
+     */
+    uint256 m_last_block_processed GUARDED_BY(cs_wallet);
+    int m_last_block_processed_height GUARDED_BY(cs_wallet) = 0;
+
     CPubKey vchDefaultKey GUARDED_BY(cs_wallet);
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
@@ -233,19 +288,306 @@ public:
      */
     int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr);
 
-    typedef std::pair<CWalletTx*, CAccountingEntry*> TxPair;
+    // Use hash-based lookup and value-based storage to avoid dangling pointers
+    // when mapWallet reallocates or acentries goes out of scope.
+    // Stores transaction hash + optional accounting entry copy (not a pointer!)
+    typedef std::pair<uint256, std::optional<CAccountingEntry>> TxPair;
     typedef std::multimap<int64_t, TxPair > TxItems;
 
     /** Get the wallet's activity log
         @return multimap of ordered transactions and accounting entries
-        @warning Returned pointers are *only* valid within the scope of passed acentries
+        @warning Transaction hashes must be looked up in mapWallet before use
      */
     TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
 
     void MarkDirty();
     bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb);
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate = false, bool fFindBlock = false);
     bool EraseFromWallet(uint256 hash);
+
+    /**
+     * SyncTransaction: Unified Transaction State Synchronization
+     *
+     * WHY THIS EXISTS:
+     * This is THE central entry point for updating wallet state when transactions
+     * change state. Previously, transaction updates were scattered across multiple
+     * functions. SyncTransaction consolidates all updates into one place, ensuring
+     * consistency and reducing bugs.
+     *
+     * RESPONSIBILITIES:
+     * 1. Add/update transaction in mapWallet
+     * 2. Update mapTxSpends for conflict tracking
+     * 3. Trigger wallet balance updates
+     * 4. Emit UI notifications
+     * 5. Persist changes to wallet.dat
+     *
+     * WHEN CALLED:
+     * - transactionAddedToMempool() → calls with TxStateInMempool
+     * - blockConnected() → calls with TxStateConfirmed for each tx in block
+     * - blockDisconnected() → calls with TxStateInMempool or removes tx
+     * - transactionRemovedFromMempool() → calls with TxStateInactive if conflicted
+     *
+     * STATE TRANSITIONS HANDLED:
+     * 1. New tx → mempool: SyncTransaction(tx, TxStateInMempool{})
+     * 2. Mempool → confirmed: SyncTransaction(tx, TxStateConfirmed{hash, height, pos})
+     * 3. Confirmed → mempool (reorg): SyncTransaction(tx, TxStateInMempool{})
+     * 4. Mempool → conflicted: SyncTransaction(tx, TxStateInactive{false})
+     * 5. Mempool → abandoned: SyncTransaction(tx, TxStateInactive{true})
+     *
+     * PARAMETERS EXPLAINED:
+     * @param ptx               Transaction being synchronized (shared_ptr for efficiency)
+     * @param state             New state for the transaction (see wallet/transaction.h)
+     * @param update_tx         If true, update existing transaction; if false, only add new
+     * @param rescanning_old_block  If true, we're rescanning (affects UI notifications)
+     *
+     * @return true if wallet was modified, false if transaction not relevant to wallet
+     *
+     * DESIGN NOTE - Why shared_ptr:
+     * Using CTransactionRef (shared_ptr) avoids copying large transactions. The
+     * validation layer holds transactions in shared_ptr form, so we accept that
+     * directly rather than forcing a copy.
+     *
+     * THREAD SAFETY: Requires cs_wallet lock (checked at runtime via EXCLUSIVE_LOCKS_REQUIRED)
+     */
+    bool SyncTransaction(const CTransactionRef& ptx,
+                        const wallet::TxState& state,
+                        bool update_tx = true,
+                        bool rescanning_old_block = false) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * Legacy overload accepting CTransaction
+     *
+     * WHY THIS EXISTS:
+     * Some older code still works with CTransaction directly rather than
+     * CTransactionRef. This overload converts on the fly to avoid forcing
+     * a large refactoring of existing code.
+     *
+     * NOTE: Creates a shared_ptr internally, so has some overhead. Prefer
+     * the CTransactionRef version when possible.
+     */
+    bool SyncTransaction(const CTransaction& tx,
+                        const wallet::TxState& state,
+                        bool update_tx = true)
+    {
+        return SyncTransaction(MakeTransactionRef(tx), state, update_tx, false);
+    }
+
+    /**
+     * ========================================================================
+     * VALIDATION INTERFACE CALLBACKS
+     * ========================================================================
+     *
+     * OVERVIEW:
+     * These methods are called by the validation layer to notify the wallet
+     * of chain state changes. They form the "glue" between chain validation
+     * and wallet state management.
+     *
+     * DESIGN PATTERN:
+     * This follows Bitcoin Core's validation interface pattern. The validation
+     * layer doesn't know about wallets directly - instead it calls registered
+     * callbacks. This keeps validation and wallet code decoupled.
+     *
+     * CALL SEQUENCE DURING NORMAL BLOCK:
+     * 1. Validation accepts block to chain
+     * 2. For each tx in block: transactionRemovedFromMempool(tx, BLOCK)
+     * 3. blockConnected(block, height)
+     * 4. Wallet processes each tx via SyncTransaction
+     *
+     * CALL SEQUENCE DURING REORG:
+     * 1. Old blocks disconnected: blockDisconnected(old_block, height)
+     * 2. New blocks connected: blockConnected(new_block, height)
+     * 3. Orphaned txs return to mempool: transactionAddedToMempool(tx)
+     *
+     * THREAD SAFETY:
+     * All callbacks require cs_wallet lock. The validation layer must acquire
+     * this lock before calling. This prevents race conditions between chain
+     * updates and wallet operations.
+     */
+
+    /**
+     * transactionAddedToMempool: Transaction entered mempool
+     *
+     * WHEN CALLED:
+     * - New transaction broadcast and accepted to mempool
+     * - During reorg, when confirmed tx returns to mempool
+     *
+     * RESPONSIBILITIES:
+     * - Call SyncTransaction with TxStateInMempool
+     * - Update balance if tx involves our addresses
+     * - Notify UI of new pending transaction
+     *
+     * WHY SEPARATE FROM blockConnected:
+     * Mempool transactions need special handling - they're unconfirmed and
+     * can be evicted. We track them differently from confirmed transactions.
+     */
+    void transactionAddedToMempool(const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * blockConnected: New block added to active chain
+     *
+     * WHEN CALLED:
+     * - New block validated and connected to tip
+     * - During reorg, when alternative chain becomes active
+     *
+     * RESPONSIBILITIES:
+     * - Update m_last_block_processed
+     * - For each tx in block: Call SyncTransaction with TxStateConfirmed
+     * - Mark conflicting mempool txs as inactive
+     * - Update wallet balance and confirmations
+     * - Notify UI of confirmed transactions
+     *
+     * CRITICAL ORDERING:
+     * Must process transactions in block order (not random) to maintain
+     * consistent state during wallet rescans.
+     */
+    void blockConnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * transactionRemovedFromMempool: Transaction left mempool
+     *
+     * WHEN CALLED:
+     * - Transaction confirmed in block (reason = BLOCK)
+     * - Transaction conflicted with confirmed tx (reason = CONFLICT)
+     * - Transaction evicted due to mempool limits (reason = EXPIRY or SIZELIMIT)
+     * - Transaction replaced by higher fee (reason = REPLACED)
+     *
+     * RESPONSIBILITIES:
+     * - If CONFLICT: Mark tx as inactive (conflicted)
+     * - If BLOCK: No action needed (blockConnected handles confirmation)
+     * - If EXPIRY/SIZELIMIT: Remove from wallet if not ours
+     * - Update UI to reflect removal
+     *
+     * WHY WE NEED reason PARAMETER:
+     * Different removal reasons require different handling. Conflicted txs
+     * should be marked inactive, but confirmed txs are handled by blockConnected.
+     */
+    void transactionRemovedFromMempool(const CTransactionRef& tx,
+                                      MemPoolRemovalReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * blockDisconnected: Block removed from active chain (reorg)
+     *
+     * WHEN CALLED:
+     * - During blockchain reorganization
+     * - When a block becomes invalid
+     * - During chain rollback (rare)
+     *
+     * RESPONSIBILITIES:
+     * - Update m_last_block_processed to parent block
+     * - For each tx in disconnected block:
+     *   * If tx still valid: Return to mempool (TxStateInMempool)
+     *   * If tx now conflicted: Mark inactive (TxStateInactive)
+     * - Revert wallet balance changes from this block
+     * - Notify UI of confirmation count changes
+     *
+     * CRITICAL:
+     * Must handle reorgs correctly to avoid lost transactions or double-spends.
+     * This is one of the most complex wallet scenarios.
+     */
+    void blockDisconnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * ========================================================================
+     * TRANSACTION CONFLICT TRACKING AND ABANDONMENT
+     * ========================================================================
+     *
+     * OVERVIEW:
+     * These methods handle scenarios where transactions compete for the same
+     * inputs (conflicts) or where users give up on unconfirmed transactions
+     * (abandonment).
+     */
+
+    /**
+     * GetConflicts: Find transactions conflicting with given transaction
+     *
+     * WHY THIS EXISTS:
+     * When two transactions spend the same input, only one can confirm. We
+     * need to identify conflicts to:
+     * 1. Mark losing transaction as inactive/conflicted
+     * 2. Show user why their transaction failed
+     * 3. Free up inputs for new transactions
+     *
+     * HOW IT WORKS:
+     * 1. Look up each input of txid in mapTxSpends
+     * 2. Find all OTHER transactions spending those same inputs
+     * 3. Return set of conflicting transaction IDs
+     *
+     * EXAMPLE:
+     *   TxA and TxB both try to spend output X:0
+     *   If TxA confirms, GetConflicts(TxB) returns {TxA}
+     *   TxB is then marked conflicted/inactive
+     *
+     * THREAD SAFETY: Requires cs_wallet lock
+     */
+    std::set<uint256> GetConflicts(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * IsAbandoned: Check if transaction was explicitly abandoned
+     *
+     * WHY THIS EXISTS:
+     * Users need to know if they intentionally gave up on a transaction.
+     * Abandoned transactions:
+     * - Won't be rebroadcast
+     * - Free up their inputs for reuse
+     * - Show differently in UI
+     *
+     * USAGE:
+     * Called by RPC commands (listtransactions, gettransaction) to determine
+     * transaction display status.
+     *
+     * IMPLEMENTATION:
+     * Checks if tx state is TxStateInactive with abandoned=true
+     *
+     * THREAD SAFETY: Requires cs_wallet lock
+     */
+    bool IsAbandoned(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /**
+     * AbandonTransaction: Explicitly give up on unconfirmed transaction
+     *
+     * WHY THIS EXISTS:
+     * Sometimes transactions get "stuck" (low fee, network issues, etc). Rather
+     * than wait forever, users can abandon them to:
+     * 1. Free up inputs for new transactions
+     * 2. Stop wallet from rebroadcasting
+     * 3. Clear up UI with stuck pending transactions
+     *
+     * SAFETY CHECKS:
+     * - Transaction must be unconfirmed (can't abandon confirmed tx!)
+     * - Transaction must exist in wallet
+     * - Must not have conflicting confirmed transaction
+     *
+     * WHAT IT DOES:
+     * 1. Marks transaction state as TxStateInactive{abandoned=true}
+     * 2. Stops rebroadcasting this transaction
+     * 3. Frees up inputs for use in new transactions
+     * 4. Updates wallet balance (removes pending credit)
+     * 5. Notifies UI of status change
+     *
+     * REORG HANDLING:
+     * If abandoned tx later appears in a block (edge case), we'll re-activate it.
+     * The abandoned flag is a user preference, not a permanent state.
+     *
+     * RPC INTERFACE:
+     * Exposed via abandontransaction RPC command
+     *
+     * @param txid Transaction to abandon
+     * @return true if successfully abandoned, false if can't abandon (confirmed, etc)
+     *
+     * THREAD SAFETY: Requires cs_wallet lock
+     */
+    bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+private:
+    /**
+     * Add transaction to wallet if it involves this wallet's addresses
+     * Internal helper called by SyncTransaction
+     * This is the new implementation using TxState
+     */
+    bool AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
+                                  const wallet::TxState& state,
+                                  bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
@@ -522,6 +864,12 @@ public:
     std::vector<char> vfSpent; // which outputs are already spent
     int64_t nOrderPos;  // position in ordered transaction list
 
+    /**
+     * New transaction state tracking
+     * Replaces reliance on hashBlock for state determination
+     */
+    wallet::TxState m_state;
+
     // memory only
     mutable bool fDebitCached;
     mutable bool fCreditCached;
@@ -581,6 +929,49 @@ public:
 		nWatchCreditCached = 0;
         nChangeCached = 0;
         nOrderPos = -1;
+        m_state = wallet::TxStateUnrecognized{}; // Default to unrecognized
+    }
+
+    /**
+     * Get transaction state of specific type
+     * @return Pointer to state if type matches, nullptr otherwise
+     */
+    template<typename T>
+    const T* state() const {
+        return std::get_if<T>(&m_state);
+    }
+
+    template<typename T>
+    T* state() {
+        return std::get_if<T>(&m_state);
+    }
+
+    /**
+     * Check if transaction is confirmed
+     */
+    bool isConfirmed() const {
+        return std::holds_alternative<wallet::TxStateConfirmed>(m_state);
+    }
+
+    /**
+     * Check if transaction is in mempool
+     */
+    bool isInMempool() const {
+        return std::holds_alternative<wallet::TxStateInMempool>(m_state);
+    }
+
+    /**
+     * Check if transaction is inactive/conflicted
+     */
+    bool isInactive() const {
+        return std::holds_alternative<wallet::TxStateInactive>(m_state);
+    }
+
+    /**
+     * Check if transaction state is unrecognized (old format)
+     */
+    bool isUnrecognized() const {
+        return std::holds_alternative<wallet::TxStateUnrecognized>(m_state);
     }
 
     ADD_SERIALIZE_METHODS;
@@ -609,6 +1000,16 @@ public:
 
             if (nTimeSmart) {
                 mapValue["timesmart"] = strprintf("%u", nTimeSmart);
+            }
+
+            // Sync m_state to legacy fields for backward compatibility
+            // Older wallet versions rely on hashBlock/nIndex
+            if (const auto* conf = state<wallet::TxStateConfirmed>()) {
+                hashBlock = conf->m_confirmed_block_hash;
+                nIndex = conf->m_position_in_block;
+            } else {
+                hashBlock = uint256();  // Clear hashBlock for unconfirmed/inactive
+                nIndex = -1;
             }
         }
 
@@ -639,11 +1040,42 @@ public:
             }
         }
 
-        mapValue.erase("fromaccount");
-        mapValue.erase("version");
-        mapValue.erase("spent");
-        mapValue.erase("n");
-        mapValue.erase("timesmart");
+        // Direct m_state serialization (version-gated)
+        // This replaces the buggy mapValue-based state storage
+        if (s.GetVersion() >= wallet::FEATURE_TRANSACTION_STATES) {
+            // New format: Deserialize m_state directly using variant deserialization
+            if (!ser_action.ForRead()) {
+                // WRITING: Serialize the current m_state
+                wallet::SerializeTxState(s, m_state);
+            } else {
+                // READING: Deserialize the state and assign it
+                // This restores the actual transaction state from wallet.dat
+                wallet::TxState temp_state;
+                wallet::UnserializeTxState(s, temp_state);
+                m_state = temp_state;  // Assign the deserialized state
+            }
+        } else {
+            // Legacy format: hashBlock is already deserialized above
+            // Migrate from hashBlock to proper state based on whether block is set
+            if (ser_action.ForRead()) {
+                // If hashBlock is set, transaction was confirmed in the old format
+                if (!hashBlock.IsNull()) {
+                    m_state = wallet::TxStateConfirmed(hashBlock, -1, nIndex);
+                } else {
+                    // hashBlock is null, transaction was unconfirmed
+                    m_state = wallet::TxStateUnrecognized{};
+                }
+            }
+        }
+
+        // Clean up temporary mapValue entries
+        if (ser_action.ForRead()) {
+            mapValue.erase("fromaccount");
+            mapValue.erase("version");
+            mapValue.erase("spent");
+            mapValue.erase("n");
+            mapValue.erase("timesmart");
+        }
     }
 
     // marks certain txout's as spent
@@ -777,9 +1209,13 @@ public:
             if (!IsSpent(i))
             {
                 const CTxOut &txout = vout[i];
-                nCredit += pwallet->GetCredit(txout);
-                if (!MoneyRange(nCredit))
-                    throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                // SAFETY CHECK: Ensure pwallet is valid before dereferencing
+                if (pwallet)
+                {
+                    nCredit += pwallet->GetCredit(txout);
+                    if (!MoneyRange(nCredit))
+                        throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                }
             }
         }
 
