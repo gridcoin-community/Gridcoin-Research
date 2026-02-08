@@ -18,11 +18,13 @@
 #include "main.h"
 #include "key.h"
 #include "keystore.h"
+#include "primitives/transaction.h"
 #include "script.h"
 #include "streams.h"
 #include "node/ui_interface.h"
 #include <util/string.h>
 #include "wallet/generated_type.h"
+#include "wallet/transaction.h"
 #include "wallet/walletdb.h"
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
@@ -163,7 +165,7 @@ public:
 
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        nWalletVersion = wallet::FEATURE_BASE;
+        nWalletVersion = FEATURE_BASE;
         fFileBacked = false;
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = nullptr;
@@ -177,14 +179,23 @@ public:
 
     std::map<CTxDestination, std::string> mapAddressBook GUARDED_BY(cs_wallet);
 
+    //! Maps spent outpoints to the transaction that spends them.
+    //! Multimap because reorgs can temporarily create duplicates.
+    std::multimap<COutPoint, uint256> mapTxSpends GUARDED_BY(cs_wallet);
+
+    //! Hash of the last block the wallet processed. Updated by
+    //! blockConnected/blockDisconnected for incremental sync & reorg detection.
+    uint256 m_last_block_processed GUARDED_BY(cs_wallet);
+    int m_last_block_processed_height GUARDED_BY(cs_wallet) = 0;
+
     CPubKey vchDefaultKey GUARDED_BY(cs_wallet);
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
     // check whether we are allowed to upgrade (or already support) to the named feature
-    bool CanSupportFeature(enum wallet::WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    bool CanSupportFeature(enum WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         AssertLockHeld(cs_wallet);
-        return wallet::IsFeatureSupported(nWalletVersion, wf);
+        return IsFeatureSupported(nWalletVersion, wf);
     }
 
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
@@ -233,19 +244,61 @@ public:
      */
     int64_t IncOrderPosNext(CWalletDB* pwalletdb = nullptr);
 
-    typedef std::pair<CWalletTx*, CAccountingEntry*> TxPair;
+    // Use hash-based lookup and value-based storage to avoid dangling pointers
+    // when mapWallet reallocates or acentries goes out of scope.
+    // Stores transaction hash + optional accounting entry copy (not a pointer!)
+    typedef std::pair<uint256, std::optional<CAccountingEntry>> TxPair;
     typedef std::multimap<int64_t, TxPair > TxItems;
 
     /** Get the wallet's activity log
         @return multimap of ordered transactions and accounting entries
-        @warning Returned pointers are *only* valid within the scope of passed acentries
+        @warning Transaction hashes must be looked up in mapWallet before use
      */
     TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
 
     void MarkDirty();
     bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate = false, bool fFindBlock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     bool EraseFromWallet(uint256 hash);
+
+    /** Central entry point for updating wallet transaction state.
+     *  Called by validation callbacks; handles mapWallet, mapTxSpends,
+     *  balance updates, UI notifications, and persistence.
+     */
+    bool SyncTransaction(const CTransactionRef& ptx,
+                        const TxState& state,
+                        bool update_tx = true,
+                        bool rescanning_old_block = false);
+
+    //! Legacy overload — wraps CTransaction in a shared_ptr.
+    bool SyncTransaction(const CTransaction& tx,
+                        const TxState& state,
+                        bool update_tx = true)
+    {
+        return SyncTransaction(MakeTransactionRef(tx), state, update_tx, false);
+    }
+
+    // -- Validation interface callbacks (acquire cs_wallet internally) --------
+    void transactionAddedToMempool(const CTransactionRef& tx) LOCKS_EXCLUDED(cs_wallet);
+    void blockConnected(const CBlock& block, int height) LOCKS_EXCLUDED(cs_wallet);
+    void transactionRemovedFromMempool(const CTransactionRef& tx,
+                                      MemPoolRemovalReason reason) LOCKS_EXCLUDED(cs_wallet);
+    void blockDisconnected(const CBlock& block, int height) LOCKS_EXCLUDED(cs_wallet);
+
+    // -- Conflict tracking & abandonment -------------------------------------
+    /** Return txids that spend the same inputs as @p txid. */
+    std::set<uint256> GetConflicts(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    /** True if the transaction was explicitly abandoned by the user. */
+    bool IsAbandoned(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    /** Mark an unconfirmed transaction (and its descendants) as abandoned. */
+    bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+private:
+    /** Add tx to wallet if it involves our addresses. Called by SyncTransaction. */
+    bool AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
+                                  const TxState& state,
+                                  bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     int ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd, bool fUpdate = false);
@@ -398,7 +451,7 @@ public:
     bool SetDefaultKey(const CPubKey &vchPubKey);
 
     // signify that a particular wallet feature is now used.
-    bool SetMinVersion(enum wallet::WalletFeature, CWalletDB* pwalletdbIn = nullptr);
+    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = nullptr);
 
     // get the current wallet format (the oldest client version guaranteed to understand this wallet)
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
@@ -518,6 +571,9 @@ class CWalletTx : public CMerkleTx
 private:
     const CWallet* pwallet;
 
+    // Uses m_state instead of legacy hashBlock/nIndex for depth calculation.
+    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const override;
+
 public:
     std::vector<CMerkleTx> vtxPrev;
     mapValue_t mapValue;
@@ -529,6 +585,9 @@ public:
     std::string strFromAccount;
     std::vector<char> vfSpent; // which outputs are already spent
     int64_t nOrderPos;  // position in ordered transaction list
+
+    //! Canonical transaction state (replaces legacy hashBlock-based inference).
+    TxState m_state;
 
     // memory only
     mutable bool fDebitCached;
@@ -589,6 +648,52 @@ public:
 		nWatchCreditCached = 0;
         nChangeCached = 0;
         nOrderPos = -1;
+        m_state = TxStateUnrecognized{}; // Default to unrecognized
+    }
+
+    //! Get state if it matches type T, else nullptr.
+    template<typename T>
+    const T* state() const {
+        return std::get_if<T>(&m_state);
+    }
+
+    template<typename T>
+    T* state() {
+        return std::get_if<T>(&m_state);
+    }
+
+    bool isConfirmed() const {
+        return std::holds_alternative<TxStateConfirmed>(m_state);
+    }
+
+    bool isInMempool() const {
+        return std::holds_alternative<TxStateInMempool>(m_state);
+    }
+
+    bool isInactive() const {
+        return std::holds_alternative<TxStateInactive>(m_state);
+    }
+
+    bool isUnrecognized() const {
+        return std::holds_alternative<TxStateUnrecognized>(m_state);
+    }
+
+    //! Derive legacy hashBlock/nIndex from m_state.
+    //! @deprecated These fields exist only for backward-compatible serialization
+    //! and legacy code paths. m_state is the single source of truth.
+    //! Call this after any m_state mutation to keep legacy fields in sync.
+    void SyncLegacyFromState()
+    {
+        if (const auto* conf = state<TxStateConfirmed>()) {
+            hashBlock = conf->m_confirmed_block_hash;
+            nIndex = conf->m_position_in_block;
+        } else if (const auto* inactive = state<TxStateInactive>()) {
+            hashBlock = inactive->m_abandoned ? ABANDONED_HASH_SENTINEL : CONFLICTED_HASH_SENTINEL;
+            nIndex = -1;
+        } else {
+            hashBlock = uint256();  // Mempool / Unrecognized → null
+            nIndex = -1;
+        }
     }
 
     ADD_SERIALIZE_METHODS;
@@ -618,6 +723,9 @@ public:
             if (nTimeSmart) {
                 mapValue["timesmart"] = strprintf("%u", nTimeSmart);
             }
+
+            // Derive legacy hashBlock/nIndex from m_state for backward compatibility.
+            SyncLegacyFromState();
         }
 
         READWRITEAS(CMerkleTx, *this);
@@ -647,11 +755,57 @@ public:
             }
         }
 
-        mapValue.erase("fromaccount");
-        mapValue.erase("version");
-        mapValue.erase("spent");
-        mapValue.erase("n");
-        mapValue.erase("timesmart");
+        // TxState serialization: length-prefixed envelope after legacy fields.
+        // On read, presence of remaining bytes signals new format; absence
+        // triggers legacy hashBlock migration.
+        if (!ser_action.ForRead()) {
+            // --- WRITING: serialize m_state with length prefix ---
+            CDataStream ss_state(s.GetType(), s.GetVersion());
+            SerializeTxState(ss_state, m_state);
+            uint32_t state_len = static_cast<uint32_t>(ss_state.size());
+            READWRITE(state_len);
+            s.write(Span{ss_state.data(), ss_state.size()});
+        } else {
+            // --- READING ---
+            if (!s.empty()) {
+                // New format: length-prefixed TxState present
+                uint32_t state_len = 0;
+                READWRITE(state_len);
+                if (state_len > 0 && state_len < 10000) {
+                    // Read exactly state_len bytes into a sub-stream
+                    std::vector<std::byte> state_buf(state_len);
+                    s.read(state_buf);
+                    CDataStream ss_state(Span{state_buf}, s.GetType(), s.GetVersion());
+                    try {
+                        TxState temp_state;
+                        UnserializeTxState(ss_state, temp_state);
+                        m_state = temp_state;
+                    } catch (const std::exception& e) {
+                        LogPrintf("WARNING: CWalletTx deserialization: failed to parse TxState (%s), falling back to legacy\n", e.what());
+                        m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
+                    }
+                } else if (state_len == 0) {
+                    // Zero-length state blob: treat as legacy
+                    m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
+                } else {
+                    // Unreasonably large - skip and fall back to legacy
+                    LogPrintf("WARNING: CWalletTx deserialization: TxState length %u too large, using legacy migration\n", state_len);
+                    m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
+                }
+            } else {
+                // Legacy format: no TxState blob — migrate from hashBlock
+                m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
+            }
+        }
+
+        // Clean up temporary mapValue entries
+        if (ser_action.ForRead()) {
+            mapValue.erase("fromaccount");
+            mapValue.erase("version");
+            mapValue.erase("spent");
+            mapValue.erase("n");
+            mapValue.erase("timesmart");
+        }
     }
 
     // marks certain txout's as spent
@@ -785,9 +939,13 @@ public:
             if (!IsSpent(i))
             {
                 const CTxOut &txout = vout[i];
-                nCredit += pwallet->GetCredit(txout);
-                if (!MoneyRange(nCredit))
-                    throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                // SAFETY CHECK: Ensure pwallet is valid before dereferencing
+                if (pwallet)
+                {
+                    nCredit += pwallet->GetCredit(txout);
+                    if (!MoneyRange(nCredit))
+                        throw std::runtime_error("CWalletTx::GetAvailableCredit() : value out of range");
+                }
             }
         }
 
