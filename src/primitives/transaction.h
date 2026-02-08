@@ -7,6 +7,7 @@
 #define BITCOIN_PRIMITIVES_TRANSACTION_H
 
 #include "amount.h"
+#include "fwd.h"
 #include "gridcoin/contract/contract.h"
 #include "script/script.h"
 #include "serialize.h"
@@ -65,7 +66,7 @@ public:
     {
         return !(a == b);
     }
-    
+
     std::string ToString() const;
 };
 
@@ -444,6 +445,12 @@ void CTransaction::Unserialize(Stream& s)
     CMutableTransaction mtx;
     s >> mtx;
     *this = CTransaction(std::move(mtx));
+}
+
+/** Helper function to create a shared transaction reference */
+inline CTransactionRef MakeTransactionRef(const CTransaction& tx)
+{
+    return std::make_shared<const CTransaction>(tx);
 }
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H
