@@ -2150,7 +2150,15 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
         if (!AcceptToMemoryPool(mempool, tx, state, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
 
-        SyncWithWallets(tx, nullptr, true);
+        // Notify wallets directly that transaction was added to mempool
+        {
+            LOCK(cs_setpwalletRegistered);
+            CTransactionRef ptx = MakeTransactionRef(tx);
+            for (auto const& pwallet : setpwalletRegistered)
+            {
+                pwallet->transactionAddedToMempool(ptx);
+            }
+        }
     }
     RelayTransaction(tx, hashTx);
 
