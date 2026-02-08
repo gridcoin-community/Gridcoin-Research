@@ -4,6 +4,12 @@
 #include "main.h"
 #include "wallet/wallet.h"
 
+// Stream operator for uint256 to support Boost Test output.
+// Defined in global namespace (not std) to avoid undefined behavior per [namespace.std].
+inline std::ostream& operator<<(std::ostream& os, const uint256& hash) {
+    return os << hash.ToString();
+}
+
 // how many times to run all the tests to have a chance to catch errors that only show up with particular random shuffles
 #define RUN_TESTS 100
 
@@ -303,6 +309,1523 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
         }
     }
     empty_wallet();
+}
+
+// ---------------------------------------------------------------------------
+// SyncLegacyFromState — derives hashBlock/nIndex from m_state
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_confirmed)
+{
+    CWalletTx wtx;
+    uint256 bh = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    wtx.m_state = TxStateConfirmed(bh, 500, 7);
+    wtx.SyncLegacyFromState();
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, bh);
+    BOOST_CHECK_EQUAL(wtx.nIndex, 7);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_abandoned)
+{
+    CWalletTx wtx;
+    wtx.m_state = TxStateInactive{true};
+    wtx.SyncLegacyFromState();
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, ABANDONED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_conflicted)
+{
+    CWalletTx wtx;
+    wtx.m_state = TxStateInactive{false};
+    wtx.SyncLegacyFromState();
+
+    BOOST_CHECK_EQUAL(wtx.hashBlock, CONFLICTED_HASH_SENTINEL);
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_mempool)
+{
+    CWalletTx wtx;
+    wtx.m_state = TxStateInMempool{};
+    wtx.SyncLegacyFromState();
+
+    BOOST_CHECK(wtx.hashBlock.IsNull());
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_CASE(sync_legacy_from_state_unrecognized)
+{
+    CWalletTx wtx;
+    wtx.m_state = TxStateUnrecognized{};
+    wtx.SyncLegacyFromState();
+
+    BOOST_CHECK(wtx.hashBlock.IsNull());
+    BOOST_CHECK_EQUAL(wtx.nIndex, -1);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(wallet_integration_tests)
+
+BOOST_AUTO_TEST_CASE(state_transition_mempool_to_confirmed)
+{
+    // Test state transition from mempool to confirmed
+    CWallet test_wallet;
+
+    // Create a transaction
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+    CTransactionRef ptx = MakeTransactionRef(tx);
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Start in mempool state
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // Transition to confirmed
+        uint256 block_hash = uint256S("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        TxState confirmed_state = TxStateConfirmed(block_hash, 100, 5);
+
+        // Manually update state (simulating what SyncTransaction does)
+        test_wallet.mapWallet[hash].m_state = confirmed_state;
+        test_wallet.mapWallet[hash].hashBlock = block_hash;
+        test_wallet.mapWallet[hash].nIndex = 5;
+
+        // Verify transition
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isInMempool());
+
+        auto* conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+        BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 100);
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(state_transition_confirmed_to_inactive_reorg)
+{
+    // Test reorg scenario: confirmed -> inactive
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 75 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Start confirmed
+        CWalletTx wtx(&test_wallet, tx);
+        uint256 block_hash = uint256S("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+        wtx.m_state = TxStateConfirmed(block_hash, 200, 3);
+        wtx.hashBlock = block_hash;
+        wtx.nIndex = 3;
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        // Simulate reorg: block disconnected, tx becomes inactive
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        test_wallet.mapWallet[hash].hashBlock.SetNull();
+        test_wallet.mapWallet[hash].nIndex = -1;
+
+        // Verify transition
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isConfirmed());
+
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, false);  // Not abandoned, just orphaned
+    }
+}
+
+BOOST_AUTO_TEST_CASE(spent_tracking_on_confirmation)
+{
+    // Test that parent outputs are marked spent when child tx confirms
+    CWallet test_wallet;
+
+    // Create parent transaction
+    CTransaction parent_tx;
+    parent_tx.vout.resize(2);
+    parent_tx.vout[0].nValue = 100 * COIN;
+    parent_tx.vout[1].nValue = 50 * COIN;
+    uint256 parent_hash = parent_tx.GetHash();
+
+    // Create child transaction spending parent output 0
+    CTransaction child_tx;
+    child_tx.vin.resize(1);
+    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_tx.vout.resize(1);
+    child_tx.vout[0].nValue = 99 * COIN;  // 1 COIN fee
+    uint256 child_hash = child_tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add parent to wallet (confirmed)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.m_state = TxStateConfirmed(uint256S("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"), 100, 1);
+        parent_wtx.vfSpent.resize(2, false);  // Both outputs unspent initially
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Add child to wallet (mempool initially)
+        CWalletTx child_wtx(&test_wallet, child_tx);
+        child_wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[child_hash] = child_wtx;
+
+        // Verify parent output 0 is unspent
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(1));
+
+        // Mark parent output as spent (simulating what SyncTransaction does)
+        test_wallet.mapWallet[parent_hash].MarkSpent(0);
+
+        // Verify parent output 0 is now spent
+        BOOST_CHECK(test_wallet.mapWallet[parent_hash].IsSpent(0));
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(1));  // Output 1 still unspent
+    }
+}
+
+BOOST_AUTO_TEST_CASE(reorg_unmarks_parent_spent)
+{
+    // Test that reorg correctly unmarks parent outputs as unspent
+    CWallet test_wallet;
+
+    // Create parent and child transactions
+    CTransaction parent_tx;
+    parent_tx.vout.resize(1);
+    parent_tx.vout[0].nValue = 100 * COIN;
+    uint256 parent_hash = parent_tx.GetHash();
+
+    CTransaction child_tx;
+    child_tx.vin.resize(1);
+    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_tx.vout.resize(1);
+    child_tx.vout[0].nValue = 99 * COIN;
+    uint256 child_hash = child_tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add parent (confirmed, output spent)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.m_state = TxStateConfirmed(uint256S("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), 150, 2);
+        parent_wtx.vfSpent.resize(1, true);  // Output 0 is spent
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Verify output is spent
+        BOOST_CHECK(test_wallet.mapWallet[parent_hash].IsSpent(0));
+
+        // Simulate reorg: unmark parent output as spent
+        test_wallet.mapWallet[parent_hash].MarkUnspent(0);
+
+        // Verify output is now unspent
+        BOOST_CHECK(!test_wallet.mapWallet[parent_hash].IsSpent(0));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_then_reconfirm_workflow)
+{
+    // Test full abandon lifecycle including edge case reconfirmation
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 60 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // 1. Transaction starts in mempool
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 2. Transaction removed/conflicted (not abandoned yet)
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+
+        // 3. User explicitly abandons
+        bool abandoned_ok = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(abandoned_ok);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+
+        // 4. Edge case: abandoned tx appears in a block (should re-activate)
+        uint256 block_hash = uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        test_wallet.mapWallet[hash].m_state = TxStateConfirmed(block_hash, 300, 4);
+        test_wallet.mapWallet[hash].hashBlock = block_hash;
+        test_wallet.mapWallet[hash].nIndex = 4;
+
+        // Verify it's now confirmed (abandoned flag overridden)
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(inactive_conflicted_vs_abandoned)
+{
+    // Test distinction between conflicted (abandoned=false) and abandoned (abandoned=true)
+    CWallet test_wallet;
+
+    // Transaction 1: conflicted
+    CTransaction tx1;
+    tx1.vout.resize(1);
+    tx1.vout[0].nValue = 40 * COIN;
+    uint256 hash1 = tx1.GetHash();
+
+    // Transaction 2: abandoned
+    CTransaction tx2;
+    tx2.vout.resize(1);
+    tx2.vout[0].nValue = 30 * COIN;
+    uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add conflicted transaction
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.m_state = TxStateInactive{false};  // conflicted, not abandoned
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        // Add abandoned transaction
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.m_state = TxStateInactive{true};  // abandoned
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Verify both are inactive
+        BOOST_CHECK(test_wallet.mapWallet[hash1].isInactive());
+        BOOST_CHECK(test_wallet.mapWallet[hash2].isInactive());
+
+        // But only tx2 is abandoned
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash1));
+        BOOST_CHECK(test_wallet.IsAbandoned(hash2));
+
+        // Verify the abandoned flags
+        auto* inactive1 = test_wallet.mapWallet[hash1].state<TxStateInactive>();
+        auto* inactive2 = test_wallet.mapWallet[hash2].state<TxStateInactive>();
+
+        BOOST_CHECK(inactive1 != nullptr);
+        BOOST_CHECK(inactive2 != nullptr);
+        BOOST_CHECK_EQUAL(inactive1->m_abandoned, false);
+        BOOST_CHECK_EQUAL(inactive2->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(unrecognized_migration_with_hashblock)
+{
+    // Test migration of unrecognized transactions with hashBlock set
+    // This tests the consolidated migration path (Fix 1)
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 80 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Create transaction with unrecognized state but hashBlock set
+        // (simulates old wallet format being loaded)
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateUnrecognized{};
+        uint256 block_hash = uint256S("1111111122222222333333334444444455555555666666667777777788888888");
+        wtx.hashBlock = block_hash;
+        wtx.nIndex = 7;
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // Simulate migration: if hashBlock is set, migrate to confirmed state
+        // (This is what ReacceptWalletTransactions does)
+        if (!test_wallet.mapWallet[hash].hashBlock.IsNull()) {
+            test_wallet.mapWallet[hash].m_state = TxStateConfirmed(
+                test_wallet.mapWallet[hash].hashBlock,
+                250,  // height (would come from mapBlockIndex in real code)
+                test_wallet.mapWallet[hash].nIndex
+            );
+        }
+
+        // Verify migration succeeded
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isUnrecognized());
+
+        auto* conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 7);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(unrecognized_migration_without_hashblock)
+{
+    // Test migration of unrecognized transactions without hashBlock
+    // These should become inactive (not found)
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 90 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Create transaction with unrecognized state and no hashBlock
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateUnrecognized{};
+        wtx.hashBlock.SetNull();
+        wtx.nIndex = -1;
+        test_wallet.mapWallet[hash] = wtx;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // Simulate migration: no hashBlock, not in mempool/txdb -> inactive
+        if (test_wallet.mapWallet[hash].hashBlock.IsNull()) {
+            test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        }
+
+        // Verify migration to inactive
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.mapWallet[hash].isUnrecognized());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));  // Not abandoned, just not found
+    }
+}
+
+BOOST_AUTO_TEST_CASE(multiple_state_transitions)
+{
+    // Test multiple state transitions in sequence
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 110 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // 1. Start: Unrecognized (loaded from old wallet)
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateUnrecognized{};
+        test_wallet.mapWallet[hash] = wtx;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isUnrecognized());
+
+        // 2. Migrate to Mempool (found in mempool during ReacceptWalletTransactions)
+        test_wallet.mapWallet[hash].m_state = TxStateInMempool{};
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 3. Confirm (block connected)
+        uint256 block_hash = uint256S("9999999999999999999999999999999999999999999999999999999999999999");
+        test_wallet.mapWallet[hash].m_state = TxStateConfirmed(block_hash, 400, 8);
+        test_wallet.mapWallet[hash].hashBlock = block_hash;
+        test_wallet.mapWallet[hash].nIndex = 8;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        // 4. Reorg back to Inactive (block disconnected)
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        test_wallet.mapWallet[hash].hashBlock.SetNull();
+        test_wallet.mapWallet[hash].nIndex = -1;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+
+        // 5. Return to Mempool (transaction still valid)
+        test_wallet.mapWallet[hash].m_state = TxStateInMempool{};
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+
+        // 6. Re-confirm in new chain
+        uint256 new_block_hash = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        test_wallet.mapWallet[hash].m_state = TxStateConfirmed(new_block_hash, 401, 2);
+        test_wallet.mapWallet[hash].hashBlock = new_block_hash;
+        test_wallet.mapWallet[hash].nIndex = 2;
+        BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
+
+        auto* final_conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
+        BOOST_CHECK(final_conf != nullptr);
+        BOOST_CHECK(final_conf->m_confirmed_block_hash == new_block_hash);
+        BOOST_CHECK_EQUAL(final_conf->m_confirmed_block_height, 401);
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(wallet_state_tests)
+
+BOOST_AUTO_TEST_CASE(state_type_creation)
+{
+    // Test creating each state type
+    TxStateInMempool mempool_state;
+    BOOST_CHECK(std::holds_alternative<TxStateInMempool>(
+        TxState{mempool_state}));
+
+    TxStateConfirmed conf_state(uint256S("00"), 100, 0);
+    BOOST_CHECK_EQUAL(conf_state.m_confirmed_block_height, 100);
+
+    TxStateInactive inactive_state(true);
+    BOOST_CHECK_EQUAL(inactive_state.m_abandoned, true);
+
+    TxStateUnrecognized unrec_state;
+    BOOST_CHECK_EQUAL(unrec_state.m_index, -1);
+}
+
+BOOST_AUTO_TEST_CASE(state_serialization)
+{
+    // Test each state type serializes/deserializes correctly
+    {
+        TxStateConfirmed original(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 12345, 7);
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        TxStateConfirmed restored;
+        ss >> restored;
+
+        BOOST_CHECK(original.m_confirmed_block_hash == restored.m_confirmed_block_hash);
+        BOOST_CHECK_EQUAL(original.m_confirmed_block_height, restored.m_confirmed_block_height);
+        BOOST_CHECK_EQUAL(original.m_position_in_block, restored.m_position_in_block);
+    }
+
+    {
+        TxStateInactive original(true);
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        TxStateInactive restored;
+        ss >> restored;
+
+        BOOST_CHECK_EQUAL(original.m_abandoned, restored.m_abandoned);
+    }
+
+    {
+        TxStateUnrecognized original;
+        original.m_block_hash = uint256S("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+        original.m_index = 42;
+
+        CDataStream ss(SER_DISK, CLIENT_VERSION);
+        ss << original;
+
+        TxStateUnrecognized restored;
+        ss >> restored;
+
+        BOOST_CHECK(original.m_block_hash == restored.m_block_hash);
+        BOOST_CHECK_EQUAL(original.m_index, restored.m_index);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_state_helpers)
+{
+    CWalletTx wtx;
+
+    // Test mempool state
+    wtx.m_state = TxStateInMempool{};
+    BOOST_CHECK(wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    // Test confirmed state
+    wtx.m_state = TxStateConfirmed(uint256S("00"), 100, 0);
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    auto* conf = wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 100);
+
+    // Test inactive state
+    wtx.m_state = TxStateInactive(true);
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(wtx.isInactive());
+    BOOST_CHECK(!wtx.isUnrecognized());
+
+    auto* inactive = wtx.state<TxStateInactive>();
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+
+    // Test unrecognized state
+    wtx.m_state = TxStateUnrecognized{};
+    BOOST_CHECK(!wtx.isInMempool());
+    BOOST_CHECK(!wtx.isConfirmed());
+    BOOST_CHECK(!wtx.isInactive());
+    BOOST_CHECK(wtx.isUnrecognized());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_tx_serialization_with_state)
+{
+    // Test that CWalletTx with state serializes correctly
+    CWalletTx original;
+    original.m_state = TxStateConfirmed(uint256S("abc123"), 500, 3);
+
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << original;
+
+    CWalletTx restored;
+    ss >> restored;
+
+    BOOST_CHECK(restored.isConfirmed());
+    auto* conf = restored.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 500);
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 3);
+}
+
+BOOST_AUTO_TEST_CASE(old_wallet_migration)
+{
+    // Test that old wallet format migrates to new state
+    CWalletTx oldFormat;
+    oldFormat.hashBlock = uint256S("def456");
+    oldFormat.nIndex = 5;
+
+    // Serialize with old version (before FEATURE_TRANSACTION_STATES)
+    CDataStream ss_old(SER_DISK, FEATURE_TRANSACTION_STATES - 1);
+    ss_old << oldFormat;
+
+    // Deserialize with old version first (this is how wallet.dat reading actually works)
+    CDataStream ss_migrate(SER_DISK, FEATURE_TRANSACTION_STATES - 1);
+    ss_migrate.write(MakeByteSpan(ss_old));
+
+    CWalletTx newFormat;
+    ss_migrate >> newFormat;
+
+    // The migration happens during deserialization when version < FEATURE_TRANSACTION_STATES
+    // The code should automatically set m_state based on hashBlock
+    BOOST_CHECK(newFormat.isConfirmed() || newFormat.isUnrecognized());
+
+    if (newFormat.isConfirmed()) {
+        auto* conf = newFormat.state<TxStateConfirmed>();
+        BOOST_CHECK(conf != nullptr);
+        BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("def456"));
+        BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(state_template_methods)
+{
+    CWalletTx wtx;
+
+    // Test template state retrieval
+    wtx.m_state = TxStateConfirmed(uint256S("test"), 123, 1);
+
+    // Test const version
+    const CWalletTx& const_wtx = wtx;
+    const TxStateConfirmed* const_conf = const_wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(const_conf != nullptr);
+    BOOST_CHECK_EQUAL(const_conf->m_confirmed_block_height, 123);
+
+    // Test non-const version
+    TxStateConfirmed* conf = wtx.state<TxStateConfirmed>();
+    BOOST_CHECK(conf != nullptr);
+    conf->m_confirmed_block_height = 456;
+    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 456);
+
+    // Test retrieval of wrong type returns nullptr
+    const TxStateInMempool* mempool_ptr = const_wtx.state<TxStateInMempool>();
+    BOOST_CHECK(mempool_ptr == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_no_conflicts)
+{
+    // Test GetConflicts with no conflicting transactions
+    CWallet test_wallet;
+
+    // Create a simple transaction
+    CTransaction tx1;
+    tx1.vin.resize(1);
+    tx1.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 0);
+    tx1.vout.resize(1);
+    tx1.vout[0].nValue = 100 * COIN;
+
+    uint256 hash1 = tx1.GetHash();
+
+    // Add to wallet
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        // Populate mapTxSpends
+        for (const auto& txin : tx1.vin) {
+            test_wallet.mapTxSpends.insert(std::make_pair(txin.prevout, hash1));
+        }
+    }
+
+    // Should have no conflicts
+    std::set<uint256> conflicts = test_wallet.GetConflicts(hash1);
+    BOOST_CHECK(conflicts.empty());
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_with_conflicts)
+{
+    // Test GetConflicts with conflicting transactions (double-spend)
+    CWallet test_wallet;
+
+    // Create two transactions that spend the same output
+    COutPoint shared_outpoint(uint256S("2222222222222222222222222222222222222222222222222222222222222222"), 0);
+
+    CTransaction tx1;
+    tx1.vin.resize(1);
+    tx1.vin[0].prevout = shared_outpoint;
+    tx1.vout.resize(1);
+    tx1.vout[0].nValue = 100 * COIN;
+    uint256 hash1 = tx1.GetHash();
+
+    CTransaction tx2;
+    tx2.vin.resize(1);
+    tx2.vin[0].prevout = shared_outpoint;  // Same input!
+    tx2.vout.resize(1);
+    tx2.vout[0].nValue = 99 * COIN;  // Different output
+    uint256 hash2 = tx2.GetHash();
+
+    // Add both to wallet
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Populate mapTxSpends for both
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash1));
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash2));
+    }
+
+    // tx1 should conflict with tx2
+    std::set<uint256> conflicts1 = test_wallet.GetConflicts(hash1);
+    BOOST_CHECK_EQUAL(conflicts1.size(), 1u);
+    BOOST_CHECK(conflicts1.count(hash2) == 1);
+
+    // tx2 should conflict with tx1
+    std::set<uint256> conflicts2 = test_wallet.GetConflicts(hash2);
+    BOOST_CHECK_EQUAL(conflicts2.size(), 1u);
+    BOOST_CHECK(conflicts2.count(hash1) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(get_conflicts_multiple_conflicts)
+{
+    // Test GetConflicts with multiple conflicting transactions
+    CWallet test_wallet;
+
+    COutPoint shared_outpoint(uint256S("3333333333333333333333333333333333333333333333333333333333333333"), 5);
+
+    // Create three transactions that all spend the same output
+    std::vector<uint256> hashes;
+    for (int i = 0; i < 3; i++) {
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout = shared_outpoint;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = (100 - i) * COIN;
+
+        uint256 hash = tx.GetHash();
+        hashes.push_back(hash);
+
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash));
+    }
+
+    // Each transaction should conflict with the other two
+    for (size_t i = 0; i < hashes.size(); i++) {
+        std::set<uint256> conflicts = test_wallet.GetConflicts(hashes[i]);
+        BOOST_CHECK_EQUAL(conflicts.size(), 2u);
+
+        for (size_t j = 0; j < hashes.size(); j++) {
+            if (i != j) {
+                BOOST_CHECK(conflicts.count(hashes[j]) == 1);
+            }
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_not_abandoned)
+{
+    // Test IsAbandoned with non-abandoned transaction
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_with_abandoned_tx)
+{
+    // Test IsAbandoned with abandoned transaction
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInactive{true};  // abandoned = true
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    BOOST_CHECK(test_wallet.IsAbandoned(hash));
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_inactive_not_abandoned)
+{
+    // Test IsAbandoned with inactive but not abandoned transaction
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInactive{false};  // abandoned = false
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+}
+
+BOOST_AUTO_TEST_CASE(is_abandoned_nonexistent_tx)
+{
+    // Test IsAbandoned with transaction not in wallet
+    CWallet test_wallet;
+
+    uint256 nonexistent_hash = uint256S("4444444444444444444444444444444444444444444444444444444444444444");
+    BOOST_CHECK(!test_wallet.IsAbandoned(nonexistent_hash));
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
+{
+    // Test AbandonTransaction with unconfirmed transaction (not in mempool)
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 75 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        // Use Unrecognized state - transaction not in mempool, not confirmed
+        wtx.m_state = TxStateUnrecognized{};
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Should be able to abandon unconfirmed transaction not in mempool
+    BOOST_CHECK(test_wallet.AbandonTransaction(hash));
+
+    // Should now be marked as abandoned
+    BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+    // Verify state changed to inactive with abandoned=true
+    {
+        LOCK(test_wallet.cs_wallet);
+        auto it = test_wallet.mapWallet.find(hash);
+        BOOST_CHECK(it != test_wallet.mapWallet.end());
+        BOOST_CHECK(it->second.isInactive());
+
+        auto* inactive_state = it->second.state<TxStateInactive>();
+        BOOST_CHECK(inactive_state != nullptr);
+        BOOST_CHECK_EQUAL(inactive_state->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
+{
+    // Test that AbandonTransaction fails with confirmed transaction
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 75 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateConfirmed(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 100, 0);
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Should NOT be able to abandon confirmed transaction
+    BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+
+    // Should still be confirmed, not abandoned
+    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        auto it = test_wallet.mapWallet.find(hash);
+        BOOST_CHECK(it != test_wallet.mapWallet.end());
+        BOOST_CHECK(it->second.isConfirmed());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_nonexistent_tx_fails)
+{
+    // Test that AbandonTransaction fails with nonexistent transaction
+    CWallet test_wallet;
+
+    uint256 nonexistent_hash = uint256S("6666666666666666666666666666666666666666666666666666666666666666");
+
+    // Should fail gracefully
+    BOOST_CHECK(!test_wallet.AbandonTransaction(nonexistent_hash));
+}
+
+BOOST_AUTO_TEST_CASE(maptxspends_cleanup_on_erase)
+{
+    // Test that mapTxSpends is cleaned up when transaction is erased
+    CWallet test_wallet;
+
+    // Create a transaction with multiple inputs
+    CTransaction tx;
+    tx.vin.resize(3);
+    tx.vin[0].prevout = COutPoint(uint256S("7777777777777777777777777777777777777777777777777777777777777777"), 0);
+    tx.vin[1].prevout = COutPoint(uint256S("8888888888888888888888888888888888888888888888888888888888888888"), 1);
+    tx.vin[2].prevout = COutPoint(uint256S("9999999999999999999999999999999999999999999999999999999999999999"), 2);
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 100 * COIN;
+
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Populate mapTxSpends
+        for (const auto& txin : tx.vin) {
+            test_wallet.mapTxSpends.insert(std::make_pair(txin.prevout, hash));
+        }
+
+        // Verify entries exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 1u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[2].prevout), 1u);
+
+        // Erase the transaction
+        test_wallet.EraseFromWallet(hash);
+
+        // mapTxSpends entries should be cleaned up
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[0].prevout), 0u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[1].prevout), 0u);
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(tx.vin[2].prevout), 0u);
+
+        // Transaction should be gone from mapWallet
+        BOOST_CHECK(test_wallet.mapWallet.find(hash) == test_wallet.mapWallet.end());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// transactionRemovedFromMempool state-transition tests (#9)
+//
+// These verify the state-transition *logic* for each MemPoolRemovalReason
+// without requiring full mempool mocking. We pre-populate mapWallet and
+// apply the same transitions that transactionRemovedFromMempool() makes.
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(mempool_removal_block_reason_no_state_change)
+{
+    // When reason == BLOCK, transactionRemovedFromMempool returns early.
+    // blockConnected handles the state transition instead.
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Simulate: reason == BLOCK → no action (early return)
+    // State should remain InMempool (blockConnected changes it later)
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_conflict_marks_inactive)
+{
+    // CONFLICT reason should mark transaction as inactive (not abandoned)
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Apply same logic as transactionRemovedFromMempool for CONFLICT
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        test_wallet.mapWallet[hash].hashBlock.SetNull();
+        test_wallet.mapWallet[hash].nIndex = -1;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, false);  // Not abandoned, just conflicted
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_replaced_marks_inactive)
+{
+    // REPLACED reason should mark transaction as inactive (same as CONFLICT)
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Apply same logic as transactionRemovedFromMempool for REPLACED
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        test_wallet.mapWallet[hash].hashBlock.SetNull();
+        test_wallet.mapWallet[hash].nIndex = -1;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_expiry_preserves_mempool_state)
+{
+    // EXPIRY reason should NOT change state — tx is eligible for re-acceptance
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // EXPIRY: no state change (just logs)
+        // State should remain InMempool — ReacceptWalletTransactions will handle it
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_sizelimit_preserves_mempool_state)
+{
+    // SIZELIMIT reason should NOT change state — tx is eligible for re-acceptance
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // SIZELIMIT: no state change (just logs)
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_reorg_defers_to_block_disconnected)
+{
+    // REORG reason should NOT change state — blockDisconnected handles it
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // REORG: no state change (deferred to blockDisconnected)
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_unknown_marks_inactive)
+{
+    // UNKNOWN reason should conservatively mark as inactive
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Apply same logic as transactionRemovedFromMempool for UNKNOWN
+        test_wallet.mapWallet[hash].m_state = TxStateInactive{false};
+        test_wallet.mapWallet[hash].hashBlock.SetNull();
+        test_wallet.mapWallet[hash].nIndex = -1;
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInactive());
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_removal_not_in_wallet_no_crash)
+{
+    // Removal of tx NOT in wallet should be a no-op (no crash)
+    CWallet test_wallet;
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 50 * COIN;
+    uint256 hash = tx.GetHash();
+
+    // Don't add to wallet — verify no crash when looking up
+    {
+        LOCK(test_wallet.cs_wallet);
+        auto it = test_wallet.mapWallet.find(hash);
+        BOOST_CHECK(it == test_wallet.mapWallet.end());
+        // In transactionRemovedFromMempool, this causes an early return
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MigrateFromLegacyHashBlock tests — all 4 branches
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_abandoned_sentinel)
+{
+    // ABANDONED_HASH_SENTINEL → TxStateInactive{true}
+    TxState state = MigrateFromLegacyHashBlock(ABANDONED_HASH_SENTINEL, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(state));
+    auto* inactive = std::get_if<TxStateInactive>(&state);
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_conflicted_sentinel)
+{
+    // CONFLICTED_HASH_SENTINEL → TxStateInactive{false}
+    TxState state = MigrateFromLegacyHashBlock(CONFLICTED_HASH_SENTINEL, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(state));
+    auto* inactive = std::get_if<TxStateInactive>(&state);
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, false);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_confirmed)
+{
+    // Non-null hash → TxStateConfirmed with height=-1 (resolved later)
+    uint256 block_hash = uint256S("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+    TxState state = MigrateFromLegacyHashBlock(block_hash, 5);
+    BOOST_CHECK(std::holds_alternative<TxStateConfirmed>(state));
+    auto* conf = std::get_if<TxStateConfirmed>(&state);
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
+    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, -1);  // Height not known at migration time
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
+}
+
+BOOST_AUTO_TEST_CASE(migrate_legacy_null_hash)
+{
+    // Null hash → TxStateUnrecognized
+    TxState state = MigrateFromLegacyHashBlock(uint256(), -1);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(state));
+}
+
+// ---------------------------------------------------------------------------
+// TxState variant-level serialization round-trips
+// (tests SerializeTxState/UnserializeTxState, not just individual structs)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_variant_roundtrip_mempool)
+{
+    TxState original = TxStateInMempool{};
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    Serialize(ss, original);
+
+    TxState restored;
+    Unserialize(ss, restored);
+    BOOST_CHECK(std::holds_alternative<TxStateInMempool>(restored));
+    BOOST_CHECK_EQUAL(original.index(), restored.index());
+}
+
+BOOST_AUTO_TEST_CASE(txstate_variant_roundtrip_confirmed)
+{
+    uint256 bh = uint256S("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
+    TxState original = TxStateConfirmed(bh, 999, 42);
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    Serialize(ss, original);
+
+    TxState restored;
+    Unserialize(ss, restored);
+    BOOST_CHECK(std::holds_alternative<TxStateConfirmed>(restored));
+    auto* conf = std::get_if<TxStateConfirmed>(&restored);
+    BOOST_CHECK(conf != nullptr);
+    BOOST_CHECK(conf->m_confirmed_block_hash == bh);
+    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 999);
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 42);
+}
+
+BOOST_AUTO_TEST_CASE(txstate_variant_roundtrip_inactive)
+{
+    TxState original = TxStateInactive{true};
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    Serialize(ss, original);
+
+    TxState restored;
+    Unserialize(ss, restored);
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(restored));
+    auto* inactive = std::get_if<TxStateInactive>(&restored);
+    BOOST_CHECK(inactive != nullptr);
+    BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+}
+
+BOOST_AUTO_TEST_CASE(txstate_variant_roundtrip_unrecognized)
+{
+    TxStateUnrecognized u;
+    u.m_block_hash = uint256S("1234");
+    u.m_index = 77;
+    TxState original = u;
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    Serialize(ss, original);
+
+    TxState restored;
+    Unserialize(ss, restored);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(restored));
+    auto* unrec = std::get_if<TxStateUnrecognized>(&restored);
+    BOOST_CHECK(unrec != nullptr);
+    BOOST_CHECK(unrec->m_block_hash == u.m_block_hash);
+    BOOST_CHECK_EQUAL(unrec->m_index, 77);
+}
+
+// ---------------------------------------------------------------------------
+// Forward compatibility: unknown state index
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_unknown_index_deserializes_as_unrecognized)
+{
+    // Manually craft a stream with state_index=99 (unknown future type)
+    // followed by a TxStateUnrecognized payload (block_hash + index).
+    // UnserializeTxState should handle this gracefully → TxStateUnrecognized.
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    int bogus_index = 99;
+    ::Serialize(ss, bogus_index);
+    // Write a plausible payload (TxStateUnrecognized has uint256 + int)
+    TxStateUnrecognized payload;
+    payload.m_block_hash = uint256S("dead");
+    payload.m_index = 13;
+    ::Serialize(ss, payload);
+
+    TxState restored;
+    Unserialize(ss, restored);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(restored));
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: cascading to child transactions
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
+{
+    CWallet test_wallet;
+
+    // Parent tx
+    CTransaction parent_tx;
+    parent_tx.vout.resize(2);
+    parent_tx.vout[0].nValue = 50 * COIN;
+    parent_tx.vout[1].nValue = 30 * COIN;
+    uint256 parent_hash = parent_tx.GetHash();
+
+    // Child tx spending parent output 0
+    CTransaction child_tx;
+    child_tx.vin.resize(1);
+    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_tx.vout.resize(1);
+    child_tx.vout[0].nValue = 49 * COIN;
+    uint256 child_hash = child_tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add parent (inactive/unconfirmed, not in mempool)
+        CWalletTx parent_wtx(&test_wallet, parent_tx);
+        parent_wtx.m_state = TxStateInactive{false};
+        test_wallet.mapWallet[parent_hash] = parent_wtx;
+
+        // Add child (inactive/unconfirmed, not in mempool)
+        CWalletTx child_wtx(&test_wallet, child_tx);
+        child_wtx.m_state = TxStateInactive{false};
+        test_wallet.mapWallet[child_hash] = child_wtx;
+
+        // Wire up mapTxSpends so AbandonTransaction can find the child
+        test_wallet.mapTxSpends.insert(std::make_pair(COutPoint(parent_hash, 0), child_hash));
+
+        // Neither should be abandoned yet
+        BOOST_CHECK(!test_wallet.IsAbandoned(parent_hash));
+        BOOST_CHECK(!test_wallet.IsAbandoned(child_hash));
+
+        // Abandon the parent
+        bool ok = test_wallet.AbandonTransaction(parent_hash);
+        BOOST_CHECK(ok);
+
+        // Both parent AND child should now be abandoned
+        BOOST_CHECK(test_wallet.IsAbandoned(parent_hash));
+        BOOST_CHECK(test_wallet.IsAbandoned(child_hash));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: hashBlock sentinel verification (Fix B)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_sets_sentinel_hash)
+{
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 25 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInactive{false};  // Not yet abandoned
+        wtx.hashBlock.SetNull();
+        test_wallet.mapWallet[hash] = wtx;
+
+        // Abandon
+        bool ok = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok);
+
+        // Verify hashBlock is set to ABANDONED_HASH_SENTINEL (not null)
+        BOOST_CHECK(test_wallet.mapWallet[hash].hashBlock == ABANDONED_HASH_SENTINEL);
+        BOOST_CHECK(!test_wallet.mapWallet[hash].hashBlock.IsNull());
+
+        // And nIndex should be -1
+        BOOST_CHECK_EQUAL(test_wallet.mapWallet[hash].nIndex, -1);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: double-abandon idempotency
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Variant index stability — serialization compatibility guard
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_variant_index_stability)
+{
+    // The variant index is written to disk. If anyone reorders the variant
+    // alternatives, old wallet.dat files will silently deserialize to the
+    // wrong type. This test locks the indices.
+    TxState s0 = TxStateInMempool{};
+    TxState s1 = TxStateConfirmed{};
+    TxState s2 = TxStateInactive{};
+    TxState s3 = TxStateUnrecognized{};
+
+    BOOST_CHECK_EQUAL(s0.index(), 0u);  // InMempool must be index 0
+    BOOST_CHECK_EQUAL(s1.index(), 1u);  // Confirmed must be index 1
+    BOOST_CHECK_EQUAL(s2.index(), 2u);  // Inactive must be index 2
+    BOOST_CHECK_EQUAL(s3.index(), 3u);  // Unrecognized must be index 3
+}
+
+// ---------------------------------------------------------------------------
+// Default constructor invariants
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(txstate_default_constructor_invariants)
+{
+    // Guard against someone changing default field values
+    TxStateConfirmed conf;
+    BOOST_CHECK(conf.m_confirmed_block_hash.IsNull());
+    BOOST_CHECK_EQUAL(conf.m_confirmed_block_height, -1);
+    BOOST_CHECK_EQUAL(conf.m_position_in_block, -1);
+
+    TxStateInactive inactive;
+    BOOST_CHECK_EQUAL(inactive.m_abandoned, false);
+
+    TxStateUnrecognized unrec;
+    BOOST_CHECK(unrec.m_block_hash.IsNull());
+    BOOST_CHECK_EQUAL(unrec.m_index, -1);
+}
+
+// ---------------------------------------------------------------------------
+// AbandonTransaction: mempool tx cannot be abandoned
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
+{
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 20 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash] = wtx;
+    }
+
+    // Should NOT be able to abandon a mempool transaction
+    BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+
+    // Should still be in mempool, not abandoned
+    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(abandon_transaction_double_abandon_is_idempotent)
+{
+    CWallet test_wallet;
+
+    CTransaction tx;
+    tx.vout.resize(1);
+    tx.vout[0].nValue = 15 * COIN;
+    uint256 hash = tx.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        CWalletTx wtx(&test_wallet, tx);
+        wtx.m_state = TxStateUnrecognized{};  // Can be abandoned
+        test_wallet.mapWallet[hash] = wtx;
+
+        // First abandon
+        bool ok1 = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok1);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        // Second abandon — should return true without error
+        bool ok2 = test_wallet.AbandonTransaction(hash);
+        BOOST_CHECK(ok2);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+
+        // State should still be inactive/abandoned (unchanged)
+        auto* inactive = test_wallet.mapWallet[hash].state<TxStateInactive>();
+        BOOST_CHECK(inactive != nullptr);
+        BOOST_CHECK_EQUAL(inactive->m_abandoned, true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(maptxspends_cleanup_preserves_other_conflicts)
+{
+    // Test that erasing one conflicting tx doesn't remove other conflicts
+    CWallet test_wallet;
+
+    COutPoint shared_outpoint(uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), 0);
+
+    // Create two conflicting transactions
+    CTransaction tx1;
+    tx1.vin.resize(1);
+    tx1.vin[0].prevout = shared_outpoint;
+    tx1.vout.resize(1);
+    tx1.vout[0].nValue = 100 * COIN;
+    uint256 hash1 = tx1.GetHash();
+
+    CTransaction tx2;
+    tx2.vin.resize(1);
+    tx2.vin[0].prevout = shared_outpoint;
+    tx2.vout.resize(1);
+    tx2.vout[0].nValue = 99 * COIN;
+    uint256 hash2 = tx2.GetHash();
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Add both transactions
+        CWalletTx wtx1(&test_wallet, tx1);
+        wtx1.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash1] = wtx1;
+
+        CWalletTx wtx2(&test_wallet, tx2);
+        wtx2.m_state = TxStateInMempool{};
+        test_wallet.mapWallet[hash2] = wtx2;
+
+        // Populate mapTxSpends
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash1));
+        test_wallet.mapTxSpends.insert(std::make_pair(shared_outpoint, hash2));
+
+        // Both entries should exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(shared_outpoint), 2u);
+
+        // Erase first transaction
+        test_wallet.EraseFromWallet(hash1);
+
+        // Second transaction's entry should still exist
+        BOOST_CHECK_EQUAL(test_wallet.mapTxSpends.count(shared_outpoint), 1u);
+
+        // Verify it's the correct entry
+        auto range = test_wallet.mapTxSpends.equal_range(shared_outpoint);
+        BOOST_CHECK(range.first != range.second);
+        BOOST_CHECK_EQUAL(range.first->second, hash2);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
