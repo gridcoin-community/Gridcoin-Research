@@ -588,12 +588,14 @@ bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex)
             return error("%s: WriteBlockIndex failed", __func__);
     }
 
-    // ppcoin: clean up wallet after disconnecting coinstake.
+    // Notify registered wallets that block was disconnected.
     // Canonical order: cs_main (held by DisconnectBlock) -> cs_setpwalletRegistered -> cs_wallet.
     {
         LOCK(cs_setpwalletRegistered);
-        for (auto const& tx : block.vtx)
-            SyncWithWallets(tx, &block, false, false);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->blockDisconnected(block, pindex->nHeight);
+        }
     }
 
     if (bDiscTxFailed) return error("%s: DisconnectInputs failed", __func__);
@@ -1102,12 +1104,15 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockInd
             return error("%s: WriteBlockIndex failed", __func__);
     }
 
-    // Watch for transactions paying to me.
+    // Notify registered wallets that block was connected.
+    // This updates transactions from mempool to confirmed state.
     // Canonical order: cs_main (held by ConnectBlock) -> cs_setpwalletRegistered -> cs_wallet.
     {
         LOCK(cs_setpwalletRegistered);
-        for (auto const& tx : block.vtx)
-            SyncWithWallets(tx, &block, true);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->blockConnected(block, pindex->nHeight);
+        }
     }
 
     return true;
@@ -1781,4 +1786,3 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
 
     return true;
 }
-

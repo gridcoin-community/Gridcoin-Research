@@ -1443,7 +1443,7 @@ bool AppInit2(ThreadHandlerPtr threads)
         // So Clang doesn't complain, even though we are really essentially single-threaded here.
         LOCK(pwalletMain->cs_wallet);
 
-        pwalletMain->SetMinVersion(wallet::FEATURE_LATEST);
+        pwalletMain->SetMinVersion(FEATURE_LATEST);
 
         // generate a new master key
         CPubKey masterPubKey = pwalletMain->GenerateNewHDMasterKey();
