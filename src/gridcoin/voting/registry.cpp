@@ -368,6 +368,7 @@ PollReference::PollReference()
     : m_txid(uint256{})
     , m_payload_version(0)
     , m_type(PollType::UNKNOWN)
+    , m_weight_type(PollWeightType::UNKNOWN)
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
@@ -1088,6 +1089,17 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
         return false;
     }
 
+    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
+    if (!IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
+        && payload->m_claim.m_version >= 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v2 poll claim before multi-address activation at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
+    }
+
     // Enforce multi-address claims at PollMultiAddressHeight
     if (IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
         && payload->m_claim.m_version < 2) {
@@ -1152,6 +1164,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_title = poll_title;
         poll_ref.m_payload_version = payload->m_version;
         poll_ref.m_type = payload->m_poll.m_type.Value();
+        poll_ref.m_weight_type = payload->m_poll.m_weight_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
 
@@ -1242,7 +1255,13 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     int64_t poll_time = payload->m_poll.m_timestamp;
 
-    PollReference* poll_ref = TryBy(payload->m_poll.m_title);
+    PollReference* poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+
+    if (!poll_ref) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" not found in registry.",
+                 __func__, payload->m_poll.m_title);
+        return;
+    }
 
     if (poll_ref) {
         // Note this reference will effectively disappear once this function exits, but this is ok, because there will

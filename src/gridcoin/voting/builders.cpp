@@ -635,6 +635,10 @@ public:
     //!
     PollEligibilityClaim BuildClaim(const Poll& poll) const
     {
+        if (!IsPollMultiAddressEnabled(nBestHeight)) {
+            return BuildV1Claim(poll);
+        }
+
         PollEligibilityClaim claim;
         claim.m_version = 2;
 
@@ -744,6 +748,66 @@ public:
 
 private:
     const CWallet& m_wallet; //!< Supplies balance context and signing keys.
+
+    //!
+    //! \brief Generate a v1 single-address poll eligibility claim.
+    //!
+    //! Used before PollMultiAddressHeight activation to maintain backward
+    //! compatibility with nodes that do not understand v2 claims.
+    //!
+    //! \param poll Poll contract to generate the claim for.
+    //!
+    PollEligibilityClaim BuildV1Claim(const Poll& poll) const
+    {
+        std::vector<COutput> outputs;
+        m_wallet.AvailableCoins(outputs, true, nullptr, true);
+
+        // Group outputs by address
+        std::map<CKeyID, AddressOutputs> outputs_by_address;
+        for (const auto& output : outputs) {
+            if (output.tx->vout[output.i].nValue < COIN) continue;
+            if (!output.tx->IsTrusted() || !output.tx->IsConfirmed()) continue;
+
+            CTxDestination dest;
+            if (!ExtractDestination(output.tx->vout[output.i].scriptPubKey, dest)) continue;
+
+            const CKeyID* keyId = std::get_if<CKeyID>(&dest);
+            if (!keyId) continue;
+
+            auto it = outputs_by_address.find(*keyId);
+            if (it == outputs_by_address.end()) {
+                it = outputs_by_address.emplace(*keyId, AddressOutputs(*keyId)).first;
+            }
+            it->second.m_outpoints.emplace_back(output.tx->GetHash(), output.i);
+            it->second.m_total_amount += output.tx->vout[output.i].nValue;
+        }
+
+        // Find the first address with balance >= POLL_REQUIRED_BALANCE
+        const AddressClaimBuilder address_builder(m_wallet);
+        for (auto& [key_id, addr_outputs] : outputs_by_address) {
+            if (addr_outputs.m_total_amount < POLL_REQUIRED_BALANCE) continue;
+
+            // Trim to MAX_OUTPOINTS if needed
+            if (addr_outputs.m_outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
+                addr_outputs.m_outpoints.resize(PollEligibilityClaim::MAX_OUTPOINTS);
+            }
+
+            if (auto claim_option = address_builder.TryBuildClaim(std::move(addr_outputs))) {
+                PollEligibilityClaim claim;
+                claim.m_version = 1;
+                claim.m_balance_claim.m_address_claims.push_back(std::move(*claim_option));
+
+                LogPrint(LogFlags::VOTE, "%s: Built v1 poll claim for address %s",
+                    __func__, EncodeDestination(key_id));
+
+                return claim;
+            }
+        }
+
+        throw VotingError(strprintf(
+            _("No single address has the required %s GRC balance to create a poll."),
+            FormatMoney(POLL_REQUIRED_BALANCE)));
+    }
 }; // PollClaimBuilder
 
 //!

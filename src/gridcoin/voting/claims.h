@@ -358,6 +358,7 @@ public:
     bool WellFormed() const
     {
         return m_version > 0 && m_version <= CURRENT_VERSION
+            && !m_balance_claim.m_address_claims.empty()
             && m_balance_claim.WellFormed()
             && TotalOutpoints() <= MAX_OUTPOINTS;
     }
@@ -369,8 +370,12 @@ public:
     //!
     CAmount RequiredBurnAmount() const
     {
-        // A scaled fee based on the number of claimed outputs:
-        return m_balance_claim.RequiredBurnAmount();
+        // Poll eligibility: per-UTXO fee only, no per-address overhead
+        CAmount amount = 0;
+        for (const auto& claim : m_balance_claim.m_address_claims) {
+            amount += claim.RequiredBurnAmount();
+        }
+        return amount;
     }
 
     //!
@@ -387,14 +392,17 @@ public:
         READWRITE(m_version);
 
         if (m_version == 1) {
-            // Legacy: single address claim (v1)
-            AddressClaim single_address_claim;
-            READWRITE(single_address_claim);
-
             if (ser_action.ForRead()) {
-                // Convert v1 (single address) to v2 (balance claim) format
+                AddressClaim single_address_claim;
+                READWRITE(single_address_claim);
                 m_balance_claim.m_address_claims.clear();
                 m_balance_claim.m_address_claims.push_back(std::move(single_address_claim));
+            } else {
+                // Write the actual first address claim
+                AddressClaim single_address_claim = !m_balance_claim.m_address_claims.empty()
+                    ? m_balance_claim.m_address_claims[0]
+                    : AddressClaim{};
+                READWRITE(single_address_claim);
             }
         } else {
             // Version 2+: multiple addresses via balance claim
