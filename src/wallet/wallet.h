@@ -165,7 +165,7 @@ public:
 
     void SetNull() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
-        nWalletVersion = FEATURE_BASE;
+        nWalletVersion = wallet::FEATURE_BASE;
         fFileBacked = false;
         nMasterKeyMaxID = 0;
         pwalletdbEncryption = nullptr;
@@ -192,10 +192,10 @@ public:
     int64_t nTimeFirstKey GUARDED_BY(cs_wallet);
 
     // check whether we are allowed to upgrade (or already support) to the named feature
-    bool CanSupportFeature(enum WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+    bool CanSupportFeature(enum wallet::WalletFeature wf) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
     {
         AssertLockHeld(cs_wallet);
-        return IsFeatureSupported(nWalletVersion, wf);
+        return wallet::IsFeatureSupported(nWalletVersion, wf);
     }
 
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins, unsigned int nSpendTime, int64_t& nBalanceOut) const;
@@ -291,6 +291,11 @@ public:
     bool IsAbandoned(const uint256& txid) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     /** Mark an unconfirmed transaction (and its descendants) as abandoned. */
     bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+
+    /** @deprecated Use SyncTransaction or blockConnected/transactionAddedToMempool instead.
+     *  Public compatibility wrapper with the legacy signature. */
+    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,
+                                  bool fUpdate = false, bool fFindBlock = false);
 
 private:
     /** Add tx to wallet if it involves our addresses. Called by SyncTransaction. */
@@ -451,7 +456,7 @@ public:
     bool SetDefaultKey(const CPubKey &vchPubKey);
 
     // signify that a particular wallet feature is now used.
-    bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = nullptr);
+    bool SetMinVersion(enum wallet::WalletFeature, CWalletDB* pwalletdbIn = nullptr);
 
     // get the current wallet format (the oldest client version guaranteed to understand this wallet)
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }

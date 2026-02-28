@@ -141,8 +141,7 @@ bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex)
     }
 
     wtx.m_state = TxStateConfirmed(hashBlock, it->second->nHeight, vtx_index);
-    wtx.hashBlock = hashBlock;
-    wtx.nIndex = vtx_index;
+    wtx.SyncLegacyFromState();
     return true;
 }
 
@@ -155,9 +154,12 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
     bool fRepeat = false;
     bool fResolved = false;
 
-    // FIRST: trust deserialized hashBlock if present
-    if (!wtx.hashBlock.IsNull()) {
-        auto it = mapBlockIndex.find(wtx.hashBlock);
+    // FIRST: trust deserialized block hash if present in unrecognized state
+    const auto* unrec = wtx.state<TxStateUnrecognized>();
+    const uint256 legacy_hash = unrec ? unrec->m_block_hash : uint256{};
+
+    if (!legacy_hash.IsNull()) {
+        auto it = mapBlockIndex.find(legacy_hash);
         if (it != mapBlockIndex.end() && it->second->IsInMainChain()) {
             CBlock block;
             if (ReadBlockFromDisk(block, it->second, Params().GetConsensus())) {
@@ -167,31 +169,34 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                             "ReacceptWalletTransactions: migrating unrecognized tx %s to confirmed "
                             "(using deserialized hashBlock, vtx index %d, height=%d)\n",
                             wtx.GetHash().ToString(), vtx_index, it->second->nHeight);
-                    wtx.m_state = TxStateConfirmed(wtx.hashBlock, it->second->nHeight, vtx_index);
-                    wtx.nIndex = vtx_index;
+                    wtx.m_state = TxStateConfirmed(legacy_hash, it->second->nHeight, vtx_index);
+                    wtx.SyncLegacyFromState();
                 } else {
                     LogPrintf("WARNING: ReacceptWalletTransactions: tx %s not found in block vtx "
                              "despite valid hashBlock %s, marking inactive\n",
-                             wtx.GetHash().ToString(), wtx.hashBlock.ToString().substr(0,10));
+                             wtx.GetHash().ToString(), legacy_hash.ToString().substr(0,10));
                     wtx.m_state = TxStateInactive{false};
+                    wtx.SyncLegacyFromState();
                 }
             } else {
                 LogPrintf("WARNING: ReacceptWalletTransactions: Failed to read block %s for tx %s, "
                          "marking inactive\n",
-                         wtx.hashBlock.ToString().substr(0,10), wtx.GetHash().ToString());
+                         legacy_hash.ToString().substr(0,10), wtx.GetHash().ToString());
                 wtx.m_state = TxStateInactive{false};
+                wtx.SyncLegacyFromState();
             }
         } else {
             if (it == mapBlockIndex.end()) {
                 LogPrint(BCLog::LogFlags::VERBOSE,
                         "ReacceptWalletTransactions: tx %s hashBlock %s not in mapBlockIndex, marking inactive\n",
-                        wtx.GetHash().ToString(), wtx.hashBlock.ToString().substr(0,10));
+                        wtx.GetHash().ToString(), legacy_hash.ToString().substr(0,10));
             } else {
                 LogPrint(BCLog::LogFlags::VERBOSE,
                         "ReacceptWalletTransactions: tx %s block orphaned, marking inactive\n",
                         wtx.GetHash().ToString());
             }
             wtx.m_state = TxStateInactive{false};
+            wtx.SyncLegacyFromState();
         }
         fUpdated = true;
         fResolved = true;
@@ -215,6 +220,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                 "ReacceptWalletTransactions: migrating unrecognized tx %s to mempool\n",
                 wtx.GetHash().ToString());
         wtx.m_state = TxStateInMempool{};
+        wtx.SyncLegacyFromState();
         fUpdated = true;
         fResolved = true;
     }
@@ -225,6 +231,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                 "ReacceptWalletTransactions: migrating unrecognized tx %s to inactive (not found anywhere)\n",
                 wtx.GetHash().ToString());
         wtx.m_state = TxStateInactive{false};
+        wtx.SyncLegacyFromState();
         fUpdated = true;
         if (!(wtx.IsCoinBase() || wtx.IsCoinStake())) {
             wtx.AcceptWalletTransaction(txdb);
@@ -351,7 +358,7 @@ CKey CWallet::MasterPrivateKey(int height) const
 CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
-    bool fCompressed = CanSupportFeature(FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
+    bool fCompressed = CanSupportFeature(wallet::FEATURE_COMPRPUBKEY); // default to compressed public keys if we want 0.6.0 wallets
 
     CKey secret;
 
@@ -404,7 +411,7 @@ CPubKey CWallet::GenerateNewKey() EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
 
     // Compressed public keys were introduced in version 0.6.0
     if (fCompressed)
-        SetMinVersion(FEATURE_COMPRPUBKEY);
+        SetMinVersion(wallet::FEATURE_COMPRPUBKEY);
 
     CPubKey pubkey = secret.GetPubKey();
 
@@ -570,7 +577,7 @@ void CWallet::SetBestChain(const CBlockLocator& loc)
     walletdb.WriteBestBlock(loc);
 }
 
-bool CWallet::SetMinVersion(enum WalletFeature nVersion, CWalletDB* pwalletdbIn)
+bool CWallet::SetMinVersion(enum wallet::WalletFeature nVersion, CWalletDB* pwalletdbIn)
 {
     LOCK(cs_wallet); // nWalletVersion
     if (nWalletVersion >= nVersion)
@@ -643,7 +650,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         // Encryption was introduced in version 0.4.0
-        SetMinVersion(FEATURE_WALLETCRYPT, pwalletdbEncryption);
+        SetMinVersion(wallet::FEATURE_WALLETCRYPT, pwalletdbEncryption);
 
         if (fFileBacked)
         {
@@ -788,9 +795,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
             wtx.nOrderPos = IncOrderPosNext(pwalletdb);
 
             wtx.nTimeSmart = wtx.nTimeReceived;
-            if (!wtxIn.hashBlock.IsNull())
-            {
-                auto mapItem = mapBlockIndex.find(wtxIn.hashBlock);
+            if (const auto* conf = wtxIn.state<TxStateConfirmed>()) {
+                auto mapItem = mapBlockIndex.find(conf->m_confirmed_block_hash);
                 if (mapItem != mapBlockIndex.end())
                 {
                     wtx.nTimeSmart = mapItem->second->nTime;
@@ -799,20 +805,26 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
                 {
                     LogPrint(BCLog::LogFlags::VERBOSE, "AddToWallet() : found %s in block %s not in index",
                            hash.ToString().substr(0,10),
-                           wtxIn.hashBlock.ToString());
+                           conf->m_confirmed_block_hash.ToString());
                 }
             }
         } else {
-            // Merge
-            if (!wtxIn.hashBlock.IsNull() && wtxIn.hashBlock != wtx.hashBlock)
-            {
-                wtx.hashBlock = wtxIn.hashBlock;
-                fUpdated = true;
-            }
-            if (wtxIn.nIndex != -1 && wtxIn.nIndex != wtx.nIndex)
-            {
-                wtx.nIndex = wtxIn.nIndex;
-                fUpdated = true;
+            // Merge: update m_state from incoming transaction if it has newer info
+            if (const auto* conf_in = wtxIn.state<TxStateConfirmed>()) {
+                if (!wtx.isConfirmed() ||
+                    wtx.state<TxStateConfirmed>()->m_confirmed_block_hash != conf_in->m_confirmed_block_hash) {
+                    wtx.m_state = wtxIn.m_state;
+                    wtx.SyncLegacyFromState();
+                    fUpdated = true;
+                }
+                if (conf_in->m_position_in_block != -1) {
+                    auto* conf_wtx = wtx.state<TxStateConfirmed>();
+                    if (conf_wtx && conf_wtx->m_position_in_block != conf_in->m_position_in_block) {
+                        conf_wtx->m_position_in_block = conf_in->m_position_in_block;
+                        wtx.SyncLegacyFromState();
+                        fUpdated = true;
+                    }
+                }
             }
             if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
             {
@@ -826,15 +838,17 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
         // expensive CTxDB lookups during rescan. Existing transactions get
         // their state resolved by ReacceptWalletTransactions() after load.
         if (fInsertedNew && std::holds_alternative<TxStateUnrecognized>(wtx.m_state)) {
-            if (!wtx.hashBlock.IsNull()) {
-                auto it = mapBlockIndex.find(wtx.hashBlock);
+            const auto* unrec = wtx.state<TxStateUnrecognized>();
+            if (unrec && !unrec->m_block_hash.IsNull()) {
+                auto it = mapBlockIndex.find(unrec->m_block_hash);
                 if (it != mapBlockIndex.end()) {
                     CBlockIndex* pindex = it->second;
                     wtx.m_state = TxStateConfirmed(
-                        wtx.hashBlock,
+                        unrec->m_block_hash,
                         pindex->nHeight,
-                        wtx.nIndex
+                        unrec->m_index
                     );
+                    wtx.SyncLegacyFromState();
                 } else {
                     wtx.m_state = TxStateUnrecognized{};
                 }
@@ -846,23 +860,23 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
                     CBlock block;
                     if (ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos,
                                           Params().GetConsensus(), false)) {
-                        uint256 hashBlock = block.GetHash();
-                        auto it = mapBlockIndex.find(hashBlock);
+                        uint256 block_hash = block.GetHash();
+                        auto it = mapBlockIndex.find(block_hash);
                         if (it != mapBlockIndex.end() && it->second->IsInMainChain()) {
                             int vtx_index = FindTxInBlock(block, wtx.GetHash());
 
                             if (vtx_index >= 0) {
                                 wtx.m_state = TxStateConfirmed(
-                                    hashBlock,
+                                    block_hash,
                                     it->second->nHeight,
                                     vtx_index
                                 );
-                                wtx.hashBlock = hashBlock;
-                                wtx.nIndex = vtx_index;
+                                wtx.SyncLegacyFromState();
                             } else {
                                 LogPrintf("WARNING: AddToWallet: tx %s not found in block vtx despite valid txindex\n",
                                          wtx.GetHash().ToString());
                                 wtx.m_state = TxStateInactive{false};
+                                wtx.SyncLegacyFromState();
                             }
 
                             LogPrint(BCLog::LogFlags::VERBOSE,
@@ -870,14 +884,18 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
                                     wtx.GetHash().ToString(), it->second->nHeight);
                         } else {
                             wtx.m_state = TxStateInactive{false};
+                            wtx.SyncLegacyFromState();
                         }
                     } else {
                         wtx.m_state = TxStateInactive{false};
+                        wtx.SyncLegacyFromState();
                     }
                 } else if (mempool.exists(wtx.GetHash())) {
                     wtx.m_state = TxStateInMempool{};
+                    wtx.SyncLegacyFromState();
                 } else {
                     wtx.m_state = TxStateInactive{false};
+                    wtx.SyncLegacyFromState();
                 }
             }
         }
@@ -908,7 +926,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
             }
         }
         // since AddToWallet is called directly for self-originating transactions, check for consumption of own coins
-        WalletUpdateSpent(wtx, (!wtxIn.hashBlock.IsNull()), pwalletdb);
+        WalletUpdateSpent(wtx, wtxIn.isConfirmed(), pwalletdb);
 
         // Notify UI of new or updated transaction
         NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
@@ -960,6 +978,10 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
                              bool update_tx,
                              bool rescanning_old_block)
 {
+    // Note: cs_wallet may already be held by blockConnected/blockDisconnected.
+    // CCriticalSection supports recursive locking, so the LOCK here is safe
+    // whether called from a callback (cs_wallet already held) or from the
+    // legacy SyncTransaction(const CTransaction&, ...) overload (not held).
     LOCK(cs_wallet);
 
     const uint256& hash = ptx->GetHash();
@@ -1000,15 +1022,10 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
             }
         }
 
+        // Ensure legacy fields are in sync after state update
         auto it = mapWallet.find(hash);
         if (it != mapWallet.end()) {
-            CWalletTx& wtx = it->second;
-
-            const auto* conf = std::get_if<TxStateConfirmed>(&state);
-            if (conf) {
-                wtx.hashBlock = conf->m_confirmed_block_hash;
-                wtx.nIndex = conf->m_position_in_block;
-            }
+            it->second.SyncLegacyFromState();
         }
     }
 
@@ -1037,6 +1054,38 @@ bool CWallet::SyncTransaction(const CTransactionRef& ptx,
     NotifyTransactionChanged(this, hash, CT_UPDATED);
 
     return true;
+}
+
+// Deprecated public compatibility wrapper with legacy signature.
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,
+                                       bool fUpdate, bool /*fFindBlock*/)
+{
+    LOCK(cs_wallet);
+
+    TxState state;
+    if (pblock && !pblock->GetHash(true).IsNull()) {
+        uint256 block_hash = pblock->GetHash(true);
+        int block_height = -1;
+        int position = -1;
+
+        auto it = mapBlockIndex.find(block_hash);
+        if (it != mapBlockIndex.end()) {
+            block_height = it->second->nHeight;
+        }
+
+        for (size_t i = 0; i < pblock->vtx.size(); i++) {
+            if (pblock->vtx[i].GetHash() == tx.GetHash()) {
+                position = static_cast<int>(i);
+                break;
+            }
+        }
+
+        state = TxStateConfirmed{block_hash, block_height, position};
+    } else {
+        state = TxStateInMempool{};
+    }
+
+    return AddToWalletIfInvolvingMe(MakeTransactionRef(tx), state, fUpdate);
 }
 
 // Add transaction to wallet if it involves our addresses
@@ -1096,10 +1145,10 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
             auto mapItem = mapBlockIndex.find(conf->m_confirmed_block_hash);
             if (mapItem != mapBlockIndex.end()) {
                 wtx.nTimeSmart = mapItem->second->nTime;
-                wtx.hashBlock = conf->m_confirmed_block_hash;
-                wtx.nIndex = conf->m_position_in_block;
             }
         }
+        // Sync legacy fields from the canonical m_state
+        wtx.SyncLegacyFromState();
 
         wtx.vfSpent.clear();
         wtx.vfSpent.resize(tx.vout.size(), false);
@@ -1200,10 +1249,17 @@ void CWallet::blockConnected(const CBlock& block, int height)
     LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::blockConnected: %s at height %d\n",
              block_hash.ToString(), height);
 
-    // Sync each transaction in the block
+    // Sync each transaction in the block that involves this wallet.
+    // Pre-check IsMine/IsFromMe to avoid allocating a shared_ptr for
+    // every transaction in every block (the vast majority don't involve us).
     for (size_t index = 0; index < block.vtx.size(); index++) {
+        const CTransaction& tx = block.vtx[index];
+        if (IsMine(tx) == ISMINE_NO && !IsFromMe(tx) &&
+            mapWallet.find(tx.GetHash()) == mapWallet.end()) {
+            continue;
+        }
         SyncTransaction(
-            MakeTransactionRef(block.vtx[index]),
+            MakeTransactionRef(tx),
             TxStateConfirmed{block_hash, height, static_cast<int>(index)},
             /*update_tx=*/true,
             /*rescanning_old_block=*/false
@@ -1294,11 +1350,15 @@ void CWallet::blockDisconnected(const CBlock& block, int height)
              block_hash.ToString(), height);
 
     /**
-     * Complete reorg handling
+     * Complete reorg handling:
      * 1. For each tx in block, determine if it should return to mempool
      * 2. Validate state transitions are consistent
      * 3. Update parent tx spent tracking (reverse the marks)
      * 4. Update m_last_block_processed safely
+     *
+     * Lock order: cs_main (held by caller) -> cs_wallet (acquired above)
+     * -> mempool.cs (acquired below). This is safe because no code path
+     * acquires mempool.cs before cs_wallet.
      */
 
     // Single CWalletDB instance batches all writes into one database session
@@ -1493,7 +1553,7 @@ bool CWallet::SetHDMasterKey(const CPubKey& pubkey)
     LOCK(cs_wallet);
 
     // ensure this wallet.dat can only be opened by clients supporting HD
-    SetMinVersion(FEATURE_HD);
+    SetMinVersion(wallet::FEATURE_HD);
 
     // store the keyid (hash160) together with
     // the child index counter in the database
@@ -2147,8 +2207,8 @@ void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_
         {
             CWalletTx& wtx = item.second;
 
-            // Resend only if hashBlock is null AND not in the mainchain AND not in the mempool (this is depth = -1).
-            if (wtx.hashBlock.IsNull() && wtx.GetDepthInMainChain() == -1) {
+            // Resend only if not confirmed AND not in the mainchain AND not in the mempool (this is depth = -1).
+            if (!wtx.isConfirmed() && wtx.GetDepthInMainChain() == -1) {
                 // Don't rebroadcast until it's had plenty of time that it should have gotten in already by now.
                 // Here we are using time of approximately 5 blocks at target spacing.
                 if (fForce || g_nTimeBestReceived - (int64_t)wtx.nTimeReceived > GetTargetSpacing(nBestHeight) * 5)
@@ -4012,7 +4072,9 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXC
     for (std::map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); it++) {
         // iterate over all wallet transactions...
         const CWalletTx& wtx = it->second;
-        BlockMap::iterator blit = mapBlockIndex.find(wtx.hashBlock);
+        const auto* conf = wtx.state<TxStateConfirmed>();
+        if (!conf) continue;
+        BlockMap::iterator blit = mapBlockIndex.find(conf->m_confirmed_block_hash);
         if (blit != mapBlockIndex.end() && blit->second->IsInMainChain()) {
             // ... which are already in a block
             int nHeight = blit->second->nHeight;
@@ -4159,8 +4221,8 @@ bool CWallet::UpgradeWallet(int version, std::string& error)
 {
     int prev_version = GetVersion();
     if (version == 0) {
-        LogPrintf("Performing wallet upgrade to %i", FEATURE_LATEST);
-        version = FEATURE_LATEST;
+        LogPrintf("Performing wallet upgrade to %i", wallet::FEATURE_LATEST);
+        version = wallet::FEATURE_LATEST;
     } else {
         LogPrintf("Allowing wallet upgrade up to %i", version);
     }
@@ -4172,10 +4234,10 @@ bool CWallet::UpgradeWallet(int version, std::string& error)
     LOCK(cs_wallet);
 
     // Permanently upgrade to the version
-    SetMinVersion(GetClosestWalletFeature(version));
+    SetMinVersion(wallet::GetClosestWalletFeature(version));
 
     bool hd_upgrade = false;
-    if (IsFeatureSupported(version, FEATURE_HD) && !IsHDEnabled()) {
+    if (wallet::IsFeatureSupported(version, wallet::FEATURE_HD) && !IsHDEnabled()) {
         LogPrintf("Upgrading wallet to HD");
 
         CPubKey masterPubKey = GenerateNewHDMasterKey();
