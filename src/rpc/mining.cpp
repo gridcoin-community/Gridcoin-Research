@@ -181,7 +181,8 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        const CBlockIndex* const pindex = mapBlockIndex[stake_tx->hashBlock];
+        const auto* stake_conf = stake_tx->state<TxStateConfirmed>();
+        const CBlockIndex* const pindex = mapBlockIndex[stake_conf->m_confirmed_block_hash];
 
         height = pindex->nHeight;
         timestamp = pindex->nTime;
@@ -200,7 +201,8 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     const int64_t elapsed_seconds = GetAdjustedTime() - timestamp;
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("block", stake_tx->hashBlock.ToString());
+    const auto* stake_conf_json = stake_tx->state<TxStateConfirmed>();
+    json.pushKV("block", stake_conf_json->m_confirmed_block_hash.ToString());
     json.pushKV("height", height);
     json.pushKV("confirmations", confirmations);
     json.pushKV("immature", confirmations < nCoinbaseMaturity);

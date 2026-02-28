@@ -419,9 +419,11 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUI
 
     // Find the block the tx is in
     CBlockIndex* pindex = nullptr;
-    BlockMap::iterator mi = mapBlockIndex.find(wtx.hashBlock);
-    if (mi != mapBlockIndex.end())
-        pindex = mi->second;
+    if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+        BlockMap::iterator mi = mapBlockIndex.find(conf->m_confirmed_block_hash);
+        if (mi != mapBlockIndex.end())
+            pindex = mi->second;
+    }
 
     // Sort order, unrecorded transactions sort to the top
     status.sortKey = strprintf("%010d-%01d-%010u-%03d",

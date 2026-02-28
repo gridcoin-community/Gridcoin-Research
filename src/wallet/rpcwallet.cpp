@@ -70,9 +70,11 @@ void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) EXCLUSIVE_LOCKS_REQUI
         entry.pushKV("generated", true);
     if (confirms > 0)
     {
-        entry.pushKV("blockhash", wtx.hashBlock.GetHex());
-        entry.pushKV("blockindex", wtx.nIndex);
-        entry.pushKV("blocktime", (int)(mapBlockIndex[wtx.hashBlock]->nTime));
+        if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+            entry.pushKV("blockhash", conf->m_confirmed_block_hash.GetHex());
+            entry.pushKV("blockindex", conf->m_position_in_block);
+            entry.pushKV("blocktime", (int)(mapBlockIndex[conf->m_confirmed_block_hash]->nTime));
+        }
     }
     entry.pushKV("txid", wtx.GetHash().GetHex());
     entry.pushKV("time", wtx.GetTxTime());
@@ -2483,8 +2485,10 @@ UniValue inspectwalletstate(const UniValue& params, bool fHelp)
                 UniValue info(UniValue::VOBJ);
                 info.pushKV("txid", wtx.GetHash().GetHex());
                 info.pushKV("depth", wtx.GetDepthInMainChain());
-                info.pushKV("hashBlock", wtx.hashBlock.GetHex());
-                info.pushKV("nIndex", wtx.nIndex);
+                if (const auto* inactive = wtx.state<TxStateInactive>()) {
+                    info.pushKV("abandoned", inactive->m_abandoned);
+                }
+                info.pushKV("hashBlock_legacy", wtx.hashBlock.GetHex());
                 info.pushKV("isConfirmed", wtx.IsConfirmed());
                 info.pushKV("isTrusted", wtx.IsTrusted());
                 info.pushKV("amount", ValueFromAmount(wtx.GetCredit() - wtx.GetDebit()));
@@ -2498,8 +2502,10 @@ UniValue inspectwalletstate(const UniValue& params, bool fHelp)
                 UniValue info(UniValue::VOBJ);
                 info.pushKV("txid", wtx.GetHash().GetHex());
                 info.pushKV("depth", wtx.GetDepthInMainChain());
-                info.pushKV("hashBlock", wtx.hashBlock.GetHex());
-                info.pushKV("nIndex", wtx.nIndex);
+                if (const auto* unrec = wtx.state<TxStateUnrecognized>()) {
+                    info.pushKV("legacy_block_hash", unrec->m_block_hash.GetHex());
+                    info.pushKV("legacy_index", unrec->m_index);
+                }
                 info.pushKV("isConfirmed", wtx.IsConfirmed());
                 info.pushKV("isTrusted", wtx.IsTrusted());
                 unrecognized_list.push_back(info);

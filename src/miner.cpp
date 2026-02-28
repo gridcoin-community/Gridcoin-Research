@@ -735,7 +735,8 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
         unsigned int block_time;
 
-        block_time = mapBlockIndex[CoinTx.hashBlock]->nTime;
+        const auto* coin_conf = CoinTx.state<TxStateConfirmed>();
+        block_time = mapBlockIndex[coin_conf->m_confirmed_block_hash]->nTime;
 
         StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
 
