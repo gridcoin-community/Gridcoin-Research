@@ -5,8 +5,6 @@
 #ifndef BITCOIN_WALLET_WALLETUTIL_H
 #define BITCOIN_WALLET_WALLETUTIL_H
 
-#include "util.h"
-
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
 {
@@ -17,9 +15,7 @@ enum WalletFeature
 
     FEATURE_HD = 5040101, // Hierarchical key derivation after BIP32 (HD Wallet)
 
-    FEATURE_TRANSACTION_STATES = 5040908, // TxState-based transaction state tracking (v5.4.9.8)
-
-    FEATURE_LATEST = FEATURE_TRANSACTION_STATES
+    FEATURE_LATEST = FEATURE_HD
 };
 
 bool IsFeatureSupported(int wallet_version, int feature_version);

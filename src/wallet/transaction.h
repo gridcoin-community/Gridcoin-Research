@@ -7,7 +7,6 @@
 #define BITCOIN_WALLET_TRANSACTION_H
 
 #include "uint256.h"
-#include "serialize.h"
 #include <variant>
 
 /**
@@ -20,16 +19,13 @@
  *                     |                    |
  *                     +-----> TxStateInactive <------+
  *
- * Variant index order is fixed for serialization compatibility.
+ * Serialization uses the existing CMerkleTx hashBlock/nIndex fields with
+ * sentinel values for backward compatibility (no envelope format).
  */
 
 //! Transaction is in the mempool (unconfirmed).
 struct TxStateInMempool {
     TxStateInMempool() = default;
-
-    ADD_SERIALIZE_METHODS;
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) { }
 };
 
 //! Transaction is confirmed in a block on the active chain.
@@ -47,15 +43,6 @@ struct TxStateConfirmed {
         : m_confirmed_block_hash(hash)
         , m_confirmed_block_height(height)
         , m_position_in_block(pos) {}
-
-    ADD_SERIALIZE_METHODS;
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(m_confirmed_block_hash);
-        READWRITE(m_confirmed_block_height);
-        READWRITE(m_position_in_block);
-    }
 };
 
 //! Transaction is inactive: either conflicted (abandoned=false) or
@@ -65,13 +52,6 @@ struct TxStateInactive {
 
     TxStateInactive() : m_abandoned(false) {}
     explicit TxStateInactive(bool _abandoned) : m_abandoned(_abandoned) {}
-
-    ADD_SERIALIZE_METHODS;
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(m_abandoned);
-    }
 };
 
 //! Transaction state unrecognized (loading old wallet or future format).
@@ -81,20 +61,11 @@ struct TxStateUnrecognized {
     int m_index;           //!< Legacy nIndex value, if present
 
     TxStateUnrecognized() : m_index(-1) {}
-
-    ADD_SERIALIZE_METHODS;
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(m_block_hash);
-        READWRITE(m_index);
-    }
 };
 
 /**
  * Variant holding the current transaction state.
  * Index order is fixed: 0=InMempool, 1=Confirmed, 2=Inactive, 3=Unrecognized.
- * Do NOT reorder without migration logic — it would break wallet.dat compat.
  */
 using TxState = std::variant<
     TxStateInMempool,
@@ -128,48 +99,39 @@ inline TxState MigrateFromLegacyHashBlock(const uint256& hashBlock, int nIndex)
 }
 
 // ---------------------------------------------------------------------------
-// Variant serialization helpers
+// Sentinel-based serialization helpers
+//
+// These extract the hashBlock and nIndex values that CMerkleTx writes to disk.
+// On read, MigrateFromLegacyHashBlock() reconstructs m_state from those fields.
+// This approach is backward-compatible with all existing wallet.dat files.
 // ---------------------------------------------------------------------------
 
-template<typename Stream>
-void SerializeTxState(Stream& s, const TxState& state)
+//! Return the hashBlock value to serialize for a given TxState.
+inline uint256 TxStateSerializedBlockHash(const TxState& state)
 {
-    int state_index = state.index();
-    ::Serialize(s, state_index);
-    std::visit([&s](const auto& st) { ::Serialize(s, st); }, state);
-}
-
-template<typename Stream>
-void UnserializeTxState(Stream& s, TxState& state)
-{
-    int state_index;
-    ::Unserialize(s, state_index);
-
-    switch (state_index) {
-        case 0: { TxStateInMempool st;     ::Unserialize(s, st); state = st; break; }
-        case 1: { TxStateConfirmed st;     ::Unserialize(s, st); state = st; break; }
-        case 2: { TxStateInactive st;      ::Unserialize(s, st); state = st; break; }
-        case 3: { TxStateUnrecognized st;  ::Unserialize(s, st); state = st; break; }
-        default: {
-            // Forward compatibility: unknown state type → unrecognized.
-            // NOTE: No LogPrint here to avoid heavy logging.h include in this header.
-            // Callers that care can check for TxStateUnrecognized after deserialization.
-            TxStateUnrecognized st;
-            try {
-                ::Unserialize(s, st);
-            } catch (...) {
-                st = TxStateUnrecognized{};
-            }
-            state = st;
-            break;
+    return std::visit([](const auto& s) -> uint256 {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, TxStateConfirmed>) {
+            return s.m_confirmed_block_hash;
+        } else if constexpr (std::is_same_v<T, TxStateInactive>) {
+            return s.m_abandoned ? ABANDONED_HASH_SENTINEL : CONFLICTED_HASH_SENTINEL;
+        } else {
+            return uint256{};
         }
-    }
+    }, state);
 }
 
-template<typename Stream>
-void Serialize(Stream& s, const TxState& state) { SerializeTxState(s, state); }
-
-template<typename Stream>
-void Unserialize(Stream& s, TxState& state) { UnserializeTxState(s, state); }
+//! Return the nIndex value to serialize for a given TxState.
+inline int TxStateSerializedIndex(const TxState& state)
+{
+    return std::visit([](const auto& s) -> int {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, TxStateConfirmed>) {
+            return s.m_position_in_block;
+        } else {
+            return -1;
+        }
+    }, state);
+}
 
 #endif // BITCOIN_WALLET_TRANSACTION_H

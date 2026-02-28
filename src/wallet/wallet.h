@@ -684,16 +684,8 @@ public:
     //! Call this after any m_state mutation to keep legacy fields in sync.
     void SyncLegacyFromState()
     {
-        if (const auto* conf = state<TxStateConfirmed>()) {
-            hashBlock = conf->m_confirmed_block_hash;
-            nIndex = conf->m_position_in_block;
-        } else if (const auto* inactive = state<TxStateInactive>()) {
-            hashBlock = inactive->m_abandoned ? ABANDONED_HASH_SENTINEL : CONFLICTED_HASH_SENTINEL;
-            nIndex = -1;
-        } else {
-            hashBlock = uint256();  // Mempool / Unrecognized → null
-            nIndex = -1;
-        }
+        hashBlock = TxStateSerializedBlockHash(m_state);
+        nIndex = TxStateSerializedIndex(m_state);
     }
 
     ADD_SERIALIZE_METHODS;
@@ -725,7 +717,9 @@ public:
             }
 
             // Derive legacy hashBlock/nIndex from m_state for backward compatibility.
-            SyncLegacyFromState();
+            // CMerkleTx serialization writes these fields naturally.
+            hashBlock = TxStateSerializedBlockHash(m_state);
+            nIndex = TxStateSerializedIndex(m_state);
         }
 
         READWRITEAS(CMerkleTx, *this);
@@ -753,49 +747,10 @@ public:
             if (!mapValue.count("timesmart") || !ParseUInt32(mapValue["timesmart"], &nTimeSmart)) {
                 nTimeSmart = 0;
             }
-        }
 
-        // TxState serialization: length-prefixed envelope after legacy fields.
-        // On read, presence of remaining bytes signals new format; absence
-        // triggers legacy hashBlock migration.
-        if (!ser_action.ForRead()) {
-            // --- WRITING: serialize m_state with length prefix ---
-            CDataStream ss_state(s.GetType(), s.GetVersion());
-            SerializeTxState(ss_state, m_state);
-            uint32_t state_len = static_cast<uint32_t>(ss_state.size());
-            READWRITE(state_len);
-            s.write(Span{ss_state.data(), ss_state.size()});
-        } else {
-            // --- READING ---
-            if (!s.empty()) {
-                // New format: length-prefixed TxState present
-                uint32_t state_len = 0;
-                READWRITE(state_len);
-                if (state_len > 0 && state_len < 10000) {
-                    // Read exactly state_len bytes into a sub-stream
-                    std::vector<std::byte> state_buf(state_len);
-                    s.read(state_buf);
-                    CDataStream ss_state(Span{state_buf}, s.GetType(), s.GetVersion());
-                    try {
-                        TxState temp_state;
-                        UnserializeTxState(ss_state, temp_state);
-                        m_state = temp_state;
-                    } catch (const std::exception& e) {
-                        LogPrintf("WARNING: CWalletTx deserialization: failed to parse TxState (%s), falling back to legacy\n", e.what());
-                        m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
-                    }
-                } else if (state_len == 0) {
-                    // Zero-length state blob: treat as legacy
-                    m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
-                } else {
-                    // Unreasonably large - skip and fall back to legacy
-                    LogPrintf("WARNING: CWalletTx deserialization: TxState length %u too large, using legacy migration\n", state_len);
-                    m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
-                }
-            } else {
-                // Legacy format: no TxState blob — migrate from hashBlock
-                m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
-            }
+            // Reconstruct m_state from the legacy hashBlock/nIndex fields
+            // that CMerkleTx deserialized. Works for both old and new wallets.
+            m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
         }
 
         // Clean up temporary mapValue entries
