@@ -6,6 +6,7 @@
 
 #include <array>
 
+namespace wallet {
 bool IsFeatureSupported(int wallet_version, int feature_version)
 {
     return wallet_version >= feature_version;
@@ -19,3 +20,4 @@ WalletFeature GetClosestWalletFeature(int version)
     }
     return static_cast<WalletFeature>(0);
 }
+} // namespace wallet

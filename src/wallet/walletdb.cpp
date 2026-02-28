@@ -533,9 +533,9 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     LogPrintf("nFileVersion = %d", wss.nFileVersion);
 
     // Validate wallet file version is in expected range
-    if (wss.nFileVersion > FEATURE_LATEST) {
+    if (wss.nFileVersion > wallet::FEATURE_LATEST) {
         LogPrintf("WARNING: Wallet file version %d exceeds latest wallet feature version %d",
-                  wss.nFileVersion, FEATURE_LATEST);
+                  wss.nFileVersion, wallet::FEATURE_LATEST);
         LogPrintf("This may indicate version mismatch or corrupted wallet file");
     }
 

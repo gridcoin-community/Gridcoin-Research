@@ -5,6 +5,7 @@
 #ifndef BITCOIN_WALLET_WALLETUTIL_H
 #define BITCOIN_WALLET_WALLETUTIL_H
 
+namespace wallet {
 /** (client) version numbers for particular wallet features */
 enum WalletFeature
 {
@@ -20,5 +21,7 @@ enum WalletFeature
 
 bool IsFeatureSupported(int wallet_version, int feature_version);
 WalletFeature GetClosestWalletFeature(int version);
+
+} // namespace wallet
 
 #endif // BITCOIN_WALLET_WALLETUTIL_H
