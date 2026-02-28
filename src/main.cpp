@@ -192,7 +192,8 @@ void static EraseFromWallets(uint256 hash)
         pwallet->EraseFromWallet(hash);
 }
 
-// make sure all wallets know about the given transaction, in the given block
+// Legacy wallet sync entry point. Prefer blockConnected/blockDisconnected/
+// transactionAddedToMempool for new code paths.
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
@@ -213,23 +214,19 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
         return;
     }
 
-    // Use the new TxState-aware AddToWalletIfInvolvingMe
-    // Construct appropriate TxState based on whether transaction is in a block
-    TxState state;
+    // Delegate to the TxState-aware SyncTransaction
+    CTransactionRef ptx = MakeTransactionRef(tx);
 
     if (pblock && !pblock->GetHash(true).IsNull()) {
-        // Transaction is in a block - find its position and height
         uint256 block_hash = pblock->GetHash(true);
         int block_height = -1;
         int position = -1;
 
-        // Find block height from mapBlockIndex
         auto it = mapBlockIndex.find(block_hash);
         if (it != mapBlockIndex.end()) {
             block_height = it->second->nHeight;
         }
 
-        // Find transaction position in block
         for (size_t i = 0; i < pblock->vtx.size(); i++) {
             if (pblock->vtx[i].GetHash() == tx.GetHash()) {
                 position = static_cast<int>(i);
@@ -237,16 +234,12 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
             }
         }
 
-        state = TxStateConfirmed{block_hash, block_height, position};
+        for (auto const& pwallet : setpwalletRegistered)
+            pwallet->SyncTransaction(ptx, TxStateConfirmed{block_hash, block_height, position}, fUpdate);
     } else {
-        // Transaction not in a block - assume mempool
-        state = TxStateInMempool{};
+        for (auto const& pwallet : setpwalletRegistered)
+            pwallet->transactionAddedToMempool(ptx);
     }
-
-    // Call the new TxState-aware version
-    CTransactionRef ptx = MakeTransactionRef(tx);
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->SyncTransaction(ptx, state, fUpdate);
 }
 
 // notify wallets about a new best chain
