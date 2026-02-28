@@ -996,8 +996,11 @@ BOOST_AUTO_TEST_CASE(get_conflicts_no_conflicts)
     }
 
     // Should have no conflicts
-    std::set<uint256> conflicts = test_wallet.GetConflicts(hash1);
-    BOOST_CHECK(conflicts.empty());
+    {
+        LOCK(test_wallet.cs_wallet);
+        std::set<uint256> conflicts = test_wallet.GetConflicts(hash1);
+        BOOST_CHECK(conflicts.empty());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(get_conflicts_with_conflicts)
@@ -1040,14 +1043,17 @@ BOOST_AUTO_TEST_CASE(get_conflicts_with_conflicts)
     }
 
     // tx1 should conflict with tx2
-    std::set<uint256> conflicts1 = test_wallet.GetConflicts(hash1);
-    BOOST_CHECK_EQUAL(conflicts1.size(), 1u);
-    BOOST_CHECK(conflicts1.count(hash2) == 1);
+    {
+        LOCK(test_wallet.cs_wallet);
+        std::set<uint256> conflicts1 = test_wallet.GetConflicts(hash1);
+        BOOST_CHECK_EQUAL(conflicts1.size(), 1u);
+        BOOST_CHECK(conflicts1.count(hash2) == 1);
 
-    // tx2 should conflict with tx1
-    std::set<uint256> conflicts2 = test_wallet.GetConflicts(hash2);
-    BOOST_CHECK_EQUAL(conflicts2.size(), 1u);
-    BOOST_CHECK(conflicts2.count(hash1) == 1);
+        // tx2 should conflict with tx1
+        std::set<uint256> conflicts2 = test_wallet.GetConflicts(hash2);
+        BOOST_CHECK_EQUAL(conflicts2.size(), 1u);
+        BOOST_CHECK(conflicts2.count(hash1) == 1);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(get_conflicts_multiple_conflicts)
@@ -1077,13 +1083,16 @@ BOOST_AUTO_TEST_CASE(get_conflicts_multiple_conflicts)
     }
 
     // Each transaction should conflict with the other two
-    for (size_t i = 0; i < hashes.size(); i++) {
-        std::set<uint256> conflicts = test_wallet.GetConflicts(hashes[i]);
-        BOOST_CHECK_EQUAL(conflicts.size(), 2u);
+    {
+        LOCK(test_wallet.cs_wallet);
+        for (size_t i = 0; i < hashes.size(); i++) {
+            std::set<uint256> conflicts = test_wallet.GetConflicts(hashes[i]);
+            BOOST_CHECK_EQUAL(conflicts.size(), 2u);
 
-        for (size_t j = 0; j < hashes.size(); j++) {
-            if (i != j) {
-                BOOST_CHECK(conflicts.count(hashes[j]) == 1);
+            for (size_t j = 0; j < hashes.size(); j++) {
+                if (i != j) {
+                    BOOST_CHECK(conflicts.count(hashes[j]) == 1);
+                }
             }
         }
     }
@@ -1106,7 +1115,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_not_abandoned)
         test_wallet.mapWallet[hash] = wtx;
     }
 
-    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(is_abandoned_with_abandoned_tx)
@@ -1126,7 +1138,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_with_abandoned_tx)
         test_wallet.mapWallet[hash] = wtx;
     }
 
-    BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(is_abandoned_inactive_not_abandoned)
@@ -1146,7 +1161,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_inactive_not_abandoned)
         test_wallet.mapWallet[hash] = wtx;
     }
 
-    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(is_abandoned_nonexistent_tx)
@@ -1155,7 +1173,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_nonexistent_tx)
     CWallet test_wallet;
 
     uint256 nonexistent_hash = uint256S("4444444444444444444444444444444444444444444444444444444444444444");
-    BOOST_CHECK(!test_wallet.IsAbandoned(nonexistent_hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(nonexistent_hash));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
@@ -1180,7 +1201,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
     BOOST_CHECK(test_wallet.AbandonTransaction(hash));
 
     // Should now be marked as abandoned
-    BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(test_wallet.IsAbandoned(hash));
+    }
 
     // Verify state changed to inactive with abandoned=true
     {
@@ -1216,10 +1240,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
     BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
 
     // Should still be confirmed, not abandoned
-    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
-
     {
         LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
+
         auto it = test_wallet.mapWallet.find(hash);
         BOOST_CHECK(it != test_wallet.mapWallet.end());
         BOOST_CHECK(it->second.isConfirmed());
@@ -1796,9 +1820,9 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
     BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
 
     // Should still be in mempool, not abandoned
-    BOOST_CHECK(!test_wallet.IsAbandoned(hash));
     {
         LOCK(test_wallet.cs_wallet);
+        BOOST_CHECK(!test_wallet.IsAbandoned(hash));
         BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
     }
 }
