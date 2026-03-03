@@ -907,6 +907,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_serialization_with_state)
     // Test that CWalletTx with state serializes correctly
     CWalletTx original;
     original.m_state = TxStateConfirmed(uint256S("abc123"), 500, 3);
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -933,6 +934,7 @@ BOOST_AUTO_TEST_CASE(old_wallet_migration)
     // Simulate an old confirmed entry
     CWalletTx oldFormat;
     oldFormat.m_state = TxStateConfirmed(uint256S("def456"), -1, 5);
+    oldFormat.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << oldFormat;
@@ -1552,6 +1554,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_mempool)
     // InMempool has no on-disk representation; serializes as null hashBlock
     CWalletTx original;
     original.m_state = TxStateInMempool{};
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -1568,6 +1571,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_confirmed)
     uint256 bh = uint256S("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
     CWalletTx original;
     original.m_state = TxStateConfirmed(bh, 999, 42);
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -1588,6 +1592,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_inactive_abandoned)
 {
     CWalletTx original;
     original.m_state = TxStateInactive{true};
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -1605,6 +1610,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_inactive_conflicted)
 {
     CWalletTx original;
     original.m_state = TxStateInactive{false};
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -1623,6 +1629,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_unrecognized)
     // Unrecognized is a transient state; serializes as null hashBlock
     CWalletTx original;
     original.m_state = TxStateUnrecognized{};
+    original.SyncLegacyFromState();
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
