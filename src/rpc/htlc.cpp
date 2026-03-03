@@ -255,7 +255,6 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);
@@ -403,7 +402,6 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);

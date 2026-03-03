@@ -720,11 +720,6 @@ public:
             if (nTimeSmart) {
                 mapValue["timesmart"] = strprintf("%u", nTimeSmart);
             }
-
-            // Derive legacy hashBlock/nIndex from m_state for backward compatibility.
-            // CMerkleTx serialization writes these fields naturally.
-            hashBlock = TxStateSerializedBlockHash(m_state);
-            nIndex = TxStateSerializedIndex(m_state);
         }
 
         READWRITEAS(CMerkleTx, *this);
@@ -755,6 +750,9 @@ public:
 
             // Reconstruct m_state from the legacy hashBlock/nIndex fields
             // that CMerkleTx deserialized. Works for both old and new wallets.
+            // Note: TxStateConfirmed will have m_confirmed_block_height = -1
+            // because height is not stored in CMerkleTx. ReacceptWalletTransactions
+            // resolves the height from mapBlockIndex on wallet load.
             m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
         }
 

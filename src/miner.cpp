@@ -736,6 +736,10 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
         unsigned int block_time;
 
         const auto* coin_conf = CoinTx.state<TxStateConfirmed>();
+        if (!coin_conf) {
+            LogPrintf("ERROR: %s: stake input not in confirmed state", __func__);
+            return false;
+        }
         block_time = mapBlockIndex[coin_conf->m_confirmed_block_hash]->nTime;
 
         StakeValueSum += CoinTx.vout[CoinTxN].nValue / (double) COIN;
