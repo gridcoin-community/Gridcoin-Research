@@ -785,12 +785,13 @@ BOOST_AUTO_TEST_CASE(state_type_creation)
 BOOST_AUTO_TEST_CASE(state_serialization)
 {
     // Test each state type round-trips through CWalletTx sentinel-based serialization.
-    // State -> TxStateSerializedBlockHash/Index -> CMerkleTx -> deserialize -> MigrateFromLegacyHashBlock -> state.
+    // SyncLegacyFromState -> CMerkleTx -> deserialize -> MigrateFromLegacyHashBlock -> state.
 
     {
         // Confirmed state
         CWalletTx original;
         original.m_state = TxStateConfirmed(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 12345, 7);
+        original.SyncLegacyFromState();
 
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss << original;
@@ -811,6 +812,7 @@ BOOST_AUTO_TEST_CASE(state_serialization)
         // Inactive (abandoned) state — serializes as ABANDONED_HASH_SENTINEL
         CWalletTx original;
         original.m_state = TxStateInactive(true);
+        original.SyncLegacyFromState();
 
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss << original;
@@ -828,6 +830,7 @@ BOOST_AUTO_TEST_CASE(state_serialization)
         // Inactive (conflicted) state — serializes as CONFLICTED_HASH_SENTINEL
         CWalletTx original;
         original.m_state = TxStateInactive(false);
+        original.SyncLegacyFromState();
 
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss << original;
@@ -846,6 +849,7 @@ BOOST_AUTO_TEST_CASE(state_serialization)
         // serializes as null hashBlock -> deserializes as Unrecognized
         CWalletTx original;
         original.m_state = TxStateInMempool{};
+        original.SyncLegacyFromState();
 
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss << original;
