@@ -192,56 +192,6 @@ void static EraseFromWallets(uint256 hash)
         pwallet->EraseFromWallet(hash);
 }
 
-// Legacy wallet sync entry point. Prefer blockConnected/blockDisconnected/
-// transactionAddedToMempool for new code paths.
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
-{
-    if (!fConnect)
-    {
-        // ppcoin: wallets need to refund inputs when disconnecting coinstake
-        if (tx.IsCoinStake())
-        {
-            for (auto const& pwallet : setpwalletRegistered)
-            {
-                if (pwallet->IsFromMe(tx))
-                {
-                    pwallet->DisableTransaction(tx);
-                    g_miner_status.ClearLastStake();
-                }
-            }
-        }
-        return;
-    }
-
-    // Delegate to the TxState-aware SyncTransaction
-    CTransactionRef ptx = MakeTransactionRef(tx);
-
-    if (pblock && !pblock->GetHash(true).IsNull()) {
-        uint256 block_hash = pblock->GetHash(true);
-        int block_height = -1;
-        int position = -1;
-
-        auto it = mapBlockIndex.find(block_hash);
-        if (it != mapBlockIndex.end()) {
-            block_height = it->second->nHeight;
-        }
-
-        for (size_t i = 0; i < pblock->vtx.size(); i++) {
-            if (pblock->vtx[i].GetHash() == tx.GetHash()) {
-                position = static_cast<int>(i);
-                break;
-            }
-        }
-
-        for (auto const& pwallet : setpwalletRegistered)
-            pwallet->SyncTransaction(ptx, TxStateConfirmed{block_hash, block_height, position}, fUpdate);
-    } else {
-        for (auto const& pwallet : setpwalletRegistered)
-            pwallet->transactionAddedToMempool(ptx);
-    }
-}
-
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
     EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)

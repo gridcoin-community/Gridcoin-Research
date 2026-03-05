@@ -51,7 +51,7 @@ struct CompareValueOnly
 };
 
 //! Returns false if the confirmed state has an invalid block hash, height, or position.
-bool ValidateTxStateConfirmed(const TxStateConfirmed& state, const uint256& txid)
+bool ValidateTxStateConfirmed(const TxStateConfirmed& state, const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     auto it = mapBlockIndex.find(state.m_confirmed_block_hash);
     if (it == mapBlockIndex.end()) {
@@ -1153,12 +1153,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
         wtx.vfSpent.clear();
         wtx.vfSpent.resize(tx.vout.size(), false);
 
-        if (std::holds_alternative<TxStateConfirmed>(state)) {
-            for (unsigned int i = 0; i < tx.vout.size(); i++) {
-                wtx.vfSpent[i] = false;
-            }
-        }
-
         if (const auto* conf = std::get_if<TxStateConfirmed>(&wtx.m_state)) {
             if (!ValidateTxStateConfirmed(*conf, hash)) {
                 LogPrintf("WARNING: AddToWalletIfInvolvingMe: Invalid confirmed state for new tx %s, falling back to unrecognized\n",
@@ -1357,8 +1351,8 @@ void CWallet::blockDisconnected(const CBlock& block, int height)
      * 4. Update m_last_block_processed safely
      *
      * Lock order: cs_main (held by caller) -> cs_wallet (acquired above)
-     * -> mempool.cs (acquired below). This is safe because no code path
-     * acquires mempool.cs before cs_wallet.
+     * -> mempool.cs (acquired below for state transition checks). This
+     * follows the canonical ordering documented in developer-notes.md.
      */
 
     // Single CWalletDB instance batches all writes into one database session
@@ -3367,21 +3361,6 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
             // This must not fail. The transaction has already been signed and recorded.
             LogPrintf("CommitTransaction() : Error: Transaction not valid");
             return false;
-        }
-
-        // Update wallet state to mempool after successful acceptance
-        // This ensures the transaction has the correct state for balance/confirmation calculations
-        {
-            auto it = mapWallet.find(wtxNew.GetHash());
-            if (it != mapWallet.end()) {
-                it->second.m_state = TxStateInMempool{};
-                if (fFileBacked) {
-                    CWalletDB walletdb(strWalletFile);
-                    it->second.WriteToDisk(&walletdb);
-                }
-                LogPrint(BCLog::LogFlags::VERBOSE, "CommitTransaction: Updated state to TxStateInMempool for tx %s\n",
-                         wtxNew.GetHash().ToString());
-            }
         }
 
         wtxNew.RelayWalletTransaction();
