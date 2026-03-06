@@ -15,7 +15,9 @@
 
 #include "prevector.h"
 #include "pubkey.h"
+#include "tinyformat.h"
 #include <util/hash_type.h>
+#include <util/strencodings.h>
 #include "serialize.h"
 
 typedef std::vector<unsigned char> valtype;
