@@ -91,6 +91,7 @@ bool CalculateLegacyV3HashProof(
     CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
+    CValidationState& state,
     uint256& out_hash_proof);
 
 //Block version 8+ Staking
@@ -99,6 +100,7 @@ bool CheckProofOfStakeV8(
     CBlockIndex* pindexPrev, //previous block in chain index
     CBlock& Block, //block to check
     bool generated_by_me,
+    CValidationState& state,
     uint256& hashProofOfStake); //proof hash out-parameter
 
 bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight);
