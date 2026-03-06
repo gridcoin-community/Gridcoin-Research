@@ -152,7 +152,8 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             stream >> btx;
             CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
 
-            BOOST_CHECK_MESSAGE(CheckTransaction(tx), strTest);
+            CValidationState valid_state;
+            BOOST_CHECK_MESSAGE(CheckTransaction(tx, valid_state), strTest);
 
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
@@ -225,7 +226,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             stream >> btx;
             CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
 
-            fValid = CheckTransaction(tx);
+            CValidationState invalid_state;
+            fValid = CheckTransaction(tx, invalid_state);
 
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {
@@ -277,11 +279,13 @@ BOOST_AUTO_TEST_CASE(basic_transaction_tests)
     CMutableBitcoinTransaction btx;
     stream >> btx;
     CTransaction tx = ConvertFromMutableBitcoinTransaction(btx);
-    BOOST_CHECK_MESSAGE(CheckTransaction(tx), "Simple deserialized transaction should be valid.");
+    CValidationState deser_state;
+    BOOST_CHECK_MESSAGE(CheckTransaction(tx, deser_state), "Simple deserialized transaction should be valid.");
 
     // Check that duplicate txins fail
     tx.vin.push_back(tx.vin[0]);
-    BOOST_CHECK_MESSAGE(!CheckTransaction(tx), "Transaction with duplicate txins should be invalid.");
+    CValidationState dup_state;
+    BOOST_CHECK_MESSAGE(!CheckTransaction(tx, dup_state), "Transaction with duplicate txins should be invalid.");
 }
 
 //
