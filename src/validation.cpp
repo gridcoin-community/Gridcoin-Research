@@ -94,16 +94,16 @@ bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout)
     return ReadTxFromDisk(tx, txdb, prevout, txindex);
 }
 
-bool CheckTransaction(const CTransaction& tx)
+bool CheckTransaction(const CTransaction& tx, CValidationState& state)
 {
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
-        return tx.DoS(10, error("CheckTransaction() : vin empty"));
+        return state.DoS(10, error("CheckTransaction() : vin empty"));
     if (tx.vout.empty())
-        return tx.DoS(10, error("CheckTransaction() : vout empty"));
+        return state.DoS(10, error("CheckTransaction() : vout empty"));
     // Size limits - don't count coinbase superblocks--we check this at the block level:
     if (GetSerializeSize(tx, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
-        return tx.DoS(100, error("CheckTransaction() : size limits failed"));
+        return state.DoS(100, error("CheckTransaction() : size limits failed"));
 
     // Check for negative or overflow output values (see CVE-2010-5139)
     CAmount nValueOut = 0;
@@ -111,14 +111,14 @@ bool CheckTransaction(const CTransaction& tx)
     {
         const CTxOut& txout = tx.vout[i];
         if (txout.IsEmpty() && !tx.IsCoinBase() && !tx.IsCoinStake())
-            return tx.DoS(100, error("CheckTransaction() : txout empty for user transaction"));
+            return state.DoS(100, error("CheckTransaction() : txout empty for user transaction"));
         if (txout.nValue < 0)
-            return tx.DoS(100, error("CheckTransaction() : txout.nValue negative"));
+            return state.DoS(100, error("CheckTransaction() : txout.nValue negative"));
         if (txout.nValue > MAX_MONEY)
-            return tx.DoS(100, error("CheckTransaction() : txout.nValue too high"));
+            return state.DoS(100, error("CheckTransaction() : txout.nValue too high"));
         nValueOut += txout.nValue;
         if (!MoneyRange(nValueOut))
-            return tx.DoS(100, error("CheckTransaction() : txout total out of range"));
+            return state.DoS(100, error("CheckTransaction() : txout total out of range"));
     }
     // Check for duplicate inputs
     std::set<COutPoint> vInOutPoints;
@@ -132,19 +132,19 @@ bool CheckTransaction(const CTransaction& tx)
     if (tx.IsCoinBase())
     {
         if (tx.vin[0].scriptSig.size() < 2 || tx.vin[0].scriptSig.size() > 100)
-            return tx.DoS(100, error("CheckTransaction() : coinbase script size is invalid"));
+            return state.DoS(100, error("CheckTransaction() : coinbase script size is invalid"));
     }
     else
     {
         for (auto const& txin : tx.vin)
             if (txin.prevout.IsNull())
-                return tx.DoS(10, error("CheckTransaction() : prevout is null"));
+                return state.DoS(10, error("CheckTransaction() : prevout is null"));
     }
 
     return true;
 }
 
-bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_height)
+bool CheckContracts(const CTransaction& tx, CValidationState& state, const MapPrevTx& inputs, int block_height)
 {
     if (tx.nVersion <= 1) {
         return true;
@@ -153,28 +153,28 @@ bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_h
     // Although v2 transactions support multiple contracts, we just allow one
     // for now to mitigate spam:
     if (tx.GetContracts().size() > 1) {
-        return tx.DoS(100, error("%s: only one contract allowed in tx", __func__));
+        return state.DoS(100, error("%s: only one contract allowed in tx", __func__));
     }
 
     if ((tx.IsCoinBase() || tx.IsCoinStake())) {
-        return tx.DoS(100, error("%s: contract in non-standard tx", __func__));
+        return state.DoS(100, error("%s: contract in non-standard tx", __func__));
     }
 
     CAmount required_burn_fee = 0;
 
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_version <= 1) {
-            return tx.DoS(100, error("%s: legacy contract", __func__));
+            return state.DoS(100, error("%s: legacy contract", __func__));
         }
 
         if (!contract.WellFormed()) {
-            return tx.DoS(100, error("%s: malformed contract", __func__));
+            return state.DoS(100, error("%s: malformed contract", __func__));
         }
 
         // Reject any transactions with administrative contracts sent from a
         // wallet that does not hold the master key:
         if (contract.RequiresMasterKey() && !HasMasterKeyInput(tx, inputs, block_height)) {
-            return tx.DoS(100, error("%s: contract requires master key", __func__));
+            return state.DoS(100, error("%s: contract requires master key", __func__));
         }
 
         required_burn_fee += contract.RequiredBurnAmount();
@@ -189,7 +189,7 @@ bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_h
     }
 
     if (supplied_burn_fee < required_burn_fee) {
-        return tx.DoS(100, error(
+        return state.DoS(100, error(
             "%s: insufficient burn output. Required: %s, supplied: %s",
             __func__,
             FormatMoney(required_burn_fee),
@@ -281,7 +281,7 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb)
 }
 
 
-bool FetchInputs(CTransaction& tx, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool,
+bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool,
                  bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid)
 {
     // FetchInputs can return false either because we just haven't seen some inputs
@@ -348,14 +348,14 @@ bool FetchInputs(CTransaction& tx, CTxDB& txdb, const std::map<uint256, CTxIndex
             // Revisit this if/when transaction replacement is implemented and allows
             // adding inputs:
             fInvalid = true;
-            return tx.DoS(100, error("FetchInputs() : %s prevout.n out of range %d %" PRIszu " %" PRIszu " prev tx %s\n%s", tx.GetHash().ToString().substr(0,10).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size(), prevout.hash.ToString().substr(0,10).c_str(), txPrev.ToString().c_str()));
+            return state.DoS(100, error("FetchInputs() : %s prevout.n out of range %d %" PRIszu " %" PRIszu " prev tx %s\n%s", tx.GetHash().ToString().substr(0,10).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size(), prevout.hash.ToString().substr(0,10).c_str(), txPrev.ToString().c_str()));
         }
     }
 
     return true;
 }
 
-bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
+bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
 {
     // Take over previous transactions' spent pointers
@@ -374,7 +374,7 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
             CTransaction& txPrev = inputs[prevout.hash].second;
 
             if (prevout.n >= txPrev.vout.size() || prevout.n >= txindex.vSpent.size())
-                return tx.DoS(100, error("ConnectInputs() : %s prevout.n out of range %d %" PRIszu " %" PRIszu " prev tx %s\n%s", tx.GetHash().ToString().substr(0,10).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size(), prevout.hash.ToString().substr(0,10).c_str(), txPrev.ToString().c_str()));
+                return state.DoS(100, error("ConnectInputs() : %s prevout.n out of range %d %" PRIszu " %" PRIszu " prev tx %s\n%s", tx.GetHash().ToString().substr(0,10).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size(), prevout.hash.ToString().substr(0,10).c_str(), txPrev.ToString().c_str()));
 
             // If prev is coinbase or coinstake, check that it's matured
             if (txPrev.IsCoinBase() || txPrev.IsCoinStake())
@@ -384,12 +384,12 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
 
             // ppcoin: check transaction timestamp
             if (txPrev.nTime > tx.nTime)
-                return tx.DoS(100, error("ConnectInputs() : transaction timestamp earlier than input transaction"));
+                return state.DoS(100, error("ConnectInputs() : transaction timestamp earlier than input transaction"));
 
             // Check for negative or overflow input values
             nValueIn += txPrev.vout[prevout.n].nValue;
             if (!MoneyRange(txPrev.vout[prevout.n].nValue) || !MoneyRange(nValueIn))
-                return tx.DoS(100, error("ConnectInputs() : txin values out of range"));
+                return state.DoS(100, error("ConnectInputs() : txin values out of range"));
 
         }
         // The first loop above does all the inexpensive checks.
@@ -437,7 +437,7 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
                 // Verify signature
                 if (!VerifySignature(txPrev, tx, GetBlockScriptFlags(*pindexBlock), i, 0))
                 {
-                    return tx.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
+                    return state.DoS(100,error("ConnectInputs() : %s VerifySignature failed", tx.GetHash().ToString().substr(0,10).c_str()));
                 }
             }
 
@@ -456,21 +456,21 @@ bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uin
             if (nValueIn < tx.GetValueOut())
             {
                 LogPrintf("ConnectInputs(): VALUE IN < VALUEOUT ");
-                return tx.DoS(100, error("ConnectInputs() : %s value in < value out", tx.GetHash().ToString().substr(0,10).c_str()));
+                return state.DoS(100, error("ConnectInputs() : %s value in < value out", tx.GetHash().ToString().substr(0,10).c_str()));
             }
 
             // Tally transaction fees
             CAmount nTxFee = nValueIn - tx.GetValueOut();
             if (nTxFee < 0)
-                return tx.DoS(100, error("ConnectInputs() : %s nTxFee < 0", tx.GetHash().ToString().substr(0,10).c_str()));
+                return state.DoS(100, error("ConnectInputs() : %s nTxFee < 0", tx.GetHash().ToString().substr(0,10).c_str()));
 
             // enforce transaction fees for every block
             if (nTxFee < GetMinFee(tx))
-                return fBlock? tx.DoS(100, error("ConnectInputs() : %s not paying required fee=%s, paid=%s", tx.GetHash().ToString().substr(0,10).c_str(), FormatMoney(GetMinFee(tx)).c_str(), FormatMoney(nTxFee).c_str())) : false;
+                return fBlock? state.DoS(100, error("ConnectInputs() : %s not paying required fee=%s, paid=%s", tx.GetHash().ToString().substr(0,10).c_str(), FormatMoney(GetMinFee(tx)).c_str(), FormatMoney(nTxFee).c_str())) : false;
 
             nFees += nTxFee;
             if (!MoneyRange(nFees))
-                return tx.DoS(100, error("ConnectInputs() : nFees out of range"));
+                return state.DoS(100, error("ConnectInputs() : nFees out of range"));
         }
     }
 
@@ -740,12 +740,14 @@ class ClaimValidator
 public:
     ClaimValidator(
         const CBlock& block,
+        CValidationState& state,
         const CBlockIndex* const pindex,
         const CAmount stake_value_in,
         const CAmount total_claimed,
         const CAmount fees,
         const CAmount coin_age)
         : m_block(block)
+        , m_state(state)
         , m_pindex(pindex)
         , m_claim(block.GetClaim())
         , m_stake_value_in(stake_value_in)
@@ -764,6 +766,7 @@ public:
 
 private:
     const CBlock& m_block;
+    CValidationState& m_state;
     const CBlockIndex* const m_pindex;
     const GRC::Claim& m_claim;
     const int64_t m_stake_value_in;
@@ -1080,7 +1083,7 @@ private:
             return true;
         }
 
-        return m_block.DoS(10, error(
+        return m_state.DoS(10, error(
                                    "ConnectBlock[%s]: non-cruncher claim %s, expected %s, fees %: %s",
                                    __func__,
                                    FormatMoney(m_total_claimed),
@@ -1131,7 +1134,7 @@ private:
         const CAmount max_reward = 12750 * COIN;
 
         return m_claim.m_research_subsidy <= max_reward
-            || m_block.DoS(1, error(
+            || m_state.DoS(1, error(
                 "ConnectBlock[%s]: research claim %s exceeds max %s. CPID %s",
                 __func__,
                 FormatMoney(m_claim.m_research_subsidy),
@@ -1154,7 +1157,7 @@ private:
         }
 
         return m_claim.TotalSubsidy() + drift_allowed >= reward_claimed
-            || m_block.DoS(20, error(
+            || m_state.DoS(20, error(
                 "ConnectBlock[%s]: reward claim %s exceeds allowed %s. CPID %s",
                 __func__,
                 FormatMoney(reward_claimed),
@@ -1168,7 +1171,7 @@ private:
         const double mag = GRC::Quorum::GetMagnitude(m_claim.m_mining_id).Floating();
 
         return m_claim.m_magnitude <= (mag * 1.25)
-            || m_block.DoS(20, error(
+            || m_state.DoS(20, error(
                 "ConnectBlock[%s]: magnitude claim %f exceeds superblock %f. CPID %s",
                 __func__,
                 m_claim.m_magnitude,
@@ -1227,7 +1230,7 @@ private:
             return true;
         }
 
-        return m_block.DoS(20, error(
+        return m_state.DoS(20, error(
             "ConnectBlock[%s]: signature verification failed. CPID %s, LBH %s",
             __func__,
             m_claim.m_mining_id.ToString(),
@@ -1314,7 +1317,7 @@ private:
             return true;
         }
 
-        return m_block.DoS(10, error(
+        return m_state.DoS(10, error(
                                    "ConnectBlock[%s]: researcher claim %s compared to expected %s for CPID %s. "
                                    "Expected research %s, stake %s, fees %s. "
                                    "Claimed research %s, stake %s: %s",
@@ -1349,7 +1352,7 @@ private:
         // If the number of MRCs in the claim's mrc tx map exceeds the output limit, then validation fails. This would be
         // a problem introduced by the staking node and should get the same DoS as other claim validation errors above.
         if (mrc_claimed_outputs > mrc_output_limit) {
-            return m_block.DoS(10, error(
+            return m_state.DoS(10, error(
                                    "ConnectBlock[%s]: MRC claimed outputs, %u, exceeds max of %u excluding foundation "
                                    "sidestake.",
                                    __func__,
@@ -1382,7 +1385,7 @@ private:
                                     // If an MRC fails validation no point in continuing. Return false immediately with an
                                     // appropriate DoS.
                                     if (!ValidateMRC(m_pindex->pprev, mrc)) {
-                                        return m_block.DoS(10, error(
+                                        return m_state.DoS(10, error(
                                                                "ConnectBlock[%s]: An MRC in the claim failed to validate.",
                                                                __func__));
                                     }
@@ -1427,7 +1430,7 @@ private:
                                     // If this doesn't match we have a problem with the correlation between the coinstake
                                     // and the claim in the MRC area.
                                     if (coinstake_mrc_reward != mrc_reward) {
-                                        return m_block.DoS(10, error(
+                                        return m_state.DoS(10, error(
                                                                "ConnectBlock[%s]: The rewards in an MRC, %s, do not "
                                                                "correspond to the value of the corresponding output "
                                                                "on the coinstake, %s.",
@@ -1480,7 +1483,7 @@ private:
         // mrc_tx_map, because the hashes in the mrc_tx_map (the values) are also unique. The greater than condition is
         // checked first above.
         if (mrc_outputs < mrc_claimed_outputs) {
-            return m_block.DoS(10, error(
+            return m_state.DoS(10, error(
                                    "ConnectBlock[%s]: The number of validated claims in MRC transactions, %u, "
                                    "is less than the number of MRCs in the stake claim, %u.",
                                    __func__,
@@ -1500,6 +1503,7 @@ private:
 
 bool TryLoadSuperblock(
     CBlock& block,
+    CValidationState& state,
     const CBlockIndex* const pindex,
     const GRC::Claim& claim)
 {
@@ -1512,7 +1516,7 @@ bool TryLoadSuperblock(
     if ((!fColdBoot || block.nVersion >= 11)
         && !GRC::Quorum::ValidateSuperblockClaim(claim, superblock, pindex))
     {
-        return block.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
+        return state.DoS(25, error("ConnectBlock: Rejected invalid superblock."));
     }
 
     // Block versions 11+ calculate research rewards from snapshots of
@@ -1545,6 +1549,7 @@ bool TryLoadSuperblock(
 
 bool GridcoinConnectBlock(
     CBlock& block,
+    CValidationState& state,
     CBlockIndex* const pindex,
     CTxDB& txdb,
     const int64_t stake_value_in,
@@ -1559,12 +1564,12 @@ bool GridcoinConnectBlock(
             return false;
         }
 
-        if (!ClaimValidator(block, pindex, stake_value_in, total_claimed, fees, out_coin_age).Check()) {
+        if (!ClaimValidator(block, state, pindex, stake_value_in, total_claimed, fees, out_coin_age).Check()) {
             return false;
         }
 
         if (claim.ContainsSuperblock()) {
-            if (!TryLoadSuperblock(block, pindex, claim)) {
+            if (!TryLoadSuperblock(block, state, pindex, claim)) {
                 return false;
             }
 
@@ -1648,10 +1653,10 @@ unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
     return flags;
 }
 
-bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
+bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
-    if (!CheckBlock(block, pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
+    if (!CheckBlock(block, state, pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
     {
         return error("%s: CheckBlock failed", __func__);
     }
@@ -1680,7 +1685,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
     if (block.nVersion >= 8 && pindex->nStakeModifier == 0)
     {
         uint256 tmp_hashProof;
-        if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, block, /*generated_by_me*/ false, tmp_hashProof))
+        if (!GRC::CheckProofOfStakeV8(txdb, pindex->pprev, block, /*generated_by_me*/ false, state, tmp_hashProof))
             return error("%s: check proof-of-stake failed", __func__);
     }
 
@@ -1709,7 +1714,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
 
         nSigOps += GetLegacySigOpCount(tx);
         if (nSigOps > MAX_BLOCK_SIGOPS)
-            return block.DoS(100, error("%s: too many sigops", __func__));
+            return state.DoS(100, error("%s: too many sigops", __func__));
 
         CDiskTxPos posThisTx(pindex->nFile, pindex->nBlockPos, nTxPos);
         if (!fJustCheck)
@@ -1723,7 +1728,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
         else
         {
             bool fInvalid;
-            if (!FetchInputs(tx, txdb, mapQueuedChanges, true, false, mapInputs, fInvalid))
+            if (!FetchInputs(tx, state, txdb, mapQueuedChanges, true, false, mapInputs, fInvalid))
                 return false;
 
             // Add in sigops done by pay-to-script-hash inputs;
@@ -1731,7 +1736,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
             // an incredibly-expensive-to-validate block.
             nSigOps += GetP2SHSigOpCount(tx, mapInputs);
             if (nSigOps > MAX_BLOCK_SIGOPS)
-                return block.DoS(100, error("%s: too many sigops", __func__));
+                return state.DoS(100, error("%s: too many sigops", __func__));
 
             CAmount nTxValueIn = GetValueIn(tx, mapInputs);
             CAmount nTxValueOut = tx.GetValueOut();
@@ -1770,7 +1775,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
                 if (pindex->nVersion >= 10)
                 {
                     if (tx.vout.size() > GetCoinstakeOutputLimit(pindex->nVersion))
-                        return block.DoS(100, error("%s: too many coinstake outputs", __func__));
+                        return state.DoS(100, error("%s: too many coinstake outputs", __func__));
                 }
                 else if (bIsDPOR && pindex->nHeight > nGrandfather && pindex->nVersion < 10)
                 {
@@ -1781,7 +1786,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
                     {
                         if (CoinToDouble(tx.vout[i].nValue) > 0)
                         {
-                            return block.DoS(50, error("%s: coinstake output %u forbidden", __func__, i));
+                            return state.DoS(50, error("%s: coinstake output %u forbidden", __func__, i));
                         }
                     }
                 }
@@ -1789,20 +1794,20 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
 
             // Validate any contracts published in the transaction:
             if (!tx.GetContracts().empty()) {
-                if (!CheckContracts(tx, mapInputs, pindex->nHeight)) {
+                if (!CheckContracts(tx, state, mapInputs, pindex->nHeight)) {
                     return false;
                 }
 
                 int DoS = 0;
                 if (block.nVersion >= 11 && !GRC::BlockValidateContracts(pindex, tx, DoS)) {
-                    return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+                    return state.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
                                              __func__,
                                              tx.GetHash().ToString(),
                                              DoS));
                 }
             }
 
-            if (!ConnectInputs(tx, txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
+            if (!ConnectInputs(tx, state, txdb, mapInputs, mapQueuedChanges, posThisTx, pindex, true, false))
                 return false;
         }
 
@@ -1810,7 +1815,7 @@ bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustChe
     }
 
     if (IsResearchAgeEnabled(pindex->nHeight)
-        && !GridcoinConnectBlock(block, pindex, txdb, stake_value_in, nStakeReward, nFees))
+        && !GridcoinConnectBlock(block, state, pindex, txdb, stake_value_in, nStakeReward, nFees))
     {
         return false;
     }
@@ -1919,7 +1924,7 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     return true;
 }
 
-bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex)
+bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW, bool fCheckMerkleRoot, bool fCheckSig, bool fLoadingIndex)
         EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
@@ -1941,53 +1946,53 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
         || ::GetSerializeSize(block, (SER_NETWORK & SER_SKIPSUPERBLOCK), PROTOCOL_VERSION) > MAX_BLOCK_SIZE
         || ::GetSerializeSize(block.GetSuperblock(), SER_NETWORK, PROTOCOL_VERSION) > GRC::Superblock::MAX_SIZE)
     {
-        return block.DoS(100, error("%s: size limits failed", __func__));
+        return state.DoS(100, error("%s: size limits failed", __func__));
     }
 
     // Check proof of work matches claimed amount
     if (fCheckPOW && block.IsProofOfWork() && !CheckProofOfWork(block.GetHash(true), block.nBits, Params().GetConsensus()))
-        return block.DoS(50, error("%s: proof of work failed", __func__));
+        return state.DoS(50, error("%s: proof of work failed", __func__));
 
     //Reject blocks with diff that has grown to an extraordinary level (should never happen)
     double blockdiff = GRC::GetBlockDifficulty(block.nBits);
     if (height1 > nGrandfather && blockdiff > 10000000000000000)
     {
-       return block.DoS(1, error("%s: Block Bits larger than 10000000000000000.", __func__));
+       return state.DoS(1, error("%s: Block Bits larger than 10000000000000000.", __func__));
     }
 
     // First transaction must be coinbase, the rest must not be
     if (block.vtx.empty() || !block.vtx[0].IsCoinBase())
-        return block.DoS(100, error("%s: first tx is not coinbase", __func__));
+        return state.DoS(100, error("%s: first tx is not coinbase", __func__));
     for (unsigned int i = 1; i < block.vtx.size(); i++)
         if (block.vtx[i].IsCoinBase())
-            return block.DoS(100, error("%s: more than one coinbase", __func__));
+            return state.DoS(100, error("%s: more than one coinbase", __func__));
 
     // Version 11+ blocks store the Gridcoin claim context as a contract in the
     // coinbase transaction instead of the hashBoinc field.
     //
     if (block.nVersion >= 11) {
         if (block.vtx[0].vContracts.empty()) {
-            return block.DoS(100, error("%s: missing claim contract", __func__));
+            return state.DoS(100, error("%s: missing claim contract", __func__));
         }
 
         if (block.vtx[0].vContracts.size() > 1) {
-            return block.DoS(100, error("%s: too many coinbase contracts", __func__));
+            return state.DoS(100, error("%s: too many coinbase contracts", __func__));
         }
 
         if (block.vtx[0].vContracts[0].m_type != GRC::ContractType::CLAIM) {
-            return block.DoS(100, error("%s: unexpected coinbase contract", __func__));
+            return state.DoS(100, error("%s: unexpected coinbase contract", __func__));
         }
 
         if (!block.vtx[0].vContracts[0].WellFormed()) {
-            return block.DoS(100, error("%s: malformed claim contract", __func__));
+            return state.DoS(100, error("%s: malformed claim contract", __func__));
         }
 
         if (block.vtx[0].vContracts[0].m_version <= 1 || block.GetClaim().m_version <= 1) {
-            return block.DoS(100, error("%s: legacy claim", __func__));
+            return state.DoS(100, error("%s: legacy claim", __func__));
         }
 
         if (!fTestNet && block.GetClaim().m_version == 2) {
-            return block.DoS(100, error("%s: testnet-only claim", __func__));
+            return state.DoS(100, error("%s: testnet-only claim", __func__));
         }
     }
 
@@ -1998,22 +2003,22 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
         if (height1 > nGrandfather)
         {
             if (fCheckSig && !CheckBlockSignature(block))
-                return block.DoS(100, error("%s: bad proof-of-stake block signature", __func__));
+                return state.DoS(100, error("%s: bad proof-of-stake block signature", __func__));
         }
 
         // Coinbase output should be empty if proof-of-stake block
         if (block.vtx[0].vout.size() != 1 || !block.vtx[0].vout[0].IsEmpty())
-            return block.DoS(100, error("%s: coinbase output not empty for proof-of-stake block", __func__));
+            return state.DoS(100, error("%s: coinbase output not empty for proof-of-stake block", __func__));
 
         // Second transaction must be coinstake, the rest must not be
         if (block.vtx.empty() || !block.vtx[1].IsCoinStake())
-            return block.DoS(100, error("%s: second tx is not coinstake", __func__));
+            return state.DoS(100, error("%s: second tx is not coinstake", __func__));
 
         for (unsigned int i = 2; i < block.vtx.size(); i++)
         {
             if (block.vtx[i].IsCoinStake())
             {
-                return block.DoS(100, error("%s: more than one coinstake (at %d)", __func__, i));
+                return state.DoS(100, error("%s: more than one coinstake (at %d)", __func__, i));
             }
         }
     }
@@ -2021,12 +2026,12 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
     // Check transactions
     for (auto const& tx : block.vtx)
     {
-        if (!CheckTransaction(tx))
-            return block.DoS(tx.nDoS, error("%s: CheckTransaction failed", __func__));
+        if (!CheckTransaction(tx, state))
+            return error("%s: CheckTransaction failed", __func__);
 
         // ppcoin: check transaction timestamp
         if (block.GetBlockTime() < (int64_t)tx.nTime)
-            return block.DoS(50, error("%s: block timestamp earlier than transaction timestamp", __func__));
+            return state.DoS(50, error("%s: block timestamp earlier than transaction timestamp", __func__));
     }
 
     // Check for duplicate txids. This is caught by ConnectInputs(),
@@ -2037,7 +2042,7 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
         uniqueTx.insert(tx.GetHash());
     }
     if (uniqueTx.size() != block.vtx.size())
-        return block.DoS(100, error("%s: duplicate transaction", __func__));
+        return state.DoS(100, error("%s: duplicate transaction", __func__));
 
     unsigned int nSigOps = 0;
     for (auto const& tx : block.vtx)
@@ -2045,20 +2050,20 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
         nSigOps += GetLegacySigOpCount(tx);
     }
     if (nSigOps > MAX_BLOCK_SIGOPS)
-        return block.DoS(100, error("%s: out-of-bounds SigOpCount", __func__));
+        return state.DoS(100, error("%s: out-of-bounds SigOpCount", __func__));
 
     // Check merkle root
     if (fCheckMerkleRoot) {
         bool mutated;
         uint256 hashMerkleRoot = BlockMerkleRoot(block, &mutated);
         if (block.hashMerkleRoot != hashMerkleRoot)
-            return block.DoS(100, error("%s: hashMerkleRoot mismatch", __func__));
+            return state.DoS(100, error("%s: hashMerkleRoot mismatch", __func__));
 
         // Check for merkle tree malleability (CVE-2012-2459): repeating sequences
         // of transactions in a block without affecting the merkle root of a block,
         // while still invalidating it.
         if (mutated)
-            return block.DoS(100, error("%s: duplicate transaction", __func__));
+            return state.DoS(100, error("%s: duplicate transaction", __func__));
     }
 
     if (fCheckPOW && fCheckMerkleRoot && fCheckSig)
@@ -2067,12 +2072,12 @@ bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW, bool fCheckMer
     return true;
 }
 
-bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
     if (block.nVersion > CBlock::CURRENT_VERSION)
-        return block.DoS(100, error("%s: reject unknown block version %d", __func__, block.nVersion));
+        return state.DoS(100, error("%s: reject unknown block version %d", __func__, block.nVersion));
 
     // Check for duplicate
     uint256 hash = block.GetHash(true);
@@ -2082,7 +2087,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
     // Get prev block index
     BlockMap::iterator mi = mapBlockIndex.find(block.hashPrevBlock);
     if (mi == mapBlockIndex.end())
-        return block.DoS(10, error("%s: prev block not found", __func__));
+        return state.DoS(10, error("%s: prev block not found", __func__));
     CBlockIndex* pindexPrev = mi->second;
     const int nHeight = pindexPrev->nHeight + 1;
     const int checkpoint_height = Params().Checkpoints().GetHeight();
@@ -2091,7 +2096,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
     // use a cheaper condition than IsInitialBlockDownload() to skip the checks
     // during initial sync:
     if (nBestHeight > checkpoint_height && nHeight <= checkpoint_height) {
-        return block.DoS(25, error("%s: rejected height below checkpoint", __func__));
+        return state.DoS(25, error("%s: rejected height below checkpoint", __func__));
     }
 
     // The block height at which point we start rejecting v7 blocks and
@@ -2105,7 +2110,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
             || (IsV13Enabled(nHeight) && block.nVersion < 13)
             || (IsV14Enabled(nHeight) && block.nVersion < 14)
             ) {
-        return block.DoS(20, error("%s: reject too old nVersion = %d", __func__, block.nVersion));
+        return state.DoS(20, error("%s: reject too old nVersion = %d", __func__, block.nVersion));
     } else if ((!IsProtocolV2(nHeight) && block.nVersion >= 7)
                || (!IsV8Enabled(nHeight) && block.nVersion >= 8)
                || (!IsV9Enabled(nHeight) && block.nVersion >= 9)
@@ -2115,39 +2120,39 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
                || (!IsV13Enabled(nHeight) && block.nVersion >= 13)
                || (!IsV14Enabled(nHeight) && block.nVersion >= 14)
                ) {
-        return block.DoS(100, error("%s: reject too new nVersion = %d", __func__, block.nVersion));
+        return state.DoS(100, error("%s: reject too new nVersion = %d", __func__, block.nVersion));
     }
 
     if (block.IsProofOfWork() && nHeight > LAST_POW_BLOCK)
-        return block.DoS(100, error("%s: reject proof-of-work at height %d", __func__, nHeight));
+        return state.DoS(100, error("%s: reject proof-of-work at height %d", __func__, nHeight));
 
     if (nHeight > nGrandfather)
     {
         // Check coinbase timestamp
         if (block.GetBlockTime() > FutureDrift((int64_t)block.vtx[0].nTime, nHeight))
         {
-            return block.DoS(80, error("%s: coinbase timestamp is too early", __func__));
+            return state.DoS(80, error("%s: coinbase timestamp is too early", __func__));
         }
         // Check timestamp against prev
         if (block.nVersion < 12 && (block.GetBlockTime() <= pindexPrev->GetPastTimeLimit() || FutureDrift(block.GetBlockTime(), nHeight) < pindexPrev->GetBlockTime()))
-            return block.DoS(60, error("%s: block's timestamp is too early", __func__));
+            return state.DoS(60, error("%s: block's timestamp is too early", __func__));
         // Check proof-of-work or proof-of-stake
         if (block.nBits != GRC::GetNextTargetRequired(pindexPrev))
-            return block.DoS(100, error("%s: incorrect target", __func__));
+            return state.DoS(100, error("%s: incorrect target", __func__));
     }
 
     if (block.nVersion >= 12) {
         // Check timestamp
         if (pindexPrev->GetBlockTime() - block.GetBlockTime() > 128) {
-            return block.DoS(50, error("%s: block timestamp too early", __func__));
+            return state.DoS(50, error("%s: block timestamp too early", __func__));
         }
 
         if (block.GetBlockTime() - GetAdjustedTime() > 128) {
-            return block.DoS(25, error("%s: block timestamp too far in future", __func__));
+            return state.DoS(25, error("%s: block timestamp too far in future", __func__));
         }
 
         if (block.vtx[1].nTime != block.GetBlockTime()) {
-            return block.DoS(50, error("%s: block coinstake time mismatch", __func__));
+            return state.DoS(50, error("%s: block coinstake time mismatch", __func__));
         }
     }
 
@@ -2158,24 +2163,24 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
         if (block.nVersion >= 11 && tx.nVersion < 2) {
             // Disallow tx version 1 after the mandatory block to prohibit the
             // use of legacy string contracts:
-            return block.DoS(100, error("%s: legacy transaction", __func__));
+            return state.DoS(100, error("%s: legacy transaction", __func__));
         }
 
         // Check that all transactions are finalized
         if (!IsFinalTx(tx, nHeight, block.GetBlockTime()))
-            return block.DoS(10, error("%s: contains a non-final transaction", __func__));
+            return state.DoS(10, error("%s: contains a non-final transaction", __func__));
 
         // BIP68: Check sequence locks for v14+ blocks (skip coinbase and coinstake)
         if (IsV14Enabled(nHeight) && !tx.IsCoinBase() && !tx.IsCoinStake()) {
             if (!CheckSequenceLocks(tx, 0, pindexPrev)) {
-                return block.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
+                return state.DoS(10, error("%s: contains a transaction with unsatisfied sequence locks", __func__));
             }
         }
     }
 
     // Check that the block chain matches the known block chain up to a checkpoint
     if (!Checkpoints::CheckHardened(nHeight, hash))
-        return block.DoS(100, error("%s: rejected by hardened checkpoint lock-in at %d", __func__, nHeight));
+        return state.DoS(100, error("%s: rejected by hardened checkpoint lock-in at %d", __func__, nHeight));
 
     uint256 hashProof;
 
@@ -2185,12 +2190,12 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
         //no grandfather exceptions
         //if (IsProofOfStake())
         CTxDB txdb("r");
-        if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, block, generated_by_me, hashProof))
+        if(!GRC::CheckProofOfStakeV8(txdb, pindexPrev, block, generated_by_me, state, hashProof))
         {
-            return block.DoS(block.vtx[1].nDoS, error("%s: invalid proof-of-stake for block %s, prev %s",
-                                                      __func__,
-                                                      hash.ToString(),
-                                                      pindexPrev->GetBlockHash().ToString()));
+            return error("%s: invalid proof-of-stake for block %s, prev %s",
+                         __func__,
+                         hash.ToString(),
+                         pindexPrev->GetBlockHash().ToString());
         }
 
         if (g_seen_stakes.ContainsProof(hashProof)
@@ -2214,7 +2219,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
         // testnet: nGrandfather (196551) to version 8 (311999)
         //
         CTxDB txdb("r");
-        if (!GRC::CalculateLegacyV3HashProof(txdb, block, block.nNonce, hashProof)) {
+        if (!GRC::CalculateLegacyV3HashProof(txdb, block, block.nNonce, state, hashProof)) {
             return error("%s: Failed to carry v7 proof hash.", __func__);
         }
     }
@@ -2232,7 +2237,7 @@ bool AcceptBlock(CBlock& block, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(c
         CScript expect = CScript() << nHeight;
         if (block.vtx[0].vin[0].scriptSig.size() < expect.size() ||
                 !std::equal(expect.begin(), expect.end(), block.vtx[0].vin[0].scriptSig.begin()))
-            return block.DoS(100, error("%s: block height mismatch in coinbase", __func__));
+            return state.DoS(100, error("%s: block height mismatch in coinbase", __func__));
     }
 
     // Write block to history file

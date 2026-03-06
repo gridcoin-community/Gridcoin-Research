@@ -7,6 +7,7 @@
 #define BITCOIN_VALIDATION_H
 
 #include "amount.h"
+#include "consensus/validation.h"
 #include "index/disktxpos.h"
 #include "primitives/transaction.h"
 
@@ -28,7 +29,7 @@ bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& 
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout);
 bool ReadTxFromDisk(CTransaction& tx, COutPoint prevout);
 
-bool CheckTransaction(const CTransaction& tx);
+bool CheckTransaction(const CTransaction& tx, CValidationState& state);
 
 //! \brief Check the validity of any contracts contained in the transaction.
 //!
@@ -40,7 +41,7 @@ bool CheckTransaction(const CTransaction& tx);
 //!
 //! \return \c true if all of the contracts in the transaction validate.
 //!
-bool CheckContracts(const CTransaction& tx, const MapPrevTx& inputs, int block_height);
+bool CheckContracts(const CTransaction& tx, CValidationState& state, const MapPrevTx& inputs, int block_height);
 
 //! \brief Determine whether a transaction contains an input spent by the
 //! master key holder.
@@ -79,7 +80,7 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb);
     @param[out] fInvalid	returns true if tx is invalid
     @return	Returns true if all inputs are in txdb or mapTestPool
 */
-bool FetchInputs(CTransaction& tx, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
+bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
 
 /** Sanity check previous transactions, then, if all checks succeed,
     mark them as spent by tx.
@@ -92,7 +93,7 @@ bool FetchInputs(CTransaction& tx, CTxDB& txdb, const std::map<uint256, CTxIndex
     @param[in] fMiner	true if called from CreateNewBlock
     @return Returns true if all checks succeed
     */
-bool ConnectInputs(CTransaction& tx, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
+bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
 
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppcoin: get transaction coin age
 
@@ -101,10 +102,10 @@ int GetDepthInMainChain(const CTxIndex& txi);
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
 
 bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex);
-bool ConnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
+bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
 bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
-bool CheckBlock(const CBlock& block, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
-bool AcceptBlock(CBlock& block, bool generated_by_me);
+bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me);
 bool CheckBlockSignature(const CBlock& block);
 
 // Returns the script flags which should be checked for a given block
