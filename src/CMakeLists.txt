@@ -205,6 +205,10 @@ add_library(gridcoin_util STATIC
     rpc/voting.cpp
     scheduler.cpp
     script.cpp
+    script/interpreter.cpp
+    script/script.cpp
+    script/sign.cpp
+    script/standard.cpp
     scrypt.cpp
     support/cleanse.cpp
     support/lockedpool.cpp
