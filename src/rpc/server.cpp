@@ -347,6 +347,8 @@ static const CRPCCommand vRPCCommands[] =
     { "settxfee",                &settxfee,                cat_wallet        },
     { "signmessage",             &signmessage,             cat_wallet        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
+    { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet },
+    { "signrawtransactionwithwallet", &signrawtransactionwithwallet, cat_wallet },
     { "upgradewallet",           &upgradewallet,           cat_wallet        },
     { "validateaddress",         &validateaddress,         cat_wallet        },
     { "validatepubkey",          &validatepubkey,          cat_wallet        },
@@ -475,6 +477,7 @@ static constexpr const char* DEPRECATED_RPCS[] {
         "listreceivedbyaccount",
         "move",
         "setaccount",
+        "signrawtransaction",
         "vote",
 };
 

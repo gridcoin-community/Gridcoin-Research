@@ -161,6 +161,8 @@ extern UniValue sethdseed(const UniValue& params, bool fHelp);
 extern UniValue settxfee(const UniValue& params, bool fHelp);
 extern UniValue signmessage(const UniValue& params, bool fHelp);
 extern UniValue signrawtransaction(const UniValue& params, bool fHelp);
+extern UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp);
+extern UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp);
 extern UniValue upgradewallet(const UniValue& params, bool fHelp);
 extern UniValue validateaddress(const UniValue& params, bool fHelp);
 extern UniValue validatepubkey(const UniValue& params, bool fHelp);
