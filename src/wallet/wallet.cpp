@@ -1369,7 +1369,8 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     MapPrevTx mapInputs;
     map<uint256, CTxIndex> mapUnused;
     bool fInvalid = false;
-    if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+    CValidationState wallet_state;
+    if (!FetchInputs(tx, wallet_state, txdb, mapUnused, false, false, mapInputs, fInvalid))
     {
         if (fInvalid) {
             return error("%s: FetchInputs found invalid tx %s", __func__, tx.GetHash().ToString());
@@ -1380,7 +1381,7 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     // Validate any contracts published in the transaction:
 
     if (!tx.GetContracts().empty()) {
-        if (!CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+        if (!CheckContracts(tx, wallet_state, mapInputs, pindexBest->nHeight)) {
             return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
         }
 

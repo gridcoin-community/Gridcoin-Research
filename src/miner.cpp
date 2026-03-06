@@ -527,7 +527,8 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
             map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
             MapPrevTx mapInputs;
             bool fInvalid;
-            if (!FetchInputs(tx, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
+            CValidationState miner_state;
+            if (!FetchInputs(tx, miner_state, txdb, mapTestPoolTmp, false, true, mapInputs, fInvalid))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to fetch inputs for tx %s ", tx.GetHash().GetHex());
                 continue;
@@ -553,7 +554,7 @@ bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev,
                 continue;
             }
 
-            if (!ConnectInputs(tx, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
+            if (!ConnectInputs(tx, miner_state, txdb, mapInputs, mapTestPoolTmp, CDiskTxPos(1,1,1), pindexPrev, false, true))
             {
                 LogPrint(BCLog::LogFlags::NOISY, "Unable to connect inputs for tx %s ",tx.GetHash().GetHex());
                 continue;
@@ -1504,7 +1505,8 @@ void StakeMiner(CWallet *pwallet)
         }
 
         // * delegate to ProcessBlock
-        if (!ProcessBlock(nullptr, &StakeBlock, true)) {
+        CValidationState stake_state;
+        if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
             error("%s: Block vehemently rejected", __func__);
             continue;
         }

@@ -366,7 +366,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs
 }
 
 
-bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
@@ -374,19 +374,19 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     // Mandatory switch to binary contracts (tx version 2):
     if (tx.nVersion < 2) {
-        return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
+        return state.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
     }
 
-    if (!CheckTransaction(tx))
+    if (!CheckTransaction(tx, state))
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
 
     // ppcoin: coinstake is also only valid in a block, not as a loose transaction
     if (tx.IsCoinStake())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
 
     // Rather not work on nonstandard transactions
     if (!IsStandardTx(tx))
@@ -396,7 +396,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     int DoS = 0;
     if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
-        return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+        return state.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
                                  __func__,
                                  tx.GetHash().ToString(),
                                  DoS));
@@ -452,7 +452,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                         // Reject and put a stiff DoS...
                         if (!found && cpid == other_cpid) {
                             found = true;
-                            tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                            state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
                                              "in the memory pool, %s.",
                                              __func__,
                                              tx.GetHash().ToString(),
@@ -512,7 +512,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         MapPrevTx mapInputs;
         map<uint256, CTxIndex> mapUnused;
         bool fInvalid = false;
-        if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+        if (!FetchInputs(tx, state, txdb, mapUnused, false, false, mapInputs, fInvalid))
         {
             if (fInvalid)
                 return error("AcceptToMemoryPool : FetchInputs found invalid tx %s", hash.ToString().substr(0,10).c_str());
@@ -540,7 +540,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          nFees, txMinFee, nSize);
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+        if (!tx.GetContracts().empty() && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight)) {
             return false;
         }
 
@@ -554,7 +554,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
-        if (!ConnectInputs(tx, txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
+        if (!ConnectInputs(tx, state, txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
             LogPrint(BCLog::LogFlags::MEMPOOL, "WARNING: %s: Unable to Connect Inputs %s.",
                      __func__,
@@ -699,7 +699,8 @@ int CMerkleTx::GetBlocksToMaturity() const
 
 bool CMerkleTx::AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return ::AcceptToMemoryPool(mempool, *this, nullptr);
+    CValidationState state;
+    return ::AcceptToMemoryPool(mempool, *this, state, nullptr);
 }
 
 
@@ -1032,8 +1033,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     if (cnt_dis > 0)
     {
         // Resurrect memory transactions that were in the disconnected branch
-        for( CTransaction& tx : vResurrect)
-            AcceptToMemoryPool(mempool, tx, nullptr);
+        for( CTransaction& tx : vResurrect) {
+            CValidationState resurrect_state;
+            AcceptToMemoryPool(mempool, tx, resurrect_state, nullptr);
+        }
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
@@ -1185,7 +1188,8 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 assert(pindex->GetBlockHash()==block.GetHash(true));
                 assert(pindex->pprev == pindexBest);
 
-                if (!ConnectBlock(block, txdb, pindex, false)) {
+                CValidationState connect_state;
+                if (!ConnectBlock(block, connect_state, txdb, pindex, false)) {
                     txdb.TxnAbort();
                     error("%s: ConnectBlock %s failed, Previous block %s",
                           __func__,
@@ -1467,7 +1471,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     return true;
 }
 
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -1494,7 +1498,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Preliminary checks
-    if (!CheckBlock(*pblock, pindexBest->nHeight + 1))
+    if (!CheckBlock(*pblock, state, pindexBest->nHeight + 1))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
@@ -1550,7 +1554,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Store to disk
-    if (!AcceptBlock(*pblock, generated_by_me))
+    if (!AcceptBlock(*pblock, state, generated_by_me))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one
@@ -1564,7 +1568,8 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
              ++mi)
         {
             CBlock* pblockOrphan = mi->second;
-            if (AcceptBlock(*pblockOrphan, generated_by_me))
+            CValidationState orphan_state;
+            if (AcceptBlock(*pblockOrphan, orphan_state, generated_by_me))
                 vWorkQueue.push_back(pblockOrphan->GetHash(true));
             mapOrphanBlocks.erase(pblockOrphan->GetHash(true));
             g_seen_stakes.ForgetOrphan(pblockOrphan->vtx[1]);
@@ -1748,7 +1753,7 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(CheckBlock(block, 1));
+        { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
 
         // Start new block file
         unsigned int nFile;
@@ -1907,7 +1912,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 {
                     CBlock block;
                     blkdat >> block;
-                    if (ProcessBlock(nullptr, &block, false)) {
+                    CValidationState load_state;
+                    if (ProcessBlock(nullptr, &block, false, load_state)) {
                         ++nLoaded;
 
                         if (display_progress) {
@@ -2567,8 +2573,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
+        CValidationState state;
         bool fMissingInputs = false;
-        if (AcceptToMemoryPool(mempool, tx, &fMissingInputs))
+        if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
         {
             RelayTransaction(tx, inv.hash);
             mapAlreadyAskedFor.erase(inv);
@@ -2585,9 +2592,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     const uint256& orphanTxHash = *mi;
                     CTransaction& orphanTx = mapOrphanTransactions[orphanTxHash];
+                    CValidationState orphan_state;
                     bool fMissingInputs2 = false;
 
-                    if (AcceptToMemoryPool(mempool, orphanTx, &fMissingInputs2))
+                    if (AcceptToMemoryPool(mempool, orphanTx, orphan_state, &fMissingInputs2))
                     {
                         LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
                         RelayTransaction(orphanTx, orphanTxHash);
@@ -2617,7 +2625,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (nEvicted > 0)
                 LogPrintf("mapOrphan overflow, removed %u tx", nEvicted);
         }
-        if (tx.nDoS) pfrom->Misbehaving(tx.nDoS);
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+            pfrom->Misbehaving(nDoS);
     }
 
 
@@ -2638,14 +2648,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        if (ProcessBlock(pfrom, &block, false))
+        CValidationState state;
+        if (ProcessBlock(pfrom, &block, false, state))
         {
             mapAlreadyAskedFor.erase(inv);
             pfrom->nTrust++;
         }
-        if (block.nDoS)
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
         {
-                pfrom->Misbehaving(block.nDoS);
+                pfrom->Misbehaving(nDoS);
                 pfrom->nTrust--;
         }
 
