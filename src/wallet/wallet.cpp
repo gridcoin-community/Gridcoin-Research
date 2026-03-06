@@ -1363,7 +1363,8 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     CTransaction tx = (CTransaction) *this;
 
     // Redo basic transaction check
-    if (!CheckTransaction(tx)) return false;
+    CValidationState check_state;
+    if (!CheckTransaction(tx, check_state)) return false;
 
     // Do a subset of the AcceptToMemoryPool transaction checks. Here we are going to check and see if the inputs exist
     // and also do the vanilla contract and GRC specific contract checks.
