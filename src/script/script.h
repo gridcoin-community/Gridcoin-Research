@@ -14,12 +14,14 @@
 #include <stdint.h>
 
 #include "prevector.h"
+#include "pubkey.h"
 #include <util/hash_type.h>
 #include "serialize.h"
 
 typedef std::vector<unsigned char> valtype;
 
 class CTransaction;
+class CScript;
 
 /** A reference to a CScript: the Hash160 of its serialization (see script.h) */
 class CScriptID : public BaseHash<uint160>
