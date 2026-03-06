@@ -239,8 +239,11 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     }
 
     // Broadcast
-    if (!AcceptToMemoryPool(mempool, txSpend, nullptr))
-        throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    {
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, txSpend, state, nullptr))
+            throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    }
 
     uint256 txHash = txSpend.GetHash();
     SyncWithWallets(txSpend, nullptr, true);
@@ -375,8 +378,11 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     }
 
     // Broadcast
-    if (!AcceptToMemoryPool(mempool, txSpend, nullptr))
-        throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    {
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, txSpend, state, nullptr))
+            throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    }
 
     uint256 txHash = txSpend.GetHash();
     SyncWithWallets(txSpend, nullptr, true);

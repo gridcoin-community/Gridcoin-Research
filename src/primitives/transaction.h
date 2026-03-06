@@ -244,9 +244,6 @@ public:
     std::vector<CTxOut> vout;
     unsigned int nLockTime;
 
-    // Denial-of-service detection:
-    mutable int nDoS;
-    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
     std::string hashBoinc;
     std::vector<GRC::Contract> vContracts;
 
@@ -280,7 +277,6 @@ public:
         vin.clear();
         vout.clear();
         nLockTime = 0;
-        nDoS = 0;  // Denial-of-service prevention
         hashBoinc = "";
         vContracts.clear();
     }
