@@ -1973,6 +1973,74 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     return true;
 }
 
+bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePosInOut,
+                              std::string& strFailReason, bool includeWatching)
+{
+    std::vector<std::pair<CScript, int64_t>> vecSend;
+
+    // Collect existing outputs
+    for (const auto& txOut : tx.vout)
+    {
+        vecSend.push_back(std::make_pair(txOut.scriptPubKey, txOut.nValue));
+    }
+
+    CWalletTx wtx;
+    CReserveKey reservekey(this);
+
+    // Copy nTime from the input transaction
+    wtx.nTime = tx.nTime;
+
+    if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet))
+    {
+        strFailReason = "Insufficient funds or unable to create transaction";
+        return false;
+    }
+
+    // Identify which output is the change output. CreateTransaction inserts
+    // change at a random position if nChange > 0. The change output is the
+    // one in wtx.vout that was NOT in vecSend. We use a marking approach:
+    // mark each vecSend entry as matched against the wtx outputs.
+    nChangePosInOut = -1;
+    if (wtx.vout.size() > vecSend.size())
+    {
+        // Build a list of unmatched original outputs (by script+amount)
+        std::vector<bool> matched(vecSend.size(), false);
+
+        for (unsigned int i = 0; i < wtx.vout.size(); i++)
+        {
+            bool isOriginal = false;
+            for (unsigned int j = 0; j < vecSend.size(); j++)
+            {
+                if (!matched[j]
+                    && wtx.vout[i].scriptPubKey == vecSend[j].first
+                    && wtx.vout[i].nValue == vecSend[j].second)
+                {
+                    matched[j] = true;
+                    isOriginal = true;
+                    break;
+                }
+            }
+            if (!isOriginal)
+            {
+                nChangePosInOut = i;
+                break;
+            }
+        }
+    }
+
+    // Copy inputs and outputs back to the raw transaction
+    tx.vin = wtx.vin;
+    tx.vout = wtx.vout;
+
+    // Strip signatures — caller gets an unsigned funded transaction.
+    for (auto& txin : tx.vin)
+    {
+        txin.scriptSig = CScript();
+    }
+
+    return true;
+}
+
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl,
                                 bool change_back_to_input_address)
