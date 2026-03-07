@@ -1590,8 +1590,10 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
                 "fundrawtransaction \"hexstring\" ( options )\n"
                 "\nAdd inputs to a transaction until it has enough in value to meet its out value.\n"
                 "This will not modify existing inputs, and will add one change output to the outputs.\n"
-                "Note that inputs which were signed may need to be resigned after completion since in/outputs have been added.\n"
                 "The inputs added will not be signed, use signrawtransaction for that.\n"
+                "\nNote: The transaction must have no existing inputs. Unlike Bitcoin Core's\n"
+                "fundrawtransaction, this command does not yet support adding funds to a\n"
+                "transaction that already has inputs.\n"
                 "\nArguments:\n"
                 "1. \"hexstring\"           (string, required) The hex string of the raw transaction\n"
                 "2. options               (object, optional)\n"
@@ -1624,9 +1626,11 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
     if (tx.vout.size() == 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "TX must have at least one output");
 
+    // Unlike Bitcoin Core, we don't yet support funding transactions that
+    // already have inputs, since computing their value requires UTXO lookups.
     if (tx.vin.size() > 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-            "fundrawtransaction does not support transactions with existing inputs. "
+            "fundrawtransaction does not yet support transactions with existing inputs. "
             "Use createrawtransaction with outputs only.");
 
     // Parse options
