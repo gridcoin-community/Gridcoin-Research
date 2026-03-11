@@ -141,10 +141,10 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
     {
         LOCK(cs_main);
 
-        CTransaction txDummy;
+        CMutableTransaction txDummy;
 
         // Min Fee
-        nMinFee = GetBaseFee(txDummy, GMF_SEND);
+        nMinFee = GetBaseFee(CTransaction(txDummy), GMF_SEND);
     }
 
     if (nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee)

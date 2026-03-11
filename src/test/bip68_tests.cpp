@@ -23,7 +23,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_constants)
 BOOST_AUTO_TEST_CASE(sequence_disabled_flag)
 {
     // A transaction with version < 2 should have sequence locks trivially satisfied
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nVersion = 1;
     tx.vin.resize(1);
     tx.vin[0].nSequence = 10; // 10 blocks relative locktime
@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(sequence_disabled_flag)
     block.pprev = &prevBlock;
     block.nHeight = 110;
 
-    auto result = CalculateSequenceLocks(tx, 0, prevHeights, block);
+    auto result = CalculateSequenceLocks(CTransaction(tx), 0, prevHeights, block);
     // v1 tx should always satisfy
     BOOST_CHECK_EQUAL(result.first, 0);
     BOOST_CHECK_EQUAL(result.second, -1);
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(sequence_disabled_flag)
 
 BOOST_AUTO_TEST_CASE(sequence_lock_disabled_flag_on_input)
 {
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nVersion = 2;
     tx.vin.resize(1);
     // Set the disable flag - this input should not be constrained
@@ -56,7 +56,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_disabled_flag_on_input)
     block.pprev = &prevBlock;
     block.nHeight = 100;
 
-    auto result = CalculateSequenceLocks(tx, 0, prevHeights, block);
+    auto result = CalculateSequenceLocks(CTransaction(tx), 0, prevHeights, block);
     // With disable flag, locks should be trivially satisfied
     BOOST_CHECK_EQUAL(result.first, -1);
     BOOST_CHECK_EQUAL(result.second, -1);
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_disabled_flag_on_input)
 
 BOOST_AUTO_TEST_CASE(sequence_lock_height_based)
 {
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nVersion = 2;
     tx.vin.resize(1);
     tx.vin[0].nSequence = 10; // 10 blocks relative locktime
@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_height_based)
     block.pprev = &prevBlock;
     block.nHeight = 110;
 
-    auto result = CalculateSequenceLocks(tx, 0, prevHeights, block);
+    auto result = CalculateSequenceLocks(CTransaction(tx), 0, prevHeights, block);
     // Min height = nCoinHeight + nSequence - 1 = 100 + 10 - 1 = 109
     BOOST_CHECK_EQUAL(result.first, 109);
     BOOST_CHECK_EQUAL(result.second, -1);
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_height_based)
 
 BOOST_AUTO_TEST_CASE(sequence_lock_height_based_not_satisfied)
 {
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nVersion = 2;
     tx.vin.resize(1);
     tx.vin[0].nSequence = 10; // 10 blocks relative locktime
@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_height_based_not_satisfied)
     block.pprev = &prevBlock;
     block.nHeight = 109;
 
-    auto result = CalculateSequenceLocks(tx, 0, prevHeights, block);
+    auto result = CalculateSequenceLocks(CTransaction(tx), 0, prevHeights, block);
     // Min height = 100 + 10 - 1 = 109
     BOOST_CHECK_EQUAL(result.first, 109);
 
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_height_based_not_satisfied)
 
 BOOST_AUTO_TEST_CASE(sequence_lock_multiple_inputs)
 {
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nVersion = 2;
     tx.vin.resize(3);
     tx.vin[0].nSequence = 5;   // 5 blocks from height 100
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(sequence_lock_multiple_inputs)
     block.pprev = &prevBlock;
     block.nHeight = 110;
 
-    auto result = CalculateSequenceLocks(tx, 0, prevHeights, block);
+    auto result = CalculateSequenceLocks(CTransaction(tx), 0, prevHeights, block);
     // input 0: 100 + 5 - 1 = 104
     // input 1: 90 + 10 - 1 = 99
     // input 2: disabled

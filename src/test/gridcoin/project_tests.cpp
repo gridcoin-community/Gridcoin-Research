@@ -18,7 +18,7 @@ void AddProjectEntry(const uint32_t& payload_version, const std::string& name, c
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -53,7 +53,8 @@ void AddProjectEntry(const uint32_t& payload_version, const std::string& name, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name,
@@ -64,7 +65,7 @@ void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -96,7 +97,8 @@ void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 struct AutoGreylistEntryState

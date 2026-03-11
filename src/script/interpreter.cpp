@@ -1105,7 +1105,7 @@ uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int
         LogPrintf("ERROR: SignatureHash() : nIn=%d out of range", nIn);
         return one;
     }
-    CTransaction txTmp(txTo);
+    CMutableTransaction txTmp(txTo);
 
     // In case concatenating two scripts ends up with two codeseparators,
     // or an extra one at the end, this prevents all those possible incompatibilities.

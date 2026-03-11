@@ -13,6 +13,8 @@
 
 #include <stdexcept>
 
+struct CMutableTransaction;
+
 /** An inpoint - a combination of a transaction and an index n into its vin */
 class CInPoint
 {
@@ -252,6 +254,10 @@ public:
         SetNull();
     }
 
+    /** Convert from a CMutableTransaction. */
+    CTransaction(const CMutableTransaction& tx);
+    CTransaction(CMutableTransaction&& tx);
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -360,6 +366,51 @@ public:
         return std::move(vContracts);
     }
 
+};
+
+/** A mutable version of CTransaction.
+ *
+ * Use CMutableTransaction to build a transaction, then convert to an immutable
+ * CTransaction when done. In a future change, CTransaction fields will become
+ * const to enable reliable hash caching.
+ */
+struct CMutableTransaction
+{
+    static const int CURRENT_VERSION = 2;
+    int nVersion;
+    unsigned int nTime;
+    std::vector<CTxIn> vin;
+    std::vector<CTxOut> vout;
+    unsigned int nLockTime;
+    std::string hashBoinc;
+    std::vector<GRC::Contract> vContracts;
+
+    CMutableTransaction();
+    explicit CMutableTransaction(const CTransaction& tx);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nVersion);
+        READWRITE(nTime);
+        READWRITE(vin);
+        READWRITE(vout);
+        READWRITE(nLockTime);
+
+        if (nVersion >= 2) {
+            READWRITE(vContracts);
+        } else {
+            READWRITE(hashBoinc);
+        }
+    }
+
+    /** Compute the hash of this CMutableTransaction. This is computed on the
+     * fly, as opposed to GetHash() in CTransaction, which will use a cached
+     * result once CTransaction fields become const.
+     */
+    uint256 GetHash() const;
 };
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

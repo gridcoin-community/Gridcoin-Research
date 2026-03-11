@@ -80,15 +80,16 @@ void AddTestBeacon(const GRC::Cpid cpid)
 
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = now;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, now, uint256(), -1);
 }
 
@@ -106,16 +107,17 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
     const CKeyID key_id = public_key.GetID();
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = nBeaconCount;
     nBeaconCount++;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0, uint256(), -1);
 }
 
@@ -131,8 +133,9 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = 0;
+    CTransaction ctx_tx(tx);
 
     uint256 mock_superblock_hash = uint256();
 
@@ -142,7 +145,7 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
         std::move(public_key));
 
     GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
-    GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Delete({ contract, ctx_tx, nullptr });
 }
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,

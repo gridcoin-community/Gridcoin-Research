@@ -630,7 +630,7 @@ void CoinControlDialog::updateLabels(WalletModel *model,
     qint64 nPayAmount = 0;
     bool fLowOutput = false;
     bool fDust = false;
-    CTransaction txDummy;
+    CMutableTransaction txDummy;
     for (const qint64& amount : std::as_const(*payAmounts)) {
         nPayAmount += amount;
 
@@ -692,7 +692,7 @@ void CoinControlDialog::updateLabels(WalletModel *model,
         int64_t nFee = nTransactionFee * (1 + (int64_t)nBytes / 1000);
 
         // Min Fee
-        int64_t nMinFee = GetMinFee(txDummy, 1000, GMF_SEND, nBytes);
+        int64_t nMinFee = GetMinFee(CTransaction(txDummy), 1000, GMF_SEND, nBytes);
 
         nPayFee = max(nFee, nMinFee);
 

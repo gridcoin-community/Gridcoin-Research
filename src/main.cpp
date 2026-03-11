@@ -1676,7 +1676,7 @@ bool LoadBlockIndex(bool fAllowNew)
 
         const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
 
-        CTransaction txNew;
+        CMutableTransaction txNew;
         //GENESIS TIME
         txNew.nVersion = 1;
         txNew.nTime = 1413033777;
@@ -1685,7 +1685,7 @@ bool LoadBlockIndex(bool fAllowNew)
         txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
         txNew.vout[0].SetEmpty();
         CBlock block;
-        block.vtx.push_back(txNew);
+        block.vtx.push_back(CTransaction(txNew));
         block.hashPrevBlock.SetNull();
         block.hashMerkleRoot = BlockMerkleRoot(block);
         block.nVersion = 1;

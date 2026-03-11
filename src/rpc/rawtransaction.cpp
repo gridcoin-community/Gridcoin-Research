@@ -1180,7 +1180,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_REQUEST, "Search resulted in no results");
 
     // Parse the inputs and make a raw transaction
-    CTransaction rawtx;
+    CMutableTransaction rawtx;
     CAmount nTotal = 0;
 
     // Inputs
@@ -1200,7 +1200,7 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     int64_t nInputs = umultimapInputs.size();
     // Add vout to the nBase amount
     int64_t nBytes = (nBase * nInputs) + 37;
-    nMinFee = GetMinFee(rawtx, 1000, GMF_SEND, nBytes);
+    nMinFee = GetMinFee(CTransaction(rawtx), 1000, GMF_SEND, nBytes);
     nFee = nTransactionFee * (1 + nBytes / 1000);
     nTxFee = std::max(nMinFee, nFee);
     nOutput = nTotal - nTxFee;
@@ -1524,7 +1524,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     UniValue inputs = params[0].get_array();
     UniValue sendTo = params[1].get_obj();
 
-    CTransaction rawTx;
+    CMutableTransaction rawTx;
 
     for (unsigned int idx = 0; idx<inputs.size(); idx++)
     {
