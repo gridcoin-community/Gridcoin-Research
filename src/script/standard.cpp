@@ -151,39 +151,39 @@ int ScriptSigArgsExpected(txnouttype t, const std::vector<std::vector<unsigned c
     return -1;
 }
 
-unsigned int HaveKeys(const vector<valtype>& pubkeys, const CKeyStore& keystore)
+unsigned int HaveKeys(const vector<valtype>& pubkeys, const SigningProvider& provider)
 {
     unsigned int nResult = 0;
     for (auto const& pubkey : pubkeys)
     {
         CKeyID keyID = CPubKey(pubkey).GetID();
-        if (keystore.HaveKey(keyID))
+        if (provider.HaveKey(keyID))
             ++nResult;
     }
     return nResult;
 }
 
-class CKeyStoreIsMineVisitor
+class IsMineVisitor
 {
 private:
-    const CKeyStore *keystore;
+    const SigningProvider *provider;
 public:
-    CKeyStoreIsMineVisitor(const CKeyStore *keystoreIn) : keystore(keystoreIn) { }
+    IsMineVisitor(const SigningProvider *providerIn) : provider(providerIn) { }
     bool operator()(const CNoDestination &dest) const { return false; }
-    bool operator()(const CKeyID &keyID) const { return keystore->HaveKey(keyID); }
-    bool operator()(const CScriptID &scriptID) const { return keystore->HaveCScript(scriptID); }
+    bool operator()(const CKeyID &keyID) const { return provider->HaveKey(keyID); }
+    bool operator()(const CScriptID &scriptID) const { return provider->HaveCScript(scriptID); }
 };
 
-isminetype IsMine(const CKeyStore &keystore, const CTxDestination &dest)
+isminetype IsMine(const SigningProvider &provider, const CTxDestination &dest)
 {
-    if (std::visit(CKeyStoreIsMineVisitor(&keystore), dest))
+    if (std::visit(IsMineVisitor(&provider), dest))
     {
         return ISMINE_SPENDABLE;
     }
     return ISMINE_NO;
 }
 
-IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
+IsMineResult IsMineInner(const SigningProvider &provider, const CScript& scriptPubKey)
 {
     IsMineResult ret = IsMineResult::NO;
 
@@ -200,21 +200,21 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
         break;
     case TX_PUBKEY:
         keyID = CPubKey(vSolutions[0]).GetID();
-        if (keystore.HaveKey(keyID)) {
+        if (provider.HaveKey(keyID)) {
             ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
     case TX_PUBKEYHASH:
         keyID = CKeyID(uint160(vSolutions[0]));
-        if (keystore.HaveKey(keyID)) {
+        if (provider.HaveKey(keyID)) {
             ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
     case TX_SCRIPTHASH:
     {
         CScript subscript;
-        if (keystore.GetCScript(CScriptID(uint160(vSolutions[0])), subscript)) {
-            ret = std::max(ret, IsMineInner(keystore, subscript));
+        if (provider.GetCScript(CScriptID(uint160(vSolutions[0])), subscript)) {
+            ret = std::max(ret, IsMineInner(provider, subscript));
         }
         break;
     }
@@ -226,7 +226,7 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
         // them) enable spend-out-from-under-you attacks, especially
         // in shared-wallet situations.
         vector<valtype> keys(vSolutions.begin()+1, vSolutions.begin()+vSolutions.size()-1);
-        if (HaveKeys(keys, keystore) == keys.size()) {
+        if (HaveKeys(keys, provider) == keys.size()) {
             ret = std::max(ret, IsMineResult::SPENDABLE);
         }
         break;
@@ -236,9 +236,9 @@ IsMineResult IsMineInner(const CKeyStore &keystore, const CScript& scriptPubKey)
     return ret;
 }
 
-isminetype IsMine(const CKeyStore &keystore, const CScript& scriptPubKey)
+isminetype IsMine(const SigningProvider &provider, const CScript& scriptPubKey)
 {
-    switch (IsMineInner(keystore, scriptPubKey)) {
+    switch (IsMineInner(provider, scriptPubKey)) {
     case IsMineResult::NO:
         return ISMINE_NO;
     case IsMineResult::WATCH_ONLY:
@@ -280,11 +280,11 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
 
 class CAffectedKeysVisitor {
 private:
-    const CKeyStore &keystore;
+    const SigningProvider &provider;
     std::vector<CKeyID> &vKeys;
 
 public:
-    CAffectedKeysVisitor(const CKeyStore &keystoreIn, std::vector<CKeyID> &vKeysIn) : keystore(keystoreIn), vKeys(vKeysIn) {}
+    CAffectedKeysVisitor(const SigningProvider &providerIn, std::vector<CKeyID> &vKeysIn) : provider(providerIn), vKeys(vKeysIn) {}
 
     void Process(const CScript &script) {
         txnouttype type;
@@ -297,13 +297,13 @@ public:
     }
 
     void operator()(const CKeyID &keyId) {
-        if (keystore.HaveKey(keyId))
+        if (provider.HaveKey(keyId))
             vKeys.push_back(keyId);
     }
 
     void operator()(const CScriptID &scriptId) {
         CScript script;
-        if (keystore.GetCScript(scriptId, script))
+        if (provider.GetCScript(scriptId, script))
             Process(script);
     }
 
@@ -311,8 +311,8 @@ public:
 };
 
 
-void ExtractAffectedKeys(const CKeyStore &keystore, const CScript& scriptPubKey, std::vector<CKeyID> &vKeys) {
-    CAffectedKeysVisitor(keystore, vKeys).Process(scriptPubKey);
+void ExtractAffectedKeys(const SigningProvider &provider, const CScript& scriptPubKey, std::vector<CKeyID> &vKeys) {
+    CAffectedKeysVisitor(provider, vKeys).Process(scriptPubKey);
 }
 
 bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, vector<CTxDestination>& addressRet, int& nRequiredRet)
