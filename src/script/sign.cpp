@@ -7,6 +7,59 @@
 
 using namespace std;
 
+// ---------------------------------------------------------------------------
+// Signature creator implementations
+// ---------------------------------------------------------------------------
+
+TransactionSignatureCreator::TransactionSignatureCreator(
+    const CTransaction& txToIn, unsigned int nInIn, int nHashTypeIn)
+    : txTo(txToIn), nIn(nInIn), nHashType(nHashTypeIn)
+{
+}
+
+bool TransactionSignatureCreator::CreateSig(
+    const SigningProvider& provider, std::vector<unsigned char>& vchSig,
+    const CKeyID& keyid, const CScript& scriptCode) const
+{
+    CKey key;
+    if (!provider.GetKey(keyid, key))
+        return false;
+
+    uint256 hash = SignatureHash(scriptCode, txTo, nIn, nHashType);
+
+    if (!key.Sign(hash, vchSig))
+        return false;
+    vchSig.push_back((unsigned char)nHashType);
+    return true;
+}
+
+MutableTransactionSignatureCreator::MutableTransactionSignatureCreator(
+    const CMutableTransaction& txToIn, unsigned int nInIn, int nHashTypeIn)
+    : txTo(txToIn), nIn(nInIn), nHashType(nHashTypeIn)
+{
+}
+
+bool MutableTransactionSignatureCreator::CreateSig(
+    const SigningProvider& provider, std::vector<unsigned char>& vchSig,
+    const CKeyID& keyid, const CScript& scriptCode) const
+{
+    CKey key;
+    if (!provider.GetKey(keyid, key))
+        return false;
+
+    CTransaction txToConst(txTo);
+    uint256 hash = SignatureHash(scriptCode, txToConst, nIn, nHashType);
+
+    if (!key.Sign(hash, vchSig))
+        return false;
+    vchSig.push_back((unsigned char)nHashType);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy signing functions (to be refactored in commit 3)
+// ---------------------------------------------------------------------------
+
 bool Sign1(const CKeyID& address, const CKeyStore& keystore, uint256 hash, int nHashType, CScript& scriptSigRet)
 {
     CKey key;
