@@ -13,6 +13,7 @@
 
 class CWallet;
 class CWalletTx;
+struct CMutableTransaction;
 
 typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
@@ -23,19 +24,25 @@ extern unsigned int nMinerSleep;
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
 static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 
-void SplitCoinStakeOutput(CBlock &blocknew, int64_t &nReward, bool &fEnableStakeSplit, bool &fEnableSideStaking,
-                          SideStakeAlloc &vSideStakeAlloc, double &dEfficiency);
+void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
+                          bool &fEnableStakeSplit, bool &fEnableSideStaking,
+                          int64_t &nMinStakeSplitValue, double &dEfficiency);
 unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);
 bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue);
 
-bool CreateMRCRewards(CBlock &blocknew,
+bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
+                      CBlock &blocknew,
                       std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map,
                       std::map<GRC::Cpid, uint256>& mrc_tx_map,
                       CAmount& reward,
                       uint32_t& claim_contract_version,
                       GRC::Claim& claim,
                       CWallet* pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool CreateRestOfTheBlock(CBlock &block, CBlockIndex* pindexPrev, std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map);
-bool CreateGridcoinReward(CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward, GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
+                          const CMutableTransaction& mtxCoinstake, CBlockIndex* pindexPrev,
+                          std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>>& mrc_map);
+bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
+                          CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward,
+                          GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // BITCOIN_MINER_H

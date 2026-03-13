@@ -241,8 +241,10 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 {
     CBlock block;
     block.vtx.resize(2);
-    block.vtx[1].vin.resize(1);
-    block.vtx[1].vout.resize(2);
+    CMutableTransaction mtxCoinstake;
+    mtxCoinstake.vin.resize(1);
+    mtxCoinstake.vout.resize(2);
+    CMutableTransaction mtxCoinbase;
     std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
     std::map<GRC::Cpid, uint256> mrc_tx_map;
 
@@ -252,7 +254,7 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
 
-    BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map));
+    BOOST_CHECK(CreateRestOfTheBlock(block, mtxCoinbase, mtxCoinstake, pindex->pprev, mrc_map));
 
     GRC::MRC mrc;
     CAmount reward{0}, fee{0};
@@ -263,9 +265,9 @@ BOOST_AUTO_TEST_CASE(it_creates_valid_mrc_claims)
 
     uint32_t claim_contract_version = 2;
 
-    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, reward, claim));
+    BOOST_CHECK(CreateGridcoinReward(mtxCoinbase, mtxCoinstake, block, pindex->pprev, reward, claim));
 
-    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, reward, claim_contract_version, claim, wallet));
+    BOOST_CHECK(CreateMRCRewards(mtxCoinbase, mtxCoinstake, block, mrc_map, mrc_tx_map, reward, claim_contract_version, claim, wallet));
 
     // TODO(div72): Separate this test into pieces and actually have it do
     // some useful testing by testing the validation logic against it.
