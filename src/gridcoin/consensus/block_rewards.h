@@ -6,7 +6,7 @@
 #define GRIDCOIN_CONSENSUS_BLOCK_REWARDS_H
 
 #include "amount.h"
-#include "gridcoin/consensus/mutable_transaction.h"
+#include "primitives/transaction.h"
 #include "gridcoin/sidestake.h"
 #include "script.h"
 
