@@ -328,12 +328,13 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     assert(mtxCoinbase.vin[0].scriptSig.size() <= 100);
     mtxCoinbase.vout[0].SetEmpty();
 
-    // Note that block.vtx[1], the coinstake, has already been created by CreateCoinStake on block and passed into this
-    // function. There is no point in going through this work to compose a complete block unless the CreateCoinStake
-    // succeeds. Note that the coinstake transaction here has not gone through the split/sidestake process nor have the MRC
-    // outputs been added, so there are currently two outputs on the coinstake, the empty one, and the reward return.
-    // We will need to add a reserved size placeholder for the fully built out coinstake, which will include the non-MRC
-    // output limit plus the number of MRC's intended to be bound to the block. This is done below using this size.
+    // Note that the coinstake has already been built by CreateCoinStake into mtxCoinstake and passed into this function.
+    // There is no point in going through this work to compose a complete block unless CreateCoinStake succeeds. The
+    // coinstake has not gone through the split/sidestake process nor have the MRC outputs been added, so there are
+    // currently two outputs on the coinstake, the empty one, and the reward return. It will be copied to block.vtx[1]
+    // after all mutations are complete. We will need to add a reserved size placeholder for the fully built out
+    // coinstake, which will include the non-MRC output limit plus the number of MRC's intended to be bound to the
+    // block. This is done below using this size.
     size_t coinstake_output_ser_size = GetSerializeSize(mtxCoinstake.vout[1], SER_NETWORK, PROTOCOL_VERSION);
 
     // We need this to detect an MRC in the mempool that is from the staker (i.e. the staker is a researcher with an active
@@ -1252,14 +1253,14 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     return true;
 }
 
-void AddSuperblockContractOrVote(CBlock& blocknew)
+void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime)
 {
     if (OutOfSyncByAge()) {
         LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
     }
 
-    if (!GRC::Quorum::SuperblockNeeded(blocknew.nTime)) {
+    if (!GRC::Quorum::SuperblockNeeded(nBlockTime)) {
         LogPrintf("AddSuperblockContractOrVote: Not needed.");
         return;
     }
@@ -1271,8 +1272,7 @@ void AddSuperblockContractOrVote(CBlock& blocknew)
         return;
     }
 
-    // TODO: fix the const cast:
-    GRC::Claim& claim = const_cast<GRC::Claim&>(blocknew.GetClaim());
+    GRC::Claim claim = mtxCoinbase.vContracts[0].CopyPayloadAs<GRC::Claim>();
 
     claim.m_quorum_hash = superblock.GetHash();
     claim.m_superblock.Replace(std::move(superblock));
@@ -1280,6 +1280,11 @@ void AddSuperblockContractOrVote(CBlock& blocknew)
     LogPrintf(
         "AddSuperblockContractOrVote: Added our Superblock (size %" PRIszu ").",
         GetSerializeSize(claim.m_superblock, SER_NETWORK, 1));
+
+    mtxCoinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        mtxCoinbase.vContracts[0].m_version,
+        GRC::ContractAction::ADD,
+        std::move(claim));
 }
 
 bool CreateGridcoinReward(
@@ -1527,7 +1532,11 @@ void StakeMiner(CWallet *pwallet)
 
         LogPrintf("INFO: %s: added MRC reward outputs to coinstake", __func__);
 
-        // Copy back coinbase AFTER CreateMRCRewards (which places claim on mtxCoinbase.vContracts)
+        AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+
+        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
+
+        // Copy back coinbase AFTER CreateMRCRewards and AddSuperblockContractOrVote
         StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
 
         // * If argument is supplied desiring stake output splitting or side staking, then call SplitCoinStakeOutput.
@@ -1541,10 +1550,6 @@ void StakeMiner(CWallet *pwallet)
         g_timer.GetTimes(function + "SplitCoinStakeOutput", "miner");
 
         LogPrintf("INFO: %s: performed stakesplitting/sidestaking", __func__);
-
-        AddSuperblockContractOrVote(StakeBlock);
-
-        g_timer.GetTimes(function + "AddSuperblockContractOrVote", "miner");
 
         // * sign boinchash, coinstake, wholeblock
         if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) continue;

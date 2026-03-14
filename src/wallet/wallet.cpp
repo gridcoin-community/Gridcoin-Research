@@ -2253,7 +2253,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
 
-                    // Copy back to wtxNew BEFORE signing (SignSignature needs CTransaction&)
+                    // Overwrite only the CTransaction base-class slice of wtxNew;
+                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
                     static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
 
                     // Sign
@@ -2271,7 +2272,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
 
-                    // Copy back to wtxNew BEFORE signing (SignSignature needs CTransaction&)
+                    // Overwrite only the CTransaction base-class slice of wtxNew;
+                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
                     static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
 
                     // Sign
