@@ -8,6 +8,7 @@
 class CTransaction;
 class SigningProvider;
 struct CMutableTransaction;
+class CTxIn;
 
 /** Interface for signature creators. */
 class BaseSignatureCreator
@@ -56,6 +57,24 @@ public:
                    const CKeyID& keyid,
                    const CScript& scriptCode) const override;
 };
+
+/** Holds signing result: scriptSig + any redeem scripts used. */
+struct SignatureData
+{
+    CScript scriptSig;
+
+    SignatureData() {}
+    explicit SignatureData(const CScript& script) : scriptSig(script) {}
+};
+
+/** Produce a satisfying script (SignatureData) for the given scriptPubKey. */
+bool ProduceSignature(const SigningProvider& provider,
+                      const BaseSignatureCreator& creator,
+                      const CScript& scriptPubKey,
+                      SignatureData& sigdata);
+
+/** Apply SignatureData to a CTxIn. */
+void UpdateInput(CTxIn& input, const SignatureData& data);
 
 bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CTransaction& txTo, unsigned int nIn, int nHashType=SIGHASH_ALL);
 bool SignSignature(const SigningProvider& provider, const CTransaction& txFrom, CTransaction& txTo, unsigned int nIn, int nHashType=SIGHASH_ALL);

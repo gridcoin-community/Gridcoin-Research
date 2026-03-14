@@ -129,18 +129,18 @@ static bool SignStep(const SigningProvider& provider,
 }
 
 // ---------------------------------------------------------------------------
-// SignSignature: public API using TransactionSignatureCreator
+// ProduceSignature: fills SignatureData without verifying
 // ---------------------------------------------------------------------------
 
-bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CTransaction& txTo, unsigned int nIn, int nHashType)
+bool ProduceSignature(const SigningProvider& provider,
+                      const BaseSignatureCreator& creator,
+                      const CScript& scriptPubKey,
+                      SignatureData& sigdata)
 {
-    assert(nIn < txTo.vin.size());
-    CTxIn& txin = txTo.vin[nIn];
-
-    TransactionSignatureCreator creator(txTo, nIn, nHashType);
+    CScript& scriptSigOut = sigdata.scriptSig;
 
     txnouttype whichType;
-    if (!SignStep(provider, creator, fromPubKey, txin.scriptSig, whichType))
+    if (!SignStep(provider, creator, scriptPubKey, scriptSigOut, whichType))
         return false;
 
     if (whichType == TX_SCRIPTHASH)
@@ -148,18 +148,41 @@ bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, C
         // SignStep returns the subscript that needs to be evaluated;
         // the final scriptSig is the signatures from that
         // and then the serialized subscript:
-        CScript subscript = txin.scriptSig;
+        CScript subscript = scriptSigOut;
 
         txnouttype subType;
         bool fSolved =
-            SignStep(provider, creator, subscript, txin.scriptSig, subType) && subType != TX_SCRIPTHASH;
+            SignStep(provider, creator, subscript, scriptSigOut, subType) && subType != TX_SCRIPTHASH;
         // Append serialized subscript whether or not it is completely signed:
-        txin.scriptSig << valtype(subscript.begin(), subscript.end());
+        scriptSigOut << valtype(subscript.begin(), subscript.end());
         if (!fSolved) return false;
     }
 
+    return true;
+}
+
+void UpdateInput(CTxIn& input, const SignatureData& data)
+{
+    input.scriptSig = data.scriptSig;
+}
+
+// ---------------------------------------------------------------------------
+// SignSignature: public API using TransactionSignatureCreator
+// ---------------------------------------------------------------------------
+
+bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CTransaction& txTo, unsigned int nIn, int nHashType)
+{
+    assert(nIn < txTo.vin.size());
+
+    TransactionSignatureCreator creator(txTo, nIn, nHashType);
+    SignatureData sigdata;
+    bool ret = ProduceSignature(provider, creator, fromPubKey, sigdata);
+    UpdateInput(txTo.vin[nIn], sigdata);
+
+    if (!ret) return false;
+
     // Test solution
-    return VerifyScript(txin.scriptSig, fromPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, txTo, nIn);
+    return VerifyScript(txTo.vin[nIn].scriptSig, fromPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, txTo, nIn);
 }
 
 bool SignSignature(const SigningProvider& provider, const CTransaction& txFrom, CTransaction& txTo, unsigned int nIn, int nHashType)
