@@ -156,7 +156,7 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
 
@@ -184,7 +184,8 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 } // anonymous namespace
 
