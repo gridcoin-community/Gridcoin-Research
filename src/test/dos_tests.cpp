@@ -203,4 +203,118 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     BOOST_CHECK(mapOrphanTransactionsByPrev.empty());
 }
 
+BOOST_AUTO_TEST_CASE(DoS_validation_state)
+{
+    // --- Part 1: CValidationState unit behavior ---
+
+    // Fresh state is valid, DoS = 0
+    {
+        CValidationState state;
+        BOOST_CHECK(state.IsValid());
+        BOOST_CHECK(!state.IsInvalid());
+        BOOST_CHECK(!state.IsError());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+        int nDoS = -1;
+        BOOST_CHECK(!state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, -1); // unchanged when valid
+    }
+
+    // DoS() sets INVALID mode and accumulates score
+    {
+        CValidationState state;
+        state.DoS(10, false, "reason1");
+        BOOST_CHECK(!state.IsValid());
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "reason1");
+
+        // Accumulates
+        state.DoS(25, false, "reason2");
+        BOOST_CHECK_EQUAL(state.GetDoS(), 35);
+
+        // IsInvalid(nDoS) extracts accumulated score
+        int nDoS = 0;
+        BOOST_CHECK(state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, 35);
+    }
+
+    // Invalid() sets INVALID with DoS = 0
+    {
+        CValidationState state;
+        state.Invalid(false, "soft-invalid");
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+    }
+
+    // Error() sets ERROR mode (not INVALID)
+    {
+        CValidationState state;
+        state.Error("runtime-error");
+        BOOST_CHECK(state.IsError());
+        BOOST_CHECK(!state.IsInvalid());
+        BOOST_CHECK(!state.IsValid());
+        int nDoS = -1;
+        BOOST_CHECK(!state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, -1);
+    }
+
+    // --- Part 2: CheckTransaction sets DoS via state ---
+
+    // Empty vin → DoS 10
+    {
+        CTransaction tx;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = 1 * CENT;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+    }
+
+    // Empty vout → DoS 10
+    {
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.hash = InsecureRand256();
+        tx.vin[0].prevout.n = 0;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+    }
+
+    // Negative output value → DoS 100
+    {
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.hash = InsecureRand256();
+        tx.vin[0].prevout.n = 0;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = -1;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // --- Part 3: P2P glue pattern works ---
+    // Simulates the exact code path from main.cpp ProcessMessage("tx"/BLOCK)
+    {
+        CTransaction tx; // empty vin+vout
+        CValidationState state;
+        CheckTransaction(tx, state);
+
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+        {
+            // This would call pfrom->Misbehaving(nDoS) in production
+            BOOST_CHECK(nDoS > 0);
+        }
+        else
+        {
+            BOOST_ERROR("Expected IsInvalid with nDoS > 0 for empty transaction");
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
