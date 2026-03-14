@@ -49,6 +49,14 @@
     </sizepolicy>
    </property>
   </widget>
+  <widget class="ResearcherWizardCpidSyncPage" name="cpidSyncPage">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+  </widget>
   <widget class="ResearcherWizardBeaconPage" name="beaconPage">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -95,6 +103,12 @@
    <class>ResearcherWizardProjectsPage</class>
    <extends>QWizardPage</extends>
    <header>researcher/researcherwizardprojectspage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ResearcherWizardCpidSyncPage</class>
+   <extends>QWizardPage</extends>
+   <header>researcher/researcherwizardcpidsyncpage.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>

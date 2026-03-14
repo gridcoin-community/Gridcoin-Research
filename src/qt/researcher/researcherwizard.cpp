@@ -6,6 +6,7 @@
 #include "qt/forms/ui_researcherwizard.h"
 #include "qt/researcher/researchermodel.h"
 #include "qt/researcher/researcherwizard.h"
+#include "qt/researcher/researcherwizardcpidsyncpage.h"
 
 #include <cassert>
 #include <QAbstractButton>
@@ -39,6 +40,7 @@ ResearcherWizard::ResearcherWizard(
     ui->modeDetailPage->setModel(researcher_model);
     ui->emailPage->setModel(researcher_model);
     ui->projectsPage->setModel(researcher_model);
+    ui->cpidSyncPage->setModel(researcher_model);  // NEW: CPID sync page
     ui->beaconPage->setModel(researcher_model, wallet_model);
     ui->authPage->setModel(researcher_model);
     ui->summaryPage->setModel(researcher_model);

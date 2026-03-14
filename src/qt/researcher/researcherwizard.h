@@ -25,6 +25,7 @@ public:
         PageModeDetail,
         PageEmail,
         PageProjects,
+        PageCpidSync,      // NEW: CPID synchronization page
         PageBeacon,
         PageAuth,
         PageSummary,
