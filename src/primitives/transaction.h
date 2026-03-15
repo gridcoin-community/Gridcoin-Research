@@ -8,7 +8,7 @@
 
 #include "amount.h"
 #include "gridcoin/contract/contract.h"
-#include "script.h"
+#include "script/script.h"
 #include "serialize.h"
 
 #include <stdexcept>
@@ -308,12 +308,7 @@ public:
     }
 
     template<typename Stream>
-    void Unserialize(Stream& s)
-    {
-        CMutableTransaction mtx;
-        s >> mtx;
-        *this = CTransaction(std::move(mtx));
-    }
+    void Unserialize(Stream& s);
 
     bool IsNull() const
     {
@@ -440,5 +435,13 @@ struct CMutableTransaction
      */
     uint256 GetHash() const;
 };
+
+template<typename Stream>
+void CTransaction::Unserialize(Stream& s)
+{
+    CMutableTransaction mtx;
+    s >> mtx;
+    *this = CTransaction(std::move(mtx));
+}
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H
