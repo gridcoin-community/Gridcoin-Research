@@ -343,6 +343,9 @@ public:
     // memory only
     mutable bool fChecked;
 
+    //! Lazy cache for the parsed claim contract on legacy (pre-v11) blocks.
+    mutable GRC::Contract m_claim_contract_cache;
+
     CBlock()
     {
         SetNull();

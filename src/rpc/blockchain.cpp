@@ -1323,9 +1323,13 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
     // Custom messages are no longer supported. The static "rain by magnitude" message will be replaced by an actual
     // rain contract at the next mandatory.
-    wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
-        GRC::ContractAction::ADD,
-        "Rain By Magnitude"));
+    {
+        CMutableTransaction mtx;
+        mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+            GRC::ContractAction::ADD,
+            "Rain By Magnitude"));
+        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
+    }
 
     EnsureWalletIsUnlocked();
 

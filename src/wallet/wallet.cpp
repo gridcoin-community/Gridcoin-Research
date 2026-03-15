@@ -2836,7 +2836,7 @@ set< set<CTxDestination> > CWallet::GetAddressGroupings() EXCLUSIVE_LOCKS_REQUIR
                 // If the input is not mine, ignore it.
                 if (IsMine(txin) == ISMINE_NO) continue;
 
-                CScript& scriptPubKey = mapWallet[txin.prevout.hash].vout[txin.prevout.n].scriptPubKey;
+                const CScript& scriptPubKey = mapWallet[txin.prevout.hash].vout[txin.prevout.n].scriptPubKey;
 
                 if (!ExtractDestination(scriptPubKey, address)) continue;
 

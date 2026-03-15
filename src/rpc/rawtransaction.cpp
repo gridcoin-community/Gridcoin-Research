@@ -1801,14 +1801,14 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
 
     // mergedTx will end up with all the signatures; it
     // starts as a clone of the rawtx:
-    CTransaction mergedTx(txVariants[0]);
+    CMutableTransaction mergedTx(txVariants[0]);
     bool fComplete = true;
 
     // Fetch previous transactions (inputs):
     map<COutPoint, CScript> mapPrevOut;
     for (unsigned int i = 0; i < mergedTx.vin.size(); i++)
     {
-        CTransaction tempTx;
+        CMutableTransaction tempTx;
         MapPrevTx mapPrevTx;
         CTxDB txdb("r");
         map<uint256, CTxIndex> unused;
@@ -1817,7 +1817,8 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
         CValidationState fetch_state;
-        FetchInputs(tempTx, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
+        CTransaction tempTxConst(tempTx);
+        FetchInputs(tempTxConst, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)
@@ -1916,7 +1917,7 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mergedTx.vout.size()))
         {
-            TransactionSignatureCreator creator(mergedTx, i, nHashType);
+            MutableTransactionSignatureCreator creator(mergedTx, i, nHashType);
             ProduceSignature(keystore, creator, prevPubKey, sigdata);
         }
         UpdateInput(txin, sigdata);

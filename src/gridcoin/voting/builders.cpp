@@ -804,14 +804,15 @@ template <typename PayloadType>
 void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
 {
     CWalletTx mock_tx = tx;
-    Contract& contract = mock_tx.vContracts.back();
 
     // Expand the incomplete claim signatures to provide a more realistic
-    // transaction size that the wallet will base the input selection on:
+    // transaction size that the wallet will base the input selection on.
+    // SharePayload() returns a shared_ptr copy, so we can modify the payload
+    // even though vContracts is const.
     //
-    contract.SharePayload().As<PayloadType>().m_claim.ExpandDummySignatures();
+    mock_tx.vContracts.back().SharePayload().As<PayloadType>().m_claim.ExpandDummySignatures();
 
-    const CAmount burn_fee = contract.RequiredBurnAmount();
+    const CAmount burn_fee = mock_tx.vContracts.back().RequiredBurnAmount();
     CReserveKey reserve_key(&wallet); // unused
     CAmount out_applied_fee;
 
@@ -830,7 +831,10 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
         throw VotingError(_("Could not create transaction. See debug.log."));
     }
 
-    tx.vin = std::move(mock_tx.vin);
+    // Copy the selected inputs back to the original tx
+    CMutableTransaction mtx(tx);
+    mtx.vin = CMutableTransaction(mock_tx).vin;
+    static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
 }
 } // Anonymous namespace
 
@@ -1198,12 +1202,16 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     const PollClaimBuilder claim_builder(*pwallet);
     PollEligibilityClaim claim = claim_builder.BuildClaim(*m_poll);
 
-    tx.vContracts.emplace_back(MakeContract<PollPayload>(
-                                   contract_version,
-                                   ContractAction::ADD,
-                                   std::move(m_poll_payload_version),
-                                   std::move(*m_poll),
-                                   std::move(claim)));
+    {
+        CMutableTransaction mtx(tx);
+        mtx.vContracts.emplace_back(MakeContract<PollPayload>(
+                                       contract_version,
+                                       ContractAction::ADD,
+                                       std::move(m_poll_payload_version),
+                                       std::move(*m_poll),
+                                       std::move(claim)));
+        static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
+    }
 
     SelectFinalInputs<PollPayload>(*pwallet, tx);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
@@ -1353,8 +1361,12 @@ CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     const VoteClaimBuilder claim_builder(*pwallet, Researcher::Get());
     claim_builder.BuildClaim(*m_vote, *m_poll);
 
-    tx.vContracts.emplace_back(
-        MakeContract<Vote>(contract_version, ContractAction::ADD, std::move(*m_vote)));
+    {
+        CMutableTransaction mtx(tx);
+        mtx.vContracts.emplace_back(
+            MakeContract<Vote>(contract_version, ContractAction::ADD, std::move(*m_vote)));
+        static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
+    }
 
     SelectFinalInputs<Vote>(*pwallet, tx);
     Vote& vote = tx.vContracts.back().SharePayload().As<Vote>();

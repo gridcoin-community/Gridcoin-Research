@@ -245,9 +245,11 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
     if (!recipients[0].Message.isEmpty())
     {
-        wtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
+        CMutableTransaction mtx;
+        mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
             GRC::ContractAction::ADD,
             recipients[0].Message.toStdString()));
+        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
     }
 
     {

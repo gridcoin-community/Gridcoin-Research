@@ -197,8 +197,11 @@ std::string SendContractTx(CWalletTx& wtx_new)
 
 std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract)
 {
+    CMutableTransaction mtx;
+    mtx.vContracts.emplace_back(std::move(contract));
+
     CWalletTx wtx;
-    wtx.vContracts.emplace_back(std::move(contract));
+    static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
 
     return SendContract(std::move(wtx));
 }

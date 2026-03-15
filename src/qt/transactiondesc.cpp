@@ -1,12 +1,15 @@
 #include "transactiondesc.h"
 #include "clientmodel.h"
 #include "guiutil.h"
-#include "gridcoin/tx_message.h"
 #include "bitcoinunits.h"
 #include "main.h"
 #include "wallet/wallet.h"
 #include "txdb.h"
 #include "node/ui_interface.h"
+#ifdef GetMessage
+#undef GetMessage
+#endif
+#include "gridcoin/tx_message.h"
 #include <key_io.h>
 #include "bitcoingui.h"
 #include "util.h"
