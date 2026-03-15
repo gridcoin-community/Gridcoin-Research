@@ -6,6 +6,8 @@
 #include <primitives/transaction.h>
 
 #include <hash.h>
+#include <logging.h>
+#include <util.h>
 
 CMutableTransaction::CMutableTransaction()
     : nVersion(CMutableTransaction::CURRENT_VERSION)
