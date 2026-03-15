@@ -42,8 +42,6 @@ bool fColdBoot = true;
 
 bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet)
 {
-    tx.SetNull();
-
     CAutoFile filein(OpenBlockFile(pos.nFile, 0, pfileRet ? "rb+" : "rb"), SER_DISK, CLIENT_VERSION);
     if (filein.IsNull())
         return error("ReadTxFromDisk() : OpenBlockFile failed");
@@ -71,14 +69,12 @@ bool ReadTxFromDisk(CTransaction& tx, CDiskTxPos pos, FILE** pfileRet)
 
 bool ReadTxFromDisk(CTransaction& tx, CTxDB& txdb, COutPoint prevout, CTxIndex& txindexRet)
 {
-    tx.SetNull();
     if (!txdb.ReadTxIndex(prevout.hash, txindexRet))
         return false;
     if (!ReadTxFromDisk(tx, txindexRet.pos))
         return false;
     if (prevout.n >= tx.vout.size())
     {
-        tx.SetNull();
         return false;
     }
     return true;
