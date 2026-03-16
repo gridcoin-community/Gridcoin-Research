@@ -809,8 +809,14 @@ void ThreadSocketHandler2(void* parg)
                     vNodesDisconnected.push_back(pnode);
                 }
             }
+        }
 
-            // Delete disconnected nodes
+        // Delete disconnected nodes
+        // Moved outside cs_vNodes scope: this section only touches the
+        // function-local vNodesDisconnected list and per-node locks.
+        // Keeping it inside cs_vNodes created a lock-order conflict with
+        // ThreadMessageHandler (cs_vRecvMsg -> cs_main -> cs_vNodes).
+        {
             list<CNode*> vNodesDisconnectedCopy = vNodesDisconnected;
             for (auto const& pnode : vNodesDisconnectedCopy)
             {
@@ -819,11 +825,11 @@ void ThreadSocketHandler2(void* parg)
                 {
                     bool fDelete = false;
                     {
-                        TRY_LOCK(pnode->cs_vSend, lockSend);
-                        if (lockSend)
+                        TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
+                        if (lockRecv)
                         {
-                            TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                            if (lockRecv)
+                            TRY_LOCK(pnode->cs_vSend, lockSend);
+                            if (lockSend)
                             {
                                 TRY_LOCK(pnode->cs_inventory, lockInv);
                                 if (lockInv)
