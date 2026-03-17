@@ -432,11 +432,6 @@ void CNode::CloseSocketDisconnect()
         LogPrint(BCLog::LogFlags::NET, "disconnecting node %s", addrName);
         closesocket(hSocket);
         hSocket = INVALID_SOCKET;
-
-        // in case this fails, we'll empty the recv buffer when the CNode is deleted
-        TRY_LOCK(cs_vRecvMsg, lockRecv);
-        if (lockRecv)
-            vRecvMsg.clear();
     }
 }
 
@@ -828,6 +823,7 @@ void ThreadSocketHandler2(void* parg)
                         TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                         if (lockRecv)
                         {
+                            pnode->vRecvMsg.clear();
                             TRY_LOCK(pnode->cs_vSend, lockSend);
                             if (lockSend)
                             {
@@ -1010,6 +1006,7 @@ void ThreadSocketHandler2(void* parg)
                         if (!pnode->fDisconnect)
                             LogPrintf("socket recv flood control disconnect (%u bytes)", pnode->GetTotalRecvSize());
                         pnode->CloseSocketDisconnect();
+                        pnode->vRecvMsg.clear();
                     }
                     else {
                         // typical socket buffer is 8K-64K
@@ -1018,7 +1015,10 @@ void ThreadSocketHandler2(void* parg)
                         if (nBytes > 0)
                         {
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
+                            {
                                 pnode->CloseSocketDisconnect();
+                                pnode->vRecvMsg.clear();
+                            }
                             pnode->nLastRecv = GetAdjustedTime();
                             pnode->RecordBytesRecv(nBytes);
                         }
@@ -1030,6 +1030,7 @@ void ThreadSocketHandler2(void* parg)
                               LogPrint(BCLog::LogFlags::NET, "socket closed");
                             }
                             pnode->CloseSocketDisconnect();
+                            pnode->vRecvMsg.clear();
                         }
                         else if (nBytes < 0)
                         {
@@ -1042,6 +1043,7 @@ void ThreadSocketHandler2(void* parg)
                                    LogPrint(BCLog::LogFlags::NET, "socket recv error %d", nErr);
                                 }
                                 pnode->CloseSocketDisconnect();
+                                pnode->vRecvMsg.clear();
                             }
                         }
                     }
@@ -1800,7 +1802,10 @@ void ThreadMessageHandler2(void* parg)
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
                     if (!ProcessMessages(pnode))
+                    {
                         pnode->CloseSocketDisconnect();
+                        pnode->vRecvMsg.clear();
+                    }
             }
 
             if (fShutdown)
