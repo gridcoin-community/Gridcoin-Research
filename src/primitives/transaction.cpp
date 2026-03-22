@@ -42,7 +42,7 @@ CTransaction::CTransaction()
     , nTime(GetAdjustedTime())
     , nLockTime(0)
     , nDoS(0)
-    , hash()
+    , hash(ComputeHash())
 {
 }
 
