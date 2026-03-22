@@ -55,6 +55,7 @@ add_executable(test_gridcoin
     sigopcount_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
+    transaction_identity_tests.cpp
     transaction_tests.cpp
     uint256_tests.cpp
     util_tests.cpp
