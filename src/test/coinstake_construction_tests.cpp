@@ -18,9 +18,11 @@
 #include <gridcoin/claim.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
+#include <gridcoin/researcher.h>
 #include <gridcoin/sidestake.h>
 #include <gridcoin/tally.h>
 #include <gridcoin/contract/contract.h>
+#include <rpc/blockchain.h>
 #include <test/test_gridcoin.h>
 #include <wallet/wallet.h>
 
