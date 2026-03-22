@@ -4,8 +4,7 @@
 
 // Serialization round-trip tests for CTransaction. These verify that
 // serialize -> deserialize preserves GetHash() for all transaction
-// variants, serving as a safety net for the upcoming CMutableTransaction
-// split (PR E in the PSGT sequence).
+// variants, serving as a safety net for the CMutableTransaction split.
 
 #include <boost/test/unit_test.hpp>
 
@@ -33,14 +32,15 @@ BOOST_AUTO_TEST_CASE(standard_p2pkh_roundtrip)
 {
     CKey key = MakeKey();
 
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000000;
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"), 0);
-    tx.vin[0].nSequence = 0xffffffff;
-    tx.vout.emplace_back(50 * COIN, P2PKH(key.GetPubKey().GetID()));
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000000;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"), 0);
+    mtx.vin[0].nSequence = 0xffffffff;
+    mtx.vout.emplace_back(50 * COIN, P2PKH(key.GetPubKey().GetID()));
 
+    CTransaction tx(mtx);
     uint256 hash_before = tx.GetHash();
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -67,13 +67,14 @@ BOOST_AUTO_TEST_CASE(p2sh_roundtrip)
     CScript p2sh;
     p2sh << OP_HASH160 << scriptID << OP_EQUAL;
 
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000001;
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 3);
-    tx.vout.emplace_back(10 * COIN, p2sh);
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000001;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 3);
+    mtx.vout.emplace_back(10 * COIN, p2sh);
 
+    CTransaction tx(mtx);
     uint256 hash_before = tx.GetHash();
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -93,13 +94,14 @@ BOOST_AUTO_TEST_CASE(multisig_roundtrip)
     CScript multisig;
     multisig << OP_1 << key1.GetPubKey() << key2.GetPubKey() << OP_2 << OP_CHECKMULTISIG;
 
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000002;
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("2222222222222222222222222222222222222222222222222222222222222222"), 1);
-    tx.vout.emplace_back(25 * COIN, multisig);
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000002;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("2222222222222222222222222222222222222222222222222222222222222222"), 1);
+    mtx.vout.emplace_back(25 * COIN, multisig);
 
+    CTransaction tx(mtx);
     uint256 hash_before = tx.GetHash();
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -115,14 +117,15 @@ BOOST_AUTO_TEST_CASE(v1_hashboinc_roundtrip)
 {
     CKey key = MakeKey();
 
-    CTransaction tx;
-    tx.nVersion = 1;
-    tx.nTime = 1700000003;
-    tx.hashBoinc = "some_legacy_boinc_data_for_testing";
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("3333333333333333333333333333333333333333333333333333333333333333"), 0);
-    tx.vout.emplace_back(5 * COIN, P2PKH(key.GetPubKey().GetID()));
+    CMutableTransaction mtx;
+    mtx.nVersion = 1;
+    mtx.nTime = 1700000003;
+    mtx.hashBoinc = "some_legacy_boinc_data_for_testing";
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("3333333333333333333333333333333333333333333333333333333333333333"), 0);
+    mtx.vout.emplace_back(5 * COIN, P2PKH(key.GetPubKey().GetID()));
 
+    CTransaction tx(mtx);
     uint256 hash_before = tx.GetHash();
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -140,12 +143,14 @@ BOOST_AUTO_TEST_CASE(v2_empty_contracts_roundtrip)
 {
     CKey key = MakeKey();
 
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000004;
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("4444444444444444444444444444444444444444444444444444444444444444"), 0);
-    tx.vout.emplace_back(100 * COIN, P2PKH(key.GetPubKey().GetID()));
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000004;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("4444444444444444444444444444444444444444444444444444444444444444"), 0);
+    mtx.vout.emplace_back(100 * COIN, P2PKH(key.GetPubKey().GetID()));
+
+    CTransaction tx(mtx);
 
     // v2 with empty vContracts — verify the contract vector serializes correctly
     BOOST_CHECK(tx.vContracts.empty());
@@ -166,33 +171,38 @@ BOOST_AUTO_TEST_CASE(ntime_affects_hash)
 {
     CKey key = MakeKey();
 
-    CTransaction tx1;
-    tx1.nVersion = 2;
-    tx1.nTime = 1700000010;
-    tx1.vin.resize(1);
-    tx1.vin[0].prevout = COutPoint(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0);
-    tx1.vout.emplace_back(1 * COIN, P2PKH(key.GetPubKey().GetID()));
+    CMutableTransaction mtx1;
+    mtx1.nVersion = 2;
+    mtx1.nTime = 1700000010;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = COutPoint(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0);
+    mtx1.vout.emplace_back(1 * COIN, P2PKH(key.GetPubKey().GetID()));
 
-    CTransaction tx2;
-    tx2.nVersion = 2;
-    tx2.nTime = 1700000011; // Different nTime
-    tx2.vin.resize(1);
-    tx2.vin[0].prevout = COutPoint(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0);
-    tx2.vout.emplace_back(1 * COIN, P2PKH(key.GetPubKey().GetID()));
+    CMutableTransaction mtx2;
+    mtx2.nVersion = 2;
+    mtx2.nTime = 1700000011; // Different nTime
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = COutPoint(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0);
+    mtx2.vout.emplace_back(1 * COIN, P2PKH(key.GetPubKey().GetID()));
+
+    CTransaction tx1(mtx1);
+    CTransaction tx2(mtx2);
 
     BOOST_CHECK(tx1.GetHash() != tx2.GetHash());
 }
 
 BOOST_AUTO_TEST_CASE(coinbase_roundtrip)
 {
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000020;
-    tx.vin.resize(1);
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000020;
+    mtx.vin.resize(1);
     // Coinbase: prevout is null
-    tx.vin[0].prevout.SetNull();
-    tx.vin[0].scriptSig = CScript() << 0;
-    tx.vout.emplace_back(0, CScript());
+    mtx.vin[0].prevout.SetNull();
+    mtx.vin[0].scriptSig = CScript() << 0;
+    mtx.vout.emplace_back(0, CScript());
+
+    CTransaction tx(mtx);
 
     BOOST_CHECK(tx.IsCoinBase());
 
@@ -212,17 +222,19 @@ BOOST_AUTO_TEST_CASE(coinstake_roundtrip)
 {
     CKey key = MakeKey();
 
-    CTransaction tx;
-    tx.nVersion = 2;
-    tx.nTime = 1700000030;
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000030;
 
     // Non-null input (required for coinstake, not coinbase)
-    tx.vin.resize(1);
-    tx.vin[0].prevout = COutPoint(uint256S("6666666666666666666666666666666666666666666666666666666666666666"), 0);
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("6666666666666666666666666666666666666666666666666666666666666666"), 0);
 
     // Coinstake: vout[0] is empty marker
-    tx.vout.emplace_back(0, CScript());
-    tx.vout.emplace_back(100 * COIN, P2PKH(key.GetPubKey().GetID()));
+    mtx.vout.emplace_back(0, CScript());
+    mtx.vout.emplace_back(100 * COIN, P2PKH(key.GetPubKey().GetID()));
+
+    CTransaction tx(mtx);
 
     BOOST_CHECK(tx.IsCoinStake());
 
