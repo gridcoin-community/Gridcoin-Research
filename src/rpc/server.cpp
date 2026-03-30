@@ -358,6 +358,16 @@ static const CRPCCommand vRPCCommands[] =
     { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
     { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
 
+  // PSGT commands
+    { "createpsgt",              &createpsgt,              cat_wallet        },
+    { "decodepsgt",              &decodepsgt,              cat_wallet        },
+    { "combinepsgt",             &combinepsgt,             cat_wallet        },
+    { "finalizepsgt",            &finalizepsgt,            cat_wallet        },
+    { "walletprocesspsgt",       &walletprocesspsgt,       cat_wallet        },
+    { "utxoupdatepsgt",          &utxoupdatepsgt,          cat_wallet        },
+    { "converttopsgt",           &converttopsgt,           cat_wallet        },
+    { "walletcreatefundedpsgt",  &walletcreatefundedpsgt,  cat_wallet        },
+
   // Staking commands
     { "advertisebeacon",         &advertisebeacon,         cat_staking        },
     { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking        },
