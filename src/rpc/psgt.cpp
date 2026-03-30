@@ -503,9 +503,10 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
         }
     }
 
-    // Populate HD keypaths for outputs.
+    // Update outputs (redeem scripts + HD keypaths).
     for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
     {
+        UpdatePSGTOutput(*pwalletMain, psgt, i);
         FillHDKeypaths(*pwalletMain,
                        psgt.tx.vout[i].scriptPubKey,
                        psgt.outputs[i].hd_keypaths);
@@ -722,6 +723,15 @@ UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
             if (!SignPSGTInput(*pwalletMain, psgt, i))
                 complete = false;
         }
+    }
+
+    // Update outputs (redeem scripts + HD keypaths).
+    for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
+    {
+        UpdatePSGTOutput(*pwalletMain, psgt, i);
+        FillHDKeypaths(*pwalletMain,
+                       psgt.tx.vout[i].scriptPubKey,
+                       psgt.outputs[i].hd_keypaths);
     }
 
     UniValue result(UniValue::VOBJ);

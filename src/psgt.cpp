@@ -315,6 +315,27 @@ bool CombinePSGTs(PartiallySignedTransaction& out,
     return true;
 }
 
+void UpdatePSGTOutput(const SigningProvider& provider,
+                       PartiallySignedTransaction& psgt,
+                       unsigned int index)
+{
+    if (index >= psgt.outputs.size() || index >= psgt.tx.vout.size())
+        return;
+
+    PSGTOutput& output = psgt.outputs[index];
+    const CScript& scriptPubKey = psgt.tx.vout[index].scriptPubKey;
+
+    // For P2SH outputs, look up the redeem script.
+    if (output.redeem_script.empty() && scriptPubKey.IsPayToScriptHash())
+    {
+        CScriptID scriptID(uint160(std::vector<unsigned char>(
+            scriptPubKey.begin() + 2, scriptPubKey.begin() + 22)));
+        CScript redeemScript;
+        if (provider.GetCScript(scriptID, redeemScript))
+            output.redeem_script = redeemScript;
+    }
+}
+
 // --- BIP 174-style binary serialization ---
 
 // Helper: write a compact size to a byte vector.

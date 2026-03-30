@@ -118,4 +118,13 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
  */
 std::vector<unsigned char> SerializePSGT(const PartiallySignedTransaction& psgt);
 
+/**
+ * Update a PSGT output with redeem script and HD keypath info from the
+ * signing provider (typically the wallet). For P2SH outputs, looks up the
+ * redeem script. For all outputs, looks up HD keypaths for involved pubkeys.
+ */
+void UpdatePSGTOutput(const SigningProvider& provider,
+                       PartiallySignedTransaction& psgt,
+                       unsigned int index);
+
 #endif // GRIDCOIN_PSGT_H
