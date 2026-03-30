@@ -584,4 +584,62 @@ BOOST_AUTO_TEST_CASE(multisig_partial_sigs_roundtrip)
         STANDARD_SCRIPT_VERIFY_FLAGS, signedTx, 0));
 }
 
+// ---------------------------------------------------------------------------
+// Test 15: HD keypaths survive serialize/deserialize round-trip.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(hd_keypaths_roundtrip)
+{
+    CKey key = MakeKey();
+    CTransaction prevTx = MakePrevTx(key, 5 * COIN);
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700001800;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(prevTx.GetHash(), 0);
+    mtx.vout.push_back(CTxOut(4 * COIN, P2PKH(MakeKey().GetPubKey().GetID())));
+
+    PartiallySignedTransaction psgt(mtx);
+    psgt.inputs[0].non_witness_utxo = prevTx;
+
+    // Manually populate HD keypath for the input.
+    KeyOriginInfo info;
+    info.fingerprint[0] = 0xDE; info.fingerprint[1] = 0xAD;
+    info.fingerprint[2] = 0xBE; info.fingerprint[3] = 0xEF;
+    info.path = {0x80000000, 0x80000000, 0x80000005}; // m/0'/0'/5'
+    psgt.inputs[0].hd_keypaths[key.GetPubKey()] = info;
+
+    // Also add an HD keypath for the output.
+    CKey outKey = MakeKey();
+    KeyOriginInfo outInfo;
+    outInfo.fingerprint[0] = 0xCA; outInfo.fingerprint[1] = 0xFE;
+    outInfo.fingerprint[2] = 0xBA; outInfo.fingerprint[3] = 0xBE;
+    outInfo.path = {0x80000000, 0x80000000, 0x8000002A}; // m/0'/0'/42'
+    psgt.outputs[0].hd_keypaths[outKey.GetPubKey()] = outInfo;
+
+    // Serialize and deserialize.
+    std::vector<unsigned char> data = SerializePSGT(psgt);
+    std::string b64 = EncodeBase64(data.data(), data.size());
+
+    PartiallySignedTransaction psgt2;
+    std::string error;
+    BOOST_CHECK(DecodeRawPSGT(psgt2, b64, error));
+
+    // Input HD keypaths should survive.
+    BOOST_CHECK_EQUAL(psgt2.inputs[0].hd_keypaths.size(), 1u);
+    auto it = psgt2.inputs[0].hd_keypaths.find(key.GetPubKey());
+    BOOST_CHECK(it != psgt2.inputs[0].hd_keypaths.end());
+    BOOST_CHECK_EQUAL(it->second.fingerprint[0], 0xDE);
+    BOOST_CHECK_EQUAL(it->second.fingerprint[3], 0xEF);
+    BOOST_CHECK_EQUAL(it->second.path.size(), 3u);
+    BOOST_CHECK_EQUAL(it->second.path[2], 0x80000005u);
+
+    // Output HD keypaths should survive.
+    BOOST_CHECK_EQUAL(psgt2.outputs[0].hd_keypaths.size(), 1u);
+    auto it2 = psgt2.outputs[0].hd_keypaths.find(outKey.GetPubKey());
+    BOOST_CHECK(it2 != psgt2.outputs[0].hd_keypaths.end());
+    BOOST_CHECK_EQUAL(it2->second.fingerprint[0], 0xCA);
+    BOOST_CHECK_EQUAL(it2->second.path[2], 0x8000002Au);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

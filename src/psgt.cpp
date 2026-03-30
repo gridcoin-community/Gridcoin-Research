@@ -418,6 +418,28 @@ std::vector<unsigned char> SerializePSGT(const PartiallySignedTransaction& psgt)
             SerializeKeyValue(result, key, val);
         }
 
+        // BIP32 derivation paths.
+        for (const auto& kp : input.hd_keypaths)
+        {
+            std::vector<unsigned char> key;
+            key.push_back(PSGT_IN_BIP32_DERIVATION);
+            auto pubkey_data = kp.first.IsValid()
+                ? std::vector<unsigned char>(kp.first.begin(), kp.first.end())
+                : std::vector<unsigned char>();
+            key.insert(key.end(), pubkey_data.begin(), pubkey_data.end());
+
+            std::vector<unsigned char> val;
+            val.insert(val.end(), kp.second.fingerprint, kp.second.fingerprint + 4);
+            for (uint32_t idx : kp.second.path)
+            {
+                val.push_back((unsigned char)(idx & 0xff));
+                val.push_back((unsigned char)((idx >> 8) & 0xff));
+                val.push_back((unsigned char)((idx >> 16) & 0xff));
+                val.push_back((unsigned char)((idx >> 24) & 0xff));
+            }
+            SerializeKeyValue(result, key, val);
+        }
+
         // Final scriptSig.
         if (!input.final_script_sig.empty())
         {
@@ -444,6 +466,28 @@ std::vector<unsigned char> SerializePSGT(const PartiallySignedTransaction& psgt)
         {
             std::vector<unsigned char> key = {PSGT_OUT_REDEEM_SCRIPT};
             std::vector<unsigned char> val(output.redeem_script.begin(), output.redeem_script.end());
+            SerializeKeyValue(result, key, val);
+        }
+
+        // BIP32 derivation paths.
+        for (const auto& kp : output.hd_keypaths)
+        {
+            std::vector<unsigned char> key;
+            key.push_back(PSGT_OUT_BIP32_DERIVATION);
+            auto pubkey_data = kp.first.IsValid()
+                ? std::vector<unsigned char>(kp.first.begin(), kp.first.end())
+                : std::vector<unsigned char>();
+            key.insert(key.end(), pubkey_data.begin(), pubkey_data.end());
+
+            std::vector<unsigned char> val;
+            val.insert(val.end(), kp.second.fingerprint, kp.second.fingerprint + 4);
+            for (uint32_t idx : kp.second.path)
+            {
+                val.push_back((unsigned char)(idx & 0xff));
+                val.push_back((unsigned char)((idx >> 8) & 0xff));
+                val.push_back((unsigned char)((idx >> 16) & 0xff));
+                val.push_back((unsigned char)((idx >> 24) & 0xff));
+            }
             SerializeKeyValue(result, key, val);
         }
 
@@ -635,6 +679,25 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
             case PSGT_IN_FINAL_SCRIPTSIG:
                 psgt.inputs[i].final_script_sig = CScript(val.begin(), val.end());
                 break;
+            case PSGT_IN_BIP32_DERIVATION:
+            {
+                // Key: type byte + compressed pubkey (33 bytes)
+                if (key.size() < 34) { error = "BIP32 derivation key too short"; return false; }
+                CPubKey pubkey(key.begin() + 1, key.end());
+                if (!pubkey.IsValid()) { error = "Invalid pubkey in BIP32 derivation"; return false; }
+                // Value: 4-byte fingerprint + 4 bytes per path element
+                if (val.size() < 4 || (val.size() - 4) % 4 != 0) { error = "Invalid BIP32 derivation value"; return false; }
+                KeyOriginInfo info;
+                memcpy(info.fingerprint, val.data(), 4);
+                for (size_t j = 4; j < val.size(); j += 4)
+                {
+                    uint32_t idx = val[j] | (uint32_t(val[j+1]) << 8) |
+                                   (uint32_t(val[j+2]) << 16) | (uint32_t(val[j+3]) << 24);
+                    info.path.push_back(idx);
+                }
+                psgt.inputs[i].hd_keypaths[pubkey] = info;
+                break;
+            }
             default:
                 psgt.inputs[i].unknown[key] = val;
                 break;
@@ -668,6 +731,23 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
             case PSGT_OUT_REDEEM_SCRIPT:
                 psgt.outputs[i].redeem_script = CScript(val.begin(), val.end());
                 break;
+            case PSGT_OUT_BIP32_DERIVATION:
+            {
+                if (key.size() < 34) { error = "BIP32 derivation key too short"; return false; }
+                CPubKey pubkey(key.begin() + 1, key.end());
+                if (!pubkey.IsValid()) { error = "Invalid pubkey in BIP32 derivation"; return false; }
+                if (val.size() < 4 || (val.size() - 4) % 4 != 0) { error = "Invalid BIP32 derivation value"; return false; }
+                KeyOriginInfo info;
+                memcpy(info.fingerprint, val.data(), 4);
+                for (size_t j = 4; j < val.size(); j += 4)
+                {
+                    uint32_t idx = val[j] | (uint32_t(val[j+1]) << 8) |
+                                   (uint32_t(val[j+2]) << 16) | (uint32_t(val[j+3]) << 24);
+                    info.path.push_back(idx);
+                }
+                psgt.outputs[i].hd_keypaths[pubkey] = info;
+                break;
+            }
             default:
                 psgt.outputs[i].unknown[key] = val;
                 break;

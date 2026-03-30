@@ -11,6 +11,7 @@
 #include <script/sign.h>
 #include <script/standard.h>
 #include <streams.h>
+#include <util/bip32.h>
 #include <util/strencodings.h>
 #include <wallet/coincontrol.h>
 #include <wallet/wallet.h>
@@ -20,6 +21,47 @@
 using namespace std;
 
 extern CWallet* pwalletMain;
+
+/** Populate HD keypath info for a pubkey from wallet metadata. */
+static void AddHDKeypathIfAvailable(const CWallet& wallet,
+                                     const CPubKey& pubkey,
+                                     std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+{
+    CKeyID keyid = pubkey.GetID();
+    auto it = wallet.mapKeyMetadata.find(keyid);
+    if (it == wallet.mapKeyMetadata.end())
+        return;
+
+    const CKeyMetadata& meta = it->second;
+    if (meta.hdKeypath.empty() || meta.hdMasterKeyID.IsNull())
+        return;
+
+    std::vector<uint32_t> path;
+    if (!ParseHDKeypath(meta.hdKeypath, path))
+        return;
+
+    KeyOriginInfo info;
+    // Fingerprint = first 4 bytes of the master key's Hash160
+    // masterKeyID IS the Hash160, so take its first 4 bytes.
+    memcpy(info.fingerprint, meta.hdMasterKeyID.begin(), 4);
+    info.path = path;
+    hd_keypaths[pubkey] = info;
+}
+
+/** Populate HD keypaths for all pubkeys involved in a scriptPubKey. */
+static void FillHDKeypaths(const CWallet& wallet,
+                            const CScript& scriptPubKey,
+                            std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+{
+    std::vector<CKeyID> vKeys;
+    ExtractAffectedKeys(wallet, scriptPubKey, vKeys);
+    for (const CKeyID& keyid : vKeys)
+    {
+        CPubKey pubkey;
+        if (wallet.GetPubKey(keyid, pubkey))
+            AddHDKeypathIfAvailable(wallet, pubkey, hd_keypaths);
+    }
+}
 
 UniValue createpsgt(const UniValue& params, bool fHelp)
 {
@@ -228,6 +270,20 @@ UniValue decodepsgt(const UniValue& params, bool fHelp)
             in_obj.pushKV("final_scriptSig", fs_obj);
         }
 
+        if (!input.hd_keypaths.empty())
+        {
+            UniValue bip32_arr(UniValue::VARR);
+            for (const auto& kp : input.hd_keypaths)
+            {
+                UniValue kp_obj(UniValue::VOBJ);
+                kp_obj.pushKV("pubkey", HexStr(std::vector<unsigned char>(kp.first.begin(), kp.first.end())));
+                kp_obj.pushKV("master_fingerprint", HexStr(std::vector<unsigned char>(kp.second.fingerprint, kp.second.fingerprint + 4)));
+                kp_obj.pushKV("path", WriteHDKeypath(kp.second.path));
+                bip32_arr.push_back(kp_obj);
+            }
+            in_obj.pushKV("bip32_derivs", bip32_arr);
+        }
+
         if (!input.unknown.empty())
         {
             UniValue unk_obj(UniValue::VOBJ);
@@ -253,6 +309,20 @@ UniValue decodepsgt(const UniValue& params, bool fHelp)
             rs_obj.pushKV("asm", output.redeem_script.ToString());
             rs_obj.pushKV("hex", HexStr(output.redeem_script));
             out_obj.pushKV("redeem_script", rs_obj);
+        }
+
+        if (!output.hd_keypaths.empty())
+        {
+            UniValue bip32_arr(UniValue::VARR);
+            for (const auto& kp : output.hd_keypaths)
+            {
+                UniValue kp_obj(UniValue::VOBJ);
+                kp_obj.pushKV("pubkey", HexStr(std::vector<unsigned char>(kp.first.begin(), kp.first.end())));
+                kp_obj.pushKV("master_fingerprint", HexStr(std::vector<unsigned char>(kp.second.fingerprint, kp.second.fingerprint + 4)));
+                kp_obj.pushKV("path", WriteHDKeypath(kp.second.path));
+                bip32_arr.push_back(kp_obj);
+            }
+            out_obj.pushKV("bip32_derivs", bip32_arr);
         }
 
         if (!output.unknown.empty())
@@ -418,6 +488,27 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
     {
         if (!SignPSGTInput(*pwalletMain, psgt, i, nHashType))
             complete = false;
+    }
+
+    // Populate HD keypaths for inputs.
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        if (!psgt.inputs[i].non_witness_utxo.IsNull())
+        {
+            const COutPoint& prevout = psgt.tx.vin[i].prevout;
+            if (prevout.n < psgt.inputs[i].non_witness_utxo.vout.size())
+                FillHDKeypaths(*pwalletMain,
+                               psgt.inputs[i].non_witness_utxo.vout[prevout.n].scriptPubKey,
+                               psgt.inputs[i].hd_keypaths);
+        }
+    }
+
+    // Populate HD keypaths for outputs.
+    for (unsigned int i = 0; i < psgt.outputs.size(); ++i)
+    {
+        FillHDKeypaths(*pwalletMain,
+                       psgt.tx.vout[i].scriptPubKey,
+                       psgt.outputs[i].hd_keypaths);
     }
 
     UniValue result(UniValue::VOBJ);
