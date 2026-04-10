@@ -483,12 +483,14 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
     }
 
     // Sign each input with wallet keys.
-    bool complete = true;
     for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
     {
-        if (!SignPSGTInput(*pwalletMain, psgt, i, nHashType))
-            complete = false;
+        SignPSGTInput(*pwalletMain, psgt, i, nHashType);
     }
+
+    // Determine completeness by attempting finalization on a copy.
+    PartiallySignedTransaction psgt_copy = psgt;
+    bool complete = FinalizePSGT(psgt_copy);
 
     // Populate HD keypaths for inputs.
     for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
