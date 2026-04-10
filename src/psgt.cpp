@@ -574,8 +574,18 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
                     const std::string& base64_tx,
                     std::string& error)
 {
+    // Strip whitespace (spaces, tabs, newlines) that may be introduced
+    // by terminal line-wrapping or copy-paste.
+    std::string cleaned;
+    cleaned.reserve(base64_tx.size());
+    for (char c : base64_tx)
+    {
+        if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
+            cleaned += c;
+    }
+
     bool invalid = false;
-    std::vector<unsigned char> data = DecodeBase64(base64_tx.c_str(), &invalid);
+    std::vector<unsigned char> data = DecodeBase64(cleaned.c_str(), &invalid);
     if (invalid)
     {
         error = "Invalid base64";
