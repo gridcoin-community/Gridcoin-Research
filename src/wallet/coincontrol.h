@@ -6,15 +6,17 @@ class CCoinControl
 {
 public:
     CTxDestination destChange;
+    bool fAllowWatchOnly;
 
     CCoinControl()
     {
         SetNull();
     }
-        
+
     void SetNull()
     {
         destChange = CNoDestination();
+        fAllowWatchOnly = false;
         setSelected.clear();
     }
     

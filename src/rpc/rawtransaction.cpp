@@ -1669,6 +1669,8 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         }
     }
 
+    coinControl.fAllowWatchOnly = includeWatching;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
@@ -1676,7 +1678,7 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
     int nChangePosOut = -1;
     string strFailReason;
 
-    if (!pwalletMain->FundTransaction(tx, nFeeOut, nChangePosOut, strFailReason, includeWatching))
+    if (!pwalletMain->FundTransaction(tx, nFeeOut, nChangePosOut, strFailReason, &coinControl))
         throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
 
     // If user requested a specific change position, move change output there
