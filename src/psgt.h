@@ -34,7 +34,7 @@ static const std::vector<unsigned char> PSGT_MAGIC = {0x70, 0x73, 0x67, 0x74, 0x
 /** HD key origin information: fingerprint + derivation path. */
 struct KeyOriginInfo
 {
-    unsigned char fingerprint[4];
+    unsigned char fingerprint[4] = {0};
     std::vector<uint32_t> path;
 };
 

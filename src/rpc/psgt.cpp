@@ -428,6 +428,8 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     PartiallySignedTransaction psgt;
     string error;
     if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
@@ -627,6 +629,8 @@ UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
     EnsureWalletIsUnlocked();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Build the raw transaction first via createpsgt logic.
     UniValue inputs = params[0].get_array();
