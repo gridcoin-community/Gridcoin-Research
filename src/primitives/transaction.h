@@ -368,7 +368,9 @@ public:
     const std::vector<GRC::Contract>& GetContracts() const
     {
         if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
-            m_legacy_parsed_contracts.emplace_back(GRC::Contract::Parse(hashBoinc));
+            if (m_legacy_parsed_contracts.empty()) {
+                m_legacy_parsed_contracts.emplace_back(GRC::Contract::Parse(hashBoinc));
+            }
             return m_legacy_parsed_contracts;
         }
 

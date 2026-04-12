@@ -381,6 +381,7 @@ public:
         vtx.clear();
         vchBlockSig.clear();
         fChecked = false;
+        m_claim_contract_cache = GRC::Contract();
     }
 
     CBlockHeader GetBlockHeader() const
