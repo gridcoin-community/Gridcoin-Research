@@ -26,7 +26,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "policy/fees.h"
-#include "util.h"
+#include <util.h>
 
 #include <stdexcept>
 
