@@ -15,6 +15,7 @@
 #include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
+#include <rpc/util.h>
 
 #include <univalue.h>
 #include <stdexcept>
@@ -2464,6 +2465,66 @@ UniValue superblocks(const UniValue& params, bool fHelp)
 //!
 UniValue addkey(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "addkey",
+        "Add or delete an administrative key in the Gridcoin contract system.\n"
+        "Requires the wallet to be unlocked and the caller to hold the master key.\n"
+        "The set of required and optional parameters depends on the key type, the "
+        "action, and the currently-active protocol version. Parameters 5-7 apply "
+        "only to <keytype>=project and are gated by protocol flags (v2 project "
+        "contracts, v4 project contracts, block v13). See the per-parameter "
+        "descriptions below.",
+        {
+            {"action", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "'add' or 'delete'."},
+            {"keytype", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Contract type. One of: project, scraper, protocol, sidestake."},
+            {"keyname", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Key name. For project: project short name. For scraper: Gridcoin "
+                "address. For protocol: parameter key. For sidestake: Gridcoin "
+                "destination address."},
+            {"keyvalue", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Key value. For project: stats URL. For scraper: 'true'|'false'|"
+                "'explorer' (v13) or 'true'|'false' (pre-v13). For protocol: "
+                "parameter value. For sidestake: allocation percentage (0-100)."},
+            {"gdpr_protection_bool", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "project only, requires v2 project contracts: 'true' if GDPR "
+                "stats-export protection is enforced for the project, otherwise "
+                "'false'. For sidestake add: optional free-text description."},
+            {"requires_external_adapter", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "project only, requires v4 project contracts: 'true' if the "
+                "project requires an external adapter to collect stats, otherwise "
+                "'false'. Pre-v4: reused for the manual greylist status (see next "
+                "parameter)."},
+            {"status", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "project only, requires v13 blocks: 'man_greylist' or "
+                "'auto_greylist_override'. Omit for no manual status."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "contract", /*optional=*/false,
+                    "JSON serialization of the contract that was broadcast.", /*inner=*/{}},
+                {RPCResult::Type::STR_HEX, "txid",
+                    "Transaction id of the contract-bearing transaction."},
+            }},
+        RPCExamples{
+            HelpExampleCli("addkey",
+                "add project milkyway@home http://milkyway.cs.rpi.edu/milkyway/@ true false")
+          + HelpExampleCli("addkey",
+                "delete project milkyway@home")
+          + HelpExampleRpc("addkey",
+                "\"add\", \"project\", \"milkyway@home\", "
+                "\"http://milkyway.cs.rpi.edu/milkyway/@\", \"true\", \"false\"")
+        }
+    };
+
+    // Absolute min/max across all (action, keytype, protocol-version) shapes.
+    // Shape-specific enforcement happens below, once we've read the action and
+    // key type and can consult the live protocol flags.
+    if (fHelp || params.size() < 3 || params.size() > 7) {
+        throw std::runtime_error(help.ToString());
+    }
+
     bool project_v2_enabled = false;
     bool project_v4_enabled = false;
     bool block_v13_enabled = false;
@@ -2481,25 +2542,21 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
     GRC::ContractAction action = GRC::ContractAction::UNKNOWN;
     GRC::Contract::Type type = GRC::ContractType::UNKNOWN;
+
+    if (params[0].get_str() == "add") {
+        action = GRC::ContractAction::ADD;
+    } else if (params[0].get_str() == "delete") {
+        action = GRC::ContractAction::REMOVE;
+    }
+
+    type = GRC::Contract::Type::Parse(params[1].get_str());
+
     size_t required_param_count = 4;
     size_t param_count_max = 4;
-
-    if (params.size()) {
-        if (params[0].get_str() == "add") {
-            action = GRC::ContractAction::ADD;
-        } else if (params[0].get_str() == "delete") {
-            action = GRC::ContractAction::REMOVE;
-        }
-    }
-
-    if (params.size() >= 2) {
-        type = GRC::Contract::Type::Parse(params[1].get_str());
-    }
 
     // We only need to specify five parameters if v2 project contracts are enabled AND the action is add AND
     // the key type is project.
     if (project_v2_enabled
-            && params.size()
             && action == GRC::ContractAction::ADD
             && type == GRC::ContractType::PROJECT) {
         required_param_count = 5;
@@ -2539,63 +2596,13 @@ UniValue addkey(const UniValue& params, bool fHelp)
         }
     }
 
-    if (fHelp || params.size() < required_param_count || params.size() > param_count_max) {
-        std::string error_string;
-
-        if (block_v13_enabled) {
-            if (project_v4_enabled) {
-                error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> "
-                               "<requires_external_adapter> <status> \n"
-                               "\n"
-                               "<action> ---> Specify add or delete of key\n"
-                               "<keytype> --> Specify keytype ex: project\n"
-                               "<keyname> --> Specify keyname ex: milky\n"
-                               "<keyvalue> -> Specify keyvalue ex: 1\n"
-                               "\n"
-                               "For project keytype only\n"
-                               "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                               "<requires_external_adapter> true if project requires an external adapter to collect stats\n"
-                               "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
-                               "\n"
-                               "Add a key to the network";
-            } else {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool> <status> \n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "For project keytype only\n"
-                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                           "<status> -> auto_greylist_override or man_greylist. Defaults to blank."
-                           "\n"
-                           "Add a key to the network";
-            }
-        } else if (project_v2_enabled) {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue> <gdpr_protection_bool>\n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "For project keytype only\n"
-                           "<gdpr_protection_bool> -> true if GDPR stats export protection is enforced for project\n"
-                           "\n"
-                           "Add a key to the network";
-        } else {
-            error_string = "addkey <action> <keytype> <keyname> <keyvalue>\n"
-                           "\n"
-                           "<action> ---> Specify add or delete of key\n"
-                           "<keytype> --> Specify keytype ex: project\n"
-                           "<keyname> --> Specify keyname ex: milky\n"
-                           "<keyvalue> -> Specify keyvalue ex: 1\n"
-                           "\n"
-                           "Add a key to the network";
-        }
-
-        throw runtime_error(error_string);
+    if (params.size() < required_param_count || params.size() > param_count_max) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("addkey %s %s: expected %u..%u parameters, got %u. "
+                      "Check protocol version gating for this key type.",
+                      params[0].get_str(), params[1].get_str(),
+                      (unsigned)required_param_count, (unsigned)param_count_max,
+                      (unsigned)params.size()));
     }
 
     if (pwalletMain->IsLocked()) {
