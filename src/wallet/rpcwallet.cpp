@@ -8,6 +8,7 @@
 #include "txdb.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "init.h"
 #include "streams.h"
 #include "util.h"
@@ -2156,14 +2157,37 @@ void ThreadCleanWalletPassphrase(void* parg)
 
 UniValue walletpassphrase(const UniValue& params, bool fHelp)
 {
-    if (pwalletMain->IsCrypted() && (fHelp || params.size() < 2 || params.size() > 3))
-        throw runtime_error(
-                "walletpassphrase <passphrase> <timeout> [stakingonly]\n"
-                "\n"
-                "Stores the wallet decryption key in memory for <timeout> seconds.\n"
-                "if [stakingonly] is true sending functions are disabled.\n");
-    if (fHelp)
-        return true;
+    static const RPCHelpMan help{
+        "walletpassphrase",
+        "Stores the wallet decryption key in memory for <timeout> seconds, "
+        "allowing operations that require an unlocked wallet (sending, signing, "
+        "staking). Requires the wallet to be encrypted.\n"
+        "\n"
+        "If <stakingonly> is true, the wallet is unlocked for staking only and "
+        "sending functions remain disabled until walletlock is called and the "
+        "wallet is re-unlocked with <stakingonly> false.\n"
+        "\n"
+        "Timeouts greater than 100000000 seconds are clamped to that value to "
+        "avoid a macOS/libevent bug.",
+        {
+            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The wallet passphrase."},
+            {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "The time in seconds to keep the decryption key in memory."},
+            {"stakingonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, unlock for staking only; sending functions remain "
+                "disabled. Defaults to false."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60")
+          + HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60 true")
+          + HelpExampleRpc("walletpassphrase", "\"mypassphrase\", 60")
+        }
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
@@ -2207,9 +2231,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
             }
         }
     } else {
-        throw runtime_error(
-            "walletpassphrase <passphrase> <timeout>\n"
-            "Stores the wallet decryption key in memory for <timeout> seconds.");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
     }
 
     NewThread(ThreadTopUpKeyPool, nullptr);
@@ -2228,13 +2250,25 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
 
 UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
 {
-    if (pwalletMain->IsCrypted() && (fHelp || params.size() != 2))
-        throw runtime_error(
-                "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
-                "\n"
-                "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>.\n");
-    if (fHelp)
-        return true;
+    static const RPCHelpMan help{
+        "walletpassphrasechange",
+        "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>. "
+        "Requires the wallet to be encrypted.",
+        {
+            {"oldpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The current wallet passphrase."},
+            {"newpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The new wallet passphrase."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("walletpassphrasechange", "\"oldpassphrase\" \"newpassphrase\"")
+          + HelpExampleRpc("walletpassphrasechange", "\"oldpassphrase\", \"newpassphrase\"")
+        }
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
@@ -2248,9 +2282,7 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
     strNewWalletPass = std::string_view{params[1].get_str()};
 
     if (strOldWalletPass.length() < 1 || strNewWalletPass.length() < 1)
-        throw runtime_error(
-            "walletpassphrasechange <oldpassphrase> <newpassphrase>\n"
-            "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>\n.");
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Passphrase cannot be empty.");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2355,15 +2387,22 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
 
 UniValue walletlock(const UniValue& params, bool fHelp)
 {
-    if (pwalletMain->IsCrypted() && (fHelp || params.size() != 0))
-        throw runtime_error(
-                "walletlock\n"
-                "\n"
-                "Removes the wallet encryption key from memory, locking the wallet.\n"
-                "After calling this method, you will need to call walletpassphrase again\n"
-                "before being able to call any methods which require the wallet to be unlocked.\n");
-    if (fHelp)
-        return true;
+    static const RPCHelpMan help{
+        "walletlock",
+        "Removes the wallet encryption key from memory, locking the wallet. "
+        "After calling this method, you will need to call walletpassphrase again "
+        "before being able to call any methods which require the wallet to be "
+        "unlocked. Requires the wallet to be encrypted.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("walletlock", "")
+          + HelpExampleRpc("walletlock", "")
+        }
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
