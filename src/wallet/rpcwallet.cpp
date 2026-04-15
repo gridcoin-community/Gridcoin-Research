@@ -2019,32 +2019,57 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
 
 UniValue maintainbackups(const UniValue& params, bool fHelp)
 {
-    if (fHelp || (params.size() != 0 && params.size() != 2)
-            || (params.size() == 2 && (params[0].get_int() < 0 || params[1].get_int() < 0)))
-        throw runtime_error(
-                "maintainbackups ( \"retention by number\" \"retention by days\" )\n"
-                "\nArguments:\n"
-                "1. \"retention by number\" (non-negative integer, optional) The number of files to retain\n"
-                "2. \"retention by days\"   (non-negative integer, optional) The number of days to retain\n"
-                "These must be specified as a pair if provided.\n"
-                "To run this command, -maintainbackupretention must be set as an argument during Gridcoin\n"
-                "startup or given in the config file with maintainbackupretention=1.\n"
-                "WARNING: The default values for number and days is 365 for each. Please ensure this is\n"
-                "what is desired before you execute this command. Note the command will also use\n"
-                "the corresponding walletbackupretainnumfiles= and walletbackupretainnumdays= specified\n"
-                "in the config file unless overridden by supplied arguments here. Finally, this function\n"
-                "will not allow both values to be set less than 7 to prevent disastrous unintended\n"
-                "consequences, and will clamp the values at 7 instead.\n"
-                "\n"
-                "Maintain backup retention.\n");
+    static const RPCHelpMan help{
+        "maintainbackups",
+        "Maintain backup file retention by pruning old wallet backup files.\n"
+        "\n"
+        "To run this command, -maintainbackupretention must be set as an argument "
+        "during Gridcoin startup or given in the config file with "
+        "maintainbackupretention=1.\n"
+        "\n"
+        "If arguments are omitted, the values from walletbackupretainnumfiles and "
+        "walletbackupretainnumdays in the config file are used (defaulting to 365 "
+        "each). Both arguments must be supplied together or both omitted.\n"
+        "\n"
+        "WARNING: retention will not allow both values to be set lower than 7 — "
+        "values below 7 are clamped to 7 to prevent unintended data loss. The "
+        "rule that retains the greater number of files wins.",
+        {
+            {"retention_by_number", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of most-recent backup files to retain (non-negative integer)."},
+            {"retention_by_days", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of days of backups to retain (non-negative integer)."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("maintainbackups", "")
+          + HelpExampleCli("maintainbackups", "30 90")
+          + HelpExampleRpc("maintainbackups", "30, 90")
+        }
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
+
+    // IsValidNumArgs accepts 0, 1, or 2 because RPCHelpMan ranges are contiguous.
+    // maintainbackups only accepts {0, 2} — reject 1 explicitly.
+    if (params.size() == 1) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Both retention_by_number and retention_by_days must be specified together, or both omitted.");
+    }
 
     unsigned int retention_by_num = 0;
     unsigned int retention_by_days = 0;
 
-    if (params.size() == 2)
-    {
-         retention_by_num = params[0].get_int();
-         retention_by_days = params[1].get_int();
+    if (params.size() == 2) {
+        const int num_arg  = params[0].get_int();
+        const int days_arg = params[1].get_int();
+        if (num_arg < 0 || days_arg < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "Retention values must be non-negative integers.");
+        }
+        retention_by_num  = static_cast<unsigned int>(num_arg);
+        retention_by_days = static_cast<unsigned int>(days_arg);
     }
 
     std::vector<std::string> backup_file_type;
