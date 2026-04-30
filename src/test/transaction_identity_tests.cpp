@@ -11,6 +11,7 @@
 #include <key.h>
 #include <main.h>
 #include <streams.h>
+#include <gridcoin/contract/contract.h>
 
 BOOST_AUTO_TEST_SUITE(transaction_identity_tests)
 
@@ -248,6 +249,48 @@ BOOST_AUTO_TEST_CASE(coinstake_roundtrip)
     BOOST_CHECK(tx2.GetHash() == hash_before);
     BOOST_CHECK(tx == tx2);
     BOOST_CHECK(tx2.IsCoinStake());
+}
+
+BOOST_AUTO_TEST_CASE(v1_legacy_contract_getcontracts_is_idempotent)
+{
+    // Build a v1 transaction with a legacy beacon contract embedded in
+    // hashBoinc. The hashBoinc string must satisfy GRC::Contract::Detect()
+    // (must contain "<MT>" and not be a superblock).
+    CMutableTransaction mtx;
+    mtx.nVersion = 1;
+    mtx.nTime = 1700000000;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S(
+        "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"), 0);
+    mtx.vin[0].nSequence = 0xffffffff;
+    mtx.vout.emplace_back(0, CScript());
+    mtx.hashBoinc =
+        "<MT>beacon</MT>"
+        "<MK>test</MK>"
+        "<MV>test</MV>"
+        "<MA>A</MA>"
+        "<MPK></MPK>";
+
+    const CTransaction tx(std::move(mtx));
+
+    BOOST_REQUIRE_EQUAL(tx.nVersion, 1);
+    BOOST_REQUIRE(tx.vContracts.empty());
+    BOOST_REQUIRE(GRC::Contract::Detect(tx.hashBoinc));
+
+    // First call parses-and-caches.
+    const std::vector<GRC::Contract>& contracts1 = tx.GetContracts();
+    BOOST_CHECK_EQUAL(contracts1.size(), 1u);
+    BOOST_CHECK(contracts1[0].m_type == GRC::ContractType::BEACON);
+
+    // Subsequent calls must return the same cached vector unchanged. A
+    // regression of the m_legacy_parsed_contracts.empty() guard would
+    // grow the vector and trip ContextualCheckTransaction's DoS-100
+    // path (tx.GetContracts().size() > 1).
+    BOOST_CHECK_EQUAL(tx.GetContracts().size(), 1u);
+    BOOST_CHECK_EQUAL(tx.GetContracts().size(), 1u);
+
+    // Same backing storage on every call (cache returned, not re-parsed).
+    BOOST_CHECK_EQUAL(&contracts1, &tx.GetContracts());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
