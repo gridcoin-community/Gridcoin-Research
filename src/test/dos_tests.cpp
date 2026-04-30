@@ -262,9 +262,10 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
 
     // Empty vin → DoS 10
     {
-        CTransaction tx;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = 1 * CENT;
+        CMutableTransaction mtx;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * CENT;
+        const CTransaction tx(std::move(mtx));
         CValidationState state;
         BOOST_CHECK(!CheckTransaction(tx, state));
         BOOST_CHECK(state.IsInvalid());
@@ -273,10 +274,11 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
 
     // Empty vout → DoS 10
     {
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout.hash = InsecureRand256();
-        tx.vin[0].prevout.n = 0;
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout.hash = InsecureRand256();
+        mtx.vin[0].prevout.n = 0;
+        const CTransaction tx(std::move(mtx));
         CValidationState state;
         BOOST_CHECK(!CheckTransaction(tx, state));
         BOOST_CHECK(state.IsInvalid());
@@ -285,12 +287,13 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
 
     // Negative output value → DoS 100
     {
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout.hash = InsecureRand256();
-        tx.vin[0].prevout.n = 0;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = -1;
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout.hash = InsecureRand256();
+        mtx.vin[0].prevout.n = 0;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = -1;
+        const CTransaction tx(std::move(mtx));
         CValidationState state;
         BOOST_CHECK(!CheckTransaction(tx, state));
         BOOST_CHECK(state.IsInvalid());
@@ -328,13 +331,13 @@ static CBlock CreateMinimalBlock()
     block.nTime = GetAdjustedTime();
     block.nBits = 0x1d00ffff;
 
-    CTransaction coinbase;
-    coinbase.vin.resize(1);
-    coinbase.vin[0].prevout.SetNull();
-    coinbase.vin[0].scriptSig = CScript() << 0 << 0;
-    coinbase.vout.resize(1);
-    coinbase.vout[0].nValue = 0;
-    block.vtx.push_back(coinbase);
+    CMutableTransaction mtx_coinbase;
+    mtx_coinbase.vin.resize(1);
+    mtx_coinbase.vin[0].prevout.SetNull();
+    mtx_coinbase.vin[0].scriptSig = CScript() << 0 << 0;
+    mtx_coinbase.vout.resize(1);
+    mtx_coinbase.vout[0].nValue = 0;
+    block.vtx.emplace_back(std::move(mtx_coinbase));
 
     return block;
 }
@@ -369,9 +372,12 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
     {
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
-        // Replace coinbase with a regular tx (non-null prevout)
-        block.vtx[0].vin[0].prevout.hash = uint256S("0xdead");
-        block.vtx[0].vin[0].prevout.n = 0;
+        // Replace coinbase with a regular tx (non-null prevout). vtx[0]'s
+        // vin is const post-F3, so rebuild it via CMutableTransaction.
+        CMutableTransaction mtx(block.vtx[0]);
+        mtx.vin[0].prevout.hash = uint256S("0xdead");
+        mtx.vin[0].prevout.n = 0;
+        block.vtx[0] = CTransaction(std::move(mtx));
         CValidationState state;
         BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
         BOOST_CHECK(state.IsInvalid());
@@ -394,12 +400,13 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
         // Add a regular tx, then duplicate it
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout.hash = uint256S("0xbeef");
-        tx.vin[0].prevout.n = 0;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = 1 * CENT;
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout.hash = uint256S("0xbeef");
+        mtx.vin[0].prevout.n = 0;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1 * CENT;
+        const CTransaction tx(std::move(mtx));
         block.vtx.push_back(tx);
         block.vtx.push_back(tx); // same hash → duplicate
         CValidationState state;
@@ -424,13 +431,13 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
         // Add a tx with negative output value → CheckTransaction assigns DoS 100
-        CTransaction bad_tx;
-        bad_tx.vin.resize(1);
-        bad_tx.vin[0].prevout.hash = uint256S("0xcafe");
-        bad_tx.vin[0].prevout.n = 0;
-        bad_tx.vout.resize(1);
-        bad_tx.vout[0].nValue = -1;
-        block.vtx.push_back(bad_tx);
+        CMutableTransaction mtx_bad;
+        mtx_bad.vin.resize(1);
+        mtx_bad.vin[0].prevout.hash = uint256S("0xcafe");
+        mtx_bad.vin[0].prevout.n = 0;
+        mtx_bad.vout.resize(1);
+        mtx_bad.vout[0].nValue = -1;
+        block.vtx.emplace_back(std::move(mtx_bad));
         CValidationState state;
         BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
         BOOST_CHECK(state.IsInvalid());

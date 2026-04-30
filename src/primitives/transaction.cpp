@@ -41,7 +41,6 @@ CTransaction::CTransaction()
     : nVersion(CTransaction::CURRENT_VERSION)
     , nTime(GetAdjustedTime())
     , nLockTime(0)
-    , nDoS(0)
     , hash(ComputeHash())
 {
 }
@@ -54,7 +53,6 @@ CTransaction::CTransaction(const CTransaction& tx)
     , nLockTime(tx.nLockTime)
     , hashBoinc(tx.hashBoinc)
     , vContracts(tx.vContracts)
-    , nDoS(0)
     , hash(tx.hash)
 {
 }
@@ -67,7 +65,6 @@ CTransaction::CTransaction(CTransaction&& tx) noexcept
     , nLockTime(tx.nLockTime)
     , hashBoinc(std::move(const_cast<std::string&>(tx.hashBoinc)))
     , vContracts(std::move(const_cast<std::vector<GRC::Contract>&>(tx.vContracts)))
-    , nDoS(0)
     , hash(tx.hash)
 {
 }
@@ -80,7 +77,6 @@ CTransaction::CTransaction(const CMutableTransaction& tx)
     , nLockTime(tx.nLockTime)
     , hashBoinc(tx.hashBoinc)
     , vContracts(tx.vContracts)
-    , nDoS(0)
     , hash(ComputeHash())
 {
 }
@@ -93,7 +89,6 @@ CTransaction::CTransaction(CMutableTransaction&& tx)
     , nLockTime(tx.nLockTime)
     , hashBoinc(std::move(tx.hashBoinc))
     , vContracts(std::move(tx.vContracts))
-    , nDoS(0)
     , hash(ComputeHash())
 {
 }
