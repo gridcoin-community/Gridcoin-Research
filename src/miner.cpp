@@ -133,21 +133,6 @@ bool TrySignClaim(
 
     return true;
 }
-
-//!
-//! \brief Temporary overload to cast const claims for the final signature.
-//!
-//! TODO: Refactor the block API to provide easier access to the claim contract
-//! for this.
-//!
-bool TrySignClaim(
-    CWallet* pwallet,
-    const GRC::Claim& claim,
-    const CBlock& block,
-    const bool dry_run = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    return TrySignClaim(pwallet, const_cast<GRC::Claim&>(claim), block, dry_run);
-}
 }
 
 // This is in anonymous namespace because it is only to be used by miner code here in this file.
@@ -1226,22 +1211,47 @@ unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitVal
 bool SignStakeBlock(CBlock &block, CKey &key,
                     vector<const CWalletTx*> &StakeInputs, CWallet *pwallet) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    //Sign the coinstake transaction
+    //Sign the coinstake transaction. Post-F3 CTransaction fields are const, so
+    //sign on a local CMutableTransaction and copy back when complete.
+    CMutableTransaction mtxCoinstake(block.vtx[1]);
     unsigned nIn = 0;
     for (auto const& pcoin : StakeInputs)
     {
-        if (!SignSignature(*pwallet, *pcoin, block.vtx[1], nIn++))
+        if (!SignSignature(*pwallet, *pcoin, mtxCoinstake, nIn++))
         {
             return error("SignStakeBlock: failed to sign coinstake");
         }
     }
+    block.vtx[1] = CTransaction(std::move(mtxCoinstake));
 
     // Researcher claim signatures depend on the coinstake transaction, so we
-    // sign claims after we sign the coinstake:
-    //
-    if (!TrySignClaim(pwallet, block.GetClaim(), block)) {
+    // sign claims after we sign the coinstake. The claim lives inside
+    // vtx[0].vContracts[0] (for v2+ blocks). CTransaction fields are const
+    // and the transaction hash is cached at construction time, so mutating
+    // the claim in place via const_cast (as the pre-F3 code did) leaves
+    // vtx[0].GetHash() stale and produces a merkle root on the wire that
+    // does not match the serialized content. Instead, pull a copy of the
+    // claim, sign the copy, and rebuild vtx[0] with the signed claim so
+    // the cached hash reflects the final on-wire content.
+    assert(!block.vtx[0].vContracts.empty());
+    GRC::Claim signed_claim = block.PullClaim();
+    if (!TrySignClaim(pwallet, signed_claim, block)) {
         return error("%s: failed to sign claim", __func__);
     }
+
+    CMutableTransaction mtxCoinbase(block.vtx[0]);
+    const uint32_t contract_version = mtxCoinbase.vContracts[0].m_version;
+    mtxCoinbase.vContracts[0] = GRC::MakeContract<GRC::Claim>(
+        contract_version,
+        GRC::ContractAction::ADD,
+        std::move(signed_claim));
+    block.vtx[0] = CTransaction(std::move(mtxCoinbase));
+
+    // The lazy claim cache on CBlock is stale after the rebuild above —
+    // GetClaim() on the post-assignment block would still be correct for
+    // v2+ blocks (it reads vContracts[0] directly), but resetting it is
+    // the defensive move in case legacy v1 paths ever populate it.
+    block.m_claim_contract_cache = GRC::Contract();
 
     //Sign the whole block
     block.hashMerkleRoot = BlockMerkleRoot(block);
