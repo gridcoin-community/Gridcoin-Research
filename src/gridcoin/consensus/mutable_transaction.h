@@ -7,6 +7,7 @@
 
 #include "primitives/transaction.h"
 
+#include <string>
 #include <vector>
 
 //! Scaffolding for CMutableTransaction — a mutable transaction builder type.
@@ -39,6 +40,8 @@ struct CMutableTransaction
     std::vector<CTxIn> vin;
     std::vector<CTxOut> vout;
     unsigned int nLockTime;
+    std::string hashBoinc;
+    std::vector<GRC::Contract> vContracts;
 
     CMutableTransaction()
         : nVersion(CTransaction::CURRENT_VERSION)
@@ -46,6 +49,8 @@ struct CMutableTransaction
         , vin()
         , vout()
         , nLockTime(0)
+        , hashBoinc()
+        , vContracts()
     {
     }
 
@@ -56,6 +61,8 @@ struct CMutableTransaction
         , vin(tx.vin)
         , vout(tx.vout)
         , nLockTime(tx.nLockTime)
+        , hashBoinc(tx.hashBoinc)
+        , vContracts(tx.vContracts)
     {
     }
 };
@@ -74,6 +81,8 @@ inline CTransaction MakeTransaction(const CMutableTransaction& mtx)
     tx.vin = mtx.vin;
     tx.vout = mtx.vout;
     tx.nLockTime = mtx.nLockTime;
+    tx.hashBoinc = mtx.hashBoinc;
+    tx.vContracts = mtx.vContracts;
     return tx;
 }
 

@@ -21,6 +21,7 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
@@ -1993,11 +1994,13 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
         vecSend.push_back(std::make_pair(txOut.scriptPubKey, txOut.nValue));
     }
 
-    CWalletTx wtx;
+    // Construct CWalletTx from the input transaction so its CTransaction
+    // base (notably nTime, hashBoinc, vContracts) is carried into
+    // CreateTransaction without post-construction mutation. Direct
+    // assignment to wtx.nTime stops compiling once CTransaction's fields
+    // become const (see #2901, F3).
+    CWalletTx wtx(this, tx);
     CReserveKey reservekey(this);
-
-    // Copy nTime from the input transaction
-    wtx.nTime = tx.nTime;
 
     if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet, nChangePosInOut, coinControl))
     {
@@ -2009,15 +2012,20 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
     // another transaction before the caller broadcasts this one.
     reservekey.KeepKey();
 
-    // Copy inputs and outputs back to the raw transaction
-    tx.vin = wtx.vin;
-    tx.vout = wtx.vout;
+    // Lift tx into a mutable copy, install the funded inputs/outputs, strip
+    // signatures, then copy back. Direct mutation of tx.vin / tx.vout stops
+    // compiling once CTransaction's vectors become const (see #2901, F3).
+    CMutableTransaction mtx(tx);
+    mtx.vin = wtx.vin;
+    mtx.vout = wtx.vout;
 
     // Strip signatures — caller gets an unsigned funded transaction.
-    for (auto& txin : tx.vin)
+    for (auto& txin : mtx.vin)
     {
         txin.scriptSig = CScript();
     }
+
+    tx = MakeTransaction(mtx);
 
     return true;
 }

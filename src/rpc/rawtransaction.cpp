@@ -8,6 +8,7 @@
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
@@ -1681,15 +1682,19 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
     if (!pwalletMain->FundTransaction(tx, nFeeOut, nChangePosOut, strFailReason, &coinControl))
         throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
 
-    // If user requested a specific change position, move change output there
+    // If user requested a specific change position, move change output there.
+    // The erase/insert dance lifts to a mutable copy so it stays compilable
+    // once CTransaction's vout becomes const (see #2901, F3).
     if (changePosition >= 0 && nChangePosOut >= 0 && changePosition != nChangePosOut)
     {
         if (changePosition >= (int)tx.vout.size())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "changePosition out of bounds");
 
-        CTxOut changeOut = tx.vout[nChangePosOut];
-        tx.vout.erase(tx.vout.begin() + nChangePosOut);
-        tx.vout.insert(tx.vout.begin() + changePosition, changeOut);
+        CMutableTransaction mtx(tx);
+        CTxOut changeOut = mtx.vout[nChangePosOut];
+        mtx.vout.erase(mtx.vout.begin() + nChangePosOut);
+        mtx.vout.insert(mtx.vout.begin() + changePosition, changeOut);
+        tx = MakeTransaction(mtx);
         nChangePosOut = changePosition;
     }
 
