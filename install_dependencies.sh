@@ -220,9 +220,11 @@ install_deps() {
                 sudo zypper --gpg-auto-import-keys refresh
             fi
 
-            # Pattern Install
-            echo "Installing devel_basis pattern..."
-            sudo zypper install -y -t pattern devel_basis
+            # Do not install openSUSE's devel_basis pattern directly here.
+            # On Leap 15.6 the pattern can ask zypper to downgrade libncurses6
+            # interactively, which breaks non-interactive CI. Install the build
+            # tools Gridcoin needs explicitly instead.
+            append_base binutils bison flex gettext-tools m4 make patch zlib-devel
 
             # Base common packages
             append_base libtool automake autoconf pkg-config python3 cmake git curl ccache doxygen graphviz libzstd-devel
