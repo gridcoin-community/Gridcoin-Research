@@ -143,7 +143,7 @@ struct RPCArg {
     using Default = UniValue;
     using Fallback = std::variant<Optional, DefaultHint, Default>;
 
-    const std::string m_names; //!< The name of the arg (can be empty for inner args, can contain multiple aliases separated by | for named request arguments)
+    const std::string m_names; //!< The name of the arg (can be empty for inner args, can contain multiple aliases separated by | for named request arguments). Aliased names ("foo|bar") are only valid on top-level args; GetName() asserts no '|' is present, and Sections::Push routes inner args through GetName() unconditionally.
     const Type m_type;
     const std::vector<RPCArg> m_inner; //!< Only used for arrays or dicts
     const Fallback m_fallback;
@@ -163,6 +163,7 @@ struct RPCArg {
           m_opts{std::move(opts)}
     {
         CHECK_NONFATAL(type != Type::ARR && type != Type::OBJ && type != Type::OBJ_NAMED_PARAMS && type != Type::OBJ_USER_KEYS);
+        CHECK_NONFATAL(m_opts.type_str.empty() || m_opts.type_str.size() == 2);
     }
 
     RPCArg(
@@ -180,6 +181,7 @@ struct RPCArg {
           m_opts{std::move(opts)}
     {
         CHECK_NONFATAL(type == Type::ARR || type == Type::OBJ || type == Type::OBJ_NAMED_PARAMS || type == Type::OBJ_USER_KEYS);
+        CHECK_NONFATAL(m_opts.type_str.empty() || m_opts.type_str.size() == 2);
     }
 
     bool IsOptional() const;

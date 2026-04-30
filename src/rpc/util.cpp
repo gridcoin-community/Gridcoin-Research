@@ -598,6 +598,15 @@ void RPCResult::CheckInnerDoc() const
     CHECK_NONFATAL(inner_needed != m_inner.empty());
 }
 
+// WARNING: ToStringObj() asserts on Type::OBJ / OBJ_NAMED_PARAMS / OBJ_USER_KEYS.
+// RPCArg::ToString() routes object-typed args' inner elements through
+// ToStringObj(), so any spec that nests an object inside another object's
+// m_inner will trip CHECK_NONFATAL(false) when help is rendered. This matches
+// upstream Bitcoin Core v26.0 (which has the same NONFATAL_UNREACHABLE() and
+// the same de facto "no nested objects" constraint). Spec authors must avoid
+// nesting object-typed args until this implementation is extended.
+// TODO(#2922): implement object-type rendering here when the first command
+// that needs nested objects in m_inner is converted to RPCHelpMan.
 std::string RPCArg::ToStringObj(const bool oneline) const
 {
     std::string res;
@@ -630,7 +639,7 @@ std::string RPCArg::ToStringObj(const bool oneline) const
     case Type::OBJ:
     case Type::OBJ_NAMED_PARAMS:
     case Type::OBJ_USER_KEYS:
-        // Currently unused, so avoid writing dead code
+        // See TODO(#2922) above the function definition.
         CHECK_NONFATAL(false);
     } // no default case, so the compiler can warn about missing cases
     CHECK_NONFATAL(false);

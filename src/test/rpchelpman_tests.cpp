@@ -253,6 +253,47 @@ BOOST_AUTO_TEST_CASE(percall_construction_dynamic_help)
     }
 }
 
+// Exercises the OBJ-typed RPCArg constructor: full RPCHelpMan rendering with
+// an object argument containing two scalar inner fields. Verifies that
+// Sections::Push recurses into m_inner, that the rendered help reaches the
+// "Arguments:" section for both the OBJ wrapper and its scalars, and that
+// RPCArg::ToStringObj() handles scalar inners. Does *not* nest object inside
+// object — that path intentionally trips CHECK_NONFATAL(false) (see TODO at
+// RPCArg::ToStringObj definition).
+BOOST_AUTO_TEST_CASE(rpcarg_obj_with_scalar_inner_renders)
+{
+    const RPCHelpMan help{
+        "objcmd",
+        "A command that takes an options object.",
+        {
+            {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED,
+                "Options for the command.",
+                {
+                    {"feerate", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "Fee rate, GRC/kB."},
+                    {"replaceable", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                        "Whether to mark the transaction as BIP125-replaceable."},
+                }},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{HelpExampleCli("objcmd", "")},
+    };
+
+    const std::string out = help.ToString();
+
+    // The OBJ wrapper appears in the Arguments: section by name.
+    BOOST_CHECK(out.find("Arguments:") != std::string::npos);
+    BOOST_CHECK(out.find("options") != std::string::npos);
+    // Both scalar inner fields appear by name in the rendered help.
+    BOOST_CHECK(out.find("feerate") != std::string::npos);
+    BOOST_CHECK(out.find("replaceable") != std::string::npos);
+
+    // GetArgNames returns just the top-level wrapper, not its inner fields.
+    const auto names = help.GetArgNames();
+    BOOST_CHECK_EQUAL(names.size(), 1u);
+    BOOST_CHECK_EQUAL(names[0].first, "options");
+}
+
 // Verify that throwing ToString() via the typical Tier 1 call pattern produces
 // a runtime_error whose message contains the rendered help.
 BOOST_AUTO_TEST_CASE(tier1_throw_pattern)
