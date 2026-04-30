@@ -350,7 +350,26 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
+    // The set of valid poll types depends on whether PollV3 is active, so the help
+    // text must be constructed per-call from the runtime-resolved list.
+    uint32_t payload_version = 0;
+    std::vector<PollType> valid_poll_types;
+    {
+        LOCK(cs_main);
+
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
+    }
+
+    std::stringstream types_ss;
+    for (const auto& type : valid_poll_types) {
+        if (types_ss.str() != std::string{}) {
+            types_ss << ", ";
+        }
+        types_ss << ToLower(Poll::PollTypeToString(type, false));
+    }
+
+    const RPCHelpMan help{
         "addpoll",
         "Add a poll to the network.\n"
         "Requires 100K GRC balance. Costs 50 GRC.\n"
@@ -359,8 +378,8 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         "parameters to see the required fields for a specific type.",
         {
             {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
-             "Type of poll. Valid types: survey, project. "
-             "Requires PollV3: development, governance, marketing, outreach, community."},
+             strprintf("Type of poll. Valid types for the active protocol version: %s.",
+                       types_ss.str())},
             {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
             {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
             {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
@@ -431,27 +450,6 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         }
     }
 
-    if (OutOfSyncByAge()) {
-        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
-    }
-
-    uint32_t payload_version = 0;
-    std::vector<PollType> valid_poll_types;
-    {
-        LOCK(cs_main);
-
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
-    }
-
-    std::stringstream types_ss;
-    for (const auto& type : valid_poll_types) {
-        if (types_ss.str() != std::string{}) {
-            types_ss << ", ";
-        }
-        types_ss << ToLower(Poll::PollTypeToString(type, false));
-    }
-
     std::string type_string = ToLower(params[0].get_str());
     PollType poll_type = PollType::UNKNOWN;
     bool valid_type_parameter = false;
@@ -471,7 +469,8 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     const std::vector<std::string>& required_fields = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
 
     // Wizard hint: `addpoll <type>` — reframe the per-type required-fields list as a
-    // validation error instead of help text.
+    // validation error instead of help text. Fires before the sync check so an unsynced
+    // user discovering the interface still gets the hint.
     if (params.size() == 1) {
         std::stringstream required_fields_ss;
         for (const auto& f : required_fields) {
@@ -489,6 +488,10 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     if (!required_fields.empty() && params.size() < 9) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
             strprintf("Poll type %s requires the additional <required_fields> argument.", type_string));
+    }
+
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
     }
 
     EnsureWalletIsUnlocked();

@@ -2470,10 +2470,11 @@ UniValue addkey(const UniValue& params, bool fHelp)
         "Add or delete an administrative key in the Gridcoin contract system.\n"
         "Requires the wallet to be unlocked and the caller to hold the master key.\n"
         "The set of required and optional parameters depends on the key type, the "
-        "action, and the currently-active protocol version. Parameters 5-7 apply "
-        "only to <keytype>=project and are gated by protocol flags (v2 project "
-        "contracts, v4 project contracts, block v13). See the per-parameter "
-        "descriptions below.",
+        "action, and the currently-active protocol version. Parameter 5 carries "
+        "different meanings for project (GDPR bool) and sidestake (description); "
+        "parameters 6-7 apply only to <keytype>=project and are gated by protocol "
+        "flags (v2 project contracts, v4 project contracts, block v13). See the "
+        "per-parameter descriptions below.",
         {
             {"action", RPCArg::Type::STR, RPCArg::Optional::NO,
                 "'add' or 'delete'."},
@@ -2483,14 +2484,17 @@ UniValue addkey(const UniValue& params, bool fHelp)
                 "Key name. For project: project short name. For scraper: Gridcoin "
                 "address. For protocol: parameter key. For sidestake: Gridcoin "
                 "destination address."},
-            {"keyvalue", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Key value. For project: stats URL. For scraper: 'true'|'false'|"
-                "'explorer' (v13) or 'true'|'false' (pre-v13). For protocol: "
-                "parameter value. For sidestake: allocation percentage (0-100)."},
-            {"gdpr_protection_bool", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "project only, requires v2 project contracts: 'true' if GDPR "
-                "stats-export protection is enforced for the project, otherwise "
-                "'false'. For sidestake add: optional free-text description."},
+            {"keyvalue", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Key value. Optional for project/scraper/sidestake delete; "
+                "required otherwise. For project add: stats URL. For scraper "
+                "add: 'true'|'false'|'explorer' (v13) or 'true'|'false' "
+                "(pre-v13). For protocol: parameter value. For sidestake add: "
+                "allocation percentage (0-100)."},
+            {"type_specific", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Project add (v2 contracts and later): 'true' if GDPR "
+                "stats-export protection is enforced, otherwise 'false'. "
+                "Sidestake add: optional free-text description (any string). "
+                "Pre-v2 / delete actions: ignored."},
             {"requires_external_adapter", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
                 "project only, requires v4 project contracts: 'true' if the "
                 "project requires an external adapter to collect stats, otherwise "

@@ -2040,7 +2040,18 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
             {"retention_by_days", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
                 "Number of days of backups to retain (non-negative integer)."},
         },
-        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "Maintain backup file retention success",
+                    "Whether the maintenance succeeded."},
+                {RPCResult::Type::NUM, "Number of files removed",
+                    "Count of files deleted from the backup directory."},
+                {RPCResult::Type::ARR, "Files removed",
+                    "List of file paths that were removed.",
+                    {
+                        {RPCResult::Type::STR, "", "Path of a removed file."},
+                    }},
+            }},
         RPCExamples{
             HelpExampleCli("maintainbackups", "")
           + HelpExampleCli("maintainbackups", "30 90")
@@ -2231,7 +2242,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
     constexpr int64_t MAX_SLEEP_TIME = 100000000; // larger values trigger a macos/libevent bug?
     if (nSleepTime > MAX_SLEEP_TIME) {
         nSleepTime = MAX_SLEEP_TIME;
-        LogPrintf("WARN: walletpassphrase: timeout is too large. Set to limit of 10000000 seconds.");
+        LogPrintf("WARN: walletpassphrase: timeout is too large. Set to limit of 100000000 seconds.");
     }
 
     // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
