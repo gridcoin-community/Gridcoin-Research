@@ -1807,18 +1807,35 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
 
 UniValue listsinceblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp)
-        throw runtime_error(
-                "listsinceblock ( \"blockhash\" target-confirmations includeWatchonly)\n"
-                "\nGet all transactions in blocks since block [blockhash], or all transactions if omitted\n"
-                "\nArguments:\n"
-                "1. \"blockhash\"   (string, optional) The block hash to list transactions since\n"
-                "2. target-confirmations:    (numeric, optional) The confirmations required, must be 1 or more\n"
-                "3. includeWatchonly:        (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')"
-                "\nResult:\n"
-                "{\n"
-                "  \"transactions\": [\n"
-                );
+    static const RPCHelpMan help{
+        "listsinceblock",
+        "Get all transactions in blocks since block [blockhash], or all transactions if omitted.",
+        {
+            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+                "The block hash to list transactions since."},
+            {"target_confirmations", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The confirmations required, must be 1 or more."},
+            {"include_watchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "transactions", "",
+                    {
+                        {RPCResult::Type::ELISION, "", "transaction object; see 'listtransactions'"},
+                    }},
+                {RPCResult::Type::STR_HEX, "lastblock",
+                    "The hash of the last block considered."},
+            }},
+        RPCExamples{
+            HelpExampleCli("listsinceblock", "") +
+            HelpExampleCli("listsinceblock",
+                "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\" 6") +
+            HelpExampleRpc("listsinceblock",
+                "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\", 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
