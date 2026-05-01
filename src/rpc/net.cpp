@@ -6,6 +6,7 @@
 
 #include "server.h"
 #include "protocol.h"
+#include <rpc/util.h>
 #include "alert.h"
 #include "wallet/wallet.h"
 #include "wallet/db.h"
@@ -35,15 +36,32 @@ UniValue getconnectioncount(const UniValue& params, bool fHelp)
 
 UniValue addnode(const UniValue& params, bool fHelp)
 {
-    string strCommand;
-    if (params.size() == 2)
-        strCommand = params[1].get_str();
-    if (fHelp || params.size() != 2 ||
-            (strCommand != "onetry" && strCommand != "add" && strCommand != "remove"))
-        throw runtime_error(
-                "addnode <node> <add|remove|onetry>\n"
-                "\n"
-                "Attempts add or remove <node> from the addnode list or try a connection to <node> once\n");
+    static const RPCHelpMan help{
+        "addnode",
+        "Attempts to add or remove a node from the addnode list, or try a connection to a node once.",
+        {
+            {"node", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The node (see getpeerinfo for nodes), as host[:port]."},
+            {"command", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "'add' to add a node to the list, 'remove' to remove a node from the list, "
+                "'onetry' to try a connection to the node once."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "always \"ok\" on success"},
+            }},
+        RPCExamples{
+            HelpExampleCli("addnode", "\"192.168.0.6:32749\" \"onetry\"") +
+            HelpExampleRpc("addnode", "\"192.168.0.6:32749\", \"onetry\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
+    const string strCommand = params[1].get_str();
+    if (strCommand != "onetry" && strCommand != "add" && strCommand != "remove") {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "command must be one of: \"add\", \"remove\", \"onetry\"");
+    }
 
     string strNode = params[0].get_str();
 

@@ -20,6 +20,7 @@
 // globals (vNodes, g_banman, pwalletMain, mapBlockIndex, locks), so calling
 // these with fHelp=true and an empty params array is safe in unit tests.
 UniValue settxfee(const UniValue& params, bool fHelp);
+UniValue addnode(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -338,6 +339,21 @@ BOOST_AUTO_TEST_CASE(settxfee_help_renders)
         const std::string what{e.what()};
         BOOST_CHECK(what.find("settxfee") != std::string::npos);
         BOOST_CHECK(what.find("amount") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(addnode_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        addnode(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("addnode") != std::string::npos);
+        BOOST_CHECK(what.find("node") != std::string::npos);
+        BOOST_CHECK(what.find("onetry") != std::string::npos);
         BOOST_CHECK(what.find("Examples:") != std::string::npos);
     }
 }
