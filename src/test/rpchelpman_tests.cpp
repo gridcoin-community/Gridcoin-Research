@@ -12,6 +12,15 @@
 #include <stdexcept>
 #include <string>
 
+// Forward declarations of the Tier 2 commands under test. These must live in
+// the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
+// captured into the suite's namespace and fail to link against the
+// definitions in src/rpc/blockchain.cpp, src/rpc/net.cpp, src/wallet/rpcwallet.cpp.
+// Each command's converted body throws for fHelp=true before touching any
+// globals (vNodes, g_banman, pwalletMain, mapBlockIndex, locks), so calling
+// these with fHelp=true and an empty params array is safe in unit tests.
+UniValue settxfee(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -316,6 +325,20 @@ BOOST_AUTO_TEST_CASE(tier1_throw_pattern)
         const std::string what{e.what()};
         BOOST_CHECK(what.find("trivialcmd") != std::string::npos);
         BOOST_CHECK(what.find("address") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(settxfee_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        settxfee(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("settxfee") != std::string::npos);
+        BOOST_CHECK(what.find("amount") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
     }
 }
 
