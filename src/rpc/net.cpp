@@ -227,23 +227,36 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 
 UniValue setban(const UniValue& params, bool fHelp)
 {
-    std::string strCommand;
+    static const RPCHelpMan help{
+        "setban",
+        "Attempts to add or remove an IP/Subnet from the banned list.",
+        {
+            {"subnet", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask "
+                "(default is /32 = single IP)."},
+            {"command", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list."},
+            {"bantime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Time in seconds how long (or until when if [absolute] is set) the IP is banned. "
+                "0 or empty means using the default time of 24h which can also be overwritten "
+                "by the -bantime startup argument."},
+            {"absolute", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If set, the bantime must be an absolute timestamp in seconds since epoch (Jan 1 1970 GMT). "
+                "Defaults to false."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("setban", "\"192.168.0.6\" \"add\" 86400") +
+            HelpExampleCli("setban", "\"192.168.0.0/24\" \"add\"") +
+            HelpExampleRpc("setban", "\"192.168.0.6\", \"add\", 86400")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
-    if (!params[1].isNull())
-        strCommand = params[1].get_str();
-
-    if (fHelp || params.size() < 2 || params.size() > 4 || (strCommand != "add" && strCommand != "remove"))
-    {
-        throw runtime_error(
-                    "setban <ip or subnet> <command> [bantime] [absolute]\n"
-                    "\n"
-                    "add or remove an IP/Subnet from the banned list.\n"
-                    "subnet: The IP/Subnet (see getpeerinfo for nodes IP) with an optional netmask (default is /32 = single IP) \n"
-                    "command: 'add' to add an IP/Subnet to the list, 'remove' to remove an IP/Subnet from the list \n"
-                    "bantime: time in seconds how long (or until when if [absolute] is set) the IP is banned \n"
-                    "         (0 or empty means using the default time of 24h which can also be overwritten by the -bantime startup argument)\n"
-                    "absolute: Defaults to false. If set, the bantime must be an absolute timestamp in seconds since epoch (Jan 1 1970 GMT).\n"
-                    );
+    const std::string strCommand = params[1].get_str();
+    if (strCommand != "add" && strCommand != "remove") {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "command must be \"add\" or \"remove\"");
     }
 
     if (!g_banman) {

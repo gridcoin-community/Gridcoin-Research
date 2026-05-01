@@ -21,6 +21,7 @@
 // these with fHelp=true and an empty params array is safe in unit tests.
 UniValue settxfee(const UniValue& params, bool fHelp);
 UniValue addnode(const UniValue& params, bool fHelp);
+UniValue setban(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -354,6 +355,21 @@ BOOST_AUTO_TEST_CASE(addnode_help_renders)
         BOOST_CHECK(what.find("addnode") != std::string::npos);
         BOOST_CHECK(what.find("node") != std::string::npos);
         BOOST_CHECK(what.find("onetry") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(setban_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        setban(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("setban") != std::string::npos);
+        BOOST_CHECK(what.find("subnet") != std::string::npos);
+        BOOST_CHECK(what.find("bantime") != std::string::npos);
         BOOST_CHECK(what.find("Examples:") != std::string::npos);
     }
 }
