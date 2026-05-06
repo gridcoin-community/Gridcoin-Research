@@ -27,8 +27,8 @@ jobs:
             prep_cmd: "dnf install -y which sudo git"
             build_args: ""
 
-          - distro: OpenSUSE Leap 15.6
-            image: opensuse/leap:15.6
+          - distro: OpenSUSE Leap 16.0
+            image: opensuse/leap:16.0
             prep_cmd: "zypper refresh && zypper install -y sudo which git"
             build_args: "CC=gcc-13 CXX=g++-13"
 
