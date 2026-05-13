@@ -409,7 +409,16 @@ Replaces Research Age accrual with periodic snapshots:
 - Magnitude looked up from the beacon/superblock registry instead of
   self-reported claim value
 
-> **Source:** `src/gridcoin/claim.h:27-69`
+Although both versions belong to the v11 lineage, the v3 bump occurred during
+v11 development (commit `9b9108be0`, "Sign claim contracts with coinstake
+transaction") before mainnet v11 activated at block 2,053,000. From v11
+activation onward the miner has unconditionally emitted v3 claims for pre-v12
+blocks; claim v2 was a pre-release format and never appeared on mainnet. No
+consensus rule gates claim version by height — the verifier accepts whichever
+version it finds and selects the matching hash branch in `GetClaimHash()`.
+
+> **Source:** `src/gridcoin/claim.h:27-69`, `src/gridcoin/claim.cpp:44-75`,
+> `src/miner.cpp:1299-1300`
 
 ---
 
@@ -793,26 +802,45 @@ Notes:
 This table shows the current (maximum) payload version for each contract type
 and when each version was introduced:
 
-| Contract Type | v1 (Legacy) | v2 (v11 Binary) | v3 | v4 |
+| Contract Type | v1 | v2 | v3 | v4 |
 |---|---|---|---|---|
+| **Envelope** | Legacy string | v11+ | v13+ (Scraper/Protocol native) | — |
 | **Beacon** | Legacy string | v11+ | v14+ (ownership proof) | — |
-| **Claim** | Legacy string | v11+ | v11+ (coinstake in sig) | v12+ (MRC map) |
+| **Claim** | Legacy string | v11+ † | v11+ (coinstake in sig) | v12+ (MRC map) |
 | **Poll** | Legacy string | v11+ | v12+ (PollV3Height) | — |
-| **Vote** | Legacy string | — | — | — |
-| **Project** | Legacy string | v12+ (ProjectV2Height) | — | v13+ (ProjectV4Height) |
+| **Vote** | v11+ ‡ | — | — | — |
+| **Project** | Legacy K-V | v12+ (ProjectV2Height) | v13+ (gated by contract v3) | v13+ (ProjectV4Height) |
 | **Protocol** | Legacy K-V | v13+ (contract v3) | — | — |
 | **Scraper** | Legacy K-V | v13+ (contract v3) | — | — |
 | **Superblock** | Legacy string | v11+ (SHA256 hash) | v13+ (SuperblockV3Height) | — |
-| **MRC** | — | — | — | — |
-| **Sidestake** | — | — | — | — |
+| **MRC** | v12+ | — | — | — |
+| **Sidestake** | v13+ | — | — | — |
+
+For most payloads, v1 is the pre-binary legacy form (string or appcache K-V)
+that gets parsed into a v1 instance, and v2 is the first native-binary format.
+MRC, Sidestake, and Vote are exceptions: their v1 *is* native binary and they
+have no legacy v1 entry — MRC and Sidestake never had a pre-binary form at
+all, and pre-v11 votes live in a separate `LegacyVote` class rather than
+being parsed as Vote v1.
 
 Notes:
-- MRC payload is version 1 only, introduced at v12
-- Sidestake payload is version 1 only, introduced at v13
-- Vote payload is version 1 only, introduced at v11
-- The "contract envelope" itself is at version 3 (all payloads native binary)
+- The envelope is the outer container that wraps every payload. Envelope v2
+  introduced the binary `vContracts` field on transactions at v11, dropping
+  the v1 signature/pubkey that lived alongside the legacy hashBoinc XML.
+  Envelope v3 at v13 completes the transition by moving the last two
+  appcache-backed payloads (Scraper, Protocol) to native binary.
 - Protocol and Scraper payloads were legacy K-V (appcache) through v11/v12;
-  their payload v2 coincides with contract envelope v3 at v13
+  their payload v2 coincides with envelope v3 at v13.
+- † Claim v2 was the initial binary-serialized format introduced during v11
+  development. It was superseded by v3 (coinstake in signature) before v11
+  activated on mainnet — no v11+ block has ever contained a v2 claim. The
+  miner unconditionally emits v3 for pre-v12 blocks (`src/miner.cpp:1299`),
+  and there is no consensus rule keying claim version to height; v2 remains
+  only as a serialization branch retained for completeness.
+- ‡ Vote v1 is native binary, introduced at v11 alongside the binary contract
+  system. Unlike the other "v1 is the legacy form" payloads, pre-v11 votes
+  are represented by a separate `LegacyVote` class (`src/gridcoin/voting/vote.h:180`)
+  and are not parsed as Vote v1.
 
 Current `CURRENT_VERSION` constants:
 
