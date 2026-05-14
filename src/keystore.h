@@ -12,8 +12,22 @@
 class CScript;
 class CScriptID;
 
+/** Read-only interface for key and script access, used by signing code.
+ *  Unlike CKeyStore, this has no Add* or enumeration methods.
+ */
+class SigningProvider
+{
+public:
+    virtual ~SigningProvider() {}
+    virtual bool HaveKey(const CKeyID &address) const { return false; }
+    virtual bool GetKey(const CKeyID &address, CKey& keyOut) const { return false; }
+    virtual bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const { return false; }
+    virtual bool HaveCScript(const CScriptID &hash) const { return false; }
+    virtual bool GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const { return false; }
+};
+
 /** A virtual base class for key stores */
-class CKeyStore
+class CKeyStore : public SigningProvider
 {
 protected:
     mutable CCriticalSection cs_KeyStore;
@@ -177,7 +191,7 @@ public:
     boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
 };
 
-/** Checks if a CKey is in the given CKeyStore compressed or otherwise*/
-bool HaveKey(const CKeyStore& store, const CKey& key);
+/** Checks if a CKey is in the given SigningProvider compressed or otherwise*/
+bool HaveKey(const SigningProvider& store, const CKey& key);
 
 #endif
