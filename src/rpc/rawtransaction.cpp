@@ -8,6 +8,7 @@
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
@@ -1581,6 +1582,130 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << rawTx;
     return HexStr(ss);
+}
+
+UniValue fundrawtransaction(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+                "fundrawtransaction \"hexstring\" ( options )\n"
+                "\nAdd inputs to a transaction until it has enough in value to meet its out value.\n"
+                "This will not modify existing inputs, and will add one change output to the outputs.\n"
+                "The inputs added will not be signed, use signrawtransaction for that.\n"
+                "\nNote: The transaction must have no existing inputs. Unlike Bitcoin Core's\n"
+                "fundrawtransaction, this command does not yet support adding funds to a\n"
+                "transaction that already has inputs.\n"
+                "\nArguments:\n"
+                "1. \"hexstring\"           (string, required) The hex string of the raw transaction\n"
+                "2. options               (object, optional)\n"
+                "   {\n"
+                "     \"changeAddress\"     (string, optional) The address to receive the change\n"
+                "     \"changePosition\"    (numeric, optional) The index of the change output\n"
+                "     \"includeWatching\"   (boolean, optional, default false) Also select inputs which are watch only\n"
+                "   }\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"hex\":       \"value\", (string) The resulting raw transaction (hex-encoded string)\n"
+                "  \"fee\":       n,       (numeric) Fee in GRC the resulting transaction pays\n"
+                "  \"changepos\": n        (numeric) The position of the added change output, or -1\n"
+                "}\n"
+                + HelpRequiringPassphrase());
+
+    RPCTypeCheck(params, { UniValue::VSTR });
+
+    // parse hex string from parameter
+    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+    CTransaction tx;
+    try {
+        ssData >> tx;
+    }
+    catch (std::exception& e) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+    }
+
+    if (tx.vout.size() == 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "TX must have at least one output");
+
+    // Unlike Bitcoin Core, we don't yet support funding transactions that
+    // already have inputs, since computing their value requires UTXO lookups.
+    if (tx.vin.size() > 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "fundrawtransaction does not yet support transactions with existing inputs. "
+            "Use createrawtransaction with outputs only.");
+
+    // Parse options
+    CCoinControl coinControl;
+    int changePosition = -1;
+    bool includeWatching = false;
+
+    if (params.size() > 1 && !params[1].isNull())
+    {
+        RPCTypeCheck({ params[1] }, { UniValue::VOBJ });
+        UniValue options = params[1].get_obj();
+
+        UniValue changeAddressValue = find_value(options, "changeAddress");
+        if (!changeAddressValue.isNull())
+        {
+            CTxDestination dest = DecodeDestination(changeAddressValue.get_str());
+            if (!IsValidDestination(dest))
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "changeAddress must be a valid Gridcoin address");
+            coinControl.destChange = dest;
+        }
+
+        UniValue changePosValue = find_value(options, "changePosition");
+        if (!changePosValue.isNull())
+        {
+            changePosition = changePosValue.get_int();
+            if (changePosition < 0)
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "changePosition must be >= 0");
+        }
+
+        UniValue includeWatchingValue = find_value(options, "includeWatching");
+        if (!includeWatchingValue.isNull())
+        {
+            if (!includeWatchingValue.isBool())
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "includeWatching must be a boolean");
+            includeWatching = includeWatchingValue.get_bool();
+        }
+    }
+
+    coinControl.fAllowWatchOnly = includeWatching;
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
+    int64_t nFeeOut = 0;
+    int nChangePosOut = -1;
+    string strFailReason;
+
+    if (!pwalletMain->FundTransaction(tx, nFeeOut, nChangePosOut, strFailReason, &coinControl))
+        throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
+
+    // If user requested a specific change position, move change output there.
+    // The erase/insert dance lifts to a mutable copy so it stays compilable
+    // once CTransaction's vout becomes const (see #2901, F3).
+    if (changePosition >= 0 && nChangePosOut >= 0 && changePosition != nChangePosOut)
+    {
+        if (changePosition >= (int)tx.vout.size())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "changePosition out of bounds");
+
+        CMutableTransaction mtx(tx);
+        CTxOut changeOut = mtx.vout[nChangePosOut];
+        mtx.vout.erase(mtx.vout.begin() + nChangePosOut);
+        mtx.vout.insert(mtx.vout.begin() + changePosition, changeOut);
+        tx = MakeTransaction(mtx);
+        nChangePosOut = changePosition;
+    }
+
+    UniValue result(UniValue::VOBJ);
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+    ssTx << tx;
+    result.pushKV("hex", HexStr(ssTx));
+    result.pushKV("fee", ValueFromAmount(nFeeOut));
+    result.pushKV("changepos", nChangePosOut);
+
+    return result;
 }
 
 UniValue decoderawtransaction(const UniValue& params, bool fHelp)

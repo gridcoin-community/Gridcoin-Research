@@ -21,6 +21,7 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
+#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
@@ -1501,7 +1502,16 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
 
             for (unsigned int i = 0; i < pcoin->vout.size(); i++)
 			{
-                if ((!(pcoin->IsSpent(i)) && (IsMine(pcoin->vout[i]) != ISMINE_NO) && pcoin->vout[i].nValue >= nMinimumInputValue &&
+                isminetype mine = IsMine(pcoin->vout[i]);
+                // Preserve historical behavior when no coinControl is supplied
+                // (include anything we have any interest in). When coinControl
+                // is supplied, restrict to spendable unless the caller opts in
+                // to watch-only via fAllowWatchOnly.
+                bool mine_ok = coinControl
+                    ? ((mine & ISMINE_SPENDABLE)
+                        || ((mine & ISMINE_WATCH_ONLY) && coinControl->fAllowWatchOnly))
+                    : (mine != ISMINE_NO);
+                if ((!(pcoin->IsSpent(i)) && mine_ok && pcoin->vout[i].nValue >= nMinimumInputValue &&
                      (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected(it->first, i))) ||
                     (fIncludeStakedCoins && pcoin->IsCoinStake() && pcoin->GetBlocksToMaturity() > 0 && pcoin->GetDepthInMainChain() > 0)) {
                     vCoins.push_back(COutput(pcoin, i, nDepth));
@@ -1973,9 +1983,56 @@ bool CWallet::SelectCoinsForStaking(unsigned int nSpendTime, std::vector<pair<co
     return true;
 }
 
+bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePosInOut,
+                              std::string& strFailReason, const CCoinControl* coinControl)
+{
+    std::vector<std::pair<CScript, int64_t>> vecSend;
+
+    // Collect existing outputs
+    for (const auto& txOut : tx.vout)
+    {
+        vecSend.push_back(std::make_pair(txOut.scriptPubKey, txOut.nValue));
+    }
+
+    // Construct CWalletTx from the input transaction so its CTransaction
+    // base (notably nTime, hashBoinc, vContracts) is carried into
+    // CreateTransaction without post-construction mutation. Direct
+    // assignment to wtx.nTime stops compiling once CTransaction's fields
+    // become const (see #2901, F3).
+    CWalletTx wtx(this, tx);
+    CReserveKey reservekey(this);
+
+    if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet, nChangePosInOut, coinControl))
+    {
+        strFailReason = "Insufficient funds or unable to create transaction";
+        return false;
+    }
+
+    // Keep the change key so it isn't returned to the pool and reused by
+    // another transaction before the caller broadcasts this one.
+    reservekey.KeepKey();
+
+    // Lift tx into a mutable copy, install the funded inputs/outputs, strip
+    // signatures, then copy back. Direct mutation of tx.vin / tx.vout stops
+    // compiling once CTransaction's vectors become const (see #2901, F3).
+    CMutableTransaction mtx(tx);
+    mtx.vin = wtx.vin;
+    mtx.vout = wtx.vout;
+
+    // Strip signatures — caller gets an unsigned funded transaction.
+    for (auto& txin : mtx.vin)
+    {
+        txin.scriptSig = CScript();
+    }
+
+    tx = MakeTransaction(mtx);
+
+    return true;
+}
+
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins_in,
-                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl,
-                                bool change_back_to_input_address)
+                                CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, int& nChangePosRet,
+                                const CCoinControl* coinControl, bool change_back_to_input_address)
 {
 
     int64_t nValueOut = 0;
@@ -2175,12 +2232,14 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     }
 
                     // Insert change output at random position in the transaction:
-                    vector<CTxOut>::iterator position = wtxNew.vout.begin() + GetRand<int>(wtxNew.vout.size());
-                    wtxNew.vout.insert(position, CTxOut(nChange, scriptChange));
+                    int nChangeInsertPos = GetRand<int>(wtxNew.vout.size());
+                    wtxNew.vout.insert(wtxNew.vout.begin() + nChangeInsertPos, CTxOut(nChange, scriptChange));
+                    nChangePosRet = nChangeInsertPos;
                 }
                 else
                 {
                     reservekey.ReturnKey();
+                    nChangePosRet = -1;
                 }
 
                 if (setCoins_in.size())
@@ -2263,12 +2322,26 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 }
 
 bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+    int64_t& nFeeRet, int& nChangePosRet, const CCoinControl* coinControl, bool change_back_to_input_address)
 {
     // Initialize setCoins empty to let CreateTransaction choose via SelectCoins...
     set<pair<const CWalletTx*,unsigned int>> setCoins;
 
-    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, coinControl, change_back_to_input_address);
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+}
+
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+    int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+{
+    int nChangePosRet = -1;
+    return CreateTransaction(vecSend, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
+}
+
+bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, set<pair<const CWalletTx*,unsigned int>>& setCoins,
+    CWalletTx& wtxNew, CReserveKey& reservekey, int64_t& nFeeRet, const CCoinControl* coinControl, bool change_back_to_input_address)
+{
+    int nChangePosRet = -1;
+    return CreateTransaction(vecSend, setCoins, wtxNew, reservekey, nFeeRet, nChangePosRet, coinControl, change_back_to_input_address);
 }
 
 

@@ -300,6 +300,7 @@ static const CRPCCommand vRPCCommands[] =
     { "decoderawtransaction",    &decoderawtransaction,    cat_wallet        },
     { "decodescript",            &decodescript,            cat_wallet        },
     { "dumpprivkey",             &dumpprivkey,             cat_wallet        },
+    { "fundrawtransaction",      &fundrawtransaction,      cat_wallet        },
     { "dumpwallet",              &dumpwallet,              cat_wallet        },
     { "encryptwallet",           &encryptwallet,           cat_wallet        },
     { "getaccount",              &getaccount,              cat_wallet        },
