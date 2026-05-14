@@ -9,7 +9,6 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
-#include "primitives/transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
 #include "gridcoin/sidestake.h"
@@ -1683,8 +1682,8 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
 
     // If user requested a specific change position, move change output there.
-    // The erase/insert dance lifts to a mutable copy so it stays compilable
-    // once CTransaction's vout becomes const (see #2901, F3).
+    // Post-F3 CTransaction fields are const, so operate on a CMutableTransaction
+    // copy and reassign.
     if (changePosition >= 0 && nChangePosOut >= 0 && changePosition != nChangePosOut)
     {
         if (changePosition >= (int)tx.vout.size())
@@ -1694,7 +1693,7 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         CTxOut changeOut = mtx.vout[nChangePosOut];
         mtx.vout.erase(mtx.vout.begin() + nChangePosOut);
         mtx.vout.insert(mtx.vout.begin() + changePosition, changeOut);
-        tx = MakeTransaction(mtx);
+        tx = CTransaction(std::move(mtx));
         nChangePosOut = changePosition;
     }
 

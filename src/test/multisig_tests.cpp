@@ -265,25 +265,26 @@ BOOST_AUTO_TEST_CASE(multisig_Sign)
     CScript escrow;
     escrow << OP_2 << key[0].GetPubKey() << key[1].GetPubKey() << key[2].GetPubKey() << OP_3 << OP_CHECKMULTISIG;
 
-    CTransaction txFrom;  // Funding transaction
-    txFrom.vout.resize(3);
-    txFrom.vout[0].scriptPubKey = a_and_b;
-    txFrom.vout[1].scriptPubKey = a_or_b;
-    txFrom.vout[2].scriptPubKey = escrow;
+    CMutableTransaction mtxFrom;  // Funding transaction
+    mtxFrom.vout.resize(3);
+    mtxFrom.vout[0].scriptPubKey = a_and_b;
+    mtxFrom.vout[1].scriptPubKey = a_or_b;
+    mtxFrom.vout[2].scriptPubKey = escrow;
 
-    CTransaction txTo[3]; // Spending transaction
+    CTransaction txFrom(mtxFrom);
+    CMutableTransaction mtxTo[3]; // Spending transaction
     for (int i = 0; i < 3; i++)
     {
-        txTo[i].vin.resize(1);
-        txTo[i].vout.resize(1);
-        txTo[i].vin[0].prevout.n = i;
-        txTo[i].vin[0].prevout.hash = txFrom.GetHash();
-        txTo[i].vout[0].nValue = 1;
+        mtxTo[i].vin.resize(1);
+        mtxTo[i].vout.resize(1);
+        mtxTo[i].vin[0].prevout.n = i;
+        mtxTo[i].vin[0].prevout.hash = txFrom.GetHash();
+        mtxTo[i].vout[0].nValue = 1;
     }
 
     for (int i = 0; i < 3; i++)
     {
-        BOOST_CHECK_MESSAGE(SignSignature(keystore, txFrom, txTo[i], 0), strprintf("SignSignature %d", i));
+        BOOST_CHECK_MESSAGE(SignSignature(keystore, txFrom, mtxTo[i], 0), strprintf("SignSignature %d", i));
     }
 }
 

@@ -21,7 +21,6 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
-#include "primitives/transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"
@@ -1996,12 +1995,13 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
         vecSend.push_back(std::make_pair(txOut.scriptPubKey, txOut.nValue));
     }
 
-    // Construct CWalletTx from the input transaction so its CTransaction
-    // base (notably nTime, hashBoinc, vContracts) is carried into
-    // CreateTransaction without post-construction mutation. Direct
-    // assignment to wtx.nTime stops compiling once CTransaction's fields
-    // become const (see #2901, F3).
-    CWalletTx wtx(this, tx);
+    // Seed the wallet tx with the input transaction's nTime. Post-F3
+    // CTransaction fields are const, so we build an initializer via
+    // CMutableTransaction and construct CWalletTx from the resulting
+    // CTransaction.
+    CMutableTransaction mtxInit;
+    mtxInit.nTime = tx.nTime;
+    CWalletTx wtx(this, CTransaction(std::move(mtxInit)));
     CReserveKey reservekey(this);
 
     if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet, nChangePosInOut, coinControl))
@@ -2014,20 +2014,16 @@ bool CWallet::FundTransaction(CTransaction& tx, int64_t& nFeeRet, int& nChangePo
     // another transaction before the caller broadcasts this one.
     reservekey.KeepKey();
 
-    // Lift tx into a mutable copy, install the funded inputs/outputs, strip
-    // signatures, then copy back. Direct mutation of tx.vin / tx.vout stops
-    // compiling once CTransaction's vectors become const (see #2901, F3).
-    CMutableTransaction mtx(tx);
-    mtx.vin = wtx.vin;
-    mtx.vout = wtx.vout;
-
-    // Strip signatures — caller gets an unsigned funded transaction.
-    for (auto& txin : mtx.vin)
+    // Post-F3 CTransaction fields are const — copy through a CMutableTransaction
+    // and reassign. Strip signatures so the caller gets an unsigned funded tx.
+    CMutableTransaction mtxOut(tx);
+    mtxOut.vin = wtx.vin;
+    mtxOut.vout = wtx.vout;
+    for (auto& txin : mtxOut.vin)
     {
         txin.scriptSig = CScript();
     }
-
-    tx = MakeTransaction(mtx);
+    tx = CTransaction(std::move(mtxOut));
 
     return true;
 }
@@ -2074,7 +2070,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             {
                 CMutableTransaction mtx;
                 mtx.nTime = wtxNew.nTime;
+                mtx.nVersion = wtxNew.nVersion;
                 mtx.vContracts = wtxNew.vContracts;
+
                 setCoins_out.clear();
                 wtxNew.fFromMe = true;
 
@@ -2107,7 +2105,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                     // Notice that setCoins_out is that set PRODUCED by SelectCoins. Tying this to the input
                     // parameter of CreateTransaction was a major bug here before. It is now separated.
-                    if (!SelectCoins(nTotalValue, wtxNew.nTime, setCoins_out, nValueIn, coinControl, contract)) {
+                    if (!SelectCoins(nTotalValue, mtx.nTime, setCoins_out, nValueIn, coinControl, contract)) {
                         return error("%s: Failed to select coins", __func__);
                     }
 
@@ -2170,9 +2168,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                 // if sub-cent change is required, the fee must be raised to at least GetBaseFee
                 // or until nChange becomes zero
                 // NOTE: this depends on the exact behaviour of GetMinFee
-                if (nFeeRet < GetBaseFee(wtxNew) && nChange > 0 && nChange < CENT)
+                if (nFeeRet < GetBaseFee(CTransaction(mtx)) && nChange > 0 && nChange < CENT)
                 {
-                    int64_t nMoveToFee = min(nChange, GetBaseFee(wtxNew) - nFeeRet);
+                    int64_t nMoveToFee = min(nChange, GetBaseFee(CTransaction(mtx)) - nFeeRet);
                     nChange -= nMoveToFee;
                     nFeeRet += nMoveToFee;
 
@@ -2253,14 +2251,14 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
 
-                    // Overwrite only the CTransaction base-class slice of wtxNew;
-                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
-                    static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
-
-                    // Sign
+                    // Sign on the mutable transaction while it's still live.
+                    // Post-F3, CTransaction fields are const, so signing can
+                    // only happen via CMutableTransaction. The copy-back to
+                    // wtxNew's CTransaction base class happens after all
+                    // signing is complete.
                     int nIn = 0;
                     for (auto const& coin : setCoins_in)
-                        if (!SignSignature(*this, *coin.first, wtxNew, nIn++)) {
+                        if (!SignSignature(*this, *coin.first, mtx, nIn++)) {
                             return error("%s: Failed to sign tx", __func__);
                         }
                 }
@@ -2272,21 +2270,23 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                         mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
 
-                    // Overwrite only the CTransaction base-class slice of wtxNew;
-                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
-                    static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
-
-                    // Sign
+                    // Sign on the mutable transaction (see note above).
                     int nIn = 0;
                     for (auto const& coin : setCoins_out)
-                        if (!SignSignature(*this, *coin.first, wtxNew, nIn++))
+                        if (!SignSignature(*this, *coin.first, mtx, nIn++))
                         {
                             return error("%s: Failed to sign tx", __func__);
                         }
                 }
 
+                // Copy the signed mutable transaction into the CWalletTx base.
+                // We overwrite only the CTransaction base-class slice so
+                // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are
+                // preserved. After this, mtx is moved-from; do not use it.
+                static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
+
                 // Limit size
-                unsigned int nBytes = ::GetSerializeSize(*(CTransaction*)&wtxNew, SER_NETWORK, PROTOCOL_VERSION);
+                unsigned int nBytes = ::GetSerializeSize(static_cast<const CTransaction&>(wtxNew), SER_NETWORK, PROTOCOL_VERSION);
                 if (nBytes >= MAX_STANDARD_TX_SIZE) {
                     return error("%s: tx size %d greater than standard %d", __func__, nBytes, MAX_STANDARD_TX_SIZE);
                 }

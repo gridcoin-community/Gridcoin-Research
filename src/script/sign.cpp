@@ -170,11 +170,15 @@ void UpdateInput(CTxIn& input, const SignatureData& data)
 // SignSignature: public API using TransactionSignatureCreator
 // ---------------------------------------------------------------------------
 
-bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CTransaction& txTo, unsigned int nIn, int nHashType)
+// ---------------------------------------------------------------------------
+// CMutableTransaction overloads (primary implementations)
+// ---------------------------------------------------------------------------
+
+bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CMutableTransaction& txTo, unsigned int nIn, int nHashType)
 {
     assert(nIn < txTo.vin.size());
 
-    TransactionSignatureCreator creator(txTo, nIn, nHashType);
+    MutableTransactionSignatureCreator creator(txTo, nIn, nHashType);
     SignatureData sigdata;
     bool ret = ProduceSignature(provider, creator, fromPubKey, sigdata);
     UpdateInput(txTo.vin[nIn], sigdata);

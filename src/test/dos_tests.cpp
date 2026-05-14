@@ -142,15 +142,15 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     // 50 orphan transactions:
     for (int i = 0; i < 50; i++)
     {
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = InsecureRand256();
-        tx.vin[0].scriptSig << OP_1;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = 1*CENT;
-        tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-        AddOrphanTx(tx);
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout.n = 0;
+        mtx.vin[0].prevout.hash = InsecureRand256();
+        mtx.vin[0].scriptSig << OP_1;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1*CENT;
+        mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+        AddOrphanTx(CTransaction(mtx));
     }
 
     // ... and 50 that depend on other orphans:
@@ -158,15 +158,15 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     {
         CTransaction txPrev = RandomOrphan();
 
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout.n = 0;
-        tx.vin[0].prevout.hash = txPrev.GetHash();
-        tx.vout.resize(1);
-        tx.vout[0].nValue = 1*CENT;
-        tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-        BOOST_CHECK(SignSignature(keystore, txPrev, tx, 0));
-        AddOrphanTx(tx);
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout.n = 0;
+        mtx.vin[0].prevout.hash = txPrev.GetHash();
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1*CENT;
+        mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+        BOOST_CHECK(SignSignature(keystore, txPrev, mtx, 0));
+        AddOrphanTx(CTransaction(mtx));
     }
 
     // This really-big orphan should be ignored:
@@ -174,23 +174,23 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     {
         CTransaction txPrev = RandomOrphan();
 
-        CTransaction tx;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = 1*CENT;
-        tx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
-        tx.vin.resize(500);
-        for (unsigned int j = 0; j < tx.vin.size(); j++)
+        CMutableTransaction mtx;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = 1*CENT;
+        mtx.vout[0].scriptPubKey.SetDestination(key.GetPubKey().GetID());
+        mtx.vin.resize(500);
+        for (unsigned int j = 0; j < mtx.vin.size(); j++)
         {
-            tx.vin[j].prevout.n = j;
-            tx.vin[j].prevout.hash = txPrev.GetHash();
+            mtx.vin[j].prevout.n = j;
+            mtx.vin[j].prevout.hash = txPrev.GetHash();
         }
-        BOOST_CHECK(SignSignature(keystore, txPrev, tx, 0));
+        BOOST_CHECK(SignSignature(keystore, txPrev, mtx, 0));
         // Reuse same signature for other inputs
         // (they don't have to be valid for this test)
-        for (unsigned int j = 1; j < tx.vin.size(); j++)
-            tx.vin[j].scriptSig = tx.vin[0].scriptSig;
+        for (unsigned int j = 1; j < mtx.vin.size(); j++)
+            mtx.vin[j].scriptSig = mtx.vin[0].scriptSig;
 
-        BOOST_CHECK(!AddOrphanTx(tx));
+        BOOST_CHECK(!AddOrphanTx(CTransaction(mtx)));
     }
 
     // Test LimitOrphanTxSize() function:
@@ -265,9 +265,8 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
         CMutableTransaction mtx;
         mtx.vout.resize(1);
         mtx.vout[0].nValue = 1 * CENT;
-        const CTransaction tx(std::move(mtx));
         CValidationState state;
-        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(!CheckTransaction(CTransaction(mtx), state));
         BOOST_CHECK(state.IsInvalid());
         BOOST_CHECK_EQUAL(state.GetDoS(), 10);
     }
@@ -278,9 +277,8 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
         mtx.vin.resize(1);
         mtx.vin[0].prevout.hash = InsecureRand256();
         mtx.vin[0].prevout.n = 0;
-        const CTransaction tx(std::move(mtx));
         CValidationState state;
-        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(!CheckTransaction(CTransaction(mtx), state));
         BOOST_CHECK(state.IsInvalid());
         BOOST_CHECK_EQUAL(state.GetDoS(), 10);
     }
@@ -293,9 +291,8 @@ BOOST_AUTO_TEST_CASE(DoS_validation_state)
         mtx.vin[0].prevout.n = 0;
         mtx.vout.resize(1);
         mtx.vout[0].nValue = -1;
-        const CTransaction tx(std::move(mtx));
         CValidationState state;
-        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(!CheckTransaction(CTransaction(mtx), state));
         BOOST_CHECK(state.IsInvalid());
         BOOST_CHECK_EQUAL(state.GetDoS(), 100);
     }
@@ -331,13 +328,13 @@ static CBlock CreateMinimalBlock()
     block.nTime = GetAdjustedTime();
     block.nBits = 0x1d00ffff;
 
-    CMutableTransaction mtx_coinbase;
-    mtx_coinbase.vin.resize(1);
-    mtx_coinbase.vin[0].prevout.SetNull();
-    mtx_coinbase.vin[0].scriptSig = CScript() << 0 << 0;
-    mtx_coinbase.vout.resize(1);
-    mtx_coinbase.vout[0].nValue = 0;
-    block.vtx.emplace_back(std::move(mtx_coinbase));
+    CMutableTransaction mtxCoinbase;
+    mtxCoinbase.vin.resize(1);
+    mtxCoinbase.vin[0].prevout.SetNull();
+    mtxCoinbase.vin[0].scriptSig = CScript() << 0 << 0;
+    mtxCoinbase.vout.resize(1);
+    mtxCoinbase.vout[0].nValue = 0;
+    block.vtx.push_back(CTransaction(std::move(mtxCoinbase)));
 
     return block;
 }
@@ -372,12 +369,11 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
     {
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
-        // Replace coinbase with a regular tx (non-null prevout). vtx[0]'s
-        // vin is const post-F3, so rebuild it via CMutableTransaction.
-        CMutableTransaction mtx(block.vtx[0]);
-        mtx.vin[0].prevout.hash = uint256S("0xdead");
-        mtx.vin[0].prevout.n = 0;
-        block.vtx[0] = CTransaction(std::move(mtx));
+        // Replace coinbase with a regular tx (non-null prevout)
+        CMutableTransaction mtxReplace(block.vtx[0]);
+        mtxReplace.vin[0].prevout.hash = uint256S("0xdead");
+        mtxReplace.vin[0].prevout.n = 0;
+        block.vtx[0] = CTransaction(std::move(mtxReplace));
         CValidationState state;
         BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
         BOOST_CHECK(state.IsInvalid());
@@ -400,13 +396,13 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
         // Add a regular tx, then duplicate it
-        CMutableTransaction mtx;
-        mtx.vin.resize(1);
-        mtx.vin[0].prevout.hash = uint256S("0xbeef");
-        mtx.vin[0].prevout.n = 0;
-        mtx.vout.resize(1);
-        mtx.vout[0].nValue = 1 * CENT;
-        const CTransaction tx(std::move(mtx));
+        CMutableTransaction mtxDup;
+        mtxDup.vin.resize(1);
+        mtxDup.vin[0].prevout.hash = uint256S("0xbeef");
+        mtxDup.vin[0].prevout.n = 0;
+        mtxDup.vout.resize(1);
+        mtxDup.vout[0].nValue = 1 * CENT;
+        CTransaction tx(mtxDup);
         block.vtx.push_back(tx);
         block.vtx.push_back(tx); // same hash → duplicate
         CValidationState state;
@@ -431,13 +427,13 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
         LOCK(cs_main);
         CBlock block = CreateMinimalBlock();
         // Add a tx with negative output value → CheckTransaction assigns DoS 100
-        CMutableTransaction mtx_bad;
-        mtx_bad.vin.resize(1);
-        mtx_bad.vin[0].prevout.hash = uint256S("0xcafe");
-        mtx_bad.vin[0].prevout.n = 0;
-        mtx_bad.vout.resize(1);
-        mtx_bad.vout[0].nValue = -1;
-        block.vtx.emplace_back(std::move(mtx_bad));
+        CMutableTransaction mtxBad;
+        mtxBad.vin.resize(1);
+        mtxBad.vin[0].prevout.hash = uint256S("0xcafe");
+        mtxBad.vin[0].prevout.n = 0;
+        mtxBad.vout.resize(1);
+        mtxBad.vout[0].nValue = -1;
+        block.vtx.push_back(CTransaction(std::move(mtxBad)));
         CValidationState state;
         BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
         BOOST_CHECK(state.IsInvalid());
