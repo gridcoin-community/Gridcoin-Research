@@ -480,7 +480,8 @@ bool CTxDB::LoadBlockIndex()
             }
         }
 
-        if (nCheckLevel>0 && !CheckBlock(block, pindex->nHeight, true, true, (nCheckLevel>6), true))
+        CValidationState check_state;
+        if (nCheckLevel>0 && !CheckBlock(block, check_state, pindex->nHeight, true, true, (nCheckLevel>6), true))
         {
             LogPrintf("LoadBlockIndex() : *** found bad block at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
             pindexFork = pindex->pprev;
@@ -536,7 +537,7 @@ bool CTxDB::LoadBlockIndex()
                                         LogPrintf("LoadBlockIndex(): *** cannot read spending transaction of %s:%i from disk", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;
                                     }
-                                    else if (!CheckTransaction(txSpend))
+                                    else if (CValidationState spend_state; !CheckTransaction(txSpend, spend_state))
                                     {
                                         LogPrintf("LoadBlockIndex(): *** spending transaction of %s:%i is invalid", hashTx.ToString(), nOutput);
                                         pindexFork = pindex->pprev;

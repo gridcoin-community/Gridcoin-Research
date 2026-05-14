@@ -1816,7 +1816,8 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
 
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
-        FetchInputs(tempTx, txdb, unused, false, false, mapPrevTx, fInvalid);
+        CValidationState fetch_state;
+        FetchInputs(tempTx, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)
@@ -2127,7 +2128,8 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     else
     {
         // push to local node
-        if (!AcceptToMemoryPool(mempool, tx, nullptr))
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, tx, state, nullptr))
             throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX rejected");
 
         SyncWithWallets(tx, nullptr, true);

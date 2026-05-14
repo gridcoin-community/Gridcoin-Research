@@ -203,4 +203,239 @@ BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
     BOOST_CHECK(mapOrphanTransactionsByPrev.empty());
 }
 
+BOOST_AUTO_TEST_CASE(DoS_validation_state)
+{
+    // --- Part 1: CValidationState unit behavior ---
+
+    // Fresh state is valid, DoS = 0
+    {
+        CValidationState state;
+        BOOST_CHECK(state.IsValid());
+        BOOST_CHECK(!state.IsInvalid());
+        BOOST_CHECK(!state.IsError());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+        int nDoS = -1;
+        BOOST_CHECK(!state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, -1); // unchanged when valid
+    }
+
+    // DoS() sets INVALID mode and accumulates score
+    {
+        CValidationState state;
+        state.DoS(10, false, "reason1");
+        BOOST_CHECK(!state.IsValid());
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "reason1");
+
+        // Accumulates
+        state.DoS(25, false, "reason2");
+        BOOST_CHECK_EQUAL(state.GetDoS(), 35);
+
+        // IsInvalid(nDoS) extracts accumulated score
+        int nDoS = 0;
+        BOOST_CHECK(state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, 35);
+    }
+
+    // Invalid() sets INVALID with DoS = 0
+    {
+        CValidationState state;
+        state.Invalid(false, "soft-invalid");
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 0);
+    }
+
+    // Error() sets ERROR mode (not INVALID)
+    {
+        CValidationState state;
+        state.Error("runtime-error");
+        BOOST_CHECK(state.IsError());
+        BOOST_CHECK(!state.IsInvalid());
+        BOOST_CHECK(!state.IsValid());
+        int nDoS = -1;
+        BOOST_CHECK(!state.IsInvalid(nDoS));
+        BOOST_CHECK_EQUAL(nDoS, -1);
+    }
+
+    // --- Part 2: CheckTransaction sets DoS via state ---
+
+    // Empty vin → DoS 10
+    {
+        CTransaction tx;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = 1 * CENT;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+    }
+
+    // Empty vout → DoS 10
+    {
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.hash = InsecureRand256();
+        tx.vin[0].prevout.n = 0;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 10);
+    }
+
+    // Negative output value → DoS 100
+    {
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.hash = InsecureRand256();
+        tx.vin[0].prevout.n = 0;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = -1;
+        CValidationState state;
+        BOOST_CHECK(!CheckTransaction(tx, state));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // --- Part 3: P2P glue pattern works ---
+    // Simulates the exact code path from main.cpp ProcessMessage("tx"/BLOCK)
+    {
+        CTransaction tx; // empty vin+vout
+        CValidationState state;
+        CheckTransaction(tx, state);
+
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+        {
+            // This would call pfrom->Misbehaving(nDoS) in production
+            BOOST_CHECK(nDoS > 0);
+        }
+        else
+        {
+            BOOST_ERROR("Expected IsInvalid with nDoS > 0 for empty transaction");
+        }
+    }
+}
+
+// Helper: create a minimal block that passes CheckBlock structural checks.
+// Uses height=0 (≤ nGrandfather) and disables PoW/merkle/sig checks.
+// The block has a single coinbase tx with a valid scriptSig.
+static CBlock CreateMinimalBlock()
+{
+    CBlock block;
+    block.nVersion = 10; // pre-contract version avoids claim contract checks
+    block.hashPrevBlock = uint256S("0x1"); // non-null to skip genesis bypass
+    block.nTime = GetAdjustedTime();
+    block.nBits = 0x1d00ffff;
+
+    CTransaction coinbase;
+    coinbase.vin.resize(1);
+    coinbase.vin[0].prevout.SetNull();
+    coinbase.vin[0].scriptSig = CScript() << 0 << 0;
+    coinbase.vout.resize(1);
+    coinbase.vout[0].nValue = 0;
+    block.vtx.push_back(coinbase);
+
+    return block;
+}
+
+BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
+{
+    // All tests use height=0 and disable PoW/merkle/sig to isolate structural checks.
+    // CheckBlock requires cs_main.
+
+    // Baseline: minimal block passes
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        CValidationState state;
+        BOOST_CHECK_MESSAGE(
+            CheckBlock(block, state, 0, false, false, false),
+            "Minimal valid block should pass CheckBlock");
+    }
+
+    // Empty vtx → DoS 100 (size limits)
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        block.vtx.clear();
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // First tx not coinbase → DoS 100
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        // Replace coinbase with a regular tx (non-null prevout)
+        block.vtx[0].vin[0].prevout.hash = uint256S("0xdead");
+        block.vtx[0].vin[0].prevout.n = 0;
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // Multiple coinbases → DoS 100
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        block.vtx.push_back(block.vtx[0]); // duplicate coinbase
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // Duplicate transactions → DoS 100
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        // Add a regular tx, then duplicate it
+        CTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.hash = uint256S("0xbeef");
+        tx.vin[0].prevout.n = 0;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = 1 * CENT;
+        block.vtx.push_back(tx);
+        block.vtx.push_back(tx); // same hash → duplicate
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // Merkle root mismatch → DoS 100 (enable fCheckMerkleRoot)
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        block.hashMerkleRoot = uint256S("0xbad"); // wrong merkle root
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, /*fCheckMerkleRoot=*/true, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+
+    // Block with invalid transaction propagates DoS from CheckTransaction
+    {
+        LOCK(cs_main);
+        CBlock block = CreateMinimalBlock();
+        // Add a tx with negative output value → CheckTransaction assigns DoS 100
+        CTransaction bad_tx;
+        bad_tx.vin.resize(1);
+        bad_tx.vin[0].prevout.hash = uint256S("0xcafe");
+        bad_tx.vin[0].prevout.n = 0;
+        bad_tx.vout.resize(1);
+        bad_tx.vout[0].nValue = -1;
+        block.vtx.push_back(bad_tx);
+        CValidationState state;
+        BOOST_CHECK(!CheckBlock(block, state, 0, false, false, false));
+        BOOST_CHECK(state.IsInvalid());
+        BOOST_CHECK_EQUAL(state.GetDoS(), 100);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

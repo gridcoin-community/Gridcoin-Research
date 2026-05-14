@@ -114,7 +114,7 @@ void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
 void UpdatedTransaction(const uint256& hashTx);
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
@@ -138,7 +138,7 @@ bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
-                        bool* pfMissingInputs);
+                        CValidationState& state, bool* pfMissingInputs);
 bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
 
 
@@ -343,10 +343,6 @@ public:
     // memory only
     mutable bool fChecked;
 
-    // Denial-of-service detection:
-    mutable int nDoS;
-    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-
     CBlock()
     {
         SetNull();
@@ -382,7 +378,6 @@ public:
         vtx.clear();
         vchBlockSig.clear();
         fChecked = false;
-        nDoS = 0;
     }
 
     CBlockHeader GetBlockHeader() const

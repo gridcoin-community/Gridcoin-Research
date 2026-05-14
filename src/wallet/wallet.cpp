@@ -1363,14 +1363,16 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     CTransaction tx = (CTransaction) *this;
 
     // Redo basic transaction check
-    if (!CheckTransaction(tx)) return false;
+    CValidationState check_state;
+    if (!CheckTransaction(tx, check_state)) return false;
 
     // Do a subset of the AcceptToMemoryPool transaction checks. Here we are going to check and see if the inputs exist
     // and also do the vanilla contract and GRC specific contract checks.
     MapPrevTx mapInputs;
     map<uint256, CTxIndex> mapUnused;
     bool fInvalid = false;
-    if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+    CValidationState wallet_state;
+    if (!FetchInputs(tx, wallet_state, txdb, mapUnused, false, false, mapInputs, fInvalid))
     {
         if (fInvalid) {
             return error("%s: FetchInputs found invalid tx %s", __func__, tx.GetHash().ToString());
@@ -1381,7 +1383,7 @@ bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
     // Validate any contracts published in the transaction:
 
     if (!tx.GetContracts().empty()) {
-        if (!CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+        if (!CheckContracts(tx, wallet_state, mapInputs, pindexBest->nHeight)) {
             return error("%s: CheckContracts found invalid contract in tx %s", __func__, tx.GetHash().ToString());
         }
 
