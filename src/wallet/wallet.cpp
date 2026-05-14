@@ -2072,8 +2072,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
             nFeeRet = nTransactionFee;
             while (true)
             {
-                wtxNew.vin.clear();
-                wtxNew.vout.clear();
+                CMutableTransaction mtx;
+                mtx.nTime = wtxNew.nTime;
+                mtx.vContracts = wtxNew.vContracts;
                 setCoins_out.clear();
                 wtxNew.fFromMe = true;
 
@@ -2081,12 +2082,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
 
                 // vouts to the payees
                 for (auto const& s : vecSend)
-                    wtxNew.vout.emplace_back(s.second, s.first);
+                    mtx.vout.emplace_back(s.second, s.first);
 
                 // Add the burn fee for a transaction with a custom user message:
                 if (message_fee > 0)
                 {
-                    wtxNew.vout.emplace_back(message_fee, CScript() << OP_RETURN);
+                    mtx.vout.emplace_back(message_fee, CScript() << OP_RETURN);
                 }
 
                 int64_t nValueIn = 0;
@@ -2234,8 +2235,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     }
 
                     // Insert change output at random position in the transaction:
-                    int nChangeInsertPos = GetRand<int>(wtxNew.vout.size());
-                    wtxNew.vout.insert(wtxNew.vout.begin() + nChangeInsertPos, CTxOut(nChange, scriptChange));
+                    int nChangeInsertPos = GetRand<int>(mtx.vout.size());
+                    mtx.vout.insert(mtx.vout.begin() + nChangeInsertPos, CTxOut(nChange, scriptChange));
                     nChangePosRet = nChangeInsertPos;
                 }
                 else
@@ -2249,8 +2250,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     // Fill vin from provided inputs
                     for (auto const& coin : setCoins_in)
                     {
-                        wtxNew.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
+                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
+
+                    // Overwrite only the CTransaction base-class slice of wtxNew;
+                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
+                    static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
 
                     // Sign
                     int nIn = 0;
@@ -2264,8 +2269,12 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, int64_t> >& vecSend, 
                     // Fill vin from provided inputs
                     for (auto const& coin : setCoins_out)
                     {
-                        wtxNew.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
+                        mtx.vin.push_back(CTxIn(coin.first->GetHash(),coin.second));
                     }
+
+                    // Overwrite only the CTransaction base-class slice of wtxNew;
+                    // CWalletTx/CMerkleTx members (mapValue, vOrderForm, etc.) are preserved.
+                    static_cast<CTransaction&>(wtxNew) = CTransaction(std::move(mtx));
 
                     // Sign
                     int nIn = 0;

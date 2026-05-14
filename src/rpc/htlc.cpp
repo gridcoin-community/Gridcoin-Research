@@ -197,27 +197,28 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "Receiver's private key not found in wallet");
 
     // Build the spending transaction
-    CTransaction txSpend;
-    txSpend.nVersion = CTransaction::CURRENT_VERSION;
-    txSpend.nTime = GetAdjustedTime();
-    txSpend.nLockTime = 0;
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+    mtx.nTime = GetAdjustedTime();
+    mtx.nLockTime = 0;
 
     // Input: the HTLC UTXO
     CTxIn txin(COutPoint(htlc_txid, nVout), CScript(), 0xfffffffe);
-    txSpend.vin.push_back(txin);
+    mtx.vin.push_back(txin);
 
     // Output: pay to destination minus fee
     CScript destScript;
     destScript.SetDestination(dest);
 
     CAmount nValue = htlcOutput.nValue;
-    CAmount nFee = GetBaseFee(txSpend);
+    CAmount nFee = GetBaseFee(CTransaction(mtx));
     if (nValue <= nFee)
         throw JSONRPCError(RPC_WALLET_ERROR, "HTLC output value too small to cover fee");
 
-    txSpend.vout.push_back(CTxOut(nValue - nFee, destScript));
+    mtx.vout.push_back(CTxOut(nValue - nFee, destScript));
 
-    // Sign: compute signature hash over the redeem script
+    // Sign: compute sighash using CTransaction for SignatureHash
+    CTransaction txSpend(mtx);
     uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
 
     vector<unsigned char> vchSig;
@@ -226,7 +227,10 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     vchSig.push_back((unsigned char)SIGHASH_ALL);
 
     // Build scriptSig: <sig> <preimage> OP_TRUE <redeemScript>
-    txSpend.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, preimage, redeemScript);
+    mtx.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, preimage, redeemScript);
+
+    // Final tx for verify + broadcast
+    txSpend = CTransaction(mtx);
 
     // Verify the script evaluates correctly
     if (!VerifyScript(txSpend.vin[0].scriptSig, htlcOutput.scriptPubKey,
@@ -336,27 +340,28 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "Sender's private key not found in wallet");
 
     // Build the spending transaction
-    CTransaction txSpend;
-    txSpend.nVersion = CTransaction::CURRENT_VERSION;
-    txSpend.nTime = GetAdjustedTime();
-    txSpend.nLockTime = timeout;
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+    mtx.nTime = GetAdjustedTime();
+    mtx.nLockTime = timeout;
 
     // Input: the HTLC UTXO with nSequence < max to enable nLockTime
     CTxIn txin(COutPoint(htlc_txid, nVout), CScript(), 0xfffffffe);
-    txSpend.vin.push_back(txin);
+    mtx.vin.push_back(txin);
 
     // Output: pay to destination minus fee
     CScript destScript;
     destScript.SetDestination(dest);
 
     CAmount nValue = htlcOutput.nValue;
-    CAmount nFee = GetBaseFee(txSpend);
+    CAmount nFee = GetBaseFee(CTransaction(mtx));
     if (nValue <= nFee)
         throw JSONRPCError(RPC_WALLET_ERROR, "HTLC output value too small to cover fee");
 
-    txSpend.vout.push_back(CTxOut(nValue - nFee, destScript));
+    mtx.vout.push_back(CTxOut(nValue - nFee, destScript));
 
-    // Sign: compute signature hash over the redeem script
+    // Sign: compute sighash using CTransaction for SignatureHash
+    CTransaction txSpend(mtx);
     uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
 
     vector<unsigned char> vchSig;
@@ -365,7 +370,10 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     vchSig.push_back((unsigned char)SIGHASH_ALL);
 
     // Build scriptSig: <sig> OP_FALSE <redeemScript>
-    txSpend.vin[0].scriptSig = CreateHTLCRefundScript(vchSig, redeemScript);
+    mtx.vin[0].scriptSig = CreateHTLCRefundScript(vchSig, redeemScript);
+
+    // Final tx for verify + broadcast
+    txSpend = CTransaction(mtx);
 
     // Verify the script evaluates correctly
     if (!VerifyScript(txSpend.vin[0].scriptSig, htlcOutput.scriptPubKey,
