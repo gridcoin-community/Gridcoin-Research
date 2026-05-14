@@ -1774,29 +1774,14 @@ UniValue decodescript(const UniValue& params, bool fHelp)
     return r;
 }
 
-UniValue signrawtransaction(const UniValue& params, bool fHelp)
+// Shared helper for signrawtransactionwithkey, signrawtransactionwithwallet,
+// and the deprecated signrawtransaction.
+static UniValue SignRawTransactionHelper(const string& hexTx,
+                                         const UniValue& prevTxsUnival,
+                                         const CKeyStore& keystore,
+                                         const string& strHashType)
 {
-    if (fHelp || params.size() < 1 || params.size() > 4)
-        throw runtime_error(
-                "signrawtransaction <hex string> [{\"txid\":txid,\"vout\":n,\"scriptPubKey\":hex},...] [<privatekey1>,...] [sighashtype=\"ALL\"]\n"
-                "\n"
-                "Sign inputs for raw transaction (serialized, hex-encoded).\n"
-                "Second optional argument (may be null) is an array of previous transaction outputs that\n"
-                "this transaction depends on but may not yet be in the blockchain.\n"
-                "Third optional argument (may be null) is an array of base58-encoded private\n"
-                "keys that, if given, will be the only keys used to sign the transaction.\n"
-                "Fourth optional argument is a string that is one of six values; ALL, NONE, SINGLE or\n"
-                "ALL|ANYONECANPAY, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY.\n"
-                "Returns json object with keys:\n"
-                "  hex : raw transaction with signature(s) (hex-encoded string)\n"
-                "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
-                + HelpRequiringPassphrase());
-
-    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    vector<unsigned char> txData(ParseHex(params[0].get_str()));
+    vector<unsigned char> txData(ParseHex(hexTx));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
     vector<CTransaction> txVariants;
     while (!ssData.empty())
@@ -1843,9 +1828,9 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     }
 
     // Add previous txouts given in the RPC call:
-    if (params.size() > 1 && !params[1].isNull())
+    if (!prevTxsUnival.isNull())
     {
-        UniValue prevTxs = params[1].get_array();
+        UniValue prevTxs = prevTxsUnival.get_array();
         for (unsigned int idx = 0; idx < prevTxs.size(); idx++)
         {
             const UniValue&p = prevTxs[idx];
@@ -1893,29 +1878,9 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
         }
     }
 
-    bool fGivenKeys = false;
-    CBasicKeyStore tempKeystore;
-    if (params.size() > 2 && !params[2].isNull())
-    {
-        fGivenKeys = true;
-        UniValue keys = params[2].get_array();
-        for (unsigned int idx = 0; idx < keys.size(); idx++)
-        {
-            UniValue k = keys[idx];
-            CKey key = DecodeSecret(k.get_str());
-            if (!key.IsValid()) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
-            }
-            tempKeystore.AddKey(key);
-        }
-    }
-    else
-        EnsureWalletIsUnlocked();
-
-    const CKeyStore& keystore = (fGivenKeys ? tempKeystore : *pwalletMain);
-
+    // Parse sighash type
     int nHashType = SIGHASH_ALL;
-    if (params.size() > 3 && !params[3].isNull())
+    if (!strHashType.empty())
     {
         static std::map<std::string, int> mapSigHashValues = {
             { "ALL"                , SIGHASH_ALL                           },
@@ -1926,7 +1891,6 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
             { "SINGLE|ANYONECANPAY", SIGHASH_SINGLE | SIGHASH_ANYONECANPAY },
         };
 
-        string strHashType = params[3].get_str();
         if (mapSigHashValues.count(strHashType))
             nHashType = mapSigHashValues[strHashType];
         else
@@ -1967,6 +1931,160 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     result.pushKV("complete", fComplete);
 
     return result;
+}
+
+UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 2 || params.size() > 4)
+        throw runtime_error(
+                "signrawtransactionwithkey \"hexstring\" [\"privatekey1\",...] "
+                "( [{\"txid\":\"id\",\"vout\":n,\"scriptPubKey\":\"hex\"},...] \"sighashtype\" )\n"
+                "\nSign inputs for raw transaction (serialized, hex-encoded).\n"
+                "The second argument is an array of base58-encoded private keys that will be the\n"
+                "only keys used to sign the transaction.\n"
+                "\nArguments:\n"
+                "1. \"hexstring\"           (string, required) The transaction hex string\n"
+                "2. \"privkeys\"            (array, required) A json array of base58-encoded private keys for signing\n"
+                "    [                      (json array of strings)\n"
+                "      \"privatekey\"          (string) private key in base58-encoding\n"
+                "      ,...\n"
+                "    ]\n"
+                "3. \"prevtxs\"             (array, optional) A json array of previous dependent transaction outputs\n"
+                "    [                      (json array of json objects)\n"
+                "      {\n"
+                "        \"txid\":\"id\",      (string, required) The transaction id\n"
+                "        \"vout\":n,         (numeric, required) The output number\n"
+                "        \"scriptPubKey\":\"hex\" (string, required) script key\n"
+                "      }\n"
+                "      ,...\n"
+                "    ]\n"
+                "4. \"sighashtype\"          (string, optional, default=ALL) The signature hash type. Must be one of\n"
+                "       \"ALL\"\n"
+                "       \"NONE\"\n"
+                "       \"SINGLE\"\n"
+                "       \"ALL|ANYONECANPAY\"\n"
+                "       \"NONE|ANYONECANPAY\"\n"
+                "       \"SINGLE|ANYONECANPAY\"\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"hex\" : \"value\",       (string) The hex-encoded raw transaction with signature(s)\n"
+                "  \"complete\" : true|false  (boolean) If the transaction has a complete set of signatures\n"
+                "}\n");
+
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
+
+    LOCK(cs_main);
+
+    // Build temporary keystore from provided private keys
+    CBasicKeyStore tempKeystore;
+    UniValue keys = params[1].get_array();
+    for (unsigned int idx = 0; idx < keys.size(); idx++)
+    {
+        UniValue k = keys[idx];
+        CKey key = DecodeSecret(k.get_str());
+        if (!key.IsValid()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+        }
+        tempKeystore.AddKey(key);
+    }
+
+    UniValue prevTxs = (params.size() > 2 && !params[2].isNull()) ? params[2] : UniValue();
+    string strHashType = (params.size() > 3 && !params[3].isNull()) ? params[3].get_str() : "";
+
+    return SignRawTransactionHelper(params[0].get_str(), prevTxs, tempKeystore, strHashType);
+}
+
+UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 3)
+        throw runtime_error(
+                "signrawtransactionwithwallet \"hexstring\" "
+                "( [{\"txid\":\"id\",\"vout\":n,\"scriptPubKey\":\"hex\"},...] \"sighashtype\" )\n"
+                "\nSign inputs for raw transaction (serialized, hex-encoded) using wallet keys.\n"
+                "\nArguments:\n"
+                "1. \"hexstring\"           (string, required) The transaction hex string\n"
+                "2. \"prevtxs\"             (array, optional) A json array of previous dependent transaction outputs\n"
+                "    [                      (json array of json objects)\n"
+                "      {\n"
+                "        \"txid\":\"id\",      (string, required) The transaction id\n"
+                "        \"vout\":n,         (numeric, required) The output number\n"
+                "        \"scriptPubKey\":\"hex\" (string, required) script key\n"
+                "      }\n"
+                "      ,...\n"
+                "    ]\n"
+                "3. \"sighashtype\"          (string, optional, default=ALL) The signature hash type. Must be one of\n"
+                "       \"ALL\"\n"
+                "       \"NONE\"\n"
+                "       \"SINGLE\"\n"
+                "       \"ALL|ANYONECANPAY\"\n"
+                "       \"NONE|ANYONECANPAY\"\n"
+                "       \"SINGLE|ANYONECANPAY\"\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"hex\" : \"value\",       (string) The hex-encoded raw transaction with signature(s)\n"
+                "  \"complete\" : true|false  (boolean) If the transaction has a complete set of signatures\n"
+                "}\n"
+                + HelpRequiringPassphrase());
+
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VSTR }, true);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
+    UniValue prevTxs = (params.size() > 1 && !params[1].isNull()) ? params[1] : UniValue();
+    string strHashType = (params.size() > 2 && !params[2].isNull()) ? params[2].get_str() : "";
+
+    return SignRawTransactionHelper(params[0].get_str(), prevTxs, *pwalletMain, strHashType);
+}
+
+UniValue signrawtransaction(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 4)
+        throw runtime_error(
+                "signrawtransaction <hex string> [{\"txid\":txid,\"vout\":n,\"scriptPubKey\":hex},...] [<privatekey1>,...] [sighashtype=\"ALL\"]\n"
+                "\n"
+                "DEPRECATED. Sign inputs for raw transaction (serialized, hex-encoded).\n"
+                "Use signrawtransactionwithkey or signrawtransactionwithwallet instead.\n"
+                "\n"
+                "Second optional argument (may be null) is an array of previous transaction outputs that\n"
+                "this transaction depends on but may not yet be in the blockchain.\n"
+                "Third optional argument (may be null) is an array of base58-encoded private\n"
+                "keys that, if given, will be the only keys used to sign the transaction.\n"
+                "Fourth optional argument is a string that is one of six values; ALL, NONE, SINGLE or\n"
+                "ALL|ANYONECANPAY, NONE|ANYONECANPAY, SINGLE|ANYONECANPAY.\n"
+                "Returns json object with keys:\n"
+                "  hex : raw transaction with signature(s) (hex-encoded string)\n"
+                "  complete : 1 if transaction has a complete set of signature (0 if not)\n"
+                + HelpRequiringPassphrase());
+
+    RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Determine keystore: explicit keys or wallet
+    UniValue prevTxs = (params.size() > 1 && !params[1].isNull()) ? params[1] : UniValue();
+    string strHashType = (params.size() > 3 && !params[3].isNull()) ? params[3].get_str() : "";
+
+    if (params.size() > 2 && !params[2].isNull())
+    {
+        CBasicKeyStore tempKeystore;
+        UniValue keys = params[2].get_array();
+        for (unsigned int idx = 0; idx < keys.size(); idx++)
+        {
+            UniValue k = keys[idx];
+            CKey key = DecodeSecret(k.get_str());
+            if (!key.IsValid()) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
+            }
+            tempKeystore.AddKey(key);
+        }
+        return SignRawTransactionHelper(params[0].get_str(), prevTxs, tempKeystore, strHashType);
+    }
+    else
+    {
+        EnsureWalletIsUnlocked();
+        return SignRawTransactionHelper(params[0].get_str(), prevTxs, *pwalletMain, strHashType);
+    }
 }
 
 UniValue sendrawtransaction(const UniValue& params, bool fHelp)
