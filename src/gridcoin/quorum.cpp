@@ -575,11 +575,19 @@ public:
     //! \brief Create a new validator for the provided superblock.
     //!
     //! \param superblock The superblock data to validate.
+    //! \param hint_bits  For testing by-project fallback validation.
+    //! \param height     Height of the block whose superblock is being
+    //!                   validated. Threaded through to ProjectResolver to
+    //!                   gate the PPK/PACTC skip-list extension behind
+    //!                   BlockV13Height.
     //!
-    SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
+    SuperblockValidator(const SuperblockPtr& superblock,
+                        size_t hint_bits = 32,
+                        int height = std::numeric_limits<int>::max())
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
         , m_hint_shift(32 + std::clamp<size_t>(32 - hint_bits, 0, 32))
+        , m_height(height)
     {
     }
 
@@ -862,11 +870,17 @@ private: // SuperblockValidator classes
         //!
         //! \param projects Contains matching manifest parts hashes for each
         //! project hinted in the superblock.
+        //! \param height   Height of the block whose superblock is being
+        //!                 validated. Used to gate post-v13 side-channel
+        //!                 part inclusion (PACTC, PPK) in the reconstructed
+        //!                 convergence.
         //!
-        ProjectCombiner(std::map<std::string, ResolvedProject> projects)
+        ProjectCombiner(std::map<std::string, ResolvedProject> projects,
+                        int height = std::numeric_limits<int>::max())
             : m_projects(std::move(projects))
             , m_total_combinations(1)
             , m_current_combination(0)
+            , m_height(height)
         {
             for (auto& project_pair : reverse_iterate(m_projects)) {
                 project_pair.second.m_combiner_mask = m_total_combinations;
@@ -880,6 +894,7 @@ private: // SuperblockValidator classes
         ProjectCombiner()
             : m_total_combinations(0)
             , m_current_combination(0)
+            , m_height(std::numeric_limits<int>::max())
         {
         }
 
@@ -976,7 +991,7 @@ private: // SuperblockValidator classes
                 }
             }
 
-            AddBeaconPartsData(convergence, latest_manifest);
+            AddBeaconPartsData(convergence, latest_manifest, m_height);
 
             ++m_current_combination;
 
@@ -992,6 +1007,16 @@ private: // SuperblockValidator classes
 
         size_t m_total_combinations;  //!< Number of project part combinations.
         size_t m_current_combination; //!< Number of the combination to try.
+
+        //!
+        //! \brief Height of the block whose superblock is being validated.
+        //!
+        //! Threaded from SuperblockValidator so AddBeaconPartsData can gate
+        //! the PACTC/PPK inclusion (post-BlockV13Height) in the reconstructed
+        //! convergence, matching the scraper-side behavior at
+        //! scraper.cpp:5613-5627.
+        //!
+        const int m_height;
 
         //!
         //! \brief Fetch the project part data for the specified part hash.
@@ -1017,15 +1042,40 @@ private: // SuperblockValidator classes
         }
 
         //!
-        //! \brief Insert the beacon list and verified beacons part data from
-        //! the specified manifest into the provided convergence candidate.
+        //! \brief Insert the beacon list and (optionally) the side-channel
+        //! parts from the specified manifest into the provided convergence
+        //! candidate.
         //!
-        //! \param convergence   Convergence to add the beacon parts to.
-        //! \param manifest_hash Identifies the manifest to fetch the parts from.
+        //! Mirrors the scraper-side convergence construction at
+        //! scraper.cpp:5611-5627: after the per-project supermajority check
+        //! selects a winning source manifest, pull BeaconList (always at
+        //! part 0) and any of the side-channel parts (VerifiedBeacons,
+        //! ProjectsAllCpidTotalCredits, ProjectPublicKeys) that the manifest
+        //! happens to carry. Absence of any side-channel part is not a
+        //! failure — scrapers emit them conditionally (e.g. VerifiedBeacons
+        //! only when beacons are pending verification; PPK only when
+        //! v3-beacon-capable projects are whitelisted).
+        //!
+        //! Side-channel-part integrity is inherited transitively: the
+        //! source manifest was already in supermajority for at least one
+        //! regular project, so its side-channel parts are trusted for this
+        //! convergence candidate, matching the scraper-side security model.
+        //!
+        //! \param convergence   Convergence to add the parts to.
+        //! \param manifest_hash Identifies the source manifest.
+        //! \param height        Height of the block whose superblock is
+        //!                      being validated. PACTC and PPK are only
+        //!                      included in the reconstructed convergence
+        //!                      at or after BlockV13Height — before that
+        //!                      the fallback did not handle these parts at
+        //!                      all (and scrapers did not emit them), so
+        //!                      preserving pre-v13 convergence contents
+        //!                      keeps the hard-fork story clean.
         //!
         static void AddBeaconPartsData(
             ConvergenceCandidate& convergence,
-            const uint256& manifest_hash)
+            const uint256& manifest_hash,
+            const int height)
         {
             LOCK(CScraperManifest::cs_mapManifest);
 
@@ -1040,13 +1090,13 @@ private: // SuperblockValidator classes
 
             const CScraperManifest_shared_ptr manifest = iter->second;
 
-            // If the manifest for the beacon list is now empty, we cannot
-            // proceed, but ProjectResolver should always select manifests
-            // with a beacon list part:
+            const bool include_extra_side_channel_parts = IsV13Enabled(height);
 
             // Note using fine-grained locking here to avoid lock-order issues and
             // also to deal with Clang potential false positive below.
-            std::vector<CScraperManifest::dentry>::iterator verified_beacons_entry_iter;
+            std::vector<CScraperManifest::dentry>::iterator verified_beacons_iter;
+            std::vector<CScraperManifest::dentry>::iterator pactc_iter;
+            std::vector<CScraperManifest::dentry>::iterator ppk_iter;
             {
                 LOCK(manifest->cs_manifest);
 
@@ -1057,35 +1107,50 @@ private: // SuperblockValidator classes
 
                 convergence.AddPart("BeaconList", manifest->vParts[0]);
 
-                // Find the offset of the verified beacons project part. Typically
-                // this exists at vParts offset 1 when a scraper verified at least
-                // one pending beacon. If it doesn't exist, omit the part from the
-                // reconstructed convergence:
-                verified_beacons_entry_iter = std::find_if(
-                            manifest->projects.begin(),
-                            manifest->projects.end(),
-                            [](const CScraperManifest::dentry& entry) {
-                    return entry.project == "VerifiedBeacons";
-                });
+                auto find_entry = [&manifest](const std::string& name) {
+                    return std::find_if(
+                        manifest->projects.begin(),
+                        manifest->projects.end(),
+                        [&name](const CScraperManifest::dentry& entry) {
+                            return entry.project == name;
+                        });
+                };
+
+                verified_beacons_iter = find_entry("VerifiedBeacons");
+
+                if (include_extra_side_channel_parts) {
+                    pactc_iter = find_entry("ProjectsAllCpidTotalCredits");
+                    ppk_iter = find_entry("ProjectPublicKeys");
+                } else {
+                    pactc_iter = manifest->projects.end();
+                    ppk_iter = manifest->projects.end();
+                }
             }
 
             // The manifest must be unlocked above and then relocked after cs_mapParts to avoid possible
             // deadlock due to lock order.
             LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
 
-            if (verified_beacons_entry_iter == manifest->projects.end()) {
-                LogPrintf("ValidateSuperblock(): verified beacon project missing.");
-                return;
-            }
+            // Add a side-channel part to the convergence if the manifest
+            // carries it. Absent parts are silently skipped — scrapers emit
+            // these conditionally and the convergence is expected to omit
+            // them when the manifest did. Mirrors scraper.cpp:5622-5626.
+            auto add_optional_part = [&](const std::string& name,
+                                         std::vector<CScraperManifest::dentry>::iterator it) {
+                if (it == manifest->projects.end()) {
+                    return;
+                }
+                const size_t part_offset = it->part1;
+                if (part_offset == 0 || part_offset >= manifest->vParts.size()) {
+                    LogPrintf("ValidateSuperblock(): out-of-range part offset for %s.", name);
+                    return;
+                }
+                convergence.AddPart(name, manifest->vParts[part_offset]);
+            };
 
-            const size_t part_offset = verified_beacons_entry_iter->part1;
-
-            if (part_offset == 0 || part_offset >= manifest->vParts.size()) {
-                LogPrintf("ValidateSuperblock(): out-of-range verified beacon part.");
-                return;
-            }
-
-            convergence.AddPart("VerifiedBeacons", manifest->vParts[part_offset]);
+            add_optional_part("VerifiedBeacons", verified_beacons_iter);
+            add_optional_part("ProjectsAllCpidTotalCredits", pactc_iter);
+            add_optional_part("ProjectPublicKeys", ppk_iter);
         }
     }; // ProjectCombiner
 
@@ -1105,9 +1170,11 @@ private: // SuperblockValidator classes
         //!
         ProjectResolver(
             std::map<std::string, CandidatePartHashMap> candidate_parts,
-            mmCSManifestsBinnedByScraper manifests_by_scraper)
+            mmCSManifestsBinnedByScraper manifests_by_scraper,
+            int height = std::numeric_limits<int>::max())
             : m_manifests_by_scraper(std::move(manifests_by_scraper))
             , m_supermajority(NumScrapersForSupermajority(m_manifests_by_scraper.size()))
+            , m_height(height)
         {
             for (auto&& project_part_pair : candidate_parts) {
                 m_resolved_projects.emplace(
@@ -1168,7 +1235,7 @@ private: // SuperblockValidator classes
                 }
             }
 
-            return ProjectCombiner(std::move(m_resolved_projects));
+            return ProjectCombiner(std::move(m_resolved_projects), m_height);
         }
 
     private:
@@ -1202,6 +1269,14 @@ private: // SuperblockValidator classes
         std::map<std::string, std::set<ScraperID>> m_other_projects;
 
         //!
+        //! \brief Height of the block whose superblock is being validated.
+        //!
+        //! Used to gate the PPK/PACTC skip-list extension behind
+        //! BlockV13Height. See TallyProject().
+        //!
+        const int m_height;
+
+        //!
         //! \brief Record the supplied scraper ID for the specified project to
         //! track supermajority status.
         //!
@@ -1220,6 +1295,25 @@ private: // SuperblockValidator classes
             // stage:
             //
             if (project == "BeaconList" || project == "VerifiedBeacons") {
+                return nullptr;
+            }
+
+            // ProjectsAllCpidTotalCredits (added to manifests in 2025-01) and
+            // ProjectPublicKeys (added in 2026-02 for v3 beacon ownership
+            // proofs) are also manifest-level side-channel parts rather than
+            // BOINC projects, but were not added to the skip list above when
+            // the scraper started emitting them. The scraper's own roll-up
+            // (ScraperConstructConvergedManifestByProject) filters them, so
+            // cached-convergence and current-convergence validation paths are
+            // unaffected. The by-project fallback path is not: scrapers pass
+            // supermajority on both entries every cycle, and the
+            // "missing from superblock" check below rejects every modern
+            // superblock. Gated behind BlockV13Height so the rule change has
+            // a documented activation marker bundled with the v13 hard fork.
+            //
+            if (IsV13Enabled(m_height)
+                && (project == "ProjectsAllCpidTotalCredits"
+                    || project == "ProjectPublicKeys")) {
                 return nullptr;
             }
 
@@ -1278,6 +1372,9 @@ private: // SuperblockValidator fields
     const SuperblockPtr& m_superblock; //!< Points to the superblock to validate.
     const QuorumHash m_quorum_hash;    //!< Hash of the superblock to validate.
     const size_t m_hint_shift;         //!< For testing by-project combinations.
+    const int m_height;                //!< Height of the block being validated;
+                                       //!< threaded to ProjectResolver for the
+                                       //!< PPK/PACTC skip-list gate.
 
 private: // SuperblockValidator methods
 
@@ -1429,7 +1526,9 @@ private: // SuperblockValidator methods
             return false;
         }
 
-        ProjectResolver resolver(std::move(candidates), ScraperCullAndBinCScraperManifests());
+        ProjectResolver resolver(std::move(candidates),
+                                 ScraperCullAndBinCScraperManifests(),
+                                 m_height);
         ProjectCombiner combiner = resolver.ResolveProjectParts();
 
         LogPrint(BCLog::LogFlags::VERBOSE,
@@ -1559,7 +1658,7 @@ bool Quorum::ValidateSuperblockClaim(
             return error("%s: quorum hash mismatch.", __func__);
         }
 
-        return ValidateSuperblock(superblock);
+        return ValidateSuperblock(superblock, true, 32, pindex->nHeight);
     }
 
     const CTxDestination address = DecodeDestination(claim.m_quorum_address);
@@ -1591,11 +1690,12 @@ bool Quorum::ValidateSuperblockClaim(
 bool Quorum::ValidateSuperblock(
     const SuperblockPtr& superblock,
     const bool use_cache,
-    const size_t hint_bits)
+    const size_t hint_bits,
+    const int height)
 {
     using Result = SuperblockValidator::Result;
 
-    const Result result = SuperblockValidator(superblock, hint_bits).Validate(use_cache);
+    const Result result = SuperblockValidator(superblock, hint_bits, height).Validate(use_cache);
     std::string message;
 
     switch (result) {

@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_QUORUM_H
 #define GRIDCOIN_QUORUM_H
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -125,13 +126,20 @@ public:
     //! \param superblock The superblock to validate.
     //! \param use_cache  If \c false, skip validation with the scraper cache.
     //! \param hint_bits  For testing by-project fallback validation.
+    //! \param height     Height of the block whose superblock is being
+    //!                   validated, used to gate the by-project fallback
+    //!                   skip-list extension behind BlockV13Height. Defaults
+    //!                   to INT_MAX so non-consensus callers (scraper self-
+    //!                   checks, unit tests) always apply the extended skip
+    //!                   list.
     //!
     //! \return \c true if local manifest data produces a matching superblock.
     //!
     static bool ValidateSuperblock(
         const SuperblockPtr& superblock,
         const bool use_cache = true,
-        const size_t hint_bits = 32);
+        const size_t hint_bits = 32,
+        const int height = std::numeric_limits<int>::max());
 
     //!
     //! \brief Get the current magnitude for the specified CPID.
