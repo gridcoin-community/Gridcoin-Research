@@ -1912,9 +1912,14 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
         const CScript& prevPubKey = mapPrevOut[txin.prevout];
 
         txin.scriptSig.clear();
+        SignatureData sigdata;
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mergedTx.vout.size()))
-            SignSignature(keystore, prevPubKey, mergedTx, i, nHashType);
+        {
+            TransactionSignatureCreator creator(mergedTx, i, nHashType);
+            ProduceSignature(keystore, creator, prevPubKey, sigdata);
+        }
+        UpdateInput(txin, sigdata);
 
         // ... and merge in other signatures:
         for (auto const& txv : txVariants)
