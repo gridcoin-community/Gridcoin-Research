@@ -230,7 +230,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_reward_application)
     GRC::Claim claim;
 
     LOCK(cs_main);
-    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, nReward, claim, coinbase, coinstake));
+    BOOST_CHECK(CreateGridcoinReward(coinbase, coinstake, block, pindex->pprev, nReward, claim));
 
     // Reward should be positive (block subsidy + fees at minimum)
     BOOST_CHECK(nReward > 0);
@@ -263,11 +263,11 @@ BOOST_AUTO_TEST_CASE(mrc_outputs_appended)
     // First create the reward so the claim is populated
     int64_t nReward = 0;
     GRC::Claim claim;
-    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, nReward, claim, coinbase, coinstake));
+    BOOST_CHECK(CreateGridcoinReward(coinbase, coinstake, block, pindex->pprev, nReward, claim));
 
     // Add MRC researcher context and create an MRC
     pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-    BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map, coinbase, coinstake));
+    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map));
 
     GRC::MRC mrc;
     CAmount mrc_reward{0}, mrc_fee{0};
@@ -277,9 +277,8 @@ BOOST_AUTO_TEST_CASE(mrc_outputs_appended)
     uint32_t claim_contract_version = 2;
     size_t vout_before = coinstake.vout.size();
 
-    BOOST_CHECK(CreateMRCRewards(block, mrc_map, mrc_tx_map, nReward,
-                                 claim_contract_version, claim, wallet,
-                                 coinbase, coinstake));
+    BOOST_CHECK(CreateMRCRewards(coinbase, coinstake, block, mrc_map, mrc_tx_map,
+                                 nReward, claim_contract_version, claim, wallet));
 
     // MRC outputs should have been appended to coinstake
     BOOST_CHECK(coinstake.vout.size() > vout_before);
@@ -308,8 +307,8 @@ BOOST_AUTO_TEST_CASE(split_coinstake_distributes_reward)
     int64_t nMinStakeSplitValue = 800;
     double dEfficiency = 98.0;
 
-    SplitCoinStakeOutput(block, nReward, fEnableStakeSplit, fEnableSideStaking,
-                         nMinStakeSplitValue, dEfficiency, coinstake);
+    SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
+                         nMinStakeSplitValue, dEfficiency);
 
     // Should have split into multiple outputs
     BOOST_CHECK(coinstake.vout.size() > 2);
@@ -353,8 +352,8 @@ BOOST_AUTO_TEST_CASE(sidestake_outputs_placed)
     int64_t nMinStakeSplitValue = 800;
     double dEfficiency = 98.0;
 
-    SplitCoinStakeOutput(block, nReward, fEnableStakeSplit, fEnableSideStaking,
-                         nMinStakeSplitValue, dEfficiency, coinstake);
+    SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
+                         nMinStakeSplitValue, dEfficiency);
 
     // Should have at least 3 outputs: empty + coinstake + sidestake
     BOOST_CHECK(coinstake.vout.size() >= 3);
@@ -408,11 +407,11 @@ BOOST_AUTO_TEST_CASE(full_pipeline_roundtrip)
     // Step 1: CreateGridcoinReward
     int64_t nReward = 0;
     GRC::Claim claim;
-    BOOST_CHECK(CreateGridcoinReward(block, pindex->pprev, nReward, claim, coinbase, coinstake));
+    BOOST_CHECK(CreateGridcoinReward(coinbase, coinstake, block, pindex->pprev, nReward, claim));
 
     // Step 2: CreateMRCRewards
     pindex->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
-    BOOST_CHECK(CreateRestOfTheBlock(block, pindex->pprev, mrc_map, coinbase, coinstake));
+    BOOST_CHECK(CreateRestOfTheBlock(block, coinbase, coinstake, pindex->pprev, mrc_map));
 
     GRC::MRC mrc;
     CAmount mrc_reward{0}, mrc_fee{0};
@@ -420,17 +419,16 @@ BOOST_AUTO_TEST_CASE(full_pipeline_roundtrip)
     mrc_map[cpid] = {uint256{}, mrc};
 
     uint32_t claim_contract_version = 2;
-    CreateMRCRewards(block, mrc_map, mrc_tx_map, nReward,
-                     claim_contract_version, claim, wallet,
-                     coinbase, coinstake);
+    CreateMRCRewards(coinbase, coinstake, block, mrc_map, mrc_tx_map,
+                     nReward, claim_contract_version, claim, wallet);
 
     // Step 3: SplitCoinStakeOutput
     bool fEnableStakeSplit = true;
     bool fEnableSideStaking = false;
     int64_t nMinStakeSplitValue = 800;
     double dEfficiency = 98.0;
-    SplitCoinStakeOutput(block, nReward, fEnableStakeSplit, fEnableSideStaking,
-                         nMinStakeSplitValue, dEfficiency, coinstake);
+    SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
+                         nMinStakeSplitValue, dEfficiency);
 
     // Convert to CTransaction and verify round-trip
     CTransaction ctx(coinstake);
