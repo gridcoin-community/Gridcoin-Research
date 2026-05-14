@@ -9,7 +9,6 @@
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
-#include "primitives/transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
 #include "gridcoin/sidestake.h"
@@ -1683,8 +1682,8 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, strFailReason);
 
     // If user requested a specific change position, move change output there.
-    // The erase/insert dance lifts to a mutable copy so it stays compilable
-    // once CTransaction's vout becomes const (see #2901, F3).
+    // Post-F3 CTransaction fields are const, so operate on a CMutableTransaction
+    // copy and reassign.
     if (changePosition >= 0 && nChangePosOut >= 0 && changePosition != nChangePosOut)
     {
         if (changePosition >= (int)tx.vout.size())
@@ -1694,7 +1693,7 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         CTxOut changeOut = mtx.vout[nChangePosOut];
         mtx.vout.erase(mtx.vout.begin() + nChangePosOut);
         mtx.vout.insert(mtx.vout.begin() + changePosition, changeOut);
-        tx = MakeTransaction(mtx);
+        tx = CTransaction(std::move(mtx));
         nChangePosOut = changePosition;
     }
 
@@ -1801,14 +1800,14 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
 
     // mergedTx will end up with all the signatures; it
     // starts as a clone of the rawtx:
-    CTransaction mergedTx(txVariants[0]);
+    CMutableTransaction mergedTx(txVariants[0]);
     bool fComplete = true;
 
     // Fetch previous transactions (inputs):
     map<COutPoint, CScript> mapPrevOut;
     for (unsigned int i = 0; i < mergedTx.vin.size(); i++)
     {
-        CTransaction tempTx;
+        CMutableTransaction tempTx;
         MapPrevTx mapPrevTx;
         CTxDB txdb("r");
         map<uint256, CTxIndex> unused;
@@ -1817,7 +1816,8 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
         // FetchInputs aborts on failure, so we go one at a time.
         tempTx.vin.push_back(mergedTx.vin[i]);
         CValidationState fetch_state;
-        FetchInputs(tempTx, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
+        CTransaction tempTxConst(tempTx);
+        FetchInputs(tempTxConst, fetch_state, txdb, unused, false, false, mapPrevTx, fInvalid);
 
         // Copy results into mapPrevOut:
         for (auto const& txin : tempTx.vin)
@@ -1916,7 +1916,7 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mergedTx.vout.size()))
         {
-            TransactionSignatureCreator creator(mergedTx, i, nHashType);
+            MutableTransactionSignatureCreator creator(mergedTx, i, nHashType);
             ProduceSignature(keystore, creator, prevPubKey, sigdata);
         }
         UpdateInput(txin, sigdata);

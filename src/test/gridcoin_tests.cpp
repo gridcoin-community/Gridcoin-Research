@@ -40,8 +40,8 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
            // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
-    dummy_tx.nTime = index.nTime;
+    CMutableTransaction mtx;
+    mtx.nTime = index.nTime;
 
     GRC::Contract contract;
 
@@ -61,8 +61,9 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
             GRC::ProtocolEntryStatus::ACTIVE);
     }
 
-    dummy_tx.vContracts.push_back(contract);
+    mtx.vContracts.push_back(contract);
 
+    CTransaction dummy_tx(mtx);
     registry.Add({contract, dummy_tx, &index});
 }
 

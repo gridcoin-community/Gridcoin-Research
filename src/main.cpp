@@ -837,19 +837,23 @@ const GRC::Claim& CBlock::GetClaim() const
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction. We cache the parsed
-    // representation here to speed up subsequent access:
+    // representation in the block to speed up subsequent access:
     //
-    REF(vtx[0]).vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
-        GRC::ContractAction::ADD,
-        GRC::Claim::Parse(vtx[0].hashBoinc, nVersion)));
+    if (m_claim_contract_cache.m_type == GRC::ContractType::UNKNOWN) {
+        m_claim_contract_cache = GRC::MakeContract<GRC::Claim>(
+            GRC::ContractAction::ADD,
+            GRC::Claim::Parse(vtx[0].hashBoinc, nVersion));
+    }
 
-    return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
+    return *m_claim_contract_cache.SharePayloadAs<GRC::Claim>();
 }
 
 GRC::Claim CBlock::PullClaim()
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return vtx[0].vContracts[0].PullPayloadAs<GRC::Claim>();
+        // PullPayloadAs operates on the shared_ptr within the Contract,
+        // not on the vector element itself, so const vContracts is fine.
+        return vtx[0].vContracts[0].CopyPayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored

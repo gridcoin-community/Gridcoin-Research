@@ -170,11 +170,15 @@ void UpdateInput(CTxIn& input, const SignatureData& data)
 // SignSignature: public API using TransactionSignatureCreator
 // ---------------------------------------------------------------------------
 
-bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CTransaction& txTo, unsigned int nIn, int nHashType)
+// ---------------------------------------------------------------------------
+// CMutableTransaction overloads (primary implementations)
+// ---------------------------------------------------------------------------
+
+bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, CMutableTransaction& txTo, unsigned int nIn, int nHashType)
 {
     assert(nIn < txTo.vin.size());
 
-    TransactionSignatureCreator creator(txTo, nIn, nHashType);
+    MutableTransactionSignatureCreator creator(txTo, nIn, nHashType);
     SignatureData sigdata;
     bool ret = ProduceSignature(provider, creator, fromPubKey, sigdata);
     UpdateInput(txTo.vin[nIn], sigdata);
@@ -182,10 +186,11 @@ bool SignSignature(const SigningProvider& provider, const CScript& fromPubKey, C
     if (!ret) return false;
 
     // Test solution
-    return VerifyScript(txTo.vin[nIn].scriptSig, fromPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, txTo, nIn);
+    CTransaction txConst(txTo);
+    return VerifyScript(txConst.vin[nIn].scriptSig, fromPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, txConst, nIn);
 }
 
-bool SignSignature(const SigningProvider& provider, const CTransaction& txFrom, CTransaction& txTo, unsigned int nIn, int nHashType)
+bool SignSignature(const SigningProvider& provider, const CTransaction& txFrom, CMutableTransaction& txTo, unsigned int nIn, int nHashType)
 {
     assert(nIn < txTo.vin.size());
     CTxIn& txin = txTo.vin[nIn];
@@ -194,6 +199,7 @@ bool SignSignature(const SigningProvider& provider, const CTransaction& txFrom, 
 
     return SignSignature(provider, txout.scriptPubKey, txTo, nIn, nHashType);
 }
+
 
 static CScript PushAll(const vector<valtype>& values)
 {

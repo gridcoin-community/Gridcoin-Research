@@ -30,12 +30,15 @@ static void add_coin(int64_t nValue, int nAge = 6*24, bool fIsFromMe = false, in
     tx.nTime = 0;
     tx.vout.resize(nInput+1);
     tx.vout[nInput].nValue = nValue;
-    std::unique_ptr<CWalletTx> wtx(new CWalletTx(&wallet, CTransaction(tx)));
     if (fIsFromMe)
     {
         // IsFromMe() returns (GetDebit() > 0), and GetDebit() is 0 if vin.empty(),
         // so stop vin being empty, and cache a non-zero Debit to fake out IsFromMe()
-        wtx->vin.resize(1);
+        tx.vin.resize(1);
+    }
+    std::unique_ptr<CWalletTx> wtx(new CWalletTx(&wallet, CTransaction(tx)));
+    if (fIsFromMe)
+    {
         wtx->fDebitCached = true;
         wtx->nDebitCached = 1;
     }

@@ -6,6 +6,8 @@
 #include <primitives/transaction.h>
 
 #include <hash.h>
+#include <logging.h>
+#include <util.h>
 
 CMutableTransaction::CMutableTransaction()
     : nVersion(CMutableTransaction::CURRENT_VERSION)
@@ -30,15 +32,52 @@ uint256 CMutableTransaction::GetHash() const
     return SerializeHash(*this);
 }
 
+uint256 CTransaction::ComputeHash() const
+{
+    return SerializeHash(*this);
+}
+
+CTransaction::CTransaction()
+    : nVersion(CTransaction::CURRENT_VERSION)
+    , nTime(GetAdjustedTime())
+    , nLockTime(0)
+    , hash(ComputeHash())
+{
+}
+
+CTransaction::CTransaction(const CTransaction& tx)
+    : nVersion(tx.nVersion)
+    , nTime(tx.nTime)
+    , vin(tx.vin)
+    , vout(tx.vout)
+    , nLockTime(tx.nLockTime)
+    , hashBoinc(tx.hashBoinc)
+    , vContracts(tx.vContracts)
+    , hash(tx.hash)
+{
+}
+
+CTransaction::CTransaction(CTransaction&& tx) noexcept
+    : nVersion(tx.nVersion)
+    , nTime(tx.nTime)
+    , vin(std::move(const_cast<std::vector<CTxIn>&>(tx.vin)))
+    , vout(std::move(const_cast<std::vector<CTxOut>&>(tx.vout)))
+    , nLockTime(tx.nLockTime)
+    , hashBoinc(std::move(const_cast<std::string&>(tx.hashBoinc)))
+    , vContracts(std::move(const_cast<std::vector<GRC::Contract>&>(tx.vContracts)))
+    , hash(tx.hash)
+{
+}
+
 CTransaction::CTransaction(const CMutableTransaction& tx)
     : nVersion(tx.nVersion)
     , nTime(tx.nTime)
     , vin(tx.vin)
     , vout(tx.vout)
     , nLockTime(tx.nLockTime)
-    , nDoS(0)
     , hashBoinc(tx.hashBoinc)
     , vContracts(tx.vContracts)
+    , hash(ComputeHash())
 {
 }
 
@@ -48,9 +87,9 @@ CTransaction::CTransaction(CMutableTransaction&& tx)
     , vin(std::move(tx.vin))
     , vout(std::move(tx.vout))
     , nLockTime(tx.nLockTime)
-    , nDoS(0)
     , hashBoinc(std::move(tx.hashBoinc))
     , vContracts(std::move(tx.vContracts))
+    , hash(ComputeHash())
 {
 }
 
