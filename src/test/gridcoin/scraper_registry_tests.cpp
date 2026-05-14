@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/scraper/scraper_registry.h"
+#include "primitives/transaction.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -23,7 +24,7 @@ void AddRemoveScraperEntryV1(const std::string& address, const std::string& valu
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -45,7 +46,8 @@ void AddRemoveScraperEntryV1(const std::string& address, const std::string& valu
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntryStatus& status,
@@ -60,7 +62,7 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -77,7 +79,8 @@ void AddRemoveScraperEntryV2(const std::string& address, const GRC::ScraperEntry
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 }// anonymous namespace
@@ -214,7 +217,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     height++;
     time++;
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -230,7 +233,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     dummy_tx.vContracts.push_back(contract);
 
-    GRC::ContractContext ctx(contract, dummy_tx, &dummy_index);
+    CTransaction ctx_tx(dummy_tx);
+    GRC::ContractContext ctx(contract, ctx_tx, &dummy_index);
 
     registry.Add(ctx);
 
@@ -410,7 +414,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     height++;
     time++;
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -431,7 +435,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     dummy_tx.vContracts.push_back(contract);
 
-    GRC::ContractContext ctx(contract, dummy_tx, &dummy_index);
+    CTransaction ctx_tx(dummy_tx);
+    GRC::ContractContext ctx(contract, ctx_tx, &dummy_index);
 
     registry.Add(ctx);
 

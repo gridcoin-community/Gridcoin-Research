@@ -53,13 +53,13 @@ BOOST_AUTO_TEST_CASE(multisig_verify)
     CScript escrow;
     escrow << OP_2 << key[0].GetPubKey() << key[1].GetPubKey() << key[2].GetPubKey() << OP_3 << OP_CHECKMULTISIG;
 
-    CTransaction txFrom;  // Funding transaction
+    CMutableTransaction txFrom;  // Funding transaction
     txFrom.vout.resize(3);
     txFrom.vout[0].scriptPubKey = a_and_b;
     txFrom.vout[1].scriptPubKey = a_or_b;
     txFrom.vout[2].scriptPubKey = escrow;
 
-    CTransaction txTo[3]; // Spending transaction
+    CMutableTransaction txTo[3]; // Spending transaction
     for (int i = 0; i < 3; i++)
     {
         txTo[i].vin.resize(1);
@@ -75,37 +75,37 @@ BOOST_AUTO_TEST_CASE(multisig_verify)
     // Test a AND b:
     keys.assign(1,key[0]);
     keys.push_back(key[1]);
-    s = sign_multisig(a_and_b, keys, txTo[0], 0);
-    BOOST_CHECK(VerifyScript(s, a_and_b, flags, txTo[0], 0));
+    s = sign_multisig(a_and_b, keys, CTransaction(txTo[0]), 0);
+    BOOST_CHECK(VerifyScript(s, a_and_b, flags, CTransaction(txTo[0]), 0));
 
     for (int i = 0; i < 4; i++)
     {
         keys.assign(1,key[i]);
-        s = sign_multisig(a_and_b, keys, txTo[0], 0);
-        BOOST_CHECK_MESSAGE(!VerifyScript(s, a_and_b, flags, txTo[0], 0), strprintf("a&b 1: %d", i));
+        s = sign_multisig(a_and_b, keys, CTransaction(txTo[0]), 0);
+        BOOST_CHECK_MESSAGE(!VerifyScript(s, a_and_b, flags, CTransaction(txTo[0]), 0), strprintf("a&b 1: %d", i));
 
         keys.assign(1,key[1]);
         keys.push_back(key[i]);
-        s = sign_multisig(a_and_b, keys, txTo[0], 0);
-        BOOST_CHECK_MESSAGE(!VerifyScript(s, a_and_b, flags, txTo[0], 0), strprintf("a&b 2: %d", i));
+        s = sign_multisig(a_and_b, keys, CTransaction(txTo[0]), 0);
+        BOOST_CHECK_MESSAGE(!VerifyScript(s, a_and_b, flags, CTransaction(txTo[0]), 0), strprintf("a&b 2: %d", i));
     }
 
     // Test a OR b:
     for (int i = 0; i < 4; i++)
     {
         keys.assign(1,key[i]);
-        s = sign_multisig(a_or_b, keys, txTo[1], 0);
+        s = sign_multisig(a_or_b, keys, CTransaction(txTo[1]), 0);
         if (i == 0 || i == 1)
-            BOOST_CHECK_MESSAGE(VerifyScript(s, a_or_b, flags, txTo[1], 0), strprintf("a|b: %d", i));
+            BOOST_CHECK_MESSAGE(VerifyScript(s, a_or_b, flags, CTransaction(txTo[1]), 0), strprintf("a|b: %d", i));
         else
-            BOOST_CHECK_MESSAGE(!VerifyScript(s, a_or_b, flags, txTo[1], 0), strprintf("a|b: %d", i));
+            BOOST_CHECK_MESSAGE(!VerifyScript(s, a_or_b, flags, CTransaction(txTo[1]), 0), strprintf("a|b: %d", i));
     }
     s.clear();
     s << OP_0 << OP_0;
-    BOOST_CHECK(!VerifyScript(s, a_or_b, flags, txTo[1], 0));
+    BOOST_CHECK(!VerifyScript(s, a_or_b, flags, CTransaction(txTo[1]), 0));
     s.clear();
     s << OP_0 << OP_1;
-    BOOST_CHECK(!VerifyScript(s, a_or_b, flags, txTo[1], 0));
+    BOOST_CHECK(!VerifyScript(s, a_or_b, flags, CTransaction(txTo[1]), 0));
 
 
     for (int i = 0; i < 4; i++)
@@ -113,11 +113,11 @@ BOOST_AUTO_TEST_CASE(multisig_verify)
         {
             keys.assign(1,key[i]);
             keys.push_back(key[j]);
-            s = sign_multisig(escrow, keys, txTo[2], 0);
+            s = sign_multisig(escrow, keys, CTransaction(txTo[2]), 0);
             if (i < j && i < 3 && j < 3)
-                BOOST_CHECK_MESSAGE(VerifyScript(s, escrow, flags, txTo[2], 0), strprintf("escrow 1: %d %d", i, j));
+                BOOST_CHECK_MESSAGE(VerifyScript(s, escrow, flags, CTransaction(txTo[2]), 0), strprintf("escrow 1: %d %d", i, j));
             else
-                BOOST_CHECK_MESSAGE(!VerifyScript(s, escrow, flags, txTo[2], 0), strprintf("escrow 2: %d %d", i, j));
+                BOOST_CHECK_MESSAGE(!VerifyScript(s, escrow, flags, CTransaction(txTo[2]), 0), strprintf("escrow 2: %d %d", i, j));
         }
 }
 

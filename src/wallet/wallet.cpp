@@ -21,7 +21,7 @@
 #include "main.h"
 #include "util.h"
 #include <util/string.h>
-#include "gridcoin/consensus/mutable_transaction.h"
+#include "primitives/transaction.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/staking/kernel.h"
 #include "gridcoin/support/block_finder.h"

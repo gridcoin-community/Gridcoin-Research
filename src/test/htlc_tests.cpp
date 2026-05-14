@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(htlc_claim_path_succeeds)
     scriptPubKey << OP_EQUAL;
 
     // Create spending transaction
-    CTransaction txSpend;
+    CMutableTransaction txSpend;
     txSpend.nVersion = 2;
     txSpend.nTime = GetAdjustedTime();
     txSpend.nLockTime = 0;
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(htlc_claim_path_succeeds)
     txSpend.vout[0].nValue = 1 * COIN;
 
     // Sign with receiver's key
-    uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
+    uint256 sighash = SignatureHash(redeemScript, CTransaction(txSpend), 0, SIGHASH_ALL);
     vector<unsigned char> vchSig;
     receiver_key.Sign(sighash, vchSig);
     vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(htlc_claim_path_succeeds)
 
     // Verify
     unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    BOOST_CHECK(VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, txSpend, 0));
+    BOOST_CHECK(VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, CTransaction(txSpend), 0));
 }
 
 BOOST_AUTO_TEST_CASE(htlc_refund_path_succeeds)
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(htlc_refund_path_succeeds)
     scriptPubKey << OP_EQUAL;
 
     // Create spending transaction with locktime at timeout
-    CTransaction txSpend;
+    CMutableTransaction txSpend;
     txSpend.nVersion = 2;
     txSpend.nTime = GetAdjustedTime();
     txSpend.nLockTime = timeout; // CLTV requires nLockTime >= script timeout
@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(htlc_refund_path_succeeds)
     txSpend.vout[0].nValue = 1 * COIN;
 
     // Sign with sender's key
-    uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
+    uint256 sighash = SignatureHash(redeemScript, CTransaction(txSpend), 0, SIGHASH_ALL);
     vector<unsigned char> vchSig;
     sender_key.Sign(sighash, vchSig);
     vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(htlc_refund_path_succeeds)
 
     // Verify
     unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    BOOST_CHECK(VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, txSpend, 0));
+    BOOST_CHECK(VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, CTransaction(txSpend), 0));
 }
 
 BOOST_AUTO_TEST_CASE(htlc_wrong_preimage_fails)
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_preimage_fails)
     scriptPubKey << vector<unsigned char>(scriptID.begin(), scriptID.end());
     scriptPubKey << OP_EQUAL;
 
-    CTransaction txSpend;
+    CMutableTransaction txSpend;
     txSpend.nVersion = 2;
     txSpend.nTime = GetAdjustedTime();
     txSpend.nLockTime = 0;
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_preimage_fails)
     txSpend.vout.resize(1);
     txSpend.vout[0].nValue = 1 * COIN;
 
-    uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
+    uint256 sighash = SignatureHash(redeemScript, CTransaction(txSpend), 0, SIGHASH_ALL);
     vector<unsigned char> vchSig;
     receiver_key.Sign(sighash, vchSig);
     vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_preimage_fails)
     txSpend.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, wrong_preimage, redeemScript);
 
     unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, txSpend, 0));
+    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, CTransaction(txSpend), 0));
 }
 
 BOOST_AUTO_TEST_CASE(htlc_wrong_key_fails)
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_key_fails)
     scriptPubKey << vector<unsigned char>(scriptID.begin(), scriptID.end());
     scriptPubKey << OP_EQUAL;
 
-    CTransaction txSpend;
+    CMutableTransaction txSpend;
     txSpend.nVersion = 2;
     txSpend.nTime = GetAdjustedTime();
     txSpend.nLockTime = 0;
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_key_fails)
     txSpend.vout[0].nValue = 1 * COIN;
 
     // Sign with WRONG key
-    uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
+    uint256 sighash = SignatureHash(redeemScript, CTransaction(txSpend), 0, SIGHASH_ALL);
     vector<unsigned char> vchSig;
     wrong_key.Sign(sighash, vchSig);
     vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE(htlc_wrong_key_fails)
     txSpend.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, preimage, redeemScript);
 
     unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, txSpend, 0));
+    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, CTransaction(txSpend), 0));
 }
 
 BOOST_AUTO_TEST_CASE(htlc_early_refund_fails)
@@ -258,7 +258,7 @@ BOOST_AUTO_TEST_CASE(htlc_early_refund_fails)
     scriptPubKey << OP_EQUAL;
 
     // Create spending tx with nLockTime BEFORE timeout
-    CTransaction txSpend;
+    CMutableTransaction txSpend;
     txSpend.nVersion = 2;
     txSpend.nTime = GetAdjustedTime();
     txSpend.nLockTime = 400; // before timeout of 500
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(htlc_early_refund_fails)
     txSpend.vout.resize(1);
     txSpend.vout[0].nValue = 1 * COIN;
 
-    uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
+    uint256 sighash = SignatureHash(redeemScript, CTransaction(txSpend), 0, SIGHASH_ALL);
     vector<unsigned char> vchSig;
     sender_key.Sign(sighash, vchSig);
     vchSig.push_back((unsigned char)SIGHASH_ALL);
@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(htlc_early_refund_fails)
 
     // CLTV should fail because nLockTime (400) < timeout (500)
     unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, txSpend, 0));
+    BOOST_CHECK(!VerifyScript(txSpend.vin[0].scriptSig, scriptPubKey, flags, CTransaction(txSpend), 0));
 }
 
 BOOST_AUTO_TEST_CASE(htlc_parse_invalid_script)

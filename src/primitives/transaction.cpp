@@ -5,6 +5,54 @@
 
 #include <primitives/transaction.h>
 
+#include <hash.h>
+
+CMutableTransaction::CMutableTransaction()
+    : nVersion(CMutableTransaction::CURRENT_VERSION)
+    , nTime(GetAdjustedTime())
+    , nLockTime(0)
+{
+}
+
+CMutableTransaction::CMutableTransaction(const CTransaction& tx)
+    : nVersion(tx.nVersion)
+    , nTime(tx.nTime)
+    , vin(tx.vin)
+    , vout(tx.vout)
+    , nLockTime(tx.nLockTime)
+    , hashBoinc(tx.hashBoinc)
+    , vContracts(tx.vContracts)
+{
+}
+
+uint256 CMutableTransaction::GetHash() const
+{
+    return SerializeHash(*this);
+}
+
+CTransaction::CTransaction(const CMutableTransaction& tx)
+    : nVersion(tx.nVersion)
+    , nTime(tx.nTime)
+    , vin(tx.vin)
+    , vout(tx.vout)
+    , nLockTime(tx.nLockTime)
+    , nDoS(0)
+    , hashBoinc(tx.hashBoinc)
+    , vContracts(tx.vContracts)
+{
+}
+
+CTransaction::CTransaction(CMutableTransaction&& tx)
+    : nVersion(tx.nVersion)
+    , nTime(tx.nTime)
+    , vin(std::move(tx.vin))
+    , vout(std::move(tx.vout))
+    , nLockTime(tx.nLockTime)
+    , nDoS(0)
+    , hashBoinc(std::move(tx.hashBoinc))
+    , vContracts(std::move(tx.vContracts))
+{
+}
 
 std::string COutPoint::ToString() const
 {

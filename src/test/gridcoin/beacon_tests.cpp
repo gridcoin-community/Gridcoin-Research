@@ -1423,9 +1423,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
 
     // Pending beacon
-    CTransaction tx1 {};
+    CMutableTransaction tx1 {};
     tx1.nTime = int64_t {1};
-    uint256 tx1_hash = tx1.GetHash();
+    CTransaction ctx_tx1(tx1);
+    uint256 tx1_hash = ctx_tx1.GetHash();
 
     CBlockIndex pindex1 {};
     pindex1.nVersion = 13;
@@ -1439,7 +1440,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
+    GRC::ContractContext ctx1 {contract1, ctx_tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1503,9 +1504,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     }
 
     // Renewal
-    CTransaction tx3 {};
+    CMutableTransaction tx3 {};
     tx3.nTime = int64_t {3};
-    uint256 tx3_hash = tx3.GetHash();
+    CTransaction ctx_tx3(tx3);
+    uint256 tx3_hash = ctx_tx3.GetHash();
     CBlockIndex index3 {};
     index3.nVersion = 13;
     index3.nHeight = 3;
@@ -1517,7 +1519,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
 
     GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
-    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+    GRC::ContractContext ctx3 {contract3, ctx_tx3, &index3};
 
     registry.Add(ctx3);
 
@@ -1541,9 +1543,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     }
 
     // Second renewal
-    CTransaction tx4 {};
+    CMutableTransaction tx4 {};
     tx4.nTime = int64_t {4};
-    uint256 tx4_hash = tx4.GetHash();
+    CTransaction ctx_tx4(tx4);
+    uint256 tx4_hash = ctx_tx4.GetHash();
     CBlockIndex index4 = {};
     index4.nVersion = 13;
     index4.nHeight = 2;
@@ -1555,7 +1558,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test)
     beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
 
     GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
-    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    GRC::ContractContext ctx4 {contract4, ctx_tx4, &index4};
     registry.Add(ctx4);
 
     chainlet_head = registry.Try(TestKey::Cpid());
@@ -1630,9 +1633,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     // This is a trivial initial pending beacon, activation, and two renewals. The typical type of beacon chainlet.
 
     // Pending beacon
-    CTransaction tx1 {};
+    CMutableTransaction tx1 {};
     tx1.nTime = int64_t {1};
-    uint256 tx1_hash = tx1.GetHash();
+    CTransaction ctx_tx1(tx1);
+    uint256 tx1_hash = ctx_tx1.GetHash();
 
     CBlockIndex pindex1 {};
     pindex1.nVersion = 13;
@@ -1646,7 +1650,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload1.m_signature = TestKey::Signature(beacon_payload1);
 
     GRC::Contract contract1 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload1);
-    GRC::ContractContext ctx1 {contract1, tx1, &pindex1};
+    GRC::ContractContext ctx1 {contract1, ctx_tx1, &pindex1};
 
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_cpid == TestKey::Cpid());
     BOOST_CHECK(ctx1.m_contract.CopyPayloadAs<GRC::BeaconPayload>().m_beacon.m_status == GRC::BeaconStatusForStorage::PENDING);
@@ -1710,9 +1714,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     }
 
     // Renewal
-    CTransaction tx3 {};
+    CMutableTransaction tx3 {};
     tx3.nTime = int64_t {3};
-    uint256 tx3_hash = tx3.GetHash();
+    CTransaction ctx_tx3(tx3);
+    uint256 tx3_hash = ctx_tx3.GetHash();
     CBlockIndex index3 {};
     index3.nVersion = 13;
     index3.nHeight = 3;
@@ -1724,7 +1729,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload3.m_signature = TestKey::Signature(beacon_payload3);
 
     GRC::Contract contract3 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload3);
-    GRC::ContractContext ctx3 {contract3, tx3, &index3};
+    GRC::ContractContext ctx3 {contract3, ctx_tx3, &index3};
 
     registry.Add(ctx3);
 
@@ -1748,9 +1753,10 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     }
 
     // Second renewal
-    CTransaction tx4 {};
+    CMutableTransaction tx4 {};
     tx4.nTime = int64_t {4};
-    uint256 tx4_hash = tx4.GetHash();
+    CTransaction ctx_tx4(tx4);
+    uint256 tx4_hash = ctx_tx4.GetHash();
     CBlockIndex index4 = {};
     index4.nVersion = 13;
     index4.nHeight = 2;
@@ -1762,7 +1768,7 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
     beacon_payload4.m_signature = TestKey::Signature(beacon_payload4);
 
     GRC::Contract contract4 = GRC::MakeContract<GRC::BeaconPayload>(3, GRC::ContractAction::ADD, beacon_payload4);
-    GRC::ContractContext ctx4 {contract4, tx4, &index4};
+    GRC::ContractContext ctx4 {contract4, ctx_tx4, &index4};
     registry.Add(ctx4);
 
     chainlet_head = registry.Try(TestKey::Cpid());

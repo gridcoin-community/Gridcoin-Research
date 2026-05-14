@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "gridcoin/protocol.h"
+#include "primitives/transaction.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -16,7 +17,7 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -42,7 +43,8 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 void DeleteProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
@@ -53,7 +55,7 @@ void DeleteProtocolEntry(const uint32_t& payload_version, const std::string& key
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -79,7 +81,8 @@ void DeleteProtocolEntry(const uint32_t& payload_version, const std::string& key
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 } // anonymous namespace
@@ -135,7 +138,7 @@ BOOST_AUTO_TEST_CASE(protocol_DeletingEntryShouldSuppressReversionShouldRestore)
 
     // Delete the protocol entry manually to retain the ctx.
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index {};
     dummy_index.nHeight = 123456791;
     dummy_tx.nTime = 123456791;
@@ -151,7 +154,8 @@ BOOST_AUTO_TEST_CASE(protocol_DeletingEntryShouldSuppressReversionShouldRestore)
                 "fi", // The value is actually irrelevant here.
                 GRC::ProtocolEntryStatus::DELETED);
 
-    GRC::ContractContext ctx(contract, dummy_tx, &dummy_index);
+    CTransaction ctx_tx(dummy_tx);
+    GRC::ContractContext ctx(contract, ctx_tx, &dummy_index);
 
     GRC::GetProtocolRegistry().Add(ctx);
 

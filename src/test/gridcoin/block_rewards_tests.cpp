@@ -6,7 +6,6 @@
 
 #include "amount.h"
 #include "gridcoin/consensus/block_rewards.h"
-#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/sidestake.h"
 #include "key.h"
 #include "script.h"
@@ -495,7 +494,7 @@ BOOST_AUTO_TEST_CASE(validate_fails_when_only_voluntary_present)
 }
 
 // =============================================================================
-// CMutableTransaction scaffold tests
+// CMutableTransaction round-trip (uses real CMutableTransaction from E1)
 // =============================================================================
 
 BOOST_AUTO_TEST_CASE(mutable_transaction_round_trip)
@@ -525,8 +524,8 @@ BOOST_AUTO_TEST_CASE(mutable_transaction_round_trip)
     BOOST_CHECK_EQUAL(mtx.vout.size(), 2u);
     BOOST_CHECK_EQUAL(orig.vout.size(), 1u); // original unchanged
 
-    // Convert back
-    CTransaction result = MakeTransaction(mtx);
+    // Convert back via CTransaction constructor
+    CTransaction result(mtx);
     BOOST_CHECK_EQUAL(result.vout.size(), 2u);
     BOOST_CHECK_EQUAL(result.nVersion, orig.nVersion);
     BOOST_CHECK_EQUAL(result.nTime, orig.nTime);

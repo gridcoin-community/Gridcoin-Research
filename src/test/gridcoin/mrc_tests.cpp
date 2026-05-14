@@ -58,8 +58,9 @@ struct Setup {
         assert(pindex->nHeight >= 7);
         assert(pindex->nHeight < 179);
 
-        CTransaction tx;
+        CMutableTransaction tx;
         tx.nTime = pindexGenesisBlock->nTime;
+        CTransaction ctx_tx(tx);
 
         key.MakeNewKey(false);
 
@@ -76,7 +77,7 @@ struct Setup {
         account.m_first_block_ptr = pindexGenesisBlock;
         account.m_last_block_ptr = pindexGenesisBlock;
 
-        GRC::GetBeaconRegistry().Add({contract, tx, pindexGenesisBlock});
+        GRC::GetBeaconRegistry().Add({contract, ctx_tx, pindexGenesisBlock});
         GRC::GetBeaconRegistry().ActivatePending({key.GetPubKey().GetID()}, tx.nTime, uint256(), 0);
         beacon = *GRC::GetBeaconRegistry().TryActive(cpid, pindex->nTime);
 
