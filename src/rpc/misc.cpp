@@ -4,7 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "protocol.h"
-#include "util.h"
+#include <util.h>
 
 #include <univalue.h>
 #include <stdexcept>

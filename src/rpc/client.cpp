@@ -12,7 +12,7 @@
 #include "client.h"
 #include "server.h"
 #include "wallet/db.h"
-#include "util.h"
+#include <util.h>
 
 // #undef printf
 #include <set>

@@ -49,6 +49,7 @@ add_executable(test_gridcoin
     psgt_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
+    rpchelpman_tests.cpp
     sanity_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp

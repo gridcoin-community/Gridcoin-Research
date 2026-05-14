@@ -14,7 +14,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
-#include "util.h"
+#include <util.h>
 #include <util/string.h>
 
 #include <boost/algorithm/string.hpp>

@@ -204,6 +204,7 @@ add_library(gridcoin_util STATIC
     rpc/psgt.cpp
     rpc/rawtransaction.cpp
     rpc/server.cpp
+    rpc/util.cpp
     rpc/voting.cpp
     scheduler.cpp
     script.cpp

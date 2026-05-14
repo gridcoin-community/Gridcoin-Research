@@ -9,7 +9,7 @@
 #include "protocol.h"
 #include <key_io.h>
 #include "wallet/db.h"
-#include "util.h"
+#include <util.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
