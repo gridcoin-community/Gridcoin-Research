@@ -172,6 +172,16 @@ extern UniValue walletpassphrase(const UniValue& params, bool fHelp);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp);
 extern UniValue walletdiagnose(const UniValue& params, bool fHelp);
 
+// PSGT (Partially Signed Gridcoin Transactions)
+extern UniValue createpsgt(const UniValue& params, bool fHelp);
+extern UniValue decodepsgt(const UniValue& params, bool fHelp);
+extern UniValue combinepsgt(const UniValue& params, bool fHelp);
+extern UniValue finalizepsgt(const UniValue& params, bool fHelp);
+extern UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
+extern UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
+extern UniValue converttopsgt(const UniValue& params, bool fHelp);
+extern UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
+
 // Staking
 extern UniValue advertisebeacon(const UniValue& params, bool fHelp);
 extern UniValue advertisebeaconv3(const UniValue& params, bool fHelp);

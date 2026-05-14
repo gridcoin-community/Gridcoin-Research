@@ -188,6 +188,7 @@ add_library(gridcoin_util STATIC
     pbkdf2.cpp
     policy/policy.cpp
     primitives/transaction.cpp
+    psgt.cpp
     protocol.cpp
     pubkey.cpp
     random.cpp
@@ -200,6 +201,7 @@ add_library(gridcoin_util STATIC
     rpc/misc.cpp
     rpc/net.cpp
     rpc/protocol.cpp
+    rpc/psgt.cpp
     rpc/rawtransaction.cpp
     rpc/server.cpp
     rpc/voting.cpp
