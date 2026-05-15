@@ -157,6 +157,16 @@ void Shutdown(void* parg)
         threadGroup.interrupt_all();
         threadGroup.join_all();
 
+        LogPrintf("INFO: %s: Flushing wallet database.", __func__);
+        bitdb.Flush(false);
+
+        // Interrupt all sleeping threads.
+        LogPrintf("INFO: %s: Interrupting sleeping threads.", __func__);
+        g_thread_interrupt();
+
+        LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
+        StopNode();
+
         // Coordinate block-file and block-index DB state before exit so a
         // clean shutdown never leaves the LevelDB index referencing flat-file
         // data that hasn't been fsynced. The fsync on the active blk*.dat
@@ -164,6 +174,13 @@ void Shutdown(void* parg)
         // 5000-block fsync boundaries; the CTxDB::Sync() barrier then forces
         // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
         // durable. See issue #2865.
+        //
+        // This must run after StopNode() so that every thread that can write
+        // a block (ThreadMessageHandler, ThreadStakeMiner, ThreadScraper, and
+        // the rest of the net/peer thread group) has been joined. Running it
+        // earlier leaves a small race window where a block accepted during
+        // shutdown could land after our flush and bypass the coordination
+        // guarantee Phase 2's startup recovery relies on.
         LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
         {
             LOCK(cs_main);
@@ -174,16 +191,6 @@ void Shutdown(void* parg)
             }
             CTxDB().Sync();
         }
-
-        LogPrintf("INFO: %s: Flushing wallet database.", __func__);
-        bitdb.Flush(false);
-
-        // Interrupt all sleeping threads.
-        LogPrintf("INFO: %s: Interrupting sleeping threads.", __func__);
-        g_thread_interrupt();
-
-        LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
-        StopNode();
 
         LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
