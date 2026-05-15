@@ -161,6 +161,22 @@ bool CTxDB::TxnCommit()
     return true;
 }
 
+bool CTxDB::Sync()
+{
+    if (fReadOnly) {
+        return true;
+    }
+    leveldb::WriteOptions opts;
+    opts.sync = true;
+    leveldb::WriteBatch empty_batch;
+    leveldb::Status status = pdb->Write(opts, &empty_batch);
+    if (!status.ok()) {
+        LogPrintf("LevelDB Sync failure: %s", status.ToString());
+        return false;
+    }
+    return true;
+}
+
 class CBatchScanner : public leveldb::WriteBatch::Handler {
 public:
     std::string needle;

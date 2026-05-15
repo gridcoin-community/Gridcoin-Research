@@ -5,6 +5,7 @@
 
 #include "chainparams.h"
 #include "clientversion.h"
+#include "dbwrapper.h"
 #include "main.h"
 #include "protocol.h"
 #include "serialize.h"
@@ -37,8 +38,18 @@ bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int&
 
     // Flush stdio buffers and commit to disk before returning
     fflush(fileout.Get());
-    if (!IsInitialBlockDownload() || (nBestHeight + 1) % 5000 == 0)
-        FileCommit(fileout.Get());
+    if (!IsInitialBlockDownload() || (nBestHeight + 1) % 5000 == 0) {
+        if (FileCommit(fileout.Get())) {
+            // Pair the block-file fsync with a LevelDB WAL sync barrier so
+            // the block index DB cannot be made durable referencing blk*.dat
+            // data that has not itself been fsynced. This converts the
+            // "index committed but data still in OS page cache" failure mode
+            // (Scenario C in issue #2865) into the safe "data on disk but
+            // index doesn't know about it yet" mode (Scenario B), at the
+            // cost of one small WAL fsync per fsync boundary.
+            CTxDB().Sync();
+        }
+    }
 
     return true;
 }

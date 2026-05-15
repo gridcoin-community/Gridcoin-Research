@@ -6,6 +6,7 @@
 
 
 #include "chainparams.h"
+#include "dbwrapper.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
 #include "util/threadnames.h"
@@ -155,6 +156,24 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
+
+        // Coordinate block-file and block-index DB state before exit so a
+        // clean shutdown never leaves the LevelDB index referencing flat-file
+        // data that hasn't been fsynced. The fsync on the active blk*.dat
+        // covers the IBD case where the last block was written between
+        // 5000-block fsync boundaries; the CTxDB::Sync() barrier then forces
+        // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
+        // durable. See issue #2865.
+        LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
+        {
+            LOCK(cs_main);
+            unsigned int nFile = 0;
+            if (FILE* fp = AppendBlockFile(nFile)) {
+                FileCommit(fp);
+                fclose(fp);
+            }
+            CTxDB().Sync();
+        }
 
         LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
