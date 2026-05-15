@@ -185,11 +185,25 @@ void Shutdown(void* parg)
         {
             LOCK(cs_main);
             unsigned int nFile = 0;
+            bool block_file_synced = false;
             if (FILE* fp = AppendBlockFile(nFile)) {
-                FileCommit(fp);
+                block_file_synced = FileCommit(fp);
                 fclose(fp);
+                if (!block_file_synced) {
+                    LogPrintf("WARN: %s: FileCommit failed for blk%05u.dat during shutdown; "
+                              "skipping LevelDB sync barrier so the block-index DB does not "
+                              "become durable referencing unflushed flat-file data.",
+                              __func__, nFile);
+                }
+            } else {
+                LogPrintf("WARN: %s: AppendBlockFile failed during shutdown; "
+                          "skipping LevelDB sync barrier.", __func__);
             }
-            CTxDB().Sync();
+            if (block_file_synced) {
+                if (!CTxDB().Sync()) {
+                    LogPrintf("WARN: %s: CTxDB::Sync failed during shutdown.", __func__);
+                }
+            }
         }
 
         LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
