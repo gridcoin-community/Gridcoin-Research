@@ -1985,7 +1985,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "backupwallet\n"
                 "\n"
-                "Backup your wallet and config files.\n");
+                "Backup your wallet, config, and settings files.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
