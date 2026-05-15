@@ -4,6 +4,7 @@
 
 #include <rpc/util.h>
 
+#include <rpc/protocol.h>
 #include <tinyformat.h>
 #include <univalue.h>
 
@@ -388,6 +389,47 @@ BOOST_AUTO_TEST_CASE(listsinceblock_help_renders)
         BOOST_CHECK(what.find("target_confirmations") != std::string::npos);
         BOOST_CHECK(what.find("transactions") != std::string::npos);
         BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+// Invalid-subcommand path for addnode: the JSONRPCError throw at net.cpp:62-63
+// fires before any LOCK(cs_vAddedNodes) or vNodes/ConnectNode access, so this
+// is safe to exercise without a node/net fixture.
+BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("x");
+    params.push_back("bogus");
+    try {
+        addnode(params, /*fHelp=*/false);
+        BOOST_FAIL("expected UniValue JSON-RPC error");
+    } catch (const UniValue& e) {
+        BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
+        const std::string message = e["message"].get_str();
+        BOOST_CHECK(message.find("command must be one of") != std::string::npos);
+        BOOST_CHECK(message.find("add") != std::string::npos);
+        BOOST_CHECK(message.find("remove") != std::string::npos);
+        BOOST_CHECK(message.find("onetry") != std::string::npos);
+    }
+}
+
+// Invalid-subcommand path for setban: the JSONRPCError throw at net.cpp:258-259
+// fires before the g_banman null check and any lock acquisition, so this is
+// safe to exercise without a banman/net fixture.
+BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("1.2.3.4");
+    params.push_back("bogus");
+    try {
+        setban(params, /*fHelp=*/false);
+        BOOST_FAIL("expected UniValue JSON-RPC error");
+    } catch (const UniValue& e) {
+        BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
+        const std::string message = e["message"].get_str();
+        BOOST_CHECK(message.find("command must be") != std::string::npos);
+        BOOST_CHECK(message.find("add") != std::string::npos);
+        BOOST_CHECK(message.find("remove") != std::string::npos);
     }
 }
 
