@@ -75,7 +75,9 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
     QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
     QAction *copyAddressAction = new QAction(ui->copyToClipboardButton->text(), this);
     QAction *editAction = new QAction(tr("&Edit"), this);
+#ifdef ENABLE_QRENCODE
     QAction *showQRCodeAction = new QAction(ui->showQRCodeButton->text(), this);
+#endif
     QAction *signMessageAction = new QAction(ui->signMessageButton->text(), this);
     QAction *verifyMessageAction = new QAction(ui->verifyMessageButton->text(), this);
     deleteAction = new QAction(ui->deleteButton->text(), this);
@@ -88,7 +90,9 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
     if(tab == SendingTab)
         contextMenu->addAction(deleteAction);
     contextMenu->addSeparator();
+#ifdef ENABLE_QRENCODE
     contextMenu->addAction(showQRCodeAction);
+#endif
     if(tab == ReceivingTab)
         contextMenu->addAction(signMessageAction);
     else if(tab == SendingTab)
@@ -99,7 +103,9 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
     connect(copyLabelAction, &QAction::triggered, this, &AddressBookPage::onCopyLabelAction);
     connect(editAction, &QAction::triggered, this, &AddressBookPage::onEditAction);
     connect(deleteAction, &QAction::triggered, this, &AddressBookPage::on_deleteButton_clicked);
+#ifdef ENABLE_QRENCODE
     connect(showQRCodeAction, &QAction::triggered, this, &AddressBookPage::on_showQRCodeButton_clicked);
+#endif
     connect(signMessageAction, &QAction::triggered, this, &AddressBookPage::on_signMessageButton_clicked);
     connect(verifyMessageAction, &QAction::triggered, this, &AddressBookPage::on_verifyMessageButton_clicked);
 
