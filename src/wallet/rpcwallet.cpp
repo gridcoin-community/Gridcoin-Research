@@ -1985,17 +1985,19 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
         throw runtime_error(
                 "backupwallet\n"
                 "\n"
-                "Backup your wallet and config files.\n");
+                "Backup your wallet, config, and settings files.\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     bool bWalletBackupResults = GRC::BackupWallet(*pwalletMain, GRC::GetBackupFilename("wallet.dat"));
     bool bConfigBackupResults = GRC::BackupConfigFile(GRC::GetBackupFilename("gridcoinresearch.conf"));
+    bool bSettingsBackupResults = GRC::BackupSettingsFile(GRC::GetBackupFilename("gridcoinsettings.json"));
 
     std::vector<std::string> backup_file_type;
 
     backup_file_type.push_back("wallet.dat");
     backup_file_type.push_back("gridcoinresearch.conf");
+    backup_file_type.push_back("gridcoinsettings.json");
 
     std::vector<std::string> files_removed;
     UniValue u_files_removed(UniValue::VARR);
@@ -2010,6 +2012,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("Backup wallet success", bWalletBackupResults);
     ret.pushKV("Backup config success", bConfigBackupResults);
+    ret.pushKV("Backup settings success", bSettingsBackupResults);
     ret.pushKV("Maintain backup file retention success", bMaintainBackupResults);
     ret.pushKV("Number of files removed", (int64_t) files_removed.size());
     ret.pushKV("Files removed", u_files_removed);
