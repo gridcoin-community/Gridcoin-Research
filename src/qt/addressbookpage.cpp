@@ -15,7 +15,7 @@
 #include <QMessageBox>
 #include <QMenu>
 
-#ifdef USE_QRCODE
+#ifdef ENABLE_QRENCODE
 #include "qrcodedialog.h"
 #endif
 
@@ -40,7 +40,7 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
     ui->deleteButton->setIcon(QIcon());
 #endif
 
-#ifndef USE_QRCODE
+#ifndef ENABLE_QRENCODE
     ui->showQRCodeButton->setVisible(false);
 #endif
 
@@ -367,7 +367,7 @@ void AddressBookPage::changeFilter(const QString& needle)
 
 void AddressBookPage::on_showQRCodeButton_clicked()
 {
-#ifdef USE_QRCODE
+#ifdef ENABLE_QRENCODE
     QTableView *table = ui->tableView;
     QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Address);
 

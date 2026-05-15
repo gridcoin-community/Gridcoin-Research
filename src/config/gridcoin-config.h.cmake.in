@@ -36,7 +36,6 @@
 #cmakedefine USE_ASM_SCRYPT
 
 #cmakedefine USE_DBUS
-#cmakedefine USE_QRCODE
 
 #cmakedefine HAVE_STRERROR_R
 #cmakedefine STRERROR_R_CHAR_P

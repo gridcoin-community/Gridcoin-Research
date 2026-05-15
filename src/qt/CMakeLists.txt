@@ -131,6 +131,11 @@ elseif(APPLE)
     )
 endif()
 
+if(ENABLE_QRENCODE)
+    target_sources(gridcoinqt PRIVATE qrcodedialog.cpp)
+    target_compile_definitions(gridcoinqt PRIVATE ENABLE_QRENCODE)
+endif()
+
 set_target_properties(gridcoinqt PROPERTIES
     AUTOMOC ON
     AUTORCC ON
@@ -173,6 +178,9 @@ if(USE_QT6)
 endif()
 if(USE_DBUS)
     target_link_libraries(gridcoinqt PUBLIC ${QT}::DBus)
+endif()
+if(ENABLE_QRENCODE)
+    target_link_libraries(gridcoinqt PUBLIC PkgConfig::QRENCODE)
 endif()
 
 if(APPLE)
