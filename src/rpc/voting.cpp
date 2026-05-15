@@ -10,6 +10,7 @@
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
 #include "protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "util/time.h"
 
@@ -349,62 +350,109 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 
 UniValue addpoll(const UniValue& params, bool fHelp)
 {
+    // The set of valid poll types depends on whether PollV3 is active, so the help
+    // text must be constructed per-call from the runtime-resolved list.
     uint32_t payload_version = 0;
     std::vector<PollType> valid_poll_types;
-
     {
         LOCK(cs_main);
 
         payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
-
         valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
     }
 
     std::stringstream types_ss;
-
     for (const auto& type : valid_poll_types) {
         if (types_ss.str() != std::string{}) {
             types_ss << ", ";
         }
-
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
 
-    if (params.size() == 0) {
-        std::string e = strprintf(
-                    "addpoll <type> <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url> "
-                    "<required_field_name1=value1;required_field_name2=value2...>\n"
-                    "\n"
-                    "<type> -----------> Type of poll. Valid types are: %s.\n"
-                    "<title> ----------> Title for the poll\n"
-                    "<days> -----------> Number of days that the poll will run\n"
-                    "<question> -------> Prompt that voters shall answer\n"
-                    "<answers> --------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
-                    "<weighttype> -----> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
-                    "<responsetype> ---> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
-                    "<url> ------------> Discussion web page URL for the poll\n"
-                    "<required fields>-> Required additional field(s) if any (see below)\n"
-                    "\n"
-                    "Add a poll to the network.\n"
-                    "Requires 100K GRC balance. Costs 50 GRC.\n"
-                    "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
-                    "Certain poll types may require additional fields. You can see these with addpoll <type> \n"
-                    "with no other parameters.",
-                    types_ss.str());
+    const RPCHelpMan help{
+        "addpoll",
+        "Add a poll to the network.\n"
+        "Requires 100K GRC balance. Costs 50 GRC.\n"
+        "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
+        "Certain poll types require additional fields. Call `addpoll <type>` with no other "
+        "parameters to see the required fields for a specific type.",
+        {
+            {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
+             strprintf("Type of poll. Valid types for the active protocol version: %s.",
+                       types_ss.str())},
+            {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
+            {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
+            {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
+            {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
+             "Semicolon-separated answer list (whitespace is not trimmed). "
+             "Pass an empty string for yes/no/abstain response type."},
+            {"weighttype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+             "Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance."},
+            {"responsetype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+             "1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice."},
+            {"url", RPCArg::Type::STR, RPCArg::Optional::NO, "Discussion web page URL for the poll."},
+            {"required_fields", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+             "Semicolon-separated name=value pairs for poll types that require additional fields "
+             "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
+             "to discover the required fields for a given poll type."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "title", "Poll title."},
+                {RPCResult::Type::STR_HEX, "id", "Poll transaction id (hex)."},
+                {RPCResult::Type::STR, "question", "Poll question."},
+                {RPCResult::Type::STR, "url", "Discussion URL."},
+                {RPCResult::Type::ARR, "additional_fields", "Additional name/value pairs.",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "name", "Field name."},
+                                {RPCResult::Type::STR, "value", "Field value."},
+                                {RPCResult::Type::BOOL, "required", "Whether the field is required for this poll type."},
+                            }},
+                    }},
+                {RPCResult::Type::STR, "poll_type", "Poll type (string form)."},
+                {RPCResult::Type::NUM, "poll_type_id", "Poll type (numeric enum)."},
+                {RPCResult::Type::STR, "weight_type", "Weight type (string form)."},
+                {RPCResult::Type::NUM, "weight_type_id", "Weight type (numeric enum)."},
+                {RPCResult::Type::STR, "response_type", "Response type (string form)."},
+                {RPCResult::Type::NUM, "response_type_id", "Response type (numeric enum)."},
+                {RPCResult::Type::NUM, "duration_days", "Poll duration in days."},
+                {RPCResult::Type::STR, "expiration", "Human-readable expiration timestamp."},
+                {RPCResult::Type::STR, "timestamp", "Human-readable creation timestamp."},
+                {RPCResult::Type::ARR, "choices", "Answer choices.",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::NUM, "id", "Choice index."},
+                                {RPCResult::Type::STR, "label", "Choice label."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("addpoll",
+                "survey \"Example poll\" 7 \"What do you think?\" \"yes;no;maybe\" 1 2 "
+                "\"https://example.org/discussion\"")
+            + HelpExampleCli("addpoll",
+                "project \"Add XYZ\" 14 \"Add project XYZ?\" \"\" 1 1 "
+                "\"https://example.org\" \"project_url=https://xyz.example\"")
+            + HelpExampleRpc("addpoll",
+                "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
+                "\"https://example.org/discussion\"")
+        },
+    };
 
-        throw std::runtime_error(e);
-    }
-
-    if (OutOfSyncByAge()) {
-        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
+    // Preserve the interactive wizard: `addpoll <type>` (one arg) shows the required-fields
+    // hint for that type. Fall through past the help gate and intercept after type resolution.
+    if (params.size() != 1) {
+        if (fHelp || !help.IsValidNumArgs(params.size())) {
+            throw std::runtime_error(help.ToString());
+        }
     }
 
     std::string type_string = ToLower(params[0].get_str());
-
     PollType poll_type = PollType::UNKNOWN;
-
     bool valid_type_parameter = false;
-
     for (const auto& type : valid_poll_types) {
         if (ToLower(Poll::PollTypeToString(type, false)) == type_string) {
             poll_type = type;
@@ -414,56 +462,36 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     }
 
     if (!valid_type_parameter) {
-        std::string e = strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str());
-
-        throw JSONRPCError(RPC_INVALID_PARAMETER, e);
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str()));
     }
 
     const std::vector<std::string>& required_fields = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
-    std::stringstream required_fields_ss;
 
-    for (const auto& required_field : required_fields) {
-        if (required_fields_ss.str() != std::string{}) {
-            required_fields_ss << ", ";
-        }
-
-        required_fields_ss << required_field;
-    }
-
+    // Wizard hint: `addpoll <type>` — reframe the per-type required-fields list as a
+    // validation error instead of help text. Fires before the sync check so an unsynced
+    // user discovering the interface still gets the hint.
     if (params.size() == 1) {
-        std::string e = strprintf(
-                    "For addpoll %s, the required fields are the following: %s.\n",
-                    ToLower(params[0].get_str()),
-                    required_fields.empty() ? "none" : required_fields_ss.str());
-
-        throw std::runtime_error(e);
+        std::stringstream required_fields_ss;
+        for (const auto& f : required_fields) {
+            if (required_fields_ss.str() != std::string{}) {
+                required_fields_ss << ", ";
+            }
+            required_fields_ss << f;
+        }
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("For addpoll %s, the required fields are the following: %s.",
+                      type_string,
+                      required_fields.empty() ? "none" : required_fields_ss.str()));
     }
 
-    size_t required_number_of_params = required_fields.empty() ? 8 : 9;
+    if (!required_fields.empty() && params.size() < 9) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("Poll type %s requires the additional <required_fields> argument.", type_string));
+    }
 
-    if (fHelp || params.size() < required_number_of_params) {
-        std::string e = strprintf(
-                    "addpoll <type> <title> <days> <question> <answer1;answer2...> <weighttype> <responsetype> <url> "
-                    "<required_field_name1=value1;required_field_name2=value2...>\n"
-                    "\n"
-                    "<type> -----------> Type of poll. Valid types are: %s.\n"
-                    "<title> ----------> Title for the poll\n"
-                    "<days> -----------> Number of days that the poll will run\n"
-                    "<question> -------> Prompt that voters shall answer\n"
-                    "<answers> --------> Answers for voters to choose from. Separate answers with semicolons (;)\n"
-                    "<weighttype> -----> Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance\n"
-                    "<responsetype> ---> 1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice\n"
-                    "<url> ------------> Discussion web page URL for the poll\n"
-                    "<required fields>-> Required additional field(s) if any (see below)\n"
-                    "\n"
-                    "Add a poll to the network.\n"
-                    "Requires 100K GRC balance. Costs 50 GRC.\n"
-                    "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
-                    "Certain poll types may require additional fields. You can see these with addpoll <type> \n"
-                    "with no other parameters.",
-                    types_ss.str());
-
-        throw std::runtime_error(e);
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Cannot add a poll with a wallet that is not in sync.");
     }
 
     EnsureWalletIsUnlocked();
