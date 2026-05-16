@@ -127,6 +127,15 @@ bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
+//! Abandonment-style rewind of the chain to `pindex_target`. Updates the in-memory chain
+//! globals (pindexBest, nBestHeight, hashBestChain, g_chain_trust, sync time) and persists
+//! the new hashBestChain to LevelDB via the supplied CTxDB. Unlike DisconnectBlocksBatch,
+//! this does NOT call DisconnectBlock on the abandoned range -- the on-disk data for those
+//! blocks is by definition unreadable (we are recovering from corruption that made them
+//! unhashable). Phase 2 of issue #2865; see src/node/coherence.cpp and
+//! doc/block_corruption_recovery_design.md.
+bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb);
+
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 
 int GetNumBlocksOfPeers();

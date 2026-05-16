@@ -1607,6 +1607,45 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
     return file;
 }
 
+bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
+{
+    AssertLockHeld(cs_main);
+    assert(pindex_target != nullptr);
+
+    if (pindex_target == pindexBest) {
+        return true;
+    }
+
+    LogPrintf("INFO: %s: abandoning chain tip %s @ %d down to %s @ %d.", __func__,
+              pindexBest->GetBlockHash().GetHex(), nBestHeight,
+              pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+
+    // Unlink the abandoned range from the in-memory tree by clearing pnext along the way.
+    // The CBlockIndex entries themselves stay in mapBlockIndex -- they're orphaned but
+    // inert, and AddToBlockIndex will overwrite them when P2P re-supplies the same blocks.
+    for (CBlockIndex* pindex = pindexBest; pindex && pindex != pindex_target; pindex = pindex->pprev) {
+        if (pindex->pprev) {
+            pindex->pprev->pnext = nullptr;
+        }
+    }
+
+    pindexBest = pindex_target;
+    nBestHeight = pindex_target->nHeight;
+    hashBestChain = pindex_target->GetBlockHash();
+    g_chain_trust.SetBest(pindex_target);
+    UpdateSyncTime(pindex_target);
+
+    if (!txdb.WriteHashBestChain(pindex_target->GetBlockHash())) {
+        return error("%s: WriteHashBestChain failed for %s", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+    if (!txdb.Sync()) {
+        return error("%s: CTxDB::Sync failed after abandonment", __func__);
+    }
+
+    return true;
+}
+
 static unsigned int nCurrentBlockFile = 1;
 
 FILE* AppendBlockFile(unsigned int& nFileRet)
