@@ -74,15 +74,18 @@ wait_for_height() {
 
 # ---------------------------------------------------------------- preflight
 
-[[ "$EUID" -ne 0 ]] && command -v sudo >/dev/null || fail "sudo required for dm-flakey setup."
+if [[ "$EUID" -ne 0 ]] && ! command -v sudo >/dev/null; then
+    fail "sudo required for dm-flakey setup."
+fi
 command -v dmsetup >/dev/null || fail "dmsetup not installed (apt install dmsetup)."
 command -v losetup  >/dev/null || fail "losetup not installed (util-linux package)."
 [[ -x "$WALLET_BIN" ]] || fail "WALLET_BIN '$WALLET_BIN' is not executable."
 sudo ip netns list | grep -q "^${TEST_NETNS}\b" || fail "Test netns '$TEST_NETNS' not found."
 sudo ip netns list | grep -q "^${PEER_NETNS}\b" || fail "Peer netns '$PEER_NETNS' not found."
 PEER_TIP=$(get_block_height "$PEER_NETNS" "$PEER_DATADIR")
-[[ -n "$PEER_TIP" ]] && (( PEER_TIP > TARGET_HEIGHT )) \
-    || fail "Peer tip ($PEER_TIP) is not above TARGET_HEIGHT ($TARGET_HEIGHT)."
+if [[ -z "$PEER_TIP" ]] || (( PEER_TIP <= TARGET_HEIGHT )); then
+    fail "Peer tip ($PEER_TIP) is not above TARGET_HEIGHT ($TARGET_HEIGHT)."
+fi
 
 log "Preflight OK. Peer tip = $PEER_TIP; drop-writes at $DROP_AT_HEIGHT; SIGKILL at $TARGET_HEIGHT."
 
@@ -112,6 +115,7 @@ sudo chown -R "$USER":"$USER" "$TEST_MOUNTPOINT"
 # ---------------------------------------------------------------- start wallet
 
 log "Starting victim wallet..."
+# shellcheck disable=SC2024  # /tmp path is user-owned; redirect by calling shell is intentional.
 sudo ip netns exec "$TEST_NETNS" "$WALLET_BIN" \
     -testnet -datadir="$TEST_DATADIR" -daemon \
     >/tmp/grc_crash_harness_t2_start.log 2>&1
@@ -159,6 +163,7 @@ ARCHIVE="$TEST_DATADIR/testnet/debug.log.tier2_prerestart"
 sudo mv "$TEST_DATADIR/testnet/debug.log" "$ARCHIVE" 2>/dev/null || true
 
 log "Restarting victim..."
+# shellcheck disable=SC2024  # /tmp path is user-owned; redirect by calling shell is intentional.
 sudo ip netns exec "$TEST_NETNS" "$WALLET_BIN" \
     -testnet -datadir="$TEST_DATADIR" -daemon \
     >/tmp/grc_crash_harness_t2_restart.log 2>&1
@@ -167,7 +172,7 @@ sleep 5
 [[ -f "$PIDFILE" ]] || fail "Restart pidfile not found."
 
 # Wait for RPC.
-for i in 1 2 3 4 5 6 7 8; do
+for _ in 1 2 3 4 5 6 7 8; do
     if rpc "$TEST_NETNS" "$TEST_DATADIR" getblockchaininfo >/dev/null 2>&1; then break; fi
     sleep 5
 done

@@ -65,8 +65,9 @@ sudo ip netns list | grep -q "^${PEER_NETNS}\b"  || fail "Peer netns '$PEER_NETN
 [[ -d "$PEER_DATADIR" ]] || fail "Peer datadir '$PEER_DATADIR' does not exist."
 
 PEER_TIP=$(get_block_height "$PEER_NETNS" "$PEER_DATADIR")
-[[ -n "$PEER_TIP" ]] && (( PEER_TIP > TARGET_HEIGHT )) \
-    || fail "Peer tip ($PEER_TIP) is not above TARGET_HEIGHT ($TARGET_HEIGHT). Pick a lower target or wait for peer to sync."
+if [[ -z "$PEER_TIP" ]] || (( PEER_TIP <= TARGET_HEIGHT )); then
+    fail "Peer tip ($PEER_TIP) is not above TARGET_HEIGHT ($TARGET_HEIGHT). Pick a lower target or wait for peer to sync."
+fi
 
 log "Preflight OK. Peer tip = $PEER_TIP; will kill victim at $TARGET_HEIGHT."
 
@@ -78,6 +79,7 @@ sudo mkdir -p "$TEST_DATADIR"
 sudo chown "$USER":"$USER" "$TEST_DATADIR"
 
 log "Starting victim wallet in netns $TEST_NETNS, datadir $TEST_DATADIR..."
+# shellcheck disable=SC2024  # /tmp path is user-owned; redirect by calling shell is intentional.
 sudo ip netns exec "$TEST_NETNS" "$WALLET_BIN" \
     -testnet -datadir="$TEST_DATADIR" -daemon \
     >/tmp/grc_crash_harness_t1_start.log 2>&1
@@ -110,6 +112,7 @@ ARCHIVE="$TEST_DATADIR/testnet/debug.log.tier1_prerestart"
 sudo mv "$TEST_DATADIR/testnet/debug.log" "$ARCHIVE" 2>/dev/null || true
 
 log "Restarting victim..."
+# shellcheck disable=SC2024  # /tmp path is user-owned; redirect by calling shell is intentional.
 sudo ip netns exec "$TEST_NETNS" "$WALLET_BIN" \
     -testnet -datadir="$TEST_DATADIR" -daemon \
     >/tmp/grc_crash_harness_t1_restart.log 2>&1
@@ -120,7 +123,7 @@ NEW_PID=$(cat "$PIDFILE")
 log "Restarted wallet PID = $NEW_PID"
 
 # Wait for RPC to come up.
-for i in 1 2 3 4 5 6; do
+for _ in 1 2 3 4 5 6; do
     if rpc "$TEST_NETNS" "$TEST_DATADIR" getblockchaininfo >/dev/null 2>&1; then
         break
     fi
