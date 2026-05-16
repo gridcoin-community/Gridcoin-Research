@@ -35,25 +35,48 @@ routine validation of Phase 1 + Phase 2 together, especially after any
 change to the coordination invariant in `WriteBlockToDisk` or to the
 Phase 2 walk-back / rewind / rebuild logic.
 
-## Tier 3 — VMware abrupt power-off (`tier3_vmware.md`)
+## Tier 3 — deterministic blk\*.dat truncation (`tier3_truncate.sh`)
 
-Documented manual procedure. Uses an existing VMware Workstation guest on
-the developer's host (configuration host-specific). Snapshot before each
-run for repeatability; start IBD inside the guest; from the host,
-`vmrun stop <vm> hard` drops the guest's page cache instantly. Reboot
-and observe Phase 2 recovery end-to-end. The most faithful reproduction
-of Scenario C available — what an actual power loss looks like to the
-guest filesystem and the wallet process running inside it.
+Sync the wallet cleanly to a target height, stop it via RPC, truncate
+the active `blk*.dat` file by `TRUNCATE_BYTES` bytes from the end, and
+restart. The LevelDB block index still references the now-missing
+bytes — exactly the post-power-loss state Scenario C describes, but
+produced deterministically by file truncation rather than by racing
+against the kernel writeback.
 
-Left as a manual procedure because the VMware lifecycle is host-specific
-and not worth automating until we want CI integration on a VMware-capable
-runner.
+Unique value vs the other tiers:
+
+- **Deterministic.** Exact rewind depth == exact truncation depth.
+  Repeatable across runs and machines.
+- **Parametric.** Sweep `TRUNCATE_BYTES` through small / medium / large
+  values to exercise zero-SB-cross (registry clamp), 1-SB-cross
+  (single-SB beacon handling), and 2+-SB-cross (`Reset()` + replay)
+  code paths in turn. The script's header comment lists suggested values.
+- **Exits the recovery window cleanly.** Set
+  `EXPECT_REINDEX_REQUEST=1` with a large `TRUNCATE_BYTES` to verify
+  Phase 2 correctly logs the "please `-reindex`" message and refuses
+  to start when the truncation exceeds `-coherencewalkmax`.
+- **Strict assertions.** Unlike Tier 1 (where "no rewind needed" is the
+  expected common case) and Tier 2 (where the dm-flakey timing can land
+  on either outcome), Tier 3 *guarantees* an inconsistency. The script
+  fails if `VerifyChainCoherence` doesn't detect it, if
+  `CleanAbandonedRange` doesn't log its scan stats, or if
+  `PurgeOrphanedBlockIndexEntries` doesn't run — turning any silent
+  regression of those code paths into a hard failure.
+
+What this tier does **not** cover: mid-sector torn writes, LevelDB SST
+file corruption, or filesystem-journal artifacts. For Phase 2's
+recovery code those don't matter, but if you need to exercise the
+whole stack including the kernel page cache and the block device's
+write cache, see [`appendix_vmware_powerpull.md`](appendix_vmware_powerpull.md)
+for the original manual VMware power-pull procedure.
 
 ## What every tier asserts
 
 After the restart in each tier, the harness checks:
 
-1. **Wallet booted without manual intervention.** No `-reindex` required.
+1. **Wallet booted without manual intervention.** No `-reindex`
+   required (unless `EXPECT_REINDEX_REQUEST=1` in Tier 3, which inverts).
 2. **Phase 2 hook executed.** debug.log contains one of:
    - `INFO: RunStartupCoherenceRecovery: chain tip at height N is coherent. No rewind needed.`
      (no corruption was detected — common in Tier 1, expected when fsync caught up)
@@ -66,6 +89,11 @@ After the restart in each tier, the harness checks:
 5. **Beacon state consistent with peers** (when an SB was crossed and
    the rebuild fired). `listbeacons` row count matches a control node's
    to within reorg-fork tolerance.
+
+Tier 3 additionally asserts that `CleanAbandonedRange` and
+`PurgeOrphanedBlockIndexEntries` both ran (proves the surgical
+chainstate cleanup path is wired in; a regression to the old
+"leave phantoms" behaviour fails the test).
 
 ## Invocation pattern
 

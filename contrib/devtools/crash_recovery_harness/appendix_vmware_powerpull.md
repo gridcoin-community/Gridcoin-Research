@@ -1,9 +1,22 @@
-# Tier 3 — VMware abrupt power-off (manual procedure)
+# Appendix — VMware abrupt power-off (manual procedure)
 
-The most faithful reproduction of Scenario C from issue #2865 available
-without dedicated hardware: from the host, abruptly terminate the
-VMware guest process so the guest's OS page cache is dropped instantly,
-matching what real power loss looks like to the wallet inside.
+> This was the original Tier 3 procedure. It has been **superseded for
+> day-to-day validation** by `tier3_truncate.sh`, which reproduces the
+> same recovery state deterministically (LevelDB index ahead of
+> blk\*.dat data) without VMware or root and is therefore far better
+> suited to routine regression testing.
+>
+> This procedure is preserved for the rare case when someone needs to
+> validate the *whole* corruption stack -- kernel page cache, fs
+> journal, block-device write cache -- not just the recovery code's
+> response to a corrupted state. That is a different concern from what
+> the Phase 2 harness is normally exercising.
+
+From the host, abruptly terminate the VMware guest process so the
+guest's OS page cache is dropped instantly, matching what real power
+loss looks like to the wallet inside. This is the most faithful
+reproduction of Scenario C from issue #2865 available without
+dedicated hardware.
 
 This is a manual procedure, not a scripted harness. The VMware
 lifecycle is host-specific and not worth automating until we want CI
