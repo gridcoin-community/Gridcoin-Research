@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_NODE_COHERENCE_H
 #define GRIDCOIN_NODE_COHERENCE_H
 
+#include "main.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED thread-safety analyzer)
 #include "sync.h"
 
 class CBlockIndex;

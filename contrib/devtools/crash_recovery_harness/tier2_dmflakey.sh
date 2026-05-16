@@ -17,6 +17,7 @@
 # Linux only. Requires root for dmsetup / mount / kpartx. Idempotent setup
 # but always wipes the test datadir on entry.
 
+export LC_ALL=C
 set -euo pipefail
 
 WALLET_BIN="${WALLET_BIN:?WALLET_BIN must point to gridcoinresearchd}"
