@@ -74,10 +74,10 @@ defaults for the on-host isolated testnet are baked in). Override on the
 command line:
 
 ```bash
-WALLET_BIN=/home/jco/GridcoinDev/gridcoinresearchd-<ver>-<branch>-<hash> \
+WALLET_BIN=$HOME/path/to/gridcoinresearchd \
 TEST_DATADIR=/tmp/grc_crash_harness_test \
 PEER_NETNS=node1 \
-PEER_DATADIR=/home/jco/isolated_Gridcoin_testnet/.GridcoinResearch \
+PEER_DATADIR=$HOME/isolated_Gridcoin_testnet/.GridcoinResearch \
 TARGET_HEIGHT=100000 \
 ./tier1_killsync.sh
 ```
