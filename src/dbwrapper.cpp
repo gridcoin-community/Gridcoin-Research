@@ -14,6 +14,8 @@
 #include "chainparams.h"
 #include "clientversion.h"
 #include "gridcoin/staking/kernel.h"
+#include "index/txindex.h"
+#include "node/coherence.h"  // GRC::PackBlockFilePos
 #include "txdb.h"
 #include "main.h"
 #include "node/blockstorage.h"
@@ -245,6 +247,156 @@ bool CTxDB::EraseTxIndex(const CTransaction& tx)
     uint256 hash = tx.GetHash();
 
     return Erase(make_pair(string("tx"), hash));
+}
+
+bool CTxDB::CleanAbandonedRange(const std::unordered_set<uint64_t>& abandoned_positions,
+                                uint64_t* out_entries_deleted,
+                                uint64_t* out_vspent_cleared,
+                                uint64_t* out_entries_scanned)
+{
+    // Initialize out-params defensively. The cleanup itself runs even if
+    // abandoned_positions is empty (it's a no-op scan); the early-return
+    // below just spares us the iterator setup cost.
+    if (out_entries_deleted) *out_entries_deleted = 0;
+    if (out_vspent_cleared)  *out_vspent_cleared  = 0;
+    if (out_entries_scanned) *out_entries_scanned = 0;
+
+    if (abandoned_positions.empty()) {
+        return true;
+    }
+
+    const int64_t nStart = GetTimeMillis();
+
+    // Pass 1: scan all ("tx", *) entries with a read-only iterator and
+    // collect the mutations we want to apply. We can't safely mutate via
+    // Erase/Write while a snapshot-based iterator is alive on the same
+    // pdb, and we want a single atomic commit at the end -- so build the
+    // mutation list in memory first.
+    //
+    // Per-entry cost is dominated by deserializing CTxIndex (~100 bytes
+    // typical). On mainnet (~10M tx index entries) this is a one-shot scan
+    // measured in 1-30 seconds on SSD, 10-60 seconds on HDD. It runs only
+    // when the Phase 2 walk-back detected real corruption -- the common
+    // (no-corruption) path never hits this function because the caller
+    // short-circuits when abandoned_positions is empty.
+    std::vector<uint256> to_erase;
+    std::vector<std::pair<uint256, CTxIndex>> to_rewrite;
+    uint64_t scanned = 0;
+
+    {
+        leveldb::Iterator* iterator = pdb->NewIterator(leveldb::ReadOptions());
+
+        CDataStream ssStartKey(SER_DISK, CLIENT_VERSION);
+        ssStartKey << make_pair(string("tx"), uint256());
+        iterator->Seek(ssStartKey.str());
+
+        bool scan_error = false;
+
+        while (iterator->Valid()) {
+            try {
+                CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                ssKey.write(MakeByteSpan(iterator->key()));
+
+                string strType;
+                ssKey >> strType;
+                if (strType != "tx") break;  // walked past the ("tx", *) range
+
+                uint256 hashTx;
+                ssKey >> hashTx;
+
+                CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                ssValue.write(MakeByteSpan(iterator->value()));
+
+                CTxIndex txindex;
+                ssValue >> txindex;
+
+                ++scanned;
+
+                const uint64_t tx_pos_key = GRC::PackBlockFilePos(txindex.pos.nFile, txindex.pos.nBlockPos);
+
+                if (abandoned_positions.count(tx_pos_key)) {
+                    // This tx was created by ConnectBlock in an abandoned
+                    // block. Delete its CTxIndex outright. No need to also
+                    // sweep its vSpent because by definition no later tx
+                    // in a non-abandoned block could have spent it (the
+                    // abandoned block was the tip of the chain).
+                    to_erase.push_back(hashTx);
+                    continue;
+                }
+
+                // The tx itself was confirmed in a kept block, but one or
+                // more of its outputs may carry a vSpent[i] marker pointing
+                // into an abandoned block (a child tx in that block spent
+                // the output). Clear those specific entries; rewrite the
+                // CTxIndex only if at least one slot changed.
+                bool modified = false;
+                for (CDiskTxPos& spent : txindex.vSpent) {
+                    if (spent.IsNull()) continue;
+                    const uint64_t spent_key = GRC::PackBlockFilePos(spent.nFile, spent.nBlockPos);
+                    if (abandoned_positions.count(spent_key)) {
+                        spent.SetNull();
+                        modified = true;
+                        if (out_vspent_cleared) ++(*out_vspent_cleared);
+                    }
+                }
+                if (modified) {
+                    to_rewrite.emplace_back(hashTx, std::move(txindex));
+                }
+            } catch (const std::exception& e) {
+                LogPrintf("ERROR: %s: deserialize error during ('tx', *) scan: %s", __func__, e.what());
+                scan_error = true;
+                break;
+            }
+
+            iterator->Next();
+        }
+
+        delete iterator;
+
+        if (scan_error) {
+            return false;
+        }
+    }
+
+    if (out_entries_scanned) *out_entries_scanned = scanned;
+
+    LogPrintf("INFO: %s: scanned %u CTxIndex entries in %" PRId64 "ms; %u entries to delete, %u entries to rewrite "
+              "(%u vSpent slot(s) cleared total).", __func__, (unsigned) scanned, GetTimeMillis() - nStart,
+              (unsigned) to_erase.size(), (unsigned) to_rewrite.size(),
+              (unsigned) (out_vspent_cleared ? *out_vspent_cleared : 0));
+
+    if (to_erase.empty() && to_rewrite.empty()) {
+        return true;
+    }
+
+    // Pass 2: apply mutations atomically.
+    if (!TxnBegin()) {
+        return error("%s: TxnBegin failed", __func__);
+    }
+
+    for (const uint256& hashTx : to_erase) {
+        if (!Erase(make_pair(string("tx"), hashTx))) {
+            TxnAbort();
+            return error("%s: Erase(tx, %s) failed", __func__, hashTx.GetHex());
+        }
+    }
+    if (out_entries_deleted) *out_entries_deleted = to_erase.size();
+
+    for (const auto& [hashTx, txindex] : to_rewrite) {
+        if (!Write(make_pair(string("tx"), hashTx), txindex)) {
+            TxnAbort();
+            return error("%s: Write(tx, %s) for vSpent clear failed", __func__, hashTx.GetHex());
+        }
+    }
+
+    if (!TxnCommit()) {
+        return error("%s: TxnCommit failed", __func__);
+    }
+    if (!Sync()) {
+        return error("%s: CTxDB::Sync failed after CleanAbandonedRange commit", __func__);
+    }
+
+    return true;
 }
 
 bool CTxDB::ContainsTx(uint256 hash)

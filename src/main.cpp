@@ -1657,14 +1657,13 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
               pindexBest->GetBlockHash().GetHex(), nBestHeight,
               pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
 
-    // Unlink the abandoned range from the in-memory tree by clearing pnext along the way.
-    // The CBlockIndex entries themselves stay in mapBlockIndex -- they're orphaned but
-    // inert, and AddToBlockIndex will overwrite them when P2P re-supplies the same blocks.
-    for (CBlockIndex* pindex = pindexBest; pindex && pindex != pindex_target; pindex = pindex->pprev) {
-        if (pindex->pprev) {
-            pindex->pprev->pnext = nullptr;
-        }
-    }
+    // Sever the abandoned range from the in-memory tree by clearing the new tip's pnext.
+    // The abandoned CBlockIndex entries are removed from mapBlockIndex separately by
+    // PurgeOrphanedBlockIndexEntries (called from the Phase 2 recovery hook after this
+    // function returns and CTxDB::CleanAbandonedRange has completed the chainstate
+    // rollback). We do not erase them here because the caller still needs the abandoned
+    // CBlockIndex* values for the surgical cleanup pass.
+    pindex_target->pnext = nullptr;
 
     pindexBest = pindex_target;
     nBestHeight = pindex_target->nHeight;
@@ -1681,6 +1680,30 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
     }
 
     return true;
+}
+
+void PurgeOrphanedBlockIndexEntries(std::vector<CBlockIndex*>& abandoned)
+{
+    AssertLockHeld(cs_main);
+
+    // The abandoned vector is what VerifyChainCoherence collected during the walk:
+    // every block past the last consistent one, recorded in newest-to-oldest order.
+    // After the chainstate cleanup, none of these are reachable from pindexBest's
+    // ancestry, and the Phase 2 hook runs before wallet / Quorum / Tally / mempool /
+    // net have started, so no other consumer can hold a live reference.
+    //
+    // Erase from mapBlockIndex first, then delete the heap allocation, then null the
+    // local pointer so a stale read of `abandoned` after this returns is obviously
+    // broken instead of silently dereferencing freed memory.
+    for (CBlockIndex*& p : abandoned) {
+        if (!p) continue;
+        mapBlockIndex.erase(p->GetBlockHash());
+        delete p;
+        p = nullptr;
+    }
+
+    LogPrintf("INFO: %s: purged %u orphaned CBlockIndex entries from mapBlockIndex.",
+              __func__, (unsigned) abandoned.size());
 }
 
 static unsigned int nCurrentBlockFile = 1;

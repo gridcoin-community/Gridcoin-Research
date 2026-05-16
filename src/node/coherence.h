@@ -8,6 +8,10 @@
 #include "main.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED thread-safety analyzer)
 #include "sync.h"
 
+#include <cstdint>
+#include <unordered_set>
+#include <vector>
+
 class CBlockIndex;
 
 namespace GRC {
@@ -16,6 +20,14 @@ namespace GRC {
 //! giving up. Sized well above Phase 1's 5000-block IBD fsync interval so
 //! atypical fsync skips still have headroom. Overridable via -coherencewalkmax.
 constexpr int DEFAULT_COHERENCE_WALK_MAX = 10000;
+
+//! Pack a (nFile, nBlockPos) pair into a uint64_t for fast hash-set lookup
+//! during the chainstate cleanup pass. nFile is uint32 and nBlockPos is
+//! uint32 in the on-disk format, so the pair fits losslessly.
+inline uint64_t PackBlockFilePos(uint32_t nFile, uint32_t nBlockPos)
+{
+    return (static_cast<uint64_t>(nFile) << 32) | static_cast<uint64_t>(nBlockPos);
+}
 
 //! Result of a startup chain-coherence verification.
 struct CoherenceResult {
@@ -33,6 +45,15 @@ struct CoherenceResult {
     //! block. When set, pindex_consistent is unchanged from input and the
     //! caller should refuse to start (the user must -reindex).
     bool exhausted {false};
+    //! CBlockIndex pointers for every block past pindex_consistent that
+    //! failed the coherence check. Consumed by PurgeOrphanedBlockIndexEntries
+    //! to remove the dead entries from mapBlockIndex.
+    std::vector<CBlockIndex*> abandoned_indexes;
+    //! Packed (nFile, nBlockPos) pairs (via PackBlockFilePos) covered by
+    //! abandoned blocks. Consumed by CleanTxdbAbandonedRange to identify
+    //! which CTxIndex entries and vSpent[i] markers were written by
+    //! abandoned blocks and need to be deleted / cleared from the txdb.
+    std::unordered_set<uint64_t> abandoned_positions;
 };
 
 //! Walk backward from pindexBest, hash-verifying each block's on-disk

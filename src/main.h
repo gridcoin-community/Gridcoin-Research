@@ -132,9 +132,26 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
 //! the new hashBestChain to LevelDB via the supplied CTxDB. Unlike DisconnectBlocksBatch,
 //! this does NOT call DisconnectBlock on the abandoned range -- the on-disk data for those
 //! blocks is by definition unreadable (we are recovering from corruption that made them
-//! unhashable). Phase 2 of issue #2865; see src/node/coherence.cpp and
-//! doc/block_corruption_recovery_design.md.
+//! unhashable). The downstream cleanup of chainstate (CTxIndex / vSpent) and the in-memory
+//! mapBlockIndex purge happen separately via CTxDB::CleanAbandonedRange and
+//! PurgeOrphanedBlockIndexEntries below. Phase 2 of issue #2865; see src/node/coherence.cpp
+//! and doc/block_corruption_recovery_design.md.
 bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb);
+
+//! Purge the abandoned CBlockIndex entries from in-memory mapBlockIndex. Called by the
+//! Phase 2 abandonment path after AbandonChainTo + CTxDB::CleanAbandonedRange. The caller
+//! must guarantee that no consumer holds references to the abandoned entries -- in the
+//! Phase 2 hook this is true by construction (runs after LoadBlockIndex, before
+//! GRC::Initialize -- the wallet, Quorum, Tally, mempool, and net have not yet started).
+//!
+//! Frees both the map slot and the heap allocation. The input vector entries are nulled
+//! out after deletion to make it harder to accidentally dereference a freed pointer.
+//!
+//! Doing this at startup-init is safe; doing it at runtime would require coordinating with
+//! live consumers (e.g. blockindex iteration in RPC handlers, Quorum lookups), which is
+//! why the runtime DisconnectBlocksBatch path does NOT also purge -- it leaves orphans in
+//! mapBlockIndex and accepts the small live-state weight.
+void PurgeOrphanedBlockIndexEntries(std::vector<class CBlockIndex*>& abandoned) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 

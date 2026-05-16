@@ -30,16 +30,29 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
     CBlock block;
 
     for (CBlockIndex* pindex = pindexBest; pindex; pindex = pindex->pprev) {
-        // Read with fReadTransactions=false: the ReadBlockFromDisk(pindex)
-        // overload still computes block.GetHash() (header hash) and compares
-        // against pindex->GetBlockHash() internally. A true return means the
-        // on-disk data hashes to what the index claims for this block --
-        // i.e. coherent. A false return means either the read failed (file
-        // missing, partial record) or the hash did not match (Scenario C
-        // from issue #2865); either way we treat it as corruption at this
-        // height and keep walking backward.
-        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus(),
-                              /*fReadTransactions=*/false)) {
+        // Read with the (block, nFile, nBlockPos, params, fReadTransactions=false)
+        // overload -- the lower-level one that actually touches disk. We
+        // deliberately do NOT use ReadBlockFromDisk(block, pindex, ...) with
+        // fReadTransactions=false: that overload's no-transactions branch
+        // copies the header from the in-memory pindex and returns true
+        // without touching disk (blockstorage.cpp:99-104), which would make
+        // this entire coherence check a no-op. See the design doc section
+        // "The walk-back" for the full discussion.
+        //
+        // fReadTransactions=false uses SER_BLOCKHEADERONLY -- we read only
+        // the header (80 bytes + length prefix), enough to recompute the
+        // header hash without paying the cost of deserializing all the
+        // transactions. The PoW check inside the called function is skipped
+        // automatically in the header-only path (it gates on fReadTransactions),
+        // which is correct -- Gridcoin is PoS, so the in-block hash check we
+        // do here against pindex->GetBlockHash() is the only check we need.
+        const bool read_ok = ReadBlockFromDisk(
+            block, pindex->nFile, pindex->nBlockPos,
+            Params().GetConsensus(), /*fReadTransactions=*/false);
+
+        const bool coherent = read_ok && (block.GetHash(true) == pindex->GetBlockHash());
+
+        if (coherent) {
             result.pindex_consistent = pindex;
             return result;
         }
@@ -52,9 +65,16 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
             ++result.sb_cross_count;
         }
 
-        LogPrintf("WARN: %s: block at height %d (hash %s, blk%05u.dat:%u) failed coherence check; walking back.",
+        // Record this block for downstream cleanup. abandoned_indexes drives
+        // the mapBlockIndex purge; abandoned_positions drives the surgical
+        // CTxIndex / vSpent cleanup in CleanTxdbAbandonedRange.
+        result.abandoned_indexes.push_back(pindex);
+        result.abandoned_positions.insert(PackBlockFilePos(pindex->nFile, pindex->nBlockPos));
+
+        LogPrintf("WARN: %s: block at height %d (hash %s, blk%05u.dat:%u) failed coherence check "
+                  "(read_ok=%s); walking back.",
                   __func__, pindex->nHeight, pindex->GetBlockHash().GetHex(),
-                  pindex->nFile, pindex->nBlockPos);
+                  pindex->nFile, pindex->nBlockPos, read_ok ? "true" : "false");
 
         ++walked;
         if (walked >= max_walkback) {
@@ -174,15 +194,43 @@ bool RunStartupCoherenceRecovery()
     }
 
     LogPrintf("INFO: %s: detected inconsistency past height %d. Last consistent block is at height %d "
-              "(%d superblocks crossed in the abandoned range).",
+              "(%d superblocks crossed in the abandoned range, %u blocks abandoned).",
               __func__, result.pindex_consistent->nHeight, result.pindex_consistent->nHeight,
-              result.sb_cross_count);
+              result.sb_cross_count, (unsigned) result.abandoned_indexes.size());
 
+    // Step 1: rewind in-memory chain globals + persist hashBestChain.
     if (!RewindToConsistentTip(result.pindex_consistent)) {
         LogPrintf("ERROR: %s: rewind to height %d failed; cannot continue.",
                   __func__, result.pindex_consistent->nHeight);
         return false;
     }
+
+    // Step 2: surgical chainstate cleanup. Delete CTxIndex entries created
+    // by abandoned blocks, and clear vSpent[i] markers on surviving entries
+    // that point into abandoned blocks. Without this, ConnectInputs on the
+    // re-supplied blocks would silently reject the same input as
+    // already-spent. See the "Abandonment-style rewind + surgical
+    // chainstate cleanup" section of doc/block_corruption_recovery_design.md.
+    {
+        CTxDB txdb;
+        uint64_t entries_deleted = 0, vspent_cleared = 0, entries_scanned = 0;
+        if (!txdb.CleanAbandonedRange(result.abandoned_positions,
+                                      &entries_deleted, &vspent_cleared, &entries_scanned)) {
+            LogPrintf("ERROR: %s: CleanAbandonedRange failed; chainstate may be inconsistent. "
+                      "Restart with -reindex.", __func__);
+            return false;
+        }
+        LogPrintf("INFO: %s: chainstate cleanup: scanned %" PRIu64 " CTxIndex entries, "
+                  "deleted %" PRIu64 ", cleared %" PRIu64 " vSpent slot(s) across surviving entries.",
+                  __func__, entries_scanned, entries_deleted, vspent_cleared);
+    }
+
+    // Step 3: purge the abandoned CBlockIndex entries from in-memory
+    // mapBlockIndex. Safe at this init-time point because no live consumer
+    // holds references (wallet / Quorum / Tally / mempool / net all start
+    // later). See PurgeOrphanedBlockIndexEntries doc comment for why we do
+    // this here instead of at runtime.
+    PurgeOrphanedBlockIndexEntries(result.abandoned_indexes);
 
     // Reconcile registry state with the rewound chain.
     //

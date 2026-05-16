@@ -10,7 +10,9 @@
 #include "main.h"
 #include "streams.h"
 
+#include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 
@@ -204,6 +206,32 @@ public:
     bool UpdateTxIndex(uint256 hash, const CTxIndex& txindex);
     bool AddTxIndex(const CTransaction& tx, const CDiskTxPos& pos, int nHeight);
     bool EraseTxIndex(const CTransaction& tx);
+
+    //! Surgical chainstate cleanup after a Phase 2 abandonment-style rewind
+    //! (see node/coherence.h and doc/block_corruption_recovery_design.md).
+    //!
+    //! Performs one sequential scan of the ("tx", *) keyspace and:
+    //!   - Deletes any CTxIndex whose pos.{nFile, nBlockPos} (packed via
+    //!     GRC::PackBlockFilePos) is in abandoned_positions. These are the
+    //!     CTxIndex entries created by ConnectBlock for txs that lived in
+    //!     the abandoned blocks.
+    //!   - For any other CTxIndex, clears (sets null) vSpent[i] entries
+    //!     whose value is in abandoned_positions. These are the spent
+    //!     markers a parent tx received when a child tx in an abandoned
+    //!     block spent its output. Without this clear, ConnectInputs would
+    //!     silently reject the same input when the canonical chain
+    //!     re-supplies the same block.
+    //!
+    //! The two passes (collect-then-apply) live in one method body because
+    //! they share the iterator. Atomic via TxnBegin/TxnCommit -- a crash
+    //! mid-scan leaves the txdb unchanged. Returns false on TxnCommit
+    //! failure or any iterator error.
+    //!
+    //! Optional out-params surface counters for the recovery log narrative.
+    bool CleanAbandonedRange(const std::unordered_set<uint64_t>& abandoned_positions,
+                             uint64_t* out_entries_deleted = nullptr,
+                             uint64_t* out_vspent_cleared = nullptr,
+                             uint64_t* out_entries_scanned = nullptr);
     bool ContainsTx(uint256 hash);
     bool ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex);
     bool ReadDiskTx(uint256 hash, CTransaction& tx);
