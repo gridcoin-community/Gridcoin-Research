@@ -182,6 +182,13 @@ public:
         return true;
     }
 
+    //! Force a fsync of the LevelDB write-ahead log so that all block-index
+    //! entries committed up to this point are durable on disk. Used as a
+    //! barrier paired with a FileCommit() on the active blk*.dat so the
+    //! block index DB cannot reference flat-file data that hasn't itself
+    //! been flushed. See issue #2865.
+    bool Sync();
+
     bool ReadVersion(int& nVersion)
     {
         nVersion = 0;

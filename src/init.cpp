@@ -6,6 +6,7 @@
 
 
 #include "chainparams.h"
+#include "dbwrapper.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
 #include "util/threadnames.h"
@@ -165,6 +166,45 @@ void Shutdown(void* parg)
 
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
+
+        // Coordinate block-file and block-index DB state before exit so a
+        // clean shutdown never leaves the LevelDB index referencing flat-file
+        // data that hasn't been fsynced. The fsync on the active blk*.dat
+        // covers the IBD case where the last block was written between
+        // 5000-block fsync boundaries; the CTxDB::Sync() barrier then forces
+        // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
+        // durable. See issue #2865.
+        //
+        // This must run after StopNode() so that every thread that can write
+        // a block (ThreadMessageHandler, ThreadStakeMiner, ThreadScraper, and
+        // the rest of the net/peer thread group) has been joined. Running it
+        // earlier leaves a small race window where a block accepted during
+        // shutdown could land after our flush and bypass the coordination
+        // guarantee Phase 2's startup recovery relies on.
+        LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
+        {
+            LOCK(cs_main);
+            unsigned int nFile = 0;
+            bool block_file_synced = false;
+            if (FILE* fp = AppendBlockFile(nFile)) {
+                block_file_synced = FileCommit(fp);
+                fclose(fp);
+                if (!block_file_synced) {
+                    LogPrintf("WARN: %s: FileCommit failed for blk%05u.dat during shutdown; "
+                              "skipping LevelDB sync barrier so the block-index DB does not "
+                              "become durable referencing unflushed flat-file data.",
+                              __func__, nFile);
+                }
+            } else {
+                LogPrintf("WARN: %s: AppendBlockFile failed during shutdown; "
+                          "skipping LevelDB sync barrier.", __func__);
+            }
+            if (block_file_synced) {
+                if (!CTxDB().Sync()) {
+                    LogPrintf("WARN: %s: CTxDB::Sync failed during shutdown.", __func__);
+                }
+            }
+        }
 
         LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
