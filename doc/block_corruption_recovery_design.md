@@ -32,28 +32,58 @@ The Phase 2 hook slots in this window. Critically: **registries have not been in
 
 ## The walk-back
 
-`VerifyChainCoherence(int max_walkback) → CBlockIndex* /* last consistent, or nullptr */`
+`VerifyChainCoherence(int max_walkback) → CoherenceResult`
 
 Walk backward from `pindexBest`, at each step:
 
-1. `ReadBlockFromDisk(block, pindex, Params().GetConsensus())` — read the bytes the index says are at `[pindex->nFile, pindex->nBlockPos]`.
-2. Compare `block.GetHash(true) == pindex->GetBlockHash()`.
-3. If they match, the on-disk data is coherent with the index for this block. Return `pindex` — recovery target found.
-4. If they don't match (read failed, or hash differs), the index has lost contact with reality for this block. Log the mismatch, advance `pindex = pindex->pprev`, repeat.
+1. Read the block bytes the index says are at `[pindex->nFile, pindex->nBlockPos]` using the lower-level overload `ReadBlockFromDisk(block, pindex->nFile, pindex->nBlockPos, Params().GetConsensus(), /*fReadTransactions=*/false)`. This overload uses `SER_BLOCKHEADERONLY` so we read only the header — enough to recompute the hash without paying the cost of deserializing transactions. **Note**: we deliberately do NOT use the `ReadBlockFromDisk(block, pindex, ...)` overload with `fReadTransactions=false`, because that overload's no-transactions branch copies the header from the in-memory `pindex` and returns true without touching disk — defeating the entire purpose of a coherence check (caught during Copilot review of an earlier draft).
+2. Compute `block.GetHash(true)` and compare against `pindex->GetBlockHash()`.
+3. If they match, the on-disk data is coherent with the index for this block. Return `pindex` as `pindex_consistent` — recovery target found.
+4. If the read failed (file missing, partial record) or the hashes differ, the index has lost contact with reality for this block. Log the mismatch, record the block's `(nFile, nBlockPos)` and `CBlockIndex*` into the result (downstream cleanup steps need them), advance `pindex = pindex->pprev`, repeat.
 5. Bound the walk by `max_walkback` to keep startup time predictable. Default is well above Phase 1's 5000-block IBD fsync interval (proposed 10000) to leave headroom. If the bound is exhausted without finding a consistent block, log a fatal "data corruption beyond automatic-recovery window — please `-reindex`" and exit cleanly.
 
 In the common case (no corruption), the very first check on `pindexBest` succeeds and we exit immediately — one `ReadBlockFromDisk` of overhead per startup. The expensive walk only runs when corruption is actually present.
 
-## Abandonment-style rewind (not disconnect-style)
+The walk also collects two pieces of state for the downstream cleanup steps:
+
+- `abandoned_indexes`: the `CBlockIndex*` of every block past `pindex_consistent`. Consumed by `PurgeOrphanedBlockIndexEntries` to remove the dead entries from `mapBlockIndex`.
+- `abandoned_positions`: the set of `(nFile, nBlockPos)` pairs covered by abandoned blocks, packed into `uint64_t` for fast hash-set lookup. Consumed by `CleanTxdbAbandonedRange` to identify which `CTxIndex` entries and `vSpent` markers were written by abandoned blocks.
+
+Collecting during the walk avoids re-traversing the chain three times.
+
+## Abandonment-style rewind + surgical chainstate cleanup
 
 When the walk returns a non-tip `pindex_consistent`, we cannot use the existing `DisconnectBlocksBatch` primitive (`src/main.cpp:933`). That function reads each block from disk to compute the inverse of its effect on the chainstate — but for the blocks we're abandoning, the on-disk data is by definition unreadable or unhashable. Chicken-and-egg.
 
-Instead, Phase 2 does an **abandonment rewind**:
+What we *can* do is roll back the chainstate effects of those blocks directly in the `CTxIndex` LevelDB table without needing the block data. Gridcoin's chainstate is much simpler than Bitcoin Core's modern UTXO database — `CTxIndex` (`src/index/txindex.h:12`) is just `{pos, vector<CDiskTxPos> vSpent}` keyed by tx hash, stored under LevelDB key `("tx", hash)`. The entire effect of `ConnectBlock` on chainstate is:
 
-1. Update in-memory chain state: `pindexBest = pindex_consistent`, `nBestHeight = pindex_consistent->nHeight`, `hashBestChain = pindex_consistent->GetBlockHash()`, `g_chain_trust.SetBest(pindex_consistent)`.
-2. Persist the new tip to LevelDB: `txdb.WriteHashBestChain(pindex_consistent->GetBlockHash())`.
-3. Do **not** call `DisconnectBlock` on the abandoned range. The transactions in those blocks were already absorbed into the wallet's `mapWallet` before the crash. They stay there as unconfirmed entries. When P2P re-supplies the canonical chain past `pindex_consistent`, the normal `AcceptBlock` path runs and re-confirms them. (Wallet behavior is identical to any small reorg; this is well-trodden code.)
-4. Leave the `CBlockIndex` entries for abandoned heights in `mapBlockIndex` and in LevelDB. They become unreferenced from `hashBestChain` and get naturally overwritten as P2P re-supplies the blocks. Aggressively erasing them would be more code for no benefit (the next `AddToBlockIndex` for the re-arriving block overwrites the entry at the same key).
+- A new `CTxIndex` entry per tx in the block, with `pos` pointing into the block's `blk*.dat` region.
+- Updated `vSpent[i]` markers on each input tx's `CTxIndex`, set to the spending tx's `CDiskTxPos` (which is inside the block's region).
+
+So the inverse is two transformations over one LevelDB iteration:
+
+1. **Delete** `CTxIndex` entries whose `pos` is in the abandoned `(nFile, nBlockPos)` set.
+2. **Clear** `vSpent[i]` entries on remaining `CTxIndex` whose value is in the abandoned set.
+
+Both checks use the same primitive — *"is this `CDiskTxPos`'s `(nFile, nBlockPos)` in the abandoned set?"* — which is an `unordered_set<uint64_t>` lookup, O(1). The set is at most `-coherencewalkmax` entries (default 10000), built in one walk of the in-memory `CBlockIndex` chain (already collected during the coherence walk).
+
+The full Phase 2 abandonment sequence:
+
+1. `AbandonChainTo(pindex_consistent, txdb)` — updates in-memory chain globals (`pindexBest`, `nBestHeight`, `hashBestChain`, `g_chain_trust`, sync time), persists the new `hashBestChain` to LevelDB, and nulls `pindex_consistent->pnext` so the in-memory tree doesn't dangle forward from the new tip.
+2. `CleanTxdbAbandonedRange(abandoned_positions, txdb)` — one sequential scan of the `("tx", *)` keyspace in LevelDB. For each entry: delete if its `pos` is in the abandoned set; otherwise if any `vSpent[i]` is in the abandoned set, clear those specific `vSpent[i]` entries and rewrite the modified `CTxIndex`. Atomic via `TxnBegin`/`TxnCommit`. Two-pass (collect-then-apply) to avoid iterator invalidation while writing.
+3. `PurgeOrphanedBlockIndexEntries(abandoned_indexes)` — for each abandoned `CBlockIndex*`: `mapBlockIndex.erase(p->GetBlockHash())` then `delete p`. Frees the in-memory tree of the dead entries.
+
+Wallet handling: any `mapWallet` entry whose confirming block hash was abandoned will, on the wallet load + rescan that follows in init step 8, detect that its confirming block no longer exists in `mapBlockIndex` and revert the tx to unconfirmed. Same code path as any small reorg's wallet behavior. No explicit mempool resurrection is needed in the abandonment path: in the canonical-chain re-supply case the same txs come back via blocks (re-confirmed at the same heights); in the divergent-reorg case other peers still hold the txs in their mempools and mempool relay supplies them back.
+
+### Cost
+
+The chainstate scan is paid exactly once per actual Scenario C event:
+
+- **Common case** (no corruption): `VerifyChainCoherence` returns OK on the first hash check; no rewind, no scan, no cleanup. Total cost: one `ReadBlockFromDisk` (~5 ms).
+- **Corruption detected**: walk-back (a few `ReadBlockFromDisk` calls) + `AbandonChainTo` (one LevelDB write) + `CleanTxdbAbandonedRange` (one full scan of the `("tx", *)` keyspace) + `PurgeOrphanedBlockIndexEntries` (in-memory erases). ~1–30 seconds on SSD, ~10–60 seconds on HDD depending on chain size. Compared with `-reindex` from scratch (10–20 minutes on HDD), a ~30x–60x speedup.
+- **Subsequent startups** after recovery: chain is coherent at the rewound tip; first hash check passes; return immediately. No scan.
+
+The scan cost is **O(txdb size), not O(abandoned range)**. A deeper rewind (within `-coherencewalkmax`) doesn't cost meaningfully more than a shallow one; the rewind distance only affects the size of the `unordered_set` we test membership against, and that lookup is O(1).
 
 ## Registry bookmark clamp
 
@@ -83,6 +113,8 @@ If we rewind `hashBestChain` without clamping these bookmarks, two failure modes
 ### What the clamp does *not* do — important distinction
 
 **The clamp does not bound what `RegistryDB::Initialize()` loads from LevelDB.** It is tempting to assume that lowering `height_stored` causes Initialize to skip entries past that height during load. It does not — Initialize's read at line 139 is unconditional. The phantom entries from abandoned blocks *will* load into `m_historical` and active maps.
+
+**Important — this "phantoms harmless" framing applies to registry entries only.** It does *not* apply to chainstate (`CTxIndex` / `vSpent` in the txdb). Chainstate phantoms would silently break `ConnectInputs` validation when re-arriving blocks try to spend outputs that the abandoned blocks already marked spent — that's why chainstate gets the surgical `CleanTxdbAbandonedRange` treatment above instead of being left alone. Registry entries don't have that problem because the registry handler's insert is idempotent under the entry's content hash.
 
 They are nevertheless harmless, in the order to think about it:
 
@@ -155,12 +187,65 @@ This rebuild applies on **both** paths:
 
 Each lives in its own commit on the Phase 2 PR. The rebuild trigger is the same helper function on both paths, so future maintainers can't add a third rewind site that forgets it.
 
-## Alternatives considered (and rejected)
+## Design decisions captured during review
+
+These are the design choices made (and the alternatives explicitly rejected) during the review pass on the first draft of Phase 2. Recorded here so future maintainers don't have to re-derive them from the PR discussion.
+
+### Chainstate rollback: surgical `CTxIndex` cleanup, not `-reindex`
+
+The first draft assumed phantom `CTxIndex` / `vSpent` entries from abandoned blocks were harmless (mirroring the registry "phantoms harmless" argument). Copilot review pointed out that they're *not* harmless — when re-arriving blocks try to spend the same outputs, `ConnectInputs` reads the stale `vSpent[i]` marker and rejects the input as already-spent. The wallet would silently fail to validate the re-supplied chain.
+
+Two correctness-preserving options were considered:
+
+- **(A) Detection only + require `-reindex`**: walk-back becomes a diagnostic layer; on corruption detection, log a clear message and exit. User must restart with `-reindex`. Simple, safe, but `-reindex` on HDD takes 10–20 minutes and Gridcoin has insufficient GUI affordances to help users understand what's happening — a poor user experience for an automatic-recovery feature.
+- **(B) Surgical chainstate cleanup**: scan the `("tx", *)` keyspace in LevelDB, delete entries whose `pos` is in the abandoned range, clear `vSpent[i]` entries whose value is in the abandoned range. Atomic via `TxnBegin/TxnCommit`.
+
+**Decision: option B.** Gridcoin's chainstate (`CTxIndex` with inline `vSpent`, no separate UTXO db) is much simpler than Bitcoin Core's, making the surgical scan tractable: one sequential LevelDB scan, ~10M entries on mainnet, ~1–30 seconds total. ~30x–60x faster than `-reindex` on HDD. The trade-off is ~100 LOC of carefully-tested cleanup code.
+
+Bitcoin Core's analogous solution is undo data (`rev*.dat` files written by `ConnectBlock`). Gridcoin doesn't have that. Adding it would be a substantial separate piece of work; option B uses only existing primitives.
+
+### In-memory orphan cleanup: purge `mapBlockIndex` entries
+
+The first draft left abandoned `CBlockIndex` entries in `mapBlockIndex` "to be overwritten by `AddToBlockIndex` when P2P re-supplies the blocks." That works for the canonical-chain case but leaks RAM permanently in the rare divergent-reorg case.
+
+**Decision: purge them.** RAM is more precious than disk; the canonical-supply case re-populates the entries naturally via `AddToBlockIndex` (find-by-hash → in-place update on the new entry); the reorg case is the one we're trying to handle gracefully and leaving permanent RAM debris from it is wrong.
+
+Safety: the erasure runs at a specific point in init (after `LoadBlockIndex`, before `GRC::Initialize`) where no consumer holds references to the abandoned `CBlockIndex` objects. The abandoned entries are all descendants of `pindex_consistent`, so no non-abandoned entry's `pprev` points at them; `AbandonChainTo` already nulled `pindex_consistent->pnext`; Quorum / Tally / wallet / mempool / net are all not yet initialized. Doing this purge at *runtime* (e.g. from a reorg path) would be much harder because of live consumers.
+
+### `CDiskBlockIndex` orphans in LevelDB: leave them
+
+Symmetric question to the `mapBlockIndex` purge: should we also erase the on-disk `CDiskBlockIndex` LevelDB entries for the abandoned range?
+
+**Decision: no.** In the canonical-supply case `AddToBlockIndex` overwrites them in place at the same key. In the reorg case they sit as unreachable dead weight in LevelDB but consume no RAM. The cost asymmetry runs the other way from `mapBlockIndex`: disk is cheap, RAM is not. Bookkeeping for a `txdb.Erase(make_pair("blockindex", hash))` per abandoned block would add complexity (and another `TxnCommit` envelope to think about) for marginal benefit. If exhaustive disk hygiene ever becomes desirable, it's a small follow-up.
+
+### No mempool resurrection in the abandonment path
+
+A normal `DisconnectBlocksBatch` reorg populates `vResurrect` and re-`AcceptToMemoryPool`s each disconnected tx. The abandonment path skips `DisconnectBlock` entirely and thus doesn't resurrect anything.
+
+**Decision: this is acceptable.** In the canonical-supply case the same txs come back inside the re-supplied blocks and re-confirm at the same heights. In the divergent-reorg case other peers in the network still hold those txs in their mempools (mempool relay is independent of block status) and they flow back via standard `getdata` mempool relay. The wallet reaches the correct steady state either way; the network-wide mempool reaches it through standard relay. The "best-effort" semantics of the mempool absorb the temporary gap.
+
+### Coinbase / PoS-specific handling
+
+Gridcoin is PoS, so coinbases are degenerate (value 0, no spendable script). They have no `vSpent` entries to clear and nothing for later txs to reference. The cleanup deletes the coinbase's `CTxIndex` entry via the `pos` check (same as any other tx in an abandoned block); no special case needed.
+
+Coinstakes are the actual reward-bearing txs and have real input spends; they go through the standard non-coinbase path (`CTxIndex` deleted, kernel UTXO's `vSpent[i]` cleared on the parent tx).
+
+### No "MRC registry" — MRCs are just transactions
+
+There is no MRC registry per se. MRCs are transactions with a special contract payload that pays to a beacon-owned address. Their tx-side state lives in `CTxIndex` like any other tx and is handled by the chainstate cleanup. Their contract-side dependency on the beacon registry is covered by the beacon `Reset()` path when an SB is crossed.
+
+### Stake modifiers, Quorum cache, Tally cache, accrual snapshots
+
+All rebuilt inside `GRC::Initialize`, which runs *after* the Phase 2 hook. They see the rewound tip and rebuild from a coherent chain. No special handling needed in the Phase 2 hook itself — the init sequencing protects us.
+
+## Alternatives considered (and rejected) — registry path
+
+These alternatives apply to the four "regular" registries (`ProjectRegistry`, `ProtocolRegistry`, `ScraperRegistry`, `SideStakeRegistry`). `BeaconRegistry` has its own rebuild path described above when an SB boundary is crossed. Chainstate (`CTxIndex` / `vSpent`) is handled by the surgical `CleanTxdbAbandonedRange` scan documented earlier, not by any of these.
 
 - **Targeted registry reset.** For each registry where `GetDBHeight() > pindex_consistent->nHeight`, call `registry.Reset()` to clear both in-memory maps and LevelDB storage, then let `InitializeContracts` do a full contract replay from `V11_height`. Safe and well-tested (equivalent to `-clearallregistryhistory`), but the full replay grows linearly with chain height and is increasingly expensive — punishing every rare corruption recovery with a from-genesis registry rebuild.
 - **Selective revert via `m_previous_hash` chains.** Walk backward through registry entries to undo phantom entries from blocks above the rewound tip. Faster than full replay, but requires writing a new revert path that works without block data (the existing `Revert()` needs `ContractContext` which requires `ReadBlockFromDisk` — the very blocks we cannot read). Significant new code with its own edge cases.
 
-The bookmark clamp + tolerate-phantoms approach above is the lowest-risk middle ground: it uses only existing primitives, requires no new revert path, costs nothing in the common-case recovery (idempotent), and is bounded in the rare-case overhead (orphans, not corruption).
+The bookmark clamp + tolerate-phantoms approach above is the lowest-risk middle ground for the regular registries: it uses only existing primitives, requires no new revert path, costs nothing in the common-case recovery (idempotent), and is bounded in the rare-case overhead (orphans, not corruption). It is **not** applied to chainstate — see "What the clamp does *not* do" for why chainstate gets surgical treatment instead.
 
 ## Bounds and configuration
 
