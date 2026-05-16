@@ -36,6 +36,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "node/blockstorage.h"
+#include "node/coherence.h"
 #include "node/orphan_blocks.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
@@ -936,6 +937,17 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
     GRC::RegistryBookmarks registries;
 
+    // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
+    // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
+    // (it uses m_expired_pending which only carries the latest SB's expired set --
+    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
+    // beacons from the prior SBs are lost. To recover correctness without paying the
+    // cost of an in-line chain replay during the reorg, we flag the beacon registry
+    // for rebuild on the next startup; GRC::RunStartupCoherenceRecovery (Phase 2 of
+    // issue #2865) services the flag by calling BeaconRegistry::Reset() before the
+    // normal InitializeContracts replay. See doc/block_corruption_recovery_design.md.
+    int sb_cross_count = 0;
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -975,6 +987,11 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
             // a virtual method that corresponds to this call, as it is only relevant to beacons.
             GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+
+            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
+            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
+            // for one SB at a time; see the comment above the loop).
+            ++sb_cross_count;
 
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
@@ -1049,6 +1066,26 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
             assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
             GRC::Tally::LegacyRecount(pindexBest);
+        }
+
+        // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
+        // above could not fully resurrect expired-pending beacons from the prior SBs
+        // (m_expired_pending only carries the most recent SB's set -- the limitation
+        // acknowledged at beacon.cpp:1265-1273). Rather than try to do a multi-minute in-line
+        // beacon registry replay inside the reorg path (under cs_main), flag the registry
+        // for rebuild on the next startup. GRC::RunStartupCoherenceRecovery checks the flag
+        // and calls BeaconRegistry::Reset() before the registries reload, so the subsequent
+        // InitializeContracts pass replays beacon contracts from V11_height forward and
+        // rebuilds cleanly.
+        //
+        // Single-SB reorgs are NOT flagged: the existing Deactivate path handles them
+        // correctly and the rebuild would be wasted work on the most common case.
+        if (sb_cross_count >= 2) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+                      "fidelity is degraded for the prior SB(s). Flagging beacon registry for rebuild "
+                      "on next startup. Until restart, beacon-related queries may show stale entries.",
+                      __func__, sb_cross_count);
+            GRC::SetBeaconRebuildPending();
         }
     }
 

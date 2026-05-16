@@ -89,14 +89,69 @@ bool RewindToConsistentTip(CBlockIndex* pindex_target)
     return AbandonChainTo(pindex_target, txdb);
 }
 
+namespace {
+//! LevelDB key for the deferred beacon-registry rebuild flag set by the
+//! runtime reorg path (DisconnectBlocksBatch) when 2+ SBs are crossed.
+const std::pair<std::string, std::string> BEACON_REBUILD_KEY =
+    std::make_pair("beacon_db", "needs_rebuild");
+} // anonymous namespace
+
+bool IsBeaconRebuildPending()
+{
+    CTxDB txdb("r");
+    bool pending = false;
+    if (!txdb.ReadGenericSerializable(BEACON_REBUILD_KEY, pending)) {
+        return false;
+    }
+    return pending;
+}
+
+void SetBeaconRebuildPending()
+{
+    CTxDB txdb;
+    if (!txdb.WriteGenericSerializable(BEACON_REBUILD_KEY, true)) {
+        LogPrintf("WARN: %s: failed to persist beacon-rebuild flag; rebuild will not happen on next restart "
+                  "until the flag is set again or -clearallregistryhistory is used.", __func__);
+    }
+}
+
+void ClearBeaconRebuildPending()
+{
+    CTxDB txdb;
+    if (!txdb.WriteGenericSerializable(BEACON_REBUILD_KEY, false)) {
+        LogPrintf("WARN: %s: failed to clear beacon-rebuild flag; rebuild will fire again on the next restart "
+                  "(harmless but wasteful).", __func__);
+    }
+}
+
 bool RunStartupCoherenceRecovery()
 {
     AssertLockHeld(cs_main);
 
     if (gArgs.GetBoolArg("-reindex", false)) {
         // User is already rebuilding; the walk would be redundant.
+        // The pending-rebuild flag, if set, will be wiped by the reindex
+        // path's own registry clear; safe to skip our handling here.
         LogPrintf("INFO: %s: -reindex set; skipping coherence walk.", __func__);
         return true;
+    }
+
+    // Service any deferred beacon-registry rebuild requested by the runtime
+    // reorg path (DisconnectBlocksBatch sets the flag on a 2+ SB reorg
+    // because Deactivate cannot fully resurrect prior-SB expired-pending
+    // beacons -- see beacon.cpp:1265-1273). Reset() wipes both in-memory
+    // and LevelDB beacon state; the subsequent GRC::Initialize ->
+    // InitializeContracts -> ApplyContracts pass will replay beacon
+    // contracts from V11_height forward and rebuild cleanly.
+    //
+    // If the coherence walk below also detects an SB crossing, it will
+    // call Reset() again -- idempotent, harmless.
+    if (IsBeaconRebuildPending()) {
+        LogPrintf("INFO: %s: pending beacon registry rebuild detected (from prior multi-SB reorg); "
+                  "resetting beacon registry now so it will be rebuilt from V11_height on the "
+                  "InitializeContracts replay below.", __func__);
+        GetBeaconRegistry().Reset();
+        ClearBeaconRebuildPending();
     }
 
     const int max_walkback = gArgs.GetArg("-coherencewalkmax", DEFAULT_COHERENCE_WALK_MAX);
