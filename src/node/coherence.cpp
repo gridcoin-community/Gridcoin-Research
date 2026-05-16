@@ -195,7 +195,7 @@ bool RunStartupCoherenceRecovery()
 
     LogPrintf("INFO: %s: detected inconsistency past height %d. Last consistent block is at height %d "
               "(%d superblocks crossed in the abandoned range, %u blocks abandoned).",
-              __func__, result.pindex_consistent->nHeight, result.pindex_consistent->nHeight,
+              __func__, nBestHeight, result.pindex_consistent->nHeight,
               result.sb_cross_count, (unsigned) result.abandoned_indexes.size());
 
     // Step 1: rewind in-memory chain globals + persist hashBestChain.
