@@ -199,6 +199,49 @@ Backward-walk count was exactly 100 (matching the cap). After exhaustion, **`Aba
 
 This is the critical safety property: when Phase 2 cannot find a consistent block within the bound, it must **not** perform a partial abandonment that would leave the wallet in an inconsistent state worse than what it started with. It bails cleanly, surfaces an actionable error, and lets the user choose the recovery path (typically `-reindex`).
 
+### Iteration 8 — Tier 1 (SIGKILL mid-sync)
+
+**Purpose:** exercise the harness's Tier 1 `tier1_killsync.sh` recovery path manually — verify that `SIGKILL` of the wallet during active forward-sync does not corrupt the on-disk state, and that the Phase 2 hook on the next startup correctly reports "no rewind needed" (Phase 1's durability invariant holds across the kill).
+
+**Optimization vs the harness script:** the script does a full genesis IBD then kills at `TARGET_HEIGHT=50000`. For this validation we substituted a snapshot 3110 restore (slot 10 starts at ~2768900) + sync forward to peers' tip (~2768989). The Phase 2 hook runs on every startup regardless of where the chain is, so the SIGKILL-then-restart path is identical; only the setup time is shorter.
+
+**Setup:** snapshot 3110 restored to slot 10 (file-level: `blk*.dat` + `accrual/` + `txleveldb/`). Slot 10 started with the refactored binary `328a03e93`.
+
+**Step 1 — start slot 10 + watch for active sync:**
+
+    DEBUG=/.../testnet/debug.log
+    until sudo grep -qE "SetBestChain: new best block" $DEBUG; do sleep 0.5; done
+
+This poll matches the FIRST log line indicating slot 10 has accepted a peer block (i.e. it's past startup and in active forward-sync), as opposed to a fixed time delay that could fire too early (still in init) or too late (sync already complete).
+
+First match: `2026-05-17T06:48:52Z [grc-msghand] INFO: SetBestChain: new best block {101ca94... 2768823}`. SIGKILL fires immediately on this signal.
+
+**Step 2 — find the wallet process and SIGKILL:**
+
+The slot is launched via `gdb_commands` inside a `screen` window — three wrapper processes (`sudo ip netns exec`, `sudo -u jco`, `gdb`) plus the actual `gridcoinresearch` binary. The kill target is the leaf binary; the `pgrep` pattern anchors at `^/home/jco/GridcoinDev/gridcoinresearch-...` to skip the `sudo ip netns exec ...` wrappers.
+
+    sudo kill -9 $PID
+
+Process gone. The wallet had advanced from 2768823 to somewhere in the 2768960s region by the time the kill landed (forward-sync continues in parallel with our shell-side `pgrep`/`kill`); irrelevant to the test outcome — what matters is that the shutdown was abrupt.
+
+**Step 3 — restart slot 10 + assertions:**
+
+Cleanup: the `screen` window for `inst10` and the three orphaned wrappers (gdb keeps running after the inferior dies — doesn't notice until somebody tries to interact) must be killed before the wallet-control script accepts a `start 10` — otherwise it sees `inst10` still in the screen window list and refuses.
+
+Post-restart debug.log key lines:
+
+    INFO: RunStartupCoherenceRecovery: verifying chain coherence (walkback bound 10000).
+    INFO: RunStartupCoherenceRecovery: chain tip at height 2768962 is coherent. No rewind needed.
+    Gridcoin: block index is clean
+
+Assertions matched:
+
+- ✅ Phase 2 hook executed (`RunStartupCoherenceRecovery: ...` lines present).
+- ✅ No Phase 1 failure signatures (`grep -cE "LevelDB Sync failure|FileCommit failed|fdatasync failed|fsync failed"` = 0).
+- ✅ Chain converged with peer: slot 10 = 2768989, slot 8 = 2768989, gap = 0.
+
+**Result: PASS** — validates that Phase 1's "LevelDB block index never references unfsynced blk*.dat data" invariant survives `SIGKILL` mid-sync, exactly as designed. The Phase 2 hook on restart sees a coherent tip and exits via the no-rewind-needed fast path (one `ReadBlockFromDisk` of overhead).
+
 ### Iteration 7 — Multi-SB runtime reorg with in-line rebuild (post-refactor)
 
 **Purpose:** validate the refactored runtime path. The deferred-rebuild flag mechanism (Iteration 6 below, kept for chronology) was replaced with an in-line `GRC::RebuildBeaconRegistry` called directly from `DisconnectBlocksBatch` when `sb_cross_count >= 2`. The rebuild calls `BeaconRegistry::Reset()` followed by `InitializeContracts(pindexBest)`, which Replays beacon contracts from V11_height forward. The reorg path holds `cs_main` throughout, so no thread observes the intermediate empty-registry state.
@@ -329,6 +372,7 @@ No "pending beacon registry rebuild detected" line this restart — confirming `
 | 5 | T3 walkmax exit (`-coherencewalkmax=100`) | PASS | Clean refusal, no partial abandonment |
 | 6 | Multi-SB runtime reorg, deferred-flag design | PASS (but the design itself was flawed — see Iteration 7) | Flag set, picked up, cleared cleanly; fork window led to refactor |
 | 7 | Multi-SB runtime reorg, in-line rebuild | PASS | 303 ms beacon-registry rebuild during the reorg; no fork window; no post-reorg operator action required |
+| 8 | Tier 1 SIGKILL mid-sync | PASS | `SIGKILL` during forward-sync at height 2768823; post-restart Phase 2 reports `chain tip ... is coherent. No rewind needed.`; 0 Phase 1 failure signatures; chain converges with peers |
 
 ## Summary of fixes landed during this validation
 
