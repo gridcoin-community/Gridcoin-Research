@@ -1,0 +1,116 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#ifndef GRIDCOIN_NODE_COHERENCE_H
+#define GRIDCOIN_NODE_COHERENCE_H
+
+#include "main.h"  // cs_main (required for clang's EXCLUSIVE_LOCKS_REQUIRED thread-safety analyzer)
+#include "sync.h"
+
+#include <cstdint>
+#include <unordered_set>
+#include <vector>
+
+class CBlockIndex;
+
+namespace GRC {
+
+//! Default cap on how far backward VerifyChainCoherence will walk before
+//! giving up. Sized well above Phase 1's 5000-block IBD fsync interval so
+//! atypical fsync skips still have headroom. Overridable via -coherencewalkmax.
+constexpr int DEFAULT_COHERENCE_WALK_MAX = 10000;
+
+//! Pack a (nFile, nBlockPos) pair into a uint64_t for fast hash-set lookup
+//! during the chainstate cleanup pass. nFile is uint32 and nBlockPos is
+//! uint32 in the on-disk format, so the pair fits losslessly.
+inline uint64_t PackBlockFilePos(uint32_t nFile, uint32_t nBlockPos)
+{
+    return (static_cast<uint64_t>(nFile) << 32) | static_cast<uint64_t>(nBlockPos);
+}
+
+//! Result of a startup chain-coherence verification.
+struct CoherenceResult {
+    //! Pointer to the highest block whose on-disk data hash matches its
+    //! CBlockIndex hash. In the common case (no corruption) this equals
+    //! pindexBest. Never nullptr when status is OK.
+    CBlockIndex* pindex_consistent {nullptr};
+    //! Number of superblocks encountered between the original pindexBest
+    //! (inclusive) and pindex_consistent (exclusive). Greater than zero
+    //! indicates a rewind that crosses an SB boundary, which requires the
+    //! beacon registry to be rebuilt from scratch instead of clamped.
+    //! See doc/block_corruption_recovery_design.md.
+    int sb_cross_count {0};
+    //! True iff the walk hit -coherencewalkmax without finding a consistent
+    //! block. When set, pindex_consistent is unchanged from input and the
+    //! caller should refuse to start (the user must -reindex).
+    bool exhausted {false};
+    //! CBlockIndex pointers for every block past pindex_consistent that
+    //! failed the coherence check. Consumed by PurgeOrphanedBlockIndexEntries
+    //! to remove the dead entries from mapBlockIndex.
+    std::vector<CBlockIndex*> abandoned_indexes;
+    //! Packed (nFile, nBlockPos) pairs (via PackBlockFilePos) covered by
+    //! abandoned blocks. Consumed by CleanTxdbAbandonedRange to identify
+    //! which CTxIndex entries and vSpent[i] markers were written by
+    //! abandoned blocks and need to be deleted / cleared from the txdb.
+    std::unordered_set<uint64_t> abandoned_positions;
+};
+
+//! Walk backward from pindexBest, hash-verifying each block's on-disk
+//! representation against its CBlockIndex hash. Stops at the first block
+//! whose on-disk data is coherent with the index. Bounded by max_walkback
+//! to keep the startup cost predictable.
+//!
+//! In the common case (no corruption), the very first check on pindexBest
+//! succeeds and we return immediately with pindex_consistent == pindexBest
+//! and sb_cross_count == 0. The expensive walk only runs when corruption
+//! is actually present.
+//!
+//! Must be called with cs_main held.
+CoherenceResult VerifyChainCoherence(int max_walkback) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Abandonment-style rewind of the chain to the supplied target block.
+//! Updates in-memory pindexBest, nBestHeight, hashBestChain, g_chain_trust
+//! and persists the new hashBestChain to LevelDB. Does NOT call
+//! DisconnectBlock on the abandoned range -- the on-disk data for those
+//! blocks is by definition unreadable/uninvertible, so we abandon rather
+//! than disconnect. P2P will re-supply the missing blocks through the
+//! normal AcceptBlock path.
+//!
+//! Returns false on LevelDB write failure (rare; treated as a startup-fatal
+//! error by the caller).
+//!
+//! Must be called with cs_main held.
+bool RewindToConsistentTip(CBlockIndex* pindex_target) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Top-level Phase 2 recovery entry point. Wraps VerifyChainCoherence +
+//! RewindToConsistentTip + (conditionally) BeaconRegistry::Reset() +
+//! RegistryBookmarks::UpdateRegistryBlockHeights, with logging at each
+//! step so debug.log shows a clear narrative of what was detected and what
+//! was done.
+//!
+//! Returns true on success (including the no-rewind-needed case).
+//! Returns false on either of:
+//!   - exhausted: corruption beyond -coherencewalkmax; user must -reindex.
+//!   - LevelDB write failure during the rewind.
+//!
+//! Skipped entirely if -reindex is set (the caller is already rebuilding).
+//!
+//! Must run after LoadBlockIndex (so pindexBest is populated) and BEFORE
+//! GRC::Initialize / InitializeContracts (so registries have not yet
+//! loaded their LevelDB state -- this is what lets us clamp / reset
+//! bookmarks safely without invalidating in-memory state). See the design
+//! doc at doc/block_corruption_recovery_design.md.
+//!
+//! Must be called with cs_main held.
+bool RunStartupCoherenceRecovery() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+// (The deferred-rebuild flag mechanism was replaced with an in-line
+// rebuild in GRC::RebuildBeaconRegistry (see gridcoin/gridcoin.h), called
+// directly from DisconnectBlocksBatch when sb_cross_count >= 2. The in-line
+// rebuild closes the fork window that the deferred approach left open --
+// see doc/block_corruption_recovery_design.md.)
+
+} // namespace GRC
+
+#endif // GRIDCOIN_NODE_COHERENCE_H

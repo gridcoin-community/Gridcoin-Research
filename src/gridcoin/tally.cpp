@@ -582,6 +582,41 @@ public:
                 return false;
             }
 
+            // Reconcile the on-disk snapshot registry with the current chain tip.
+            //
+            // The Phase 2 startup chain-coherence recovery hook (issue #2865)
+            // may have rewound pindexBest backward (abandonment-style rewind --
+            // bypassing the normal DisconnectBlock path). When that rewind
+            // crosses one or more superblock boundaries, the snapshot registry
+            // still carries entries at heights above the new tip. Those
+            // entries describe accrual state for blocks that no longer exist
+            // in this chain; if we leave them in place, the first SB the
+            // subsequent forward sync re-crosses will trip Register's strict-
+            // monotonic invariant (assertion at snapshot.h:1085) and kill the
+            // wallet during P2P sync.
+            //
+            // Drop the stale entries here, before the forward walk's
+            // AssertMatch pass. PruneSnapshotFiles() at the end of the
+            // function then cleans up the orphaned files on disk.
+            //
+            // No-op in the common case (no rewind): LatestHeight() <=
+            // pindexBest->nHeight, the while loop in DropAboveHeight exits
+            // immediately, dropped = 0.
+            if (pindexBest) {
+                const int dropped = m_snapshots.DropAboveHeight(pindexBest->nHeight);
+                if (dropped < 0) {
+                    LogPrintf("WARN: %s: DropAboveHeight failed mid-loop; snapshot registry may be in "
+                              "a partially-trimmed state. Falling through to from-scratch rebuild.",
+                              __func__);
+                    throw SnapshotStateError("DropAboveHeight failed during post-rewind reconciliation");
+                } else if (dropped > 0) {
+                    LogPrintf("INFO: %s: dropped %d snapshot(s) at heights > pindexBest->nHeight=%d. "
+                              "Reconciled snapshot registry with rewound chain tip "
+                              "(likely Phase 2 abandonment recovery, issue #2865).",
+                              __func__, dropped, pindexBest->nHeight);
+                }
+            }
+
             // If the node initialized the snapshot accrual system before, we
             // should already have the latest snapshot. Otherwise, create the
             // baseline snapshot and scan context for the remaining blocks:

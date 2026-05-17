@@ -10,7 +10,9 @@
 #include "main.h"
 #include "streams.h"
 
+#include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 
@@ -204,6 +206,32 @@ public:
     bool UpdateTxIndex(uint256 hash, const CTxIndex& txindex);
     bool AddTxIndex(const CTransaction& tx, const CDiskTxPos& pos, int nHeight);
     bool EraseTxIndex(const CTransaction& tx);
+
+    //! Surgical chainstate cleanup after a Phase 2 abandonment-style rewind
+    //! (see node/coherence.h and doc/block_corruption_recovery_design.md).
+    //!
+    //! Performs one sequential scan of the ("tx", *) keyspace and:
+    //!   - Deletes any CTxIndex whose pos.{nFile, nBlockPos} (packed via
+    //!     GRC::PackBlockFilePos) is in abandoned_positions. These are the
+    //!     CTxIndex entries created by ConnectBlock for txs that lived in
+    //!     the abandoned blocks.
+    //!   - For any other CTxIndex, clears (sets null) vSpent[i] entries
+    //!     whose value is in abandoned_positions. These are the spent
+    //!     markers a parent tx received when a child tx in an abandoned
+    //!     block spent its output. Without this clear, ConnectInputs would
+    //!     silently reject the same input when the canonical chain
+    //!     re-supplies the same block.
+    //!
+    //! The two passes (collect-then-apply) live in one method body because
+    //! they share the iterator. Atomic via TxnBegin/TxnCommit -- a crash
+    //! mid-scan leaves the txdb unchanged. Returns false on TxnCommit
+    //! failure or any iterator error.
+    //!
+    //! Optional out-params surface counters for the recovery log narrative.
+    bool CleanAbandonedRange(const std::unordered_set<uint64_t>& abandoned_positions,
+                             uint64_t* out_entries_deleted = nullptr,
+                             uint64_t* out_vspent_cleared = nullptr,
+                             uint64_t* out_entries_scanned = nullptr);
     bool ContainsTx(uint256 hash);
     bool ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex);
     bool ReadDiskTx(uint256 hash, CTransaction& tx);
@@ -211,6 +239,13 @@ public:
     bool ReadDiskTx(COutPoint outpoint, CTransaction& tx);
     bool ReadBlockIndex(uint256 hash, CDiskBlockIndex& blockindex);
     bool WriteBlockIndex(const CDiskBlockIndex& blockindex);
+    //! Erase the on-disk CDiskBlockIndex record for `hash`. Used by the Phase 2
+    //! abandonment path (PurgeOrphanedBlockIndexEntries) to make the rewind
+    //! durable across restarts -- without this, LoadBlockIndex would rebuild
+    //! the ghost forward linkage from stale hashNext fields. Returns true if
+    //! LevelDB reports the erase succeeded (note: LevelDB Delete is a no-op
+    //! when the key is absent, so "true" does not imply the key existed).
+    bool EraseBlockIndex(uint256 hash);
     bool ReadHashBestChain(uint256& hashBestChain);
     bool WriteHashBestChain(uint256 hashBestChain);
     bool ReadSyncCheckpoint(uint256& hashCheckpoint);
@@ -238,6 +273,17 @@ public:
     {
 
         return Erase(key);
+    }
+
+    //! Public template wrapper around the protected `Exists` primitive. Use to
+    //! distinguish "key absent" (Exists returns false, Read would also return
+    //! false) from "key present but Read failed" (Exists returns true, Read
+    //! returns false) -- the two cases have different operational meanings for
+    //! durability-flag-style keys.
+    template <typename K>
+    bool ExistsGenericSerializable(const K& key)
+    {
+        return Exists(key);
     }
 
     template <typename T, typename K, typename V>

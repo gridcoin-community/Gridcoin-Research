@@ -18,6 +18,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/gridcoin.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
@@ -36,6 +37,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "node/blockstorage.h"
+#include "node/coherence.h"
 #include "node/orphan_blocks.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
@@ -936,6 +938,16 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
     GRC::RegistryBookmarks registries;
 
+    // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
+    // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
+    // (it uses m_expired_pending which only carries the latest SB's expired set --
+    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
+    // beacons from the prior SBs are lost; the recovery is an in-line beacon
+    // registry rebuild after the disconnect loop completes (call site below at the
+    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
+    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
+    int sb_cross_count = 0;
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -975,6 +987,11 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
             // a virtual method that corresponds to this call, as it is only relevant to beacons.
             GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+
+            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
+            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
+            // for one SB at a time; see the comment above the loop).
+            ++sb_cross_count;
 
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
@@ -1049,6 +1066,35 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
             assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
             GRC::Tally::LegacyRecount(pindexBest);
+        }
+
+        // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
+        // above could not fully resurrect expired-pending beacons from the prior SBs
+        // (m_expired_pending only carries the most recent SB's set -- the limitation
+        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
+        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
+        // from V11_height to the current (common-ancestor) tip, leaving the registry
+        // correctly reflecting that ancestor's state, and the subsequent per-block
+        // Activate() calls on the reconnect side then bring the registry up to the
+        // new tip.
+        //
+        // Doing this in-line (rather than deferring to a flag picked up on next
+        // startup) trades a few seconds of frozen-wallet time for closing the fork
+        // window: with the deferred approach, any block validated between this reorg
+        // and the next restart could consult the broken registry and diverge from
+        // healthy peers. In-line rebuild is bounded by the chain walk from V11 to
+        // tip, which is dominated by block-index iteration -- on SSD typically
+        // single-digit seconds. See doc/block_corruption_recovery_design.md.
+        //
+        // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
+        // fidelity-correct for that case and the rebuild would be wasted work on
+        // the most common case.
+        if (sb_cross_count >= 2) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+                      "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
+                      "to maintain consensus.",
+                      __func__, sb_cross_count);
+            GRC::RebuildBeaconRegistry();
         }
     }
 
@@ -1605,6 +1651,161 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
         }
     }
     return file;
+}
+
+bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
+{
+    AssertLockHeld(cs_main);
+    assert(pindex_target != nullptr);
+
+    // No early return when pindex_target == pindexBest. In the ghost-only
+    // case (a prior Phase 2 rewound the chain in memory and on hashBestChain
+    // but failed to persist pindex_target's hashNext=null), pindexBest is
+    // already the target but pindex_target->pnext still points at the first
+    // ghost (because LoadBlockIndex rebuilt that linkage from the stale
+    // on-disk CDiskBlockIndex.hashNext). We still need to (a) clear pnext
+    // in memory and (b) persist the new CDiskBlockIndex with hashNext=null
+    // so the next restart doesn't reconstruct the same ghost chain.
+
+    if (pindex_target == pindexBest) {
+        LogPrintf("INFO: %s: in-memory tip already at target %s @ %d; persisting "
+                  "hashNext=null to clear ghost linkage.", __func__,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    } else {
+        LogPrintf("INFO: %s: abandoning chain tip %s @ %d down to %s @ %d.", __func__,
+                  pindexBest->GetBlockHash().GetHex(), nBestHeight,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    }
+
+    // Sever the abandoned range from the in-memory tree by clearing the new tip's pnext.
+    // The abandoned CBlockIndex entries are removed from mapBlockIndex separately by
+    // PurgeOrphanedBlockIndexEntries (called from the Phase 2 recovery hook after this
+    // function returns and CTxDB::CleanAbandonedRange has completed the chainstate
+    // rollback). We do not erase them here because the caller still needs the abandoned
+    // CBlockIndex* values for the surgical cleanup pass.
+    //
+    // Asymmetric linkage note: we null pindex_target->pnext (forward linkage from the
+    // new tip into the abandoned range), but we deliberately do NOT walk the abandoned
+    // range and null each entry's pprev. The abandoned blocks still point pprev back
+    // toward pindex_target until PurgeOrphanedBlockIndexEntries removes them entirely
+    // a few steps later. This is benign because:
+    //   - The Phase 2 recovery hook holds cs_main and runs at init-time, before
+    //     wallet/Quorum/Tally/mempool/net start, so no live consumer is walking pprev
+    //     from an abandoned CBlockIndex* during the in-between window.
+    //   - The caller (RunStartupCoherenceRecovery) needs those abandoned entries'
+    //     pprev intact briefly for any diagnostic code that might iterate them (e.g.
+    //     a debug LogPrintf could call IsSuperblock() which uses pprev).
+    // If a future code path adds runtime use of this rewind primitive (outside the
+    // init-time hook), it must either null pprev on each abandoned entry here OR
+    // ensure no consumer walks pprev from the abandoned range.
+    pindex_target->pnext = nullptr;
+
+    pindexBest = pindex_target;
+    nBestHeight = pindex_target->nHeight;
+    hashBestChain = pindex_target->GetBlockHash();
+    g_chain_trust.SetBest(pindex_target);
+    UpdateSyncTime(pindex_target);
+
+    if (!txdb.WriteHashBestChain(pindex_target->GetBlockHash())) {
+        return error("%s: WriteHashBestChain failed for %s", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+
+    // Persist the new tip's CDiskBlockIndex so its on-disk hashNext is null.
+    // Without this, the next LoadBlockIndex would rebuild pindex_target->pnext
+    // from the stale CDiskBlockIndex.hashNext stored when the chain was longer,
+    // and the ghost chain would resurrect on every restart. The serialized
+    // CDiskBlockIndex captures pnext via GetBlockHash on the in-memory pnext
+    // (block.h CDiskBlockIndex.hashNext init) -- which we just nulled above,
+    // so this write captures the severed state.
+    if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex_target))) {
+        return error("%s: WriteBlockIndex failed for %s (could not persist severed "
+                     "hashNext; ghost chain would resurrect on next restart)", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+
+    if (!txdb.Sync()) {
+        return error("%s: CTxDB::Sync failed after abandonment", __func__);
+    }
+
+    return true;
+}
+
+void PurgeOrphanedBlockIndexEntries(CTxDB& txdb, std::vector<CBlockIndex*>& abandoned)
+{
+    AssertLockHeld(cs_main);
+
+    // The abandoned vector is what VerifyChainCoherence collected: every block
+    // past the last consistent one. After the chainstate cleanup, none of these
+    // are reachable from pindexBest's ancestry. We need to:
+    //
+    //   (1) erase each entry from mapBlockIndex so AddToBlockIndex can re-add
+    //       the same hashes when P2P delivers the canonical-chain blocks back
+    //       (otherwise the "already exists" guard at validation.cpp:1109 would
+    //       silently reject every re-supplied block forever);
+    //
+    //   (2) erase each entry's CDiskBlockIndex record from LevelDB so the next
+    //       LoadBlockIndex doesn't rebuild the ghost forward linkage from the
+    //       stale hashNext fields stored when the chain was longer. (Without
+    //       this, Phase 2 looks successful in this run but the recovered tip
+    //       resurrects the ghost chain on every subsequent boot -- the
+    //       backward walk in VerifyChainCoherence finds the tip coherent,
+    //       early-returns, and DisconnectBlocksBatch then trips
+    //       `assert(!pindexBest->pnext)` on the first P2P-delivered block.
+    //       Hit 2026-05-16 on isolated testnet slot 10.)
+    //
+    // DO NOT call `delete` on these pointers. CBlockIndex objects are allocated
+    // from GRC::BlockIndexPool (see src/gridcoin/block_index.h), which is
+    // backed by std::array<CBlockIndex, CHUNK_SIZE> in a forward_list of
+    // chunks. The pool's explicit design (per the class comment at
+    // block_index.h:54-55) is that "the application never removes or destroys
+    // block index entries"; it has no recycling path. Calling `delete` on a
+    // pointer into the middle of a std::array invokes undefined behavior:
+    // operator delete tries to free a heap-managed chunk at that address, but
+    // the address is not a heap allocation -- in practice it corrupts the C++
+    // runtime's free list, manifesting much later as bad_alloc or assertion
+    // failures in unrelated code.
+    //
+    // (We learned this the hard way during the 2026-05-16 isolated-testnet
+    // Tier 3 run: Phase 2 reported clean completion, but the very first
+    // P2P-delivered block tripped `assert(!pindexBest->pnext)` in
+    // DisconnectBlocksBatch because heap corruption from the bogus `delete`
+    // calls had overwritten pindex_target's pnext slot with garbage that
+    // happened to dereference as a valid-looking CBlockIndex pointer. See
+    // .claude/memory/reference_block_index_pool.md.)
+    //
+    // The cost of not freeing is that the abandoned pool slots remain
+    // allocated forever -- a small permanent leak per recovery event, at most
+    // a few hundred bytes per abandoned block (well under 1 MB even at the
+    // -coherencewalkmax cap). The pool is designed for this. The alternative
+    // would be a much larger redesign of BlockIndexPool to support per-object
+    // recycling, which is not justified for a rare recovery path.
+    unsigned int leveldb_erased = 0;
+    unsigned int map_erased = 0;
+    for (CBlockIndex*& p : abandoned) {
+        if (!p) continue;
+        const uint256 hash = p->GetBlockHash();
+        if (txdb.EraseBlockIndex(hash)) {
+            ++leveldb_erased;
+        } else {
+            LogPrintf("WARN: %s: EraseBlockIndex failed for %s; on-disk record may persist.",
+                      __func__, hash.GetHex());
+        }
+        mapBlockIndex.erase(hash);
+        ++map_erased;
+        // No `delete p` -- see comment above.
+        p = nullptr;
+    }
+
+    if (!txdb.Sync()) {
+        LogPrintf("WARN: %s: CTxDB::Sync failed after CDiskBlockIndex erase; will be retried "
+                  "on the next durable write.", __func__);
+    }
+
+    LogPrintf("INFO: %s: purged %u orphaned block index entries (%u from mapBlockIndex, "
+              "%u CDiskBlockIndex records from LevelDB; pool slots remain allocated, "
+              "see block_index.h).",
+              __func__, (unsigned) abandoned.size(), map_erased, leveldb_erased);
 }
 
 static unsigned int nCurrentBlockFile = 1;

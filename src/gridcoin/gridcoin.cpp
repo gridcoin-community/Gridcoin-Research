@@ -5,6 +5,7 @@
 #include "chainparams.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "main.h"
+#include "txdb.h"
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
@@ -34,33 +35,87 @@ void ScraperSubscriber();
 
 namespace {
 //!
-//! \brief Display a message that warns about a corrupted blockchain database.
+//! \brief Display a modal dialog reporting a checkpoint mismatch.
 //!
-//! For the GUI, this displays a modal dialog. It prints a message to the log
-//! and to stderr on headless nodes.
+//! Called from VerifyCheckpoints when a hardened checkpoint hash does not
+//! match the corresponding block in mapBlockIndex. For the GUI this shows
+//! a modal; on headless nodes it prints to stderr.
 //!
-void ShowChainCorruptedMessage()
+//! Sets fResetBlockchainRequest so the wallet performs a blockchain reset
+//! on next start (GUI) or instructs the operator to use -resetblockchaindata
+//! (daemon).
+//!
+void ShowCheckpointMismatchMessage()
 {
     fResetBlockchainRequest = true;
 
     if (fQtActive) {
         uiInterface.ThreadSafeMessageBox(
             _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
-              "Gridcoin detected bad index entries. This may occur because of a "
-              "late software upgrade, unexpected exit, or a power failure. "
-              "Your blockchain data is being reset and your wallet will resync "
-              "from genesis when you restart. Your balance may appear incorrect "
-              "until the synchronization finishes."),
+              "Gridcoin's compiled-in hardened checkpoint does not match the "
+              "block at that height in your local block index. This may occur "
+              "because of a late software upgrade, unexpected exit, or a power "
+              "failure. Your blockchain data is being reset and your wallet "
+              "will resync from genesis when you restart. Your balance may "
+              "appear incorrect until the synchronization finishes."),
             "Gridcoin",
             CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
     } else {
         uiInterface.ThreadSafeMessageBox(
             _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
-              "Gridcoin detected bad index entries. This may occur because of a "
-              "late software upgrade, unexpected exit, or a power failure. "
-              "Please run gridcoinresearchd with the -resetblockchaindata "
-              "parameter. Your wallet will re-download the blockchain. Your "
-              "balance may appear incorrect until the synchronization finishes." ),
+              "Gridcoin's compiled-in hardened checkpoint does not match the "
+              "block at that height in your local block index. This may occur "
+              "because of a late software upgrade, unexpected exit, or a power "
+              "failure. Please run gridcoinresearchd with the "
+              "-resetblockchaindata parameter. Your wallet will re-download "
+              "the blockchain. Your balance may appear incorrect until the "
+              "synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    }
+}
+
+//!
+//! \brief Display a modal dialog reporting a block-index integrity failure.
+//!
+//! Called from CheckBlockIndex when an entry in mapBlockIndex has a null
+//! pprev pointer despite not being the genesis block. This indicates the
+//! block index database is structurally corrupt (broken pprev linkage),
+//! not that any hardened checkpoint mismatched. The recovery action is the
+//! same as for a checkpoint mismatch (blockchain reset), but the message
+//! reports the actual cause so the operator isn't misled into looking for
+//! a checkpoint-related issue.
+//!
+//! Sets fResetBlockchainRequest as above.
+//!
+void ShowBlockIndexCorruptedMessage()
+{
+    fResetBlockchainRequest = true;
+
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Block index integrity check failed: Blockchain data may "
+              "be corrupted.\n\n"
+              "Gridcoin detected a block index entry with a broken pprev "
+              "linkage. This may occur because of a late software upgrade, "
+              "unexpected exit, or a power failure that left the on-disk "
+              "block index database in an inconsistent state. Your "
+              "blockchain data is being reset and your wallet will resync "
+              "from genesis when you restart. Your balance may appear "
+              "incorrect until the synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    } else {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Block index integrity check failed: Blockchain data may "
+              "be corrupted.\n\n"
+              "Gridcoin detected a block index entry with a broken pprev "
+              "linkage. This may occur because of a late software upgrade, "
+              "unexpected exit, or a power failure that left the on-disk "
+              "block index database in an inconsistent state. Please run "
+              "gridcoinresearchd with the -resetblockchaindata parameter. "
+              "Your wallet will re-download the blockchain. Your balance may "
+              "appear incorrect until the synchronization finishes."),
             "Gridcoin",
             CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
     }
@@ -97,7 +152,7 @@ bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
             // show the message, exit, and let the user choose a resolution:
             //
             LogPrintf("WARNING: checkpoint mismatch at %d", checkpoint_pair.first);
-            ShowChainCorruptedMessage();
+            ShowCheckpointMismatchMessage();
 
             return false;
         }
@@ -149,11 +204,6 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
     return true;
 }
 
-//!
-//! \brief Reload historical contract state from the blockchain.
-//!
-//! \param pindexBest Block index of the tip of the chain.
-//!
 void InitializeContracts(CBlockIndex* pindexBest)
 {
     // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
@@ -389,30 +439,113 @@ bool CheckBlockIndex()
     LogPrintf("Gridcoin: checking block index...");
     uiInterface.InitMessage(_("Checking block index..."));
 
-    // Block index integrity status
-    bool status = true;
+    if (!pindexGenesisBlock) {
+        // No chain yet -- nothing to check.
+        return true;
+    }
 
-    if (pindexGenesisBlock) {
-        LOCK(cs_main);
+    LOCK(cs_main);
 
-        for (const auto& index_pair : mapBlockIndex) {
-            const CBlockIndex* const pindex = index_pair.second;
+    // Pass 1: find dangling roots (pprev == null but not genesis). Each such
+    // entry was created by LoadBlockIndex from a CDiskBlockIndex whose
+    // hashPrev resolved to a hash no longer in LevelDB -- typically a
+    // side-chain block whose ancestor was purged by a prior Phase 2 run that
+    // missed the side chain (the original Phase 2 forward walk only follows
+    // the active-chain pnext linkage; the coherence.cpp fix that paired with
+    // this self-heal extends the walk to side-chain entries above the
+    // consistent tip).
+    std::set<uint256> bad_hashes;
+    for (const auto& kv : mapBlockIndex) {
+        const CBlockIndex* p = kv.second;
+        if (!p) {
+            // Null pointer in mapBlockIndex itself: treat as bad, but skip --
+            // there's no descendant chain to follow.
+            bad_hashes.insert(kv.first);
+            continue;
+        }
+        if (!p->pprev && p != pindexGenesisBlock) {
+            bad_hashes.insert(kv.first);
+        }
+    }
 
-            if (!pindex || !(pindex->pprev || pindex == pindexGenesisBlock)) {
-                status = false;
-                break;
+    if (bad_hashes.empty()) {
+        LogPrintf("Gridcoin: block index is clean");
+        return true;
+    }
+
+    // Pass 2: BFS to mark all transitive descendants. A descendant of a bad
+    // root has pprev pointing to a valid CBlockIndex object (the dangling
+    // root, which exists in mapBlockIndex with pprev=null), so the original
+    // check loop wouldn't have caught it -- but removing only the roots and
+    // leaving descendants behind would leave them pointing at freed entries
+    // (use-after-free at the next access). We must remove the whole subtree
+    // together.
+    std::multimap<uint256, uint256> children_of;
+    for (const auto& kv : mapBlockIndex) {
+        const CBlockIndex* p = kv.second;
+        if (p && p->pprev) {
+            children_of.emplace(p->pprev->GetBlockHash(), kv.first);
+        }
+    }
+    std::deque<uint256> queue(bad_hashes.begin(), bad_hashes.end());
+    while (!queue.empty()) {
+        const uint256 h = queue.front();
+        queue.pop_front();
+        auto range = children_of.equal_range(h);
+        for (auto it = range.first; it != range.second; ++it) {
+            if (bad_hashes.insert(it->second).second) {
+                queue.push_back(it->second);
             }
         }
     }
 
-    if (status) {
-        LogPrintf("Gridcoin: block index is clean");
-        return status;
+    // Defensive guard: if pindexBest is itself in the dangling subtree, the
+    // active chain tip is unreachable from genesis and we cannot safely
+    // self-heal -- silently purging pindexBest's lineage would leave the
+    // wallet at a tip that no longer exists. Fall back to the legacy modal
+    // so the user reseeds via -resetblockchaindata.
+    if (pindexBest && bad_hashes.count(pindexBest->GetBlockHash())) {
+        LogPrintf("WARNING: block index integrity check failed -- pindexBest %s @ %d is "
+                  "itself in the dangling subtree (%u entries). Falling back to "
+                  "blockchain reset.",
+                  pindexBest->GetBlockHash().GetHex(), pindexBest->nHeight,
+                  (unsigned) bad_hashes.size());
+        ShowBlockIndexCorruptedMessage();
+        return false;
     }
 
-    ShowChainCorruptedMessage();
+    LogPrintf("WARNING: block index integrity check found %u entries with broken pprev "
+              "linkage (and their descendants). Self-healing by purging from "
+              "mapBlockIndex and LevelDB.",
+              (unsigned) bad_hashes.size());
 
-    return status;
+    // Erase the bad subtree from both mapBlockIndex and LevelDB. The
+    // CBlockIndex objects are owned by GRC::BlockIndexPool and must not be
+    // deleted -- see PurgeOrphanedBlockIndexEntries for the rationale.
+    CTxDB txdb;
+    unsigned int map_erased = 0;
+    unsigned int leveldb_erased = 0;
+    for (const uint256& h : bad_hashes) {
+        if (txdb.EraseBlockIndex(h)) {
+            ++leveldb_erased;
+        } else {
+            LogPrintf("WARN: %s: EraseBlockIndex failed for %s; on-disk record may persist.",
+                      __func__, h.GetHex());
+        }
+        if (mapBlockIndex.erase(h) > 0) {
+            ++map_erased;
+        }
+    }
+    if (!txdb.Sync()) {
+        LogPrintf("WARN: %s: CTxDB::Sync failed after CDiskBlockIndex erase; will be retried "
+                  "on the next durable write.", __func__);
+    }
+
+    LogPrintf("Gridcoin: block index self-heal complete (%u mapBlockIndex entries removed, "
+              "%u CDiskBlockIndex records erased from LevelDB; pool slots remain allocated, "
+              "see block_index.h).",
+              map_erased, leveldb_erased);
+    return true;
 }
 
 //!
@@ -506,9 +639,62 @@ std::unique_ptr<Upgrade> g_UpdateChecker;
 bool fSnapshotRequest = false;
 bool fResetBlockchainRequest = false;
 
+// fQtActive lives in main.cpp; declared extern here so RebuildBeaconRegistry
+// can suppress the GUI popup in daemon mode.
+extern bool fQtActive;
+
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
+
+void GRC::RebuildBeaconRegistry()
+{
+    AssertLockHeld(cs_main);
+
+    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after multi-SB runtime reorg.", __func__);
+
+    // Non-blocking informational popup in the GUI ONLY. In daemon mode the
+    // log line above is the entire notification -- no stderr spam, no popup
+    // attempt. (uiInterface.ThreadSafeMessageBox in daemon mode does a
+    // stderr write and a duplicate log line per qt/bitcoin.cpp:129, both
+    // of which add noise without informing anything that wasn't already in
+    // debug.log.)
+    //
+    // For the GUI: the non-MODAL flag posts via Qt's QueuedConnection so
+    // the calling thread continues into the rebuild immediately -- the
+    // popup appears in parallel with the work. The operator sees a brief
+    // "rebuilding beacon registry" notice while the wallet is unresponsive;
+    // they dismiss the popup at their convenience (it does NOT auto-dismiss).
+    // The rebuild itself only takes seconds on SSD.
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("Gridcoin detected a multi-superblock chain reorganization and is "
+              "rebuilding the beacon registry to maintain consensus with the "
+              "network. The wallet may be briefly unresponsive while the "
+              "rebuild runs."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::ICON_INFORMATION);
+    }
+
+    const int64_t start_ms = GetTimeMillis();
+
+    // Wipe the beacon registry (in-memory and LevelDB beacon db). The
+    // subsequent InitializeContracts will re-Initialize the now-empty
+    // beacon db and ReplayContracts will walk forward from V11_height
+    // applying beacon contracts to rebuild the registry from scratch.
+    GetBeaconRegistry().Reset();
+
+    // InitializeContracts re-Initializes every contract-type registry and
+    // runs ReplayContracts. Other registries (scrapers, projects, polls,
+    // votes) are already initialized in memory; their Initialize calls are
+    // idempotent and the replay's "already covered" logic (see comments in
+    // InitializeContracts) skips contracts that fall within their existing
+    // DB coverage. Only the wiped beacon registry receives a full
+    // V11_height-forward replay.
+    InitializeContracts(pindexBest);
+
+    LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
+}
 
 bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
