@@ -489,10 +489,7 @@ void CWallet::MarkDirty()
     }
 }
 
-// TODO(#2869 Phase 2 — wallet): mapBlockIndex read for nTimeSmart estimation
-// needs cs_main. Many callers are during block connection where cs_main is
-// already held; some (rescan, txn import) are not.
-bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) NO_THREAD_SAFETY_ANALYSIS
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = wtxIn.GetHash();
     {
@@ -591,7 +588,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) NO_THREA
 // Add a transaction to the wallet, or update it.
 // pblock is optional, but should be provided if the transaction is known to be in a block.
 // If fUpdate is true, existing transactions will be updated.
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fFindBlock)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fFindBlock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = tx.GetHash();
     {
@@ -1248,11 +1245,7 @@ void CWalletTx::RelayWalletTransaction()
    RelayWalletTransaction(txdb);
 }
 
-// TODO(#2869 Phase 2 — wallet): Reads nBestHeight in two places and calls
-// CWalletTx::GetDepthInMainChain without holding cs_main. The wallet
-// resend-timer path needs cs_main coverage; Phase 2 should either acquire
-// cs_main outside cs_wallet or restructure the iteration to snapshot heights.
-void CWallet::ResendWalletTransactions(bool fForce) NO_THREAD_SAFETY_ANALYSIS
+void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!fForce)
     {
@@ -1364,9 +1357,7 @@ void CWallet::ResendWalletTransactions(bool fForce) NO_THREAD_SAFETY_ANALYSIS
              txns_erased_from_wallet);
 }
 
-// TODO(#2869 Phase 2 — wallet): pindexBest->nHeight read without cs_main.
-// CheckContracts also needs cs_main coverage for its block_height argument.
-bool CWalletTx::RevalidateTransaction(CTxDB& txdb) NO_THREAD_SAFETY_ANALYSIS
+bool CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CTransaction tx = (CTransaction) *this;
 
@@ -3067,11 +3058,7 @@ void CWallet::UpdatedTransaction(const uint256 &hashTx)
     }
 }
 
-// TODO(#2869 Phase 2 — wallet): Walks the wallet against mapBlockIndex /
-// nBestHeight without cs_main. Currently declared EXCLUSIVE_LOCKS_REQUIRED on
-// cs_wallet only; Phase 2 should add cs_main to the contract (callers in
-// rpcdump.cpp would need to acquire it first).
-void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet) NO_THREAD_SAFETY_ANALYSIS
+void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
     mapKeyBirth.clear();
@@ -3137,9 +3124,7 @@ void CWallet::StoreLastBackupTime(const int64_t backup_time)
     CWalletDB(strWalletFile).WriteBackupTime(backup_time);
 }
 
-// TODO(#2869 Phase 2 — wallet): mapBlockIndex lookups need cs_main. RPC
-// callers should take cs_main before invoking.
-GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) NO_THREAD_SAFETY_ANALYSIS
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CWalletTx wallettx;
     uint256 hashblock;

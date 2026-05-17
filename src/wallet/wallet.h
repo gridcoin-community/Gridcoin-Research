@@ -35,7 +35,7 @@ class CReserveKey;
 class COutput;
 class CCoinControl;
 
-GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout);
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 static const unsigned int DEFAULT_KEYPOOL_SIZE_PRE_HD = 1000;
@@ -225,7 +225,7 @@ public:
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
-    void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
+    void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
 
     /** Increment the next transaction order id
@@ -243,8 +243,8 @@ public:
     TxItems OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount = "");
 
     void MarkDirty();
-    bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb);
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate = false, bool fFindBlock = false);
+    bool AddToWallet(const CWalletTx& wtxIn, CWalletDB *pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate = false, bool fFindBlock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     bool EraseFromWallet(uint256 hash);
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
@@ -259,7 +259,7 @@ public:
     //!
     //! \param fForce
     //!
-    void ResendWalletTransactions(bool fForce = false);
+    void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     int64_t GetBalance() const;
     int64_t GetUnconfirmedBalance() const;
     int64_t GetImmatureBalance() const;
@@ -893,9 +893,9 @@ public:
     void RelayWalletTransaction(CTxDB& txdb);
     void RelayWalletTransaction();
 
-    bool RevalidateTransaction(CTxDB& txdb);
+    bool RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    GRC::MinedType GetGeneratedType(uint32_t vout_offset) const
+    GRC::MinedType GetGeneratedType(uint32_t vout_offset) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return ::GetGeneratedType(pwallet, GetHash(), vout_offset);
     }

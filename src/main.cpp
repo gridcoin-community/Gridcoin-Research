@@ -194,7 +194,7 @@ void static EraseFromWallets(uint256 hash)
 
 // make sure all wallets know about the given transaction, in the given block
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
     if (!fConnect)
     {
@@ -251,7 +251,7 @@ void static Inventory(const uint256& hash)
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->ResendWalletTransactions(fForce);
@@ -3226,11 +3226,11 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
     }
 
     // Resend wallet transactions that haven't gotten in a block yet.
-    // No outer locks held here in SendMessages; canonical order applies as
-    // cs_setpwalletRegistered -> cs_wallet (cs_main not needed by the
-    // wrapper itself; the wallet method's chain-state reads are TODO-Phase 2).
+    // No outer locks held here in SendMessages; acquire in canonical order
+    // cs_main -> cs_setpwalletRegistered -> cs_wallet. cs_main is required
+    // for the wallet method's mapBlockIndex / pindexBest reads.
     {
-        LOCK(cs_setpwalletRegistered);
+        LOCK2(cs_main, cs_setpwalletRegistered);
         ResendWalletTransactions();
     }
 

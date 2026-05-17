@@ -112,7 +112,7 @@ class CTxIndex;
 
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
+void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
 void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
@@ -180,7 +180,7 @@ int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
+void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/

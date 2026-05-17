@@ -62,9 +62,7 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
-// TODO(#2869 Phase 2 — wallet/rpc): mapBlockIndex lookup needs cs_main.
-// RPC entry points should take cs_main before invoking.
-void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) NO_THREAD_SAFETY_ANALYSIS
+void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     int confirms = wtx.GetDepthInMainChain();
     entry.pushKV("confirmations", confirms);
@@ -1402,7 +1400,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 
  void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth,
                        bool fLong, UniValue& ret, const isminefilter& filter = ISMINE_SPENDABLE,
-                       bool stakes_only = false) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+                       bool stakes_only = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
  {
     int64_t nFee;
     string strSentAccount;
@@ -2704,7 +2702,7 @@ UniValue resendtx(const UniValue& params, bool fHelp)
                 );
 
     {
-        LOCK(cs_setpwalletRegistered);
+        LOCK2(cs_main, cs_setpwalletRegistered);
         ResendWalletTransactions(true);
     }
 
