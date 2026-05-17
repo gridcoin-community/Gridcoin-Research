@@ -1,11 +1,11 @@
-# Clang Thread Safety Analysis — Phase 1 report (issue #2869)
+# Clang Thread Safety Analysis — Phase 1 + Phase 2 report (issue #2869)
 
-Phase 1 of the issue #2869 multi-phase thread-safety rollout. Captures the build-system enablement, the canonical lock order it established, and a per-resolution breakdown of every warning the analyzer surfaced.
+The issue #2869 multi-phase thread-safety rollout. Captures the build-system enablement, the canonical lock order it established, a per-resolution breakdown of every warning the analyzer surfaced, and the deferral decisions taken to preserve historical lock-scope design intent.
 
 The phases are an internal organizing tool, not a release boundary:
 
-- **Phase 1 (this PR)**: enable the analyzer; annotate cs_main globals + their immediate call chains; annotate `setpwalletRegistered`; document Phase 2/3/4 deferrals in-code with `TODO(#2869 Phase N — area)` comments.
-- **Phase 2**: researcher/beacon, wallet, tally, mrc, block_rewards, contract, voting, miner, policy, block_finder.
+- **Phase 1**: enable the analyzer; annotate cs_main globals + their immediate call chains; annotate `setpwalletRegistered`; document Phase 2/3/4 deferrals in-code with `TODO(#2869 Phase N — area)` comments.
+- **Phase 2 (this PR)**: replace the Phase 1 `NO_THREAD_SAFETY_ANALYSIS` placeholders in: block_finder, tally, mrc + block_rewards + contract, wallet + rpcwallet, researcher/beacon, voting + miner + policy. One commit per sub-area; each commit ends warning-free.
 - **Phase 3**: scraper, quorum (lambda-capture analyzer issues).
 - **Phase 4**: network layer (`ProcessMessage`, `AlreadyHave`, `PushVersion`, `ArgsManager::GetBlocksDirPath`).
 
@@ -205,6 +205,71 @@ Every `LOCK*` added in Phase 1 was traced through its full call graph for orderi
 
 `LOCK2(cs_main, cs_vNodes)` in `AskForOutstandingBlocks` was verified consistent with `validation.cpp:1508` (the only other site in the daemon that combines those two locks), and no path anywhere takes `cs_vNodes → cs_main`.
 
+## Phase 2 — sub-area annotation commits
+
+Phase 2 replaces every Phase 1 `NO_THREAD_SAFETY_ANALYSIS` placeholder in the listed sub-areas with the right `EXCLUSIVE_LOCKS_REQUIRED(...)` annotation, pushing the lock requirement out to callers (per the user's "annotate then push to caller" pattern — eliminates inversion risk and surfaces missing locks at the API boundary, not later in the call chain). Each sub-area is one commit; each commit ends with `cmake --build build_clang --clean-first` producing zero `-Wthread-safety` warnings and `test_gridcoin` reporting `*** No errors detected`.
+
+| Commit | Sub-area | Functions promoted | Caller cascade |
+|---|---|---|---|
+| `42b1e9516` | `gridcoin/support/block_finder.cpp` | `BlockFinder::FindByHeight`, `FindByMinTime`, `FindByMinTimeFromGivenIndex`, `FindLatestSuperblock` | ~29 call sites across rpc/voting/scraper/superblock; almost all callers already held cs_main. `block_finder_tests.cpp` wrapped in `#pragma clang diagnostic` for `-Wno-thread-safety-analysis` (single-threaded test fixture mutates pindexBest directly). |
+| `849a06700` | `gridcoin/tally.cpp` | `RepairZeroCpidIndex`, `ActivateSnapshotAccrual` (private+public), `GetStartHeight`, `RebuildAccrualSnapshots`, `Tally::GetNewbieSuperblockAccrualCorrection`, `Initialize` (private+public), `ApplySuperblock` (private+public), `BuildAccrualSnapshots`, `TallySuperblockAccrual`, `Tally::GetMagnitudeUnit` | All callers reached cs_main via existing init/validation/RPC paths; `tally.h` already documented "Always lock cs_main before calling its methods" — the analyzer now enforces it piecewise. |
+| `3b33e8bbb` | `gridcoin/mrc.cpp` + `gridcoin/consensus/block_rewards.cpp` + `gridcoin/contract/contract.cpp` + `gridcoin/contract/message.cpp` | `MRC::ComputeMRCFee`, `MRCContractHandler::Validate/BlockValidate` overrides, `BlockRewardRules::CheckResearcherClaim/CheckMRCRewards/Check/CheckNoncruncherClaim`, `GRC::ReplayContracts`, `Contract::Body::ResetType`, `SelectMasterInputOutput`, `CreateContractTx`, `SendContractTx`, `GRC::SendContract` (both overloads). | `rpc/blockchain.cpp::addkey` RPC: scoped `LOCK(cs_main)` around the `SendContract` call. `mrc_tests.cpp::it_has_proper_fees_for_newbies`: `LOCK(cs_main)` added to fixture. |
+| `eb56f3a1c` | `wallet/wallet.cpp` + `wallet/rpcwallet.cpp` + `main.cpp` cascade | `CWallet::AddToWallet`, `AddToWalletIfInvolvingMe`, `ResendWalletTransactions`, `GetKeyBirthTimes` (cs_main + cs_wallet), `CWalletTx::RevalidateTransaction`, `CWalletTx::GetGeneratedType` inline forwarder, `::GetGeneratedType` free function, `WalletTxToJSON`, `ListTransactions` (rpcwallet); `SyncWithWallets` + free `ResendWalletTransactions` wrappers in `main.h`/`main.cpp`. | 3 lock promotions, all canonical: `SendMessages` and `resendtx` RPC `LOCK(cs_setpwalletRegistered)` → `LOCK2(cs_main, cs_setpwalletRegistered)`; `accounting_tests.cpp` `LOCK(cs_wallet)` → `LOCK2(cs_main, cs_wallet)`. This commit **eliminates the latent Phase 1 inversion risk** where SendMessages and resendtx held cs_setpwalletRegistered without cs_main. |
+| `20d800299` | `gridcoin/researcher.cpp` + Qt v3 beacon wizard | `GRC::GenerateBeaconKey`, `CheckBeaconTransactionViable`, `SendBeaconContract` (anon), `SendNewBeacon` (anon), `RenewBeacon` (anon), `GRC::SendBeaconContractV3` (cs_main + cs_wallet, since `RecentBeacons::Remember` requires the wallet lock). `Researcher::Accrual` / `AccrualNearLimit` LOCK moved up to cover `pindexBest`/`OutOfSyncByAge` reads (see "Known follow-up" below). `researcher.h` gains `#include "sync.h"`, `#include "wallet/wallet.h"`, `extern cs_main`/`extern pwalletMain`. | 2 new `LOCK2(cs_main, pwalletMain->cs_wallet)` in `researchermodel.cpp::generateBeaconKeyForV3` and `advertiseBeaconV3`. Mirrors the existing v2 `advertisebeacon` RPC pattern; both follow canonical lock order. |
+| `47f9ae1d8` | `gridcoin/voting/builders.cpp` + `voting/result.cpp` + `miner.cpp` + `policy/policy.cpp` | `MagnitudeClaimBuilder::FindBeaconTxid`, `MagnitudeClaimBuilder::BuildClaim`, `VoteClaimBuilder::BuildClaim`, `VoteBuilder::BuildContractTx`, `PollBuilder::SetPayloadVersion`, `ResolveSuperblockForPoll`, `ResolveMoneySupplyForPoll`, `SplitCoinStakeOutput`, `IsStandardTx`. `voting/builders.h` gains `#include "sync.h"` + `extern cs_main`. **`VoteResolver::GetMagnitudeFactor` deliberately retained as `NO_THREAD_SAFETY_ANALYSIS`** — see "Design constraint" below. | `rpc/voting.cpp::addpoll` + `qt/voting/votingmodel.cpp::createPoll` each get a NEW tight `LOCK(cs_main)` scoped to the `SetPayloadVersion` call only (per the `feedback_preserve_lock_scopes` lesson — do not widen the existing surrounding LOCK blocks). `coinstake_construction_tests.cpp` Tests 4 + 5 get `LOCK(cs_main)` (Test 6 already had `LOCK2`; the script_p2sh sign/set tests already held cs_main from prior work). |
+
+### Design constraint preserved — voting result calculation must not re-acquire cs_main
+
+Historical work in the voting subsystem (see comments around `qt/voting/votingmodel.cpp:351-360`: *"We do this because we have eliminated the cs_main lock to free up the GUI"* / *"on a recursive lock on cs_main before for the ENTIRE run, and this is certainly better"*) deliberately moved poll result calculation out from under cs_main because the chain walk + vote counting can take seconds to tens of seconds on a node with deep history. The current shape:
+
+```cpp
+// gridcoin/voting/result.cpp::PollResult::BuildFor — preserved exactly by Phase 2
+if (result.m_poll.IncludesMagnitudeWeight()) {
+    SuperblockPtr superblock;
+    uint64_t supply;
+    {
+        LOCK(cs_main);                                  // tight scope:
+        superblock = ResolveSuperblockForPoll(poll);    //   snapshot
+        supply     = ResolveMoneySupplyForPoll(poll);   //   snapshot
+    }                                                   // <-- release
+    counter.EnableMagnitudeWeight(std::move(superblock), supply);
+}
+...
+counter.CountVotes(result, poll_ref.Votes());           // long, lock-free
+```
+
+Phase 2 annotates `ResolveSuperblockForPoll` / `ResolveMoneySupplyForPoll` as `EXCLUSIVE_LOCKS_REQUIRED(cs_main)` because the tight inner LOCK already satisfies them, but **`VoteResolver::GetMagnitudeFactor` (reached from `ProcessLegacyVote` inside the lock-free `CountVotes` loop) stays under `NO_THREAD_SAFETY_ANALYSIS`** with an updated TODO. The pragma block at `result.cpp:959-966` around the `ProcessLegacyVote` call site is retained for the same reason.
+
+Promoting `GetMagnitudeFactor` to `EXCLUSIVE_LOCKS_REQUIRED(cs_main)` would force cs_main back across the entire `CountVotes` loop, undoing that historical work. The right fix is the standing voting-redesign work (committed votes with UTXO demarcation pinned at poll start, deterministic tallying without live chain reads) — at which point the legacy class is removed and the suppression goes with it.
+
+### Known follow-up — researcher Accrual lock scope
+
+In commit `20d800299`, `Researcher::Accrual()` and `Researcher::AccrualNearLimit()` had their internal `LOCK(cs_main)` moved up so the cs_main-guarded reads (`pindexBest`, `OutOfSyncByAge()`) happen under the lock. Hold time grows by a few microseconds in the common case (the `Tally::GetAccrual` walk dominates).
+
+These functions are called from `ResearcherModel::formatAccrual` on GUI refresh ticks. During heavy chain activity (block connect, reorg) the GUI thread will queue on cs_main slightly more than before. Not a practical issue at present, but if profiling ever flags it, the cleaner pattern is to snapshot `pindexBest` + height/time under a tight cs_main scope, drop the lock, then call `Tally::GetAccrual` with the snapshotted values — needs a signature change on the Tally side, so out of scope for Phase 2.
+
+### Lessons recorded for future phases
+
+| Lesson | Where it applies |
+|---|---|
+| Do not widen existing tight LOCK scopes when fixing a thread-safety warning; add a NEW scoped LOCK above. Inner brace scopes are intentional (bound contention + protect cs_main → cs_wallet ordering). | Followed in both `addpoll` RPC and `votingmodel.cpp::createPoll` SetPayloadVersion fixes. |
+| When a header annotation references a lock expression like `pwalletMain->cs_wallet`, the header must `#include "wallet/wallet.h"` so the analyzer can resolve the member-access type. Forward declaration of `CWallet` is not sufficient. | `researcher.h` had to pull in `wallet/wallet.h`; `voting/builders.h` only needed `sync.h` + `extern cs_main`. |
+| EXCLUSIVE_LOCKS_REQUIRED is preferable to internal acquisition when the caller chain can hold the lock — it eliminates inversion risk and surfaces missing locks at the API boundary. | Pattern from Phase 1 `cs_setpwalletRegistered` fix; reapplied throughout Phase 2. |
+| Pragma-suppressing a test case is acceptable when the test is single-threaded and the fixture mutates analyzer-tracked globals directly; adding `LOCK(cs_main)` in the test is preferable when the existing fixture already supports it. | `coinstake_construction_tests.cpp` Tests 4 + 5 got `LOCK(cs_main)` (fixture supports it); Phase 1 `block_finder_tests.cpp` got the pragma (fixture mutates pindexBest in setup). |
+
+### Remaining work — Phase 3 + Phase 4
+
+After Phase 2 ships, the following `NO_THREAD_SAFETY_ANALYSIS` sites remain, all in Phase 3+ territory:
+
+| Phase | File:line | Function | Why deferred |
+|---|---|---|---|
+| 3 | `gridcoin/scraper/scraper.cpp:6555` | `testnewsb` RPC | Touches converged scraper state; needs the broader scraper annotation pass. |
+| 3 | `gridcoin/quorum.cpp:1083, 1119, 1148, 1818` | `AddBeaconPartsData` + two lambdas + `Quorum::SuperblockNeeded` | The two lambdas are independently suppressed because the analyzer cannot see hold state through lambda captures — needs Phase 3 lambda strategy. |
+| 4 | `net.cpp:486` | `CNode::PushVersion` | Network layer; coupled with `ProcessMessage` / `AlreadyHave` annotation. |
+| 4 | `main.cpp:2206, 2236` | `AlreadyHave`, `ProcessMessage` | The two P2P entry points; ProcessMessage's reach is the broadest single annotation cascade in the codebase. |
+| 4 | `util/system.cpp:303` | `ArgsManager::GetBlocksDirPath` | Returns a reference to a `cs_args`-guarded cache; needs a return-by-value or a lifetime-tied accessor. |
+| — | `gridcoin/voting/result.cpp:697` | `VoteResolver::GetMagnitudeFactor` | **Permanent until voting-redesign lands.** See "Design constraint" above — promoting it would re-acquire cs_main across the entire CountVotes loop and undo the historical scope-reduction work. |
+
 ## End state
 
 ```
@@ -213,11 +278,11 @@ $ cmake --build build_clang --parallel 32 --target gridcoinresearchd gridcoinres
 [100%] Built target gridcoinresearch
 [100%] Built target test_gridcoin
 
-$ grep -c "warning:" /tmp/clang_build.log
+$ grep -c "warning:.*thread-safety" /tmp/clang_build.log
 0
 
 $ ./build_clang/src/test/test_gridcoin --log_level=warning
 *** No errors detected
 ```
 
-Phase 1 ships warning-free across the daemon, the Qt wallet, and the test binary under clang. The `-Wthread-safety-*` warnings the analyzer would emit are now Phase 2 (researcher/wallet/tally/...), Phase 3 (scraper/quorum lambdas), and Phase 4 (network) work — all suppressed with `NO_THREAD_SAFETY_ANALYSIS` and a TODO that names the lock and the caller-chain audit each phase needs.
+Phase 1 + Phase 2 ship warning-free across the daemon, the Qt wallet, and the test binary under clang. The `-Wthread-safety-*` warnings the analyzer would emit are now Phase 3 (scraper/quorum lambdas) and Phase 4 (network) work, plus the deliberate voting-redesign deferral — all suppressed with `NO_THREAD_SAFETY_ANALYSIS` and a TODO that names the lock and the caller-chain audit each phase needs.
