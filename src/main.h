@@ -138,20 +138,38 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
 //! and doc/block_corruption_recovery_design.md.
 bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb);
 
-//! Purge the abandoned CBlockIndex entries from in-memory mapBlockIndex. Called by the
-//! Phase 2 abandonment path after AbandonChainTo + CTxDB::CleanAbandonedRange. The caller
-//! must guarantee that no consumer holds references to the abandoned entries -- in the
-//! Phase 2 hook this is true by construction (runs after LoadBlockIndex, before
-//! GRC::Initialize -- the wallet, Quorum, Tally, mempool, and net have not yet started).
+//! Purge the abandoned CBlockIndex entries from in-memory mapBlockIndex AND from on-disk
+//! LevelDB (CDiskBlockIndex records). Called by the Phase 2 abandonment path after
+//! AbandonChainTo + CTxDB::CleanAbandonedRange. The caller must guarantee that no consumer
+//! holds references to the abandoned entries -- in the Phase 2 hook this is true by
+//! construction (runs after LoadBlockIndex, before GRC::Initialize -- the wallet, Quorum,
+//! Tally, mempool, and net have not yet started).
 //!
-//! Frees both the map slot and the heap allocation. The input vector entries are nulled
-//! out after deletion to make it harder to accidentally dereference a freed pointer.
+//! Erases the mapBlockIndex slot and the LevelDB CDiskBlockIndex record. Does NOT delete
+//! the CBlockIndex object: the index objects are allocated out of GRC::BlockIndexPool,
+//! which never reclaims slots (see src/gridcoin/block_index.h:54-55 and
+//! .claude/memory/reference_block_index_pool.md). Calling `delete` on a pool slot is
+//! undefined behaviour and corrupts the heap free list -- the symptom (originally hit
+//! 2026-05-16 on isolated testnet) is `assert(!pindexBest->pnext)` firing in
+//! DisconnectBlocksBatch on the first P2P block delivered after Phase 2 reported clean
+//! completion, because heap corruption rewrites neighbouring pool memory at allocation
+//! time. The pool slot leaks by design (a few hundred bytes per discarded entry,
+//! permanently); the entry becomes inert because nothing in mapBlockIndex points at it
+//! and the on-disk record is gone.
 //!
-//! Doing this at startup-init is safe; doing it at runtime would require coordinating with
-//! live consumers (e.g. blockindex iteration in RPC handlers, Quorum lookups), which is
-//! why the runtime DisconnectBlocksBatch path does NOT also purge -- it leaves orphans in
-//! mapBlockIndex and accepts the small live-state weight.
-void PurgeOrphanedBlockIndexEntries(std::vector<class CBlockIndex*>& abandoned) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! The LevelDB erase is what makes Phase 2 durable across restarts -- without it,
+//! LoadBlockIndex would rebuild the same ghost pnext linkage from the stale on-disk
+//! hashNext values, causing the recovered tip to appear corrupt again on every boot.
+//!
+//! The input vector entries are nulled out after the map erase to make it harder to
+//! accidentally dereference a still-live pool pointer.
+//!
+//! Doing this at startup-init is safe; doing it at runtime would require coordinating
+//! with live consumers (e.g. blockindex iteration in RPC handlers, Quorum lookups),
+//! which is why the runtime DisconnectBlocksBatch path does NOT also purge -- it leaves
+//! orphans in mapBlockIndex and accepts the small live-state weight.
+void PurgeOrphanedBlockIndexEntries(class CTxDB& txdb, std::vector<class CBlockIndex*>& abandoned)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
 

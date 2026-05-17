@@ -1649,13 +1649,24 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
     AssertLockHeld(cs_main);
     assert(pindex_target != nullptr);
 
-    if (pindex_target == pindexBest) {
-        return true;
-    }
+    // No early return when pindex_target == pindexBest. In the ghost-only
+    // case (a prior Phase 2 rewound the chain in memory and on hashBestChain
+    // but failed to persist pindex_target's hashNext=null), pindexBest is
+    // already the target but pindex_target->pnext still points at the first
+    // ghost (because LoadBlockIndex rebuilt that linkage from the stale
+    // on-disk CDiskBlockIndex.hashNext). We still need to (a) clear pnext
+    // in memory and (b) persist the new CDiskBlockIndex with hashNext=null
+    // so the next restart doesn't reconstruct the same ghost chain.
 
-    LogPrintf("INFO: %s: abandoning chain tip %s @ %d down to %s @ %d.", __func__,
-              pindexBest->GetBlockHash().GetHex(), nBestHeight,
-              pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    if (pindex_target == pindexBest) {
+        LogPrintf("INFO: %s: in-memory tip already at target %s @ %d; persisting "
+                  "hashNext=null to clear ghost linkage.", __func__,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    } else {
+        LogPrintf("INFO: %s: abandoning chain tip %s @ %d down to %s @ %d.", __func__,
+                  pindexBest->GetBlockHash().GetHex(), nBestHeight,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    }
 
     // Sever the abandoned range from the in-memory tree by clearing the new tip's pnext.
     // The abandoned CBlockIndex entries are removed from mapBlockIndex separately by
@@ -1675,6 +1686,20 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
         return error("%s: WriteHashBestChain failed for %s", __func__,
                      pindex_target->GetBlockHash().GetHex());
     }
+
+    // Persist the new tip's CDiskBlockIndex so its on-disk hashNext is null.
+    // Without this, the next LoadBlockIndex would rebuild pindex_target->pnext
+    // from the stale CDiskBlockIndex.hashNext stored when the chain was longer,
+    // and the ghost chain would resurrect on every restart. The serialized
+    // CDiskBlockIndex captures pnext via GetBlockHash on the in-memory pnext
+    // (block.h CDiskBlockIndex.hashNext init) -- which we just nulled above,
+    // so this write captures the severed state.
+    if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex_target))) {
+        return error("%s: WriteBlockIndex failed for %s (could not persist severed "
+                     "hashNext; ghost chain would resurrect on next restart)", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+
     if (!txdb.Sync()) {
         return error("%s: CTxDB::Sync failed after abandonment", __func__);
     }
@@ -1682,55 +1707,81 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
     return true;
 }
 
-void PurgeOrphanedBlockIndexEntries(std::vector<CBlockIndex*>& abandoned)
+void PurgeOrphanedBlockIndexEntries(CTxDB& txdb, std::vector<CBlockIndex*>& abandoned)
 {
     AssertLockHeld(cs_main);
 
-    // The abandoned vector is what VerifyChainCoherence collected during the
-    // walk: every block past the last consistent one, recorded in
-    // newest-to-oldest order. After the chainstate cleanup, none of these are
-    // reachable from pindexBest's ancestry. We need to erase them from
-    // mapBlockIndex so AddToBlockIndex can re-add the same hashes when P2P
-    // delivers the canonical-chain blocks back -- otherwise the
-    // "already exists" guard at validation.cpp:1109 would silently reject
-    // every re-supplied block forever.
+    // The abandoned vector is what VerifyChainCoherence collected: every block
+    // past the last consistent one. After the chainstate cleanup, none of these
+    // are reachable from pindexBest's ancestry. We need to:
     //
-    // DO NOT call `delete` on these pointers. CBlockIndex objects are
-    // allocated from GRC::BlockIndexPool (see src/gridcoin/block_index.h),
-    // which is backed by std::array<CBlockIndex, CHUNK_SIZE> in a forward_list
-    // of chunks. The pool's explicit design (per the class comment at
+    //   (1) erase each entry from mapBlockIndex so AddToBlockIndex can re-add
+    //       the same hashes when P2P delivers the canonical-chain blocks back
+    //       (otherwise the "already exists" guard at validation.cpp:1109 would
+    //       silently reject every re-supplied block forever);
+    //
+    //   (2) erase each entry's CDiskBlockIndex record from LevelDB so the next
+    //       LoadBlockIndex doesn't rebuild the ghost forward linkage from the
+    //       stale hashNext fields stored when the chain was longer. (Without
+    //       this, Phase 2 looks successful in this run but the recovered tip
+    //       resurrects the ghost chain on every subsequent boot -- the
+    //       backward walk in VerifyChainCoherence finds the tip coherent,
+    //       early-returns, and DisconnectBlocksBatch then trips
+    //       `assert(!pindexBest->pnext)` on the first P2P-delivered block.
+    //       Hit 2026-05-16 on isolated testnet slot 10.)
+    //
+    // DO NOT call `delete` on these pointers. CBlockIndex objects are allocated
+    // from GRC::BlockIndexPool (see src/gridcoin/block_index.h), which is
+    // backed by std::array<CBlockIndex, CHUNK_SIZE> in a forward_list of
+    // chunks. The pool's explicit design (per the class comment at
     // block_index.h:54-55) is that "the application never removes or destroys
     // block index entries"; it has no recycling path. Calling `delete` on a
     // pointer into the middle of a std::array invokes undefined behavior:
     // operator delete tries to free a heap-managed chunk at that address, but
-    // the address is not a heap allocation -- in practice it corrupts the
-    // C++ runtime's free list, manifesting much later as bad_alloc or
-    // assertion failures in unrelated code.
+    // the address is not a heap allocation -- in practice it corrupts the C++
+    // runtime's free list, manifesting much later as bad_alloc or assertion
+    // failures in unrelated code.
     //
     // (We learned this the hard way during the 2026-05-16 isolated-testnet
     // Tier 3 run: Phase 2 reported clean completion, but the very first
     // P2P-delivered block tripped `assert(!pindexBest->pnext)` in
     // DisconnectBlocksBatch because heap corruption from the bogus `delete`
     // calls had overwritten pindex_target's pnext slot with garbage that
-    // happened to dereference as a valid-looking CBlockIndex pointer.)
+    // happened to dereference as a valid-looking CBlockIndex pointer. See
+    // .claude/memory/reference_block_index_pool.md.)
     //
     // The cost of not freeing is that the abandoned pool slots remain
-    // allocated forever -- a small permanent leak per recovery event, at
-    // most a few hundred bytes per abandoned block (so well under 1 MB even
-    // at the -coherencewalkmax cap). The pool is designed for this. The
-    // alternative would be a much larger redesign of BlockIndexPool to
-    // support per-object recycling, which is not justified for a rare
-    // recovery path.
+    // allocated forever -- a small permanent leak per recovery event, at most
+    // a few hundred bytes per abandoned block (well under 1 MB even at the
+    // -coherencewalkmax cap). The pool is designed for this. The alternative
+    // would be a much larger redesign of BlockIndexPool to support per-object
+    // recycling, which is not justified for a rare recovery path.
+    unsigned int leveldb_erased = 0;
+    unsigned int map_erased = 0;
     for (CBlockIndex*& p : abandoned) {
         if (!p) continue;
-        mapBlockIndex.erase(p->GetBlockHash());
+        const uint256 hash = p->GetBlockHash();
+        if (txdb.EraseBlockIndex(hash)) {
+            ++leveldb_erased;
+        } else {
+            LogPrintf("WARN: %s: EraseBlockIndex failed for %s; on-disk record may persist.",
+                      __func__, hash.GetHex());
+        }
+        mapBlockIndex.erase(hash);
+        ++map_erased;
         // No `delete p` -- see comment above.
         p = nullptr;
     }
 
-    LogPrintf("INFO: %s: removed %u orphaned CBlockIndex entries from mapBlockIndex "
-              "(pool slots remain allocated; see block_index.h).",
-              __func__, (unsigned) abandoned.size());
+    if (!txdb.Sync()) {
+        LogPrintf("WARN: %s: CTxDB::Sync failed after CDiskBlockIndex erase; will be retried "
+                  "on the next durable write.", __func__);
+    }
+
+    LogPrintf("INFO: %s: purged %u orphaned block index entries (%u from mapBlockIndex, "
+              "%u CDiskBlockIndex records from LevelDB; pool slots remain allocated, "
+              "see block_index.h).",
+              __func__, (unsigned) abandoned.size(), map_erased, leveldb_erased);
 }
 
 static unsigned int nCurrentBlockFile = 1;

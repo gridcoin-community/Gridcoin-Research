@@ -239,6 +239,13 @@ public:
     bool ReadDiskTx(COutPoint outpoint, CTransaction& tx);
     bool ReadBlockIndex(uint256 hash, CDiskBlockIndex& blockindex);
     bool WriteBlockIndex(const CDiskBlockIndex& blockindex);
+    //! Erase the on-disk CDiskBlockIndex record for `hash`. Used by the Phase 2
+    //! abandonment path (PurgeOrphanedBlockIndexEntries) to make the rewind
+    //! durable across restarts -- without this, LoadBlockIndex would rebuild
+    //! the ghost forward linkage from stale hashNext fields. Returns true if
+    //! LevelDB reports the erase succeeded (note: LevelDB Delete is a no-op
+    //! when the key is absent, so "true" does not imply the key existed).
+    bool EraseBlockIndex(uint256 hash);
     bool ReadHashBestChain(uint256& hashBestChain);
     bool WriteHashBestChain(uint256 hashBestChain);
     bool ReadSyncCheckpoint(uint256& hashCheckpoint);

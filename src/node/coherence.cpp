@@ -26,26 +26,28 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
         return result;
     }
 
+    // Phase 1 -- backward walk: find the last coherent tip.
+    //
+    // We do NOT collect abandoned_indexes/positions here. The Phase 2
+    // forward walk below catches everything past pindex_consistent, whether
+    // the backward walk found inconsistency (truncation/corruption case) or
+    // the in-memory chain has forward ghosts left over from a prior
+    // interrupted Phase 2 (the ghost-only case where pindexBest is itself
+    // coherent on disk but pindexBest->pnext is non-null because
+    // LoadBlockIndex rebuilt the broken pnext chain from on-disk hashNext
+    // values that the prior Phase 2 failed to persist). Collecting in the
+    // forward walk avoids double-accounting when both conditions coexist.
     int walked = 0;
     CBlock block;
 
     for (CBlockIndex* pindex = pindexBest; pindex; pindex = pindex->pprev) {
-        // Read with the (block, nFile, nBlockPos, params, fReadTransactions=false)
+        // Use the (block, nFile, nBlockPos, params, fReadTransactions=false)
         // overload -- the lower-level one that actually touches disk. We
         // deliberately do NOT use ReadBlockFromDisk(block, pindex, ...) with
         // fReadTransactions=false: that overload's no-transactions branch
         // copies the header from the in-memory pindex and returns true
         // without touching disk (blockstorage.cpp:99-104), which would make
-        // this entire coherence check a no-op. See the design doc section
-        // "The walk-back" for the full discussion.
-        //
-        // fReadTransactions=false uses SER_BLOCKHEADERONLY -- we read only
-        // the header (80 bytes + length prefix), enough to recompute the
-        // header hash without paying the cost of deserializing all the
-        // transactions. The PoW check inside the called function is skipped
-        // automatically in the header-only path (it gates on fReadTransactions),
-        // which is correct -- Gridcoin is PoS, so the in-block hash check we
-        // do here against pindex->GetBlockHash() is the only check we need.
+        // this entire coherence check a no-op.
         const bool read_ok = ReadBlockFromDisk(
             block, pindex->nFile, pindex->nBlockPos,
             Params().GetConsensus(), /*fReadTransactions=*/false);
@@ -54,22 +56,8 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
 
         if (coherent) {
             result.pindex_consistent = pindex;
-            return result;
+            break;  // proceed to Phase 2 forward walk
         }
-
-        // Inconsistent at this height. Record SB crossings as we go so the
-        // caller can decide whether the rewind crosses an SB boundary
-        // (which mandates a beacon registry rebuild rather than a clamp;
-        // see doc/block_corruption_recovery_design.md).
-        if (pindex->IsSuperblock()) {
-            ++result.sb_cross_count;
-        }
-
-        // Record this block for downstream cleanup. abandoned_indexes drives
-        // the mapBlockIndex purge; abandoned_positions drives the surgical
-        // CTxIndex / vSpent cleanup in CleanTxdbAbandonedRange.
-        result.abandoned_indexes.push_back(pindex);
-        result.abandoned_positions.insert(PackBlockFilePos(pindex->nFile, pindex->nBlockPos));
 
         LogPrintf("WARN: %s: block at height %d (hash %s, blk%05u.dat:%u) failed coherence check "
                   "(read_ok=%s); walking back.",
@@ -83,17 +71,34 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
         }
 
         if (!pindex->pprev) {
-            // Walked off genesis without finding a consistent block. Treat
-            // as exhausted -- requires manual -reindex.
+            // Walked off genesis without finding a consistent block.
             result.exhausted = true;
             return result;
         }
     }
 
-    // Fell out of the loop -- shouldn't happen because we always either
-    // return on coherence, return on exhaustion, or return on no pprev.
-    // Defensive: mark exhausted so caller surfaces an error.
-    result.exhausted = true;
+    // Phase 2 -- forward walk: enumerate every block past pindex_consistent.
+    //
+    // Works for both the corruption case AND the ghost case because in both,
+    // the pnext linkages from pindex_consistent forward are still intact in
+    // mapBlockIndex (either from the initial LoadBlockIndex pass in this
+    // run, or because no prior Phase 2 successfully severed them on disk).
+    //
+    // Each ghost gets cleaned up by the downstream pipeline:
+    //   abandoned_positions -> CleanAbandonedRange (CTxIndex / vSpent)
+    //   abandoned_indexes   -> PurgeOrphanedBlockIndexEntries (mapBlockIndex
+    //                          + LevelDB CDiskBlockIndex)
+    //
+    // sb_cross_count drives whether the beacon registry must be Reset()
+    // rather than clamped (see doc/block_corruption_recovery_design.md).
+    for (CBlockIndex* ghost = result.pindex_consistent->pnext; ghost; ghost = ghost->pnext) {
+        result.abandoned_indexes.push_back(ghost);
+        result.abandoned_positions.insert(PackBlockFilePos(ghost->nFile, ghost->nBlockPos));
+        if (ghost->IsSuperblock()) {
+            ++result.sb_cross_count;
+        }
+    }
+
     return result;
 }
 
@@ -186,17 +191,36 @@ bool RunStartupCoherenceRecovery()
         return false;
     }
 
-    if (result.pindex_consistent == pindexBest) {
-        // Common case: first block (the tip) was coherent. No rewind needed.
+    if (result.pindex_consistent == pindexBest && result.abandoned_indexes.empty()) {
+        // Common case: tip is coherent on disk AND there are no forward
+        // ghosts past the tip. No rewind needed.
         LogPrintf("INFO: %s: chain tip at height %d is coherent. No rewind needed.",
                   __func__, nBestHeight);
         return true;
     }
 
-    LogPrintf("INFO: %s: detected inconsistency past height %d. Last consistent block is at height %d "
-              "(%d superblocks crossed in the abandoned range, %u blocks abandoned).",
-              __func__, nBestHeight, result.pindex_consistent->nHeight,
-              result.sb_cross_count, (unsigned) result.abandoned_indexes.size());
+    // Distinguish in the log:
+    //   * pindex_consistent < pindexBest -> backward-walk found inconsistency
+    //     (truncation / interrupted write). The tip and possibly several blocks
+    //     below it are unreadable on disk.
+    //   * pindex_consistent == pindexBest with abandoned_indexes non-empty ->
+    //     ghost-only case. The on-disk tip is fine, but LoadBlockIndex
+    //     rebuilt forward pnext linkage from CDiskBlockIndex.hashNext values
+    //     that a prior Phase 2 failed to persist as null. Either way, the
+    //     forward-walk caught everything past the consistent tip and the
+    //     pipeline below cleans it up.
+    if (result.pindex_consistent != pindexBest) {
+        LogPrintf("INFO: %s: detected inconsistency past height %d. Last consistent block is at height %d "
+                  "(%d superblocks crossed in the abandoned range, %u blocks abandoned).",
+                  __func__, nBestHeight, result.pindex_consistent->nHeight,
+                  result.sb_cross_count, (unsigned) result.abandoned_indexes.size());
+    } else {
+        LogPrintf("INFO: %s: tip at height %d is coherent on disk but %u forward ghost block(s) "
+                  "(%d superblock(s) crossed) remain in the in-memory chain from a prior interrupted "
+                  "Phase 2. Cleaning up.",
+                  __func__, nBestHeight, (unsigned) result.abandoned_indexes.size(),
+                  result.sb_cross_count);
+    }
 
     // Step 1: rewind in-memory chain globals + persist hashBestChain.
     if (!RewindToConsistentTip(result.pindex_consistent)) {
@@ -211,8 +235,13 @@ bool RunStartupCoherenceRecovery()
     // re-supplied blocks would silently reject the same input as
     // already-spent. See the "Abandonment-style rewind + surgical
     // chainstate cleanup" section of doc/block_corruption_recovery_design.md.
+    //
+    // The CTxDB handle is held across step 3 as well so the mapBlockIndex
+    // purge below can erase CDiskBlockIndex entries through the same DB
+    // handle. Both writes commit on destructor scope-exit.
+    CTxDB txdb;
+
     {
-        CTxDB txdb;
         uint64_t entries_deleted = 0, vspent_cleared = 0, entries_scanned = 0;
         if (!txdb.CleanAbandonedRange(result.abandoned_positions,
                                       &entries_deleted, &vspent_cleared, &entries_scanned)) {
@@ -226,11 +255,15 @@ bool RunStartupCoherenceRecovery()
     }
 
     // Step 3: purge the abandoned CBlockIndex entries from in-memory
-    // mapBlockIndex. Safe at this init-time point because no live consumer
-    // holds references (wallet / Quorum / Tally / mempool / net all start
-    // later). See PurgeOrphanedBlockIndexEntries doc comment for why we do
-    // this here instead of at runtime.
-    PurgeOrphanedBlockIndexEntries(result.abandoned_indexes);
+    // mapBlockIndex AND from on-disk LevelDB. The on-disk erase is what
+    // makes Phase 2 durable across restarts -- without it, the next
+    // LoadBlockIndex would rebuild the same ghost pnext linkages from the
+    // stale CDiskBlockIndex.hashNext values and the recovered tip would
+    // appear corrupt again on every subsequent boot. Safe at this init-time
+    // point because no live consumer holds references (wallet / Quorum /
+    // Tally / mempool / net all start later). See PurgeOrphanedBlockIndexEntries
+    // doc comment for why we do this here instead of at runtime.
+    PurgeOrphanedBlockIndexEntries(txdb, result.abandoned_indexes);
 
     // Reconcile registry state with the rewound chain.
     //
