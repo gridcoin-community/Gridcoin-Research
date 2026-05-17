@@ -105,6 +105,44 @@ QVariant PollTableDataModel::data(const QModelIndex &index, int role) const
             }
             break;
 
+        case Qt::AccessibleTextRole:
+            // For screen readers (issue #2604). Title column returns a one-shot
+            // row summary so a screen reader announces the most-important fields
+            // (title, type, expiration, top answer) at row entry; other columns
+            // prepend the header name so per-cell navigation is self-contained.
+            switch (index.column()) {
+                case PollTableModel::Title:
+                    return tr("Poll \"%1\", type %2, expires %3, top answer %4")
+                        .arg(row->m_title,
+                             row->m_version >= 3 ? row->m_type_str : tr("(legacy)"),
+                             GUIUtil::dateTimeStr(row->m_expiration),
+                             row->m_top_answer.isEmpty() ? tr("none") : row->m_top_answer);
+                case PollTableModel::PollType:
+                    return tr("Poll type: %1")
+                        .arg(row->m_version >= 3 ? row->m_type_str : tr("(legacy)"));
+                case PollTableModel::Duration:
+                    return tr("Duration: %1").arg(QString::number(row->m_duration));
+                case PollTableModel::Expiration:
+                    return tr("Expires: %1").arg(GUIUtil::dateTimeStr(row->m_expiration));
+                case PollTableModel::WeightType:
+                    return tr("Weight type: %1").arg(row->m_weight_type_str);
+                case PollTableModel::TotalVotes:
+                    return tr("Total votes: %1").arg(QString::number(row->m_total_votes));
+                case PollTableModel::TotalWeight:
+                    return tr("Total weight: %1").arg(QString::number(row->m_total_weight));
+                case PollTableModel::VotePercentAVW:
+                    return tr("Percent of active vote weight: %1")
+                        .arg(QString::number(row->m_vote_percent_AVW, 'f', 4));
+                case PollTableModel::Validated:
+                    return tr("Validated: %1").arg(row->m_validated.toString());
+                case PollTableModel::TopAnswer:
+                    return tr("Top answer: %1")
+                        .arg(row->m_top_answer.isEmpty() ? tr("none") : row->m_top_answer);
+                case PollTableModel::StaleResults:
+                    return tr("Stale results: %1").arg(row->m_stale ? tr("yes") : tr("no"));
+            } // no default case, so the compiler can warn about missing cases
+            assert(false);
+
         case PollTableModel::SortRole:
             switch (index.column()) {
                 case PollTableModel::Title:

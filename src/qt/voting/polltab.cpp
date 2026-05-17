@@ -172,6 +172,11 @@ void PollTab::setVotingModel(VotingModel* model)
 
     ui->cards->setModel(m_polltable_model.get());
     ui->table->setModel(m_polltable_model.get());
+
+    // Accessibility (issue #2604): label both views so screen readers
+    // announce what list is being read.
+    ui->cards->setAccessibleName(tr("Polls (card view)"));
+    ui->table->setAccessibleName(tr("Polls (table view)"));
 }
 
 void PollTab::setPollFilterFlags(PollFilterFlag flags)
