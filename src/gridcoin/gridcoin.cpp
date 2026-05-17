@@ -34,33 +34,87 @@ void ScraperSubscriber();
 
 namespace {
 //!
-//! \brief Display a message that warns about a corrupted blockchain database.
+//! \brief Display a modal dialog reporting a checkpoint mismatch.
 //!
-//! For the GUI, this displays a modal dialog. It prints a message to the log
-//! and to stderr on headless nodes.
+//! Called from VerifyCheckpoints when a hardened checkpoint hash does not
+//! match the corresponding block in mapBlockIndex. For the GUI this shows
+//! a modal; on headless nodes it prints to stderr.
 //!
-void ShowChainCorruptedMessage()
+//! Sets fResetBlockchainRequest so the wallet performs a blockchain reset
+//! on next start (GUI) or instructs the operator to use -resetblockchaindata
+//! (daemon).
+//!
+void ShowCheckpointMismatchMessage()
 {
     fResetBlockchainRequest = true;
 
     if (fQtActive) {
         uiInterface.ThreadSafeMessageBox(
             _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
-              "Gridcoin detected bad index entries. This may occur because of a "
-              "late software upgrade, unexpected exit, or a power failure. "
-              "Your blockchain data is being reset and your wallet will resync "
-              "from genesis when you restart. Your balance may appear incorrect "
-              "until the synchronization finishes."),
+              "Gridcoin's compiled-in hardened checkpoint does not match the "
+              "block at that height in your local block index. This may occur "
+              "because of a late software upgrade, unexpected exit, or a power "
+              "failure. Your blockchain data is being reset and your wallet "
+              "will resync from genesis when you restart. Your balance may "
+              "appear incorrect until the synchronization finishes."),
             "Gridcoin",
             CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
     } else {
         uiInterface.ThreadSafeMessageBox(
             _("ERROR: Checkpoint mismatch: Blockchain data may be corrupted.\n\n"
-              "Gridcoin detected bad index entries. This may occur because of a "
-              "late software upgrade, unexpected exit, or a power failure. "
-              "Please run gridcoinresearchd with the -resetblockchaindata "
-              "parameter. Your wallet will re-download the blockchain. Your "
-              "balance may appear incorrect until the synchronization finishes." ),
+              "Gridcoin's compiled-in hardened checkpoint does not match the "
+              "block at that height in your local block index. This may occur "
+              "because of a late software upgrade, unexpected exit, or a power "
+              "failure. Please run gridcoinresearchd with the "
+              "-resetblockchaindata parameter. Your wallet will re-download "
+              "the blockchain. Your balance may appear incorrect until the "
+              "synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    }
+}
+
+//!
+//! \brief Display a modal dialog reporting a block-index integrity failure.
+//!
+//! Called from CheckBlockIndex when an entry in mapBlockIndex has a null
+//! pprev pointer despite not being the genesis block. This indicates the
+//! block index database is structurally corrupt (broken pprev linkage),
+//! not that any hardened checkpoint mismatched. The recovery action is the
+//! same as for a checkpoint mismatch (blockchain reset), but the message
+//! reports the actual cause so the operator isn't misled into looking for
+//! a checkpoint-related issue.
+//!
+//! Sets fResetBlockchainRequest as above.
+//!
+void ShowBlockIndexCorruptedMessage()
+{
+    fResetBlockchainRequest = true;
+
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Block index integrity check failed: Blockchain data may "
+              "be corrupted.\n\n"
+              "Gridcoin detected a block index entry with a broken pprev "
+              "linkage. This may occur because of a late software upgrade, "
+              "unexpected exit, or a power failure that left the on-disk "
+              "block index database in an inconsistent state. Your "
+              "blockchain data is being reset and your wallet will resync "
+              "from genesis when you restart. Your balance may appear "
+              "incorrect until the synchronization finishes."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
+    } else {
+        uiInterface.ThreadSafeMessageBox(
+            _("ERROR: Block index integrity check failed: Blockchain data may "
+              "be corrupted.\n\n"
+              "Gridcoin detected a block index entry with a broken pprev "
+              "linkage. This may occur because of a late software upgrade, "
+              "unexpected exit, or a power failure that left the on-disk "
+              "block index database in an inconsistent state. Please run "
+              "gridcoinresearchd with the -resetblockchaindata parameter. "
+              "Your wallet will re-download the blockchain. Your balance may "
+              "appear incorrect until the synchronization finishes."),
             "Gridcoin",
             CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
     }
@@ -97,7 +151,7 @@ bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
             // show the message, exit, and let the user choose a resolution:
             //
             LogPrintf("WARNING: checkpoint mismatch at %d", checkpoint_pair.first);
-            ShowChainCorruptedMessage();
+            ShowCheckpointMismatchMessage();
 
             return false;
         }
@@ -410,7 +464,9 @@ bool CheckBlockIndex()
         return status;
     }
 
-    ShowChainCorruptedMessage();
+    LogPrintf("WARNING: block index integrity check failed -- found mapBlockIndex entry "
+              "with null pprev that is not the genesis block");
+    ShowBlockIndexCorruptedMessage();
 
     return status;
 }
