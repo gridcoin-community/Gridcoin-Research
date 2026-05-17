@@ -199,7 +199,67 @@ Backward-walk count was exactly 100 (matching the cap). After exhaustion, **`Aba
 
 This is the critical safety property: when Phase 2 cannot find a consistent block within the bound, it must **not** perform a partial abandonment that would leave the wallet in an inconsistent state worse than what it started with. It bails cleanly, surfaces an actionable error, and lets the user choose the recovery path (typically `-reindex`).
 
-### Iteration 6 — Multi-SB runtime reorg + deferred-rebuild flag
+### Iteration 7 — Multi-SB runtime reorg with in-line rebuild (post-refactor)
+
+**Purpose:** validate the refactored runtime path. The deferred-rebuild flag mechanism (Iteration 6 below, kept for chronology) was replaced with an in-line `GRC::RebuildBeaconRegistry` called directly from `DisconnectBlocksBatch` when `sb_cross_count >= 2`. The rebuild calls `BeaconRegistry::Reset()` followed by `InitializeContracts(pindexBest)`, which Replays beacon contracts from V11_height forward. The reorg path holds `cs_main` throughout, so no thread observes the intermediate empty-registry state.
+
+**Why the refactor:** the deferred approach left a fork window between the runtime reorg that set the flag and the next restart that consumed it. During that window the in-memory beacon registry was missing prior-SB expired-pending entries (the `m_expired_pending` carry-only-latest-SB limitation), and any subsequent `ConnectBlock` that referenced one of those beacons could deterministically diverge from healthy peers. Mitigating that window with an `AcceptBlock` guard + forced shutdown + modal coordination added ~100 lines and traded one ugliness (fork risk) for another (forced restart UX). Running the rebuild in-line during the reorg eliminates both — the registry is consistent before `cs_main` is released, so no subsequent block validation sees stale state and no operator action is required.
+
+**Cost analysis:** the rebuild walks from `BlockV11Height` forward applying beacon contracts. On the isolated testnet (3 nodes, ~3M block height) the walk completed in **303 ms** on the test SSD. Wall-clock time of the full `reorganize` RPC (which includes disconnecting 2000 blocks + reconnecting on the forward direction, plus this rebuild) was 41 s. The rebuild itself is a small fraction of the reorg's intrinsic cost.
+
+**Setup:** slot 10 at tip 2768977 against the refactored binary `328a03e93`.
+
+    target_height = tip - 2000 = 2766977
+    orig_head     = cbdc0ea2d1c2fcf631089f001b8260598f3afaeb694ea579f35b0cbb933303c5
+    reorg_target  = 2ec809861fefe03de01cff68f0841368ffbf19883dcd035c9ed9703152ebb70b
+
+**Step 1 — backward runtime reorg via RPC:**
+
+    $ reorganize 2ec809861fefe03de01cff68f0841368ffbf19883dcd035c9ed9703152ebb70b
+    {"RollbackChain": true}
+    (elapsed: 41 s)
+    $ getblockcount
+    2766977
+
+Slot 10 debug.log (key lines):
+
+    WARN: DisconnectBlocksBatch: reorg disconnected 2 superblock(s); beacon registry expired-pending fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line to maintain consensus.
+    INFO: RebuildBeaconRegistry: starting in-line beacon registry rebuild after multi-SB runtime reorg.
+    INFO: InitializeContracts: Loading stored history for contract type beacon...
+    INFO: InitializeContracts: History load not successful for contract type beacon. Will initialize from contract replay.
+    Gridcoin: Starting contract replay from height 1301500.
+    Replaying contracts from block 1301500...
+    INFO: RebuildBeaconRegistry: beacon registry rebuild complete in 303ms.
+    INFO ForceReorganizeToHash: success! height 2766977 hash 2ec809861f...
+
+The contract replay started at height 1301500 (V11 activation) — the full beacon-history replay we wanted, not a clamped partial. After the rebuild, the reconnect side of `ReorganizeChain` ran `beacon.Activate()` per reconnected block; the registry was correct at every step.
+
+**Step 2 — forward reorg back to original head:**
+
+    $ reorganize cbdc0ea2d1c2fcf631089f001b8260598f3afaeb694ea579f35b0cbb933303c5
+    {"RollbackChain": true}
+    $ getblockcount
+    2768977
+
+Tip hash matches the saved original head exactly.
+
+**Step 3 — stop + restart slot 10:**
+
+Slot 10 debug.log on the next startup:
+
+    INFO: RunStartupCoherenceRecovery: verifying chain coherence (walkback bound 10000).
+    INFO: RunStartupCoherenceRecovery: chain tip at height 2768977 is coherent. No rewind needed.
+    Gridcoin: block index is clean
+
+No "pending beacon registry rebuild detected" log line — the deferred-flag mechanism is gone, and there's nothing for startup to pick up because the in-line rebuild handled the entire fix during the reorg itself.
+
+**Result: PASS.** Refactored runtime path is correct, fast (303 ms rebuild), and eliminates the fork window without requiring any post-reorg operator action.
+
+**GUI notification note:** the rebuild calls `uiInterface.ThreadSafeMessageBox(...)` without the `MODAL` flag, which routes through `Notificator::notify` (system-tray notification) rather than a `QMessageBox` popup. On some desktop environments the tray notification is subtle or filtered. Daemon mode skips this call entirely via `if (fQtActive)` and emits only the debug.log line, per the operational preference that the daemon should produce nothing but log output.
+
+### Iteration 6 — Multi-SB runtime reorg with deferred-rebuild flag (superseded design)
+
+**NOTE:** This iteration validated the original deferred-rebuild design (`SetBeaconRebuildPending` + LevelDB flag + startup pickup). That design was replaced by the in-line rebuild in Iteration 7 above because of the fork-risk window between the runtime reorg and the next restart. Keeping the record here for chronology.
 
 **Purpose:** validate the runtime path's deferred-rebuild-flag mechanism. On a runtime reorg crossing 2+ SBs, `DisconnectBlocksBatch` cannot fully resurrect prior-SB expired-pending beacons (the `m_expired_pending` carry-only-the-most-recent-SB limitation acknowledged at `beacon.cpp:1265-1273`), so it persists a `beacon_db / needs_rebuild` flag to LevelDB and lets the next startup do a clean rebuild via `BeaconRegistry::Reset()` before `InitializeContracts` replays.
 
@@ -267,7 +327,8 @@ No "pending beacon registry rebuild detected" line this restart — confirming `
 | 3 | T1 (~500 bytes / 1 block / 0 SBs) | PASS | Minimal Phase 2 case |
 | 4 | T2 (~1 MB / 1345 blocks / 2 SBs) | PASS | `Reset()` + `DropAboveHeight(2)` |
 | 5 | T3 walkmax exit (`-coherencewalkmax=100`) | PASS | Clean refusal, no partial abandonment |
-| 6 | Multi-SB runtime reorg (manual via `reorganize` RPC) | PASS | Flag set, picked up, cleared cleanly |
+| 6 | Multi-SB runtime reorg, deferred-flag design | PASS (but the design itself was flawed — see Iteration 7) | Flag set, picked up, cleared cleanly; fork window led to refactor |
+| 7 | Multi-SB runtime reorg, in-line rebuild | PASS | 303 ms beacon-registry rebuild during the reorg; no fork window; no post-reorg operator action required |
 
 ## Summary of fixes landed during this validation
 
