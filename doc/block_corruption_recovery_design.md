@@ -30,6 +30,12 @@ Phase 2 logic runs between two existing call sites in `src/init.cpp`:
 
 The Phase 2 hook slots in this window. Critically: **registries have not been initialized yet**, so we can mutate their LevelDB-stored bookmarks (`height_stored`) without having to invalidate any in-memory state.
 
+### Soft-fail in `LoadBlockIndex` so the Phase 2 hook can actually run
+
+Prior to Phase 2, `LoadBlockIndex` aborted hard on the first `ReadBlockFromDisk` failure of the 1000-block startup verification loop (`dbwrapper.cpp:637-638` and `:757-758`). For a Scenario-C-corrupted datadir this short-circuited startup with a modal "Error loading blkindex.dat" before the Phase 2 hook had a chance to run — defeating the entire automatic-recovery purpose.
+
+The behavior is now: on a read error in the verification loop, log a warning, **break out of the loop without flagging the load as failed**, and return success so the init sequence proceeds. The Phase 2 hook then sees the same corruption via `VerifyChainCoherence` and handles it through the normal recovery pipeline. This is one of the four post-implementation bug fixes (see "Bugs caught by isolated-testnet validation" below).
+
 ## The walk-back
 
 `VerifyChainCoherence(int max_walkback) → CoherenceResult`
@@ -44,12 +50,36 @@ Walk backward from `pindexBest`, at each step:
 
 In the common case (no corruption), the very first check on `pindexBest` succeeds and we exit immediately — one `ReadBlockFromDisk` of overhead per startup. The expensive walk only runs when corruption is actually present.
 
-The walk also collects two pieces of state for the downstream cleanup steps:
+### Forward walk after the backward walk
 
-- `abandoned_indexes`: the `CBlockIndex*` of every block past `pindex_consistent`. Consumed by `PurgeOrphanedBlockIndexEntries` to remove the dead entries from `mapBlockIndex`.
-- `abandoned_positions`: the set of `(nFile, nBlockPos)` pairs covered by abandoned blocks, packed into `uint64_t` for fast hash-set lookup. Consumed by `CleanTxdbAbandonedRange` to identify which `CTxIndex` entries and `vSpent` markers were written by abandoned blocks.
+The first draft collected `abandoned_indexes` and `abandoned_positions` *during* the backward walk. Isolated-testnet validation surfaced a second corruption class the backward walk alone could not see: **forward ghost state from a prior interrupted Phase 2**.
 
-Collecting during the walk avoids re-traversing the chain three times.
+Specifically: if a previous run's Phase 2 rewound `pindexBest` in memory and persisted `hashBestChain`, but the new tip's `CDiskBlockIndex.hashNext` was *not* updated on disk (it still pointed at the abandoned chain), then on the next startup `LoadBlockIndex` faithfully rebuilds the abandoned forward chain from `hashNext`. The backward walk now finds the on-disk tip block coherent (it really is — that's the rewound tip) and returns immediately with `pindex_consistent == pindexBest`, "no rewind needed." But `pindexBest->pnext` is non-null, pointing at the resurrected ghost chain. The first P2P-delivered block past the tip then trips `assert(!pindexBest->pnext)` in `DisconnectBlocksBatch`, killing the wallet.
+
+The fix: after the backward walk finds `pindex_consistent` (whether by inconsistency or first-block-OK), perform a forward walk:
+
+```
+for ghost := pindex_consistent->pnext; ghost != nullptr; ghost = ghost->pnext:
+    abandoned_indexes.push_back(ghost)
+    abandoned_positions.insert(pack(ghost->nFile, ghost->nBlockPos))
+    if ghost->IsSuperblock(): ++sb_cross_count
+```
+
+This single forward pass catches:
+
+1. **The corruption-rewind case** — every block past the newly-discovered consistent tip (whether the chain had one stale block or eighty).
+2. **The ghost-only case** — when `pindex_consistent == pindexBest` (backward walk found tip coherent), the forward walk still enumerates any leftover ghosts from a prior interrupted Phase 2 and feeds them into the cleanup pipeline.
+
+`RunStartupCoherenceRecovery` no longer short-circuits the "no rewind needed" path when `abandoned_indexes` is non-empty — it logs the ghost-only case distinctly and runs the full cleanup pipeline (AbandonChainTo to re-persist the severed `hashNext`, CleanAbandonedRange to verify chainstate is consistent, PurgeOrphanedBlockIndexEntries to remove the resurrected entries from `mapBlockIndex` and LevelDB).
+
+### Collected state
+
+The walk pair collects two pieces of state for the downstream cleanup steps:
+
+- `abandoned_indexes`: the `CBlockIndex*` of every block past `pindex_consistent` (whether reached via the backward walk's failures or the forward walk's pnext enumeration). Consumed by `PurgeOrphanedBlockIndexEntries`.
+- `abandoned_positions`: the set of `(nFile, nBlockPos)` pairs for those blocks, packed into `uint64_t` for fast hash-set lookup. Consumed by `CleanTxdbAbandonedRange`.
+
+Collecting in the forward pass (rather than during the backward walk as originally drafted) avoids double-accounting when both inconsistency and ghosts coexist, and produces a deterministic enumeration order regardless of which corruption class triggered the walk.
 
 ## Abandonment-style rewind + surgical chainstate cleanup
 
@@ -69,9 +99,9 @@ Both checks use the same primitive — *"is this `CDiskTxPos`'s `(nFile, nBlockP
 
 The full Phase 2 abandonment sequence:
 
-1. `AbandonChainTo(pindex_consistent, txdb)` — updates in-memory chain globals (`pindexBest`, `nBestHeight`, `hashBestChain`, `g_chain_trust`, sync time), persists the new `hashBestChain` to LevelDB, and nulls `pindex_consistent->pnext` so the in-memory tree doesn't dangle forward from the new tip.
-2. `CleanTxdbAbandonedRange(abandoned_positions, txdb)` — one sequential scan of the `("tx", *)` keyspace in LevelDB. For each entry: delete if its `pos` is in the abandoned set; otherwise if any `vSpent[i]` is in the abandoned set, clear those specific `vSpent[i]` entries and rewrite the modified `CTxIndex`. Atomic via `TxnBegin`/`TxnCommit`. Two-pass (collect-then-apply) to avoid iterator invalidation while writing.
-3. `PurgeOrphanedBlockIndexEntries(abandoned_indexes)` — for each abandoned `CBlockIndex*`: `mapBlockIndex.erase(p->GetBlockHash())` then `delete p`. Frees the in-memory tree of the dead entries.
+1. `AbandonChainTo(pindex_consistent, txdb)` — updates in-memory chain globals (`pindexBest`, `nBestHeight`, `hashBestChain`, `g_chain_trust`, sync time), nulls `pindex_consistent->pnext` so the in-memory tree doesn't dangle forward from the new tip, persists the new `hashBestChain` to LevelDB, **and persists `CDiskBlockIndex(pindex_consistent)` so its on-disk `hashNext` is null**. The `WriteBlockIndex` call is the load-bearing durability piece: without it, the next `LoadBlockIndex` reconstructs `pindex_consistent->pnext` from the stale on-disk `hashNext` and the ghost chain resurrects on every subsequent boot. The function also handles the `pindex_consistent == pindexBest` case (no in-memory rewind needed, but the on-disk `hashNext` may still be stale from a prior interrupted Phase 2 — we always persist the severed state).
+2. `CleanTxdbAbandonedRange(abandoned_positions, txdb)` — one sequential scan of the `("tx", *)` keyspace in LevelDB. For each entry: delete if its `pos` is in the abandoned set; otherwise if any `vSpent[i]` is in the abandoned set, clear those specific `vSpent[i]` entries and rewrite the modified `CTxIndex`. Atomic via `TxnBegin`/`TxnCommit`. Two-pass (collect-then-apply) to avoid iterator invalidation while writing. **Implementation note**: the inner loop must call `iterator->Next()` on every iteration regardless of whether the current entry was queued for deletion or rewrite — an early `continue` after the queue insert (the bug that shipped in an early draft) loops forever on the first match and OOMs.
+3. `PurgeOrphanedBlockIndexEntries(txdb, abandoned_indexes)` — for each abandoned `CBlockIndex*`: `mapBlockIndex.erase(hash)` and `txdb.EraseBlockIndex(hash)`. **DO NOT call `delete` on the `CBlockIndex*`** — see "Block-index pool allocation" below.
 
 Wallet handling: any `mapWallet` entry whose confirming block hash was abandoned will, on the wallet load + rescan that follows in init step 8, detect that its confirming block no longer exists in `mapBlockIndex` and revert the tx to unconfirmed. Same code path as any small reorg's wallet behavior. No explicit mempool resurrection is needed in the abandonment path: in the canonical-chain re-supply case the same txs come back via blocks (re-confirmed at the same heights); in the divergent-reorg case other peers still hold the txs in their mempools and mempool relay supplies them back.
 
@@ -212,11 +242,36 @@ The first draft left abandoned `CBlockIndex` entries in `mapBlockIndex` "to be o
 
 Safety: the erasure runs at a specific point in init (after `LoadBlockIndex`, before `GRC::Initialize`) where no consumer holds references to the abandoned `CBlockIndex` objects. The abandoned entries are all descendants of `pindex_consistent`, so no non-abandoned entry's `pprev` points at them; `AbandonChainTo` already nulled `pindex_consistent->pnext`; Quorum / Tally / wallet / mempool / net are all not yet initialized. Doing this purge at *runtime* (e.g. from a reorg path) would be much harder because of live consumers.
 
-### `CDiskBlockIndex` orphans in LevelDB: leave them
+### Block-index pool allocation — never `delete` a `CBlockIndex*`
 
-Symmetric question to the `mapBlockIndex` purge: should we also erase the on-disk `CDiskBlockIndex` LevelDB entries for the abandoned range?
+`CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (`src/gridcoin/block_index.h`), backed by `std::forward_list<std::array<CBlockIndex, CHUNK_SIZE>>` — chunks of 32,768 contiguous objects with no per-object deallocation path. The class comment is explicit (block_index.h:54-55): *"The pool does not provide a way to return discarded objects because the application never removes or destroys block index entries."*
 
-**Decision: no.** In the canonical-supply case `AddToBlockIndex` overwrites them in place at the same key. In the reorg case they sit as unreachable dead weight in LevelDB but consume no RAM. The cost asymmetry runs the other way from `mapBlockIndex`: disk is cheap, RAM is not. Bookkeeping for a `txdb.Erase(make_pair("blockindex", hash))` per abandoned block would add complexity (and another `TxnCommit` envelope to think about) for marginal benefit. If exhaustive disk hygiene ever becomes desirable, it's a small follow-up.
+**Hard rule:** `mapBlockIndex.erase(hash)` is safe (only removes the lookup); calling `delete p` on a pool-allocated `CBlockIndex*` is **undefined behavior**. The address is in the middle of a `std::array`, not a heap allocation; `operator delete` corrupts the C++ runtime's free list at that address. The corruption surfaces *much later* — sometimes in a different thread, sometimes after another network round-trip — as `bad_alloc` or assertion failures in unrelated code.
+
+The original Phase 2 PurgeOrphanedBlockIndexEntries shipped with a `delete p` call. The symptom on first isolated-testnet validation: Phase 2 reported clean completion, the wallet caught up to peers, then on the next P2P-delivered block `assert(!pindexBest->pnext)` fired inside `DisconnectBlocksBatch` because heap corruption from the bogus `delete` had overwritten `pindex_consistent->pnext`'s slot with garbage that happened to dereference as a valid-looking `CBlockIndex*`. The fix is removing the `delete` — the pool slot leaks by design (a few hundred bytes per abandoned block, bounded by `-coherencewalkmax`), and the slot becomes inert because nothing in `mapBlockIndex` points at it and the on-disk `CDiskBlockIndex` record is also gone (see next section).
+
+### `CDiskBlockIndex` orphans in LevelDB — erase them
+
+**Decision reversed during testing.** The first draft argued that the disk records were harmless and could be left in place. They are not — they break Phase 2 durability.
+
+The failure mode: on first run, Phase 2 successfully rewinds `pindexBest` in memory and persists `hashBestChain`, but leaves the abandoned blocks' `CDiskBlockIndex` records in LevelDB unchanged. Crucially, those records carry the `hashNext` field from when the chain was longer — pointing into what is now the abandoned range. On the next restart, `LoadBlockIndex` rebuilds the in-memory tree from those `CDiskBlockIndex` records, including the stale `hashNext` linkages. The result: `pindex_consistent->pnext` is non-null again, pointing at the resurrected ghost chain. Phase 2's backward walk finds the tip coherent (it is — the rewound tip's data is intact on disk) and short-circuits with "no rewind needed." The first P2P-delivered block then trips `assert(!pindexBest->pnext)`.
+
+The fix is two-part:
+
+1. `AbandonChainTo` persists `CDiskBlockIndex(pindex_consistent)` after nulling its in-memory `pnext`, so the on-disk `hashNext` is also null on the new tip (closes one end of the ghost linkage at the boundary between surviving and abandoned ranges).
+2. `PurgeOrphanedBlockIndexEntries` erases each abandoned block's `CDiskBlockIndex` from LevelDB via a new `CTxDB::EraseBlockIndex(hash)` helper (closes the other end — the abandoned entries themselves are no longer in LevelDB, so `LoadBlockIndex` can't reconstruct them).
+
+Both are required: (1) alone leaves orphaned `CDiskBlockIndex` records that re-populate `mapBlockIndex` even though their `hashNext` chain terminates harmlessly; (2) alone leaves the rewound tip's `hashNext` pointing at a since-erased hash, which `InsertBlockIndex` resolves as nullptr — but only by accident, and only as long as the LevelDB erase actually persisted (which `Sync` should but is not guaranteed under a fresh crash before the next checkpoint).
+
+The reversal is asymmetric with the `mapBlockIndex` pool rule above: in memory we cannot free (pool constraint); on disk we must erase (durability requirement). The bookkeeping for `EraseBlockIndex` is a single LevelDB Delete per abandoned block, called inside the same scope as the existing `CleanTxdbAbandonedRange` write — no extra `TxnCommit` envelope, the cost noise vs. the chainstate scan is rounding error.
+
+### Phase 2 durability rule
+
+The combined design invariant — captured here so future work doesn't accidentally break it again:
+
+> After `RunStartupCoherenceRecovery` returns successfully, a clean restart must report `chain tip ... is coherent. No rewind needed.` and run zero cleanup work. If the second restart re-detects abandoned indexes or rewinds again, **Phase 2 has not converged** and there is a durability bug in either `AbandonChainTo` (failed to persist `hashNext=null` on the new tip) or `PurgeOrphanedBlockIndexEntries` (failed to erase abandoned `CDiskBlockIndex` from LevelDB).
+
+The durability is verified end-to-end by the truncation harness (Tier 3 below): stop wallet, truncate `blk*.dat` tail by 64 KiB, restart and verify Phase 2 rewinds + cleans up, wait for P2P re-sync, then **restart again** and verify the second startup reports "no rewind needed."
 
 ### No mempool resurrection in the abandonment path
 
@@ -259,7 +314,7 @@ End-to-end recovery validation needs to reproduce the failure modes that motivat
 
 - **Tier 1 — process-level interruption**. Bash wrapper that starts a `gridcoinresearch` against a fresh isolated-testnet datadir, lets it begin syncing, and `kill -9`s it at a configurable target height. Restart, parse the debug.log for the expected Phase 2 INFO lines, assert the chain re-syncs to the same tip as the control nodes. Doesn't reproduce Scenario C (page cache survives), but is a fast smoke test that the Phase 2 hook runs and the recovery code paths execute without crashing. Useful for routine validation and quick CI sketches.
 - **Tier 2 — `dm-flakey` device-mapper fault injection**. Sets up a dm-flakey device under the datadir's `blk*.dat` directory, configured to drop writes after a byte threshold. Runs IBD against the isolated testnet, dm-flakey drops `blk*.dat` writes mid-sync, the test then resets the dm device (dropping its pending writes effectively) and restarts the wallet. Reproduces Scenario A directly and a meaningful subset of Scenario C. Linux-only, ~50 lines of dm setup, requires root. This is the script most worth running before merge and after any change to Phase 1/Phase 2 code.
-- **Tier 3 — VMware VM with abrupt power-off**. Manual procedure documented in `tier3_vmware.md`. Uses an existing VMware Workstation instance on the developer's host (already configured). Snapshot before each test run for repeatability; start IBD inside the guest; from the host, `vmrun stop <vm> hard` (or equivalent) to abruptly drop the guest's page cache. Reboot the guest, observe Phase 2 recovery end-to-end. This is the most faithful reproduction of Scenario C in a real machine setting; left as a documented manual procedure rather than automation because the VMware lifecycle is host-specific.
+- **Tier 3 — deterministic `blk*.dat` tail truncation**. Scripted procedure (`tier3_truncate.sh`). Stop the wallet cleanly so the active `blk*.dat` is closed. Truncate the file tail by a configurable amount (default 64 KiB — picks off roughly 80 blocks at typical Gridcoin densities). Restart and observe Phase 2: the backward walk fails on the truncated tip, walks back until it finds a coherent block, runs the surgical `CleanAbandonedRange` + `PurgeOrphanedBlockIndexEntries` cleanup, then P2P re-supplies the truncated content from peers. After the chain re-syncs, the test does a **second** clean stop/restart and verifies Phase 2 reports "no rewind needed" — proving the durability invariant. Replaces an earlier draft that used VMware abrupt-power-off, which was hard to automate and only validated detection. Truncation gives the same on-disk symptom (block read fails) with the added benefit of being deterministic and parameterizable.
 
 Each tier has its own README and asserts the same recovery checklist:
 
@@ -280,3 +335,53 @@ Each tier has its own README and asserts the same recovery checklist:
 - The clamp must use `RegistryDB::StoreDBHeight()` directly on a `CTxDB` connection rather than going through any registry method that touches in-memory state — those don't exist yet at this point in init.
 - Log every step at INFO level. A user inspecting `debug.log` after a crash recovery should see a clear narrative: "detected mismatch at height N, walked back to height M, clamped registry bookmarks, resumed."
 - The in-code comment block alongside the bookmark-clamp call should restate the "Initialize loads everything, clamp only unblocks ApplyContracts skip" distinction so a future reader doesn't fall into the same intuition trap.
+
+## Bugs caught by isolated-testnet validation
+
+The first-draft implementation passed `test_gridcoin` and the Tier 1 smoke harness but failed on the first end-to-end isolated-testnet run (Tier 3 truncation). Four discrete bugs surfaced; each is captured here so future maintainers don't re-derive the lesson:
+
+### 1. `LoadBlockIndex` hard-failed on Scenario C, never reaching the Phase 2 hook
+
+**Symptom:** wallet showed modal "Error loading blkindex.dat" on the corrupted datadir; never ran Phase 2.
+
+**Root cause:** `LoadBlockIndex`'s 1000-block startup verification loop in `dbwrapper.cpp` aborted with a hard failure on the first `ReadBlockFromDisk` error.
+
+**Fix:** soft-fail on read errors in the verification loop — log a warning, break the loop, return success. The Phase 2 hook then sees the same corruption via the deliberate coherence walk and handles it via the recovery pipeline.
+
+### 2. `CleanAbandonedRange` infinite-looped on the first abandoned-tx match
+
+**Symptom:** wallet hung at "scanning CTxIndex" indefinitely; then `std::bad_alloc` as the work queue grew unbounded.
+
+**Root cause:** an early `continue` after `to_erase.push_back(...)` skipped the `iterator->Next()` call, which lived outside the try-block. The iterator stayed on the same key forever.
+
+**Fix:** restructure the inner loop as if/else so `iterator->Next()` is unconditional on every iteration.
+
+The initial misdiagnosis ("system under memory pressure") delayed the catch — the actual disk was fine and the bad_alloc was downstream of the unbounded queue. Always look at iterator semantics before blaming the environment.
+
+### 3. `PurgeOrphanedBlockIndexEntries` called `delete` on pool-allocated objects
+
+**Symptom:** Phase 2 reported clean completion; wallet caught up to peers via P2P; on the first P2P-delivered block past the rewound tip, `assert(!pindexBest->pnext)` fired inside `DisconnectBlocksBatch`.
+
+**Root cause:** `CBlockIndex` objects are allocated from `GRC::BlockIndexPool` (chunked `std::array`-backed; see `src/gridcoin/block_index.h:54-55`). Calling `delete` on a pool slot is undefined behavior — `operator delete` tried to free a heap chunk at the middle of a `std::array`, corrupting the C++ runtime's free list. The corruption surfaced minutes later when subsequent `CBlockIndex` pool slots got back garbage from the corrupted free list, including `pindex_consistent->pnext`.
+
+**Fix:** remove the `delete p` call. Pool slots leak by design (a few hundred bytes per abandoned block, bounded by `-coherencewalkmax`). Future maintainers must NEVER call `delete` on a `CBlockIndex*` — the constraint is documented in `src/gridcoin/block_index.h` and reiterated in the `PurgeOrphanedBlockIndexEntries` doc comment.
+
+### 4. Phase 2 wasn't durable across restarts (ghost-chain resurrection)
+
+**Symptom:** same `assert(!pindexBest->pnext)` again on the second clean restart, after fix #3 supposedly resolved it.
+
+**Root cause:** even with `delete` removed, the first Phase 2 run left stale `CDiskBlockIndex` records in LevelDB for the abandoned blocks, AND left the rewound tip's `CDiskBlockIndex.hashNext` field pointing into the abandoned range. On the next `LoadBlockIndex`, the in-memory tree was rebuilt with the ghost forward linkage. The backward coherence walk saw the tip was coherent (it really was — the rewound tip's block file data was fine) and returned "no rewind needed" — but `pindexBest->pnext` was non-null again, pointing at the resurrected ghost chain.
+
+**Fix:** three coordinated changes for durability:
+
+1. `VerifyChainCoherence` performs a forward `pnext` walk after the backward walk, catching ghost state even when the tip itself is coherent.
+2. `AbandonChainTo` persists `CDiskBlockIndex(pindex_consistent)` after nulling its in-memory `pnext`, so the on-disk `hashNext` is also null. Also drops the early-return when `pindex_target == pindexBest` so the ghost-only case still writes the severed state.
+3. `PurgeOrphanedBlockIndexEntries` erases each abandoned block's `CDiskBlockIndex` from LevelDB via a new `CTxDB::EraseBlockIndex(hash)` helper, so the entries can't re-populate `mapBlockIndex` on the next startup.
+
+The combined invariant — *"the second clean restart after Phase 2 recovery must report 'No rewind needed.'"* — is what the truncation harness validates.
+
+### Lessons
+
+- `test_gridcoin` validates the in-process happy path. The chain interactions (heap layout under prolonged use, durability across restarts, multi-node convergence) need on-machine validation. The isolated 3-node testnet is the right environment; the truncation harness is the right test driver.
+- The four bugs were diagnosed and fixed within a single multi-hour session, with each fix going through build → deploy → repoint → restart on the isolated testnet. The pattern is robust because each fix is a small, focused commit (one bug = one commit) and the test cycle is short enough that the binary diff is easy to reason about.
+- The pool-allocation rule (constraint #3) is the kind of architectural fact that's invisible from the call site. The fix added a doc comment to `PurgeOrphanedBlockIndexEntries`, a memory note in the project's cross-session memory, AND the explicit reference in this design doc — three independent surfaces because anyone touching block-index lifecycle in the future needs to hit at least one of them.
