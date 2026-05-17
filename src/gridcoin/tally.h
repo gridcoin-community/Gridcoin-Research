@@ -43,7 +43,7 @@ public:
     //!
     //! \return \c true if the tally initialized without an error.
     //!
-    static bool Initialize(CBlockIndex* pindex);
+    static bool Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Switch from legacy research age accrual calculations to the
@@ -54,7 +54,7 @@ public:
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
     //!
-    static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex);
+    static bool ActivateSnapshotAccrual(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     /*
     //!
@@ -156,7 +156,7 @@ public:
     //!
     //! \param cpid for which to calculate the accrual correction.
     //!
-    static CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock);
+    static CAmount GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get an initialized research reward accrual calculator.
@@ -254,7 +254,7 @@ public:
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    static bool ApplySuperblock(SuperblockPtr superblock);
+    static bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Reset the account data to a state before the provided superblock.

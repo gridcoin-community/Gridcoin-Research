@@ -743,7 +743,7 @@ bool TryLoadSuperblock(
     CBlock& block,
     CValidationState& state,
     const CBlockIndex* const pindex,
-    const GRC::Claim& claim)
+    const GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     GRC::SuperblockPtr superblock = block.GetSuperblock(pindex);
 
@@ -792,7 +792,7 @@ bool GridcoinConnectBlock(
     CTxDB& txdb,
     const int64_t stake_value_in,
     const int64_t total_claimed,
-    const int64_t fees)
+    const int64_t fees) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const GRC::Claim& claim = block.GetClaim();
 

@@ -648,7 +648,7 @@ bool BlockRewardRules::CheckMRCRewards(
 // CheckResearchReward — accrual lookup with newbie correction fallback
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckResearchReward(std::string& error_out) const
+bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const Claim& claim = m_block->GetClaim();
 

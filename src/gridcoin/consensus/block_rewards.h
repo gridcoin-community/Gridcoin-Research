@@ -9,6 +9,7 @@
 #include "primitives/transaction.h"
 #include "gridcoin/sidestake.h"
 #include "script.h"
+#include "sync.h"
 
 #include <string>
 #include <vector>
@@ -16,6 +17,7 @@
 class CBlock;
 class CBlockIndex;
 class CTransaction;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -214,7 +216,7 @@ private:
                          CAmount& mrc_fees, unsigned int& non_zero_outputs,
                          std::string& error_out) const;
 
-    bool CheckResearchReward(std::string& error_out) const;
+    bool CheckResearchReward(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     bool CheckBeaconSignature(std::string& error_out) const;
 
     // Legacy v9-v10 checks
