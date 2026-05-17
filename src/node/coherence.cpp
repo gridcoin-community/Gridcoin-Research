@@ -46,16 +46,33 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
     CBlock block;
 
     for (CBlockIndex* pindex = pindexBest; pindex; pindex = pindex->pprev) {
-        // Use the (block, nFile, nBlockPos, params, fReadTransactions=false)
-        // overload -- the lower-level one that actually touches disk. We
-        // deliberately do NOT use ReadBlockFromDisk(block, pindex, ...) with
+        // Use the (block, nFile, nBlockPos, params, fReadTransactions) overload --
+        // the lower-level one that actually touches disk. We deliberately do
+        // NOT use ReadBlockFromDisk(block, pindex, ...) with
         // fReadTransactions=false: that overload's no-transactions branch
         // copies the header from the in-memory pindex and returns true
         // without touching disk (blockstorage.cpp:99-104), which would make
         // this entire coherence check a no-op.
+        //
+        // fReadTransactions=true is mandatory here. With header-only reads, a
+        // truncation that lands mid-block (header intact at pindex->nBlockPos
+        // but the tx payload past EOF) passes the hash check on the
+        // recomputed header and gets declared consistent. Forward sync then
+        // appends new blocks past the truncation point, but later validation
+        // that reads transactions from inside the half-truncated block (e.g.
+        // ReadStakedInput resolving a coinstake's prev_tx via CTxIndex) seeks
+        // into the truncated region and deserializes whatever happens to be
+        // there. The bogus tx fails VerifySignature in CheckProofOfStakeV8
+        // and the chain wedges at the first peer-supplied block whose
+        // coinstake input lives in the partially-truncated block. Caught
+        // 2026-05-17 on isolated testnet slot 10 mid-Phase-2 PR #2941
+        // testing: truncation at 179477059 cut block 2763517 in half;
+        // forward sync ran fine for 688 blocks then failed at 2764206
+        // because its coinstake input (b8bdb239 in block 2763517) read back
+        // as a different tx (17dec1fe) from the truncated tail.
         const bool read_ok = ReadBlockFromDisk(
             block, pindex->nFile, pindex->nBlockPos,
-            Params().GetConsensus(), /*fReadTransactions=*/false);
+            Params().GetConsensus(), /*fReadTransactions=*/true);
 
         const bool coherent = read_ok && (block.GetHash(true) == pindex->GetBlockHash());
 
