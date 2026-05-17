@@ -200,7 +200,7 @@ bool RunStartupCoherenceRecovery()
     const int64_t raw_walkback = gArgs.GetArg("-coherencewalkmax", DEFAULT_COHERENCE_WALK_MAX);
     int max_walkback;
     if (raw_walkback < 1 || raw_walkback > std::numeric_limits<int>::max()) {
-        LogPrintf("WARN: %s: invalid -coherencewalkmax=%d (must be in [1, %d]); using default %d.",
+        LogPrintf("WARN: %s: invalid -coherencewalkmax=%" PRId64 " (must be in [1, %d]); using default %d.",
                   __func__, raw_walkback, std::numeric_limits<int>::max(), DEFAULT_COHERENCE_WALK_MAX);
         max_walkback = DEFAULT_COHERENCE_WALK_MAX;
     } else {

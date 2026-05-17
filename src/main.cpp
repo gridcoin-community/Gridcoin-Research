@@ -942,11 +942,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
     // (it uses m_expired_pending which only carries the latest SB's expired set --
     // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
-    // beacons from the prior SBs are lost. To recover correctness without paying the
-    // cost of an in-line chain replay during the reorg, we flag the beacon registry
-    // for rebuild on the next startup; GRC::RunStartupCoherenceRecovery (Phase 2 of
-    // issue #2865) services the flag by calling BeaconRegistry::Reset() before the
-    // normal InitializeContracts replay. See doc/block_corruption_recovery_design.md.
+    // beacons from the prior SBs are lost; the recovery is an in-line beacon
+    // registry rebuild after the disconnect loop completes (call site below at the
+    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
+    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
     int sb_cross_count = 0;
 
     while(pindexBest != pcommon)
