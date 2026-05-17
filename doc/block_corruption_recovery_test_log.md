@@ -361,6 +361,77 @@ No "pending beacon registry rebuild detected" line this restart — confirming `
 
 **Result: PASS** — the full runtime-reorg → flag-set → restart → flag-pickup → Reset → flag-clear cycle works end-to-end.
 
+### Iteration 9 — Tier 2 fault-injection crash harness (dm-flakey on isolated loop device)
+
+Goal: stress the *full software stack* (BDB wallet, LevelDB block index, blk\*.dat block files, ext4 filesystem) under random in-flight write corruption induced at the block layer, rather than surgical content damage targeted at blk\*.dat alone. This is a more "realistic" failure mode than the Tier 3 iterations: a power-loss-class event where many in-flight writes across many files become corrupted or lost simultaneously, instead of a precisely-known byte range in one block file.
+
+**Harness setup**
+
+- 8 GiB sparse backing file `/home/jco/isolated_Gridcoin_testnet/grc_t2_backing.img` on the same volume as the live testnet datadirs
+- Loop device on top of the backing file
+- `mkfs.ext4 -O ^has_journal` to mimic ext3 / non-journaled metadata behaviour (every metadata fsync hits the disk; no journal replay on remount; corruption is not papered over by the journal)
+- Pre-populated from snapper snapshot **2707** (testnet tip ≈ 2,755,994 — 13,007 blocks behind live, ~17 days of runway)
+- `dm-flakey` device on top of the loop with two distinct table configurations (see sub-iterations below)
+- Real slot 10 stopped via `gridcoin_wallet_control.sh stop 10` for the duration of the test; the harness daemon runs in the same `node3` ip-netns, connecting via the same `connect=192.168.57.101/102` peers as the real slot 10 conf
+
+**Sub-iteration 9a — `drop_writes` mode**
+
+dm-flakey table: `0 SECTORS flakey LOOP 0 30 15 1 drop_writes` (30 s pass-through, 15 s drops, repeating).
+
+The daemon was started against the prepared mount, caught up to the live tip (≈ 2,769,002 → 2,769,009) over the next minute. Drop windows then ran for ~125 s (≈ 3 cycles); during that time blocks 2,769,007 → 2,769,009 were processed. SIGKILL was issued at +125 s into the cycle, **5 seconds into the third DOWN window**, so any in-flight kernel writeback and the subsequent `umount` flush had their writes silently discarded by dm-flakey.
+
+After the kill, dm-flakey was reloaded with `up=60 down=0` (pass-through), the filesystem remounted, and the daemon restarted.
+
+Pre-kill chain tip:  block 2,769,009 (07:24:15)
+Post-restart hashBestChain:  block 2,769,008 (07:24:00)
+On-restart Phase 2 line:
+
+    INFO: RunStartupCoherenceRecovery: verifying chain coherence (walkback bound 10000).
+    INFO: RunStartupCoherenceRecovery: chain tip at height 2769008 is coherent. No rewind needed.
+
+LevelDB's `Sync()` for the commit-tip update that *would* have advanced `hashBestChain` to 2,769,009 landed during a drop window and was silently dropped. The wallet's persisted view of the tip therefore came back as 2,769,008 — Phase 1's barrier ordering (`FileCommit(blk*.dat)` strictly before `CTxDB::Sync()`) guarantees that when one half of the pair lands and the other doesn't, it's the *LevelDB-tip-commit* half that's missing, not the blk\*.dat half. Block 2,769,008's on-disk data was intact and re-hashed to its `CBlockIndex` hash; the coherence check passed without rewinding. P2P resynced the missing block within ~10 s.
+
+A single `ConnectInputs() : prev tx already used at (nFile=2, nBlockPos=139942532, nTxPos=139950042)` ERROR appeared on the restart and reflected a left-over chainstate marker for the missing tip block; the daemon advanced past it during the resync and reached 2,769,012 cleanly.
+
+**Result: PASS** — Phase 1's barrier ordering held under randomly-dropped writes. The Phase 2 *coherence check* ran and correctly reported a coherent tip; the Phase 2 *rewind path* was not triggered because Phase 1 made it unnecessary, which is the intended layering.
+
+**Sub-iteration 9b — `corrupt_bio_byte` mode**
+
+dm-flakey table: `0 SECTORS flakey LOOP 0 30 15 5 corrupt_bio_byte 100 w 0 0` (30 s pass-through, 15 s during which byte 100 of every write bio is replaced with `0x00`).
+
+The daemon synced through several down windows. Blocks 2,769,016 → 2,769,019 landed during the corrupt period; in particular, block 2,769,019's `SetBestChain` commit landed at 07:35:31 — 4 s into the down window of cycle 9, meaning both its blk\*.dat append and its LevelDB Sync had byte 100 of their write bios zeroed. SIGKILL followed at 07:36:59 (also during a down window), then dm-flakey was restored to pass-through, the filesystem remounted, and the daemon restarted.
+
+On restart, **Berkeley DB's own integrity check fired first**:
+
+    ERROR: CDB() : error BDB0087 DB_RUNRECOVERY: Fatal error, run database recovery (-30973) opening database environment
+    Gridcoin: Error initializing database environment ... To recover, BACKUP THAT DIRECTORY, then remove everything from it except for wallet.dat.
+    gridcoinresearch exiting...
+
+`wallet.dat` + the `database/` BDB-environment dir were then restored from snap 2707 (a clean BDB state), leaving `blk*.dat` + `txleveldb` carrying their corrupted iter-9b contents. The daemon was restarted; this time **LevelDB's MANIFEST checksum check fired**:
+
+    Opening LevelDB in /home/jco/isolated_Gridcoin_testnet/.GridcoinResearch3_flakey/testnet/txleveldb
+    AppInit()Exception1
+    EXCEPTION: St13runtime_error
+    init_blockindex(): error opening database environment Corruption: checksum mismatch: /home/jco/isolated_Gridcoin_testnet/.GridcoinResearch3_flakey/testnet/txleveldb/MANIFEST-183060
+    gridcoin in AppInit()
+
+The harness was stopped at this point; recovery from corrupted txleveldb would require `-reindex` (which rebuilds txleveldb from blk\*.dat, itself partially corrupted) or a fresh sync — operator-driven repair rather than automatic Phase 2 rewind.
+
+**Result: PASS for the *layered defence* it actually validates; INTENTIONAL NON-TRIGGER for the Phase 2 rewind path itself.**
+
+`corrupt_bio_byte` indiscriminately corrupts every write bio that lands in a down window — BDB wallet log records, LevelDB MANIFEST/SST/WAL records, and blk\*.dat appends all get a zeroed byte. The lower-layer checks (BDB DB_RUNRECOVERY, LevelDB MANIFEST CRC) catch their own corruption before control reaches Phase 2. Phase 2 is designed for one specific corruption mode that *evades* those checks: LevelDB is healthy and reports tip = N, but blk\*.dat content at N's recorded position hashes to something other than the `CBlockIndex` hash. Random whole-bio corruption is much more likely to be caught by LevelDB's CRCs first than to slip through to that specific Phase 2 trigger condition.
+
+The Phase 2 rewind path itself is exercised end-to-end by Iterations 1–7 above, which use surgical content damage (truncating exact byte ranges of blk\*.dat past a specific block index entry, or `SIGABRT` during `ConnectBlock` to produce a similar partial-write signature). Iteration 9b complements those by validating that *when the corruption pattern doesn't match Phase 2's trigger*, the system still fails safely at the BDB/LevelDB layer instead of corrupting consensus state.
+
+**Combined Tier 2 conclusion**
+
+| Sub-iteration | Layer that fired | Phase 2 rewind path exercised? |
+|---------------|-----------------|--------------------------------|
+| 9a `drop_writes` | Phase 1 barrier ordering (LevelDB rollback by 1 block) | Coherence check ran; reported coherent; no rewind needed |
+| 9b `corrupt_bio_byte` | BDB DB_RUNRECOVERY → after BDB restore, LevelDB MANIFEST CRC | No — corruption caught by lower layers first |
+
+Both sub-iterations demonstrate **graceful failure**: either the wallet recovers automatically (9a) or it stops with a clear error and recovery instructions (9b) instead of silently advancing a corrupt chain.
+
 ## All planned tests complete
 
 | Iteration | Tier | Outcome | Notes |
@@ -373,6 +444,8 @@ No "pending beacon registry rebuild detected" line this restart — confirming `
 | 6 | Multi-SB runtime reorg, deferred-flag design | PASS (but the design itself was flawed — see Iteration 7) | Flag set, picked up, cleared cleanly; fork window led to refactor |
 | 7 | Multi-SB runtime reorg, in-line rebuild | PASS | 303 ms beacon-registry rebuild during the reorg; no fork window; no post-reorg operator action required |
 | 8 | Tier 1 SIGKILL mid-sync | PASS | `SIGKILL` during forward-sync at height 2768823; post-restart Phase 2 reports `chain tip ... is coherent. No rewind needed.`; 0 Phase 1 failure signatures; chain converges with peers |
+| 9a | Tier 2 dm-flakey `drop_writes` (isolated loop, ext4 no-journal) | PASS | LevelDB tip-commit dropped, hashBestChain rolled back from 2769009 → 2769008; Phase 1 barrier ordering held; coherence check passed; clean P2P resync |
+| 9b | Tier 2 dm-flakey `corrupt_bio_byte` (isolated loop, ext4 no-journal) | PASS (layered defence) | BDB `DB_RUNRECOVERY` fires first; after restoring `wallet.dat`+`database/` from snap, LevelDB MANIFEST CRC fires; Phase 2 rewind path not triggered (random whole-bio corruption is caught by lower-layer checks before reaching Phase 2's narrow trigger condition). System fails safely in both cases. |
 
 ## Summary of fixes landed during this validation
 
