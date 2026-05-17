@@ -8,11 +8,14 @@
 #include "dbwrapper.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/registry.h"
+#include "gridcoin/staking/spam.h"
 #include "main.h"
 #include "node/blockstorage.h"
 #include "util.h"
 
 #include <limits>
+
+extern GRC::SeenStakes g_seen_stakes;
 
 namespace GRC {
 
@@ -356,6 +359,17 @@ bool RunStartupCoherenceRecovery()
     RegistryBookmarks bookmarks;
     int target_height = result.pindex_consistent->nHeight;
     bookmarks.UpdateRegistryBlockHeights(target_height);
+
+    // SeenStakes was populated by LoadBlockIndex's Refill(pindexBest) against
+    // the pre-rewind tip, so its 2048-slot proof table still contains kernel
+    // proofs from the blocks we just abandoned. Forward-sync from peers will
+    // re-supply those same blocks with the same (deterministic) proofs, which
+    // would each be rejected by AcceptBlock's duplicate-POS check (see
+    // src/validation.cpp ContainsProof()) and pile up as unconnectable
+    // orphans. Clear the table and Refill against the new tip so the only
+    // remembered proofs are from blocks at or below the rewound height.
+    g_seen_stakes.Clear();
+    g_seen_stakes.Refill(pindexBest);
 
     LogPrintf("INFO: %s: registry bookmarks reconciled to height %d. Phase 2 recovery complete; "
               "P2P sync will re-supply blocks past the rewound tip.",

@@ -130,6 +130,20 @@ public:
     }
 
     //!
+    //! \brief Reset the kernel-proof slots to empty.
+    //!
+    //! Used by the Phase 2 startup coherence recovery path (issue #2865)
+    //! after a rewind: the proofs of abandoned blocks must be evicted
+    //! before \c Refill repopulates from the new tip, otherwise the same
+    //! blocks re-supplied via P2P would be rejected as duplicate
+    //! proof-of-stake.
+    //!
+    void Clear()
+    {
+        m_proofs_seen = {};
+    }
+
+    //!
     //! \brief Fill the container with proof hashes near the chain tip.
     //!
     //! \param pindex Points to the block index for the chain tip.
