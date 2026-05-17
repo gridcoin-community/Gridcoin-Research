@@ -29,9 +29,7 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
     return whichType != TX_NONSTANDARD;
 }
 
-// TODO(#2869 Phase 2 — policy): nBestHeight reads need cs_main. Production
-// caller AcceptToMemoryPool holds it; tests in script_p2sh_tests.cpp do not.
-bool IsStandardTx(const CTransaction& tx) NO_THREAD_SAFETY_ANALYSIS
+bool IsStandardTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::string reason = "";
     if (tx.nVersion > CTransaction::CURRENT_VERSION)

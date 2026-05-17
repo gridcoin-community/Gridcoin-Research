@@ -691,9 +691,12 @@ public:
     //!
     //! https://github.com/gridcoin-community/Gridcoin-Research/issues/87
     //!
-    // TODO(#2869 Phase 2 — voting): pindexBest read needs cs_main. Per the
-    // standing voting-redesign work, this whole class is set to be replaced;
-    // suppress for now to keep Phase 1 in scope.
+    // TODO(#2869 — voting): pindexBest read needs cs_main. Reached from
+    // ProcessLegacyVote, whose call site already has a pragma suppression
+    // because the surrounding VoteResolver chain does not hold cs_main.
+    // The standing voting-redesign work replaces this legacy class entirely;
+    // leaving the suppression in place rather than restructuring caller
+    // chains that the redesign will remove.
     Weight GetMagnitudeFactor() NO_THREAD_SAFETY_ANALYSIS
     {
         if (m_magnitude_factor != 0) {
@@ -1106,8 +1109,7 @@ private:
 //!
 //! \return Latest superblock active during the poll.
 //!
-// TODO(#2869 Phase 2 — voting): pindexBest walk needs cs_main.
-SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) NO_THREAD_SAFETY_ANALYSIS
+SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     SuperblockPtr superblock = Quorum::CurrentSuperblock();
 
@@ -1142,8 +1144,7 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) NO_THREAD_SAFETY_ANALYS
 //! \return Money supply as of the last block in the poll window in units of
 //! 1/100000000 GRC.
 //!
-// TODO(#2869 Phase 2 — voting): pindexBest reads need cs_main.
-CAmount ResolveMoneySupplyForPoll(const Poll& poll) NO_THREAD_SAFETY_ANALYSIS
+CAmount ResolveMoneySupplyForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!poll.Expired(pindexBest->nTime)) {
         return pindexBest->nMoneySupply;

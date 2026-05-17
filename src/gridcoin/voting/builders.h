@@ -5,10 +5,13 @@
 #ifndef GRIDCOIN_VOTING_BUILDERS_H
 #define GRIDCOIN_VOTING_BUILDERS_H
 
+#include "sync.h"
 #include "gridcoin/voting/poll.h"
 
 #include <memory>
 #include <vector>
+
+extern CCriticalSection cs_main;
 
 class CWallet;
 class CWalletTx;
@@ -49,7 +52,7 @@ public:
     //!
     //! \throws VotingError If the version is not valid for the current wallet height.
     //!
-    PollBuilder SetPayloadVersion(uint32_t version);
+    PollBuilder SetPayloadVersion(uint32_t version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Set the type of the poll.
@@ -344,7 +347,7 @@ public:
     //!
     //! \throws VotingError If the constructed vote is malformed.
     //!
-    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version);
+    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 private:
     const Poll* m_poll;           //!< The poll to create a vote contract for.
