@@ -7,9 +7,9 @@ Running design document for the four-phase plan in issue #2865. Updated as each 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Coordination invariant: `blk*.dat` fsync paired with LevelDB WAL fsync barrier; shutdown flush after `StopNode()`; surface `FileCommit` / `CTxDB::Sync` failures | Merged 2026-05-15 (PR #2939) |
-| 2 | Startup index-vs-file consistency walk; automatic abandonment-style rewind to last consistent block; registry bookmark clamp; beacon registry rebuild on SB boundary cross (Phase 2 abandonment + standard reorg path); crash harness (Tier 1 + Tier 2 + Tier 3) | PR #2941 open; isolated-testnet validation complete across 9 iterations (Tier 1 + Tier 2 ×2 + Tier 3 ×4 + multi-SB runtime reorg) |
-| 3 | `blk*.dat` tail truncation of partial-record debris | Deferred |
-| 4 | User-facing recovery UX messaging | Deferred |
+| 2 | Startup index-vs-file consistency walk; automatic abandonment-style rewind to last consistent block; registry bookmark clamp; beacon registry rebuild on SB boundary cross (Phase 2 abandonment + standard reorg path); crash harness (Tier 1 + Tier 2 + Tier 3) | Merged 2026-05-18 (PR #2941); validated across 9 isolated-testnet iterations |
+| 3 | `blk*.dat` tail truncation of partial-record debris | Not pursued — see "Phase 3 and Phase 4 — not pursued" below |
+| 4 | User-facing recovery UX messaging | Not pursued — see "Phase 3 and Phase 4 — not pursued" below |
 
 This document focuses on Phase 2 — the recovery code that actually *consumes* Phase 1's coordination invariant. Phase 1 by itself only guarantees that the on-disk LevelDB index never references unfsynced `blk*.dat` data; it doesn't recover from a state that violates that guarantee. Phase 2 is the recovery side.
 
@@ -326,8 +326,32 @@ Each tier has its own README and asserts the same recovery checklist:
 
 ## Out of scope for Phase 2
 
-- **`blk*.dat` tail truncation** — Phase 3. The walk-back identifies the last coherent block but leaves any garbage bytes past it in place. The next `AppendBlockFile` seeks to end-of-file, so new block writes go *past* the garbage tail — correct, but the tail accumulates. Phase 3 truncates it.
-- **User-facing UX** — Phase 4. Phase 2 logs to debug.log; Phase 4 surfaces friendly messages in the GUI.
+- **`blk*.dat` tail truncation** — Phase 3. The walk-back identifies the last coherent block but leaves any garbage bytes past it in place. The next `AppendBlockFile` seeks to end-of-file, so new block writes go *past* the garbage tail — correct, but the tail accumulates. Phase 3 would truncate it.
+- **User-facing UX** — Phase 4. Phase 2 logs to debug.log; Phase 4 would surface a friendly tray notification in the GUI when an actual rewind occurs.
+
+## Phase 3 and Phase 4 — not pursued
+
+Both phases were scoped in the original issue (#2865) but declined post-Phase-2-merge after a cost/value review. Recording the rationale here so a future maintainer doesn't redo the analysis.
+
+**Phase 3 (blk\*.dat tail truncation) — declined.**
+
+A crash leaves at most **one** partial record after the last fsynced block — the in-flight block whose magic+size+body never finished hitting disk. After Phase 2 rewinds the index, `AppendBlockFile` writes new blocks at EOF, so the partial bytes become dead space *between* the last valid block and the next new write. The block reader navigates by `CBlockIndex.nBlockPos` and never touches those dead bytes — they're invisible to correctness; they only cost a small amount of disk space.
+
+Cost ceiling: per crash, at most one block's worth of dead space (testnet ~3 KB, mainnet ~5–10 KB; less if the crash hit mid-magic-write). "Crashes during block write" is the rare-of-rare event — Phase 1 already narrowed the fsync window dramatically. Even a misbehaving node hitting 100 such crashes over a 10-year lifetime accumulates under 1 MB of dead space on a multi-GB block store.
+
+Phase 3's implementation cost would be non-trivial — knowing where the last valid block ends, handling the cross-file straddle (partial record spanning `blk0001.dat → blk0002.dat`), being careful not to truncate good bytes if the crash signature is misread. All for sub-MB cleanup of an event that's already rare. Doesn't pay back its complexity. **Dropped.**
+
+**Phase 4 (recovery UX) — declined.**
+
+Phase 2 was originally scoped with the assumption that users would want a friendly explanation of what was detected and what was done. In practice, Phase 2's measured behaviour reduced the value of that messaging:
+
+- The common case (tip coherent, no rewind needed) is silent on the GUI side and finishes in milliseconds — no user-visible delay, no need to explain anything.
+- The actual-rewind case completes the on-disk repair in well under a second on SSD (Iter 7 measured the related in-line beacon rebuild at 303 ms; Phase 2's coherence walk + abandonment + cleanup is faster because it doesn't replay contracts). The user then sees the existing "syncing" indicator as P2P re-supplies the abandoned blocks — which already conveys "the wallet is doing something normal" without an extra dialog.
+- The exhausted-walk case (`-coherencewalkmax` hit) already fails startup with a clear ERROR log instructing the user to `-reindex`. That's already adequate operator-facing guidance; a fancier dialog adds nothing.
+
+A minimal Phase 4 (single `ThreadSafeMessageBox` tray notification on actual rewind, daemon-skipped via `fQtActive`) was scoped — ~15 lines, one file. Even at that minimum cost, the value calculus was poor: most users will never see Phase 2 fire in their lifetime, and those who do already see the wallet recover quickly and start syncing. The notification would also have a reliability caveat (timing during init, before the main GUI window is fully constructed) that would either need testing or a deferred-notification fallback. Net: not worth shipping. **Dropped.**
+
+If field reports ever show Phase 3 or Phase 4 value (large accumulated dead space, confused users), revisit. As of the Phase 2 merge, neither is on the roadmap.
 
 ## Notes for the implementer
 
