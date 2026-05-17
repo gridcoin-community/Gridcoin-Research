@@ -708,6 +708,31 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         assert(false);
     case Qt::ToolTipRole:
         return formatTooltip(rec);
+    case Qt::AccessibleTextRole:
+        // For screen readers (issue #2604). Column 0 (Status) returns a full row
+        // description so QListView consumers (e.g. OverviewPage's recent-transactions
+        // list, which displays only the Status column with a custom delegate that
+        // composes multiple roles visually) get a meaningful announcement instead of
+        // silence. Other columns return "<header>: <value>" so QTableView consumers
+        // (transaction history) get contextual per-cell navigation.
+        switch (column) {
+        case Status:
+            return tr("%1, %2 %3, amount %4, %5")
+                .arg(formatTxDate(rec),
+                     formatTxType(rec),
+                     formatTxToAddress(rec, true),
+                     formatTxAmount(rec),
+                     rec->status.countsForBalance ? tr("confirmed") : tr("unconfirmed"));
+        case Date:
+            return tr("Date: %1").arg(formatTxDate(rec));
+        case Type:
+            return tr("Type: %1").arg(formatTxType(rec));
+        case ToAddress:
+            return tr("Address: %1").arg(formatTxToAddress(rec, true));
+        case Amount:
+            return tr("Amount: %1").arg(formatTxAmount(rec));
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     case Qt::TextAlignmentRole:
         return column_alignments[index.column()];
     case Qt::ForegroundRole:

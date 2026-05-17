@@ -166,6 +166,7 @@ OverviewPage::OverviewPage(QWidget *parent) :
     // Recent Transactions
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->listTransactions->setAccessibleName(tr("Recent transactions"));
     updateTransactions();
 
     connect(ui->listTransactions, &QListView::clicked, this, &OverviewPage::handleTransactionClicked);
