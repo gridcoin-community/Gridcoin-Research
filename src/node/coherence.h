@@ -89,11 +89,6 @@ bool RewindToConsistentTip(CBlockIndex* pindex_target) EXCLUSIVE_LOCKS_REQUIRED(
 //! step so debug.log shows a clear narrative of what was detected and what
 //! was done.
 //!
-//! Also services the deferred-rebuild flag set by the runtime reorg path
-//! (see SetBeaconRebuildPending / IsBeaconRebuildPending below) -- if a
-//! prior multi-SB reorg requested a beacon rebuild, this is where it
-//! actually happens, before the registries reload from LevelDB.
-//!
 //! Returns true on success (including the no-rewind-needed case).
 //! Returns false on either of:
 //!   - exhausted: corruption beyond -coherencewalkmax; user must -reindex.
@@ -110,29 +105,11 @@ bool RewindToConsistentTip(CBlockIndex* pindex_target) EXCLUSIVE_LOCKS_REQUIRED(
 //! Must be called with cs_main held.
 bool RunStartupCoherenceRecovery() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-//! Deferred beacon-registry rebuild flag, persisted to LevelDB.
-//!
-//! Set by the runtime reorg path (DisconnectBlocksBatch) when a reorg
-//! crosses two or more superblock boundaries -- a scenario where
-//! BeaconRegistry::Deactivate cannot resurrect expired pending beacons
-//! from prior SBs because m_expired_pending only carries the LATEST SB's
-//! set (the limitation acknowledged at beacon.cpp:1265-1273).
-//!
-//! Checked at startup by RunStartupCoherenceRecovery, which calls
-//! BeaconRegistry::Reset() and clears the flag before the registries
-//! reload, so InitializeContracts will replay beacons from V11_height
-//! forward and rebuild cleanly.
-//!
-//! Single-SB reorgs are NOT flagged -- the existing Deactivate path is
-//! fidelity-correct for that case and the rebuild would be wasted work.
-//!
-//! All three functions write to a single LevelDB key
-//! ("beacon_db", "needs_rebuild"). Failures are logged but not fatal --
-//! the worst case is "user notices stale beacon state and restarts again,"
-//! which still recovers via the next pass.
-bool IsBeaconRebuildPending();
-void SetBeaconRebuildPending();
-void ClearBeaconRebuildPending();
+// (The deferred-rebuild flag mechanism was replaced with an in-line
+// rebuild in GRC::RebuildBeaconRegistry (see gridcoin/gridcoin.h), called
+// directly from DisconnectBlocksBatch when sb_cross_count >= 2. The in-line
+// rebuild closes the fork window that the deferred approach left open --
+// see doc/block_corruption_recovery_design.md.)
 
 } // namespace GRC
 

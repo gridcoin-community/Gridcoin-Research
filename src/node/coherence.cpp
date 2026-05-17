@@ -171,57 +171,14 @@ bool RewindToConsistentTip(CBlockIndex* pindex_target)
     return AbandonChainTo(pindex_target, txdb);
 }
 
-namespace {
-//! LevelDB key for the deferred beacon-registry rebuild flag set by the
-//! runtime reorg path (DisconnectBlocksBatch) when 2+ SBs are crossed.
-const std::pair<std::string, std::string> BEACON_REBUILD_KEY =
-    std::make_pair("beacon_db", "needs_rebuild");
-} // anonymous namespace
-
-bool IsBeaconRebuildPending()
-{
-    CTxDB txdb("r");
-
-    // Distinguish "key absent" (no pending rebuild) from "key present but read
-    // failed" (treat as pending and log -- we'd rather pay a spurious rebuild
-    // than silently skip a needed one). The presence check is cheap because
-    // the key is small and the read of pending is at most 1 byte.
-    if (!txdb.ExistsGenericSerializable(BEACON_REBUILD_KEY)) {
-        return false;
-    }
-
-    bool pending = false;
-    if (!txdb.ReadGenericSerializable(BEACON_REBUILD_KEY, pending)) {
-        LogPrintf("WARN: %s: beacon-rebuild key exists but read failed; treating as pending so the "
-                  "rebuild fires on this startup.", __func__);
-        return true;
-    }
-    return pending;
-}
-
-void SetBeaconRebuildPending()
-{
-    CTxDB txdb;
-    if (!txdb.WriteGenericSerializable(BEACON_REBUILD_KEY, true)) {
-        LogPrintf("WARN: %s: failed to persist beacon-rebuild flag; rebuild will not happen on next restart "
-                  "until the flag is set again or -clearallregistryhistory is used.", __func__);
-    }
-}
-
-void ClearBeaconRebuildPending()
-{
-    CTxDB txdb;
-    // Erase rather than write-false so the key doesn't accumulate as inert
-    // dead weight in the DB. Erase is idempotent on a missing key, so we
-    // log only on a hard error (which leaves the key as `true` and means
-    // the rebuild will fire again on the next restart -- harmless but
-    // wasteful, hence the warning).
-    auto key = BEACON_REBUILD_KEY;
-    if (!txdb.EraseGenericSerializable(key)) {
-        LogPrintf("WARN: %s: failed to erase beacon-rebuild flag; rebuild will fire again on the next restart "
-                  "(harmless but wasteful).", __func__);
-    }
-}
+// NOTE: the previous deferred-rebuild flag mechanism
+// (IsBeaconRebuildPending / SetBeaconRebuildPending /
+// ClearBeaconRebuildPending) was removed when DisconnectBlocksBatch
+// switched to an in-line rebuild via GRC::RebuildBeaconRegistry (see
+// gridcoin/gridcoin.{h,cpp}). The deferred approach left a fork window
+// between the runtime reorg and the next restart; in-line rebuild closes
+// it for the cost of a few seconds of frozen wallet on SSD. See
+// doc/block_corruption_recovery_design.md.
 
 bool RunStartupCoherenceRecovery()
 {
@@ -229,28 +186,8 @@ bool RunStartupCoherenceRecovery()
 
     if (gArgs.GetBoolArg("-reindex", false)) {
         // User is already rebuilding; the walk would be redundant.
-        // The pending-rebuild flag, if set, will be wiped by the reindex
-        // path's own registry clear; safe to skip our handling here.
         LogPrintf("INFO: %s: -reindex set; skipping coherence walk.", __func__);
         return true;
-    }
-
-    // Service any deferred beacon-registry rebuild requested by the runtime
-    // reorg path (DisconnectBlocksBatch sets the flag on a 2+ SB reorg
-    // because Deactivate cannot fully resurrect prior-SB expired-pending
-    // beacons -- see beacon.cpp:1265-1273). Reset() wipes both in-memory
-    // and LevelDB beacon state; the subsequent GRC::Initialize ->
-    // InitializeContracts -> ApplyContracts pass will replay beacon
-    // contracts from V11_height forward and rebuild cleanly.
-    //
-    // If the coherence walk below also detects an SB crossing, it will
-    // call Reset() again -- idempotent, harmless.
-    if (IsBeaconRebuildPending()) {
-        LogPrintf("INFO: %s: pending beacon registry rebuild detected (from prior multi-SB reorg); "
-                  "resetting beacon registry now so it will be rebuilt from V11_height on the "
-                  "InitializeContracts replay below.", __func__);
-        GetBeaconRegistry().Reset();
-        ClearBeaconRebuildPending();
     }
 
     // gArgs.GetArg with an integer default returns int64_t; the user-supplied

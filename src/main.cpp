@@ -18,6 +18,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/gridcoin.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
@@ -1071,21 +1072,30 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
         // above could not fully resurrect expired-pending beacons from the prior SBs
         // (m_expired_pending only carries the most recent SB's set -- the limitation
-        // acknowledged at beacon.cpp:1265-1273). Rather than try to do a multi-minute in-line
-        // beacon registry replay inside the reorg path (under cs_main), flag the registry
-        // for rebuild on the next startup. GRC::RunStartupCoherenceRecovery checks the flag
-        // and calls BeaconRegistry::Reset() before the registries reload, so the subsequent
-        // InitializeContracts pass replays beacon contracts from V11_height forward and
-        // rebuilds cleanly.
+        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
+        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
+        // from V11_height to the current (common-ancestor) tip, leaving the registry
+        // correctly reflecting that ancestor's state, and the subsequent per-block
+        // Activate() calls on the reconnect side then bring the registry up to the
+        // new tip.
         //
-        // Single-SB reorgs are NOT flagged: the existing Deactivate path handles them
-        // correctly and the rebuild would be wasted work on the most common case.
+        // Doing this in-line (rather than deferring to a flag picked up on next
+        // startup) trades a few seconds of frozen-wallet time for closing the fork
+        // window: with the deferred approach, any block validated between this reorg
+        // and the next restart could consult the broken registry and diverge from
+        // healthy peers. In-line rebuild is bounded by the chain walk from V11 to
+        // tip, which is dominated by block-index iteration -- on SSD typically
+        // single-digit seconds. See doc/block_corruption_recovery_design.md.
+        //
+        // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
+        // fidelity-correct for that case and the rebuild would be wasted work on
+        // the most common case.
         if (sb_cross_count >= 2) {
             LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
-                      "fidelity is degraded for the prior SB(s). Flagging beacon registry for rebuild "
-                      "on next startup. Until restart, beacon-related queries may show stale entries.",
+                      "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
+                      "to maintain consensus.",
                       __func__, sb_cross_count);
-            GRC::SetBeaconRebuildPending();
+            GRC::RebuildBeaconRegistry();
         }
     }
 

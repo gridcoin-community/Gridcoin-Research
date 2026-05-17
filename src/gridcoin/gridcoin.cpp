@@ -204,11 +204,6 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
     return true;
 }
 
-//!
-//! \brief Reload historical contract state from the blockchain.
-//!
-//! \param pindexBest Block index of the tip of the chain.
-//!
 void InitializeContracts(CBlockIndex* pindexBest)
 {
     // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
@@ -644,9 +639,62 @@ std::unique_ptr<Upgrade> g_UpdateChecker;
 bool fSnapshotRequest = false;
 bool fResetBlockchainRequest = false;
 
+// fQtActive lives in main.cpp; declared extern here so RebuildBeaconRegistry
+// can suppress the GUI popup in daemon mode.
+extern bool fQtActive;
+
 // -----------------------------------------------------------------------------
 // Functions
 // -----------------------------------------------------------------------------
+
+void GRC::RebuildBeaconRegistry()
+{
+    AssertLockHeld(cs_main);
+
+    LogPrintf("INFO: %s: starting in-line beacon registry rebuild after multi-SB runtime reorg.", __func__);
+
+    // Non-blocking informational popup in the GUI ONLY. In daemon mode the
+    // log line above is the entire notification -- no stderr spam, no popup
+    // attempt. (uiInterface.ThreadSafeMessageBox in daemon mode does a
+    // stderr write and a duplicate log line per qt/bitcoin.cpp:129, both
+    // of which add noise without informing anything that wasn't already in
+    // debug.log.)
+    //
+    // For the GUI: the non-MODAL flag posts via Qt's QueuedConnection so
+    // the calling thread continues into the rebuild immediately -- the
+    // popup appears in parallel with the work. The operator sees a brief
+    // "rebuilding beacon registry" notice while the wallet is unresponsive;
+    // they dismiss the popup at their convenience (it does NOT auto-dismiss).
+    // The rebuild itself only takes seconds on SSD.
+    if (fQtActive) {
+        uiInterface.ThreadSafeMessageBox(
+            _("Gridcoin detected a multi-superblock chain reorganization and is "
+              "rebuilding the beacon registry to maintain consensus with the "
+              "network. The wallet may be briefly unresponsive while the "
+              "rebuild runs."),
+            "Gridcoin",
+            CClientUIInterface::BTN_OK | CClientUIInterface::ICON_INFORMATION);
+    }
+
+    const int64_t start_ms = GetTimeMillis();
+
+    // Wipe the beacon registry (in-memory and LevelDB beacon db). The
+    // subsequent InitializeContracts will re-Initialize the now-empty
+    // beacon db and ReplayContracts will walk forward from V11_height
+    // applying beacon contracts to rebuild the registry from scratch.
+    GetBeaconRegistry().Reset();
+
+    // InitializeContracts re-Initializes every contract-type registry and
+    // runs ReplayContracts. Other registries (scrapers, projects, polls,
+    // votes) are already initialized in memory; their Initialize calls are
+    // idempotent and the replay's "already covered" logic (see comments in
+    // InitializeContracts) skips contracts that fall within their existing
+    // DB coverage. Only the wiped beacon registry receives a full
+    // V11_height-forward replay.
+    InitializeContracts(pindexBest);
+
+    LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
+}
 
 bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
 {
