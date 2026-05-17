@@ -26,6 +26,7 @@ PollDetails::PollDetails(QWidget* parent)
 
     ui->additionalFieldsTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->additionalFieldsTableView->sortByColumn(AdditionalFieldsTableModel::Required, Qt::DescendingOrder);
+    ui->additionalFieldsTableView->setAccessibleName(tr("Poll additional fields"));
 }
 
 PollDetails::~PollDetails()
