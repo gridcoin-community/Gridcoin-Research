@@ -320,27 +320,36 @@ bool CTxDB::CleanAbandonedRange(const std::unordered_set<uint64_t>& abandoned_po
                     // sweep its vSpent because by definition no later tx
                     // in a non-abandoned block could have spent it (the
                     // abandoned block was the tip of the chain).
+                    //
+                    // NOTE: do NOT `continue` here. `iterator->Next()` is
+                    // outside the try/catch, and `continue` would skip past
+                    // it, leaving the iterator parked on the same entry and
+                    // re-entering the body forever. (Hit this in the
+                    // 2026-05-16 isolated-testnet Tier 3 run -- 11 min spin
+                    // pushing the same hashTx until bad_alloc.) Fall
+                    // through to the end of the try body and let the
+                    // post-try iterator->Next() advance.
                     to_erase.push_back(hashTx);
-                    continue;
-                }
-
-                // The tx itself was confirmed in a kept block, but one or
-                // more of its outputs may carry a vSpent[i] marker pointing
-                // into an abandoned block (a child tx in that block spent
-                // the output). Clear those specific entries; rewrite the
-                // CTxIndex only if at least one slot changed.
-                bool modified = false;
-                for (CDiskTxPos& spent : txindex.vSpent) {
-                    if (spent.IsNull()) continue;
-                    const uint64_t spent_key = GRC::PackBlockFilePos(spent.nFile, spent.nBlockPos);
-                    if (abandoned_positions.count(spent_key)) {
-                        spent.SetNull();
-                        modified = true;
-                        if (out_vspent_cleared) ++(*out_vspent_cleared);
+                } else {
+                    // The tx itself was confirmed in a kept block, but one
+                    // or more of its outputs may carry a vSpent[i] marker
+                    // pointing into an abandoned block (a child tx in that
+                    // block spent the output). Clear those specific
+                    // entries; rewrite the CTxIndex only if at least one
+                    // slot changed.
+                    bool modified = false;
+                    for (CDiskTxPos& spent : txindex.vSpent) {
+                        if (spent.IsNull()) continue;
+                        const uint64_t spent_key = GRC::PackBlockFilePos(spent.nFile, spent.nBlockPos);
+                        if (abandoned_positions.count(spent_key)) {
+                            spent.SetNull();
+                            modified = true;
+                            if (out_vspent_cleared) ++(*out_vspent_cleared);
+                        }
                     }
-                }
-                if (modified) {
-                    to_rewrite.emplace_back(hashTx, std::move(txindex));
+                    if (modified) {
+                        to_rewrite.emplace_back(hashTx, std::move(txindex));
+                    }
                 }
             } catch (const std::exception& e) {
                 LogPrintf("ERROR: %s: deserialize error during ('tx', *) scan: %s", __func__, e.what());
