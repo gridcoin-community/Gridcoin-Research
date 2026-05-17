@@ -12,6 +12,8 @@
 #include "node/blockstorage.h"
 #include "util.h"
 
+#include <limits>
+
 namespace GRC {
 
 CoherenceResult VerifyChainCoherence(int max_walkback)
@@ -67,12 +69,14 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
         ++walked;
         if (walked >= max_walkback) {
             result.exhausted = true;
+            result.pindex_consistent = nullptr;
             return result;
         }
 
         if (!pindex->pprev) {
             // Walked off genesis without finding a consistent block.
             result.exhausted = true;
+            result.pindex_consistent = nullptr;
             return result;
         }
     }
@@ -124,9 +128,20 @@ const std::pair<std::string, std::string> BEACON_REBUILD_KEY =
 bool IsBeaconRebuildPending()
 {
     CTxDB txdb("r");
+
+    // Distinguish "key absent" (no pending rebuild) from "key present but read
+    // failed" (treat as pending and log -- we'd rather pay a spurious rebuild
+    // than silently skip a needed one). The presence check is cheap because
+    // the key is small and the read of pending is at most 1 byte.
+    if (!txdb.ExistsGenericSerializable(BEACON_REBUILD_KEY)) {
+        return false;
+    }
+
     bool pending = false;
     if (!txdb.ReadGenericSerializable(BEACON_REBUILD_KEY, pending)) {
-        return false;
+        LogPrintf("WARN: %s: beacon-rebuild key exists but read failed; treating as pending so the "
+                  "rebuild fires on this startup.", __func__);
+        return true;
     }
     return pending;
 }
@@ -143,8 +158,14 @@ void SetBeaconRebuildPending()
 void ClearBeaconRebuildPending()
 {
     CTxDB txdb;
-    if (!txdb.WriteGenericSerializable(BEACON_REBUILD_KEY, false)) {
-        LogPrintf("WARN: %s: failed to clear beacon-rebuild flag; rebuild will fire again on the next restart "
+    // Erase rather than write-false so the key doesn't accumulate as inert
+    // dead weight in the DB. Erase is idempotent on a missing key, so we
+    // log only on a hard error (which leaves the key as `true` and means
+    // the rebuild will fire again on the next restart -- harmless but
+    // wasteful, hence the warning).
+    auto key = BEACON_REBUILD_KEY;
+    if (!txdb.EraseGenericSerializable(key)) {
+        LogPrintf("WARN: %s: failed to erase beacon-rebuild flag; rebuild will fire again on the next restart "
                   "(harmless but wasteful).", __func__);
     }
 }
@@ -179,7 +200,22 @@ bool RunStartupCoherenceRecovery()
         ClearBeaconRebuildPending();
     }
 
-    const int max_walkback = gArgs.GetArg("-coherencewalkmax", DEFAULT_COHERENCE_WALK_MAX);
+    // gArgs.GetArg with an integer default returns int64_t; the user-supplied
+    // value comes in as a signed decimal with no validation. A negative or
+    // zero value would silently disable the walk (the first non-coherent
+    // block trips `walked >= max_walkback` immediately, exhausted=true, and
+    // we'd force a -reindex on the user). A value above INT_MAX would
+    // truncate weirdly when narrowed to int. Clamp to [1, INT_MAX] and fall
+    // back to the default with a warning if the user passed garbage.
+    const int64_t raw_walkback = gArgs.GetArg("-coherencewalkmax", DEFAULT_COHERENCE_WALK_MAX);
+    int max_walkback;
+    if (raw_walkback < 1 || raw_walkback > std::numeric_limits<int>::max()) {
+        LogPrintf("WARN: %s: invalid -coherencewalkmax=%d (must be in [1, %d]); using default %d.",
+                  __func__, raw_walkback, std::numeric_limits<int>::max(), DEFAULT_COHERENCE_WALK_MAX);
+        max_walkback = DEFAULT_COHERENCE_WALK_MAX;
+    } else {
+        max_walkback = static_cast<int>(raw_walkback);
+    }
     LogPrintf("INFO: %s: verifying chain coherence (walkback bound %d).", __func__, max_walkback);
 
     CoherenceResult result = VerifyChainCoherence(max_walkback);
@@ -263,6 +299,11 @@ bool RunStartupCoherenceRecovery()
     // point because no live consumer holds references (wallet / Quorum /
     // Tally / mempool / net all start later). See PurgeOrphanedBlockIndexEntries
     // doc comment for why we do this here instead of at runtime.
+    //
+    // NB: PurgeOrphanedBlockIndexEntries nulls each entry in `abandoned_indexes`
+    // as it processes it (deliberately, to make accidental reuse of a freed
+    // pool slot less likely). After this call returns `result.abandoned_indexes`
+    // is a vector of nullptrs -- do not iterate it for any other purpose.
     PurgeOrphanedBlockIndexEntries(txdb, result.abandoned_indexes);
 
     // Reconcile registry state with the rewound chain.

@@ -275,6 +275,17 @@ public:
         return Erase(key);
     }
 
+    //! Public template wrapper around the protected `Exists` primitive. Use to
+    //! distinguish "key absent" (Exists returns false, Read would also return
+    //! false) from "key present but Read failed" (Exists returns true, Read
+    //! returns false) -- the two cases have different operational meanings for
+    //! durability-flag-style keys.
+    template <typename K>
+    bool ExistsGenericSerializable(const K& key)
+    {
+        return Exists(key);
+    }
+
     template <typename T, typename K, typename V>
     bool ReadGenericSerializablesToMap(T& key_type, std::map<K, V>& map, K& start_key_hint)
     {

@@ -234,8 +234,7 @@ log "PASS: Phase 2 hook executed."
 # the index will reference missing data, so a "tip is coherent, no rewind
 # needed" outcome would be a real bug.
 if ! sudo grep -qE "RunStartupCoherenceRecovery: detected inconsistency past height" "$DEBUG_LOG"; then
-    fail "Phase 2 did NOT detect inconsistency despite a $TRUNCATE_BYTES-byte truncation. " \
-         "Either VerifyChainCoherence regressed back to the no-op overload or the truncation is in dead space (try a larger TRUNCATE_BYTES)."
+    fail "Phase 2 did NOT detect inconsistency despite a $TRUNCATE_BYTES-byte truncation. Either VerifyChainCoherence regressed back to the no-op overload or the truncation is in dead space (try a larger TRUNCATE_BYTES)."
 fi
 REWIND_LINE=$(sudo grep -E "RunStartupCoherenceRecovery: detected inconsistency past height" "$DEBUG_LOG" | head -1)
 log "PASS: Phase 2 detected inconsistency: $REWIND_LINE"

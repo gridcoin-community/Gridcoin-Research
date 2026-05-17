@@ -1674,6 +1674,21 @@ bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
     // function returns and CTxDB::CleanAbandonedRange has completed the chainstate
     // rollback). We do not erase them here because the caller still needs the abandoned
     // CBlockIndex* values for the surgical cleanup pass.
+    //
+    // Asymmetric linkage note: we null pindex_target->pnext (forward linkage from the
+    // new tip into the abandoned range), but we deliberately do NOT walk the abandoned
+    // range and null each entry's pprev. The abandoned blocks still point pprev back
+    // toward pindex_target until PurgeOrphanedBlockIndexEntries removes them entirely
+    // a few steps later. This is benign because:
+    //   - The Phase 2 recovery hook holds cs_main and runs at init-time, before
+    //     wallet/Quorum/Tally/mempool/net start, so no live consumer is walking pprev
+    //     from an abandoned CBlockIndex* during the in-between window.
+    //   - The caller (RunStartupCoherenceRecovery) needs those abandoned entries'
+    //     pprev intact briefly for any diagnostic code that might iterate them (e.g.
+    //     a debug LogPrintf could call IsSuperblock() which uses pprev).
+    // If a future code path adds runtime use of this rewind primitive (outside the
+    // init-time hook), it must either null pprev on each abandoned entry here OR
+    // ensure no consumer walks pprev from the abandoned range.
     pindex_target->pnext = nullptr;
 
     pindexBest = pindex_target;
