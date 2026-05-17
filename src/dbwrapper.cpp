@@ -635,7 +635,35 @@ bool CTxDB::LoadBlockIndex()
             break;
         CBlock block;
         if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
-            return error("LoadBlockIndex() : block.ReadFromDisk failed");
+        {
+            // Soft-fail rather than hard-fail. A read failure here means the
+            // on-disk block at this index entry's (nFile, nBlockPos) is
+            // unreadable -- exactly the Scenario C corruption from issue
+            // #2865 that the Phase 2 startup coherence-recovery hook
+            // (GRC::RunStartupCoherenceRecovery in src/node/coherence.cpp,
+            // called from init.cpp right after this function returns) is
+            // designed to detect and recover from.
+            //
+            // The legacy behaviour was to return error() here, which
+            // propagates up to init.cpp:1330 and surfaces the modal
+            // "Error loading blkindex.dat" -- aborting init BEFORE the
+            // Phase 2 hook gets a chance to run. That made Phase 2 a no-op
+            // for the very condition it was designed to handle.
+            //
+            // Break out of the verification loop without setting pindexFork
+            // -- we deliberately do NOT trigger the legacy rewind path
+            // below (which uses SetBestChain rather than Phase 2's surgical
+            // chainstate cleanup, so it would leave CTxIndex / vSpent
+            // markers from abandoned blocks in place). Phase 2 walks back
+            // from pindexBest, identifies the last coherent block,
+            // AbandonChainTo's there, then CleanAbandonedRange wipes the
+            // stale CTxIndex / vSpent entries surgically.
+            LogPrintf("WARN: LoadBlockIndex() : block.ReadFromDisk failed at height %d (hash %s); "
+                      "leaving corruption recovery to Phase 2 startup hook (issue #2865). "
+                      "Skipping rest of verification pass.",
+                      pindex->nHeight, pindex->GetBlockHash().ToString());
+            break;
+        }
         // check level 1: verify block validity
         // check level 7: verify block signature too
 
@@ -755,9 +783,20 @@ bool CTxDB::LoadBlockIndex()
         LogPrintf("LoadBlockIndex() : *** moving best chain pointer back to block %d", pindexFork->nHeight);
         CBlock block;
         if (!ReadBlockFromDisk(block, pindexFork, Params().GetConsensus()))
-            return error("LoadBlockIndex() : block.ReadFromDisk failed");
-        CTxDB txdb;
-        SetBestChain(txdb, block, pindexFork);
+        {
+            // Same Phase 2 fallthrough as the verification-loop read above
+            // (see comment there): if the fork point's block is itself
+            // unreadable, defer to Phase 2's surgical recovery rather than
+            // hard-failing init and forcing -reindex. See issue #2865.
+            LogPrintf("WARN: LoadBlockIndex() : block.ReadFromDisk failed for legacy-rewind fork point "
+                      "at height %d (hash %s); leaving recovery to Phase 2 startup hook.",
+                      pindexFork->nHeight, pindexFork->GetBlockHash().ToString());
+        }
+        else
+        {
+            CTxDB txdb;
+            SetBestChain(txdb, block, pindexFork);
+        }
     }
 
     return true;
