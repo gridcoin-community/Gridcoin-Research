@@ -62,12 +62,14 @@ AddressBookPage::AddressBookPage(Mode mode, Tabs tab, QWidget* parent)
         ui->deleteButton->setVisible(true);
         ui->signMessageButton->setVisible(false);
         ui->addExistingButton->setVisible(false);
+        ui->tableView->setAccessibleName(tr("Sending addresses"));
         break;
     case ReceivingTab:
         ui->deleteButton->setVisible(false);
         ui->verifyMessageButton->setVisible(false);
         ui->signMessageButton->setVisible(true);
         ui->addExistingButton->setVisible(true);
+        ui->tableView->setAccessibleName(tr("Receiving addresses"));
         break;
     }
 
