@@ -853,6 +853,8 @@ QString ResearcherModel::generateBeaconKeyForV3()
         return QString();
     }
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     AdvertiseBeaconResult result = GenerateBeaconKey(*cpid);
 
     if (auto public_key = result.TryPublicKey()) {
@@ -900,6 +902,8 @@ BeaconStatus ResearcherModel::advertiseBeaconV3(const QString& ownership_proof_x
     if (!beacon_pubkey.IsValid()) {
         return BeaconStatus::ERROR_INVALID_PROOF_XML;
     }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
         return BeaconStatus::ERROR_MISSING_KEY;

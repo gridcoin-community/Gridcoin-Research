@@ -606,9 +606,7 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
 
 } // anonymous namespace
 
-// TODO(#2869 Phase 2 — researcher/beacon): Reads nBestHeight without holding
-// cs_main. Phase 2 should pass the height in or wrap the read in a LOCK.
-AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) NO_THREAD_SAFETY_ANALYSIS
+AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
 
@@ -675,9 +673,7 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-// TODO(#2869 Phase 2 — researcher/beacon): mempool.mapTx iteration needs
-// cs_main; current caller chain does not consistently hold it.
-BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) NO_THREAD_SAFETY_ANALYSIS
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
@@ -722,11 +718,10 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) NO_T
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-// TODO(#2869 Phase 2 — researcher/beacon): Reads nBestHeight without cs_main.
 AdvertiseBeaconResult SendBeaconContract(
     const Cpid& cpid,
     Beacon beacon,
-    ContractAction action = ContractAction::ADD) NO_THREAD_SAFETY_ANALYSIS
+    ContractAction action = ContractAction::ADD) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
@@ -754,13 +749,11 @@ AdvertiseBeaconResult SendBeaconContract(
 
 } // anonymous namespace
 
-// TODO(#2869 Phase 2 — researcher/beacon): Reads nBestHeight and touches
-// g_recent_beacons (Try/Remember) without cs_main / cs_wallet held.
 AdvertiseBeaconResult GRC::SendBeaconContractV3(
     const Cpid& cpid,
     Beacon beacon,
     OwnershipProof proof,
-    const bool force) NO_THREAD_SAFETY_ANALYSIS
+    const bool force) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     if (!IsV14Enabled(nBestHeight)) {
         LogPrintf("WARNING: %s: v3 beacons not yet active (requires v14).", __func__);
@@ -820,7 +813,7 @@ namespace {
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
@@ -851,7 +844,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
 //! \return A variant that contains the public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!beacon.Renewable(GetAdjustedTime())) {
         LogPrintf("%s: Beacon renewal not needed", __func__);
@@ -1402,41 +1395,42 @@ bool Researcher::HasRAC() const
     return false;
 }
 
-// TODO(#2869 Phase 2 — researcher/beacon): Reads pindexBest BEFORE taking
-// cs_main below. Phase 2 should move the LOCK up to cover the early reads
-// (the race window is small but real).
-CAmount Researcher::Accrual() const NO_THREAD_SAFETY_ANALYSIS
+CAmount Researcher::Accrual() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
-    if (!cpid || !pindexBest) {
+    if (!cpid) {
+        return 0;
+    }
+
+    LOCK(cs_main);
+
+    if (!pindexBest) {
         return 0;
     }
 
     const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
 
-    LOCK(cs_main);
-
     return Tally::GetAccrual(*cpid, now, pindexBest);
 }
 
-// TODO(#2869 Phase 2 — researcher/beacon): same shape as Accrual() above.
-std::optional<CAmount> Researcher::AccrualNearLimit() const NO_THREAD_SAFETY_ANALYSIS
+std::optional<CAmount> Researcher::AccrualNearLimit() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
-    std::optional<CAmount> near_limit_accrual;
 
-    if (!cpid || !pindexBest) {
+    if (!cpid) {
+        return std::nullopt;
+    }
+
+    LOCK(cs_main);
+
+    if (!pindexBest) {
         return std::nullopt;
     }
 
     const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
 
-    LOCK(cs_main);
-
-    near_limit_accrual = Tally::AccrualNearLimit(*cpid, now, pindexBest);
-
-    return near_limit_accrual;
+    return Tally::AccrualNearLimit(*cpid, now, pindexBest);
 }
 
 ResearcherStatus Researcher::Status() const
