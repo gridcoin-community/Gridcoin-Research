@@ -1686,23 +1686,50 @@ void PurgeOrphanedBlockIndexEntries(std::vector<CBlockIndex*>& abandoned)
 {
     AssertLockHeld(cs_main);
 
-    // The abandoned vector is what VerifyChainCoherence collected during the walk:
-    // every block past the last consistent one, recorded in newest-to-oldest order.
-    // After the chainstate cleanup, none of these are reachable from pindexBest's
-    // ancestry, and the Phase 2 hook runs before wallet / Quorum / Tally / mempool /
-    // net have started, so no other consumer can hold a live reference.
+    // The abandoned vector is what VerifyChainCoherence collected during the
+    // walk: every block past the last consistent one, recorded in
+    // newest-to-oldest order. After the chainstate cleanup, none of these are
+    // reachable from pindexBest's ancestry. We need to erase them from
+    // mapBlockIndex so AddToBlockIndex can re-add the same hashes when P2P
+    // delivers the canonical-chain blocks back -- otherwise the
+    // "already exists" guard at validation.cpp:1109 would silently reject
+    // every re-supplied block forever.
     //
-    // Erase from mapBlockIndex first, then delete the heap allocation, then null the
-    // local pointer so a stale read of `abandoned` after this returns is obviously
-    // broken instead of silently dereferencing freed memory.
+    // DO NOT call `delete` on these pointers. CBlockIndex objects are
+    // allocated from GRC::BlockIndexPool (see src/gridcoin/block_index.h),
+    // which is backed by std::array<CBlockIndex, CHUNK_SIZE> in a forward_list
+    // of chunks. The pool's explicit design (per the class comment at
+    // block_index.h:54-55) is that "the application never removes or destroys
+    // block index entries"; it has no recycling path. Calling `delete` on a
+    // pointer into the middle of a std::array invokes undefined behavior:
+    // operator delete tries to free a heap-managed chunk at that address, but
+    // the address is not a heap allocation -- in practice it corrupts the
+    // C++ runtime's free list, manifesting much later as bad_alloc or
+    // assertion failures in unrelated code.
+    //
+    // (We learned this the hard way during the 2026-05-16 isolated-testnet
+    // Tier 3 run: Phase 2 reported clean completion, but the very first
+    // P2P-delivered block tripped `assert(!pindexBest->pnext)` in
+    // DisconnectBlocksBatch because heap corruption from the bogus `delete`
+    // calls had overwritten pindex_target's pnext slot with garbage that
+    // happened to dereference as a valid-looking CBlockIndex pointer.)
+    //
+    // The cost of not freeing is that the abandoned pool slots remain
+    // allocated forever -- a small permanent leak per recovery event, at
+    // most a few hundred bytes per abandoned block (so well under 1 MB even
+    // at the -coherencewalkmax cap). The pool is designed for this. The
+    // alternative would be a much larger redesign of BlockIndexPool to
+    // support per-object recycling, which is not justified for a rare
+    // recovery path.
     for (CBlockIndex*& p : abandoned) {
         if (!p) continue;
         mapBlockIndex.erase(p->GetBlockHash());
-        delete p;
+        // No `delete p` -- see comment above.
         p = nullptr;
     }
 
-    LogPrintf("INFO: %s: purged %u orphaned CBlockIndex entries from mapBlockIndex.",
+    LogPrintf("INFO: %s: removed %u orphaned CBlockIndex entries from mapBlockIndex "
+              "(pool slots remain allocated; see block_index.h).",
               __func__, (unsigned) abandoned.size());
 }
 
