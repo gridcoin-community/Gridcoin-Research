@@ -8,8 +8,10 @@
 #include "amount.h"
 #include "gridcoin/account.h"
 #include "gridcoin/accrual/computer.h"
+#include "sync.h"
 
 class CBlockIndex;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -99,7 +101,7 @@ public:
     //!
     //! \return Current magnitude unit adjusted for the specified block.
     //!
-    static double GetMagnitudeUnit(CBlockIndex * const pindex);
+    static double GetMagnitudeUnit(CBlockIndex * const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get a traversable object for the research accounts stored in

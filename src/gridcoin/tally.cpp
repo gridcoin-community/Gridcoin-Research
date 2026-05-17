@@ -1104,7 +1104,7 @@ CAmount Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(CBlockIndex* const pindex)
+double Tally::GetMagnitudeUnit(CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindex->nVersion >= 11) {
         return SnapshotCalculator::GetMagnitudeUnit(pindex).ToDouble();

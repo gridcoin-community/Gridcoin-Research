@@ -185,7 +185,7 @@ void InitializeSuperblockQuorum(const CBlockIndex* pindexBest)
 //!
 //! \return \c false if a problem occurs while loading the stored accrual state.
 //!
-bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
+bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Gridcoin: initializing research reward accounting...");
     uiInterface.InitMessage(_("Initializing research reward accounting..."));
@@ -206,7 +206,7 @@ bool InitializeResearchRewardAccounting(CBlockIndex* pindexBest)
     return true;
 }
 
-void InitializeContracts(CBlockIndex* pindexBest)
+void InitializeContracts(CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // This loop initializes the registry for each contract type in CONTRACT_TYPES_WITH_REG_DB.
     for (const auto& contract_type : RegistryBookmarks::CONTRACT_TYPES_WITH_REG_DB) {

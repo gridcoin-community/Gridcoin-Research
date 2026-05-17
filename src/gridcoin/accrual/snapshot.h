@@ -99,7 +99,7 @@ public:
     //!
     //! \return Allocation fraction representing magnitude unit.
     //!
-    static Allocation GetMagnitudeUnit(CBlockIndex* index)
+    static Allocation GetMagnitudeUnit(CBlockIndex* index) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         CBlockIndex* sb_index = BlockFinder::FindLatestSuperblock(index);
 

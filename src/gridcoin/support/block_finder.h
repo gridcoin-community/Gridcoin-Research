@@ -7,7 +7,10 @@
 
 #include <cstdint>
 
+#include "sync.h"
+
 class CBlockIndex;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -26,7 +29,7 @@ public:
     //! \return The block with the height closest to \p nHeight if found, otherwise
     //! \a nullptr is returned.
     //!
-    static CBlockIndex* FindByHeight(int height);
+    static CBlockIndex* FindByHeight(int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Find block by time.
@@ -39,7 +42,7 @@ public:
     //! \return The youngest block which is not older than \p time, or the
     //! head of the chain if it is older than \p time.
     //!
-    static CBlockIndex* FindByMinTime(int64_t time);
+    static CBlockIndex* FindByMinTime(int64_t time) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Find block by time going forward from given index.
@@ -48,14 +51,14 @@ public:
     //! \return CBlockIndex pointing to the youngest block which is not older than \p time, or
     //! the head of the chain if it is older than \p time.
     //!
-    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in = nullptr);
+    static CBlockIndex* FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Find the last superblock at or before the provided index.
     //! \param CBlockIndex from where to start.
     //! \return CBlockIndex pointing to the block containing the last superblock contract.
     //!
-    static CBlockIndex* FindLatestSuperblock(CBlockIndex * const index_in = nullptr);
+    static CBlockIndex* FindLatestSuperblock(CBlockIndex * const index_in = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 } // namespace GRC
 

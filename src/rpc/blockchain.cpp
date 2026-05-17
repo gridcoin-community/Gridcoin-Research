@@ -61,7 +61,7 @@ UniValue MRCToJson(const GRC::MRC& mrc) {
     return json;
 }
 
-UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex)
+UniValue ClaimToJson(const GRC::Claim& claim, CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue json(UniValue::VOBJ);
 
