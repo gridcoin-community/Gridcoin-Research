@@ -3,19 +3,62 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://opensource.org/licenses/mit-license.php.
 #
-# Tier 2 crash harness: dm-flakey selective fault injection on blk*.dat.
+# Tier 2 crash harness: dm-flakey whole-volume fault injection.
 #
 # Wraps a loopback-backed ext4 volume in a dm-flakey device-mapper target,
 # mounts it at the victim wallet's testnet datadir, and uses dm-flakey's
 # `drop_writes` feature to discard pending writes to that volume mid-sync.
-# When combined with a SIGKILL of the wallet process, this reproduces
-# Scenario A (partial flat-file write) faithfully and Scenario C (LevelDB
-# index ahead of unflushed blk*.dat data) in the realistic OS-page-cache-
-# loss sense -- the dm-flakey reset discards everything the kernel had
-# buffered but not yet committed to the underlying loopback file.
+# When combined with a SIGKILL of the wallet process, this is intended to
+# reproduce Scenario A (partial flat-file write) and the realistic
+# OS-page-cache-loss flavour of Scenario C -- the dm-flakey reset
+# discards everything the kernel had buffered but not yet committed to
+# the underlying loopback file.
 #
 # Linux only. Requires root for dmsetup / mount / kpartx. Idempotent setup
 # but always wipes the test datadir on entry.
+#
+# WHAT THIS ACTUALLY VALIDATES (post-Iteration-9 lessons; see
+# doc/block_corruption_recovery_design.md "Lessons from Tier 2
+# fault-injection validation" and doc/block_corruption_recovery_test_log.md
+# Iteration 9):
+#
+#   dm-flakey wraps the *whole datadir volume*, so its drops and
+#   corruptions hit BDB wallet log records, the BDB environment files,
+#   the LevelDB MANIFEST, LevelDB SSTs, the LevelDB WAL, AND blk*.dat
+#   indiscriminately. Each of those layers has its own integrity check,
+#   and in practice those checks fire before Phase 2 ever gets to run:
+#
+#     - `drop_writes` mode: Phase 1's FileCommit(blk*.dat) before
+#       CTxDB::Sync() barrier ordering guarantees the half that gets
+#       lost is the LevelDB-tip-commit half (not the blk*.dat half),
+#       so LevelDB rolls back one block on restart and Phase 2's
+#       coherence check reports "No rewind needed." Phase 2's rewind
+#       path is NOT exercised here.
+#
+#     - `corrupt_bio_byte` mode: BDB's DB_RUNRECOVERY catches its own
+#       corruption first and aborts startup. After restoring wallet.dat
+#       + database/ from a clean snapshot, LevelDB's MANIFEST CRC
+#       catches its own corruption and aborts. Phase 2 still does not
+#       run, because random whole-bio corruption does not reliably
+#       produce Phase 2's narrow trigger condition (LevelDB healthy
+#       AND blk*.dat content hashes to something other than the
+#       CBlockIndex hash at the recorded tip position).
+#
+# This harness therefore validates the *layered defence below Phase 2*
+# (Phase 1 barrier ordering, BDB integrity, LevelDB integrity) -- not
+# Phase 2's rewind code path itself. Both Iteration 9 sub-iterations
+# passed in the "graceful failure" sense: the wallet either
+# auto-recovered (drop_writes) or stopped cleanly with operator-actionable
+# error messages (corrupt_bio_byte). No silently-advancing corrupt chain.
+#
+# To exercise Phase 2's rewind code path end-to-end, use Tier 3
+# (`tier3_truncate.sh`), which does a surgical `truncate(1)` on the
+# active blk*.dat past a specific block index entry. That produces the
+# exact corruption pattern Phase 2 is designed to recover from. The
+# pre-merge recommendation for Phase 2 changes is Tier 3, with
+# TRUNCATE_BYTES swept across the small (no SB cross), medium (1-2 SBs
+# crossed -> clamp path), and large (6+ SBs crossed -> Reset +
+# DropAboveHeight + side-chain catch-up) sub-cases.
 
 export LC_ALL=C
 set -euo pipefail
