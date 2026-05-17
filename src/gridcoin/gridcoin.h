@@ -6,8 +6,10 @@
 #define GRIDCOIN_GRIDCOIN_H
 
 #include "fwd.h"
+#include "sync.h"
 
 class CScheduler;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -18,7 +20,7 @@ namespace GRC {
 //!
 //! \return \c false if a problem occurs during initialization.
 //!
-bool Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest);
+bool Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief This closes the underlying research file to support the snapshot update
@@ -79,7 +81,7 @@ void NotifyPoll();
 //! completes in a few seconds; the wallet is briefly unresponsive but
 //! consistent. Issue #2865 / PR #2941.
 //!
-void RebuildBeaconRegistry();
+void RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 } // namespace GRC
 
 #endif // GRIDCOIN_GRIDCOIN_H

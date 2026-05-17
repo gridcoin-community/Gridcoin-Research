@@ -1307,7 +1307,15 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (gArgs.GetBoolArg("-loadblockindextest"))
     {
         CTxDB txdb("r");
-        txdb.LoadBlockIndex();
+        {
+            // CTxDB::LoadBlockIndex is EXCLUSIVE_LOCKS_REQUIRED(cs_main) because
+            // it populates mapBlockIndex / pindexBest / hashBestChain. At
+            // init-time the lock is uncontended, but acquiring it documents
+            // the contract and satisfies the analyzer. The free LoadBlockIndex()
+            // below takes cs_main internally and does not need this wrapper.
+            LOCK(cs_main);
+            txdb.LoadBlockIndex();
+        }
         PrintBlockTree();
         return false;
     }
@@ -1350,6 +1358,8 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (gArgs.IsArgSet("-printblock"))
     {
+        LOCK(cs_main); // init-time iteration of mapBlockIndex; lock uncontended here but
+                       // required by Phase 1 thread-safety annotations.
         string strMatch = gArgs.GetArg("-printblock", "");
         int nFound = 0;
         for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
@@ -1471,6 +1481,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     RegisterWallet(pwalletMain);
+
+    // Init-time wallet rescan + GRC::Initialize reads pindexBest /
+    // pindexGenesisBlock / mapBlockIndex; take cs_main for the whole block
+    // (uncontended at init, required by Phase 1 thread-safety annotations).
+    LOCK(cs_main);
 
     CBlockIndex *pindexRescan = pindexBest;
     bool mrc_request_correction_scan_complete = false;
@@ -1643,11 +1658,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
+        // cs_main is still held from the wallet-rescan block above; here we
+        // only need cs_wallet for the wallet-side prints. Single-threaded
+        // init context regardless.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
-
-        // So Clang doesn't complain, even though we are essentially single-threaded here.
-        LOCK(pwalletMain->cs_wallet);
 
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());

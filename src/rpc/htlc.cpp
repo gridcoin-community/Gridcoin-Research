@@ -138,7 +138,12 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
             "4. destination_addr  (string, required) Address to send claimed funds to\n"
             + HelpRequiringPassphrase());
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+    // The wallet-registry lock is needed for the SyncWithWallets dispatch
+    // after AcceptToMemoryPool below.
+    LOCK(cs_main);
+    LOCK(cs_setpwalletRegistered);
+    LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
     // Parse txid
@@ -272,7 +277,12 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
             "3. destination_addr  (string, required) Address to send refunded funds to\n"
             + HelpRequiringPassphrase());
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+    // The wallet-registry lock is needed for the SyncWithWallets dispatch
+    // after AcceptToMemoryPool below.
+    LOCK(cs_main);
+    LOCK(cs_setpwalletRegistered);
+    LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
     // Parse txid

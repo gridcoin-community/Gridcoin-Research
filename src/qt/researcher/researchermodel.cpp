@@ -803,6 +803,7 @@ BeaconStatus ResearcherModel::advertiseBeacon()
 
 bool ResearcherModel::isV14Enabled() const
 {
+    LOCK(cs_main);
     return IsV14Enabled(nBestHeight);
 }
 

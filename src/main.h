@@ -73,20 +73,20 @@ typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_tx_val_commit_to_disk;
-extern BlockMap mapBlockIndex;
-extern CBlockIndex* pindexGenesisBlock;
+extern BlockMap mapBlockIndex GUARDED_BY(cs_main);
+extern CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main);
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
-extern int nBestHeight;
-extern arith_uint256 nBestChainTrust;
-extern uint256 hashBestChain;
-extern CBlockIndex* pindexBest;
+extern int nBestHeight GUARDED_BY(cs_main);
+extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
+extern uint256 hashBestChain GUARDED_BY(cs_main);
+extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
 extern std::atomic<bool> g_reorg_in_progress;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
-extern std::set<CWallet*> setpwalletRegistered;
+extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
 // Settings
@@ -112,12 +112,15 @@ class CTxIndex;
 
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
-void UpdatedTransaction(const uint256& hashTx);
+void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
+void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
+// Takes cs_main internally; callers MUST NOT hold cs_main when calling
+// (the internal LOCK would deadlock under non-recursive locking; cs_main
+// is currently recursive but the annotation contract documents the intent).
 bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
 double CoinToDouble(double surrogate);
@@ -136,7 +139,7 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
 //! mapBlockIndex purge happen separately via CTxDB::CleanAbandonedRange and
 //! PurgeOrphanedBlockIndexEntries below. Phase 2 of issue #2865; see src/node/coherence.cpp
 //! and doc/block_corruption_recovery_design.md.
-bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb);
+bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //! Purge the abandoned CBlockIndex entries from in-memory mapBlockIndex AND from on-disk
 //! LevelDB (CDiskBlockIndex records). Called by the Phase 2 abandonment path after
@@ -171,13 +174,13 @@ bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb);
 void PurgeOrphanedBlockIndexEntries(class CTxDB& txdb, std::vector<class CBlockIndex*>& abandoned)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-void ResendWalletTransactions(bool fForce = false);
+void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
@@ -614,7 +617,7 @@ public:
 
     arith_uint256 GetBlockTrust() const;
 
-    bool IsInMainChain() const
+    bool IsInMainChain() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return (pnext || this == pindexBest);
     }
@@ -1077,7 +1080,7 @@ public:
         vHave.push_back((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
     }
 
-    int GetDistanceBack()
+    int GetDistanceBack() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Retrace how far back it was in the sender's branch
         int nDistance = 0;
@@ -1098,7 +1101,7 @@ public:
         return nDistance;
     }
 
-    CBlockIndex* GetBlockIndex()
+    CBlockIndex* GetBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
@@ -1114,7 +1117,7 @@ public:
         return pindexGenesisBlock;
     }
 
-    uint256 GetBlockHash()
+    uint256 GetBlockHash() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
@@ -1130,7 +1133,7 @@ public:
         return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
     }
 
-    int GetHeight()
+    int GetHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         CBlockIndex* pindex = GetBlockIndex();
         if (!pindex)

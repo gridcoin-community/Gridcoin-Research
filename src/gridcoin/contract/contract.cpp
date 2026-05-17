@@ -362,7 +362,10 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
+// TODO(#2869 Phase 2 — contract): pindexBest read needs cs_main. Caller in
+// gridcoin.cpp Initialize() holds it (added via init.cpp LOCK rollout in
+// Phase 1); annotate as EXCLUSIVE_LOCKS_REQUIRED once all callers verified.
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) NO_THREAD_SAFETY_ANALYSIS
 {
     CBlockIndex*& pindex = pindex_start;
 
@@ -935,7 +938,12 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
-void Contract::Body::ResetType(const ContractType type)
+// TODO(#2869 Phase 2 — contract): cs_main is expected to be held when
+// nBestHeight is read in the POLL/PROJECT/PROTOCOL/SCRAPER branches below
+// (see in-body comments). Phase 2 should annotate this as
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main) and audit every caller (the tx-deserialize
+// path may not always hold cs_main).
+void Contract::Body::ResetType(const ContractType type) NO_THREAD_SAFETY_ANALYSIS
 {
     switch (type) {
         case ContractType::UNKNOWN:

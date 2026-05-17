@@ -27,17 +27,17 @@ using namespace std;
 
 bool AskForOutstandingBlocks(uint256 hashStart);
 bool ForceReorganizeToHash(uint256 NewHash);
-extern UniValue MagnitudeReport(const GRC::Cpid cpid);
-extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "");
+extern UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "") EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false,
                                                     bool bContractDirectFromStatsUpdate = false,
                                                     bool bFromHousekeeping = false);
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
-extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version);
+extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 arith_uint256 GetChainTrust(const CBlockIndex* pindex);
 double CoinToDouble(double surrogate);
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 UniValue ContractToJson(const GRC::Contract& contract);
 
 UniValue MRCToJson(const GRC::MRC& mrc) {
@@ -186,7 +186,7 @@ UniValue SuperblockToJson(const GRC::SuperblockPtr& superblock)
     return SuperblockToJson(*superblock);
 }
 
-UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail)
+UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTransactionDetail) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue result(UniValue::VOBJ);
 
@@ -781,10 +781,11 @@ UniValue showblock(const UniValue& params, bool fHelp)
                 "Returns all information about the block at <index>\n");
 
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range\n");
 
     LOCK(cs_main);
+
+    if (nHeight < 0 || nHeight > nBestHeight)
+        throw runtime_error("Block number out of range\n");
 
     CBlockIndex* pblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
@@ -895,12 +896,13 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
                 "Returns hash of block in best-block-chain at <index>\n");
 
     int nHeight = params[0].get_int();
+
+    LOCK(cs_main);
+
     if (nHeight < 0 || nHeight > nBestHeight)
         throw runtime_error("Block number out of range.");
 
     LogPrint(BCLog::LogFlags::NOISY, "Getblockhash %d", nHeight);
-
-    LOCK(cs_main);
 
     CBlockIndex* RPCpblockindex = GRC::BlockFinder::FindByHeight(nHeight);
 
@@ -920,10 +922,10 @@ UniValue getblock(const UniValue& params, bool fHelp)
     std::string strHash = params[0].get_str();
     uint256 hash = uint256S(strHash);
 
+    LOCK(cs_main);
+
     if (mapBlockIndex.count(hash) == 0)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
-
-    LOCK(cs_main);
 
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
@@ -943,10 +945,11 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
                 "Returns details of a block with given block-number\n");
 
     int nHeight = params[0].get_int();
-    if (nHeight < 0 || nHeight > nBestHeight)
-        throw runtime_error("Block number out of range");
 
     LOCK(cs_main);
+
+    if (nHeight < 0 || nHeight > nBestHeight)
+        throw runtime_error("Block number out of range");
 
     CBlock block;
 
@@ -968,10 +971,10 @@ UniValue getblockbymintime(const UniValue& params, bool fHelp)
 
     int64_t nTimestamp = params[0].get_int64();
 
+    LOCK(cs_main);
+
     if (nTimestamp < pindexGenesisBlock->nTime || nTimestamp > pindexBest->nTime)
         throw runtime_error("Timestamp out of range. Cannot be below the time of the genesis block or above the time of the latest block");
-
-    LOCK(cs_main);
 
     CBlock block;
 
@@ -1032,6 +1035,12 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Either a valid block number or block hash must be provided.");
     }
 
+    // cs_main is needed for the block-validity checks below (nBestHeight /
+    // mapBlockIndex) AND for the chain walk further down. Take it once here
+    // to preserve the original error-message order (block-validity error
+    // surfaces before batch-size error).
+    LOCK(cs_main);
+
     if (!block_hash_provided)
     {
         if (nHeight < 0 || nHeight > nBestHeight)
@@ -1055,8 +1064,6 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 
     bool transaction_details = false;
     if (params.size() > 2) transaction_details = params[2].get_bool();
-
-    LOCK(cs_main);
 
     g_timer.GetTimes("Finished validating parameters", __func__);
 
@@ -2052,6 +2059,8 @@ UniValue beaconaudit(const UniValue& params, bool fHelp)
     if (!global && !cpid) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No beacon for non-cruncher.");
     }
+
+    LOCK(cs_main);
 
     // Only allow auditing when at or above block V11 threshold.
     if (!IsV11Enabled(pindexBest->nHeight)) {
@@ -3525,6 +3534,7 @@ UniValue networktime(const UniValue& params, bool fHelp)
 }
 
 UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue results(UniValue::VARR);
 
@@ -3580,7 +3590,7 @@ UniValue SuperblockReport(int lookback, bool displaycontract, std::string cpid)
     return results;
 }
 
-UniValue MagnitudeReport(const GRC::Cpid cpid)
+UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     UniValue json(UniValue::VOBJ);
 
@@ -3623,6 +3633,7 @@ UniValue MagnitudeReport(const GRC::Cpid cpid)
 }
 
 UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const int64_t min_height = std::max<int64_t>(nBestHeight - lookback, 0);
 

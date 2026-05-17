@@ -481,7 +481,9 @@ bool CNode::DisconnectNode(NodeId id)
     return false;
 }
 
-void CNode::PushVersion()
+// TODO(#2869 Phase 4 — net): Reads nBestHeight from CNode constructor path
+// (no cs_main held). Net layer needs its own thread-safety review.
+void CNode::PushVersion() NO_THREAD_SAFETY_ANALYSIS
 {
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));

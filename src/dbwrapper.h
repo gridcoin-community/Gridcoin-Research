@@ -483,9 +483,9 @@ public:
         return status;
     }
 
-    bool LoadBlockIndex();
+    bool LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 private:
-    bool LoadBlockIndexGuts();
+    bool LoadBlockIndexGuts() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 
 

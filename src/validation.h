@@ -10,11 +10,13 @@
 #include "consensus/validation.h"
 #include "index/disktxpos.h"
 #include "primitives/transaction.h"
+#include "sync.h"
 
 #include <map>
 
 class CTxDB;
 class CBlockHeader;
+extern CCriticalSection cs_main;
 namespace Consensus {
     struct Params;
 }
@@ -68,7 +70,7 @@ const CTxOut& GetOutputFor(const CTxIn& input, const MapPrevTx& inputs);
 */
 CAmount GetValueIn(const CTransaction& tx, const MapPrevTx& inputs);
 
-bool DisconnectInputs(CTransaction& tx, CTxDB& txdb);
+bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /** Fetch from memory and/or disk. inputsRet keys are transaction hashes.
     @param[in] tx The transaction to fetch inputs for
@@ -93,17 +95,17 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     @param[in] fMiner	true if called from CreateNewBlock
     @return Returns true if all checks succeed
     */
-bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner);
+bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppcoin: get transaction coin age
 
-int GetDepthInMainChain(const CTxIndex& txi);
+int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
 
-bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex);
-bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false);
-bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof);
+bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
 bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me);
 bool CheckBlockSignature(const CBlock& block);
@@ -116,7 +118,7 @@ unsigned int GetMandatorySideStakeOutputLimit(const int& block_version);
 Fraction FoundationSideStakeAllocation();
 CTxDestination FoundationSideStakeAddress();
 unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation_sidestake);
-bool ValidateMRC(const GRC::Contract &contract, const CTransaction& tx, int& DoS);
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc);
+bool ValidateMRC(const GRC::Contract &contract, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC& mrc) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // BITCOIN_VALIDATION_H

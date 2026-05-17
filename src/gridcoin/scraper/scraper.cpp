@@ -2521,8 +2521,11 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
         g_project_public_keys_timestamp = GetAdjustedTime();
     }
 
-    _log(logattribute::INFO, __func__,
-         "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    {
+        LOCK(cs_ProjectPublicKeys);
+        _log(logattribute::INFO, __func__,
+             "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    }
 }
 
 bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
@@ -6548,7 +6551,8 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return report of test results
  */
-UniValue testnewsb(const UniValue& params, bool fHelp)
+// TODO(#2869 Phase 3 — scraper): pindexBest reads in this RPC need cs_main.
+UniValue testnewsb(const UniValue& params, bool fHelp) NO_THREAD_SAFETY_ANALYSIS
 {
     if (fHelp || params.size() > 1 )
         throw std::runtime_error(

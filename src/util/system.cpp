@@ -296,7 +296,11 @@ std::optional<unsigned int> ArgsManager::GetArgFlags(const std::string& name) co
     return std::nullopt;
 }
 
-const fs::path& ArgsManager::GetBlocksDirPath()
+// TODO(#2869 Phase 4 — util): Returns reference to cs_args-guarded cache.
+// The cache is initialized-once-then-stable in practice, so the reference is
+// safe to use after the lock is dropped. A future cleanup could return by
+// value, or move the path off cs_args.
+const fs::path& ArgsManager::GetBlocksDirPath() NO_THREAD_SAFETY_ANALYSIS
 {
     LOCK(cs_args);
     fs::path& path = m_cached_blocks_path;

@@ -25,7 +25,8 @@ namespace {
 //!
 //! \return \c true if the wallet owns UTXOs for the master key address.
 //!
-bool SelectMasterInputOutput(CCoinControl& coin_control)
+// TODO(#2869 Phase 2 — contract/message): pindexBest read needs cs_main.
+bool SelectMasterInputOutput(CCoinControl& coin_control) NO_THREAD_SAFETY_ANALYSIS
 {
     const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight);
 

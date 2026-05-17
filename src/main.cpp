@@ -164,17 +164,19 @@ void UnregisterWallet(CWallet* pwalletIn)
     }
 }
 
-// check whether the passed transaction is from us
-bool static IsFromMe(CTransaction& tx)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        if (pwallet->IsFromMe(tx))
-            return true;
-    return false;
-}
+// Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+// Each wrapper iterates setpwalletRegistered (GUARDED_BY cs_setpwalletRegistered)
+// and dispatches into pwallet methods that take pwallet->cs_wallet. Callers
+// MUST hold cs_setpwalletRegistered before invoking these wrappers; this is
+// enforced by EXCLUSIVE_LOCKS_REQUIRED. Holding the lock at the call site
+// (rather than taking it inside the wrapper) lets callers that also hold
+// cs_wallet establish the canonical order at acquisition time and avoids
+// the cs_setpwalletRegistered <-> cs_wallet inversion the inside-lock
+// pattern would otherwise create.
 
 // get the wallet transaction with the given hash (if it exists)
 bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         if (pwallet->GetTransaction(hashTx,wtx))
@@ -184,6 +186,7 @@ bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
 
 // erases transaction with the given hash from all wallets
 void static EraseFromWallets(uint256 hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->EraseFromWallet(hash);
@@ -191,6 +194,7 @@ void static EraseFromWallets(uint256 hash)
 
 // make sure all wallets know about the given transaction, in the given block
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     if (!fConnect)
     {
@@ -215,6 +219,7 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
 
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->SetBestChain(loc);
@@ -222,6 +227,7 @@ void static SetBestChain(const CBlockLocator& loc)
 
 // notify wallets about an updated transaction
 void UpdatedTransaction(const uint256& hashTx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->UpdatedTransaction(hashTx);
@@ -229,6 +235,7 @@ void UpdatedTransaction(const uint256& hashTx)
 
 // dump all wallets
 void static PrintWallets(const CBlock& block)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->PrintWallet(block);
@@ -236,6 +243,7 @@ void static PrintWallets(const CBlock& block)
 
 // notify wallets about an incoming inventory (for request counts)
 void static Inventory(const uint256& hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->Inventory(hash);
@@ -243,6 +251,7 @@ void static Inventory(const uint256& hash)
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->ResendWalletTransactions(fForce);
@@ -585,7 +594,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
     if (ptxOld)
+    {
+        LOCK(cs_setpwalletRegistered);
         EraseFromWallets(ptxOld->GetHash());
+    }
 
     LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());
 
@@ -788,7 +800,7 @@ bool IsInitialBlockDownload()
             pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
 }
 
-void static InvalidChainFound(CBlockIndex* pindexNew)
+void static InvalidChainFound(CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
     arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
@@ -1372,6 +1384,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 
     if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
+        // Canonical order: cs_main (held by SetBestChain) -> cs_setpwalletRegistered -> cs_wallet.
+        LOCK(cs_setpwalletRegistered);
         ::SetBestChain(locator);
     }
 
@@ -1421,7 +1435,7 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
     return (~bnTarget / (bnTarget + 1)) + 1;
 }
 
-bool GridcoinServices()
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Block version 9 tally transition:
     //
@@ -1483,7 +1497,7 @@ bool GridcoinServices()
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
     int iAsked = 0;
-    LOCK(cs_vNodes);
+    LOCK2(cs_main, cs_vNodes);
     for (auto const& pNode : vNodes)
     {
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)))
@@ -1653,7 +1667,7 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
     return file;
 }
 
-bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
+bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     assert(pindex_target != nullptr);
@@ -2021,7 +2035,12 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                   DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
                   block.vtx.size());
 
-        PrintWallets(block);
+        {
+            // PrintBlockTree is EXCLUSIVE_LOCKS_REQUIRED(cs_main); add the
+            // wallet-registry lock here in the canonical order before dispatch.
+            LOCK(cs_setpwalletRegistered);
+            PrintWallets(block);
+        }
 
         // put the main time-chain first
         vector<CBlockIndex*>& vNext = mapNext[pindex];
@@ -2178,7 +2197,13 @@ string GetWarnings(string strFor)
 // Messages
 //
 
-bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
+// TODO(#2869 Phase 4 — network layer): AlreadyHave reads mapBlockIndex
+// (via txdb.ContainsTx + the implicit chain lookups for BLOCK inv types)
+// from the P2P message-handler thread without holding cs_main. The Phase 4
+// network-layer pass will either (a) take cs_main here, or (b) push the
+// lock acquisition into ProcessMessage at a coarser granularity. Suppressed
+// during Phase 1 to keep the cascade focused on the global annotations.
+bool static AlreadyHave(CTxDB& txdb, const CInv& inv) NO_THREAD_SAFETY_ANALYSIS
 {
     switch (inv.type)
     {
@@ -2200,7 +2225,15 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
 }
 
 
-bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
+// TODO(#2869 Phase 4 — network layer): ProcessMessage reads pindexBest /
+// nBestHeight / mapBlockIndex and calls IsInMainChain() (now annotated
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main)) from the P2P message-handler thread
+// without holding cs_main at the call sites. ProcessMessages (line 3034)
+// does not take cs_main at entry either. The Phase 4 net-layer pass will
+// systematically push the lock acquisition either into ProcessMessage at
+// the relevant branches or into ProcessMessages around the dispatch.
+// Suppressed during Phase 1 to keep the cascade focused on globals.
+bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived) NO_THREAD_SAFETY_ANALYSIS
 {
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
@@ -2541,7 +2574,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
 
                 // Track requests for our stuff
-                Inventory(inv.hash);
+                {
+                    LOCK(cs_setpwalletRegistered);
+                    Inventory(inv.hash);
+                }
 
             }
         }
@@ -2676,7 +2712,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Track requests for our stuff
-            Inventory(inv.hash);
+            {
+                LOCK(cs_setpwalletRegistered);
+                Inventory(inv.hash);
+            }
         }
     }
 
@@ -3186,8 +3225,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage(NetMsgType::PING, nonce);
     }
 
-    // Resend wallet transactions that haven't gotten in a block yet
-    ResendWalletTransactions();
+    // Resend wallet transactions that haven't gotten in a block yet.
+    // No outer locks held here in SendMessages; canonical order applies as
+    // cs_setpwalletRegistered -> cs_wallet (cs_main not needed by the
+    // wrapper itself; the wallet method's chain-state reads are TODO-Phase 2).
+    {
+        LOCK(cs_setpwalletRegistered);
+        ResendWalletTransactions();
+    }
 
     // Address refresh broadcast
     if (!IsInitialBlockDownload())
@@ -3261,6 +3306,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (!fTrickleWait)
                 {
                     CWalletTx wtx;
+                    LOCK(cs_setpwalletRegistered);
                     if (GetTransaction(inv.hash, wtx))
                         if (wtx.fFromMe)
                             fTrickleWait = true;

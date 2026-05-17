@@ -839,9 +839,13 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
     return kernel_found;
 }
 
+// TODO(#2869 Phase 2 — miner): pindexBest read for BlockRewardRules needs
+// cs_main. Miner call paths hold it; test paths in
+// coinstake_construction_tests.cpp do not, so we can't annotate as required
+// without restructuring those tests.
 void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
     bool &fEnableStakeSplit, bool &fEnableSideStaking,
-    int64_t &nMinStakeSplitValue, double &dEfficiency)
+    int64_t &nMinStakeSplitValue, double &dEfficiency) NO_THREAD_SAFETY_ANALYSIS
 {
     // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
     // and there will be a single coinstake output (besides the empty one) that has the combined stake + research

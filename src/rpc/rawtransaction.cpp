@@ -42,6 +42,7 @@ using namespace std;
 UniValue MRCToJson(const GRC::MRC& mrc);
 
 std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!(mtx.IsCoinStake() || mtx.IsCoinBase())) {
         throw runtime_error("GetTxStakeBoincHashInfo: transaction is not a coinstake or coinbase");
@@ -323,7 +324,7 @@ UniValue ContractToJson(const GRC::Contract& contract)
     return out;
 }
 
-void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
+void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     entry.pushKV("txid", tx.GetHash().GetHex());
     entry.pushKV("version", tx.nVersion);
@@ -991,11 +992,14 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
         nMaxInputs = params[4].get_int();
 
     // Parameter Sanity Check
-    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+    {
+        LOCK(cs_main);
+        if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
 
-    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+        if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+    }
 
     if (nMaxValue < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Value must not be less than 0");
@@ -1285,11 +1289,14 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     }
 
     // Parameter Sanity Check
-    if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
+    {
+        LOCK(cs_main);
+        if (nBlockStart < 1 || nBlockStart > nBestHeight || nBlockStart > nBlockEnd)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-start");
 
-    if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+        if (nBlockEnd < 1 || nBlockEnd > nBestHeight || nBlockEnd <= nBlockStart)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block-end");
+    }
 
     CTxDestination Address = DecodeDestination(sAddress);
 
@@ -2103,7 +2110,13 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
 
     RPCTypeCheck(params, { UniValue::VSTR });
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+    // Acquired as sequenced LOCKs (rather than a LOCK2 + nested LOCK) so the
+    // analyzer sees the order at acquisition time. The wallet registry lock
+    // is needed for the SyncWithWallets dispatch below.
+    LOCK(cs_main);
+    LOCK(cs_setpwalletRegistered);
+    LOCK(pwalletMain->cs_wallet);
 
     // parse hex string from parameter
     vector<unsigned char> txData(ParseHex(params[0].get_str()));

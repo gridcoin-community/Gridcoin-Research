@@ -83,7 +83,8 @@ bool MRC::WellFormed() const
     return true;
 }
 
-CAmount MRC::ComputeMRCFee() const
+// TODO(#2869 Phase 2 — mrc): mapBlockIndex lookup needs cs_main.
+CAmount MRC::ComputeMRCFee() const NO_THREAD_SAFETY_ANALYSIS
 {
     CAmount fee = 0;
 
@@ -266,7 +267,10 @@ uint256 MRC::GetHash() const
     return hasher.GetHash();
 }
 
-bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
+// TODO(#2869 Phase 2 — mrc): ValidateMRC requires cs_main; once
+// IContractHandler::Validate is annotated, this cascades through the contract
+// dispatcher path.
+bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const NO_THREAD_SAFETY_ANALYSIS
 {
     // Fully validate the incoming MRC txn.
     return ValidateMRC(contract, tx, DoS);

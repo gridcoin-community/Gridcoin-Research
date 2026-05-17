@@ -567,7 +567,8 @@ private:
     //!
     //! \return The hash of the transaction for the beacon contract if found.
     //!
-    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
+    // TODO(#2869 Phase 2 — voting): pindexBest read + chain walk need cs_main.
+    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const NO_THREAD_SAFETY_ANALYSIS
     {
         // TODO: This is rather slow, but we only need to do it once per vote.
         // Store a reference to a wallet's beacon transactions and rewrite the
@@ -892,7 +893,8 @@ PollBuilder::PollBuilder(PollBuilder&& builder) = default;
 PollBuilder::~PollBuilder() = default;
 PollBuilder& PollBuilder::operator=(PollBuilder&& builder) = default;
 
-PollBuilder PollBuilder::SetPayloadVersion(uint32_t version)
+// TODO(#2869 Phase 2 — voting): nBestHeight read needs cs_main.
+PollBuilder PollBuilder::SetPayloadVersion(uint32_t version) NO_THREAD_SAFETY_ANALYSIS
 {
     bool v3_enabled = IsPollV3Enabled(nBestHeight);
 

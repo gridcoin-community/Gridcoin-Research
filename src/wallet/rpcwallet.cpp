@@ -33,7 +33,7 @@ static CCriticalSection cs_nWalletUnlockTime;
 
 extern void ThreadTopUpKeyPool(void* parg);
 extern void ThreadCleanWalletPassphrase(void* parg);
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 static void accountingDeprecationCheck()
 {
@@ -62,7 +62,9 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
 }
 
-void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
+// TODO(#2869 Phase 2 — wallet/rpc): mapBlockIndex lookup needs cs_main.
+// RPC entry points should take cs_main before invoking.
+void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) NO_THREAD_SAFETY_ANALYSIS
 {
     int confirms = wtx.GetDepthInMainChain();
     entry.pushKV("confirmations", confirms);
@@ -2701,7 +2703,10 @@ UniValue resendtx(const UniValue& params, bool fHelp)
                 "Re-send unconfirmed transactions.\n"
                 );
 
-    ResendWalletTransactions(true);
+    {
+        LOCK(cs_setpwalletRegistered);
+        ResendWalletTransactions(true);
+    }
 
     return NullUniValue;
 }

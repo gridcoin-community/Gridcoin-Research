@@ -472,7 +472,7 @@ bool CTxDB::WriteGenericData(const std::string& strKey,const std::string& strDat
     return Write(string(strKey), strData);
 }
 
-static CBlockIndex *InsertBlockIndex(const uint256& hash)
+static CBlockIndex *InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (hash.IsNull())
         return nullptr;
@@ -509,7 +509,7 @@ bool ReadBlockHeight(CTxDB& txdb, const uint256 hash, int& height)
 }
 } // anonymous namespace
 
-bool CTxDB::LoadBlockIndex()
+bool CTxDB::LoadBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Load hashBestChain pointer to end of best chain
     if (!ReadHashBestChain(hashBestChain)) {

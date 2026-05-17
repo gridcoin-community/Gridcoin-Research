@@ -130,7 +130,9 @@ void ShowBlockIndexCorruptedMessage()
 //! \return \c false if a checkpoint does not match its corresponding block
 //! index entry.
 //!
-bool VerifyCheckpoints(const CBlockIndex* const pindexBest)
+// Called from GRC::Initialize which holds cs_main (added via init.cpp LOCK
+// rollout in Phase 1).
+bool VerifyCheckpoints(const CBlockIndex* const pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Gridcoin: verifying checkpoints...");
     uiInterface.InitMessage(_("Verifying checkpoints..."));
@@ -439,12 +441,12 @@ bool CheckBlockIndex()
     LogPrintf("Gridcoin: checking block index...");
     uiInterface.InitMessage(_("Checking block index..."));
 
+    LOCK(cs_main);
+
     if (!pindexGenesisBlock) {
         // No chain yet -- nothing to check.
         return true;
     }
-
-    LOCK(cs_main);
 
     // Pass 1: find dangling roots (pprev == null but not genesis). Each such
     // entry was created by LoadBlockIndex from a CDiskBlockIndex whose
@@ -647,7 +649,7 @@ extern bool fQtActive;
 // Functions
 // -----------------------------------------------------------------------------
 
-void GRC::RebuildBeaconRegistry()
+void GRC::RebuildBeaconRegistry() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -696,7 +698,7 @@ void GRC::RebuildBeaconRegistry()
     LogPrintf("INFO: %s: beacon registry rebuild complete in %dms.", __func__, GetTimeMillis() - start_ms);
 }
 
-bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest)
+bool GRC::Initialize(ThreadHandlerPtr threads, CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Gridcoin: initializing...");
 

@@ -140,7 +140,7 @@ bool EvaluateSequenceLocks(const CBlockIndex& block,
  * transaction), find the height of the block that contains it.
  * Returns 0 on failure.
  */
-static int GetHeightForTxIndex(const CTxIndex& txindex)
+static int GetHeightForTxIndex(const CTxIndex& txindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlock block;
     if (!ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos,

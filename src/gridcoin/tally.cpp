@@ -49,7 +49,8 @@ bool g_newbie_snapshot_fix_enabled;
 //!
 //! \param pindex Index of the block to repair.
 //!
-void RepairZeroCpidIndex(CBlockIndex* const pindex)
+// TODO(#2869 Phase 2 — tally): GetClaimByIndex requires cs_main.
+void RepairZeroCpidIndex(CBlockIndex* const pindex) NO_THREAD_SAFETY_ANALYSIS
 {
     const ClaimOption claim = GetClaimByIndex(pindex);
 
@@ -566,9 +567,12 @@ public:
     //! \return \c false if the snapshot system failed to initialize because of
     //! an error.
     //!
+    // TODO(#2869 Phase 2 — tally): pindexBest reads (snapshot rewind handling
+    // from issue #2865 Phase 2) need cs_main. Tally::ActivateSnapshotAccrual
+    // caller chain is via GRC::Initialize, which holds cs_main.
     bool ActivateSnapshotAccrual(
         const CBlockIndex* const baseline_pindex,
-        SuperblockPtr superblock)
+        SuperblockPtr superblock) NO_THREAD_SAFETY_ANALYSIS
     {
         if (!baseline_pindex || !IsV11Enabled(baseline_pindex->nHeight + 1)) {
             return false;
@@ -728,7 +732,8 @@ private:
     //! \brief Get the block index entry of the block when research accounting
     //! begins.
     //!
-    CBlockIndex* GetStartHeight()
+    // TODO(#2869 Phase 2 — tally): pindexGenesisBlock read needs cs_main.
+    CBlockIndex* GetStartHeight() NO_THREAD_SAFETY_ANALYSIS
     {
         // A node syncing from zero does not know the block index entry of the
         // starting height yet, so the tally will initialize without it.
@@ -975,7 +980,8 @@ public:
     //!
     //! \return \c false if an error occurred.
     //!
-    bool RebuildAccrualSnapshots()
+    // TODO(#2869 Phase 2 — tally): pindexBest read needs cs_main.
+    bool RebuildAccrualSnapshots() NO_THREAD_SAFETY_ANALYSIS
     {
         assert(m_snapshot_baseline_pindex != nullptr);
 
@@ -1139,7 +1145,8 @@ CAmount Tally::AccrualNearLimit(
 //! \param cpid for which to calculate the accrual correction.
 //! \param superblock that is the high point of the accrual correction
 //!
-CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock)
+// TODO(#2869 Phase 2 — tally): mapBlockIndex + hashBestChain read need cs_main.
+CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) NO_THREAD_SAFETY_ANALYSIS
 {
     // This function was moved from the anonymous namespace and private, to public and made static, because it has
     // to be called from BlockRewardRules::Check() directly too. Why?

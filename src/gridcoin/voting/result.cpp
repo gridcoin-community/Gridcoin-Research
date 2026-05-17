@@ -691,7 +691,10 @@ public:
     //!
     //! https://github.com/gridcoin-community/Gridcoin-Research/issues/87
     //!
-    Weight GetMagnitudeFactor()
+    // TODO(#2869 Phase 2 — voting): pindexBest read needs cs_main. Per the
+    // standing voting-redesign work, this whole class is set to be replaced;
+    // suppress for now to keep Phase 1 in scope.
+    Weight GetMagnitudeFactor() NO_THREAD_SAFETY_ANALYSIS
     {
         if (m_magnitude_factor != 0) {
             return m_magnitude_factor;
@@ -1103,7 +1106,8 @@ private:
 //!
 //! \return Latest superblock active during the poll.
 //!
-SuperblockPtr ResolveSuperblockForPoll(const Poll& poll)
+// TODO(#2869 Phase 2 — voting): pindexBest walk needs cs_main.
+SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) NO_THREAD_SAFETY_ANALYSIS
 {
     SuperblockPtr superblock = Quorum::CurrentSuperblock();
 
@@ -1138,7 +1142,8 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll)
 //! \return Money supply as of the last block in the poll window in units of
 //! 1/100000000 GRC.
 //!
-CAmount ResolveMoneySupplyForPoll(const Poll& poll)
+// TODO(#2869 Phase 2 — voting): pindexBest reads need cs_main.
+CAmount ResolveMoneySupplyForPoll(const Poll& poll) NO_THREAD_SAFETY_ANALYSIS
 {
     if (!poll.Expired(pindexBest->nTime)) {
         return pindexBest->nMoneySupply;

@@ -118,10 +118,18 @@ BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
     pindex->pprev->pprev->pprev->pprev->AddMRCResearcherContext(cpid, 72, 0.0);
     pindex->pprev->pprev->pprev->pprev->pprev->pprev->SetResearcherContext(cpid, 72, 0.0);
 
-    CBlockIndex* index{pindexGenesisBlock};
-    while (index) {
-        GRC::Tally::RecordRewardBlock(index);
-        index = index->pnext;
+    {
+        // Test runs single-threaded; pindexGenesisBlock is a Setup-fixture-
+        // owned pointer, not the production global. Suppress the analyzer
+        // warning rather than introducing a cs_main lock the test doesn't need.
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+        CBlockIndex* index{pindexGenesisBlock};
+        while (index) {
+            GRC::Tally::RecordRewardBlock(index);
+            index = index->pnext;
+        }
+        #pragma clang diagnostic pop
     }
 
     BOOST_CHECK(account.m_last_block_ptr == pindex->pprev);

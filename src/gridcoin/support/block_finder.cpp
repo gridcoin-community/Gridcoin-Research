@@ -7,7 +7,11 @@
 
 using namespace GRC;
 
-CBlockIndex* BlockFinder::FindByHeight(int height)
+// TODO(#2869 Phase 2 — block_finder): nBestHeight / pindexGenesisBlock /
+// pindexBest reads need cs_main. 29 call sites across the codebase, some
+// already holding cs_main and some not. Annotate as required + audit callers
+// in Phase 2 rather than cascading Phase 1.
+CBlockIndex* BlockFinder::FindByHeight(int height) NO_THREAD_SAFETY_ANALYSIS
 {
     // If the height is at the bottom half of the chain, start searching from
     // the start to the end, otherwise search backwards from the end.
@@ -31,7 +35,7 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
     return index;
 }
 
-CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
+CBlockIndex* BlockFinder::FindByMinTime(int64_t time) NO_THREAD_SAFETY_ANALYSIS
 {
     // Select starting point depending on time proximity. While this is not as
     // accurate as in the FindByHeight case it will still give us a reasonable
@@ -57,7 +61,7 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 }
 
 // The arguments are passed by value on purpose.
-CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in)
+CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in) NO_THREAD_SAFETY_ANALYSIS
 {
     CBlockIndex* index = index_in;
 
@@ -74,7 +78,7 @@ CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex*
     return index;
 }
 
-CBlockIndex* BlockFinder::FindLatestSuperblock(CBlockIndex* const index_in)
+CBlockIndex* BlockFinder::FindLatestSuperblock(CBlockIndex* const index_in) NO_THREAD_SAFETY_ANALYSIS
 {
     CBlockIndex* index = index_in;
 
