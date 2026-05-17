@@ -98,12 +98,45 @@ CoherenceResult VerifyChainCoherence(int max_walkback)
     //
     // sb_cross_count drives whether the beacon registry must be Reset()
     // rather than clamped (see doc/block_corruption_recovery_design.md).
+    std::set<uint256> active_walk;
     for (CBlockIndex* ghost = result.pindex_consistent->pnext; ghost; ghost = ghost->pnext) {
         result.abandoned_indexes.push_back(ghost);
         result.abandoned_positions.insert(PackBlockFilePos(ghost->nFile, ghost->nBlockPos));
+        active_walk.insert(ghost->GetBlockHash());
         if (ghost->IsSuperblock()) {
             ++result.sb_cross_count;
         }
+    }
+
+    // Phase 2.5 -- catch side-chain CBlockIndex* entries above the consistent
+    // tip. pnext only follows the active chain, so a competing-fork block at
+    // height > pindex_consistent->nHeight that was AcceptBlock'ed earlier
+    // (e.g. during a prior reorg or alt-chain delivery from peers) is invisible
+    // to the walk above. Its pprev chain still runs through the abandoned
+    // range. If we don't purge it now alongside the active-chain ghosts, the
+    // NEXT LoadBlockIndex sees a CDiskBlockIndex whose hashPrev resolves to an
+    // entry already purged in this run, leaves pprev null, and CheckBlockIndex
+    // trips on the dangling pprev (originally caught 2026-05-17 on isolated
+    // testnet slot 10, mid-Phase-2 PR #2941 testing). Position is intentionally
+    // NOT added to abandoned_positions: side-chain blocks were never connected
+    // so they wrote nothing to CTxIndex / vSpent. SB crossings are also counted
+    // strictly from the active walk above, since only active-chain SB
+    // activations mutated registry state.
+    unsigned int side_chain_purged = 0;
+    for (const auto& kv : mapBlockIndex) {
+        CBlockIndex* p = kv.second;
+        if (p
+            && p->nHeight > result.pindex_consistent->nHeight
+            && !active_walk.count(kv.first))
+        {
+            result.abandoned_indexes.push_back(p);
+            ++side_chain_purged;
+        }
+    }
+    if (side_chain_purged > 0) {
+        LogPrintf("INFO: %s: extending abandonment to %u side-chain index "
+                  "entries above consistent tip height %d.",
+                  __func__, side_chain_purged, result.pindex_consistent->nHeight);
     }
 
     return result;

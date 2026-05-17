@@ -5,6 +5,7 @@
 #include "chainparams.h"
 #include "gridcoin/scraper/scraper_registry.h"
 #include "main.h"
+#include "txdb.h"
 #include "util/threadnames.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/contract/contract.h"
@@ -443,32 +444,113 @@ bool CheckBlockIndex()
     LogPrintf("Gridcoin: checking block index...");
     uiInterface.InitMessage(_("Checking block index..."));
 
-    // Block index integrity status
-    bool status = true;
+    if (!pindexGenesisBlock) {
+        // No chain yet -- nothing to check.
+        return true;
+    }
 
-    if (pindexGenesisBlock) {
-        LOCK(cs_main);
+    LOCK(cs_main);
 
-        for (const auto& index_pair : mapBlockIndex) {
-            const CBlockIndex* const pindex = index_pair.second;
+    // Pass 1: find dangling roots (pprev == null but not genesis). Each such
+    // entry was created by LoadBlockIndex from a CDiskBlockIndex whose
+    // hashPrev resolved to a hash no longer in LevelDB -- typically a
+    // side-chain block whose ancestor was purged by a prior Phase 2 run that
+    // missed the side chain (the original Phase 2 forward walk only follows
+    // the active-chain pnext linkage; the coherence.cpp fix that paired with
+    // this self-heal extends the walk to side-chain entries above the
+    // consistent tip).
+    std::set<uint256> bad_hashes;
+    for (const auto& kv : mapBlockIndex) {
+        const CBlockIndex* p = kv.second;
+        if (!p) {
+            // Null pointer in mapBlockIndex itself: treat as bad, but skip --
+            // there's no descendant chain to follow.
+            bad_hashes.insert(kv.first);
+            continue;
+        }
+        if (!p->pprev && p != pindexGenesisBlock) {
+            bad_hashes.insert(kv.first);
+        }
+    }
 
-            if (!pindex || !(pindex->pprev || pindex == pindexGenesisBlock)) {
-                status = false;
-                break;
+    if (bad_hashes.empty()) {
+        LogPrintf("Gridcoin: block index is clean");
+        return true;
+    }
+
+    // Pass 2: BFS to mark all transitive descendants. A descendant of a bad
+    // root has pprev pointing to a valid CBlockIndex object (the dangling
+    // root, which exists in mapBlockIndex with pprev=null), so the original
+    // check loop wouldn't have caught it -- but removing only the roots and
+    // leaving descendants behind would leave them pointing at freed entries
+    // (use-after-free at the next access). We must remove the whole subtree
+    // together.
+    std::multimap<uint256, uint256> children_of;
+    for (const auto& kv : mapBlockIndex) {
+        const CBlockIndex* p = kv.second;
+        if (p && p->pprev) {
+            children_of.emplace(p->pprev->GetBlockHash(), kv.first);
+        }
+    }
+    std::deque<uint256> queue(bad_hashes.begin(), bad_hashes.end());
+    while (!queue.empty()) {
+        const uint256 h = queue.front();
+        queue.pop_front();
+        auto range = children_of.equal_range(h);
+        for (auto it = range.first; it != range.second; ++it) {
+            if (bad_hashes.insert(it->second).second) {
+                queue.push_back(it->second);
             }
         }
     }
 
-    if (status) {
-        LogPrintf("Gridcoin: block index is clean");
-        return status;
+    // Defensive guard: if pindexBest is itself in the dangling subtree, the
+    // active chain tip is unreachable from genesis and we cannot safely
+    // self-heal -- silently purging pindexBest's lineage would leave the
+    // wallet at a tip that no longer exists. Fall back to the legacy modal
+    // so the user reseeds via -resetblockchaindata.
+    if (pindexBest && bad_hashes.count(pindexBest->GetBlockHash())) {
+        LogPrintf("WARNING: block index integrity check failed -- pindexBest %s @ %d is "
+                  "itself in the dangling subtree (%u entries). Falling back to "
+                  "blockchain reset.",
+                  pindexBest->GetBlockHash().GetHex(), pindexBest->nHeight,
+                  (unsigned) bad_hashes.size());
+        ShowBlockIndexCorruptedMessage();
+        return false;
     }
 
-    LogPrintf("WARNING: block index integrity check failed -- found mapBlockIndex entry "
-              "with null pprev that is not the genesis block");
-    ShowBlockIndexCorruptedMessage();
+    LogPrintf("WARNING: block index integrity check found %u entries with broken pprev "
+              "linkage (and their descendants). Self-healing by purging from "
+              "mapBlockIndex and LevelDB.",
+              (unsigned) bad_hashes.size());
 
-    return status;
+    // Erase the bad subtree from both mapBlockIndex and LevelDB. The
+    // CBlockIndex objects are owned by GRC::BlockIndexPool and must not be
+    // deleted -- see PurgeOrphanedBlockIndexEntries for the rationale.
+    CTxDB txdb;
+    unsigned int map_erased = 0;
+    unsigned int leveldb_erased = 0;
+    for (const uint256& h : bad_hashes) {
+        if (txdb.EraseBlockIndex(h)) {
+            ++leveldb_erased;
+        } else {
+            LogPrintf("WARN: %s: EraseBlockIndex failed for %s; on-disk record may persist.",
+                      __func__, h.GetHex());
+        }
+        if (mapBlockIndex.erase(h) > 0) {
+            ++map_erased;
+        }
+    }
+    if (!txdb.Sync()) {
+        LogPrintf("WARN: %s: CTxDB::Sync failed after CDiskBlockIndex erase; will be retried "
+                  "on the next durable write.", __func__);
+    }
+
+    LogPrintf("Gridcoin: block index self-heal complete (%u mapBlockIndex entries removed, "
+              "%u CDiskBlockIndex records erased from LevelDB; pool slots remain allocated, "
+              "see block_index.h).",
+              map_erased, leveldb_erased);
+    return true;
 }
 
 //!
