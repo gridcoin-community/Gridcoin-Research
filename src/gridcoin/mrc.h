@@ -11,12 +11,14 @@
 #include "gridcoin/cpid.h"
 #include "gridcoin/superblock.h"
 #include "serialize.h"
+#include "sync.h"
 #include "uint256.h"
 
 #include <optional>
 #include <stdexcept>
 
 class CPubKey;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 class MRC_error : public std::runtime_error
@@ -244,7 +246,7 @@ public:
     //! \brief ComputeMRCFee
     //! \return Amount of fee in Halfords
     //!
-    CAmount ComputeMRCFee() const;
+    CAmount ComputeMRCFee() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Sign an instance that claims research rewards.
@@ -332,7 +334,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -343,7 +345,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // Add is a noop here, because this is handled at the block level by the staker (in the miner) as with the claim.
     void Add(const ContractContext& ctx) override {}

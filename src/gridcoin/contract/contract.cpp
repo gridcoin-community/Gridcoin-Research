@@ -362,10 +362,7 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-// TODO(#2869 Phase 2 — contract): pindexBest read needs cs_main. Caller in
-// gridcoin.cpp Initialize() holds it (added via init.cpp LOCK rollout in
-// Phase 1); annotate as EXCLUSIVE_LOCKS_REQUIRED once all callers verified.
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) NO_THREAD_SAFETY_ANALYSIS
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
@@ -938,12 +935,13 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
-// TODO(#2869 Phase 2 — contract): cs_main is expected to be held when
-// nBestHeight is read in the POLL/PROJECT/PROTOCOL/SCRAPER branches below
-// (see in-body comments). Phase 2 should annotate this as
-// EXCLUSIVE_LOCKS_REQUIRED(cs_main) and audit every caller (the tx-deserialize
-// path may not always hold cs_main).
-void Contract::Body::ResetType(const ContractType type) NO_THREAD_SAFETY_ANALYSIS
+// The in-body comments below note that cs_main is expected to be held when
+// the POLL/PROJECT/PROTOCOL/SCRAPER branches read nBestHeight. Annotated as
+// EXCLUSIVE_LOCKS_REQUIRED here; the cascade reaches into serializer paths
+// (Contract::Body::ResetType is called from Unserialize implementations of
+// CTransaction's body). Tx-deserialize call sites are tightened in this
+// same Phase 2 commit batch.
+void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (type) {
         case ContractType::UNKNOWN:

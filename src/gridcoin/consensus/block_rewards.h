@@ -75,7 +75,7 @@ public:
     //!
     //! Requires the full validation constructor.
     //!
-    bool Check(std::string& error_out) const;
+    bool Check(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // --- Shared spec types ---------------------------------------------------
 
@@ -204,8 +204,8 @@ private:
 
     // --- Full validation sub-checks ------------------------------------------
 
-    bool CheckResearcherClaim(std::string& error_out) const;
-    bool CheckNoncruncherClaim(std::string& error_out) const;
+    bool CheckResearcherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool CheckNoncruncherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     bool CheckReward(CAmount research_owed, CAmount& out_stake_owed,
                      CAmount mrc_staker_fees_owed, CAmount mrc_fees,
@@ -214,7 +214,7 @@ private:
 
     bool CheckMRCRewards(CAmount& mrc_rewards, CAmount& mrc_staker_fees,
                          CAmount& mrc_fees, unsigned int& non_zero_outputs,
-                         std::string& error_out) const;
+                         std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     bool CheckResearchReward(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     bool CheckBeaconSignature(std::string& error_out) const;

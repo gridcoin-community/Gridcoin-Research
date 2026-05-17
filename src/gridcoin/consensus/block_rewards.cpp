@@ -307,7 +307,7 @@ bool BlockRewardRules::ValidateMandatorySidestakeOutputs(
 // Full claim validation
 // =============================================================================
 
-bool BlockRewardRules::Check(std::string& error_out) const
+bool BlockRewardRules::Check(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!m_block) {
         error_out = "BlockRewardRules::Check() requires a block (constructed with full validation state)";
@@ -325,7 +325,7 @@ bool BlockRewardRules::Check(std::string& error_out) const
 // CheckNoncruncherClaim
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const
+bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CAmount mrc_rewards = 0;
     CAmount mrc_staker_fees = 0;
@@ -363,10 +363,7 @@ bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const
 // CheckResearcherClaim
 // -----------------------------------------------------------------------------
 
-// TODO(#2869 Phase 2 — block_rewards): mapBlockIndex + ValidateMRC need
-// cs_main. Called from ConnectBlock (already cs_main-required); annotate as
-// EXCLUSIVE_LOCKS_REQUIRED in Phase 2 after the rest of the class is audited.
-bool BlockRewardRules::CheckResearcherClaim(std::string& error_out) const NO_THREAD_SAFETY_ANALYSIS
+bool BlockRewardRules::CheckResearcherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For version 11 blocks and higher, just validate the reward and check the signature. No need for the rest
     // of these shenanigans.
@@ -539,14 +536,12 @@ bool BlockRewardRules::CheckReward(
 // CheckMRCRewards — validate MRC outputs in coinstake
 // -----------------------------------------------------------------------------
 
-// TODO(#2869 Phase 2 — block_rewards): mapBlockIndex + ValidateMRC need
-// cs_main. Called from ConnectBlock (already cs_main-required).
 bool BlockRewardRules::CheckMRCRewards(
     CAmount& mrc_rewards,
     CAmount& mrc_staker_fees,
     CAmount& mrc_fees,
     unsigned int& non_zero_outputs,
-    std::string& error_out) const NO_THREAD_SAFETY_ANALYSIS
+    std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CTransaction& coinstake = m_block->vtx[1];
     const Claim& claim = m_block->GetClaim();

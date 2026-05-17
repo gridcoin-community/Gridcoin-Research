@@ -2909,7 +2909,14 @@ UniValue addkey(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Not an admin contract type.");
     }
 
-    std::pair<CWalletTx, std::string> result = GRC::SendContract(contract);
+    std::pair<CWalletTx, std::string> result;
+    {
+        // GRC::SendContract is EXCLUSIVE_LOCKS_REQUIRED(cs_main) (Phase 2).
+        // Scope kept narrow to avoid blocking other RPCs across the wider
+        // construction work above.
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
     std::string error = result.second;
 
     if (!error.empty()) {

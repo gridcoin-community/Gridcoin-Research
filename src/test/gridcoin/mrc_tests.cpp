@@ -151,6 +151,8 @@ BOOST_AUTO_TEST_CASE(it_has_proper_fees_for_newbies)
     mrc.m_mining_id = cpid;
     mrc.m_research_subsidy = 72;
 
+    LOCK(cs_main);
+
     // Before:
     mrc.m_last_block_hash = pindex->pprev->pprev->GetBlockHash();
     BOOST_CHECK_EQUAL(mrc.ComputeMRCFee(), mrc.m_research_subsidy);
