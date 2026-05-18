@@ -125,7 +125,7 @@ bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
 double CoinToDouble(double surrogate);
 
-bool ProcessMessages(CNode* pfrom);
+bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);

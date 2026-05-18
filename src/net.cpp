@@ -738,8 +738,7 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 
 
-// requires LOCK(cs_vSend)
-void SocketSendData(CNode *pnode)
+void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
 {
     std::deque<SerializeData>::iterator it = pnode->vSendMsg.begin();
 
@@ -828,8 +827,18 @@ void ThreadSocketHandler2(void* parg)
             vector<CNode*> vNodesCopy = vNodes;
             for (auto const& pnode : vNodesCopy)
             {
-                if (pnode->fDisconnect ||
-                    (pnode->GetRefCount() <= 0 && pnode->vRecvMsg.empty() && pnode->nSendSize == 0 && pnode->ssSend.empty()))
+                // vRecvMsg / nSendSize / ssSend are guarded by per-node locks.
+                // Take them in canonical order (cs_vRecvMsg first, then cs_vSend)
+                // for the disconnect-eligibility check. Lazy: only if refcount
+                // has dropped to zero, since the test short-circuits otherwise.
+                bool empty_buffers = false;
+                if (pnode->GetRefCount() <= 0) {
+                    LOCK2(pnode->cs_vRecvMsg, pnode->cs_vSend);
+                    empty_buffers = pnode->vRecvMsg.empty()
+                                    && pnode->nSendSize == 0
+                                    && pnode->ssSend.empty();
+                }
+                if (pnode->fDisconnect || empty_buffers)
                 {
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());

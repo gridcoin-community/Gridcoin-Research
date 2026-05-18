@@ -2367,7 +2367,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
-        pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        {
+            LOCK(pfrom->cs_vSend);
+            pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        }
 
 
         if (!pfrom->fInbound)
@@ -2428,6 +2431,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == NetMsgType::VERACK)
     {
+        LOCK(pfrom->cs_vRecvMsg);
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
     }
     else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
@@ -3050,8 +3054,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     return true;
 }
 
-// requires LOCK(cs_vRecvMsg)
-bool ProcessMessages(CNode* pfrom)
+bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 {
     //
     // Message format
@@ -3066,7 +3069,7 @@ bool ProcessMessages(CNode* pfrom)
     std::deque<CNetMessage>::iterator it = pfrom->vRecvMsg.begin();
     while (!pfrom->fDisconnect && it != pfrom->vRecvMsg.end()) {
         // Don't bother if send buffer is too full to respond anyway
-        if (pfrom->nSendSize >= SendBufferSize())
+        if (WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) >= SendBufferSize())
             break;
 
         // get next message
