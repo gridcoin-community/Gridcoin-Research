@@ -88,21 +88,41 @@ CCriticalSection cs_VerifiedBeacons;
 CCriticalSection cs_ProjectPublicKeys;
 
 /**
- * @brief Flag that indicates whether the scraper is supposed to be active
+ * @brief Flag that indicates whether the scraper is supposed to be active.
+ *
+ * Written exclusively from GRC::Initialize() (gridcoin.cpp) at startup
+ * before any scraper thread runs; read on the scraper thread inside the
+ * main loop. atomic<bool> covers the cross-thread visibility.
  */
-bool fScraperActive = false;
+std::atomic<bool> fScraperActive {false};
 /**
  * @brief Vector of usernames and passwords for access to project sites which require logins to meet GPDR requirements
+ *
+ * Protected by cs_Scraper. All access paths — UserpassPopulated, the userpass
+ * utility class, and the DownloadProject* helpers — are reached only from the
+ * download section of Scraper() (the LOCK(cs_Scraper) at the start of the
+ * "section to download statistics" block). This covers both the main scraper
+ * thread loop and the reentrant ScraperSingleShot path (called by
+ * ScraperGetSuperblockContract from the staking miner thread, RPC threads,
+ * and ScraperHousekeeping); the singleshot path enters the same critical
+ * section.
  */
-std::vector<std::pair<std::string, std::string>> vuserpass;
+std::vector<std::pair<std::string, std::string>> vuserpass GUARDED_BY(cs_Scraper);
 /**
  * @brief Vector of team IDs for whitelisted teams across the different whitelisted projects. When the team requirement is
  * imposed this is important to correlate teams, since each project uses an independent ID for team names. I.e. Gridcoin
  * in one project will have, in general, a different ID, than another project.
+ *
+ * Currently unused; retained for future per-project team-id correlation work.
  */
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
-int64_t ndownloadsize = 0;
-int64_t nuploadsize = 0;
+/// Cumulative download/upload byte counts. Written by ProcessProjectRacFileByCPID
+/// and read from the "download size so far..." log line in Scraper(). Both call
+/// sites are inside the LOCK(cs_Scraper) covering the download section, so the
+/// data is effectively cs_Scraper-protected (the singleshot reentrant path also
+/// enters that critical section).
+int64_t ndownloadsize GUARDED_BY(cs_Scraper) = 0;
+int64_t nuploadsize GUARDED_BY(cs_Scraper) = 0;
 
 //!
 //! \brief Normalize a project master URL for consistent map key comparison.
@@ -300,19 +320,19 @@ void ScraperSingleShot();
  * testnewsb function (if the scraper log category is enabled).
  * @return Currently returns true. The boolean is reserved for future overall status of housekeeping.
  */
-bool ScraperHousekeeping();
+bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks if vuserpass is populated and if empty, populates it
  * @return bool true if populated
  */
-bool UserpassPopulated();
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks the scraper directory structure and files against the manifest and aligns/corrects as appropriate. Also
  * loads the TeamIDMap from file if REQUIRE_TEAM_WHITELIST_MEMBERSHIP is enabled and TeamIDs were saved to disk and loads
  * the VerifiedBeacons from disk.
  * @return
  */
-bool ScraperDirectoryAndConfigSanity();
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Stores the current beacon map to the provided file path
  * @param file
@@ -351,7 +371,7 @@ bool LoadTeamIDList(const fs::path& file);
  * manifest to the network if the scraper is active.
  * @return bool true if successful
  */
-uint256 GetmScraperFileManifestHash();
+uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Stores the mScraperFileManifest map to disk
  * @param file
@@ -371,21 +391,21 @@ bool LoadScraperFileManifest(const fs::path& file);
  * @param entry
  * @return bool true if successful
  */
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Deletes an entry from the mScraperFileManifest map and also deletes the corresponding file from disk, if it exists.
  * Also updates the mScraperFileManifest map hash and stores the hash in StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return unsigned int of the number of elements erased
  */
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Marks a file manifest entry non-current in the mScraperFileManifest map and updates the
  * StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return
  */
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Aligns the file manifest entries in the mScraperFileManifest map to the files present on disk. Deletes either/both
  * files and/or entries that are not present and have matching hashes in both.
@@ -468,13 +488,13 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
  * @param Key
  * @return bool true if successful
  */
-bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key);
+bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination
  * @return mmCSManifestsBinnedByScraper
  */
-mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper() EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination. Also culls old manifest that do not meet retention rules.
@@ -519,14 +539,14 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download the project team files and stores in the scraper data directory. This is used when
  * REQUIRE_TEAM_WHITELIST_MEMBERSHIP is true OR explorer mode is enabled.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Process project team file and populate TeamIDMap global
  * @param project
@@ -534,13 +554,13 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
  * @param etag
  * @return bool true if successful
  */
-bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag);
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag) EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap);
 /**
  * @brief Download project RAC (user) files (which have CPID level statistics) for each project on the provided whitelist.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download project public keys for account ownership proof verification from whitelisted projects.
  * Fetches get_project_config.php for each project and extracts the account_ownership_public_key element.
@@ -560,7 +580,8 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
  */
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
-                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit);
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 // Need to access from rpcblockchain.cpp
 extern UniValue SuperblockToJson(const Superblock& superblock);
 
@@ -1184,7 +1205,7 @@ private:
     fsbridge::ifstream userpassfile;
 
 public:
-    userpass()
+    userpass() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
 
@@ -1202,7 +1223,7 @@ public:
             userpassfile.close();
     }
 
-    bool import()
+    bool import() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
         std::string inputdata;
@@ -1864,8 +1885,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     return true;
 }
 
-// A lock on cs_Scraper should be taken before calling this function.
-bool ScraperDirectoryAndConfigSanity()
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto scraper_retain_noncurrent_files = []() { LOCK(cs_ScraperGlobals); return SCRAPER_RETAIN_NONCURRENT_FILES; };
@@ -2032,7 +2052,7 @@ bool ScraperDirectoryAndConfigSanity()
 }
 
 
-bool UserpassPopulated()
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     if (vuserpass.empty())
     {
@@ -2057,7 +2077,7 @@ bool UserpassPopulated()
     return true;
 }
 
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2172,7 +2192,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
     return true;
 }
 
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
@@ -2528,7 +2548,7 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
     }
 }
 
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2749,6 +2769,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };

@@ -180,7 +180,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
  * of the scraper is deemed too high. This is actually used in CScraperManifest::IsManifestAuthorized to ban
  * a scraper that is abusing the network by sending too many manifests over a very short period of time.
  */
-bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
+bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 /**
  * @brief Generates a superblock (contract) from the current convergence. It will construct/update the convergence if needed.
  * @param bStoreConvergedStats

@@ -27,7 +27,7 @@ extern CCriticalSection cs_ScraperGlobals;
 extern bool fExplorer;
 extern unsigned int nScraperSleep;
 extern unsigned int nActiveBeforeSB;
-extern bool fScraperActive;
+extern std::atomic<bool> fScraperActive;
 extern bool fQtActive;
 
 void Scraper(bool bSingleShot = false);
