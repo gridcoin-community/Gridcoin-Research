@@ -6551,8 +6551,7 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return report of test results
  */
-// TODO(#2869 Phase 3 — scraper): pindexBest reads in this RPC need cs_main.
-UniValue testnewsb(const UniValue& params, bool fHelp) NO_THREAD_SAFETY_ANALYSIS
+UniValue testnewsb(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1 )
         throw std::runtime_error(
@@ -6594,7 +6593,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp) NO_THREAD_SAFETY_ANALYSIS
     uint32_t nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint;
 
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        // pindexBest read below requires cs_main; canonical order is
+        // cs_main -> subsystem locks, so acquire cs_main first.
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
         NewFormatSuperblock = SuperblockPtr::BindShared(
             Superblock::FromConvergence(ConvergedScraperStatsCache),
@@ -6731,9 +6732,15 @@ UniValue testnewsb(const UniValue& params, bool fHelp) NO_THREAD_SAFETY_ANALYSIS
         // SuperblockValidator class tests (past convergence)
         //
 
-        SuperblockPtr RandomPastSBPtr = SuperblockPtr::BindShared(
-            std::move(RandomPastSB),
-            pindexBest);
+        SuperblockPtr RandomPastSBPtr;
+        {
+            // pindexBest read requires cs_main; scoped tight so the
+            // ValidateSuperblock calls below run without cs_main held.
+            LOCK(cs_main);
+            RandomPastSBPtr = SuperblockPtr::BindShared(
+                std::move(RandomPastSB),
+                pindexBest);
+        }
 
         if (Quorum::ValidateSuperblock(RandomPastSBPtr))
         {
