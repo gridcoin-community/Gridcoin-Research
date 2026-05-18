@@ -1196,6 +1196,10 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     //------- CPID -------------- beacon address -- Mag --- payment - suppressed
     std::map<GRC::Cpid, std::tuple<CTxDestination, double, CAmount, bool>> mCPIDRain;
 
+    // BeaconRegistry::TryActive needs cs_main; held across the iteration
+    // since each loop body does a TryActive lookup.
+    LOCK(cs_main);
+
     for (const auto& entry : mScraperConvergedStats)
     {
         // Only consider entries along the specified dimension
@@ -1324,7 +1328,8 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_MISC_ERROR, "No payments above 0.01 GRC qualify. Please recheck your specified amount.");
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    // cs_main is already held from the beacon-lookup loop above; just take cs_wallet here.
+    LOCK(pwalletMain->cs_wallet);
 
     CWalletTx wtx;
     wtx.mapValue["comment"] = "Rain By Magnitude";

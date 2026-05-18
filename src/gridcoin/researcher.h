@@ -491,7 +491,7 @@ public:
     //! to mint blocks that claim Proof-of-Research rewards. Otherwise, this
     //! method resets the wallet's mining context to non-cruncher mode.
     //!
-    static void Reload();
+    static void Reload() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Reload the wallet's researcher mining context from the supplied
@@ -503,7 +503,7 @@ public:
     //!
     static void Reload(
         MiningProjectMap projects,
-        BeaconError beacon_error = GRC::BeaconError::NONE);
+        BeaconError beacon_error = GRC::BeaconError::NONE) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -515,7 +515,7 @@ public:
     //! application calls this method to update the researcher context with any
     //! newly eligible or ineligible CPIDs.
     //!
-    static void Refresh();
+    static void Refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the primary mining ID that identifies the owner of the wallet.

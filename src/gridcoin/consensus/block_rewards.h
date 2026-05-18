@@ -217,7 +217,7 @@ private:
                          std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     bool CheckResearchReward(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-    bool CheckBeaconSignature(std::string& error_out) const;
+    bool CheckBeaconSignature(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     // Legacy v9-v10 checks
     bool CheckResearchRewardLimit(std::string& error_out) const;

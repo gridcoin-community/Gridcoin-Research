@@ -366,7 +366,7 @@ public:
         return GetMagnitudeUnit().ToDouble();
     }
 
-    int64_t AccrualAge() const override
+    int64_t AccrualAge() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // For the CPIDs that never staked a block, report the accrual age as
         // the time since the CPID advertised a beacon. This is not perfectly
@@ -393,7 +393,7 @@ public:
         return SnapshotCalculator::AccrualAge(m_account);
     }
 
-    double AccrualDays() const override
+    double AccrualDays() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Since this informational value is not consensus-critical, we use
         // floating-point arithmetic for readability:

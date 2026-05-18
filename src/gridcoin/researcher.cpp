@@ -1151,11 +1151,8 @@ Researcher::Researcher(
 
 void Researcher::Initialize()
 {
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        g_recent_beacons.ImportRegistry(GetBeaconRegistry());
-    }
-
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    g_recent_beacons.ImportRegistry(GetBeaconRegistry());
     Reload();
 }
 
@@ -1519,7 +1516,10 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
     gArgs.ForceSetArg("-email", email);
     gArgs.ForceSetArg("-noncruncher", mode == ResearcherMode::NONCRUNCHER ? "1" : "0");
 
-    Reload();
+    {
+        LOCK(cs_main);
+        Reload();
+    }
 
     return true;
 }

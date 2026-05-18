@@ -674,7 +674,10 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
 void ResearcherModel::reload()
 {
-    Researcher::Reload();
+    {
+        LOCK(cs_main);
+        Researcher::Reload();
+    }
     resetResearcher(Researcher::Get());
 }
 

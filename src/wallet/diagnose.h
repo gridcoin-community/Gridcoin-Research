@@ -533,6 +533,8 @@ public:
          * find if there is Active beacon
          */
 
+        LOCK(cs_main);
+
         const GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
         if (const GRC::CpidOption cpid = GRC::Researcher::Get()->Id().TryCpid()) {
             if (const GRC::BeaconOption beacon = beacons.Try(*cpid)) {

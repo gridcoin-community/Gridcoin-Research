@@ -68,7 +68,7 @@ int64_t nBeaconCount = 0;
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddTestBeacon(const GRC::Cpid cpid)
+void AddTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -98,7 +98,7 @@ void AddTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddExpiredTestBeacon(const GRC::Cpid cpid)
+void AddExpiredTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -126,7 +126,7 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void RemoveTestBeacon(const GRC::Cpid cpid)
+void RemoveTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -513,7 +513,15 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
+    // Reload requires cs_main but the test fixture is single-threaded.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
     GRC::Researcher::Reload(GRC::MiningProjectMap());
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
@@ -708,6 +716,14 @@ BOOST_AUTO_TEST_SUITE_END()
 // -----------------------------------------------------------------------------
 
 BOOST_AUTO_TEST_SUITE(Researcher)
+
+// Researcher::Reload/Refresh are EXCLUSIVE_LOCKS_REQUIRED(cs_main). Tests
+// invoke them directly on the single-threaded test fixture without acquiring
+// cs_main. Suppress thread-safety warnings for the suite.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_noncruncher)
 {
@@ -1829,5 +1845,9 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     gArgs.ForceSetArg("pooloperator", "0");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

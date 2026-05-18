@@ -3242,7 +3242,7 @@ bool StoreBeaconList(const fs::path& file)
     BeaconConsensus Consensus = GetConsensusBeaconList();
 
     _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: "
-         + ToString(GetBeaconRegistry().Beacons().size()));
+         + ToString(WITH_LOCK(cs_main, return GetBeaconRegistry().Beacons().size())));
     _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: "
          + ToString(Consensus.mBeaconMap.size()));
 

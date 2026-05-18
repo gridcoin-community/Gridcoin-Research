@@ -714,7 +714,7 @@ bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSI
 // CheckBeaconSignature — verify claim is signed by active beacon key
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckBeaconSignature(std::string& error_out) const
+bool BlockRewardRules::CheckBeaconSignature(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const Claim& claim = m_block->GetClaim();
     const CpidOption cpid = claim.m_mining_id.TryCpid();
