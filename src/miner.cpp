@@ -1263,7 +1263,7 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     return true;
 }
 
-void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime)
+void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (OutOfSyncByAge()) {
         LogPrintf("AddSuperblockContractOrVote: Out of sync.");
