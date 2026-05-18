@@ -1,13 +1,15 @@
-# Clang Thread Safety Analysis — Phase 1 + Phase 2 report (issue #2869)
+# Clang Thread Safety Analysis — issue #2869 rollout report
 
 The issue #2869 multi-phase thread-safety rollout. Captures the build-system enablement, the canonical lock order it established, a per-resolution breakdown of every warning the analyzer surfaced, and the deferral decisions taken to preserve historical lock-scope design intent.
 
 The phases are an internal organizing tool, not a release boundary:
 
 - **Phase 1**: enable the analyzer; annotate cs_main globals + their immediate call chains; annotate `setpwalletRegistered`; document Phase 2/3/4 deferrals in-code with `TODO(#2869 Phase N — area)` comments.
-- **Phase 2 (this PR)**: replace the Phase 1 `NO_THREAD_SAFETY_ANALYSIS` placeholders in: block_finder, tally, mrc + block_rewards + contract, wallet + rpcwallet, researcher/beacon, voting + miner + policy. One commit per sub-area; each commit ends warning-free.
-- **Phase 3**: scraper, quorum (lambda-capture analyzer issues).
+- **Phase 2**: replace the Phase 1 `NO_THREAD_SAFETY_ANALYSIS` placeholders in: block_finder, tally, mrc + block_rewards + contract, wallet + rpcwallet, researcher/beacon, voting + miner + policy. One commit per sub-area; each commit ends warning-free.
+- **Phase 3**: scraper + quorum (lambda-capture analyzer issues).
 - **Phase 4**: network layer (`ProcessMessage`, `AlreadyHave`, `PushVersion`, `ArgsManager::GetBlocksDirPath`).
+
+After Phase 4, exactly **one** `NO_THREAD_SAFETY_ANALYSIS` marker remains in the tree: `VoteResolver::GetMagnitudeFactor` at `src/gridcoin/voting/result.cpp`. It is held intentionally per the voting-redesign design constraint (see "Design constraint preserved" below) and will be removed when the voting-redesign work lands.
 
 Each phase ends with the same invariant: `cmake --build build_clang --target gridcoinresearchd gridcoinresearch test_gridcoin` produces zero `-Wthread-safety-*` warnings and the boost test suite passes.
 
@@ -257,18 +259,35 @@ These functions are called from `ResearcherModel::formatAccrual` on GUI refresh 
 | EXCLUSIVE_LOCKS_REQUIRED is preferable to internal acquisition when the caller chain can hold the lock — it eliminates inversion risk and surfaces missing locks at the API boundary. | Pattern from Phase 1 `cs_setpwalletRegistered` fix; reapplied throughout Phase 2. |
 | Pragma-suppressing a test case is acceptable when the test is single-threaded and the fixture mutates analyzer-tracked globals directly; adding `LOCK(cs_main)` in the test is preferable when the existing fixture already supports it. | `coinstake_construction_tests.cpp` Tests 4 + 5 got `LOCK(cs_main)` (fixture supports it); Phase 1 `block_finder_tests.cpp` got the pragma (fixture mutates pindexBest in setup). |
 
-### Remaining work — Phase 3 + Phase 4
+## Phase 3 — scraper + quorum sub-area commits
 
-After Phase 2 ships, the following `NO_THREAD_SAFETY_ANALYSIS` sites remain, all in Phase 3+ territory:
+Phase 3 resolves the lambda-capture analyzer issues in `quorum.cpp` and the chain-state reads in the `testnewsb` scraper RPC.
 
-| Phase | File:line | Function | Why deferred |
-|---|---|---|---|
-| 3 | `gridcoin/scraper/scraper.cpp:6555` | `testnewsb` RPC | Touches converged scraper state; needs the broader scraper annotation pass. |
-| 3 | `gridcoin/quorum.cpp:1083, 1119, 1148, 1818` | `AddBeaconPartsData` + two lambdas + `Quorum::SuperblockNeeded` | The two lambdas are independently suppressed because the analyzer cannot see hold state through lambda captures — needs Phase 3 lambda strategy. |
-| 4 | `net.cpp:486` | `CNode::PushVersion` | Network layer; coupled with `ProcessMessage` / `AlreadyHave` annotation. |
-| 4 | `main.cpp:2206, 2236` | `AlreadyHave`, `ProcessMessage` | The two P2P entry points; ProcessMessage's reach is the broadest single annotation cascade in the codebase. |
-| 4 | `util/system.cpp:303` | `ArgsManager::GetBlocksDirPath` | Returns a reference to a `cs_args`-guarded cache; needs a return-by-value or a lifetime-tied accessor. |
-| — | `gridcoin/voting/result.cpp:697` | `VoteResolver::GetMagnitudeFactor` | **Permanent until voting-redesign lands.** See "Design constraint" above — promoting it would re-acquire cs_main across the entire CountVotes loop and undo the historical scope-reduction work. |
+| Commit | Sub-area | Functions / change |
+|---|---|---|
+| `848872500` | `gridcoin/quorum.cpp` + `quorum.h` + `miner.cpp` | `Quorum::SuperblockNeeded`, `Quorum::ValidateSuperblockClaim`, `AddSuperblockContractOrVote` (miner.cpp) → `EXCLUSIVE_LOCKS_REQUIRED(cs_main)`. All four `SuperblockNeeded` callers already held cs_main. `ProjectCombiner::AddBeaconPartsData` lost its function-level NO_THREAD_SAFETY_ANALYSIS — it only takes scraper-subsystem locks. The two inner lambdas (`find_entry`, `add_optional_part`) were refactored from `[&manifest]` captures to take projects/vParts as explicit parameters so the analyzer can see that the values consumed are the ones the enclosing LOCK protects (lambda captures don't propagate hold-state). quorum.h gains `#include "sync.h"` + `extern cs_main`. No new LOCK statements; no behavior change. |
+| `fdabee989` | `gridcoin/scraper/scraper.cpp` | `testnewsb` RPC drops NO_THREAD_SAFETY_ANALYSIS. The first `LOCK(cs_ConvergedScraperStatsCache)` around `BindShared(..., pindexBest)` promoted to `LOCK2(cs_main, cs_ConvergedScraperStatsCache)` — canonical cs_main → subsystem, matches the existing pattern in `ScraperGetSuperblockContract`. The second `pindexBest` read (past-convergence path) gets a NEW tight `LOCK(cs_main)` released BEFORE the `Quorum::ValidateSuperblock` calls that follow (past-convergence validation can be slow and does not itself need cs_main — mirrors the result-calculation scope-reduction documented for `PollResult::BuildFor`). |
+
+### Lambda-capture lesson recorded
+
+Clang's thread-safety analyzer cannot reason about lock state through lambda captures. A `[&obj]` capture means the analyzer sees the lambda body accessing `obj` but cannot prove which lock (if any) protects `obj` at the call site. Two fixes:
+
+1. **Pass the relevant data into the lambda as a parameter** (preferred). The analyzer can then see that the value passed in is the one the enclosing LOCK protects. This is what the Phase 3 quorum commit did for both `find_project` and `add_optional_part`.
+2. **Restructure to inline the work**. Acceptable when the lambda is small.
+
+Anti-pattern: keeping the lambda capture and suppressing with `NO_THREAD_SAFETY_ANALYSIS` on the lambda body. The Phase 1 quorum.cpp shipped with this stopgap (which is exactly what Phase 3 cleaned up).
+
+## Phase 4 — network layer
+
+Phase 4 closes out the rollout. Resolves the remaining four `NO_THREAD_SAFETY_ANALYSIS` sites in the network layer.
+
+| Commit | Sub-area | Change |
+|---|---|---|
+| `2c9c8f817` | `util/system.cpp` + `.h`, `net.cpp`, `main.cpp` | Combined Phase 4 commit covering: `ArgsManager::GetBlocksDirPath` — return-by-value (TODO's documented preferred fix; zero callers in tree, so safe API change). `CNode::PushVersion` — internal `WITH_LOCK(cs_main, return nBestHeight)` snapshot (called from CNode construction on socket-handler thread with no outer locks; internal snapshot keeps the caller-side contract unchanged). `AlreadyHave` — `EXCLUSIVE_LOCKS_REQUIRED(cs_main)`; ProcessMessage inv-handling caller already held cs_main; SendMessages getdata-loop caller (~main.cpp:3346) gets a NEW tight `LOCK(cs_main)` scoped around just the AlreadyHave call, explicitly released BEFORE the `LOCK(CScraperManifest::cs_mapManifest)` below per the canonical cs_main → subsystem order documented at main.cpp:2533. `ProcessMessage` — NO_THREAD_SAFETY_ANALYSIS removed; three chain-state reads got tight cs_main coverage: VERSION/ARIES protocol-disconnect height check (pindexBest->nHeight via WITH_LOCK snapshot), VERSION/ARIES ask-for-blocks probe (scoped LOCK around nBestHeight + pindexBest reads + PushGetBlocks), ADDR/GRIDADDR threshold check (nBestHeight inline WITH_LOCK snapshot). |
+
+### Snapshot pattern
+
+The Phase 4 P2P entry-point cleanups use the `WITH_LOCK(cs_main, return X)` snapshot pattern instead of acquiring cs_main across the full message-handler body. This avoids holding cs_main across the (potentially slow) downstream P2P work in `PushMessage`, `PushGetBlocks`, address store, etc. It does mean the snapshotted value can be slightly stale by the time the handler acts on it, but for height-threshold heuristics (protocol-version disconnect, ask-for-blocks throttle, peer-storage threshold) staleness is harmless — the handler is making a coarse-grained policy decision, not enforcing a consensus rule.
 
 ## End state
 
@@ -283,6 +302,12 @@ $ grep -c "warning:.*thread-safety" /tmp/clang_build.log
 
 $ ./build_clang/src/test/test_gridcoin --log_level=warning
 *** No errors detected
+
+$ grep -rn 'NO_THREAD_SAFETY_ANALYSIS' src/ --include='*.cpp' --include='*.h' \
+    | grep -v 'threadsafety.h\|leveldb/port/thread_annotations.h'
+src/gridcoin/voting/result.cpp:700:    Weight GetMagnitudeFactor() NO_THREAD_SAFETY_ANALYSIS
 ```
 
-Phase 1 + Phase 2 ship warning-free across the daemon, the Qt wallet, and the test binary under clang. The `-Wthread-safety-*` warnings the analyzer would emit are now Phase 3 (scraper/quorum lambdas) and Phase 4 (network) work, plus the deliberate voting-redesign deferral — all suppressed with `NO_THREAD_SAFETY_ANALYSIS` and a TODO that names the lock and the caller-chain audit each phase needs.
+All four phases ship warning-free across the daemon, the Qt wallet, and the test binary under clang. Exactly **one** `NO_THREAD_SAFETY_ANALYSIS` marker remains in the source tree: `VoteResolver::GetMagnitudeFactor`, held intentionally per the voting-redesign design constraint above. It will be removed when the voting-redesign work lands and the legacy `VoteResolver` class is retired.
+
+With this rollout complete, the `-Wno-error=thread-safety-analysis` and `-Wno-error=thread-safety-reference` downgrades that Phase 1 added to `CMakeLists.txt` can be dropped — a future change can promote stale annotations to hard build failures so newly-introduced races don't regress under the radar.
