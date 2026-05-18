@@ -481,16 +481,20 @@ bool CNode::DisconnectNode(NodeId id)
     return false;
 }
 
-// TODO(#2869 Phase 4 — net): Reads nBestHeight from CNode constructor path
-// (no cs_main held). Net layer needs its own thread-safety review.
-void CNode::PushVersion() NO_THREAD_SAFETY_ANALYSIS
+void CNode::PushVersion()
 {
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
     GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
+
+    // Snapshot the chain height under cs_main so this method can be called
+    // from CNode construction (socket handler thread, no outer locks held)
+    // and from ProcessMessage without imposing cs_main on the call site.
+    const int nLocalBestHeight = WITH_LOCK(cs_main, return nBestHeight);
+
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
-        PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
+        PROTOCOL_VERSION, nLocalBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
     //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
     PushMessage(
@@ -502,7 +506,7 @@ void CNode::PushVersion() NO_THREAD_SAFETY_ANALYSIS
         addrMe,
         nLocalHostNonce,
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-        nBestHeight);
+        nLocalBestHeight);
 }
 
 bool CNode::Misbehaving(int howmuch)

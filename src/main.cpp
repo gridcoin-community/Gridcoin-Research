@@ -2197,13 +2197,7 @@ string GetWarnings(string strFor)
 // Messages
 //
 
-// TODO(#2869 Phase 4 — network layer): AlreadyHave reads mapBlockIndex
-// (via txdb.ContainsTx + the implicit chain lookups for BLOCK inv types)
-// from the P2P message-handler thread without holding cs_main. The Phase 4
-// network-layer pass will either (a) take cs_main here, or (b) push the
-// lock acquisition into ProcessMessage at a coarser granularity. Suppressed
-// during Phase 1 to keep the cascade focused on the global annotations.
-bool static AlreadyHave(CTxDB& txdb, const CInv& inv) NO_THREAD_SAFETY_ANALYSIS
+bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (inv.type)
     {
@@ -2225,15 +2219,7 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv) NO_THREAD_SAFETY_ANALYSIS
 }
 
 
-// TODO(#2869 Phase 4 — network layer): ProcessMessage reads pindexBest /
-// nBestHeight / mapBlockIndex and calls IsInMainChain() (now annotated
-// EXCLUSIVE_LOCKS_REQUIRED(cs_main)) from the P2P message-handler thread
-// without holding cs_main at the call sites. ProcessMessages (line 3034)
-// does not take cs_main at entry either. The Phase 4 net-layer pass will
-// systematically push the lock acquisition either into ProcessMessage at
-// the relevant branches or into ProcessMessages around the dispatch.
-// Suppressed during Phase 1 to keep the cascade focused on globals.
-bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived) NO_THREAD_SAFETY_ANALYSIS
+bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {
     LogPrint(BCLog::LogFlags::NOISY, "received: %s from %s (%" PRIszu " bytes)", strCommand, pfrom->addrName, vRecv.size());
 
@@ -2282,11 +2268,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect peers on old protocol versions after a grace period past the
         // BlockV14Height activation height. Skip entirely if that fork is not yet
         // activated (height == INT_MAX) to avoid signed integer overflow UB in the addition.
+        const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
                 && pfrom->nVersion < PROTOCOL_VERSION
                 && Params().GetConsensus().BlockV14Height != std::numeric_limits<int>::max()
-                && pindexBest->nHeight > Params().GetConsensus().BlockV14Height
+                && nLocalBestHeight > Params().GetConsensus().BlockV14Height
                                              + Params().GetConsensus().ProtocolVersionGracePeriod
                 )
             ) {
@@ -2400,13 +2387,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
-        if (!pfrom->fClient && !pfrom->fOneShot &&
-            (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-             (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
-            nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256());
-            LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            LOCK(cs_main);
+            if (!pfrom->fClient && !pfrom->fOneShot &&
+                (pfrom->nStartingHeight > (nBestHeight - 144)) &&
+                 (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
+            {
+                nAskedForBlocks++;
+                pfrom->PushGetBlocks(pindexBest, uint256());
+                LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            }
         }
 
         // Relay alerts
@@ -2452,7 +2442,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Don't store the node address unless they have block height > 50%
-        if (pfrom->nStartingHeight < (nBestHeight*.5)) return true;
+        if (pfrom->nStartingHeight < (WITH_LOCK(cs_main, return nBestHeight) * .5)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -3357,7 +3347,15 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             continue;
         }
 
-        bool fAlreadyHave = AlreadyHave(txdb, inv);
+        // cs_main is required for the AlreadyHave call (mapBlockIndex
+        // lookup) and must be released before the cs_mapManifest scope
+        // below to preserve the canonical cs_main -> subsystem order
+        // documented at the inv-handling site near main.cpp:2533.
+        bool fAlreadyHave;
+        {
+            LOCK(cs_main);
+            fAlreadyHave = AlreadyHave(txdb, inv);
+        }
 
         // Check also the scraper data propagation system to see if it needs
         // this inventory object:
