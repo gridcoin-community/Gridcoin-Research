@@ -2154,8 +2154,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 // CAlert
 //
 
-extern map<uint256, CAlert> mapAlerts;
 extern CCriticalSection cs_mapAlerts;
+extern map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 string GetWarnings(string strFor)
 {

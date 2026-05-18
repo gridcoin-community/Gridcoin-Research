@@ -61,7 +61,7 @@ struct LocalServiceInfo {
 };
 
 extern CCriticalSection cs_mapLocalHost;
-extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 
 enum
 {
@@ -110,8 +110,8 @@ extern std::map<CInv, int64_t> mapAlreadyAskedFor;
 extern ThreadHandler* netThreads;
 
 
-extern std::vector<std::string> vAddedNodes;
 extern CCriticalSection cs_vAddedNodes;
+extern std::vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
 
 class CNodeStats

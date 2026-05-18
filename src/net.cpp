@@ -61,7 +61,7 @@ bool fDiscover = true;
 bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
-std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
 CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
@@ -80,19 +80,19 @@ std::atomic<NodeId> CNode::nLastNodeId {-1};
 
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
-vector<std::string> vAddedNodes;
 CCriticalSection cs_vAddedNodes;
+vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
 map<CInv, CDataStream> mapRelay;
 deque<pair<int64_t, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
 map<CInv, int64_t> mapAlreadyAskedFor;
 
-static deque<string> vOneShots;
 CCriticalSection cs_vOneShots;
+static deque<string> vOneShots GUARDED_BY(cs_vOneShots);
 
-set<CNetAddr> setservAddNodeAddresses;
 CCriticalSection cs_setservAddNodeAddresses;
+set<CNetAddr> setservAddNodeAddresses GUARDED_BY(cs_setservAddNodeAddresses);
 
 std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
 CCriticalSection CNode::cs_mapMisbehavior;
