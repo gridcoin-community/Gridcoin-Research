@@ -122,14 +122,18 @@ BOOST_AUTO_TEST_CASE(it_properly_records_blocks)
         // Test runs single-threaded; pindexGenesisBlock is a Setup-fixture-
         // owned pointer, not the production global. Suppress the analyzer
         // warning rather than introducing a cs_main lock the test doesn't need.
+        #if defined(__clang__)
         #pragma clang diagnostic push
         #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+        #endif
         CBlockIndex* index{pindexGenesisBlock};
         while (index) {
             GRC::Tally::RecordRewardBlock(index);
             index = index->pnext;
         }
+        #if defined(__clang__)
         #pragma clang diagnostic pop
+        #endif
     }
 
     BOOST_CHECK(account.m_last_block_ptr == pindex->pprev);

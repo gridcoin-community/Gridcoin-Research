@@ -14,8 +14,10 @@
 // below). BlockFinder::* are EXCLUSIVE_LOCKS_REQUIRED(cs_main) under
 // Phase 2 of issue #2869; suppress the analyzer for this file rather than
 // take a lock the tests do not need.
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 namespace
 {
@@ -93,4 +95,6 @@ BOOST_AUTO_TEST_CASE(FindBlockByTimeShouldReturnLastBlockIfOlderThanTime)
 
 BOOST_AUTO_TEST_SUITE_END()
 
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif

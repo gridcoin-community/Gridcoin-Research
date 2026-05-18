@@ -96,7 +96,7 @@ CCriticalSection cs_ProjectPublicKeys;
  */
 std::atomic<bool> fScraperActive {false};
 /**
- * @brief Vector of usernames and passwords for access to project sites which require logins to meet GPDR requirements
+ * @brief Vector of usernames and passwords for access to project sites which require logins to meet GDPR requirements
  *
  * Protected by cs_Scraper. All access paths — UserpassPopulated, the userpass
  * utility class, and the DownloadProject* helpers — are reached only from the

@@ -850,7 +850,7 @@ Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
     // annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main); the analyzer cannot see
     // hold-state through the lambda capture.
     const auto ChainletErrorHandle = [this](unsigned int i, Beacon_ptr beacon, std::string error_message) NO_THREAD_SAFETY_ANALYSIS {
-        error("%s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %s" PRId64 ", ctx_hash = %s,"
+        error("%s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %" PRId64 ", ctx_hash = %s,"
               "prev_beacon_ctx_hash = %s, status = %s: %s.",
               __func__,
               i,
@@ -861,7 +861,7 @@ Beacon_ptr BeaconRegistry::GetBeaconChainletRoot(Beacon_ptr beacon,
               beacon->StatusToString(),
               error_message);
 
-        std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %s"
+        std::string str_error = strprintf("ERROR: %s: Beacon chainlet is corrupted at link %u for cpid %s: timestamp = %"
                                           PRId64 ", ctx_hash = %s, prev_beacon_ctx_hash = %s, status = %s: %s.",
                                           __func__,
                                           i,
