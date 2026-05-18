@@ -8,8 +8,14 @@ The phases are an internal organizing tool, not a release boundary:
 - **Phase 2**: replace the Phase 1 `NO_THREAD_SAFETY_ANALYSIS` placeholders in: block_finder, tally, mrc + block_rewards + contract, wallet + rpcwallet, researcher/beacon, voting + miner + policy. One commit per sub-area; each commit ends warning-free.
 - **Phase 3**: scraper + quorum (lambda-capture analyzer issues).
 - **Phase 4**: network layer (`ProcessMessage`, `AlreadyHave`, `PushVersion`, `ArgsManager::GetBlocksDirPath`).
+- **Follow-ups A/B/C/D** (post-Phase 4 coverage sweep): close remaining gaps surfaced by an end-state audit — `BeaconRegistry` cs_main contract (A), scraper internals (B), `CNode` per-node locks (C), and an alert/net `GUARDED_BY` sweep (D). See "Post-Phase 4 follow-ups" below.
 
-After Phase 4, exactly **one** `NO_THREAD_SAFETY_ANALYSIS` marker remains in the tree: `VoteResolver::GetMagnitudeFactor` at `src/gridcoin/voting/result.cpp`. It is held intentionally per the voting-redesign design constraint (see "Design constraint preserved" below) and will be removed when the voting-redesign work lands.
+After the four follow-ups, **two** `NO_THREAD_SAFETY_ANALYSIS` markers remain in production source:
+
+1. `VoteResolver::GetMagnitudeFactor` at `src/gridcoin/voting/result.cpp:700` — held intentionally per the voting-redesign design constraint (see "Design constraint preserved" below).
+2. `BeaconRegistry::GetBeaconChainletRoot`'s `ChainletErrorHandle` lambda body at `src/gridcoin/beacon.cpp:852` — analyzer cannot see hold-state through `[this]` lambda capture even though the enclosing `GetBeaconChainletRoot` is correctly `EXCLUSIVE_LOCKS_REQUIRED(cs_main)`. Documented at the use site; will be revisited if/when the analyzer learns about lambda-capture flow.
+
+Both will fall out naturally as the relevant subsystem work lands.
 
 Each phase ends with the same invariant: `cmake --build build_clang --target gridcoinresearchd gridcoinresearch test_gridcoin` produces zero `-Wthread-safety-*` warnings and the boost test suite passes.
 
@@ -289,6 +295,25 @@ Phase 4 closes out the rollout. Resolves the remaining four `NO_THREAD_SAFETY_AN
 
 The Phase 4 P2P entry-point cleanups use the `WITH_LOCK(cs_main, return X)` snapshot pattern instead of acquiring cs_main across the full message-handler body. This avoids holding cs_main across the (potentially slow) downstream P2P work in `PushMessage`, `PushGetBlocks`, address store, etc. It does mean the snapshotted value can be slightly stale by the time the handler acts on it, but for height-threshold heuristics (protocol-version disconnect, ask-for-blocks throttle, peer-storage threshold) staleness is harmless — the handler is making a coarse-grained policy decision, not enforcing a consensus rule.
 
+## Post-Phase 4 follow-ups
+
+After Phase 4 closed out the rollout, a second-pass coverage audit surfaced four narrow gaps. Each was addressed as a focused commit; all four are pure annotation work with one exception (`fScraperActive` → `std::atomic<bool>` in Follow-up B). All commits end clang-warning-free.
+
+| Commit | Follow-up | Sub-area | Change |
+|---|---|---|---|
+| `630deb0e3` | A | `gridcoin/beacon.{h,cpp}` + researcher + accrual + diagnose + Qt + rpc/blockchain + tests | `BeaconRegistry`'s entire public API + `Researcher::Reload`/`Refresh` + `NewbieAccrualComputer` + `SnapshotAccrualComputer` + `block_rewards::CheckBeaconSignature` annotated `EXCLUSIVE_LOCKS_REQUIRED(cs_main)`. Production-caller `LOCK(cs_main)` additions at `ResearcherModel::reload`, `Researcher::ChangeMode`, `VerifyCPIDHasRAC::hasActiveBeacon`, `rainbymagnitude` RPC (with downstream `LOCK2(cs_main, cs_wallet)` demoted to `LOCK(cs_wallet)`), `resetcpids` RPC, `StoreBeaconList` (WITH_LOCK snapshot for log line). `Researcher::Initialize` flattens its existing `LOCK2` scope to keep `Reload()` under cs_main. Test helpers (`AddTestBeacon` and friends) get per-function `NO_THREAD_SAFETY_ANALYSIS`. Adds the documented `ChainletErrorHandle` lambda suppression (the second remaining marker — see "End state"). |
+| `ab70f5d45` | B | `gridcoin/scraper/scraper.{h,cpp}` + `gridcoin/gridcoin.cpp` | `fScraperActive` → `std::atomic<bool>` (single startup write, scraper-thread reads — no lock needed; the only behavior-affecting change in the four follow-ups). `vuserpass` / `ndownloadsize` / `nuploadsize` annotated `GUARDED_BY(cs_Scraper)` to make the hoisted call-site `LOCK(cs_Scraper)` at `scraper.cpp:1640` clang-enforceable; the singleshot reentrant path (`ScraperGetSuperblockContract` → `ScraperSingleShot` → `Scraper(true)` from staking-miner/RPC threads) enters the same critical section, so the data is cs_Scraper-protected on every path. Cascade: `EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)` on `UserpassPopulated`, `class userpass` ctor/`import()`, and the four affected `DownloadProject*` / `ProcessProjectRacFileByCPID` helpers. `DownloadProjectPublicKeys` deliberately not annotated — it only touches `g_project_public_keys` under its own `cs_ProjectPublicKeys`, preserving the fine-grained-locking design. Prototype/definition consistency sweep across scraper.cpp for `ScraperHousekeeping`, `ScraperDirectoryAndConfigSanity`, `GetmScraperFileManifestHash`, `Insert/Delete/MarkScraperFileManifestEntry*`, `ScraperSendFileManifestContents`, `BinCScraperManifestsByScraper`, `ProcessProjectTeamFile`. `IsScraperMaximumManifestPublishingRateExceeded` in scraper.h gets `EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest)`. |
+| `11994d6c0` | C | `src/net.{h,cpp}` + `src/main.{h,cpp}` | `CNode` members annotated `GUARDED_BY`: `ssSend`/`nSendSize`/`nSendOffset`/`vSendMsg` → `cs_vSend`; `vRecvMsg`/`nRecvVersion` → `cs_vRecvMsg`; `setInventoryKnown`/`vInventoryToSend` → `cs_inventory`; `mapMisbehavior` → `cs_mapMisbehavior`. Methods annotated `EXCLUSIVE_LOCKS_REQUIRED`: `GetTotalRecvSize`/`ReceiveMsgBytes`/`SetRecvVersion` → `cs_vRecvMsg`; `BeginMessage`/`AbortMessage`/`EndMessage`/`PushFields` → `cs_vSend`; free `SocketSendData` → `pnode->cs_vSend` (forward decl reordered below `CNode` so the lock expression resolves); `ProcessMessages` → `pfrom->cs_vRecvMsg`. Call-site additions: scoped `LOCK(pfrom->cs_vSend)` around `ssSend.SetVersion` in the VERSION handler, around VERACK-time send-version flip, around the GETHEADERS/GETBLOCKS push paths in SendMessages, etc. Replaces the "requires LOCK(cs_X)" comments that previously documented the contract informally. |
+| `d4a52ceeb` | D | `src/alert.cpp` + `src/main.cpp` + `src/rpc/net.cpp` + `src/net.h` + `src/net.cpp` | Pure-annotation sweep of the remaining file-scope cs↔data pairs: `mapAlerts` → `GUARDED_BY(cs_mapAlerts)` (alert.cpp + 2 extern decls); `mapLocalHost`, `vAddedNodes`, `vOneShots` (file-static), `setservAddNodeAddresses` → `GUARDED_BY(cs_<paired>)`. All existing call sites already take the right lock; zero cascade needed. The `cs_*` declaration is moved above the data declaration where it wasn't already (clang requires the lock symbol to be in scope at the `GUARDED_BY` site). |
+
+### Notes on patterns confirmed during the follow-ups
+
+- **Scraper design philosophy** (Follow-up B). The scraper was written before C++11 atomics; cross-thread booleans / counters were either left racy or covered by an existing lock taken for some other reason. The right defaults now: (1) for a scalar with no existing call-site lock, prefer `std::atomic<T>`; (2) for data already inside a hoisted call-site lock, prefer honest `GUARDED_BY(lock)` over claiming "single-threaded" — the audit pass invalidated several apparent single-thread claims because the `ScraperSingleShot` path enters the same critical section as the main loop. Keep fine-grained locks scoped to specific data structures; do not fold ad-hoc state into a big `cs_Scraper` contract unless the data is in fact protected there.
+
+- **Lambda-capture suppression is acceptable** (Follow-up A's ChainletErrorHandle). The enclosing function (`GetBeaconChainletRoot`) is correctly annotated, but the analyzer can't trace hold-state through `[this]` captures into `Reset()`. The lambda-body suppression with an explanatory comment pointing back to the enclosing annotation is the right shape — restructuring the lambda would not improve safety.
+
+- **TRY_LOCK lock-order-avoidance pattern needs nothing extra** (audited during D). `sync.h:107` already declares `try_lock() EXCLUSIVE_TRYLOCK_FUNCTION(true)`, and the macro at `sync.h:256` propagates that annotation. The `if (lockX) { ... }` idiom in `net.cpp`'s `SendMessages` / `ProcessMessage` (`net.cpp:868,871,874,930,1083,1135,1877,1896,1899`) and the reversed-logic `cs_main` TRY_LOCK at `net.cpp:1888-1896` flow through TSA correctly. No suppressions required.
+
 ## End state
 
 ```
@@ -304,10 +329,16 @@ $ ./build_clang/src/test/test_gridcoin --log_level=warning
 *** No errors detected
 
 $ grep -rn 'NO_THREAD_SAFETY_ANALYSIS' src/ --include='*.cpp' --include='*.h' \
-    | grep -v 'threadsafety.h\|leveldb/port/thread_annotations.h'
+    | grep -v 'threadsafety.h\|leveldb/port/thread_annotations.h\|test/'
 src/gridcoin/voting/result.cpp:700:    Weight GetMagnitudeFactor() NO_THREAD_SAFETY_ANALYSIS
+src/gridcoin/beacon.cpp:852:    const auto ChainletErrorHandle = [this](...) NO_THREAD_SAFETY_ANALYSIS {
 ```
 
-All four phases ship warning-free across the daemon, the Qt wallet, and the test binary under clang. Exactly **one** `NO_THREAD_SAFETY_ANALYSIS` marker remains in the source tree: `VoteResolver::GetMagnitudeFactor`, held intentionally per the voting-redesign design constraint above. It will be removed when the voting-redesign work lands and the legacy `VoteResolver` class is retired.
+All four phases plus the four follow-ups ship warning-free across the daemon, the Qt wallet, and the test binary under clang. **Two** production-code `NO_THREAD_SAFETY_ANALYSIS` markers remain, both intentional:
+
+1. `VoteResolver::GetMagnitudeFactor` — voting-redesign design constraint (above).
+2. `BeaconRegistry::GetBeaconChainletRoot`'s `ChainletErrorHandle` lambda body — analyzer cannot reason about lock state through `[this]` capture; enclosing function is correctly annotated.
+
+A small number of pragma-block suppressions remain in production source — voting (deferred), the `Serialize()` template fallback in `serialize.h` (annotating it would force a contract onto every `T::Serialize` member fleet-wide), and test code (test fixtures run single-threaded and mutate analyzer-tracked globals directly).
 
 With this rollout complete, the `-Wno-error=thread-safety-analysis` and `-Wno-error=thread-safety-reference` downgrades that Phase 1 added to `CMakeLists.txt` can be dropped — a future change can promote stale annotations to hard build failures so newly-introduced races don't regress under the radar.
