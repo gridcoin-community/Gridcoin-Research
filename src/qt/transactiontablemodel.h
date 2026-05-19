@@ -1,8 +1,12 @@
 #ifndef BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 #define BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 
+#include "qt/wallet_event_queue.h"
+
 #include <QAbstractTableModel>
 #include <QStringList>
+
+#include <vector>
 
 class CWallet;
 class TransactionTablePriv;
@@ -59,6 +63,19 @@ public:
     QVariant data(const QModelIndex &index, int role) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
+
+    //!
+    //! \brief Consume a batch of producer-side wallet events drained from
+    //! WalletModel's WalletEventQueue. Inserts/removes rows from the cached
+    //! list without taking cs_main or cs_wallet — payloads are already
+    //! decomposed at the producer side under the locks that were held there.
+    //!
+    //! Status updates (TxUpdated) do not mutate rows directly; status fields
+    //! refresh lazily on read via TransactionTableModel::data() / the existing
+    //! updateConfirmations() flow.
+    //!
+    void applyEventBatch(const std::vector<GRC::WalletEvent>& events);
+
 private:
     CWallet* wallet;
     WalletModel *walletModel;
@@ -78,7 +95,6 @@ private:
     QVariant txAddressDecoration(const TransactionRecord *wtx) const;
 
 public slots:
-    void updateTransaction(const QString &hash, int status);
     void refreshWallet();
     void updateConfirmations();
     void updateDisplayUnit();

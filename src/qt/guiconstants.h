@@ -6,6 +6,12 @@
 /* Milliseconds between model updates */
 static const int MODEL_UPDATE_DELAY = 4000;
 
+/* Milliseconds between WalletEventQueue drains. The producer→GUI event channel
+ * for transaction-list updates is drained on this cadence; 500ms is
+ * imperceptible to users while keeping each drain batch sized for efficient
+ * Qt model mutation. */
+static const int MODEL_EVENT_DRAIN_INTERVAL = 500;
+
 /* AskPassphraseDialog -- Maximum passphrase length */
 static const int MAX_PASSPHRASE_SIZE = 1024;
 

@@ -38,6 +38,14 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
     connect(pollTimer, &QTimer::timeout, this, &WalletModel::pollBalanceChanged);
     pollTimer->start(MODEL_UPDATE_DELAY);
 
+    // Drain the producer→GUI event queue at a steady cadence. 500ms is
+    // imperceptible for transaction-list updates while still giving the
+    // queue room to absorb bursts (e.g. a reorg flood) without per-event
+    // round-trips to the Qt event loop.
+    eventDrainTimer = new QTimer(this);
+    connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
+    eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
+
     subscribeToCoreSignals();
 }
 
@@ -141,26 +149,35 @@ void WalletModel::checkBalanceChanged()
     }
 }
 
-void WalletModel::updateTransaction(const QString &hash, int status)
+void WalletModel::drainEventQueue()
 {
-    LogPrint(BCLog::MISC, "WalletModel::updateTransaction()");
+    auto events = m_event_queue.drain();
+    if (events.empty()) {
+        return;
+    }
 
-    if (transactionTableModel)
-    {
-        transactionTableModel->updateTransaction(hash, status);
+    LogPrint(BCLog::LogFlags::VERBOSE,
+             "WalletModel::drainEventQueue: applying %u events (front seqno=%llu, back seqno=%llu)",
+             static_cast<unsigned int>(events.size()),
+             static_cast<unsigned long long>(events.front().seqno),
+             static_cast<unsigned long long>(events.back().seqno));
 
-        // Note this is subtly different than the below. If a resync is being done on a wallet
-        // that already has transactions, the numTransactionsChanged will not be emitted after the
-        // wallet is loaded because the size() does not change. See the comments in the header file.
+    if (transactionTableModel) {
+        transactionTableModel->applyEventBatch(events);
+
+        // Note this is subtly different than the below. If a resync is being
+        // done on a wallet that already has transactions, the
+        // numTransactionsChanged will not be emitted after the wallet is
+        // loaded because the size() does not change. See the comments in the
+        // header file.
         emit transactionUpdated();
     }
 
-    // Balance and number of transactions might have changed
+    // Balance and number of transactions might have changed.
     checkBalanceChanged();
 
     int newNumTransactions = getNumTransactions();
-    if (cachedNumTransactions != newNumTransactions)
-    {
+    if (cachedNumTransactions != newNumTransactions) {
         cachedNumTransactions = newNumTransactions;
 
         emit numTransactionsChanged(newNumTransactions);
@@ -470,9 +487,17 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     case CT_NEW: {
         auto it = wallet->mapWallet.find(hash);
         if (it != wallet->mapWallet.end()) {
-            GRC::TxAddedPayload payload;
-            payload.records = TransactionRecord::decomposeTransaction(wallet, it->second);
-            walletmodel->getEventQueue().push(std::move(payload));
+            // Apply wtx-level visibility checks at the producer (orphan
+            // coinstake/coinbase, legacy OP_RETURN). The datetime filter is
+            // settings-dependent and is applied at the consumer instead.
+            // showTransaction(..., false, 0) skips the datetime check.
+            if (TransactionRecord::showTransaction(it->second, false, 0)) {
+                GRC::TxAddedPayload payload;
+                payload.records = TransactionRecord::decomposeTransaction(wallet, it->second);
+                if (!payload.records.isEmpty()) {
+                    walletmodel->getEventQueue().push(std::move(payload));
+                }
+            }
         } else {
             // mapWallet should always contain the tx at CT_NEW notification time
             // (the producer just inserted it under the same cs_wallet scope).
@@ -492,10 +517,6 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
         walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
         break;
     }
-
-    QMetaObject::invokeMethod(walletmodel, "updateTransaction", Qt::QueuedConnection,
-                              Q_ARG(QString, QString::fromStdString(hash.GetHex())),
-                              Q_ARG(int, status));
 }
 
 void WalletModel::subscribeToCoreSignals()

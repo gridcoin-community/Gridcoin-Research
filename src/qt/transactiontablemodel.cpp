@@ -99,104 +99,108 @@ public:
         parent->endResetModel();
     }
 
-    /* Update our model of the wallet incrementally by core transaction, to synchronize our model of the wallet
-       with that of the core.
-
-       Call with transaction that was added, removed or changed.
-     */
-    void updateWallet(const uint256 &hash, int status)
+    //!
+    //! \brief Apply a batch of WalletEvents drained from the producer→GUI
+    //! queue. This is the new incremental update path; it runs on the Qt
+    //! main thread and does NOT take cs_main or cs_wallet.
+    //!
+    //! - TxAdded payloads carry records that were already decomposed at the
+    //!   producer side, so no wallet lookup is needed. The consumer applies
+    //!   the user's datetime-limit filter (a record-level predicate on
+    //!   record.time) and inserts the surviving records as a contiguous
+    //!   range at the binary-search position determined by the tx hash.
+    //!
+    //! - TxRemoved payloads carry just the hash. The consumer locates the
+    //!   matching range in cachedWallet by binary search and removes it.
+    //!
+    //! - TxUpdated payloads carry hash + status. No row mutation is needed:
+    //!   per-row status (depth, Confirmed/Confirming/etc.) is refreshed
+    //!   lazily on read inside index(), and updateConfirmations() drives
+    //!   a per-block table-wide dataChanged that refreshes the visible
+    //!   rows. The event is acknowledged via verbose logging only.
+    //!
+    void applyEventBatch(const std::vector<GRC::WalletEvent>& events)
     {
-        if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)
-                || LogInstance().WillLogCategory(BCLog::LogFlags::MISC))
-        {
-            LogPrintf("updateWallet %s %i", hash.ToString(), status);
+        const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
+        const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
+
+        for (const auto& ev : events) {
+            std::visit([&](auto&& payload) {
+                using P = std::decay_t<decltype(payload)>;
+                if constexpr (std::is_same_v<P, GRC::TxAddedPayload>) {
+                    applyTxAdded(payload, fLimitTxnDisplay, limitTxnDateTime);
+                } else if constexpr (std::is_same_v<P, GRC::TxRemovedPayload>) {
+                    applyTxRemoved(payload);
+                } else if constexpr (std::is_same_v<P, GRC::TxUpdatedPayload>) {
+                    LogPrint(BCLog::LogFlags::VERBOSE,
+                             "applyEventBatch: TxUpdated %s status=%d (no row mutation)",
+                             payload.hash.GetHex(), payload.status);
+                } else if constexpr (std::is_same_v<P, GRC::BalanceSnapshotPayload>) {
+                    // BalanceSnapshot is wired in a follow-up commit alongside
+                    // the removal of pollBalanceChanged.
+                }
+            }, ev.payload);
+        }
+    }
+
+    void applyTxAdded(const GRC::TxAddedPayload& payload,
+                      bool fLimitTxnDisplay,
+                      int64_t limitTxnDateTime)
+    {
+        // Apply the consumer-side datetime filter. The producer has already
+        // applied the wtx-level visibility checks (orphan coinstake/coinbase,
+        // legacy OP_RETURN) under the locks it held at notification time.
+        QList<TransactionRecord> toInsert;
+        toInsert.reserve(payload.records.size());
+        for (const TransactionRecord& rec : payload.records) {
+            if (fLimitTxnDisplay && rec.time < limitTxnDateTime) {
+                continue;
+            }
+            toInsert.append(rec);
+        }
+        if (toInsert.isEmpty()) {
+            return;
         }
 
-        {
-            LOCK2(cs_main, wallet->cs_wallet);
-
-            bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
-            int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
-
-            // Find transaction in wallet
-            std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
-            bool inWallet = mi != wallet->mapWallet.end();
-
-            // Find bounds of this transaction in model
-            QList<TransactionRecord>::iterator lower = std::lower_bound(
-                cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
-            QList<TransactionRecord>::iterator upper = std::upper_bound(
-                cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
-            int lowerIndex = (lower - cachedWallet.begin());
-            int upperIndex = (upper - cachedWallet.begin());
-            bool inModel = (lower != upper);
-
-            // Determine whether to show transaction or not
-            bool showTransaction = (inWallet && TransactionRecord::showTransaction(mi->second,
-                                                                                   fLimitTxnDisplay,
-                                                                                   limitTxnDateTime));
-			//Remove the Orphan Mined Generated and not Accepted TX
-
-
-            if(status == CT_UPDATED)
-            {
-                if(showTransaction && !inModel)
-                    status = CT_NEW; /* Not in model, but want to show, treat as new */
-                if(!showTransaction && inModel)
-                    status = CT_DELETED; /* In model, but want to hide, treat as deleted */
-            }
-
-            LogPrint(BCLog::LogFlags::VERBOSE, "   inWallet=%i inModel=%i Index=%i-%i showTransaction=%i derivedStatus=%i",
-                     inWallet, inModel, lowerIndex, upperIndex, showTransaction, status);
-
-
-            switch(status)
-            {
-            case CT_NEW:
-                if(inModel)
-                {
-                    LogPrint(BCLog::LogFlags::VERBOSE, "Warning: updateWallet: Got CT_NEW, but transaction is already in model");
-                    break;
-                }
-                if(!inWallet)
-                {
-                    LogPrint(BCLog::LogFlags::VERBOSE, "Warning: updateWallet: Got CT_NEW, but transaction is not in wallet");
-                    break;
-                }
-                if(showTransaction)
-                {
-                    // Added -- insert at the right position
-                    QList<TransactionRecord> toInsert =
-                            TransactionRecord::decomposeTransaction(wallet, mi->second);
-                    if(!toInsert.isEmpty()) /* only if something to insert */
-                    {
-                        parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex+toInsert.size()-1);
-                        int insert_idx = lowerIndex;
-                        for (const TransactionRecord& rec : std::as_const(toInsert)) {
-                            cachedWallet.insert(insert_idx, rec);
-                            insert_idx += 1;
-                        }
-                        parent->endInsertRows();
-                    }
-                }
-                break;
-            case CT_DELETED:
-                if(!inModel)
-                {
-                    LogPrintf("Warning: updateWallet: Got CT_DELETED, but transaction is not in model");
-                    break;
-                }
-                // Removed -- remove entire transaction from table
-                parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
-                cachedWallet.erase(lower, upper);
-                parent->endRemoveRows();
-                break;
-            case CT_UPDATED:
-                // Miscellaneous updates -- nothing to do, status update will take care of this, and is only computed for
-                // visible transactions.
-                break;
-            }
+        // All records in a payload share the same hash, so they slot into
+        // cachedWallet as a single contiguous range at the lower_bound
+        // position for that hash.
+        const uint256& hash = toInsert.front().hash;
+        auto lower = std::lower_bound(cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
+        auto upper = std::upper_bound(cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
+        if (lower != upper) {
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                     "applyTxAdded: %s already in model — skipping duplicate insert", hash.GetHex());
+            return;
         }
+
+        const int lowerIndex = static_cast<int>(lower - cachedWallet.begin());
+
+        parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex + toInsert.size() - 1);
+        int insert_idx = lowerIndex;
+        for (const TransactionRecord& rec : std::as_const(toInsert)) {
+            cachedWallet.insert(insert_idx, rec);
+            insert_idx += 1;
+        }
+        parent->endInsertRows();
+    }
+
+    void applyTxRemoved(const GRC::TxRemovedPayload& payload)
+    {
+        auto lower = std::lower_bound(cachedWallet.begin(), cachedWallet.end(), payload.hash, TxLessThan());
+        auto upper = std::upper_bound(cachedWallet.begin(), cachedWallet.end(), payload.hash, TxLessThan());
+        if (lower == upper) {
+            // Not in cachedWallet — may have been filtered out at insert time,
+            // or never inserted (e.g. an orphan caught by the producer-side
+            // showTransaction check). No row work needed.
+            return;
+        }
+
+        const int lowerIndex = static_cast<int>(lower - cachedWallet.begin());
+        const int upperIndex = static_cast<int>(upper - cachedWallet.begin());
+        parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex - 1);
+        cachedWallet.erase(lower, upper);
+        parent->endRemoveRows();
     }
 
     int size()
@@ -273,14 +277,12 @@ TransactionTableModel::~TransactionTableModel()
     delete priv;
 }
 
-void TransactionTableModel::updateTransaction(const QString &hash, int status)
+void TransactionTableModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
-    LogPrint(BCLog::MISC, "TransactionTableModel::updateTransaction()");
+    LogPrint(BCLog::LogFlags::VERBOSE, "TransactionTableModel::applyEventBatch(%u events)",
+             static_cast<unsigned int>(events.size()));
 
-    uint256 updated;
-    updated.SetHex(hash.toStdString());
-
-    priv->updateWallet(updated, status);
+    priv->applyEventBatch(events);
 }
 
 void TransactionTableModel::refreshWallet()
