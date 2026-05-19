@@ -187,7 +187,12 @@ install_deps() {
                 DISTRO_PATH="openSUSE_Tumbleweed"
                 IS_TUMBLEWEED="true"
             elif [[ "$PRETTY_NAME" == *"Leap"* ]]; then
-                DISTRO_PATH="15.6"
+                # The openSUSE Build Service distribution directory for Leap is
+                # openSUSE_Leap_<version> (e.g. openSUSE_Leap_16.0). VERSION_ID
+                # is sourced from /etc/os-release during OS detection above.
+                # Hardcoding a fixed version here produced dead repo URLs on
+                # every Leap release other than the hardcoded one.
+                DISTRO_PATH="openSUSE_Leap_${VERSION_ID}"
             else
                  echo "Error: Unknown openSUSE version."
                  return 1
@@ -204,15 +209,23 @@ install_deps() {
                     local url="$1"
                     local name="$2"
                     local desc="$3"
-                    if sudo zypper lr -u | grep -Fq "$url"; then
-                        echo "Repository for $desc already exists (URL match)."
+                    # Match on the OBS project base path (.../windows:/mingw:/winNN/)
+                    # rather than the full URL or our own alias. The
+                    # openSUSE-shipped Cross-toolchain repos provide exactly
+                    # these MinGW packages, but carry a human-readable alias
+                    # and a distribution-specific URL suffix that neither a
+                    # full-URL nor an alias match would recognise. Matching the
+                    # base path identifies them and avoids adding a duplicate
+                    # repo (which is how the dead-URL duplicates were created
+                    # in the first place).
+                    local base="${url%"$DISTRO_PATH"/}"
+                    if sudo zypper lr -u | grep -Fq "$base"; then
+                        echo "Repository for $desc already provided by an existing repo ($base) - skipping."
+                    elif sudo zypper lr | grep -Fq "$name"; then
+                        echo "Warning: Repository alias '$name' exists but URL mismatch - leaving as-is."
                     else
-                        if sudo zypper lr | grep -q "$name"; then
-                            echo "Warning: Repository alias '$name' exists but URL mismatch."
-                        else
-                            echo "Adding $desc repository: $url"
-                            sudo zypper ar -f "$url" "$name"
-                        fi
+                        echo "Adding $desc repository: $url"
+                        sudo zypper ar -f "$url" "$name"
                     fi
                 }
                 add_repo_if_missing "$REPO_64_URL" "$REPO_64_NAME" "MinGW Win64"
