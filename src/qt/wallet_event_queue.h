@@ -54,22 +54,33 @@ struct TxRemovedPayload
 };
 
 //!
-//! \brief Producer-side payload: a fresh balance snapshot, replacing the role
-//! of the legacy 4-second WalletModel::pollBalanceChanged poll.
+//! \brief Producer-side payload: the chain tip advanced (block connected or
+//! disconnected). Replaces the role of the legacy 4-second
+//! WalletModel::pollBalanceChanged poll which used to watch
+//! nBestHeight != cachedNumBlocks. The consumer reacts by refreshing
+//! per-row confirmation status and re-running the (rate-limited) balance
+//! recompute path.
 //!
-struct BalanceSnapshotPayload
+//! Pre-computing the balance on the producer side is intentionally NOT done
+//! here: wallet->GetBalance() iterates the full wallet (O(N) over mapWallet)
+//! and we don't want to pay that on msghand for every block. The
+//! consumer-side path keeps the existing TRY_LOCK + MODEL_UPDATE_DELAY-gated
+//! recompute, but is now event-driven instead of timer-polled. When this
+//! code becomes the consumer side of an IPC channel post multiprocess
+//! separation, the producer can optionally precompute the snapshot to save
+//! a round-trip; the consumer contract doesn't change.
+//!
+struct ChainTipChangedPayload
 {
-    int64_t confirmed;
-    int64_t unconfirmed;
-    int64_t immature;
-    int64_t stake;
+    int     height;
+    int64_t best_time;
 };
 
 using WalletEventPayload = std::variant<
     TxAddedPayload,
     TxUpdatedPayload,
     TxRemovedPayload,
-    BalanceSnapshotPayload>;
+    ChainTipChangedPayload>;
 
 //!
 //! \brief A single event in the wallet→GUI event channel.

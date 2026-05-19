@@ -135,9 +135,10 @@ public:
                     LogPrint(BCLog::LogFlags::VERBOSE,
                              "applyEventBatch: TxUpdated %s status=%d (no row mutation)",
                              payload.hash.GetHex(), payload.status);
-                } else if constexpr (std::is_same_v<P, GRC::BalanceSnapshotPayload>) {
-                    // BalanceSnapshot is wired in a follow-up commit alongside
-                    // the removal of pollBalanceChanged.
+                } else if constexpr (std::is_same_v<P, GRC::ChainTipChangedPayload>) {
+                    // ChainTipChanged is handled at the WalletModel drain
+                    // level (triggers updateConfirmations + checkBalanceChanged
+                    // once per batch). No per-event row mutation here.
                 }
             }, ev.payload);
         }

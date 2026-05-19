@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-using GRC::BalanceSnapshotPayload;
+using GRC::ChainTipChangedPayload;
 using GRC::TxAddedPayload;
 using GRC::TxRemovedPayload;
 using GRC::TxUpdatedPayload;
@@ -67,7 +67,7 @@ void WalletEventQueueTests::allPayloadVariantsRoundTrip()
     q.push(TxAddedPayload{}); // empty record list is enough — testing the variant lane.
     q.push(TxUpdatedPayload{uint256(), 7});
     q.push(TxRemovedPayload{uint256()});
-    q.push(BalanceSnapshotPayload{1, 2, 3, 4});
+    q.push(ChainTipChangedPayload{2771000, 1779000000});
 
     auto batch = q.drain();
     QCOMPARE(batch.size(), static_cast<std::size_t>(4));
@@ -75,16 +75,14 @@ void WalletEventQueueTests::allPayloadVariantsRoundTrip()
     QVERIFY(std::holds_alternative<TxAddedPayload>(batch[0].payload));
     QVERIFY(std::holds_alternative<TxUpdatedPayload>(batch[1].payload));
     QVERIFY(std::holds_alternative<TxRemovedPayload>(batch[2].payload));
-    QVERIFY(std::holds_alternative<BalanceSnapshotPayload>(batch[3].payload));
+    QVERIFY(std::holds_alternative<ChainTipChangedPayload>(batch[3].payload));
 
     const auto& upd = std::get<TxUpdatedPayload>(batch[1].payload);
     QCOMPARE(upd.status, 7);
 
-    const auto& bal = std::get<BalanceSnapshotPayload>(batch[3].payload);
-    QCOMPARE(bal.confirmed,   static_cast<int64_t>(1));
-    QCOMPARE(bal.unconfirmed, static_cast<int64_t>(2));
-    QCOMPARE(bal.immature,    static_cast<int64_t>(3));
-    QCOMPARE(bal.stake,       static_cast<int64_t>(4));
+    const auto& tip = std::get<ChainTipChangedPayload>(batch[3].payload);
+    QCOMPARE(tip.height,    2771000);
+    QCOMPARE(tip.best_time, static_cast<int64_t>(1779000000));
 }
 
 void WalletEventQueueTests::drainPartialBatch()

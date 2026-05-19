@@ -33,15 +33,14 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
     addressTableModel = new AddressTableModel(wallet, this);
     transactionTableModel = new TransactionTableModel(wallet, this);
 
-    // This timer will be fired repeatedly to update the balance
-    pollTimer = new QTimer(this);
-    connect(pollTimer, &QTimer::timeout, this, &WalletModel::pollBalanceChanged);
-    pollTimer->start(MODEL_UPDATE_DELAY);
-
     // Drain the producer→GUI event queue at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the
     // queue room to absorb bursts (e.g. a reorg flood) without per-event
-    // round-trips to the Qt event loop.
+    // round-trips to the Qt event loop. This single timer also drives the
+    // balance / row-confirmation refresh that used to be done by a
+    // separate 4-second pollBalanceChanged timer; refresh now fires off
+    // ChainTipChanged events pushed by the producer-side subscriber to
+    // uiInterface.NotifyBlocksChanged.
     eventDrainTimer = new QTimer(this);
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
@@ -92,37 +91,32 @@ void WalletModel::updateStatus()
         emit encryptionStatusChanged(newEncryptionStatus);
 }
 
-void WalletModel::pollBalanceChanged()
-{
-    // Get required locks upfront. This avoids the GUI from getting stuck on
-    // periodical polls if the core is holding the locks for a longer time -
-    // for example, during a wallet rescan.
-    TRY_LOCK(cs_main, lockMain);
-    if(!lockMain)
-        return;
-    TRY_LOCK(wallet->cs_wallet, lockWallet);
-    if(!lockWallet)
-        return;
-
-    if(nBestHeight != cachedNumBlocks)
-    {
-        // Balance and number of transactions might have changed
-        cachedNumBlocks = nBestHeight;
-
-        checkBalanceChanged();
-        if(transactionTableModel)
-            transactionTableModel->updateConfirmations();
-    }
-}
-
 void WalletModel::checkBalanceChanged()
 {
-    // These are INCREDIBLY expensive calls for wallets with a large transaction map size. Use a timed expire (stale)
-    // pattern to avoid calling these repeatedly for rapid fire updates which occur during a blockchain resync or
-    // rescan of a busy wallet, or a transaction that changes lots of UTXO's statuses, such as consolidateunspent.
+    // The Get*Balance() calls iterate the wallet's full mapWallet and become
+    // INCREDIBLY expensive on large wallets. Two layers of protection:
+    //
+    //  1. TRY_LOCK on cs_main + cs_wallet: bow out cleanly if the core is
+    //     holding them (e.g. during a wallet rescan). This is the same
+    //     guard pollBalanceChanged used to apply.
+    //
+    //  2. A MODEL_UPDATE_DELAY (4s) stale-time gate: even when the locks
+    //     are available, only actually recompute at most once per gate
+    //     interval. Bursts of rapid-fire wallet events during a resync,
+    //     rescan, or large consolidation collapse into a single recompute.
+    //
+    // The last call in a burst that fails the stale-time test isn't lost:
+    // the next ChainTipChanged event (or the next drain pass with events
+    // in it) re-runs this function, which by then will pass the gate.
+    TRY_LOCK(cs_main, lockMain);
+    if (!lockMain) {
+        return;
+    }
+    TRY_LOCK(wallet->cs_wallet, lockWallet);
+    if (!lockWallet) {
+        return;
+    }
 
-    // We don't have to worry about the last call to this being lost (absorbed) because it doesn't pass the stale
-    // test, because the balance will be updated anyway by the timer poll in MODEL_UPDATE_DELAY seconds period.
     int64_t current_time = GetAdjustedTime();
 
     if (current_time - last_balance_update_time > MODEL_UPDATE_DELAY / 1000)
@@ -162,6 +156,18 @@ void WalletModel::drainEventQueue()
              static_cast<unsigned long long>(events.front().seqno),
              static_cast<unsigned long long>(events.back().seqno));
 
+    // Detect a chain-tip advance in the batch so the consumer-side
+    // post-processing (per-row confirmation refresh, balance recompute) runs
+    // only when a block actually moved — not on every wallet-tx burst within
+    // a single block.
+    bool chain_tip_advanced = false;
+    for (const auto& ev : events) {
+        if (std::holds_alternative<GRC::ChainTipChangedPayload>(ev.payload)) {
+            chain_tip_advanced = true;
+            break;
+        }
+    }
+
     if (transactionTableModel) {
         transactionTableModel->applyEventBatch(events);
 
@@ -171,6 +177,13 @@ void WalletModel::drainEventQueue()
         // loaded because the size() does not change. See the comments in the
         // header file.
         emit transactionUpdated();
+
+        // Equivalent of the work pollBalanceChanged used to do when it
+        // observed nBestHeight != cachedNumBlocks: refresh per-row
+        // confirmation status. Driven by the event payload now.
+        if (chain_tip_advanced) {
+            transactionTableModel->updateConfirmations();
+        }
     }
 
     // Balance and number of transactions might have changed.
@@ -519,6 +532,22 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     }
 }
 
+static void NotifyBlocksChangedForWallet(WalletModel *walletmodel,
+                                         bool /*syncing*/,
+                                         int height,
+                                         int64_t best_time,
+                                         uint32_t /*target_bits*/)
+{
+    // Fired from main.cpp::SetBestChain (under cs_main) after every chain
+    // tip advance — connect, disconnect, or reorg. Pushes a lightweight
+    // marker into the event queue. The Qt-side drain handler reacts by
+    // refreshing per-row confirmation status and re-running the existing
+    // (rate-limited) balance recompute path. This replaces the 4-second
+    // pollBalanceChanged poll that used to compare nBestHeight to a cached
+    // copy on a timer.
+    walletmodel->getEventQueue().push(GRC::ChainTipChangedPayload{height, best_time});
+}
+
 void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
@@ -531,6 +560,9 @@ void WalletModel::subscribeToCoreSignals()
     wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
                                                          boost::placeholders::_3));
+    uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChangedForWallet, this,
+                                                       boost::placeholders::_1, boost::placeholders::_2,
+                                                       boost::placeholders::_3, boost::placeholders::_4));
 }
 
 void WalletModel::unsubscribeFromCoreSignals()

@@ -162,7 +162,6 @@ private:
 
     int64_t last_balance_update_time = 0;
 
-    QTimer *pollTimer;
     QTimer *eventDrainTimer;
 
     //!
@@ -182,12 +181,14 @@ public slots:
     void updateStatus();
     /* New, updated or removed address book entry */
     void updateAddressBook(const QString &address, const QString &label, bool isMine, int status);
-    /* Current, immature or unconfirmed balance might have changed - emit 'balanceChanged' if so */
-    void pollBalanceChanged();
     /* Drain the WalletEventQueue and apply any pending events to the
-     * transaction table model. Fires from m_event_drain_timer on a 500ms
-     * cadence. Replaces the legacy QMetaObject::invokeMethod queued
-     * connection from CWallet::NotifyTransactionChanged. */
+     * transaction table model. Fires from eventDrainTimer on a 500ms
+     * cadence. Replaces both the legacy QMetaObject::invokeMethod queued
+     * connection from CWallet::NotifyTransactionChanged and the
+     * 4-second pollBalanceChanged timer that used to drive balance /
+     * confirmation refresh — the latter is now event-driven via
+     * ChainTipChangedPayload pushed by the uiInterface.NotifyBlocksChanged
+     * subscriber. */
     void drainEventQueue();
 
 signals:
