@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
 
     wtx.mapValue["comment"] = "z";
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     pwalletMain->AddToWallet(wtx, &walletdb);
     vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);

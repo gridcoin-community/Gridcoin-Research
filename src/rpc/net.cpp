@@ -17,8 +17,8 @@
 
 using namespace std;
 
-extern std::map<uint256, CAlert> mapAlerts;
 extern CCriticalSection cs_mapAlerts;
+extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {

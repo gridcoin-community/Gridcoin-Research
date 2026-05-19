@@ -26,6 +26,7 @@ extern CWallet* pwalletMain;
 static void AddHDKeypathIfAvailable(const CWallet& wallet,
                                      const CPubKey& pubkey,
                                      std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
     CKeyID keyid = pubkey.GetID();
     auto it = wallet.mapKeyMetadata.find(keyid);
@@ -52,6 +53,7 @@ static void AddHDKeypathIfAvailable(const CWallet& wallet,
 static void FillHDKeypaths(const CWallet& wallet,
                             const CScript& scriptPubKey,
                             std::map<CPubKey, KeyOriginInfo>& hd_keypaths)
+    EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
 {
     std::vector<CKeyID> vKeys;
     ExtractAffectedKeys(wallet, scriptPubKey, vKeys);

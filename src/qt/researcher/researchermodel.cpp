@@ -674,7 +674,10 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
 void ResearcherModel::reload()
 {
-    Researcher::Reload();
+    {
+        LOCK(cs_main);
+        Researcher::Reload();
+    }
     resetResearcher(Researcher::Get());
 }
 
@@ -803,6 +806,7 @@ BeaconStatus ResearcherModel::advertiseBeacon()
 
 bool ResearcherModel::isV14Enabled() const
 {
+    LOCK(cs_main);
     return IsV14Enabled(nBestHeight);
 }
 
@@ -852,6 +856,8 @@ QString ResearcherModel::generateBeaconKeyForV3()
         return QString();
     }
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     AdvertiseBeaconResult result = GenerateBeaconKey(*cpid);
 
     if (auto public_key = result.TryPublicKey()) {
@@ -899,6 +905,8 @@ BeaconStatus ResearcherModel::advertiseBeaconV3(const QString& ownership_proof_x
     if (!beacon_pubkey.IsValid()) {
         return BeaconStatus::ERROR_INVALID_PROOF_XML;
     }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
         return BeaconStatus::ERROR_MISSING_KEY;

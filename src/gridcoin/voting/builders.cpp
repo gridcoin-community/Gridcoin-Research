@@ -484,7 +484,7 @@ public:
     //!
     //! \param claim The object to fill with the claim.
     //!
-    void BuildClaim(MagnitudeClaim& claim) const
+    void BuildClaim(MagnitudeClaim& claim) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (m_researcher->Magnitude().Scaled() == 0) {
             LogPrint(LogFlags::VOTE, "%s: skipped zero magnitude", __func__);
@@ -567,7 +567,7 @@ private:
     //!
     //! \return The hash of the transaction for the beacon contract if found.
     //!
-    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const
+    std::optional<uint256> FindBeaconTxid(const Beacon& beacon) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // TODO: This is rather slow, but we only need to do it once per vote.
         // Store a reference to a wallet's beacon transactions and rewrite the
@@ -748,7 +748,7 @@ public:
     //! \param vote Vote contract to generate the claim for.
     //! \param poll Determines how to generate a magnitude claim.
     //!
-    void BuildClaim(Vote& vote, const Poll& poll) const
+    void BuildClaim(Vote& vote, const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         VoteWeightClaim& claim = vote.m_claim;
 
@@ -892,7 +892,7 @@ PollBuilder::PollBuilder(PollBuilder&& builder) = default;
 PollBuilder::~PollBuilder() = default;
 PollBuilder& PollBuilder::operator=(PollBuilder&& builder) = default;
 
-PollBuilder PollBuilder::SetPayloadVersion(uint32_t version)
+PollBuilder PollBuilder::SetPayloadVersion(uint32_t version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     bool v3_enabled = IsPollV3Enabled(nBestHeight);
 
@@ -1346,7 +1346,7 @@ VoteBuilder VoteBuilder::AddResponse(const std::string& label)
     throw VotingError(strprintf(_("\"%s\" is not a valid poll choice."), label));
 }
 
-CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
+CWalletTx VoteBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));

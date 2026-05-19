@@ -1002,6 +1002,16 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(BeaconPayload)
 
+// BeaconRegistry methods (Reset, Add, ActivatePending, Delete, Try,
+// FindPending, FindHistorical, Deactivate) are EXCLUSIVE_LOCKS_REQUIRED(cs_main).
+// These tests directly mutate the registry without acquiring cs_main (the
+// test fixtures are single-threaded). Suppress thread-safety warnings for
+// the test suite rather than wrapping every call.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_empty_invalid_payload)
 {
     const GRC::BeaconPayload payload;
@@ -1824,5 +1834,9 @@ BOOST_AUTO_TEST_CASE(beacon_registry_GetBeaconChainletRoot_test_2)
         BOOST_CHECK_EQUAL(circular_corruption_detected, true);
     }
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

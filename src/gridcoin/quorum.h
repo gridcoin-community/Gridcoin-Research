@@ -5,11 +5,15 @@
 #ifndef GRIDCOIN_QUORUM_H
 #define GRIDCOIN_QUORUM_H
 
+#include "sync.h"
+
 #include <limits>
 #include <string>
 #include <vector>
 
 class CBlockIndex;
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -117,7 +121,7 @@ public:
     static bool ValidateSuperblockClaim(
         const Claim& claim,
         const SuperblockPtr& superblock,
-        const CBlockIndex* const pindex);
+        const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Validate the supplied superblock by comparing it to the node's
@@ -204,7 +208,7 @@ public:
     //! \return \c true if the age of the current superblock exceeds the
     //! protocol's superblock spacing parameter.
     //!
-    static bool SuperblockNeeded(const int64_t now);
+    static bool SuperblockNeeded(const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the tally's superblock context.

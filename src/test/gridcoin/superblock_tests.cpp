@@ -751,6 +751,13 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence)
     }
 }
 
+// Tests run single-threaded and manipulate the chain-state globals directly
+// (pindexBest / pindexGenesisBlock / nBestHeight) without taking cs_main.
+// Pragma-suppress thread-safety in this case for the duration of the test.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
 {
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
@@ -830,6 +837,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_provided_scraper_convergence_v3)
     delete pindexBest;
     delete pindexGenesisBlock;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence)
 {
@@ -892,6 +902,11 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
     }
 }
 
+// Same single-threaded-test rationale as the v3 test above.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergence_v3)
 {
     // This needs to be initialized, because the below FromConvergence call uses the AutoGreylist class, which in turn
@@ -986,6 +1001,9 @@ BOOST_AUTO_TEST_CASE(it_initializes_from_a_fallback_by_project_scraper_convergen
     delete pindexBest;
     delete pindexGenesisBlock;
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_by_unpacking_a_legacy_binary_contract)
 {

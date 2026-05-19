@@ -318,6 +318,22 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 # Set compiler flags
 if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
+endif()
+
+# Enable Clang Thread Safety Analysis where supported (issue #2869). The
+# analyzer ships in upstream Clang and Apple Clang; gcc has no equivalent
+# attribute set. Detect rather than gating on CMAKE_CXX_COMPILER_ID so any
+# clang-compatible compiler picks it up (e.g. clang-cl on Windows).
+#
+# Kept warning-only during the incremental annotation rollout (#2869 Phases
+# 1-4). The corresponding -Wno-error= flags prevent the warning from being
+# promoted to an error if any future -Werror is added before the codebase
+# is fully annotated. Once the rollout is complete the -Wno-error= flags
+# can be dropped to make stale annotations a hard build failure.
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag(-Wthread-safety HAVE_CLANG_THREAD_SAFETY)
+if(HAVE_CLANG_THREAD_SAFETY)
+    add_compile_options(-Wthread-safety)
     add_compile_options(-Wno-error=thread-safety-analysis)
     add_compile_options(-Wno-error=thread-safety-reference)
 endif()

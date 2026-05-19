@@ -356,6 +356,7 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
 
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx,
     const CBlockIndex* pindexBlock, bool fBlock, bool fMiner)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Take over previous transactions' spent pointers
     // fBlock is true when this is called from AcceptBlock when a new best-block is added to the blockchain
@@ -564,6 +565,7 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
 }
 
 bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Disconnect in reverse order
     bool bDiscTxFailed = false;
@@ -586,9 +588,13 @@ bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex)
             return error("%s: WriteBlockIndex failed", __func__);
     }
 
-    // ppcoin: clean up wallet after disconnecting coinstake
-    for (auto const& tx : block.vtx)
-        SyncWithWallets(tx, &block, false, false);
+    // ppcoin: clean up wallet after disconnecting coinstake.
+    // Canonical order: cs_main (held by DisconnectBlock) -> cs_setpwalletRegistered -> cs_wallet.
+    {
+        LOCK(cs_setpwalletRegistered);
+        for (auto const& tx : block.vtx)
+            SyncWithWallets(tx, &block, false, false);
+    }
 
     if (bDiscTxFailed) return error("%s: DisconnectInputs failed", __func__);
     return true;
@@ -668,7 +674,7 @@ unsigned int GetMRCOutputLimit(const int& block_version, bool include_foundation
 // Gridcoin-specific ConnectBlock() routines:
 //
 namespace {
-int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent)
+int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindexcurrent->pprev)
     {
@@ -737,7 +743,7 @@ bool TryLoadSuperblock(
     CBlock& block,
     CValidationState& state,
     const CBlockIndex* const pindex,
-    const GRC::Claim& claim)
+    const GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     GRC::SuperblockPtr superblock = block.GetSuperblock(pindex);
 
@@ -786,7 +792,7 @@ bool GridcoinConnectBlock(
     CTxDB& txdb,
     const int64_t stake_value_in,
     const int64_t total_claimed,
-    const int64_t fees)
+    const int64_t fees) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const GRC::Claim& claim = block.GetClaim();
 
@@ -899,6 +905,7 @@ unsigned int GetBlockScriptFlags(const CBlockIndex& block_index)
 }
 
 bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Check it again in case a previous version let a bad block in, but skip BlockSig checking
     if (!CheckBlock(block, state, pindex->nHeight, !fJustCheck, !fJustCheck, false, false))
@@ -1095,9 +1102,13 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockInd
             return error("%s: WriteBlockIndex failed", __func__);
     }
 
-    // Watch for transactions paying to me
-    for (auto const& tx : block.vtx)
-        SyncWithWallets(tx, &block, true);
+    // Watch for transactions paying to me.
+    // Canonical order: cs_main (held by ConnectBlock) -> cs_setpwalletRegistered -> cs_wallet.
+    {
+        LOCK(cs_setpwalletRegistered);
+        for (auto const& tx : block.vtx)
+            SyncWithWallets(tx, &block, true);
+    }
 
     return true;
 }
@@ -1151,7 +1162,10 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     if (!txdb.TxnCommit())
         return false;
 
-    LOCK(cs_main);
+    // cs_main is required on entry (declared EXCLUSIVE_LOCKS_REQUIRED in
+    // validation.h). The previous explicit LOCK(cs_main) here was redundant on
+    // a recursive mutex and confused the thread-safety analyzer about exit-path
+    // hold state.
 
     // New best
     if (g_chain_trust.Favors(pindexNew))
@@ -1160,9 +1174,13 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
 
     if (pindexNew == pindexBest)
     {
-        // Notify UI to display prev block's coinbase if it was ours
+        // Notify UI to display prev block's coinbase if it was ours.
+        // Canonical order: cs_main (required on entry) -> cs_setpwalletRegistered.
         static uint256 hashPrevBestCoinBase;
-        UpdatedTransaction(hashPrevBestCoinBase);
+        {
+            LOCK(cs_setpwalletRegistered);
+            UpdatedTransaction(hashPrevBestCoinBase);
+        }
         hashPrevBestCoinBase = block.vtx[0].GetHash();
     }
 

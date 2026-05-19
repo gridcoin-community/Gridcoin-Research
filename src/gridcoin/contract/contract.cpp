@@ -362,7 +362,7 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
@@ -935,7 +935,13 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
-void Contract::Body::ResetType(const ContractType type)
+// The in-body comments below note that cs_main is expected to be held when
+// the POLL/PROJECT/PROTOCOL/SCRAPER branches read nBestHeight. Annotated as
+// EXCLUSIVE_LOCKS_REQUIRED here; the cascade reaches into serializer paths
+// (Contract::Body::ResetType is called from Unserialize implementations of
+// CTransaction's body). Tx-deserialize call sites are tightened in this
+// same Phase 2 commit batch.
+void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (type) {
         case ContractType::UNKNOWN:

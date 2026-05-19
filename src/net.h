@@ -49,6 +49,8 @@ unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
 void StartNode(void* parg);
 bool StopNode();
+// Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
+// pnode->cs_vSend and needs the complete CNode type).
 void SocketSendData(CNode *pnode);
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
@@ -59,7 +61,7 @@ struct LocalServiceInfo {
 };
 
 extern CCriticalSection cs_mapLocalHost;
-extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 
 enum
 {
@@ -108,8 +110,8 @@ extern std::map<CInv, int64_t> mapAlreadyAskedFor;
 extern ThreadHandler* netThreads;
 
 
-extern std::vector<std::string> vAddedNodes;
 extern CCriticalSection cs_vAddedNodes;
+extern std::vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
 
 class CNodeStats
@@ -189,17 +191,17 @@ public:
     // socket
     uint64_t nServices;
     SOCKET hSocket;
-    CDataStream ssSend;
-    size_t nSendSize; // total size of all vSendMsg entries
-    size_t nSendOffset; // offset inside the first vSendMsg already sent
-    std::atomic<uint64_t> nSendBytes {0};
-    std::deque<SerializeData> vSendMsg;
     CCriticalSection cs_vSend;
+    CDataStream ssSend GUARDED_BY(cs_vSend);
+    size_t nSendSize GUARDED_BY(cs_vSend); // total size of all vSendMsg entries
+    size_t nSendOffset GUARDED_BY(cs_vSend); // offset inside the first vSendMsg already sent
+    std::atomic<uint64_t> nSendBytes {0};
+    std::deque<SerializeData> vSendMsg GUARDED_BY(cs_vSend);
 
-    std::deque<CNetMessage> vRecvMsg;
     CCriticalSection cs_vRecvMsg;
+    std::deque<CNetMessage> vRecvMsg GUARDED_BY(cs_vRecvMsg);
     std::atomic<uint64_t> nRecvBytes {0};
-    int nRecvVersion;
+    int nRecvVersion GUARDED_BY(cs_vRecvMsg);
 
     int64_t nLastSend;
     int64_t nLastRecv;
@@ -233,8 +235,8 @@ protected:
 
     // Denial-of-service detection/prevention
     // ---------- address:port -- misbehavior - time
-    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior;
     static CCriticalSection cs_mapMisbehavior;
+    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior GUARDED_BY(cs_mapMisbehavior);
     // See protected GetMisbehavior() below.
     // int nMisbehavior;
 
@@ -252,9 +254,9 @@ public:
     uint256 hashCheckpointKnown; // ppcoin: known sent sync-checkpoint
 
     // inventory based relay
-    mruset<CInv> setInventoryKnown;
-    std::vector<CInv> vInventoryToSend;
     CCriticalSection cs_inventory;
+    mruset<CInv> setInventoryKnown GUARDED_BY(cs_inventory);
+    std::vector<CInv> vInventoryToSend GUARDED_BY(cs_inventory);
     std::multimap<int64_t, CInv> mapAskFor;
 
     // Ping time measurement:
@@ -352,8 +354,7 @@ public:
         return nRefCount;
     }
 
-    // requires LOCK(cs_vRecvMsg)
-    unsigned int GetTotalRecvSize()
+    unsigned int GetTotalRecvSize() EXCLUSIVE_LOCKS_REQUIRED(cs_vRecvMsg)
     {
         unsigned int total = 0;
         for (auto const& msg : vRecvMsg)
@@ -361,11 +362,9 @@ public:
         return total;
     }
 
-    // requires LOCK(cs_vRecvMsg)
-    bool ReceiveMsgBytes(const char *pch, unsigned int nBytes);
+    bool ReceiveMsgBytes(const char *pch, unsigned int nBytes) EXCLUSIVE_LOCKS_REQUIRED(cs_vRecvMsg);
 
-    // requires LOCK(cs_vRecvMsg)
-    void SetRecvVersion(int nVersionIn)
+    void SetRecvVersion(int nVersionIn) EXCLUSIVE_LOCKS_REQUIRED(cs_vRecvMsg)
     {
         nRecvVersion = nVersionIn;
         for (auto &msg : vRecvMsg)
@@ -438,23 +437,20 @@ public:
         mapAskFor.insert(std::make_pair(nRequestTime, inv));
     }
 
-    // A lock on cs_vSend must be taken before calling this function
-    void BeginMessage(const char* pszCommand)
+    void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         assert(ssSend.size() == 0);
         ssSend << CMessageHeader(pszCommand, 0);
     }
 
-    // A lock on cs_vSend must be taken before calling this function
-    void AbortMessage()
+    void AbortMessage() EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         ssSend.clear();
 
         LogPrint(BCLog::LogFlags::NOISY, "(aborted)");
     }
 
-    // A lock on cs_vSend must be taken before calling this function
-    void EndMessage()
+    void EndMessage() EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         if (ssSend.size() == 0)
             return;
@@ -485,13 +481,13 @@ public:
     void PushVersion();
 
     template<typename T>
-    void PushFields(T field)
+    void PushFields(T field) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         ssSend << field;
     }
 
     template<typename T, typename... Tfields>
-    void PushFields(T field, Tfields... fields)
+    void PushFields(T field, Tfields... fields) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
     {
         ssSend << field;
         PushFields(fields...);
@@ -596,6 +592,10 @@ public:
     friend class BanMan;
 
 };
+
+// Re-declared here (was forward-declared above CNode) so the
+// EXCLUSIVE_LOCKS_REQUIRED lock-expression can reference pnode->cs_vSend.
+void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend);
 
 inline void RelayInventory(const CInv& inv)
 {

@@ -61,7 +61,7 @@ bool fDiscover = true;
 bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
-std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
 CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
@@ -80,19 +80,19 @@ std::atomic<NodeId> CNode::nLastNodeId {-1};
 
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
-vector<std::string> vAddedNodes;
 CCriticalSection cs_vAddedNodes;
+vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
 map<CInv, CDataStream> mapRelay;
 deque<pair<int64_t, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
 map<CInv, int64_t> mapAlreadyAskedFor;
 
-static deque<string> vOneShots;
 CCriticalSection cs_vOneShots;
+static deque<string> vOneShots GUARDED_BY(cs_vOneShots);
 
-set<CNetAddr> setservAddNodeAddresses;
 CCriticalSection cs_setservAddNodeAddresses;
+set<CNetAddr> setservAddNodeAddresses GUARDED_BY(cs_setservAddNodeAddresses);
 
 std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
 CCriticalSection CNode::cs_mapMisbehavior;
@@ -487,8 +487,14 @@ void CNode::PushVersion()
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
     GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
+
+    // Snapshot the chain height under cs_main so this method can be called
+    // from CNode construction (socket handler thread, no outer locks held)
+    // and from ProcessMessage without imposing cs_main on the call site.
+    const int nLocalBestHeight = WITH_LOCK(cs_main, return nBestHeight);
+
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
-        PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
+        PROTOCOL_VERSION, nLocalBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
     //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
     PushMessage(
@@ -500,7 +506,7 @@ void CNode::PushVersion()
         addrMe,
         nLocalHostNonce,
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-        nBestHeight);
+        nLocalBestHeight);
 }
 
 bool CNode::Misbehaving(int howmuch)
@@ -732,8 +738,7 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 
 
-// requires LOCK(cs_vSend)
-void SocketSendData(CNode *pnode)
+void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
 {
     std::deque<SerializeData>::iterator it = pnode->vSendMsg.begin();
 
@@ -822,8 +827,18 @@ void ThreadSocketHandler2(void* parg)
             vector<CNode*> vNodesCopy = vNodes;
             for (auto const& pnode : vNodesCopy)
             {
-                if (pnode->fDisconnect ||
-                    (pnode->GetRefCount() <= 0 && pnode->vRecvMsg.empty() && pnode->nSendSize == 0 && pnode->ssSend.empty()))
+                // vRecvMsg / nSendSize / ssSend are guarded by per-node locks.
+                // Take them in canonical order (cs_vRecvMsg first, then cs_vSend)
+                // for the disconnect-eligibility check. Lazy: only if refcount
+                // has dropped to zero, since the test short-circuits otherwise.
+                bool empty_buffers = false;
+                if (pnode->GetRefCount() <= 0) {
+                    LOCK2(pnode->cs_vRecvMsg, pnode->cs_vSend);
+                    empty_buffers = pnode->vRecvMsg.empty()
+                                    && pnode->nSendSize == 0
+                                    && pnode->ssSend.empty();
+                }
+                if (pnode->fDisconnect || empty_buffers)
                 {
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());

@@ -1092,8 +1092,9 @@ private: // SuperblockValidator classes
 
             const bool include_extra_side_channel_parts = IsV13Enabled(height);
 
-            // Note using fine-grained locking here to avoid lock-order issues and
-            // also to deal with Clang potential false positive below.
+            // Note using fine-grained locking here to avoid lock-order issues
+            // (cs_manifest must be released and re-acquired after cs_mapParts
+            // for the second block below, per the LOCK2 ordering note).
             std::vector<CScraperManifest::dentry>::iterator verified_beacons_iter;
             std::vector<CScraperManifest::dentry>::iterator pactc_iter;
             std::vector<CScraperManifest::dentry>::iterator ppk_iter;
@@ -1107,20 +1108,24 @@ private: // SuperblockValidator classes
 
                 convergence.AddPart("BeaconList", manifest->vParts[0]);
 
-                auto find_entry = [&manifest](const std::string& name) {
+                // Inlined the previous find_entry lambda so the analyzer can
+                // see that cs_manifest (the lock guarding manifest->projects)
+                // is held — lambda captures don't propagate hold-state.
+                auto find_project = [](std::vector<CScraperManifest::dentry>& projects,
+                                       const std::string& name) {
                     return std::find_if(
-                        manifest->projects.begin(),
-                        manifest->projects.end(),
+                        projects.begin(),
+                        projects.end(),
                         [&name](const CScraperManifest::dentry& entry) {
                             return entry.project == name;
                         });
                 };
 
-                verified_beacons_iter = find_entry("VerifiedBeacons");
+                verified_beacons_iter = find_project(manifest->projects, "VerifiedBeacons");
 
                 if (include_extra_side_channel_parts) {
-                    pactc_iter = find_entry("ProjectsAllCpidTotalCredits");
-                    ppk_iter = find_entry("ProjectPublicKeys");
+                    pactc_iter = find_project(manifest->projects, "ProjectsAllCpidTotalCredits");
+                    ppk_iter = find_project(manifest->projects, "ProjectPublicKeys");
                 } else {
                     pactc_iter = manifest->projects.end();
                     ppk_iter = manifest->projects.end();
@@ -1135,22 +1140,33 @@ private: // SuperblockValidator classes
             // carries it. Absent parts are silently skipped — scrapers emit
             // these conditionally and the convergence is expected to omit
             // them when the manifest did. Mirrors scraper.cpp:5622-5626.
-            auto add_optional_part = [&](const std::string& name,
-                                         std::vector<CScraperManifest::dentry>::iterator it) {
-                if (it == manifest->projects.end()) {
+            //
+            // The helper takes projects / vParts as parameters (rather than
+            // capturing manifest by reference) so the analyzer can see that
+            // the values consumed are the ones the enclosing LOCK2 protects;
+            // lambda captures don't propagate hold-state in the same way.
+            const auto add_optional_part = [&convergence](
+                                               const std::vector<CScraperManifest::dentry>& projects,
+                                               const std::vector<CSplitBlob::CPart*>& vParts,
+                                               const std::string& name,
+                                               const std::vector<CScraperManifest::dentry>::iterator it) {
+                if (it == projects.end()) {
                     return;
                 }
                 const size_t part_offset = it->part1;
-                if (part_offset == 0 || part_offset >= manifest->vParts.size()) {
+                if (part_offset == 0 || part_offset >= vParts.size()) {
                     LogPrintf("ValidateSuperblock(): out-of-range part offset for %s.", name);
                     return;
                 }
-                convergence.AddPart(name, manifest->vParts[part_offset]);
+                convergence.AddPart(name, vParts[part_offset]);
             };
 
-            add_optional_part("VerifiedBeacons", verified_beacons_iter);
-            add_optional_part("ProjectsAllCpidTotalCredits", pactc_iter);
-            add_optional_part("ProjectPublicKeys", ppk_iter);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "VerifiedBeacons", verified_beacons_iter);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "ProjectsAllCpidTotalCredits", pactc_iter);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "ProjectPublicKeys", ppk_iter);
         }
     }; // ProjectCombiner
 
@@ -1635,7 +1651,7 @@ void Quorum::ForgetVote(const CBlockIndex* const pindex)
 bool Quorum::ValidateSuperblockClaim(
     const Claim& claim,
     const SuperblockPtr& superblock,
-    const CBlockIndex* const pindex)
+    const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!SuperblockNeeded(pindex->nTime)) {
         return error("%s: superblock too early.", __func__);
@@ -1805,7 +1821,7 @@ bool Quorum::HasPendingSuperblock()
     return g_superblock_index.HasPending();
 }
 
-bool Quorum::SuperblockNeeded(const int64_t now)
+bool Quorum::SuperblockNeeded(const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (HasPendingSuperblock()) {
         return false;

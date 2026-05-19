@@ -307,6 +307,8 @@ BOOST_AUTO_TEST_CASE(split_coinstake_distributes_reward)
     int64_t nMinStakeSplitValue = 800;
     double dEfficiency = 98.0;
 
+    LOCK(cs_main);
+
     SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
                          nMinStakeSplitValue, dEfficiency);
 
@@ -351,6 +353,8 @@ BOOST_AUTO_TEST_CASE(sidestake_outputs_placed)
     bool fEnableSideStaking = true;
     int64_t nMinStakeSplitValue = 800;
     double dEfficiency = 98.0;
+
+    LOCK(cs_main);
 
     SplitCoinStakeOutput(coinstake, block, nReward, fEnableStakeSplit, fEnableSideStaking,
                          nMinStakeSplitValue, dEfficiency);

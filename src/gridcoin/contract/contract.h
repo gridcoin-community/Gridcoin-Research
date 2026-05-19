@@ -10,6 +10,7 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
+#include "sync.h"
 
 #include <optional>
 #include <string>
@@ -18,6 +19,7 @@
 class CBlock;
 class CBlockIndex;
 class CTransaction;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 class RegistryBookmarks;
@@ -603,7 +605,7 @@ Contract MakeLegacyContract(
 //!
 //! \param pindex Block index to start with.
 //!
-void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr);
+void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions in a block by passing them to the

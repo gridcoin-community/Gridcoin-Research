@@ -307,7 +307,7 @@ bool BlockRewardRules::ValidateMandatorySidestakeOutputs(
 // Full claim validation
 // =============================================================================
 
-bool BlockRewardRules::Check(std::string& error_out) const
+bool BlockRewardRules::Check(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!m_block) {
         error_out = "BlockRewardRules::Check() requires a block (constructed with full validation state)";
@@ -325,7 +325,7 @@ bool BlockRewardRules::Check(std::string& error_out) const
 // CheckNoncruncherClaim
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const
+bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CAmount mrc_rewards = 0;
     CAmount mrc_staker_fees = 0;
@@ -363,7 +363,7 @@ bool BlockRewardRules::CheckNoncruncherClaim(std::string& error_out) const
 // CheckResearcherClaim
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckResearcherClaim(std::string& error_out) const
+bool BlockRewardRules::CheckResearcherClaim(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // For version 11 blocks and higher, just validate the reward and check the signature. No need for the rest
     // of these shenanigans.
@@ -541,7 +541,7 @@ bool BlockRewardRules::CheckMRCRewards(
     CAmount& mrc_staker_fees,
     CAmount& mrc_fees,
     unsigned int& non_zero_outputs,
-    std::string& error_out) const
+    std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CTransaction& coinstake = m_block->vtx[1];
     const Claim& claim = m_block->GetClaim();
@@ -643,7 +643,7 @@ bool BlockRewardRules::CheckMRCRewards(
 // CheckResearchReward — accrual lookup with newbie correction fallback
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckResearchReward(std::string& error_out) const
+bool BlockRewardRules::CheckResearchReward(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const Claim& claim = m_block->GetClaim();
 
@@ -714,7 +714,7 @@ bool BlockRewardRules::CheckResearchReward(std::string& error_out) const
 // CheckBeaconSignature — verify claim is signed by active beacon key
 // -----------------------------------------------------------------------------
 
-bool BlockRewardRules::CheckBeaconSignature(std::string& error_out) const
+bool BlockRewardRules::CheckBeaconSignature(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const Claim& claim = m_block->GetClaim();
     const CpidOption cpid = claim.m_mining_id.TryCpid();

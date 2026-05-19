@@ -496,8 +496,17 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    PollBuilder builder = PollBuilder()
-        .SetPayloadVersion(payload_version)
+    PollBuilder builder;
+    {
+        // PollBuilder::SetPayloadVersion reads nBestHeight to validate the
+        // version against the current block-version gate. Hold cs_main only
+        // for that call; keep the remaining (non-chain-touching) chained
+        // setters outside to bound contention.
+        LOCK(cs_main);
+        builder = PollBuilder().SetPayloadVersion(payload_version);
+    }
+
+    builder = std::move(builder)
         .SetType(poll_type)
         .SetTitle(params[1].get_str())
         .SetDuration(params[2].get_int())

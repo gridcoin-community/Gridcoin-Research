@@ -45,6 +45,7 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     double nCurrentDiff = 0;
     double nTargetDiff = 0;
     uint64_t nExpectedTime = 0;
+    int best_height = 0;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         nWeight = GRC::GetStakeWeight(*pwalletMain);
@@ -52,9 +53,10 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
         nCurrentDiff = GRC::GetCurrentDifficulty();
         nTargetDiff = GRC::GetTargetDifficulty();
         nExpectedTime = GRC::GetEstimatedTimetoStake();
+        best_height = nBestHeight;
     }
 
-    obj.pushKV("blocks", nBestHeight);
+    obj.pushKV("blocks", best_height);
     diff.pushKV("current", nCurrentDiff);
     diff.pushKV("target", nTargetDiff);
 
@@ -253,14 +255,14 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No data for non-cruncher.");
     }
 
-    if (!pindexBest) {
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Invalid chain.");
-    }
-
     UniValue result(UniValue::VOBJ);
     UniValue audit(UniValue::VARR);
 
     LOCK(cs_main);
+
+    if (!pindexBest) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Invalid chain.");
+    }
 
     if (!IsV11Enabled(nBestHeight + 1)) {
         throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
@@ -658,6 +660,8 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
     UniValue entries(UniValue::VARR);
 
     const int64_t now = GetAdjustedTime();
+
+    LOCK(cs_main);
 
     for (const auto& iter : GRC::Tally::Accounts())
     {

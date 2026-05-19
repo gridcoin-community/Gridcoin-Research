@@ -49,7 +49,7 @@ bool g_newbie_snapshot_fix_enabled;
 //!
 //! \param pindex Index of the block to repair.
 //!
-void RepairZeroCpidIndex(CBlockIndex* const pindex)
+void RepairZeroCpidIndex(CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const ClaimOption claim = GetClaimByIndex(pindex);
 
@@ -193,7 +193,7 @@ public:
     //!
     //! \return \c true if the tally initialized without an error.
     //!
-    bool Initialize(CBlockIndex* pindex, SuperblockPtr current_superblock)
+    bool Initialize(CBlockIndex* pindex, SuperblockPtr current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         LogPrintf("Initializing research reward tally...");
 
@@ -509,7 +509,7 @@ public:
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    bool ApplySuperblock(SuperblockPtr superblock)
+    bool ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // The network publishes version 2+ superblocks after the mandatory
         // switch to block version 11.
@@ -568,7 +568,7 @@ public:
     //!
     bool ActivateSnapshotAccrual(
         const CBlockIndex* const baseline_pindex,
-        SuperblockPtr superblock)
+        SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!baseline_pindex || !IsV11Enabled(baseline_pindex->nHeight + 1)) {
             return false;
@@ -728,7 +728,7 @@ private:
     //! \brief Get the block index entry of the block when research accounting
     //! begins.
     //!
-    CBlockIndex* GetStartHeight()
+    CBlockIndex* GetStartHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // A node syncing from zero does not know the block index entry of the
         // starting height yet, so the tally will initialize without it.
@@ -756,7 +756,7 @@ private:
     //!
     //! \param superblock Incoming superblock to calculate rewards at.
     //!
-    void TallySuperblockAccrual(const SuperblockPtr& superblock)
+    void TallySuperblockAccrual(const SuperblockPtr& superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const SnapshotCalculator calc(superblock.m_timestamp, m_current_superblock);
 
@@ -926,7 +926,7 @@ private:
     //!
     //! \return \c false if an IO error occurred.
     //!
-    bool BuildAccrualSnapshots()
+    bool BuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!BuildBaselineSnapshot()) {
             return false;
@@ -975,7 +975,7 @@ public:
     //!
     //! \return \c false if an error occurred.
     //!
-    bool RebuildAccrualSnapshots()
+    bool RebuildAccrualSnapshots() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         assert(m_snapshot_baseline_pindex != nullptr);
 
@@ -1015,7 +1015,7 @@ NetworkTally g_network_tally;       //!< Tracks legacy two-week network averages
 // Class: Tally
 // -----------------------------------------------------------------------------
 
-bool Tally::Initialize(CBlockIndex* pindex)
+bool Tally::Initialize(CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindex || !IsResearchAgeEnabled(pindex->nHeight)) {
         LogPrintf("Tally initialization not needed.");
@@ -1053,7 +1053,7 @@ bool Tally::Initialize(CBlockIndex* pindex)
     return true;
 }
 
-bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex)
+bool Tally::ActivateSnapshotAccrual(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrint(LogFlags::TALLY, "Activating snapshot accrual...");
 
@@ -1098,7 +1098,7 @@ CAmount Tally::MaxEmission(const int64_t payment_time)
     return NetworkTally::MaxEmission(payment_time) * COIN;
 }
 
-double Tally::GetMagnitudeUnit(CBlockIndex* const pindex)
+double Tally::GetMagnitudeUnit(CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (pindex->nVersion >= 11) {
         return SnapshotCalculator::GetMagnitudeUnit(pindex).ToDouble();
@@ -1139,7 +1139,7 @@ CAmount Tally::AccrualNearLimit(
 //! \param cpid for which to calculate the accrual correction.
 //! \param superblock that is the high point of the accrual correction
 //!
-CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock)
+CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const SuperblockPtr& current_superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // This function was moved from the anonymous namespace and private, to public and made static, because it has
     // to be called from BlockRewardRules::Check() directly too. Why?
@@ -1442,7 +1442,7 @@ void Tally::ForgetRewardBlock(const CBlockIndex* const pindex)
     g_researcher_tally.ForgetMRCRewardBlock(pindex);
 }
 
-bool Tally::ApplySuperblock(SuperblockPtr superblock)
+bool Tally::ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_researcher_tally.ApplySuperblock(std::move(superblock));
 }

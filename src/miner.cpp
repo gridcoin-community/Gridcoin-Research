@@ -841,7 +841,7 @@ bool CreateCoinStake(CBlock &blocknew, CMutableTransaction& txnew, CKey &key,
 
 void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
     bool &fEnableStakeSplit, bool &fEnableSideStaking,
-    int64_t &nMinStakeSplitValue, double &dEfficiency)
+    int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // When this function is called, CreateCoinStake and CreateGridcoinReward have already been called
     // and there will be a single coinstake output (besides the empty one) that has the combined stake + research
@@ -1263,7 +1263,7 @@ bool SignStakeBlock(CBlock &block, CKey &key,
     return true;
 }
 
-void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime)
+void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (OutOfSyncByAge()) {
         LogPrintf("AddSuperblockContractOrVote: Out of sync.");

@@ -489,7 +489,7 @@ void CWallet::MarkDirty()
     }
 }
 
-bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = wtxIn.GetHash();
     {
@@ -588,7 +588,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb)
 // Add a transaction to the wallet, or update it.
 // pblock is optional, but should be provided if the transaction is known to be in a block.
 // If fUpdate is true, existing transactions will be updated.
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fFindBlock)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fFindBlock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = tx.GetHash();
     {
@@ -1245,7 +1245,7 @@ void CWalletTx::RelayWalletTransaction()
    RelayWalletTransaction(txdb);
 }
 
-void CWallet::ResendWalletTransactions(bool fForce)
+void CWallet::ResendWalletTransactions(bool fForce) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!fForce)
     {
@@ -1357,7 +1357,7 @@ void CWallet::ResendWalletTransactions(bool fForce)
              txns_erased_from_wallet);
 }
 
-bool CWalletTx::RevalidateTransaction(CTxDB& txdb)
+bool CWalletTx::RevalidateTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CTransaction tx = (CTransaction) *this;
 
@@ -3058,7 +3058,7 @@ void CWallet::UpdatedTransaction(const uint256 &hashTx)
     }
 }
 
-void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet)
+void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
     mapKeyBirth.clear();
@@ -3124,7 +3124,7 @@ void CWallet::StoreLastBackupTime(const int64_t backup_time)
     CWalletDB(strWalletFile).WriteBackupTime(backup_time);
 }
 
-GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout)
+GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CWalletTx wallettx;
     uint256 hashblock;

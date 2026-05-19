@@ -19,7 +19,7 @@
 #include <QMessageBox>
 #include <string>
 
-std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
+std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 
 QString ToQString(std::string s)

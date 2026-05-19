@@ -210,7 +210,7 @@ public:
      *
      * @return Blocks path which is network specific
      */
-    const fs::path& GetBlocksDirPath();
+    fs::path GetBlocksDirPath();
 
     /**
      * Get data directory path

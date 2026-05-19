@@ -164,17 +164,19 @@ void UnregisterWallet(CWallet* pwalletIn)
     }
 }
 
-// check whether the passed transaction is from us
-bool static IsFromMe(CTransaction& tx)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        if (pwallet->IsFromMe(tx))
-            return true;
-    return false;
-}
+// Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+// Each wrapper iterates setpwalletRegistered (GUARDED_BY cs_setpwalletRegistered)
+// and dispatches into pwallet methods that take pwallet->cs_wallet. Callers
+// MUST hold cs_setpwalletRegistered before invoking these wrappers; this is
+// enforced by EXCLUSIVE_LOCKS_REQUIRED. Holding the lock at the call site
+// (rather than taking it inside the wrapper) lets callers that also hold
+// cs_wallet establish the canonical order at acquisition time and avoids
+// the cs_setpwalletRegistered <-> cs_wallet inversion the inside-lock
+// pattern would otherwise create.
 
 // get the wallet transaction with the given hash (if it exists)
 bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         if (pwallet->GetTransaction(hashTx,wtx))
@@ -184,6 +186,7 @@ bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
 
 // erases transaction with the given hash from all wallets
 void static EraseFromWallets(uint256 hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->EraseFromWallet(hash);
@@ -191,6 +194,7 @@ void static EraseFromWallets(uint256 hash)
 
 // make sure all wallets know about the given transaction, in the given block
 void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
     if (!fConnect)
     {
@@ -215,6 +219,7 @@ void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate,
 
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->SetBestChain(loc);
@@ -222,6 +227,7 @@ void static SetBestChain(const CBlockLocator& loc)
 
 // notify wallets about an updated transaction
 void UpdatedTransaction(const uint256& hashTx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->UpdatedTransaction(hashTx);
@@ -229,6 +235,7 @@ void UpdatedTransaction(const uint256& hashTx)
 
 // dump all wallets
 void static PrintWallets(const CBlock& block)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->PrintWallet(block);
@@ -236,6 +243,7 @@ void static PrintWallets(const CBlock& block)
 
 // notify wallets about an incoming inventory (for request counts)
 void static Inventory(const uint256& hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->Inventory(hash);
@@ -243,6 +251,7 @@ void static Inventory(const uint256& hash)
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->ResendWalletTransactions(fForce);
@@ -585,7 +594,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
     if (ptxOld)
+    {
+        LOCK(cs_setpwalletRegistered);
         EraseFromWallets(ptxOld->GetHash());
+    }
 
     LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());
 
@@ -788,7 +800,7 @@ bool IsInitialBlockDownload()
             pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
 }
 
-void static InvalidChainFound(CBlockIndex* pindexNew)
+void static InvalidChainFound(CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
     arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
@@ -1372,6 +1384,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 
     if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
+        // Canonical order: cs_main (held by SetBestChain) -> cs_setpwalletRegistered -> cs_wallet.
+        LOCK(cs_setpwalletRegistered);
         ::SetBestChain(locator);
     }
 
@@ -1421,7 +1435,7 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
     return (~bnTarget / (bnTarget + 1)) + 1;
 }
 
-bool GridcoinServices()
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Block version 9 tally transition:
     //
@@ -1483,7 +1497,7 @@ bool GridcoinServices()
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
     int iAsked = 0;
-    LOCK(cs_vNodes);
+    LOCK2(cs_main, cs_vNodes);
     for (auto const& pNode : vNodes)
     {
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)))
@@ -1653,7 +1667,7 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
     return file;
 }
 
-bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb)
+bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     assert(pindex_target != nullptr);
@@ -2021,7 +2035,12 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                   DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
                   block.vtx.size());
 
-        PrintWallets(block);
+        {
+            // PrintBlockTree is EXCLUSIVE_LOCKS_REQUIRED(cs_main); add the
+            // wallet-registry lock here in the canonical order before dispatch.
+            LOCK(cs_setpwalletRegistered);
+            PrintWallets(block);
+        }
 
         // put the main time-chain first
         vector<CBlockIndex*>& vNext = mapNext[pindex];
@@ -2135,8 +2154,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 // CAlert
 //
 
-extern map<uint256, CAlert> mapAlerts;
 extern CCriticalSection cs_mapAlerts;
+extern map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 string GetWarnings(string strFor)
 {
@@ -2178,7 +2197,7 @@ string GetWarnings(string strFor)
 // Messages
 //
 
-bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
+bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (inv.type)
     {
@@ -2249,11 +2268,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect peers on old protocol versions after a grace period past the
         // BlockV14Height activation height. Skip entirely if that fork is not yet
         // activated (height == INT_MAX) to avoid signed integer overflow UB in the addition.
+        const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
                 && pfrom->nVersion < PROTOCOL_VERSION
                 && Params().GetConsensus().BlockV14Height != std::numeric_limits<int>::max()
-                && pindexBest->nHeight > Params().GetConsensus().BlockV14Height
+                && nLocalBestHeight > Params().GetConsensus().BlockV14Height
                                              + Params().GetConsensus().ProtocolVersionGracePeriod
                 )
             ) {
@@ -2347,7 +2367,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
-        pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        {
+            LOCK(pfrom->cs_vSend);
+            pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        }
 
 
         if (!pfrom->fInbound)
@@ -2367,13 +2390,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
-        if (!pfrom->fClient && !pfrom->fOneShot &&
-            (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-             (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
         {
-            nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256());
-            LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            LOCK(cs_main);
+            if (!pfrom->fClient && !pfrom->fOneShot &&
+                (pfrom->nStartingHeight > (nBestHeight - 144)) &&
+                 (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
+            {
+                nAskedForBlocks++;
+                pfrom->PushGetBlocks(pindexBest, uint256());
+                LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            }
         }
 
         // Relay alerts
@@ -2405,6 +2431,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == NetMsgType::VERACK)
     {
+        LOCK(pfrom->cs_vRecvMsg);
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
     }
     else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
@@ -2419,7 +2446,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Don't store the node address unless they have block height > 50%
-        if (pfrom->nStartingHeight < (nBestHeight*.5)) return true;
+        if (pfrom->nStartingHeight < (WITH_LOCK(cs_main, return nBestHeight) * .5)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -2541,7 +2568,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
 
                 // Track requests for our stuff
-                Inventory(inv.hash);
+                {
+                    LOCK(cs_setpwalletRegistered);
+                    Inventory(inv.hash);
+                }
 
             }
         }
@@ -2676,7 +2706,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Track requests for our stuff
-            Inventory(inv.hash);
+            {
+                LOCK(cs_setpwalletRegistered);
+                Inventory(inv.hash);
+            }
         }
     }
 
@@ -3021,8 +3054,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     return true;
 }
 
-// requires LOCK(cs_vRecvMsg)
-bool ProcessMessages(CNode* pfrom)
+bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 {
     //
     // Message format
@@ -3037,7 +3069,7 @@ bool ProcessMessages(CNode* pfrom)
     std::deque<CNetMessage>::iterator it = pfrom->vRecvMsg.begin();
     while (!pfrom->fDisconnect && it != pfrom->vRecvMsg.end()) {
         // Don't bother if send buffer is too full to respond anyway
-        if (pfrom->nSendSize >= SendBufferSize())
+        if (WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) >= SendBufferSize())
             break;
 
         // get next message
@@ -3186,8 +3218,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage(NetMsgType::PING, nonce);
     }
 
-    // Resend wallet transactions that haven't gotten in a block yet
-    ResendWalletTransactions();
+    // Resend wallet transactions that haven't gotten in a block yet.
+    // No outer locks held here in SendMessages; acquire in canonical order
+    // cs_main -> cs_setpwalletRegistered -> cs_wallet. cs_main is required
+    // for the wallet method's mapBlockIndex / pindexBest reads.
+    {
+        LOCK2(cs_main, cs_setpwalletRegistered);
+        ResendWalletTransactions();
+    }
 
     // Address refresh broadcast
     if (!IsInitialBlockDownload())
@@ -3261,6 +3299,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (!fTrickleWait)
                 {
                     CWalletTx wtx;
+                    LOCK(cs_setpwalletRegistered);
                     if (GetTransaction(inv.hash, wtx))
                         if (wtx.fFromMe)
                             fTrickleWait = true;
@@ -3311,7 +3350,15 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             continue;
         }
 
-        bool fAlreadyHave = AlreadyHave(txdb, inv);
+        // cs_main is required for the AlreadyHave call (mapBlockIndex
+        // lookup) and must be released before the cs_mapManifest scope
+        // below to preserve the canonical cs_main -> subsystem order
+        // documented at the inv-handling site near main.cpp:2533.
+        bool fAlreadyHave;
+        {
+            LOCK(cs_main);
+            fAlreadyHave = AlreadyHave(txdb, inv);
+        }
 
         // Check also the scraper data propagation system to see if it needs
         // this inventory object:

@@ -25,7 +25,7 @@ namespace {
 //!
 //! \return \c true if the wallet owns UTXOs for the master key address.
 //!
-bool SelectMasterInputOutput(CCoinControl& coin_control)
+bool SelectMasterInputOutput(CCoinControl& coin_control) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CTxDestination master_address = CWallet::MasterAddress(pindexBest->nHeight);
 
@@ -62,7 +62,7 @@ bool SelectMasterInputOutput(CCoinControl& coin_control)
 //!
 //! \return \c true if coin selection succeeded.
 //!
-bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee)
+bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn_fee) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CCoinControl coin_control_out;
     CAmount applied_fee_out; // Unused
@@ -125,7 +125,7 @@ bool CreateContractTx(CWalletTx& wtx_out, CReserveKey& reserve_key, CAmount burn
 //! \return An empty string when successful or a description of the error that
 //! occurred. TODO: Refactor to remove string-based signaling.
 //!
-std::string SendContractTx(CWalletTx& wtx_new)
+std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CReserveKey reserve_key(pwalletMain);
 
@@ -195,7 +195,7 @@ std::string SendContractTx(CWalletTx& wtx_new)
 // Functions
 // -----------------------------------------------------------------------------
 
-std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract)
+std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CMutableTransaction mtx;
     mtx.vContracts.emplace_back(std::move(contract));
@@ -206,7 +206,7 @@ std::pair<CWalletTx, std::string> GRC::SendContract(Contract contract)
     return SendContract(std::move(wtx));
 }
 
-std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx)
+std::pair<CWalletTx, std::string> GRC::SendContract(CWalletTx wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wtx.vContracts.empty()) {
         return std::make_pair(std::move(wtx), "Transaction contains no contract.");

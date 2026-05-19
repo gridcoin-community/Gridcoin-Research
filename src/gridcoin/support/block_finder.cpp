@@ -7,7 +7,7 @@
 
 using namespace GRC;
 
-CBlockIndex* BlockFinder::FindByHeight(int height)
+CBlockIndex* BlockFinder::FindByHeight(int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // If the height is at the bottom half of the chain, start searching from
     // the start to the end, otherwise search backwards from the end.
@@ -31,7 +31,7 @@ CBlockIndex* BlockFinder::FindByHeight(int height)
     return index;
 }
 
-CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
+CBlockIndex* BlockFinder::FindByMinTime(int64_t time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Select starting point depending on time proximity. While this is not as
     // accurate as in the FindByHeight case it will still give us a reasonable
@@ -57,7 +57,7 @@ CBlockIndex* BlockFinder::FindByMinTime(int64_t time)
 }
 
 // The arguments are passed by value on purpose.
-CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in)
+CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex* const index_in) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex* index = index_in;
 
@@ -74,7 +74,7 @@ CBlockIndex* BlockFinder::FindByMinTimeFromGivenIndex(int64_t time, CBlockIndex*
     return index;
 }
 
-CBlockIndex* BlockFinder::FindLatestSuperblock(CBlockIndex* const index_in)
+CBlockIndex* BlockFinder::FindLatestSuperblock(CBlockIndex* const index_in) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex* index = index_in;
 

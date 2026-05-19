@@ -42,7 +42,7 @@ class MockBlockIndex : CDiskBlockIndex
     };
 
 public:
-    static CBlockIndex* InsertBlockIndex(const uint256& hash)
+    static CBlockIndex* InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (hash.IsNull())
             return nullptr;
