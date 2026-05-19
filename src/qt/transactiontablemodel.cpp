@@ -131,10 +131,6 @@ public:
                     applyTxAdded(payload, fLimitTxnDisplay, limitTxnDateTime);
                 } else if constexpr (std::is_same_v<P, GRC::TxRemovedPayload>) {
                     applyTxRemoved(payload);
-                } else if constexpr (std::is_same_v<P, GRC::TxUpdatedPayload>) {
-                    LogPrint(BCLog::LogFlags::VERBOSE,
-                             "applyEventBatch: TxUpdated %s status=%d (no row mutation)",
-                             payload.hash.GetHex(), payload.status);
                 } else if constexpr (std::is_same_v<P, GRC::ChainTipChangedPayload>) {
                     // ChainTipChanged is handled at the WalletModel drain
                     // level (triggers updateConfirmations + checkBalanceChanged

@@ -121,6 +121,15 @@ void WalletModel::checkBalanceChanged()
 
     if (current_time - last_balance_update_time > MODEL_UPDATE_DELAY / 1000)
     {
+        // Stamp the gate as soon as we commit to a recompute — NOT only when
+        // a change is detected. The gate exists to rate-limit the expensive
+        // Get*Balance() scans themselves; if the timestamp only advanced on a
+        // detected change, a long-stable balance would leave the gate
+        // permanently open and every drain tick (which can fire back-to-back
+        // when drainEventQueue re-arms to clear a backlog) would run a fresh
+        // full-wallet scan.
+        last_balance_update_time = current_time;
+
         qint64 newBalance = getBalance();
         qint64 newStake = getStake();
         qint64 newUnconfirmedBalance = getUnconfirmedBalance();
@@ -135,8 +144,6 @@ void WalletModel::checkBalanceChanged()
             cachedStake = newStake;
             cachedUnconfirmedBalance = newUnconfirmedBalance;
             cachedImmatureBalance = newImmatureBalance;
-
-            last_balance_update_time = current_time;
 
             emit balanceChanged(newBalance, newStake, newUnconfirmedBalance, newImmatureBalance);
         }
@@ -517,18 +524,37 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     // returns false.
     //
     // Lock state at this point:
-    //   CT_NEW / CT_UPDATED callsites all hold cs_wallet (wallet.cpp:458,
-    //   475, 572, 2400, 3057). We can safely look up mapWallet[hash] and
-    //   run decomposeTransaction (which only requires cs_wallet via the
-    //   recursive IsMine() calls it makes).
+    //   The CT_NEW / CT_UPDATED / CT_UPDATING branch needs BOTH cs_main and
+    //   cs_wallet held:
+    //     - cs_wallet — to look up mapWallet[hash] and run
+    //       decomposeTransaction (which recursively calls IsMine()).
+    //     - cs_main   — TransactionRecord::showTransaction() calls
+    //       CWalletTx::IsInMainChain(), which is EXCLUSIVE_LOCKS_REQUIRED
+    //       (cs_main). (The thread-safety analyzer does not flag this
+    //       cross-TU because GetDepthInMainChain's annotation lives on the
+    //       definition in main.cpp, not the header declaration — so the
+    //       requirement is verified here by hand, not by the compiler.)
+    //
+    //   All five CT_NEW / CT_UPDATED callsites hold both locks, verified by
+    //   audit:
+    //     wallet.cpp:572  AddToWallet            — EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
+    //     wallet.cpp:2400 CommitTransaction      — LOCK2(cs_main, cs_wallet)
+    //     wallet.cpp:458  WalletUpdateSpent      — caller AddToWallet / AddToWalletIfInvolvingMe, both EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
+    //     wallet.cpp:475  WalletUpdateSpent      — same
+    //     wallet.cpp:3057 UpdatedTransaction     — reached via validation.cpp (cs_main required on entry); LOCK(cs_wallet)
+    //   The AssertLockHeld() calls below document and (in DEBUG_LOCKORDER
+    //   builds) enforce this; any future callsite missing a lock trips them.
     //
     //   CT_DELETED callsites (main.cpp:1290, wallet.cpp:1349) DO NOT hold
-    //   cs_wallet — the tx has already been erased. The TxRemoved payload
-    //   carries only the hash, so no wallet lookup is needed.
+    //   either lock — the tx has already been erased. The TxRemoved payload
+    //   carries only the hash, so no wallet lookup or showTransaction call
+    //   is needed.
     switch (status) {
     case CT_NEW:
     case CT_UPDATED:
     case CT_UPDATING: {
+        AssertLockHeld(cs_main);
+        AssertLockHeld(wallet->cs_wallet);
         auto it = wallet->mapWallet.find(hash);
         if (it == wallet->mapWallet.end()) {
             // Tx isn't in mapWallet — only happens if the notification

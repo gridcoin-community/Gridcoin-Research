@@ -34,19 +34,10 @@ struct TxAddedPayload
 };
 
 //!
-//! \brief Producer-side payload: an existing transaction's status changed (depth,
-//! confirmation, etc.). The consumer re-queries / refreshes display state for
-//! the matching row.
-//!
-struct TxUpdatedPayload
-{
-    uint256 hash;
-    int     status;  //!< ChangeType (CT_UPDATED / CT_DELETED / CT_NEW after fold).
-};
-
-//!
 //! \brief Producer-side payload: an existing transaction was removed from the
-//! wallet. The consumer drops the matching rows from its model.
+//! wallet, or is no longer visible (e.g. an orphaned coinstake). The consumer
+//! drops the matching rows from its model; it is a no-op if the tx isn't
+//! currently in the cached list.
 //!
 struct TxRemovedPayload
 {
@@ -78,7 +69,6 @@ struct ChainTipChangedPayload
 
 using WalletEventPayload = std::variant<
     TxAddedPayload,
-    TxUpdatedPayload,
     TxRemovedPayload,
     ChainTipChangedPayload>;
 

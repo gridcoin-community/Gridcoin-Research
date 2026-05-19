@@ -136,8 +136,9 @@ public:
     //!
     //! \brief Producer→GUI event channel. Producers (core threads firing
     //! NotifyTransactionChanged etc.) push under the locks they already hold;
-    //! the eventual Qt-side drain consumer (added in a follow-up commit)
-    //! periodically pops events and applies them to the model.
+    //! the Qt-side consumer, WalletModel::drainEventQueue(), is driven by
+    //! eventDrainTimer and periodically pops events and applies them to the
+    //! transaction table model.
     //!
     GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
 

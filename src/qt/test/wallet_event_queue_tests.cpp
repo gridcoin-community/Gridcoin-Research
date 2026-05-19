@@ -13,7 +13,6 @@
 using GRC::ChainTipChangedPayload;
 using GRC::TxAddedPayload;
 using GRC::TxRemovedPayload;
-using GRC::TxUpdatedPayload;
 using GRC::WalletEvent;
 using GRC::WalletEventPayload;
 using GRC::WalletEventQueue;
@@ -65,22 +64,17 @@ void WalletEventQueueTests::allPayloadVariantsRoundTrip()
     WalletEventQueue q;
 
     q.push(TxAddedPayload{}); // empty record list is enough — testing the variant lane.
-    q.push(TxUpdatedPayload{uint256(), 7});
     q.push(TxRemovedPayload{uint256()});
     q.push(ChainTipChangedPayload{2771000, 1779000000});
 
     auto batch = q.drain();
-    QCOMPARE(batch.size(), static_cast<std::size_t>(4));
+    QCOMPARE(batch.size(), static_cast<std::size_t>(3));
 
     QVERIFY(std::holds_alternative<TxAddedPayload>(batch[0].payload));
-    QVERIFY(std::holds_alternative<TxUpdatedPayload>(batch[1].payload));
-    QVERIFY(std::holds_alternative<TxRemovedPayload>(batch[2].payload));
-    QVERIFY(std::holds_alternative<ChainTipChangedPayload>(batch[3].payload));
+    QVERIFY(std::holds_alternative<TxRemovedPayload>(batch[1].payload));
+    QVERIFY(std::holds_alternative<ChainTipChangedPayload>(batch[2].payload));
 
-    const auto& upd = std::get<TxUpdatedPayload>(batch[1].payload);
-    QCOMPARE(upd.status, 7);
-
-    const auto& tip = std::get<ChainTipChangedPayload>(batch[3].payload);
+    const auto& tip = std::get<ChainTipChangedPayload>(batch[2].payload);
     QCOMPARE(tip.height,    2771000);
     QCOMPARE(tip.best_time, static_cast<int64_t>(1779000000));
 }
