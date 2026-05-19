@@ -89,6 +89,7 @@ add_library(gridcoinqt STATIC
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
+    wallet_event_queue.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp
