@@ -2,6 +2,7 @@
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
+#include "transactionrecord.h"
 #include "transactiontablemodel.h"
 
 #include "node/ui_interface.h"
@@ -450,6 +451,48 @@ static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, 
 static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, const uint256 &hash, ChangeType status)
 {
     LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
+
+    // Push a parallel event into the WalletEventQueue. The legacy
+    // QMetaObject::invokeMethod chain below still drives the existing
+    // TransactionTableModel update path; the queue is observable-only in this
+    // commit and is wired to the consumer in a follow-up.
+    //
+    // Lock state at this point:
+    //   CT_NEW / CT_UPDATED callsites all hold cs_wallet (wallet.cpp:458,475,
+    //   572,2400,3057). We can safely look up mapWallet[hash] and run
+    //   TransactionRecord::decomposeTransaction (which only requires
+    //   cs_wallet via the recursive IsMine() calls it makes).
+    //
+    //   CT_DELETED callsites (main.cpp:1290, wallet.cpp:1349) DO NOT hold
+    //   cs_wallet — the tx has already been erased. The TxRemoved payload
+    //   carries just the hash so no wallet lookup is needed there.
+    switch (status) {
+    case CT_NEW: {
+        auto it = wallet->mapWallet.find(hash);
+        if (it != wallet->mapWallet.end()) {
+            GRC::TxAddedPayload payload;
+            payload.records = TransactionRecord::decomposeTransaction(wallet, it->second);
+            walletmodel->getEventQueue().push(std::move(payload));
+        } else {
+            // mapWallet should always contain the tx at CT_NEW notification time
+            // (the producer just inserted it under the same cs_wallet scope).
+            // If it's missing, fall back to the hash-only update payload so the
+            // consumer can resolve it later via its own path.
+            LogPrintf("WARNING: NotifyTransactionChanged: CT_NEW for %s but tx not in mapWallet",
+                      hash.GetHex());
+            walletmodel->getEventQueue().push(GRC::TxUpdatedPayload{hash, status});
+        }
+        break;
+    }
+    case CT_UPDATED:
+    case CT_UPDATING:
+        walletmodel->getEventQueue().push(GRC::TxUpdatedPayload{hash, status});
+        break;
+    case CT_DELETED:
+        walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
+        break;
+    }
+
     QMetaObject::invokeMethod(walletmodel, "updateTransaction", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(hash.GetHex())),
                               Q_ARG(int, status));

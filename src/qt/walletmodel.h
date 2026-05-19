@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 
+#include "qt/wallet_event_queue.h"
 #include "support/allocators/secure.h" /* for SecureString */
 #include "wallet/ismine.h"
 
@@ -132,6 +133,14 @@ public:
     void unlockCoin(COutPoint& output);
     void listLockedCoins(std::vector<COutPoint>& vOutpts);
 
+    //!
+    //! \brief Producer→GUI event channel. Producers (core threads firing
+    //! NotifyTransactionChanged etc.) push under the locks they already hold;
+    //! the eventual Qt-side drain consumer (added in a follow-up commit)
+    //! periodically pops events and applies them to the model.
+    //!
+    GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
+
 private:
     CWallet *wallet;
 
@@ -154,6 +163,13 @@ private:
     int64_t last_balance_update_time = 0;
 
     QTimer *pollTimer;
+
+    //!
+    //! \brief MPSC queue carrying producer-side wallet events to the GUI.
+    //! Producers push under the locks they already hold; the consumer side
+    //! (Qt-timer drain) is wired in a follow-up commit.
+    //!
+    GRC::WalletEventQueue m_event_queue;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
