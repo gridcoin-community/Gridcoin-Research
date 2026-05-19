@@ -6,7 +6,7 @@
 
 #include "util/time.h"
 
-#include <algorithm>
+#include <iterator>
 #include <utility>
 
 namespace GRC {
@@ -25,18 +25,31 @@ void WalletEventQueue::push(WalletEventPayload payload)
 
 std::vector<WalletEvent> WalletEventQueue::drain(std::size_t max_batch)
 {
-    std::vector<WalletEvent> out;
+    std::deque<WalletEvent> taken;
 
-    std::lock_guard<std::mutex> lock(m_mutex);
-    const std::size_t n = std::min(max_batch, m_queue.size());
-    out.reserve(n);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    for (std::size_t i = 0; i < n; ++i) {
-        out.push_back(std::move(m_queue.front()));
-        m_queue.pop_front();
+        if (max_batch >= m_queue.size()) {
+            // Full drain: O(1) deque swap. The producer-facing critical
+            // section is just the swap, so a producer in push() (holding
+            // cs_wallet) is never blocked behind per-element drain work.
+            taken.swap(m_queue);
+        } else {
+            // Bounded drain: move only max_batch elements. The lock hold
+            // time is bounded by the caller's requested batch size, not by
+            // the (potentially large) backlog.
+            for (std::size_t i = 0; i < max_batch; ++i) {
+                taken.push_back(std::move(m_queue.front()));
+                m_queue.pop_front();
+            }
+        }
     }
 
-    return out;
+    // Lock released. The result vector — heap allocation plus per-element
+    // moves — is built outside the critical section.
+    return std::vector<WalletEvent>(std::make_move_iterator(taken.begin()),
+                                    std::make_move_iterator(taken.end()));
 }
 
 std::size_t WalletEventQueue::size() const

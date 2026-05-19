@@ -106,10 +106,17 @@ struct WalletEvent
 //! periodic drain timer) pops in batches.
 //!
 //! Synchronisation is a single std::mutex protecting the deque and the seqno
-//! counter. The consumer never blocks the producer (drain() is non-blocking);
-//! producers serialise only against each other at push time. The mutex hold
-//! window on the push path is the cost of one std::deque::push_back plus the
-//! seqno increment — well under a microsecond on modern hardware.
+//! counter. Producers serialise only against each other at push time; the
+//! mutex hold window on the push path is one std::deque::push_back plus the
+//! seqno increment — well under a microsecond.
+//!
+//! drain() is designed to keep the producer-facing critical section tiny: a
+//! full drain (the common case — the Qt timer drains everything) swaps the
+//! whole deque out under the lock in O(1) and builds the result vector after
+//! releasing it, so a producer calling push() under cs_wallet is never
+//! blocked behind per-element drain work. A bounded drain (explicit
+//! max_batch) holds the lock for at most max_batch element moves — bounded
+//! by the caller's request, not by the backlog.
 //!
 //! The queue is intentionally unbounded for the in-process prototype: a
 //! runaway producer would exhaust memory long before queue depth becomes a
@@ -133,9 +140,14 @@ public:
     void push(WalletEventPayload payload);
 
     //!
-    //! \brief Pop up to \p max_batch events in seqno order. Non-blocking;
-    //! returns an empty vector if the queue is empty. Intended to be called
-    //! by the Qt-side drain timer.
+    //! \brief Pop up to \p max_batch events in seqno order. Returns an empty
+    //! vector if the queue is empty. Intended to be called by the Qt-side
+    //! drain timer.
+    //!
+    //! A full drain (max_batch >= current depth) releases the queue mutex
+    //! after an O(1) deque swap; a bounded drain holds it for at most
+    //! max_batch element moves. Either way the result vector is allocated
+    //! and filled after the lock is released.
     //!
     std::vector<WalletEvent> drain(std::size_t max_batch = static_cast<std::size_t>(-1));
 

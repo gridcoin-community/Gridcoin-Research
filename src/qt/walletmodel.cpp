@@ -145,7 +145,11 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::drainEventQueue()
 {
-    auto events = m_event_queue.drain();
+    // Bound the per-tick batch so a large backlog (reorg flood, IBD catch-up)
+    // cannot freeze the Qt main thread in a single apply pass. If the queue
+    // still has events after this batch, re-arm immediately (see below)
+    // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
+    auto events = m_event_queue.drain(MODEL_EVENT_DRAIN_MAX_BATCH);
     if (events.empty()) {
         return;
     }
@@ -194,6 +198,15 @@ void WalletModel::drainEventQueue()
         cachedNumTransactions = newNumTransactions;
 
         emit numTransactionsChanged(newNumTransactions);
+    }
+
+    // If this drain hit the per-tick batch cap there is still a backlog.
+    // Re-arm immediately (0ms) rather than waiting for the next periodic
+    // tick: this returns control to the Qt event loop — keeping the GUI
+    // responsive between batches — but resumes draining straight away so a
+    // burst clears in a few event-loop turns instead of one per 500ms.
+    if (events.size() >= static_cast<std::size_t>(MODEL_EVENT_DRAIN_MAX_BATCH)) {
+        QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
     }
 }
 
