@@ -319,6 +319,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 # Set compiler flags
 if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
+    # MAC_OSX gates macOS-specific code paths inherited from Bitcoin (data
+    # directory under ~/Library/Application Support, F_FULLFSYNC, getentropy,
+    # pthread thread names). The Autotools build defined it via configure.ac;
+    # the move to CMake dropped it, silently disabling those paths on macOS.
+    add_compile_definitions(MAC_OSX)
 endif()
 
 # Enable Clang Thread Safety Analysis where supported (issue #2869). The
