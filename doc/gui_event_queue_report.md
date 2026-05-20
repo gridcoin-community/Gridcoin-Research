@@ -128,7 +128,10 @@ bottleneck.
 | 3 | `gui: drain WalletEventQueue from a 500ms timer; remove LOCK2 from update path` — the core behavioural change; deletes `updateWallet`, the legacy `updateTransaction` slots, and the `QMetaObject::invokeMethod` chain. |
 | 4 | `gui: replace pollBalanceChanged timer with ChainTipChanged events` — removes the 4-second balance poll. |
 | 5 | `gui: drive ResearcherModel::refresh from NotifyBlocksChanged` — removes the 30-second researcher poll. |
-| 6 | `gui: unify CT_NEW and CT_UPDATED producer-side handling` — fixes the regression described in section 4. |
+| 6 | `gui: unify CT_NEW and CT_UPDATED producer-side handling` — fixes the regression described in section 4.4. |
+| 7 | `doc: add GUI event-queue redesign design and testing report` — this document. |
+| 8 | `review: address Copilot review on PR #2944` — minimise the `drain()` critical section (O(1) deque swap on the full-drain path); bound the per-tick drain batch with immediate re-arm. |
+| 9 | `review: address second Copilot review pass on PR #2944` — `checkBalanceChanged` rate-limit fix (section 4.6); correct the `NotifyTransactionChanged` cs_main lock-state comment and add `AssertLockHeld`; remove the now-dead `TxUpdatedPayload` variant. |
 
 ## 3. Test environment
 
@@ -264,17 +267,79 @@ was unchanged: mean 0.219 s, median 0.216 s, max 0.601 s over 630 samples —
 identical to section 4.1. The fix introduced no regression at startup or in
 steady state.
 
-### 4.6 Full IBD with the fix (IBD-2)
+### 4.6 Full IBD on the complete commit set
 
-A second full IBD — chainstate wiped again, the commit-6 binary running — was
-performed to validate the fix end-to-end: that `cachedWallet` populates
-correctly *during* IBD with no post-IBD restart required, and that the
-per-`CT_UPDATED` `decomposeTransaction` cost stays in the noise.
+Two more full IBDs were run after the commit-6 fix to validate it end-to-end
+— that `cachedWallet` populates correctly *during* IBD with no post-IBD
+restart — and to exercise the Copilot-review changes.
 
-> **Status: in progress at time of writing.** Early-IBD latency profile
-> matches IBD-1 (mean ~0.19 s, zero samples over 1.0 s). This section will
-> be finalized with the full sync metrics and the post-IBD transaction-list
-> verification once the run completes.
+The first of those surfaced one more issue: a handful of brief mid-IBD
+latency blips traced to `checkBalanceChanged()`. Its `MODEL_UPDATE_DELAY`
+stale-time gate only advanced its timestamp when a balance *change* was
+detected, so a long-stable balance left the gate permanently open and every
+drain tick re-ran the full-wallet `Get*Balance()` scans. With the
+review-commit's immediate drain re-arm that became continuous. Fixed by
+stamping the gate whenever a recompute is performed (not only on a detected
+change).
+
+The final validation IBD was run on the complete commit set (all of the
+above plus both review commits). Chainstate wiped, fresh sync from genesis
+on the isolated testnet against the same ~89k-tx wallet:
+
+- Full sync genesis → tip in **~83 minutes**.
+- Steady-state after sync, sustained: mean `getinfo` latency ~0.30 s,
+  median ~0.29 s, p95 ~0.33 s — daemon-parity, holding over many hours of
+  continuous staking.
+- **The transaction list populated correctly during IBD; no post-IBD
+  restart was needed** — the commit-6 fix validated in the field.
+- Latency excursions over 1 s all fell into explained categories, none of
+  them a GUI-induced `cs_main` stall:
+  - Brief (1–2 s) `cs_main` holds while msghand connects clutches of
+    blocks in the chain region dense with this wallet's transactions.
+  - One ~32 s sample during an IBD orphan-block megabatch: ~11,000 blocks
+    connected in the surrounding ~65 s window. This is msghand
+    *productively* bulk-connecting the orphan backlog — RPC is unavailable
+    because the core is busy, not because the GUI is stalling it. The
+    legacy GUI doing the same catch-up would have lock-thrashed for hours.
+  - Two samples (~20 s, ~25 s) at the in_sync transition: the
+    `PollTableModel` bulk `GetActiveVoteWeight` recompute (section 6) — a
+    separate voting-subsystem bottleneck, not the wallet model.
+
+The whole point of the redesign held across the entire run: no GUI→core
+lock ping-pong appears anywhere. What remains are msghand legitimately
+holding `cs_main` to do block-connect work, and the unrelated
+`PollTableModel` refresh.
+
+#### Producer-side decomposition runs on msghand — a deliberate trade
+
+One characteristic worth recording explicitly. The producer-side
+`decomposeTransaction` (commit 6) runs inline in the
+`NotifyTransactionChanged` handler — i.e. on whichever core thread fired
+the notification, under the locks it already holds. During chain
+catch-up that thread is msghand, holding `cs_main`. So the decompose
+cost is *concentrated into msghand's `cs_main` hold* rather than being
+spread to the GUI thread.
+
+This is the correct trade, not a regression:
+
+- In the legacy design the decompose ran on the GUI thread, which had to
+  *acquire* `cs_main` to do it — producing exactly the lock ping-pong
+  between msghand and the GUI that this redesign exists to remove. Total
+  wall-clock for a burst was dominated by that handoff overhead.
+- In the new design msghand does the decompose inline, with no handoff.
+  Net system work is similar; msghand's individual `cs_main` holds are
+  somewhat longer, but a burst completes far faster overall because the
+  ping-pong is gone.
+
+The visible effect: during a pathological IBD orphan-megabatch the cost
+concentrates into one long msghand hold (the ~32 s sample above) instead
+of a long stuttering sequence of shorter ones. In steady state — one
+block at a time, a few wallet-relevant txs — the per-notification
+decompose is sub-millisecond and invisible. Eliminating even the
+concentrated-hold case would mean deferring decomposition off the
+notification thread entirely, which requires wallet access from a
+non-core thread — that is multiprocess-separation territory (section 6),
+out of scope here.
 
 ## 5. Scope boundaries
 
@@ -298,8 +363,9 @@ What the redesign deliberately does **not** change:
   Orthogonal to this redesign — the shift cost is no longer on the
   consensus-critical path, so it is now a bounded GUI-thread-internal cost.
 - **`PollTableModel::refresh()`** does a bulk synchronous `GetActiveVoteWeight`
-  recompute for every historical poll, observed as a one-off 14 s GUI stall
-  at the IBD in_sync transition (section 4.3). Same architectural treatment —
+  recompute for every historical poll, observed as a GUI stall at the IBD
+  in_sync transition — ~14 s in the first full IBD (section 4.3) and ~20–25 s
+  in the final one (section 4.6). Same architectural treatment —
   event-driven / incremental refresh — applies.
 - **`interfaces::Wallet` boundary** — when multiprocess separation lands, the
   `WalletEventQueue` becomes the consumer side of the IPC channel; the
