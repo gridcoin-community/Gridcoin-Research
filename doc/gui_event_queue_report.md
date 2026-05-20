@@ -4,7 +4,10 @@ This report documents the redesign of the Qt wallet GUI's transaction-model
 update path from a lock-bound, timer-polled architecture to a producer→consumer
 event queue, and the isolated-testnet validation that backs it.
 
-It accompanies the change set on the `gui-wallet-event-queue` branch.
+It accompanies the change set on the `gui-wallet-event-queue` branch. For the
+*why* behind the design decisions — and why the redesign is shaped as
+preparatory work for the GUI/node process separation (Discussion #2937) — see
+the companion document `gui_event_queue_design.md`.
 
 ## 1. The bug
 
