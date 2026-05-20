@@ -209,18 +209,34 @@ install_deps() {
                     local url="$1"
                     local name="$2"
                     local desc="$3"
-                    # Match on the OBS project base path (.../windows:/mingw:/winNN/)
-                    # rather than the full URL or our own alias. The
-                    # openSUSE-shipped Cross-toolchain repos provide exactly
-                    # these MinGW packages, but carry a human-readable alias
-                    # and a distribution-specific URL suffix that neither a
-                    # full-URL nor an alias match would recognise. Matching the
-                    # base path identifies them and avoids adding a duplicate
-                    # repo (which is how the dead-URL duplicates were created
-                    # in the first place).
+                    # Detection is done on the OBS project base path
+                    # (.../windows:/mingw:/winNN/) rather than the full URL or
+                    # our own alias, because the openSUSE-shipped Cross-toolchain
+                    # repos provide exactly these MinGW packages but carry a
+                    # human-readable alias and a URL whose trailing distro
+                    # segment may differ from ours (e.g. no trailing slash).
+                    #
+                    # A repo only actually satisfies the dependency if its URL
+                    # carries BOTH the base path AND the current distro segment
+                    # ($DISTRO_PATH). A repo with the base path but a different
+                    # distro segment — a stale dead-URL duplicate from the
+                    # pre-fix script, or a Leap/Tumbleweed mismatch — does NOT
+                    # satisfy it and must not be silently treated as if it did.
                     local base="${url%"$DISTRO_PATH"/}"
-                    if sudo zypper lr -u | grep -Fq "$base"; then
-                        echo "Repository for $desc already provided by an existing repo ($base) - skipping."
+                    if sudo zypper lr -u | grep -F "$base" | grep -Fq "$DISTRO_PATH"; then
+                        echo "Repository for $desc already provided by an existing repo - skipping."
+                    elif sudo zypper lr -u | grep -Fq "$base"; then
+                        # Base path present but wrong distro segment: a stale or
+                        # mismatched MinGW repo is in the way. It will not
+                        # provide $desc packages for this system and will fail
+                        # to refresh. Warn with cleanup instructions rather than
+                        # adding a second repo for the same OBS project.
+                        echo "Warning: a MinGW cross-toolchain repo for a different distribution"
+                        echo "         is present under ${base} (expected distro segment"
+                        echo "         '$DISTRO_PATH'). It will not provide $desc packages for"
+                        echo "         this system and will fail on refresh. Remove the stale"
+                        echo "         repo — 'sudo zypper lr' to find its alias, then"
+                        echo "         'sudo zypper rr <alias>' — and re-run."
                     elif sudo zypper lr | grep -Fq "$name"; then
                         echo "Warning: Repository alias '$name' exists but URL mismatch - leaving as-is."
                     else
