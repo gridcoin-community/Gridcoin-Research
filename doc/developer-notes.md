@@ -606,6 +606,38 @@ between the various components is a goal, with any necessary locking
 done by the components (e.g. see the self-contained `CKeyStore` class (in `src/keystore.h`)
 and its `cs_KeyStore` lock for example).
 
+### Clang thread-safety analysis
+
+Clang ships a static thread-safety analyzer that checks the `GUARDED_BY`,
+`EXCLUSIVE_LOCKS_REQUIRED` and related annotations at compile time — it
+verifies that a guarded variable is only touched while the right lock is
+held, and that a function annotated as requiring a lock is only called with
+that lock held. It is complementary to `DEBUG_LOCKORDER`: that flag checks
+lock *ordering* at runtime, the analyzer checks lock *coverage* at compile
+time.
+
+The analyzer only runs under Clang (and Apple Clang). **gcc ignores the
+annotations entirely**, so a gcc-only build never exercises them — a missing
+or stale annotation compiles cleanly. The build system auto-enables
+`-Wthread-safety` whenever the compiler supports it; by default the
+diagnostics are warning-only.
+
+**Do a Clang build before opening a PR** so the analyzer runs against your
+changes. `build_targets.sh` honors the `CC` / `CXX` environment variables:
+
+```bash
+CC=clang CXX=clang++ ./build_targets.sh TARGET=native BUILD_TYPE=RelWithDebInfo
+```
+
+The `Thread Safety (Clang)` job in `.github/workflows/cmake_quality.yml`
+builds with `-DWERROR_THREAD_SAFETY=ON`, which promotes the thread-safety
+diagnostics to hard errors — a PR that introduces an annotation violation
+fails CI. To reproduce that gate locally, pass the same option to CMake:
+
+```bash
+cmake -B build -DCMAKE_CXX_COMPILER=clang++ -DWERROR_THREAD_SAFETY=ON ...
+```
+
 Threads
 --------
 
