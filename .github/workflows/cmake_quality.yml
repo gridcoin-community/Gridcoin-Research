@@ -151,3 +151,58 @@ jobs:
              echo "Error: lint-all.sh not found."
              exit 1
           fi
+
+  # ----------------------------------------------------------------------
+  # JOB 3: Clang Thread Safety Analysis
+  # Compile-only gate. Clang's -Wthread-safety statically checks the
+  # GUARDED_BY / EXCLUSIVE_LOCKS_REQUIRED annotations (issue #2869); gcc
+  # ignores them entirely. WERROR_THREAD_SAFETY=ON promotes a stale or
+  # missing annotation to a build error. GUI is built here (ENABLE_GUI=ON)
+  # because the Sanitizers job builds with ENABLE_GUI=OFF and would not
+  # cover the Qt wallet code.
+  # ----------------------------------------------------------------------
+  thread-safety:
+    name: Thread Safety (Clang)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install System Deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libboost-all-dev \
+            libssl-dev libdb++-dev libminiupnpc-dev libqrencode-dev \
+            qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools \
+            libqt6charts6-dev libqt6svg6-dev libqt6core5compat6-dev \
+            libxkbcommon-dev libcurl4-openssl-dev libzip-dev zipcmp zipmerge \
+            ziptool ccache
+
+      - name: Restore Ccache
+        uses: actions/cache@v5
+        with:
+          path: /home/runner/.ccache
+          key: ccache-tsa-${{ github.sha }}
+          restore-keys: ccache-tsa-
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure (Thread Safety Analysis)
+        run: |
+          cmake -B build_tsa \
+            -DENABLE_GUI=ON \
+            -DENABLE_TESTS=OFF \
+            -DUSE_QT6=ON \
+            -DWERROR_THREAD_SAFETY=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build (compile-only — analysis runs at compile time)
+        run: cmake --build build_tsa --target gridcoinresearch gridcoinresearchd
