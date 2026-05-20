@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 
+#include "qt/wallet_event_queue.h"
 #include "support/allocators/secure.h" /* for SecureString */
 #include "wallet/ismine.h"
 
@@ -132,6 +133,15 @@ public:
     void unlockCoin(COutPoint& output);
     void listLockedCoins(std::vector<COutPoint>& vOutpts);
 
+    //!
+    //! \brief Producer→GUI event channel. Producers (core threads firing
+    //! NotifyTransactionChanged etc.) push under the locks they already hold;
+    //! the Qt-side consumer, WalletModel::drainEventQueue(), is driven by
+    //! eventDrainTimer and periodically pops events and applies them to the
+    //! transaction table model.
+    //!
+    GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
+
 private:
     CWallet *wallet;
 
@@ -153,7 +163,14 @@ private:
 
     int64_t last_balance_update_time = 0;
 
-    QTimer *pollTimer;
+    QTimer *eventDrainTimer;
+
+    //!
+    //! \brief MPSC queue carrying producer-side wallet events to the GUI.
+    //! Producers push under the locks they already hold; the consumer is
+    //! drainEventQueue(), fired by eventDrainTimer every 500ms.
+    //!
+    GRC::WalletEventQueue m_event_queue;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -163,12 +180,17 @@ private:
 public slots:
     /* Wallet status might have changed */
     void updateStatus();
-    /* New transaction, or transaction changed status */
-    void updateTransaction(const QString &hash, int status);
     /* New, updated or removed address book entry */
     void updateAddressBook(const QString &address, const QString &label, bool isMine, int status);
-    /* Current, immature or unconfirmed balance might have changed - emit 'balanceChanged' if so */
-    void pollBalanceChanged();
+    /* Drain the WalletEventQueue and apply any pending events to the
+     * transaction table model. Fires from eventDrainTimer on a 500ms
+     * cadence. Replaces both the legacy QMetaObject::invokeMethod queued
+     * connection from CWallet::NotifyTransactionChanged and the
+     * 4-second pollBalanceChanged timer that used to drive balance /
+     * confirmation refresh — the latter is now event-driven via
+     * ChainTipChangedPayload pushed by the uiInterface.NotifyBlocksChanged
+     * subscriber. */
+    void drainEventQueue();
 
 signals:
     // Transaction updated. This is necessary because on a resync from zero with an existing wallet.
