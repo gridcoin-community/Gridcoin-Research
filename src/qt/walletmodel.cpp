@@ -499,6 +499,7 @@ static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, 
 }
 
 static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, const uint256 &hash, ChangeType status)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
 {
     LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
 
@@ -542,13 +543,21 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     //     wallet.cpp:458  WalletUpdateSpent      — caller AddToWallet / AddToWalletIfInvolvingMe, both EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
     //     wallet.cpp:475  WalletUpdateSpent      — same
     //     wallet.cpp:3057 UpdatedTransaction     — reached via validation.cpp (cs_main required on entry); LOCK(cs_wallet)
-    //   The AssertLockHeld() calls below document and (in DEBUG_LOCKORDER
-    //   builds) enforce this; any future callsite missing a lock trips them.
+    //   This function is annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main,
+    //   wallet->cs_wallet) so the Clang thread-safety analyzer accepts the
+    //   AssertLockHeld() calls and the mapWallet reads in the CT_NEW /
+    //   CT_UPDATED branch. The AssertLockHeld() calls additionally enforce
+    //   the requirement at runtime in DEBUG_LOCKORDER builds.
     //
     //   CT_DELETED callsites (main.cpp:1290, wallet.cpp:1349) DO NOT hold
     //   either lock — the tx has already been erased. The TxRemoved payload
     //   carries only the hash, so no wallet lookup or showTransaction call
-    //   is needed.
+    //   is needed; that branch touches nothing the annotation guards. The
+    //   EXCLUSIVE_LOCKS_REQUIRED annotation therefore over-claims for the
+    //   CT_DELETED path — harmless, because the handler is invoked only
+    //   through boost::signals2, which the analyzer cannot trace, so no
+    //   caller is ever checked against the annotation; its sole effect is
+    //   to satisfy the analyzer inside the CT_NEW / CT_UPDATED branch.
     switch (status) {
     case CT_NEW:
     case CT_UPDATED:
