@@ -51,7 +51,8 @@ public:
     TransactionTablePriv(CWallet *wallet, WalletModel *walletModel, TransactionTableModel *parent):
             wallet(wallet),
             walletModel(walletModel),
-            parent(parent)
+            parent(parent),
+            m_event_seqno_watermark(0)
     {
     }
     CWallet *wallet;
@@ -64,6 +65,14 @@ public:
      */
     QList<TransactionRecord> cachedWallet;
 
+    /* Seqno watermark recorded by the most recent loadWallet() snapshot.
+     * loadWallet() rebuilds cachedWallet from a full mapWallet scan; any event
+     * later drained from the WalletEventQueue with a seqno below this value
+     * predates that snapshot and is stale. applyEventBatch() discards them —
+     * applying one (e.g. a stale TxRemoved) would corrupt the fresh model.
+     */
+    uint64_t m_event_seqno_watermark;
+
     /* Query entire wallet anew from core.
      */
     void loadWallet()
@@ -71,6 +80,15 @@ public:
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
+
+            // Record the event-queue watermark as part of this snapshot. The
+            // producer (NotifyTransactionChanged) pushes under cs_wallet, so
+            // while this LOCK2 is held no event can be enqueued: every event
+            // already queued predates the mapWallet scan below and is stale,
+            // and every event pushed after this lock releases reflects
+            // post-snapshot state. applyEventBatch() drops anything below the
+            // watermark.
+            m_event_seqno_watermark = walletModel->getEventQueue().next_seqno();
 
             bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
             int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
@@ -124,7 +142,19 @@ public:
         const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
         const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
 
+        std::size_t skipped_stale = 0;
+
         for (const auto& ev : events) {
+            // Discard events that predate the most recent loadWallet()
+            // snapshot (see m_event_seqno_watermark). Such an event reflects
+            // wallet state already superseded by that full rebuild; applying
+            // it — most damagingly a stale TxRemoved — would drop a row the
+            // snapshot correctly loaded.
+            if (ev.seqno < m_event_seqno_watermark) {
+                ++skipped_stale;
+                continue;
+            }
+
             std::visit([&](auto&& payload) {
                 using P = std::decay_t<decltype(payload)>;
                 if constexpr (std::is_same_v<P, GRC::TxAddedPayload>) {
@@ -137,6 +167,14 @@ public:
                     // once per batch). No per-event row mutation here.
                 }
             }, ev.payload);
+        }
+
+        if (skipped_stale > 0) {
+            LogPrint(BCLog::LogFlags::VERBOSE,
+                     "applyEventBatch: dropped %u stale event(s) below loadWallet "
+                     "watermark seqno=%llu",
+                     static_cast<unsigned int>(skipped_stale),
+                     static_cast<unsigned long long>(m_event_seqno_watermark));
         }
     }
 

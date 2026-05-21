@@ -147,6 +147,21 @@ public:
     //!
     std::size_t size() const;
 
+    //!
+    //! \brief The seqno that the next push() will assign. Every event currently
+    //! in the queue — and every event ever drained — has a seqno strictly less
+    //! than this value; every future event will have one greater than or equal
+    //! to it.
+    //!
+    //! A consumer that takes a fresh full snapshot of wallet state captures
+    //! this as a watermark and discards any later-drained event whose seqno is
+    //! below it: such an event predates the snapshot and is stale. For the
+    //! watermark to be exact with respect to a concurrently-taken state
+    //! snapshot, it must be sampled while producers are blocked — e.g. under
+    //! cs_wallet, which every producer holds across its push() call.
+    //!
+    uint64_t next_seqno() const;
+
 private:
     mutable std::mutex      m_mutex;
     std::deque<WalletEvent> m_queue;

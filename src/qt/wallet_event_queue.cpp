@@ -58,4 +58,10 @@ std::size_t WalletEventQueue::size() const
     return m_queue.size();
 }
 
+uint64_t WalletEventQueue::next_seqno() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_next_seqno;
+}
+
 } // namespace GRC
