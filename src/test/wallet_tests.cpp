@@ -370,9 +370,10 @@ BOOST_AUTO_TEST_CASE(state_transition_mempool_to_confirmed)
     CWallet test_wallet;
 
     // Create a transaction
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
     CTransactionRef ptx = MakeTransactionRef(tx);
 
@@ -410,9 +411,10 @@ BOOST_AUTO_TEST_CASE(state_transition_confirmed_to_inactive_reorg)
     // Test reorg scenario: confirmed -> inactive
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 75 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -445,18 +447,20 @@ BOOST_AUTO_TEST_CASE(spent_tracking_on_confirmation)
     CWallet test_wallet;
 
     // Create parent transaction
-    CTransaction parent_tx;
-    parent_tx.vout.resize(2);
-    parent_tx.vout[0].nValue = 100 * COIN;
-    parent_tx.vout[1].nValue = 50 * COIN;
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 100 * COIN;
+    parent_mtx.vout[1].nValue = 50 * COIN;
+    CTransaction parent_tx(parent_mtx);
     uint256 parent_hash = parent_tx.GetHash();
 
     // Create child transaction spending parent output 0
-    CTransaction child_tx;
-    child_tx.vin.resize(1);
-    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
-    child_tx.vout.resize(1);
-    child_tx.vout[0].nValue = 99 * COIN;  // 1 COIN fee
+    CMutableTransaction child_mtx;
+    child_mtx.vin.resize(1);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_mtx.vout.resize(1);
+    child_mtx.vout[0].nValue = 99 * COIN;  // 1 COIN fee
+    CTransaction child_tx(child_mtx);
     uint256 child_hash = child_tx.GetHash();
 
     {
@@ -492,16 +496,18 @@ BOOST_AUTO_TEST_CASE(reorg_unmarks_parent_spent)
     CWallet test_wallet;
 
     // Create parent and child transactions
-    CTransaction parent_tx;
-    parent_tx.vout.resize(1);
-    parent_tx.vout[0].nValue = 100 * COIN;
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(1);
+    parent_mtx.vout[0].nValue = 100 * COIN;
+    CTransaction parent_tx(parent_mtx);
     uint256 parent_hash = parent_tx.GetHash();
 
-    CTransaction child_tx;
-    child_tx.vin.resize(1);
-    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
-    child_tx.vout.resize(1);
-    child_tx.vout[0].nValue = 99 * COIN;
+    CMutableTransaction child_mtx;
+    child_mtx.vin.resize(1);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_mtx.vout.resize(1);
+    child_mtx.vout[0].nValue = 99 * COIN;
+    CTransaction child_tx(child_mtx);
     uint256 child_hash = child_tx.GetHash();
 
     {
@@ -529,9 +535,10 @@ BOOST_AUTO_TEST_CASE(abandon_then_reconfirm_workflow)
     // Test full abandon lifecycle including edge case reconfirmation
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 60 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 60 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -574,15 +581,17 @@ BOOST_AUTO_TEST_CASE(inactive_conflicted_vs_abandoned)
     CWallet test_wallet;
 
     // Transaction 1: conflicted
-    CTransaction tx1;
-    tx1.vout.resize(1);
-    tx1.vout[0].nValue = 40 * COIN;
+    CMutableTransaction mtx1;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 40 * COIN;
+    CTransaction tx1(mtx1);
     uint256 hash1 = tx1.GetHash();
 
     // Transaction 2: abandoned
-    CTransaction tx2;
-    tx2.vout.resize(1);
-    tx2.vout[0].nValue = 30 * COIN;
+    CMutableTransaction mtx2;
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 30 * COIN;
+    CTransaction tx2(mtx2);
     uint256 hash2 = tx2.GetHash();
 
     {
@@ -623,9 +632,10 @@ BOOST_AUTO_TEST_CASE(unrecognized_migration_with_hashblock)
     // This tests the consolidated migration path (Fix 1)
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 80 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 80 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -671,9 +681,10 @@ BOOST_AUTO_TEST_CASE(unrecognized_migration_without_hashblock)
     // These should become inactive (not found)
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 90 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 90 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -704,9 +715,10 @@ BOOST_AUTO_TEST_CASE(multiple_state_transitions)
     // Test multiple state transitions in sequence
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 110 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 110 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -960,11 +972,12 @@ BOOST_AUTO_TEST_CASE(get_conflicts_no_conflicts)
     CWallet test_wallet;
 
     // Create a simple transaction
-    CTransaction tx1;
-    tx1.vin.resize(1);
-    tx1.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 0);
-    tx1.vout.resize(1);
-    tx1.vout[0].nValue = 100 * COIN;
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = COutPoint(uint256S("1111111111111111111111111111111111111111111111111111111111111111"), 0);
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
 
     uint256 hash1 = tx1.GetHash();
 
@@ -997,18 +1010,20 @@ BOOST_AUTO_TEST_CASE(get_conflicts_with_conflicts)
     // Create two transactions that spend the same output
     COutPoint shared_outpoint(uint256S("2222222222222222222222222222222222222222222222222222222222222222"), 0);
 
-    CTransaction tx1;
-    tx1.vin.resize(1);
-    tx1.vin[0].prevout = shared_outpoint;
-    tx1.vout.resize(1);
-    tx1.vout[0].nValue = 100 * COIN;
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = shared_outpoint;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
     uint256 hash1 = tx1.GetHash();
 
-    CTransaction tx2;
-    tx2.vin.resize(1);
-    tx2.vin[0].prevout = shared_outpoint;  // Same input!
-    tx2.vout.resize(1);
-    tx2.vout[0].nValue = 99 * COIN;  // Different output
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = shared_outpoint;  // Same input!
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 99 * COIN;  // Different output
+    CTransaction tx2(mtx2);
     uint256 hash2 = tx2.GetHash();
 
     // Add both to wallet
@@ -1052,11 +1067,12 @@ BOOST_AUTO_TEST_CASE(get_conflicts_multiple_conflicts)
     // Create three transactions that all spend the same output
     std::vector<uint256> hashes;
     for (int i = 0; i < 3; i++) {
-        CTransaction tx;
-        tx.vin.resize(1);
-        tx.vin[0].prevout = shared_outpoint;
-        tx.vout.resize(1);
-        tx.vout[0].nValue = (100 - i) * COIN;
+        CMutableTransaction mtx;
+        mtx.vin.resize(1);
+        mtx.vin[0].prevout = shared_outpoint;
+        mtx.vout.resize(1);
+        mtx.vout[0].nValue = (100 - i) * COIN;
+        CTransaction tx(mtx);
 
         uint256 hash = tx.GetHash();
         hashes.push_back(hash);
@@ -1089,9 +1105,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_not_abandoned)
     // Test IsAbandoned with non-abandoned transaction
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1112,9 +1129,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_with_abandoned_tx)
     // Test IsAbandoned with abandoned transaction
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1135,9 +1153,10 @@ BOOST_AUTO_TEST_CASE(is_abandoned_inactive_not_abandoned)
     // Test IsAbandoned with inactive but not abandoned transaction
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1170,9 +1189,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
     // Test AbandonTransaction with unconfirmed transaction (not in mempool)
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 75 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1210,9 +1230,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
     // Test that AbandonTransaction fails with confirmed transaction
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 75 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 75 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1253,13 +1274,14 @@ BOOST_AUTO_TEST_CASE(maptxspends_cleanup_on_erase)
     CWallet test_wallet;
 
     // Create a transaction with multiple inputs
-    CTransaction tx;
-    tx.vin.resize(3);
-    tx.vin[0].prevout = COutPoint(uint256S("7777777777777777777777777777777777777777777777777777777777777777"), 0);
-    tx.vin[1].prevout = COutPoint(uint256S("8888888888888888888888888888888888888888888888888888888888888888"), 1);
-    tx.vin[2].prevout = COutPoint(uint256S("9999999999999999999999999999999999999999999999999999999999999999"), 2);
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 100 * COIN;
+    CMutableTransaction mtx;
+    mtx.vin.resize(3);
+    mtx.vin[0].prevout = COutPoint(uint256S("7777777777777777777777777777777777777777777777777777777777777777"), 0);
+    mtx.vin[1].prevout = COutPoint(uint256S("8888888888888888888888888888888888888888888888888888888888888888"), 1);
+    mtx.vin[2].prevout = COutPoint(uint256S("9999999999999999999999999999999999999999999999999999999999999999"), 2);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 100 * COIN;
+    CTransaction tx(mtx);
 
     uint256 hash = tx.GetHash();
 
@@ -1305,9 +1327,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_block_reason_no_state_change)
     // When reason == BLOCK, transactionRemovedFromMempool returns early.
     // blockConnected handles the state transition instead.
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1329,9 +1352,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_conflict_marks_inactive)
 {
     // CONFLICT reason should mark transaction as inactive (not abandoned)
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1354,9 +1378,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_replaced_marks_inactive)
 {
     // REPLACED reason should mark transaction as inactive (same as CONFLICT)
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1377,9 +1402,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_expiry_preserves_mempool_state)
 {
     // EXPIRY reason should NOT change state — tx is eligible for re-acceptance
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1398,9 +1424,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_sizelimit_preserves_mempool_state)
 {
     // SIZELIMIT reason should NOT change state — tx is eligible for re-acceptance
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1418,9 +1445,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_reorg_defers_to_block_disconnected)
 {
     // REORG reason should NOT change state — blockDisconnected handles it
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1438,9 +1466,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_unknown_marks_inactive)
 {
     // UNKNOWN reason should conservatively mark as inactive
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1461,9 +1490,10 @@ BOOST_AUTO_TEST_CASE(mempool_removal_not_in_wallet_no_crash)
 {
     // Removal of tx NOT in wallet should be a no-op (no crash)
     CWallet test_wallet;
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 50 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 50 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     // Don't add to wallet — verify no crash when looking up
@@ -1657,18 +1687,20 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
     CWallet test_wallet;
 
     // Parent tx
-    CTransaction parent_tx;
-    parent_tx.vout.resize(2);
-    parent_tx.vout[0].nValue = 50 * COIN;
-    parent_tx.vout[1].nValue = 30 * COIN;
+    CMutableTransaction parent_mtx;
+    parent_mtx.vout.resize(2);
+    parent_mtx.vout[0].nValue = 50 * COIN;
+    parent_mtx.vout[1].nValue = 30 * COIN;
+    CTransaction parent_tx(parent_mtx);
     uint256 parent_hash = parent_tx.GetHash();
 
     // Child tx spending parent output 0
-    CTransaction child_tx;
-    child_tx.vin.resize(1);
-    child_tx.vin[0].prevout = COutPoint(parent_hash, 0);
-    child_tx.vout.resize(1);
-    child_tx.vout[0].nValue = 49 * COIN;
+    CMutableTransaction child_mtx;
+    child_mtx.vin.resize(1);
+    child_mtx.vin[0].prevout = COutPoint(parent_hash, 0);
+    child_mtx.vout.resize(1);
+    child_mtx.vout[0].nValue = 49 * COIN;
+    CTransaction child_tx(child_mtx);
     uint256 child_hash = child_tx.GetHash();
 
     {
@@ -1709,9 +1741,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_sets_sentinel_hash)
 {
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 25 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 25 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1787,9 +1820,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
 {
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 20 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 20 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1814,9 +1848,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_double_abandon_is_idempotent)
 {
     CWallet test_wallet;
 
-    CTransaction tx;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = 15 * COIN;
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 15 * COIN;
+    CTransaction tx(mtx);
     uint256 hash = tx.GetHash();
 
     {
@@ -1851,18 +1886,20 @@ BOOST_AUTO_TEST_CASE(maptxspends_cleanup_preserves_other_conflicts)
     COutPoint shared_outpoint(uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), 0);
 
     // Create two conflicting transactions
-    CTransaction tx1;
-    tx1.vin.resize(1);
-    tx1.vin[0].prevout = shared_outpoint;
-    tx1.vout.resize(1);
-    tx1.vout[0].nValue = 100 * COIN;
+    CMutableTransaction mtx1;
+    mtx1.vin.resize(1);
+    mtx1.vin[0].prevout = shared_outpoint;
+    mtx1.vout.resize(1);
+    mtx1.vout[0].nValue = 100 * COIN;
+    CTransaction tx1(mtx1);
     uint256 hash1 = tx1.GetHash();
 
-    CTransaction tx2;
-    tx2.vin.resize(1);
-    tx2.vin[0].prevout = shared_outpoint;
-    tx2.vout.resize(1);
-    tx2.vout[0].nValue = 99 * COIN;
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = shared_outpoint;
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 99 * COIN;
+    CTransaction tx2(mtx2);
     uint256 hash2 = tx2.GetHash();
 
     {
