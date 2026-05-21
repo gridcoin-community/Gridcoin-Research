@@ -7,6 +7,7 @@
 
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
+#include "main.h"
 #include <key_io.h>
 #include "util.h"
 #include "gridcoin/tx_message.h"
@@ -576,17 +577,49 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
             walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
             break;
         }
-        if (TransactionRecord::showTransaction(it->second, false, 0)) {
+        const CWalletTx& wtx = it->second;
+
+        bool visible = TransactionRecord::showTransaction(wtx, false, 0);
+
+        // showTransaction() hides a generated (coinstake/coinbase) tx whose
+        // block is not yet in the main chain. This handler, however, runs
+        // synchronously inside block connection: the wallet is notified of a
+        // block's transactions before SetBestChain advances pindexBest (see
+        // main.cpp), so the block being connected — and its own coinstake —
+        // transiently read as orphan. That is a false negative: the block is
+        // a split-second from becoming the tip, and without this guard its
+        // coinstake gets a TxRemoved and never enters the GUI model.
+        //
+        // Detect exactly that window: a block sitting directly on the current
+        // tip but not yet the tip itself is the one being connected right
+        // now. A genuine orphan has pprev != pindexBest and stays hidden, so
+        // -showorphans semantics are unchanged. For a current-era coinstake
+        // the orphan check is showTransaction()'s only false path, so this
+        // override cannot un-hide a tx filtered for any other reason.
+        if (!visible && (wtx.IsCoinStake() || wtx.IsCoinBase())) {
+            auto bi = mapBlockIndex.find(wtx.hashBlock);
+            if (bi != mapBlockIndex.end() && bi->second != nullptr
+                    && !bi->second->IsInMainChain()
+                    && bi->second->pprev == pindexBest) {
+                LogPrint(BCLog::LogFlags::VERBOSE,
+                         "NotifyTransactionChanged: %s is in the block being "
+                         "connected — keeping visible despite transient orphan state",
+                         hash.GetHex());
+                visible = true;
+            }
+        }
+
+        if (visible) {
             GRC::TxAddedPayload payload;
-            payload.records = TransactionRecord::decomposeTransaction(wallet, it->second);
+            payload.records = TransactionRecord::decomposeTransaction(wallet, wtx);
             if (!payload.records.isEmpty()) {
                 walletmodel->getEventQueue().push(std::move(payload));
             }
         } else {
-            // Tx is now filtered out (e.g. became an orphan coinstake).
-            // Ensure the consumer removes the row if it was previously
-            // visible — TxRemoved is a no-op if the tx isn't in
-            // cachedWallet.
+            // Tx is genuinely filtered out (a real orphan coinstake, or a
+            // legacy non-IsFromMe OP_RETURN). Ensure the consumer removes the
+            // row if it was previously visible — TxRemoved is a no-op if the
+            // tx isn't in cachedWallet.
             walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
         }
         break;
