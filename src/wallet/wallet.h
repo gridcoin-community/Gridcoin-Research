@@ -297,13 +297,13 @@ public:
     /** @deprecated Use SyncTransaction or blockConnected/transactionAddedToMempool instead.
      *  Public compatibility wrapper with the legacy signature. */
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,
-                                  bool fUpdate = false, bool fFindBlock = false);
+                                  bool fUpdate = false, bool fFindBlock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 private:
     /** Add tx to wallet if it involves our addresses. Called by SyncTransaction. */
     bool AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
                                   const TxState& state,
-                                  bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+                                  bool fUpdate) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_wallet);
 
 public:
     void WalletUpdateSpent(const CTransaction &tx, bool fBlock, CWalletDB* pwalletdb);
@@ -579,7 +579,7 @@ private:
     const CWallet* pwallet;
 
     // Uses m_state instead of legacy hashBlock/nIndex for depth calculation.
-    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const override;
+    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Canonical transaction state (replaces legacy hashBlock-based inference).
     //! Private: every mutation must go through SetTxState(), which keeps the

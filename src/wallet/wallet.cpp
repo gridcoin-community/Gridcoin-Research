@@ -121,7 +121,7 @@ int FindTxInBlock(const CBlock& block, const uint256& txHash)
 
 //! Try to confirm a wallet tx from its CTxIndex (txindex → block → confirmed state).
 //! Returns true if the tx was successfully confirmed.
-bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex)
+bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlock block;
     if (!ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos,
@@ -147,7 +147,7 @@ bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex)
 //! Resolve an unrecognized tx to a proper state. Priority: hashBlock → CTxDB → mempool → inactive.
 //! Returns {updated, repeat}.
 std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txindex,
-                                             bool fTxIndexFound, CTxDB& txdb)
+                                             bool fTxIndexFound, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     bool fUpdated = false;
     bool fRepeat = false;
@@ -236,7 +236,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
 
 //! Validate a confirmed tx: check block is still in main chain, resolve height=-1.
 //! Returns {updated, repeat}.
-std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx)
+std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     bool fUpdated = false;
     bool fRepeat = false;
@@ -287,7 +287,7 @@ std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx)
 
 //! Validate a mempool tx: verify still in mempool, try to confirm from index if not.
 //! Returns {updated, repeat}.
-std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound)
+std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (mempool.exists(wtx.GetHash()))
         return {false, false}; // Still in mempool, nothing to do
@@ -313,7 +313,7 @@ std::pair<bool, bool> ValidateMempoolTx(CWalletTx& wtx, const CTxIndex& txindex,
 
 //! Try to recover an inactive tx by checking if it got confirmed (reorg recovery).
 //! Returns {updated, repeat}.
-std::pair<bool, bool> RecoverInactiveTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound)
+std::pair<bool, bool> RecoverInactiveTx(CWalletTx& wtx, const CTxIndex& txindex, bool fTxIndexFound) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!fTxIndexFound)
         return {false, false};
