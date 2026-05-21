@@ -2113,7 +2113,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     // Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // Acquired as sequenced LOCKs (rather than a LOCK2 + nested LOCK) so the
     // analyzer sees the order at acquisition time. The wallet registry lock
-    // is needed for the SyncWithWallets dispatch below.
+    // is needed for the transactionAddedToMempool dispatch below.
     LOCK(cs_main);
     LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);

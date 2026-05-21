@@ -267,22 +267,24 @@ public:
     bool SyncTransaction(const CTransactionRef& ptx,
                         const TxState& state,
                         bool update_tx = true,
-                        bool rescanning_old_block = false);
+                        bool rescanning_old_block = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Legacy overload — wraps CTransaction in a shared_ptr.
     bool SyncTransaction(const CTransaction& tx,
                         const TxState& state,
-                        bool update_tx = true)
+                        bool update_tx = true) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return SyncTransaction(MakeTransactionRef(tx), state, update_tx, false);
     }
 
-    // -- Validation interface callbacks (acquire cs_wallet internally) --------
-    void transactionAddedToMempool(const CTransactionRef& tx) LOCKS_EXCLUDED(cs_wallet);
-    void blockConnected(const CBlock& block, int height) LOCKS_EXCLUDED(cs_wallet);
+    // -- Validation interface callbacks ---------------------------------------
+    // Invoked by the validation/mempool layer with cs_main held; each acquires
+    // cs_wallet internally, so callers must hold cs_main but not cs_wallet.
+    void transactionAddedToMempool(const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void blockConnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void transactionRemovedFromMempool(const CTransactionRef& tx,
-                                      MemPoolRemovalReason reason) LOCKS_EXCLUDED(cs_wallet);
-    void blockDisconnected(const CBlock& block, int height) LOCKS_EXCLUDED(cs_wallet);
+                                      MemPoolRemovalReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void blockDisconnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
 
     // -- Conflict tracking & abandonment -------------------------------------
     /** Return txids that spend the same inputs as @p txid. */
@@ -579,6 +581,11 @@ private:
     // Uses m_state instead of legacy hashBlock/nIndex for depth calculation.
     int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const override;
 
+    //! Canonical transaction state (replaces legacy hashBlock-based inference).
+    //! Private: every mutation must go through SetTxState(), which keeps the
+    //! legacy hashBlock/nIndex fields synced. m_state is the single source of truth.
+    TxState m_state;
+
 public:
     std::vector<CMerkleTx> vtxPrev;
     mapValue_t mapValue;
@@ -590,9 +597,6 @@ public:
     std::string strFromAccount;
     std::vector<char> vfSpent; // which outputs are already spent
     int64_t nOrderPos;  // position in ordered transaction list
-
-    //! Canonical transaction state (replaces legacy hashBlock-based inference).
-    TxState m_state;
 
     // memory only
     mutable bool fDebitCached;
@@ -691,6 +695,18 @@ public:
     {
         hashBlock = TxStateSerializedBlockHash(m_state);
         nIndex = TxStateSerializedIndex(m_state);
+    }
+
+    //! Read-only access to the canonical transaction state.
+    const TxState& GetState() const { return m_state; }
+
+    //! Set the canonical transaction state. This is the only supported way to
+    //! mutate state from outside the class: it assigns m_state and immediately
+    //! syncs the legacy hashBlock/nIndex fields, so callers can never forget.
+    void SetTxState(const TxState& new_state)
+    {
+        m_state = new_state;
+        SyncLegacyFromState();
     }
 
     ADD_SERIALIZE_METHODS;
