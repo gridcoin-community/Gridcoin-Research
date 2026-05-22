@@ -380,18 +380,28 @@ void BitcoinGUI::createActions()
     openGuidesAction->setStatusTip(tr("Open the Gridcoin Guides"));
     openGuidesAction->setMenuRole(QAction::TextHeuristicRole);
 
-    // We use lambdas here to squash the argument to showNormalIfMinized.
-    connect(overviewAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(overviewAction, &QAction::triggered, this, &BitcoinGUI::gotoOverviewPage);
-    connect(sendCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(sendCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoSendCoinsPage);
-    connect(receiveCoinsAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(receiveCoinsAction, &QAction::triggered, this, &BitcoinGUI::gotoReceiveCoinsPage);
-    connect(historyAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(historyAction, &QAction::triggered, this, &BitcoinGUI::gotoHistoryPage);
-    connect(addressBookAction, &QAction::triggered, this, [this]{ this->showNormalIfMinimized(); });
-    connect(addressBookAction, &QAction::triggered, this, &BitcoinGUI::gotoAddressBookPage);
-    connect(votingAction, &QAction::triggered, this, &BitcoinGUI::gotoVotingPage);
+    // Drive tab navigation from QAction::toggled (the checked-state transition)
+    // rather than QAction::triggered. A screen reader activates these checkable
+    // toolbar buttons through the accessibility "toggle" path, which flips the
+    // checked state and emits toggled() but never triggered() -- so a
+    // triggered-based connection left assistive-technology users able to move
+    // the tab highlight but not actually change pages (issue #2604).
+    // toggled() fires for mouse, keyboard shortcut and accessibility activation
+    // alike; the checked-true filter ensures only the newly-selected tab (not
+    // the one being unchecked by the exclusive QActionGroup) navigates.
+    auto connectTabAction = [this](QAction* action, void (BitcoinGUI::*gotoPage)()) {
+        connect(action, &QAction::toggled, this, [this, gotoPage](bool checked) {
+            if (!checked) return;
+            this->showNormalIfMinimized();
+            (this->*gotoPage)();
+        });
+    };
+    connectTabAction(overviewAction, &BitcoinGUI::gotoOverviewPage);
+    connectTabAction(sendCoinsAction, &BitcoinGUI::gotoSendCoinsPage);
+    connectTabAction(receiveCoinsAction, &BitcoinGUI::gotoReceiveCoinsPage);
+    connectTabAction(historyAction, &BitcoinGUI::gotoHistoryPage);
+    connectTabAction(addressBookAction, &BitcoinGUI::gotoAddressBookPage);
+    connectTabAction(votingAction, &BitcoinGUI::gotoVotingPage);
 
     connect(websiteAction, &QAction::triggered, this, &BitcoinGUI::websiteClicked);
     connect(bxAction, &QAction::triggered, this, &BitcoinGUI::bxClicked);
