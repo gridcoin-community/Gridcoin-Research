@@ -1935,3 +1935,144 @@ BOOST_AUTO_TEST_CASE(maptxspends_cleanup_preserves_other_conflicts)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+// ===========================================================================
+// PSGT-readiness regression tests
+//
+// Locks in the contracts a future PSGT (Partially Signed Gridcoin Transaction)
+// layer will depend on, identified by the PSGT-readiness gap analysis:
+//
+//   1. Unknown reserved sentinels must round-trip as Unrecognized, not
+//      Confirmed — so a future state addition (e.g. TxStateBlockConflicted,
+//      TxStatePsgt) stays downgrade-safe with no wallet-format bump.
+//   2. The import -> mempool -> confirm -> reorg lifecycle of an externally-
+//      signed tx must traverse the state machine without data carryover.
+//   3. The TxState variant alternative order is part of the on-disk format and
+//      must remain stable. Future states must be appended, never reordered.
+// ===========================================================================
+
+BOOST_AUTO_TEST_SUITE(psgt_readiness_tests)
+
+BOOST_AUTO_TEST_CASE(psgt_unknown_sentinel_round_trips_as_unrecognized)
+{
+    // A future reserved sentinel (e.g. 0x...03) must NOT be interpreted as a
+    // real block hash. Guards against an older client mis-reporting a future
+    // PSGT/BlockConflicted-tagged tx as "confirmed in a non-existent block".
+    uint256 future_sentinel =
+        uint256S("0000000000000000000000000000000000000000000000000000000000000003");
+
+    TxState state = MigrateFromLegacyHashBlock(future_sentinel, -1);
+    BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(state));
+
+    // Every value in the reserved low range maps the same way.
+    for (uint8_t b : {uint8_t{0x03}, uint8_t{0x10}, uint8_t{0x7f}, uint8_t{0xff}}) {
+        uint256 s;
+        s.data()[0] = b;
+        BOOST_CHECK(std::holds_alternative<TxStateUnrecognized>(
+            MigrateFromLegacyHashBlock(s, -1)));
+    }
+
+    // Sanity: known sentinels still resolve to Inactive (unchanged behavior).
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(
+        MigrateFromLegacyHashBlock(ABANDONED_HASH_SENTINEL, -1)));
+    BOOST_CHECK(std::holds_alternative<TxStateInactive>(
+        MigrateFromLegacyHashBlock(CONFLICTED_HASH_SENTINEL, -1)));
+
+    // Sanity: a normal block hash still resolves to Confirmed.
+    uint256 real_block =
+        uint256S("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+    BOOST_CHECK(std::holds_alternative<TxStateConfirmed>(
+        MigrateFromLegacyHashBlock(real_block, 5)));
+}
+
+BOOST_AUTO_TEST_CASE(psgt_imported_inactive_tx_promotes_to_mempool)
+{
+    // Import path: external/PSGT-signed tx enters wallet in Inactive{false}
+    // (the "known but not broadcast" ingestion state).
+    CWalletTx imported;
+    imported.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(imported.isInactive());
+    BOOST_CHECK_EQUAL(imported.state<TxStateInactive>()->m_abandoned, false);
+
+    // Round-trip through disk format: imported state must survive load. This
+    // is what distinguishes the import path from "tx I never saw" — on next
+    // wallet load it must come back as Inactive, not Unrecognized.
+    CDataStream ss(SER_DISK, CLIENT_VERSION);
+    ss << imported;
+    CWalletTx loaded;
+    ss >> loaded;
+    BOOST_CHECK(loaded.isInactive());
+    BOOST_CHECK_EQUAL(loaded.state<TxStateInactive>()->m_abandoned, false);
+
+    // Broadcast path: the transition the production transactionAddedToMempool
+    // callback drives. After it, the variant truly holds InMempool — the
+    // Inactive payload must not leak.
+    loaded.SetTxState(TxStateInMempool{});
+    BOOST_CHECK(loaded.isInMempool());
+    BOOST_CHECK(loaded.state<TxStateInactive>() == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(psgt_imported_tx_confirm_then_reorg)
+{
+    // Full post-import lifecycle:
+    //   Inactive{false}  (imported, not yet broadcast)
+    //   -> InMempool     (transactionAddedToMempool)
+    //   -> Confirmed     (blockConnected)
+    //   -> Inactive{false} (blockDisconnected and not re-accepted to mempool)
+    CWalletTx wtx;
+
+    wtx.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(wtx.isInactive());
+
+    wtx.SetTxState(TxStateInMempool{});
+    BOOST_CHECK(wtx.isInMempool());
+
+    uint256 bh =
+        uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
+    wtx.SetTxState(TxStateConfirmed(bh, 12345, 7));
+    BOOST_CHECK(wtx.isConfirmed());
+    BOOST_CHECK(wtx.state<TxStateConfirmed>()->m_confirmed_block_hash == bh);
+    BOOST_CHECK_EQUAL(wtx.state<TxStateConfirmed>()->m_position_in_block, 7);
+
+    // Reorg: blockDisconnected. The wallet drops back to InMempool if the tx
+    // is re-accepted there, otherwise Inactive{false}. We simulate the latter.
+    wtx.SetTxState(TxStateInactive{false});
+    BOOST_CHECK(wtx.isInactive());
+    BOOST_CHECK_EQUAL(wtx.state<TxStateInactive>()->m_abandoned, false);
+
+    // Confirmed payload must not leak across the transition.
+    BOOST_CHECK(wtx.state<TxStateConfirmed>() == nullptr);
+    BOOST_CHECK(wtx.state<TxStateInMempool>() == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(txstate_variant_index_stability_extended)
+{
+    // The TxState variant index order is part of the on-disk format and the
+    // sentinel-mapping scheme. Reordering alternatives would silently change
+    // how existing wallets deserialize. Pinned as static_assert so a reorder
+    // fails to compile, not at runtime.
+    static_assert(std::is_same_v<std::variant_alternative_t<0, TxState>, TxStateInMempool>,
+                  "TxState index 0 must remain TxStateInMempool");
+    static_assert(std::is_same_v<std::variant_alternative_t<1, TxState>, TxStateConfirmed>,
+                  "TxState index 1 must remain TxStateConfirmed");
+    static_assert(std::is_same_v<std::variant_alternative_t<2, TxState>, TxStateInactive>,
+                  "TxState index 2 must remain TxStateInactive");
+    static_assert(std::is_same_v<std::variant_alternative_t<3, TxState>, TxStateUnrecognized>,
+                  "TxState index 3 must remain TxStateUnrecognized");
+    static_assert(std::variant_size_v<TxState> == 4,
+                  "Adding a TxState alternative is OK, but it MUST be appended "
+                  "(index 4+). When you add one, bump this size assertion and "
+                  "add a matching alternative-type check above.");
+
+    // Runtime mirror of the same property.
+    TxState s0 = TxStateInMempool{};
+    TxState s1 = TxStateConfirmed{};
+    TxState s2 = TxStateInactive{false};
+    TxState s3 = TxStateUnrecognized{};
+    BOOST_CHECK_EQUAL(s0.index(), 0u);
+    BOOST_CHECK_EQUAL(s1.index(), 1u);
+    BOOST_CHECK_EQUAL(s2.index(), 2u);
+    BOOST_CHECK_EQUAL(s3.index(), 3u);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
