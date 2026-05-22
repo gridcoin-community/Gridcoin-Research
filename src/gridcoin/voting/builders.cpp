@@ -633,7 +633,7 @@ public:
     //!
     //! \param poll Poll contract to generate the claim for.
     //!
-    PollEligibilityClaim BuildClaim(const Poll& poll) const
+    PollEligibilityClaim BuildClaim(const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!IsPollMultiAddressEnabled(nBestHeight)) {
             return BuildV1Claim(poll);
