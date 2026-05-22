@@ -112,6 +112,7 @@ TransactionView::TransactionView(QWidget *parent)
     view->setContextMenuPolicy(Qt::CustomContextMenu);
     view->setShowGrid(false);
     view->horizontalHeader()->setHighlightSections(false);
+    view->setAccessibleName(tr("Transaction history"));
     transactionView = view;
 
     QVBoxLayout *tableViewLayout = new QVBoxLayout();

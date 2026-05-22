@@ -190,6 +190,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
 
     ui->additionalFieldsTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->additionalFieldsTableView->sortByColumn(AdditionalFieldsTableModel::Required, Qt::DescendingOrder);
+    ui->additionalFieldsTableView->setAccessibleName(tr("Poll additional fields"));
 
     ui->weightTypeList->addItem(tr("Balance"));
     ui->weightTypeList->addItem(tr("Magnitude+Balance"));

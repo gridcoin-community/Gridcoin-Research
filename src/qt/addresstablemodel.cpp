@@ -199,6 +199,19 @@ QVariant AddressTableModel::data(const QModelIndex &index, int role) const
             font = GUIUtil::bitcoinAddressFont();
         }
         return font;
+    } else if (role == Qt::AccessibleTextRole) {
+        // For screen readers (issue #2604). Column 0 (Label) returns a full row
+        // description ("Label \"<label>\", address <address>") so a screen-reader
+        // user gets the row context with one announcement; column 1 (Address)
+        // returns just the address with its column header for per-cell navigation.
+        const QString label = rec->label.isEmpty() ? tr("(no label)") : rec->label;
+        switch (column) {
+        case Label:
+            return tr("Label \"%1\", address %2").arg(label, rec->address);
+        case Address:
+            return tr("Address: %1").arg(rec->address);
+        } // no default case, so the compiler can warn about missing cases
+        assert(false);
     } else if (role == TypeRole) {
         switch(rec->type)
         {
