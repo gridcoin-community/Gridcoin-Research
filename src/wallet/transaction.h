@@ -86,15 +86,34 @@ inline const uint256 ABANDONED_HASH_SENTINEL =
 inline const uint256 CONFLICTED_HASH_SENTINEL =
     uint256S("0000000000000000000000000000000000000000000000000000000000000002");
 
+//! Reserved sentinel range. Any hashBlock whose numeric value is in [0x01, 0xff]
+//! is reserved for current or future state sentinels. Unrecognized values in this
+//! range are mapped to TxStateUnrecognized so future state additions stay
+//! downgrade-safe: an older client reading a wallet written by a newer one will
+//! treat the unknown sentinel as Unrecognized (resolved on rescan) rather than
+//! as a real block hash (which would falsely report the tx as confirmed in a
+//! non-existent block). See PSGT-readiness finding 6.
+inline bool IsReservedHashSentinelRange(const uint256& h)
+{
+    // True iff every byte above the lowest is zero AND the lowest byte is non-zero.
+    // m_data[0] is the LSB (matches uint256S("...0001") == uint256(uint8_t{1})).
+    if (h.IsNull()) return false;
+    for (unsigned i = 1; i < 32; ++i) {
+        if (h.data()[i] != 0) return false;
+    }
+    return h.data()[0] != 0;
+}
+
 /**
  * Migrate a legacy hashBlock/nIndex pair to a TxState.
  * Used when reading old wallet.dat entries that predate the state system.
  */
 inline TxState MigrateFromLegacyHashBlock(const uint256& hashBlock, int nIndex)
 {
-    if (hashBlock == ABANDONED_HASH_SENTINEL)  return TxStateInactive{true};
-    if (hashBlock == CONFLICTED_HASH_SENTINEL) return TxStateInactive{false};
-    if (!hashBlock.IsNull())                   return TxStateConfirmed(hashBlock, -1, nIndex);
+    if (hashBlock == ABANDONED_HASH_SENTINEL)   return TxStateInactive{true};
+    if (hashBlock == CONFLICTED_HASH_SENTINEL)  return TxStateInactive{false};
+    if (IsReservedHashSentinelRange(hashBlock)) return TxStateUnrecognized{};
+    if (!hashBlock.IsNull())                    return TxStateConfirmed(hashBlock, -1, nIndex);
     return TxStateUnrecognized{};
 }
 
