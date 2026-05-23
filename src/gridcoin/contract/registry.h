@@ -7,6 +7,7 @@
 
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/sidestake.h"
@@ -47,11 +48,13 @@ public:
     static Registry& GetRegistryWithDB(const ContractType type)
     {
         switch (type) {
-        case ContractType::BEACON:      return GetBeaconRegistry();
-        case ContractType::PROJECT:     return GetWhitelist();
-        case ContractType::PROTOCOL:    return GetProtocolRegistry();
-        case ContractType::SCRAPER:     return GetScraperRegistry();
-        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
+        case ContractType::BEACON:         return GetBeaconRegistry();
+        case ContractType::PROJECT:        return GetWhitelist();
+        case ContractType::PROTOCOL:       return GetProtocolRegistry();
+        case ContractType::SCRAPER:        return GetScraperRegistry();
+        case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
+        case ContractType::POOL_REGISTER:  return GetPoolRegistry();
+        case ContractType::POOL_APPROVE:   return GetPoolRegistry();
         case ContractType::UNKNOWN:
             [[fallthrough]];
         case ContractType::CLAIM:
@@ -74,13 +77,15 @@ public:
     static Registry& GetRegistryWithRevert(const ContractType type)
     {
         switch (type) {
-        case ContractType::BEACON:      return GetBeaconRegistry();
-        case ContractType::POLL:        return GetPollRegistry();
-        case ContractType::PROJECT:     return GetWhitelist();
-        case ContractType::PROTOCOL:    return GetProtocolRegistry();
-        case ContractType::SCRAPER:     return GetScraperRegistry();
-        case ContractType::VOTE:        return GetPollRegistry();
-        case ContractType::SIDESTAKE:   return GetSideStakeRegistry();
+        case ContractType::BEACON:         return GetBeaconRegistry();
+        case ContractType::POLL:           return GetPollRegistry();
+        case ContractType::PROJECT:        return GetWhitelist();
+        case ContractType::PROTOCOL:       return GetProtocolRegistry();
+        case ContractType::SCRAPER:        return GetScraperRegistry();
+        case ContractType::VOTE:           return GetPollRegistry();
+        case ContractType::SIDESTAKE:      return GetSideStakeRegistry();
+        case ContractType::POOL_REGISTER:  return GetPoolRegistry();
+        case ContractType::POOL_APPROVE:   return GetPoolRegistry();
             [[fallthrough]];
         case ContractType::UNKNOWN:
             [[fallthrough]];
