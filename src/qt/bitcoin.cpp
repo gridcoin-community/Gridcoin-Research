@@ -72,7 +72,7 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
 
 extern bool fQtActive;
-extern bool bGridcoinCoreInitComplete;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;

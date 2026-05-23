@@ -121,7 +121,7 @@ int64_t nMinimumInputValue = 0;
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
-bool bGridcoinCoreInitComplete = false;
+std::atomic<bool> bGridcoinCoreInitComplete{false};
 
 // Mining status variables
 std::string    msMiningErrors;
