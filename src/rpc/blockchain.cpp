@@ -2377,13 +2377,28 @@ UniValue beaconaudit(const UniValue& params, bool fHelp)
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "explainmagnitude ( cpid )\n"
-                "\n"
-                "[cpid] -> Optional CPID to explain magnitude for\n"
-                "\n"
-                "Itemize your CPID magnitudes by project.\n");
+    static const RPCHelpMan help{
+        "explainmagnitude",
+        "Itemize a CPID's magnitude contribution by project.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to explain magnitude for. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "project", "Project name (or \"total\" for the summary row)."},
+                        {RPCResult::Type::NUM, "rac", "Recent average credit for the project."},
+                        {RPCResult::Type::NUM, "magnitude", "Magnitude contribution from the project."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("explainmagnitude", "") +
+            HelpExampleRpc("explainmagnitude", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
