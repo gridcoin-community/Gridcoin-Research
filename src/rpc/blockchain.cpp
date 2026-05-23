@@ -2533,11 +2533,20 @@ UniValue magnitude(const UniValue& params, bool fHelp)
 
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "resetcpids\n"
-                "\n"
-                "Reloads cpids\n");
+    static const RPCHelpMan help{
+        "resetcpids",
+        "Reload CPIDs from the config file.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "Reset", "Always 1 on success."},
+            }},
+        RPCExamples{
+            HelpExampleCli("resetcpids", "") +
+            HelpExampleRpc("resetcpids", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
