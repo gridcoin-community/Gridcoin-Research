@@ -489,6 +489,16 @@ void CNode::PushVersion()
     // GetRandBytes() writes raw bytes into the provided buffer; that's
     // incompatible with memcpy'ing into a std::atomic's storage directly,
     // so go through a local and store atomically.
+    //
+    // The local `nonce` is what we send on the wire below -- the atomic
+    // store is only to publish it to ProcessMessage's self-connection
+    // sentinel check. Reading the atomic back here for the PushMessage
+    // payload would lose the value to a concurrent PushVersion() on
+    // another outbound connection that ran between our store() and
+    // load(). (The single-global-nonce design is still racy across
+    // multiple simultaneous outbound connections versus their respective
+    // self-connection echoes -- a separate per-connection-nonce follow-up
+    // is the proper fix; see PR #2957 commit message for context.)
     uint64_t nonce;
     GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
     nLocalHostNonce.store(nonce);
@@ -509,7 +519,7 @@ void CNode::PushVersion()
         nTime,
         addrYou,
         addrMe,
-        nLocalHostNonce.load(),
+        nonce,
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
         nLocalBestHeight);
 }
