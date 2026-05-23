@@ -836,11 +836,21 @@ UniValue getblockcount(const UniValue& params, bool fHelp)
 
 UniValue getdifficulty(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getdifficulty\n"
-                "\n"
-                "Returns the difficulty as a multiple of the minimum difficulty\n");
+    static const RPCHelpMan help{
+        "getdifficulty",
+        "Returns the difficulty as a multiple of the minimum difficulty.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "current", "Current difficulty."},
+                {RPCResult::Type::NUM, "target", "Target difficulty."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getdifficulty", "") +
+            HelpExampleRpc("getdifficulty", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
