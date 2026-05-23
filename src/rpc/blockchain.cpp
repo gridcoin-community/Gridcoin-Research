@@ -3484,13 +3484,23 @@ UniValue readdata(const UniValue& params, bool fHelp)
 
 UniValue sendblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "sendblock <blockhash>\n"
-                "\n"
-                "<blockhash> Blockhash of block to send to network\n"
-                "\n"
-                "Sends a block to the network\n");
+    static const RPCHelpMan help{
+        "sendblock",
+        "Sends a block to the network.",
+        {
+            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the block to send to the network."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "Requesting", "The block hash being requested."},
+                {RPCResult::Type::BOOL, "Result", "Whether the request was issued."},
+            }},
+        RPCExamples{
+            HelpExampleCli("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
