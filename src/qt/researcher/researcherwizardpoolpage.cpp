@@ -57,6 +57,12 @@ void ResearcherWizardPoolPage::initializePage()
 
     m_researcher_model->switchToPool();
 
+    // TODO (issue #1783): once on-chain pool registration via PoolRegistry is
+    // activated, populate poolTableWidget from GetPoolRegistry().ActivePools()
+    // instead of the static rows defined in researcherwizardpoolpage.ui. The
+    // dynamic path needs to remain a no-op before activation so users still
+    // see the curated 5-row list during the migration window.
+
     connect(ui->poolTableWidget, &QTableWidget::cellClicked,
             this, &ResearcherWizardPoolPage::openLink);
 

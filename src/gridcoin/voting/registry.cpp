@@ -603,6 +603,16 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
 
     // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
     // vote contribute to the magnitude correction for pools.
+    //
+    // CONSENSUS NOTE (issue #1783): This iteration is part of the Active Vote
+    // Weight calculation and is consensus-critical. The hardcoded
+    // g_mining_pools list is kept here on purpose even though the local
+    // wallet's pool-mode detection in researcher.cpp now reads from the
+    // on-chain PoolRegistry. Migrating this site to GetPoolRegistry().ActivePools()
+    // would change AVW for historical polls (registry is empty for pre-
+    // activation heights), forking the chain. The migration must be height-
+    // gated and handled in a dedicated PR — see the matching comment in
+    // voting/result.cpp.
     std::vector<MiningPool> pools_not_voting;
     const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
 

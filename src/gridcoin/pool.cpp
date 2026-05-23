@@ -615,6 +615,18 @@ PoolRegistry::PoolDB& PoolRegistry::GetPoolDB()
     return m_pool_db;
 }
 
+void PoolRegistry::SeedForTests(const Pool& entry)
+{
+    LOCK(cs_lock);
+    m_pool_entries[entry.m_cpid] = std::make_shared<Pool>(entry);
+}
+
+void PoolRegistry::ClearForTests()
+{
+    LOCK(cs_lock);
+    m_pool_entries.clear();
+}
+
 // -----------------------------------------------------------------------------
 // RegistryDB template KeyType() specialization
 // -----------------------------------------------------------------------------
