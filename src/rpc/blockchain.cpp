@@ -2154,17 +2154,29 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
 UniValue beaconaudit(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-            "beaconaudit [errors only] [cpid]\n"
-            "\n"
-            "[errors only] -> Boolean to provide errors only. Defaults to true.\n"
-            "[cpid] -> Optional parameter of cpid. Defaults to current cpid. * means all active CPIDs.\n"
-            "\n"
-            "Conducts consistency audit for beacon contracts and beacon chain for given CPID.\n"
-            "This is currently limited to looking at multiple renewals for the same CPID in\n"
-            "the same block and reporting inconsistencies between the normal contract order\n"
-            "and the historical beacon entries (beacon chainlet) for the CPID.\n");
+    static const RPCHelpMan help{
+        "beaconaudit",
+        "Conduct a consistency audit for beacon contracts and the beacon chain for the given CPID. "
+        "Currently limited to looking at multiple renewals for the same CPID in the same block and "
+        "reporting inconsistencies between the normal contract order and the historical beacon entries "
+        "(beacon chainlet) for the CPID.",
+        {
+            {"errors_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, return only errors. Default: true."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to audit. Defaults to the current wallet CPID. Use \"*\" for all active CPIDs."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Audit report (see beaconaudit output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "audit fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconaudit", "") +
+            HelpExampleCli("beaconaudit", "true \"*\"") +
+            HelpExampleRpc("beaconaudit", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool errors_only = true;
     bool global = false;
