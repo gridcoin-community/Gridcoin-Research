@@ -798,11 +798,17 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
 UniValue getbestblockhash(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getbestblockhash\n"
-                "\n"
-                "Returns the hash of the best block in the longest block chain\n");
+    static const RPCHelpMan help{
+        "getbestblockhash",
+        "Returns the hash of the best block in the longest block chain.",
+        {},
+        RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getbestblockhash", "") +
+            HelpExampleRpc("getbestblockhash", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
