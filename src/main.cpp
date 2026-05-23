@@ -3108,7 +3108,13 @@ bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
-        uint256 hash = Hash(Span<std::byte>{(std::byte*)&vRecv.begin()[0], nMessageSize});
+        // vRecv.data() is well-defined for an empty container; the previous
+        // &vRecv.begin()[0] dereferenced begin() to take its address,
+        // which UBSan reports as a null-pointer-of-type bind on a
+        // zero-length message (benign in practice because nMessageSize
+        // is then 0 and Hash() reads no bytes, but the UB itself was
+        // visible).
+        uint256 hash = Hash(Span<std::byte>{vRecv.data(), nMessageSize});
 
         // We just received a message off the wire, harvest entropy from the time (and the message checksum)
         RandAddEvent(ReadLE32(hash.begin()));
