@@ -307,8 +307,31 @@ void PollTableModel::refresh()
         RenameThread("PollTableModel_refresh");
         util::ThreadSetInternalName("PollTableModel_refresh");
 
-        static_cast<PollTableDataModel*>(m_data_model.get())
-            ->reload(m_voting_model->buildPollTable(m_filter_flags));
+        // Build the new poll table off the GUI thread (this is the slow
+        // bit -- AVW recompute, candidate iteration).
+        std::vector<PollItem> new_rows = m_voting_model->buildPollTable(m_filter_flags);
+
+        // Hand the result back to the GUI thread for the actual model
+        // mutation. m_rows is the std::vector backing a QAbstractItemModel
+        // the views read concurrently via rowCount() / index() / data();
+        // mutating it (and emitting layoutAboutToBeChanged / layoutChanged)
+        // from this worker violates Qt model thread-affinity -- TSan G16
+        // reports a real race against PollTableDataModel::rowCount on the
+        // main thread. A QueuedConnection invoke onto m_data_model (whose
+        // thread affinity is the GUI thread) runs reload() in the GUI
+        // event loop, where every other access already happens.
+        //
+        // m_refresh_mutex is released only after the post is queued, so
+        // concurrent refresh() workers cannot reorder reloads on the GUI
+        // thread -- two workers serialize on the mutex, post in order,
+        // and the GUI thread processes the posts in FIFO order.
+        QMetaObject::invokeMethod(
+            m_data_model.get(),
+            [data_model = static_cast<PollTableDataModel*>(m_data_model.get()),
+             rows = std::move(new_rows)]() mutable {
+                data_model->reload(std::move(rows));
+            },
+            Qt::QueuedConnection);
 
         m_refresh_mutex.unlock();
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex lock released.",
