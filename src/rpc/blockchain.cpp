@@ -497,21 +497,32 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
 UniValue getmrcinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "getmrcinfo [detailed MRC info [CPID [low height [high height]]]]\n"
-                "\n"
-                "[detailed MRC info]: optional boolean to output MRC details.\n"
-                "                     Defaults to false.\n"
-                "[CPID]:              optional CPID. Defaults to current wallet CPID.\n"
-                "                     Use \"*\" for all CPIDs (network wide).\n"
-                "                     Note that block level mrc summary statistics are\n"
-                "                     specific to the scope specified with CPID.\n"
-                "[low height]:        optional low height for scope.\n"
-                "                     Defaults to V12 block height.\n"
-                "[high height]:       optional high height for scope.\n"
-                "                     Defaults to current block.\n"
-                );
+    static const RPCHelpMan help{
+        "getmrcinfo",
+        "Display MRC (Manual Research Claim) summary statistics for the given CPID and block range.",
+        {
+            {"detailed_mrc_info", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output detailed per-MRC info. Default: false."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to scope to. Defaults to the current wallet CPID. Use \"*\" for all CPIDs "
+                "(network-wide). Block-level MRC summary statistics are specific to the scope "
+                "specified by this CPID."},
+            {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Low height for scope. Defaults to V12 block height."},
+            {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "High height for scope. Defaults to current block."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "MRC summary report (see getmrcinfo output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "report fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getmrcinfo", "") +
+            HelpExampleCli("getmrcinfo", "true \"*\"") +
+            HelpExampleRpc("getmrcinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool output_mrc_details = false;
     bool output_all_cpids = false;
