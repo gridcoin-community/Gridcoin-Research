@@ -303,9 +303,15 @@ const PollItem* PollTableModel::rowItem(int row) const
 
 void PollTableModel::refresh()
 {
+    if (!m_voting_model) {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: no voting model set, skipping refresh",
+                 __func__);
+
+        return;
+    }
+
     bool expected = false;
-    if (!m_voting_model ||
-        !m_refresh_in_flight.compare_exchange_strong(expected, true)) {
+    if (!m_refresh_in_flight.compare_exchange_strong(expected, true)) {
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh already in flight, skipping",
                  __func__);
 
