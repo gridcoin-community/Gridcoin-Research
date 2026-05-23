@@ -1376,7 +1376,16 @@ bool IsMiningAllowed(CWallet *pwallet)
         g_miner_status.AddError(GRC::MinerStatus::TESTNET_ONLY);
     }
 
-    if (vNodes.size() < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
+    // vNodes is mutated by ThreadSocketHandler / connection-accept paths
+    // under cs_vNodes; snapshot the size under the lock rather than racing
+    // the writers (TSan G3 at miner.cpp:1379). Mirrors the existing pattern
+    // at net.cpp:889-897.
+    size_t numNodes;
+    {
+        LOCK(cs_vNodes);
+        numNodes = vNodes.size();
+    }
+    if (numNodes < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
         g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 
