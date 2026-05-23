@@ -920,13 +920,19 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
 
 UniValue getblockhash(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getblockhash <index>\n"
-                "\n"
-                "<index> Block number for requested hash\n"
-                "\n"
-                "Returns hash of block in best-block-chain at <index>\n");
+    static const RPCHelpMan help{
+        "getblockhash",
+        "Returns the hash of the block in the best-block-chain at the given index.",
+        {
+            {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number for requested hash."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getblockhash", "1000") +
+            HelpExampleRpc("getblockhash", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
