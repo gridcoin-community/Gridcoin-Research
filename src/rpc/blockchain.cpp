@@ -1416,16 +1416,29 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
 UniValue advertisebeacon(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "advertisebeacon ( force )\n"
-                "\n"
-                "[force] --> If true, generate new beacon keys and send a new "
-                "beacon even when an active or pending beacon exists for your "
-                "CPID. This is useful if you lose a wallet with your original "
-                "beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+    static const RPCHelpMan help{
+        "advertisebeacon",
+        "Advertise a beacon. Requires wallet to be fully unlocked.",
+        {
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, generate new beacon keys and send a new beacon even when an active "
+                "or pending beacon exists for your CPID. Useful if you lose a wallet with your "
+                "original beacon keys; not necessary otherwise. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("advertisebeacon", "") +
+            HelpExampleCli("advertisebeacon", "true") +
+            HelpExampleRpc("advertisebeacon", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
