@@ -3598,11 +3598,20 @@ UniValue writedata(const UniValue& params, bool fHelp)
 
 UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
         {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "askforoutstandingblocks\n"
-                "\n"
-                "Requests network for outstanding blocks\n");
+    static const RPCHelpMan help{
+        "askforoutstandingblocks",
+        "Requests the network for outstanding blocks.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "Sent.", "Whether the request was issued."},
+            }},
+        RPCExamples{
+            HelpExampleCli("askforoutstandingblocks", "") +
+            HelpExampleRpc("askforoutstandingblocks", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
