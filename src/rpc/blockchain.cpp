@@ -3865,10 +3865,25 @@ UniValue rpc_reorganize(const UniValue& params, bool fHelp)
 
 UniValue getburnreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getburnreport\n"
-                "Scan for and aggregate network-wide amounts for provably-destroyed outputs.\n");
+    static const RPCHelpMan help{
+        "getburnreport",
+        "Scan for and aggregate network-wide amounts for provably-destroyed outputs.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_AMOUNT, "total", "Total burned amount (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "voluntary", "Voluntary burns not tied to a contract (GRC)."},
+                {RPCResult::Type::OBJ_DYN, "contracts", "Per-contract-type burn totals.",
+                    {
+                        {RPCResult::Type::STR_AMOUNT, "type", "Burn total for the contract type (GRC)."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getburnreport", "") +
+            HelpExampleRpc("getburnreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     CBlock block;
     CAmount total_amount = 0;
