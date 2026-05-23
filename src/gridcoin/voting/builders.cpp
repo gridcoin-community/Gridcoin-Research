@@ -1257,7 +1257,7 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
     return std::move(*this);
 }
 
-CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
+CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
