@@ -1566,23 +1566,33 @@ UniValue beaconauth(const UniValue& params, bool fHelp)
 
 UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "advertisebeaconv3 <ownership_proof_xml> ( force )\n"
-                "\n"
-                "Send a v3 beacon with a BOINC account ownership proof.\n"
-                "\n"
-                "<ownership_proof_xml> --> The XML block returned by the BOINC project's\n"
-                "  proof-of-account-ownership page. Must contain <master_url>, <msg>,\n"
-                "  and <signature> elements. The <msg> field should have the format:\n"
-                "  \"{account_id} {beacon_public_key_hex}\" (the project generates this\n"
-                "  when you enter the beacon public key from beaconauth).\n"
-                "\n"
-                "[force] --> If true, send the beacon even when an active or pending\n"
-                "  beacon already exists for your CPID. This is useful if you lose a\n"
-                "  wallet with your original beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+    static const RPCHelpMan help{
+        "advertisebeaconv3",
+        "Send a v3 beacon with a BOINC account ownership proof. Requires wallet to be fully unlocked.",
+        {
+            {"ownership_proof_xml", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The XML block returned by the BOINC project's proof-of-account-ownership page. "
+                "Must contain <master_url>, <msg>, and <signature> elements. The <msg> field "
+                "should have the format \"{account_id} {beacon_public_key_hex}\" "
+                "(the project generates this when you enter the beacon public key from beaconauth)."},
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, send the beacon even when an active or pending beacon already exists "
+                "for your CPID. Useful if you lose a wallet with your original beacon keys; not "
+                "necessary otherwise. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("advertisebeaconv3", "\"<xml>...</xml>\"") +
+            HelpExampleRpc("advertisebeaconv3", "\"<xml>...</xml>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
