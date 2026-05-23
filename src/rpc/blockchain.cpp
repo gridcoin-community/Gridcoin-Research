@@ -2469,13 +2469,23 @@ UniValue lifetime(const UniValue& params, bool fHelp)
 
 UniValue magnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "magnitude <cpid>\n"
-                "\n"
-                "<cpid> -> cpid to look up\n"
-                "\n"
-                "Displays information for the magnitude of all cpids or specified in the network\n");
+    static const RPCHelpMan help{
+        "magnitude",
+        "Display magnitude information for the specified CPID, or for the current wallet CPID if omitted.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Magnitude report (see MagnitudeReport output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "report fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("magnitude", "") +
+            HelpExampleRpc("magnitude", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
