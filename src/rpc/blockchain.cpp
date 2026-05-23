@@ -3659,11 +3659,20 @@ UniValue currenttime(const UniValue& params, bool fHelp)
 
 UniValue networktime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "networktime\n"
-                "\n"
-                "Displays current network time\n");
+    static const RPCHelpMan help{
+        "networktime",
+        "Displays the current network time.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "Network Time", "Current adjusted network time."},
+            }},
+        RPCExamples{
+            HelpExampleCli("networktime", "") +
+            HelpExampleRpc("networktime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
