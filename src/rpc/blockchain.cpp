@@ -3633,11 +3633,21 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
 UniValue currenttime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currenttime\n"
-                "\n"
-                "Displays UTC Unix time as well as date and time in UTC\n");
+    static const RPCHelpMan help{
+        "currenttime",
+        "Displays the UTC Unix time as well as the date and time in UTC.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "Unix", "Current adjusted Unix time."},
+                {RPCResult::Type::STR, "UTC", "Human-readable UTC timestamp."},
+            }},
+        RPCExamples{
+            HelpExampleCli("currenttime", "") +
+            HelpExampleRpc("currenttime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
