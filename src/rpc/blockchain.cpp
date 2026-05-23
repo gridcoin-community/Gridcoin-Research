@@ -1143,20 +1143,31 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
-    if (fHelp || (params.size() < 2 || params.size() > 4))
-        throw runtime_error(
-                "rainbymagnitude project_id amount ( trial_run output_details )\n"
-                "\n"
-                "project_id     -> Required: Limits rain to a specific project. Use \"*\" for\n"
-                "                  network-wide. Call \"listprojects\" for the IDs of eligible\n"
-                "                  projects."
-                "amount         -> Required: Amount to rain (1000 GRC minimum).\n"
-                "trial_run      -> Optional: Boolean to specify a trial run instead of an actual\n"
-                "                  transaction (default: false).\n"
-                "output_details -> Optional: Boolean to output recipient details (default: false\n"
-                "                  if not trial run, true if trial run).\n"
-                "\n"
-                "rain coins by magnitude on network");
+    static const RPCHelpMan help{
+        "rainbymagnitude",
+        "Rain coins by magnitude on the network.",
+        {
+            {"project_id", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Limits rain to a specific project. Use \"*\" for network-wide. "
+                "Call \"listprojects\" for the IDs of eligible projects."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "Amount to rain (1000 GRC minimum)."},
+            {"trial_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, perform a trial run instead of an actual transaction. Default: false."},
+            {"output_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output recipient details. "
+                "Default: false (or true if trial_run is true)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Rain result (see rainbymagnitude output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "result fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("rainbymagnitude", "\"*\" 1000 true") +
+            HelpExampleRpc("rainbymagnitude", "\"*\", 1000, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
     UniValue details(UniValue::VARR);
