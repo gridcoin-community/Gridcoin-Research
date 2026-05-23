@@ -1057,20 +1057,33 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 {
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
 
-    if (fHelp || params.size() < 2 || params.size() > 3)
+    static const RPCHelpMan help{
+        "getblocksbatch",
+        "Returns a JSON object with details of the requested blocks starting with the given block-number or hash.",
+        {
+            {"start", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The block number or hash for the block at the start of the batch."},
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "The number of blocks to return in the batch, limited to 1000."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "block_count",
+                    "Number of blocks actually returned (may be less than the requested count if the chain head is reached)."},
+                {RPCResult::Type::ARR, "blocks", "",
+                    {
+                        {RPCResult::Type::ELISION, "", "block details; see 'getblock'"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblocksbatch", "1000 10") +
+            HelpExampleRpc("getblocksbatch", "1000, 10")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
     {
-        throw runtime_error(
-                "getblocksbatch <starting block number or hash> <number of blocks> [bool:txinfo]\n"
-                "\n"
-                "<starting block number or hash> the block number or hash for the block at the\n"
-                "start of the batch\n"
-                "\n"
-                "<number of blocks> the number of blocks to return in the batch, limited to 1000"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns a JSON array with details of the requested blocks starting with\n"
-                "the given block-number or hash.\n");
+        throw runtime_error(help.ToString());
     }
 
     UniValue result(UniValue::VOBJ);
