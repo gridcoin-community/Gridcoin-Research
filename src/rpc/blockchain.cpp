@@ -985,13 +985,23 @@ UniValue getblock(const UniValue& params, bool fHelp)
 
 UniValue getblockbynumber(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbynumber <number> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-number\n");
+    static const RPCHelpMan help{
+        "getblockbynumber",
+        "Returns details of a block with the given block-number.",
+        {
+            {"number", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block height."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockbynumber", "1000") +
+            HelpExampleRpc("getblockbynumber", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
