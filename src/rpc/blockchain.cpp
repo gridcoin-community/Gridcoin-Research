@@ -1903,30 +1903,52 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
 UniValue beaconconvergence(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "beaconconvergence\n"
-                "\n"
-                "Displays verified and pending beacons from the scraper or subscriber viewpoint.\n"
-                "\n"
-                "There are three output sections:\n"
-                "\n"
-                "verified_beacons_from_scraper_global:\n"
-                "\n"
-                "Comes directly from the scraper global map for verified beacons. This is\n"
-                "for scraper monitoring of an individual scraper and will be empty if not\n"
-                "run on an actual scraper node."
-                "\n"
-                "verified_beacons_from_latest_convergence:\n"
-                "\n"
-                "From the latest convergence formed from all of the scrapers. This list\n"
-                "is what will be activated in the next superblock.\n"
-                "\n"
-                "pending_beacons_from_GetConsensusBeaconList:\n"
-                "\n"
-                "This is a list of pending beacons. Note that it is subject to a one\n"
-                "hour ladder, so it will lag the information from the\n"
-                "pendingbeaconreport rpc call.\n");
+    static const RPCHelpMan help{
+        "beaconconvergence",
+        "Displays verified and pending beacons from the scraper or subscriber viewpoint. "
+        "Output has three sections: verified_beacons_from_scraper_global (the scraper's "
+        "local verified-beacon map; empty on non-scraper nodes), "
+        "verified_beacons_from_latest_convergence (verified beacons from the latest "
+        "all-scrapers convergence, to be activated in the next superblock), and "
+        "pending_beacons_from_GetConsensusBeaconList (pending beacons; subject to a one-hour "
+        "ladder, so this lags the pendingbeaconreport RPC).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "verified_beacons_from_scraper_global", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+                {RPCResult::Type::ARR, "verified_beacons_from_latest_convergence", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+                {RPCResult::Type::ARR, "pending_beacons_from_GetConsensusBeaconList", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconconvergence", "") +
+            HelpExampleRpc("beaconconvergence", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue results(UniValue::VOBJ);
 
