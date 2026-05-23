@@ -16,6 +16,8 @@
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
 // researcher/beacon/MRC commands under test.
+// Forward declarations of the Tier 1a blockchain-core commands under test.
+// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
 // captures them into the suite's namespace and breaks linkage. After conversion
 // each function throws std::runtime_error for fHelp=true before touching any
@@ -485,6 +487,11 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
 // help-gate fires correctly. The throw happens before any global state is
 // touched, so the test runs fixture-free.
 BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
+// Tier 1b coverage: each converted researcher/beacon/MRC command throws a
+// runtime_error containing its name and the "Examples:" marker when called
+// with fHelp=true. Runs fixture-free — the help-gate fires before any global
+// state is touched.
+BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
 {
     const UniValue empty(UniValue::VARR);
 
@@ -511,6 +518,23 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"askforoutstandingblocks", &askforoutstandingblocks},
         {"debug",                   &debug},
         {"versionreport",           &versionreport},
+        {"advertisebeacon",        &advertisebeacon},
+        {"advertisebeaconv3",      &advertisebeaconv3},
+        {"beaconauth",             &beaconauth},
+        {"revokebeacon",           &revokebeacon},
+        {"beaconreport",           &beaconreport},
+        {"beaconconvergence",      &beaconconvergence},
+        {"pendingbeaconreport",    &pendingbeaconreport},
+        {"beaconstatus",           &beaconstatus},
+        {"beaconaudit",            &beaconaudit},
+        {"getmrcinfo",             &getmrcinfo},
+        {"createmrcrequest",       &createmrcrequest},
+        {"magnitude",              &magnitude},
+        {"explainmagnitude",       &explainmagnitude},
+        {"lifetime",               &lifetime},
+        {"resetcpids",             &resetcpids},
+        {"rainbymagnitude",        &rainbymagnitude},
+        {"currentcontractaverage", &currentcontractaverage},
     };
 
     for (const auto& [rpc_name, fn] : cases) {
