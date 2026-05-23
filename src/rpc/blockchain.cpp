@@ -1741,13 +1741,25 @@ UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
 
 UniValue revokebeacon(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "revokebeacon [cpid]\n"
-                "\n"
-                "[cpid] CPID associated with the beacon to revoke. If omitted, uses the current CPID.\n"
-                "\n"
-                "Revoke a beacon (Requires wallet to be fully unlocked)\n");
+    static const RPCHelpMan help{
+        "revokebeacon",
+        "Revoke a beacon. Requires wallet to be fully unlocked.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID associated with the beacon to revoke. If omitted, uses the current CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the revoked beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The revoked beacon's public key."},
+            }},
+        RPCExamples{
+            HelpExampleCli("revokebeacon", "") +
+            HelpExampleRpc("revokebeacon", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
