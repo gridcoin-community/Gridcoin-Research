@@ -772,13 +772,22 @@ UniValue getmrcinfo(const UniValue& params, bool fHelp)
 
 UniValue showblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "showblock <index>\n"
-                "\n"
-                "<index> Block number\n"
-                "\n"
-                "Returns all information about the block at <index>\n");
+    static const RPCHelpMan help{
+        "showblock",
+        "Returns all information about the block at the given index.",
+        {
+            {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("showblock", "1000") +
+            HelpExampleRpc("showblock", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
