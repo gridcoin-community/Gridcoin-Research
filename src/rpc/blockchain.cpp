@@ -3213,6 +3213,13 @@ UniValue addkey(const UniValue& params)
     case GRC::ContractType::POLL:
         [[fallthrough]];
     case GRC::ContractType::VOTE:
+        [[fallthrough]];
+    // POOL_REGISTER and POOL_APPROVE have their own dedicated RPCs
+    // (registerpool / approvepool / removepool); they are not routed through
+    // addkey. Listed here only to satisfy -Wswitch coverage.
+    case GRC::ContractType::POOL_REGISTER:
+        [[fallthrough]];
+    case GRC::ContractType::POOL_APPROVE:
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     case GRC::ContractType::UNKNOWN:
         [[fallthrough]];
