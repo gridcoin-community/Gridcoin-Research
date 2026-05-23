@@ -3590,11 +3590,29 @@ UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
 
 UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockchaininfo\n"
-                "\n"
-                "Displays data on current blockchain\n");
+    static const RPCHelpMan help{
+        "getblockchaininfo",
+        "Displays data on the current blockchain.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "blocks", "Current best block height."},
+                {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync."},
+                {RPCResult::Type::STR_AMOUNT, "moneysupply", "Total money supply (GRC)."},
+                {RPCResult::Type::OBJ, "difficulty", "",
+                    {
+                        {RPCResult::Type::NUM, "current", "Current difficulty."},
+                        {RPCResult::Type::NUM, "target", "Target difficulty."},
+                    }},
+                {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
+                {RPCResult::Type::STR, "errors", "Any warnings or errors."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockchaininfo", "") +
+            HelpExampleRpc("getblockchaininfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
