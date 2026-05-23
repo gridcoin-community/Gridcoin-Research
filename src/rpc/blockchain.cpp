@@ -817,11 +817,17 @@ UniValue getbestblockhash(const UniValue& params, bool fHelp)
 
 UniValue getblockcount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockcount\n"
-                "\n"
-                "Returns the number of blocks in the longest block chain\n");
+    static const RPCHelpMan help{
+        "getblockcount",
+        "Returns the number of blocks in the longest block chain.",
+        {},
+        RPCResult{RPCResult::Type::NUM, "", "The current block count."},
+        RPCExamples{
+            HelpExampleCli("getblockcount", "") +
+            HelpExampleRpc("getblockcount", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
