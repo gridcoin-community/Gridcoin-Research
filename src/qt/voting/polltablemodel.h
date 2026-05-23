@@ -9,9 +9,9 @@
 #include "gridcoin/voting/filter.h"
 #include "qt/voting/votingmodel.h"
 
+#include <atomic>
 #include <memory>
 #include <QSortFilterProxyModel>
-#include <QMutex>
 
 class PollTableDataModel : public QAbstractTableModel
 {
@@ -86,7 +86,14 @@ private:
     VotingModel* m_voting_model;
     std::unique_ptr<PollTableDataModel> m_data_model;
     GRC::PollFilterFlag m_filter_flags;
-    QMutex m_refresh_mutex;
+    // Debounce flag for refresh(). Held while a QtConcurrent worker is
+    // building the new poll table; cleared by the worker when the queued
+    // reload has been posted back to the GUI thread. Was historically a
+    // QMutex (tryLock on the GUI thread, unlock from the worker) but Qt's
+    // non-recursive QMutex requires same-thread unlock -- a std::atomic<bool>
+    // here is the right primitive for "is there a refresh in flight," and
+    // can be flipped from either thread.
+    std::atomic<bool> m_refresh_in_flight{false};
 };
 
 #endif // GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H

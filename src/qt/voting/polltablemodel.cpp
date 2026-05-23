@@ -293,15 +293,16 @@ const PollItem* PollTableModel::rowItem(int row) const
 
 void PollTableModel::refresh()
 {
-    if (!m_voting_model || !m_refresh_mutex.tryLock()) {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex is already taken, so tryLock failed",
+    bool expected = false;
+    if (!m_voting_model ||
+        !m_refresh_in_flight.compare_exchange_strong(expected, true)) {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh already in flight, skipping",
                  __func__);
 
         return;
-    } else {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex trylock succeeded.",
-                 __func__);
     }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh dispatched", __func__);
 
     (void) QtConcurrent::run([this]() {
         RenameThread("PollTableModel_refresh");
@@ -321,10 +322,11 @@ void PollTableModel::refresh()
         // thread affinity is the GUI thread) runs reload() in the GUI
         // event loop, where every other access already happens.
         //
-        // m_refresh_mutex is released only after the post is queued, so
+        // m_refresh_in_flight is cleared only after the post is queued, so
         // concurrent refresh() workers cannot reorder reloads on the GUI
-        // thread -- two workers serialize on the mutex, post in order,
-        // and the GUI thread processes the posts in FIFO order.
+        // thread -- a second refresh() while a worker is mid-build sees
+        // the flag set and returns immediately. The GUI thread processes
+        // queued reloads FIFO.
         QMetaObject::invokeMethod(
             m_data_model.get(),
             [data_model = static_cast<PollTableDataModel*>(m_data_model.get()),
@@ -333,9 +335,8 @@ void PollTableModel::refresh()
             },
             Qt::QueuedConnection);
 
-        m_refresh_mutex.unlock();
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex lock released.",
-                 __func__);
+        m_refresh_in_flight.store(false);
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", __func__);
     });
 }
 
