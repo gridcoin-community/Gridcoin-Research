@@ -3848,12 +3848,24 @@ UniValue getcheckpoint(const UniValue& params, bool fHelp)
 //Brod
 UniValue rpc_reorganize(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "reorganize",
+        "Roll back the block chain to the specified block hash. "
+        "The block hash must already be present in the block index.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The target block hash."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "RollbackChain", "Whether the reorganize succeeded."},
+            }},
+        RPCExamples{
+            HelpExampleCli("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
     UniValue results(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "reorganize <hash>\n"
-                "Roll back the block chain to specified block hash.\n"
-                "The block hash must already be present in block index");
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     uint256 NewHash;
     NewHash.SetHex(params[0].get_str());
