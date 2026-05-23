@@ -3348,11 +3348,26 @@ UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
 
 UniValue network(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "network\n"
-                "\n"
-                "Display information about the network health\n");
+    static const RPCHelpMan help{
+        "network",
+        "Display information about the network health.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "total_magnitude", "Sum of all CPID magnitudes."},
+                {RPCResult::Type::NUM, "average_magnitude", "Average CPID magnitude."},
+                {RPCResult::Type::NUM, "magnitude_unit", "Current magnitude unit."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_two_weeks", "Research subsidies paid in the past two weeks (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_daily_average", "Average daily research subsidy over the past two weeks (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_daily_limit", "Daily research subsidy emission limit (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "total_money_supply", "Total money supply (GRC)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("network", "") +
+            HelpExampleRpc("network", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
