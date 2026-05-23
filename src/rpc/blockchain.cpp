@@ -3549,15 +3549,23 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
 
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "versionreport <lookback:int> <full:bool>\n"
-                "\n"
-                "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
-                "<full> ------> Classify by commit suffix (default: false).\n"
-                "\n"
-                "Display the software versions of nodes that recently staked.\n");
+    static const RPCHelpMan help{
+        "versionreport",
+        "Display the software versions of nodes that recently staked.",
+        {
+            {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of blocks to tally from the chain head. Default: BLOCKS_PER_DAY."},
+            {"full", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Classify by commit suffix. Default: false."},
+        },
+        RPCResult{RPCResult::Type::ANY, "", "Per-version tally (see GetJSONVersionReport)."},
+        RPCExamples{
+            HelpExampleCli("versionreport", "") +
+            HelpExampleCli("versionreport", "1440 true") +
+            HelpExampleRpc("versionreport", "1440, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const int64_t lookback = params.size() > 0
         ? std::max(params[0].get_int(), 1)
