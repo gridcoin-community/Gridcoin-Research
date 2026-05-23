@@ -2060,13 +2060,30 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 
 UniValue beaconstatus(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconstatus [cpid]\n"
-                "\n"
-                "[cpid] -> Optional parameter of cpid\n"
-                "\n"
-                "Displays status of your beacon or specified beacon on the network\n");
+    static const RPCHelpMan help{
+        "beaconstatus",
+        "Displays the status of your beacon, or of the specified beacon on the network.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "active", "Active beacons for this CPID.",
+                    {
+                        {RPCResult::Type::ELISION, "", "beacon entry (cpid, active, pending, expired, renewable, timestamp, address, public_key, private_key_available, magnitude, verification_code, is_mine)"},
+                    }},
+                {RPCResult::Type::ARR, "pending", "Pending beacons for this CPID.",
+                    {
+                        {RPCResult::Type::ELISION, "", "beacon entry (same fields as active)"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconstatus", "") +
+            HelpExampleRpc("beaconstatus", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
