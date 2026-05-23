@@ -3814,10 +3814,22 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
 // ppcoin: get information of sync-checkpoint
 UniValue getcheckpoint(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getcheckpoint\n"
-                "Show info of synchronized checkpoint.\n");
+    static const RPCHelpMan help{
+        "getcheckpoint",
+        "Show info of the synchronized checkpoint.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "synccheckpoint", /*optional=*/true, "Checkpoint block hash."},
+                {RPCResult::Type::NUM, "height", /*optional=*/true, "Checkpoint block height."},
+                {RPCResult::Type::STR, "timestamp", /*optional=*/true, "Checkpoint block timestamp."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getcheckpoint", "") +
+            HelpExampleRpc("getcheckpoint", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue result(UniValue::VOBJ);
 
