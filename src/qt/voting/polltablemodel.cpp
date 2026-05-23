@@ -10,6 +10,7 @@
 #include "util/threadnames.h"
 
 #include <QtConcurrentRun>
+#include <QPointer>
 #include <QSortFilterProxyModel>
 #include <QStringList>
 
@@ -246,7 +247,16 @@ PollTableModel::PollTableModel(QObject* parent)
 
 PollTableModel::~PollTableModel()
 {
-    // Nothing to do yet...
+    // Block until any in-flight refresh worker is done dereferencing `this`.
+    // refresh() captures `this` directly to read m_voting_model /
+    // m_filter_flags / m_data_model and to write m_refresh_in_flight; without
+    // this wait the worker can touch those members after PollTableModel is
+    // destroyed (use-after-free during GUI shutdown). A default-constructed
+    // QFuture is already in the finished state, so this is a no-op when no
+    // refresh has ever been launched. (The queued reload-on-the-GUI-thread
+    // lambda guards its own captures with QPointer, so it remains safe even
+    // if the event queue drains after the model is gone.)
+    m_refresh_future.waitForFinished();
 }
 
 void PollTableModel::setModel(VotingModel* model)
@@ -304,7 +314,7 @@ void PollTableModel::refresh()
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh dispatched", __func__);
 
-    (void) QtConcurrent::run([this]() {
+    m_refresh_future = QtConcurrent::run([this]() {
         RenameThread("PollTableModel_refresh");
         util::ThreadSetInternalName("PollTableModel_refresh");
 
@@ -322,20 +332,29 @@ void PollTableModel::refresh()
         // thread affinity is the GUI thread) runs reload() in the GUI
         // event loop, where every other access already happens.
         //
-        // m_refresh_in_flight is cleared only after the post is queued, so
-        // concurrent refresh() workers cannot reorder reloads on the GUI
-        // thread -- a second refresh() while a worker is mid-build sees
-        // the flag set and returns immediately. The GUI thread processes
-        // queued reloads FIFO.
+        // Both captures are wrapped in QPointer so the queued lambda is safe
+        // even if PollTableModel / PollTableDataModel are destroyed before
+        // the GUI event loop processes the post (e.g. shutdown race after
+        // the worker thread has already exited). m_refresh_in_flight is
+        // cleared in the GUI continuation -- after reload() actually runs --
+        // so the debounce covers build + queued mutation, not just the
+        // build; a stream of refresh() calls collapses to one full cycle
+        // at a time.
         QMetaObject::invokeMethod(
             m_data_model.get(),
-            [data_model = static_cast<PollTableDataModel*>(m_data_model.get()),
+            [data_model = QPointer<PollTableDataModel>(
+                 static_cast<PollTableDataModel*>(m_data_model.get())),
+             self = QPointer<PollTableModel>(this),
              rows = std::move(new_rows)]() mutable {
-                data_model->reload(std::move(rows));
+                if (data_model) {
+                    data_model->reload(std::move(rows));
+                }
+                if (self) {
+                    self->m_refresh_in_flight.store(false);
+                }
             },
             Qt::QueuedConnection);
 
-        m_refresh_in_flight.store(false);
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", __func__);
     });
 }

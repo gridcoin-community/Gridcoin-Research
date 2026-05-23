@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <memory>
+#include <QFuture>
 #include <QSortFilterProxyModel>
 
 class PollTableDataModel : public QAbstractTableModel
@@ -86,14 +87,24 @@ private:
     VotingModel* m_voting_model;
     std::unique_ptr<PollTableDataModel> m_data_model;
     GRC::PollFilterFlag m_filter_flags;
-    // Debounce flag for refresh(). Held while a QtConcurrent worker is
-    // building the new poll table; cleared by the worker when the queued
-    // reload has been posted back to the GUI thread. Was historically a
+    // Debounce flag for refresh(). Set on the GUI thread when a refresh
+    // worker is launched, cleared inside the GUI continuation lambda once
+    // reload() has actually run. Covering the full build + queued reload
+    // (not just the build) prevents redundant background builds stacking
+    // up while a reload sits in the GUI event queue. Was historically a
     // QMutex (tryLock on the GUI thread, unlock from the worker) but Qt's
     // non-recursive QMutex requires same-thread unlock -- a std::atomic<bool>
     // here is the right primitive for "is there a refresh in flight," and
     // can be flipped from either thread.
     std::atomic<bool> m_refresh_in_flight{false};
+
+    // Handle to the in-flight QtConcurrent refresh worker (default-constructed
+    // QFuture is in the canceled/finished state, so the destructor's
+    // waitForFinished() is a no-op when no refresh has ever been launched).
+    // Held so the destructor can block until the worker has finished
+    // dereferencing `this` -- without it, the worker can touch m_voting_model
+    // / m_filter_flags / m_data_model after PollTableModel is destroyed.
+    QFuture<void> m_refresh_future;
 };
 
 #endif // GRIDCOIN_QT_VOTING_POLLTABLEMODEL_H
