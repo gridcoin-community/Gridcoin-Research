@@ -4,6 +4,7 @@
 
 #include <rpc/util.h>
 
+#include <rpc/protocol.h>
 #include <tinyformat.h>
 #include <univalue.h>
 
@@ -11,6 +12,18 @@
 
 #include <stdexcept>
 #include <string>
+
+// Forward declarations of the Tier 2 commands under test. These must live in
+// the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
+// captured into the suite's namespace and fail to link against the
+// definitions in src/rpc/blockchain.cpp, src/rpc/net.cpp, src/wallet/rpcwallet.cpp.
+// Each command's converted body throws for fHelp=true before touching any
+// globals (vNodes, g_banman, pwalletMain, mapBlockIndex, locks), so calling
+// these with fHelp=true and an empty params array is safe in unit tests.
+UniValue settxfee(const UniValue& params, bool fHelp);
+UniValue addnode(const UniValue& params, bool fHelp);
+UniValue setban(const UniValue& params, bool fHelp);
+UniValue listsinceblock(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -316,6 +329,107 @@ BOOST_AUTO_TEST_CASE(tier1_throw_pattern)
         const std::string what{e.what()};
         BOOST_CHECK(what.find("trivialcmd") != std::string::npos);
         BOOST_CHECK(what.find("address") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(settxfee_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        settxfee(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("settxfee") != std::string::npos);
+        BOOST_CHECK(what.find("amount") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(addnode_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        addnode(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("addnode") != std::string::npos);
+        BOOST_CHECK(what.find("node") != std::string::npos);
+        BOOST_CHECK(what.find("onetry") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(setban_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        setban(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("setban") != std::string::npos);
+        BOOST_CHECK(what.find("subnet") != std::string::npos);
+        BOOST_CHECK(what.find("bantime") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(listsinceblock_help_renders)
+{
+    const UniValue params(UniValue::VARR);
+    try {
+        listsinceblock(params, /*fHelp=*/true);
+        BOOST_FAIL("expected runtime_error");
+    } catch (const std::runtime_error& e) {
+        const std::string what{e.what()};
+        BOOST_CHECK(what.find("listsinceblock") != std::string::npos);
+        BOOST_CHECK(what.find("blockhash") != std::string::npos);
+        BOOST_CHECK(what.find("target_confirmations") != std::string::npos);
+        BOOST_CHECK(what.find("transactions") != std::string::npos);
+        BOOST_CHECK(what.find("Examples:") != std::string::npos);
+    }
+}
+
+// Invalid-subcommand path for addnode: the JSONRPCError throw at net.cpp:62-63
+// fires before any LOCK(cs_vAddedNodes) or vNodes/ConnectNode access, so this
+// is safe to exercise without a node/net fixture.
+BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("x");
+    params.push_back("bogus");
+    try {
+        addnode(params, /*fHelp=*/false);
+        BOOST_FAIL("expected UniValue JSON-RPC error");
+    } catch (const UniValue& e) {
+        BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
+        const std::string message = e["message"].get_str();
+        BOOST_CHECK(message.find("command must be one of") != std::string::npos);
+        BOOST_CHECK(message.find("add") != std::string::npos);
+        BOOST_CHECK(message.find("remove") != std::string::npos);
+        BOOST_CHECK(message.find("onetry") != std::string::npos);
+    }
+}
+
+// Invalid-subcommand path for setban: the JSONRPCError throw at net.cpp:258-259
+// fires before the g_banman null check and any lock acquisition, so this is
+// safe to exercise without a banman/net fixture.
+BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
+{
+    UniValue params(UniValue::VARR);
+    params.push_back("1.2.3.4");
+    params.push_back("bogus");
+    try {
+        setban(params, /*fHelp=*/false);
+        BOOST_FAIL("expected UniValue JSON-RPC error");
+    } catch (const UniValue& e) {
+        BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
+        const std::string message = e["message"].get_str();
+        BOOST_CHECK(message.find("command must be") != std::string::npos);
+        BOOST_CHECK(message.find("add") != std::string::npos);
+        BOOST_CHECK(message.find("remove") != std::string::npos);
     }
 }
 

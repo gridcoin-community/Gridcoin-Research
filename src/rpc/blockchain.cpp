@@ -841,23 +841,34 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
 
 UniValue settxfee(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "settxfee",
+        "Set the transaction fee per kB (rounded to the nearest 0.00000001 GRC). "
+        "Overwrites the paytxfee parameter.",
+        {
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "The transaction fee in GRC/kB."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "Returns true if successful."},
+        RPCExamples{
+            HelpExampleCli("settxfee", "0.00001") +
+            HelpExampleRpc("settxfee", "0.00001")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
     LOCK(cs_main);
 
     CTransaction txDummy;
+    const CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
+    const CAmount amount = AmountFromValue(params[0]);
+    if (amount < nMinFee) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("txfee %s below minimum %s",
+                      FormatMoney(amount), FormatMoney(nMinFee)));
+    }
 
-    // Min Fee
-    CAmount nMinFee = GetBaseFee(txDummy, GMF_SEND);
-
-    if (fHelp || params.size() < 1 || params.size() > 1 || AmountFromValue(params[0]) < nMinFee)
-        throw runtime_error(
-                "settxfee <amount>\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.00000001\n"
-                "\n"
-                "Sets the txfee for transactions\n");
-
-    nTransactionFee = AmountFromValue(params[0]);
-
+    nTransactionFee = amount;
     return true;
 }
 
