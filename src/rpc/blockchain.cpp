@@ -1020,13 +1020,23 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
 
 UniValue getblockbymintime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbymintime <timestamp> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of the block at or just after the given timestamp\n");
+    static const RPCHelpMan help{
+        "getblockbymintime",
+        "Returns details of the block at or just after the given timestamp.",
+        {
+            {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, "Unix timestamp (seconds)."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockbymintime", "1577836800") +
+            HelpExampleRpc("getblockbymintime", "1577836800")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int64_t nTimestamp = params[0].get_int64();
 
