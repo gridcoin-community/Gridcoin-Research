@@ -3647,9 +3647,10 @@ UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     json.pushKV("Lifetime Research Paid", ValueFromAmount(account.m_total_research_subsidy));
     // Lifetime Magnitude Sum is a uint64_t now (previously uint32_t, which
     // overflowed for long-lived researchers and lost the high bits when
-    // narrowed to int here). Carry it as int64_t so the JSON value matches
-    // the underlying counter for the full realistic range.
-    json.pushKV("Lifetime Magnitude Sum", (int64_t)account.m_total_magnitude);
+    // narrowed to int here). UniValue::pushKV has a uint64_t overload, so
+    // push the value directly to preserve the full unsigned range without
+    // a signed-narrowing cast.
+    json.pushKV("Lifetime Magnitude Sum", account.m_total_magnitude);
     json.pushKV("Lifetime Magnitude Average", account.AverageLifetimeMagnitude());
     json.pushKV("Lifetime Payments", (int)account.m_accuracy);
 
