@@ -2005,11 +2005,26 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 
 UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "pendingbeaconreport\n"
-                "\n"
-                "Displays pending beacons directly from the beacon registry.\n");
+    static const RPCHelpMan help{
+        "pendingbeaconreport",
+        "Displays pending beacons directly from the beacon registry.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "cpid", "CPID."},
+                        {RPCResult::Type::STR, "key_id", "Beacon key id."},
+                        {RPCResult::Type::STR, "address", "Beacon payout address."},
+                        {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("pendingbeaconreport", "") +
+            HelpExampleRpc("pendingbeaconreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue results(UniValue::VARR);
 
