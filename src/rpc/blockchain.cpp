@@ -950,13 +950,23 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
 
 UniValue getblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblock <hash> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-hash\n");
+    static const RPCHelpMan help{
+        "getblock",
+        "Returns details of a block with the given block-hash.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The block hash."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     std::string strHash = params[0].get_str();
     uint256 hash = uint256S(strHash);
