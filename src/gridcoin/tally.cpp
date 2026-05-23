@@ -329,7 +329,7 @@ public:
             // used in accrual calculations, only reporting.
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy++;
-                account.m_total_magnitude += pindex->pprev->Magnitude();
+                account.m_total_magnitude += static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             if (account.m_first_block_ptr == nullptr) {
@@ -438,7 +438,7 @@ public:
 
         if (pindex->Magnitude() > 0) {
             account.m_accuracy--;
-            account.m_total_magnitude -= pindex->Magnitude();
+            account.m_total_magnitude -= static_cast<uint64_t>(pindex->Magnitude());
         }
 
         pindex = FindLastRewardBlock(cpid, pindex);
@@ -488,7 +488,7 @@ public:
 
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy--;
-                account.m_total_magnitude -= pindex->pprev->Magnitude();
+                account.m_total_magnitude -= static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             const CBlockIndex* last_block_pindex = FindLastRewardBlock(cpid, pindex);
