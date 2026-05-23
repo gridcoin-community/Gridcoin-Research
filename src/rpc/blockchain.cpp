@@ -905,12 +905,20 @@ UniValue settxfee(const UniValue& params, bool fHelp)
 
 UniValue getrawmempool(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getrawmempool\n"
-                "\n"
-                "Returns all transaction ids in memory pool\n");
-
+    static const RPCHelpMan help{
+        "getrawmempool",
+        "Returns all transaction ids in the memory pool.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "", "Transaction id, hex-encoded."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getrawmempool", "") +
+            HelpExampleRpc("getrawmempool", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     vector<uint256> vtxid;
 
