@@ -216,7 +216,19 @@ public:
     std::atomic<int64_t> nTimeOffset{0};
     CAddress addr;
     std::string addrName;
-    CService addrLocal;
+    // addrLocal is the local address as seen by this peer (sent by them in
+    // their VERSION message). It is written once on the message-handler
+    // thread that processes that VERSION, and read concurrently by the GUI
+    // peers-table refresh (under cs_vNodes) and by net.cpp helpers
+    // (GetLocalAddress / IsPeerAddrLocalGood). The pre-existing pattern
+    // covered the readers (which hold cs_vNodes) but not the writer (which
+    // holds cs_vRecvMsg, a different mutex), surfaced as TSan G4/G5 races
+    // in CNetAddr::IsValid via CNode::copyStats.
+    //
+    // Use the GetAddrLocal()/SetAddrLocal() accessors below rather than
+    // touching the field directly.
+    mutable CCriticalSection cs_addrLocal;
+    CService addrLocal GUARDED_BY(cs_addrLocal);
     int nVersion;
     std::string strSubVer;
 	int nTrust;
@@ -589,6 +601,12 @@ public:
     //! \return The decayed misbehavior score.
     //!
     static int GetMisbehaviorAddr(const CAddress& addr);
+
+    // Thread-safe accessors for addrLocal. See the comment on the field
+    // above for the locking rationale.
+    CService GetAddrLocal() const LOCKS_EXCLUDED(cs_addrLocal);
+    void SetAddrLocal(const CService& addrLocalIn) LOCKS_EXCLUDED(cs_addrLocal);
+
     void copyStats(CNodeStats &stats);
 
     static void CopyNodeStats(std::vector<CNodeStats>& vstats);

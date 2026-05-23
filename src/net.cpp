@@ -197,7 +197,7 @@ static int GetnScore(const CService& addr)
 // Is our peer's addrLocal potentially useful as an external IP source?
 bool IsPeerAddrLocalGood(CNode *pnode)
 {
-    CService addrLocal = pnode->addrLocal;
+    CService addrLocal = pnode->GetAddrLocal();
     return fDiscover && pnode->addr.IsRoutable() && addrLocal.IsRoutable() &&
            IsReachable(addrLocal);
 }
@@ -216,7 +216,7 @@ void AdvertiseLocal(CNode *pnode)
         if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
              randomNumber == 0))
         {
-            addrLocal.SetIP(pnode->addrLocal);
+            addrLocal.SetIP(pnode->GetAddrLocal());
         }
         if (addrLocal.IsRoutable())
         {
@@ -600,6 +600,23 @@ bool CNode::MisbehavingAddr(const CAddress& addr, int howmuch)
     return false;
 }
 
+CService CNode::GetAddrLocal() const
+{
+    LOCK(cs_addrLocal);
+    return addrLocal;
+}
+
+void CNode::SetAddrLocal(const CService& addrLocalIn)
+{
+    LOCK(cs_addrLocal);
+    if (addrLocal.IsValid()) {
+        LogPrintf("WARN: %s: addrLocal already set for node %d: refusing to change from %s to %s",
+                  __func__, id, addrLocal.ToString(), addrLocalIn.ToString());
+    } else {
+        addrLocal = addrLocalIn;
+    }
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
     stats.id = id;
@@ -636,7 +653,8 @@ void CNode::copyStats(CNodeStats &stats)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
     stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
-    stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
+    const CService al = GetAddrLocal();
+    stats.addrLocal = al.IsValid() ? al.ToString() : "";
 
 }
 
