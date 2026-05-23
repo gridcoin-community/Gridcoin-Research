@@ -3060,14 +3060,23 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
 UniValue debug(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable VERBOSE logging category (aka old debug) on the fly\n"
-                "This is deprecated by the \"logging verbose\" command.\n");
+    static const RPCHelpMan help{
+        "debug",
+        "Enable or disable the VERBOSE logging category (aka old debug) on the fly. "
+        "This is deprecated by the \"logging verbose\" command.",
+        {
+            {"enable", RPCArg::Type::BOOL, RPCArg::Optional::NO, "true to enable, false to disable."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Logging category VERBOSE (aka old debug) ", "\"Enabled.\" or \"Disabled.\"."},
+            }},
+        RPCExamples{
+            HelpExampleCli("debug", "true") +
+            HelpExampleRpc("debug", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
