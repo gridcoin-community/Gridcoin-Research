@@ -360,6 +360,19 @@ public:
 
     PoolDB& GetPoolDB();
 
+    //!
+    //! \brief Test-only: directly insert a fully-formed Pool into the
+    //! in-memory map without going through contract validation or LevelDB.
+    //! Mirrors SideStakeRegistry::ResetInMemoryOnly's role as a unit-test
+    //! escape hatch. Production code MUST NOT call this.
+    //!
+    void SeedForTests(const Pool& entry);
+
+    //!
+    //! \brief Test-only: clear the in-memory map without touching LevelDB.
+    //!
+    void ClearForTests();
+
 private:
     mutable CCriticalSection cs_lock;
 

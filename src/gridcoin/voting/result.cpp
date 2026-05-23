@@ -996,6 +996,16 @@ private:
 
         CalculateWeight(detail, m_magnitude_factor);
 
+        // CONSENSUS NOTE (issue #1783): The hardcoded g_mining_pools list is
+        // intentionally retained on this voting path even though the wallet's
+        // local pool-mode detection in researcher.cpp now consults the
+        // on-chain PoolRegistry. Replacing the list source here would change
+        // m_pools_voted membership for historical polls, which feeds into the
+        // Active Vote Weight calculation in voting/registry.cpp (see the
+        // matching comment there). Migrating this path to PoolRegistry needs
+        // an explicit height gate so that polls before the activation height
+        // continue to compute identical AVW on every node. Track in a
+        // dedicated follow-up; do not bundle with #1783.
         const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
 
         // Record if a pool votes
