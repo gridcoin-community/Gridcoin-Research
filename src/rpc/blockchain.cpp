@@ -6,6 +6,7 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper_registry.h"
@@ -3249,6 +3250,319 @@ UniValue addkey(const UniValue& params)
 
     res.pushKV("contract", ContractToJson(contract));
     res.pushKV("txid", result.first.GetHash().ToString());
+
+    return res;
+}
+
+// -----------------------------------------------------------------------------
+// On-chain pool registration (issue #1783)
+// -----------------------------------------------------------------------------
+
+namespace {
+
+GRC::Cpid ParseCpidArg(const UniValue& v)
+{
+    const std::string cpid_str = v.get_str();
+    GRC::Cpid cpid = GRC::Cpid::Parse(cpid_str);
+
+    // Cpid::Parse returns the zero CPID on malformed input. The zero CPID is
+    // technically representable but is never a real BOINC external CPID, so
+    // we reject it as an invalid argument.
+    if (cpid == GRC::Cpid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Invalid CPID hex (must be 32 lowercase hex characters).");
+    }
+
+    return cpid;
+}
+
+std::string PoolStatusName(const GRC::PoolStatus status)
+{
+    switch (status) {
+        case GRC::PoolStatus::UNKNOWN:      return "UNKNOWN";
+        case GRC::PoolStatus::PENDING:      return "PENDING";
+        case GRC::PoolStatus::ACTIVE:       return "ACTIVE";
+        case GRC::PoolStatus::DELETED:      return "DELETED";
+        case GRC::PoolStatus::OUT_OF_BOUND: break;
+    }
+    return "UNKNOWN";
+}
+
+UniValue PoolToJson(const GRC::Pool& pool)
+{
+    UniValue out(UniValue::VOBJ);
+    out.pushKV("cpid", pool.m_cpid.ToString());
+    out.pushKV("name", pool.m_name);
+    out.pushKV("url", pool.m_url);
+    out.pushKV("operator_pubkey", pool.m_operator_key.IsValid()
+                                      ? HexStr(pool.m_operator_key)
+                                      : std::string{});
+    out.pushKV("status", PoolStatusName(pool.m_status.Value()));
+    out.pushKV("timestamp", pool.m_timestamp);
+    out.pushKV("contract_txid", pool.m_hash.GetHex());
+    out.pushKV("previous_contract_txid", pool.m_previous_hash.GetHex());
+    return out;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan registerpool_help{
+    "registerpool",
+    "Register a Gridcoin mining pool on chain. Generates a fresh operator key "
+    "from the wallet keypool, signs the registration payload with it, and "
+    "broadcasts a POOL_REGISTER contract. The entry lands in PENDING status; "
+    "a foundation-signed approvepool is required to flip it to ACTIVE. "
+    "Requires the wallet to be unlocked.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID identifying the pool's BOINC account."},
+        {"name", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Display name (e.g. \"grcpool.com\")."},
+        {"url", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Pool website URL."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+            {RPCResult::Type::STR, "name", "Pool display name."},
+            {RPCResult::Type::STR, "url", "Pool website URL."},
+            {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key generated for this registration."},
+            {RPCResult::Type::STR, "status", "Registry status of the new entry (PENDING)."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_REGISTER contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\" \"grcpool.com\" \"https://grcpool.com\"") +
+        HelpExampleRpc("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\", \"grcpool.com\", \"https://grcpool.com\"")},
+};
+const RPCHelpMan& registerpool_helpman() { return registerpool_help; }
+
+UniValue registerpool(const UniValue& params)
+{
+    EnsureWalletIsUnlocked();
+
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+    const std::string name = params[1].get_str();
+    const std::string url  = params[2].get_str();
+
+    if (name.empty() || name.size() > GRC::PoolRegisterPayload::MAX_NAME_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("Name must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_NAME_SIZE));
+    }
+    if (url.empty() || url.size() > GRC::PoolRegisterPayload::MAX_URL_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("URL must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_URL_SIZE));
+    }
+
+    CPubKey operator_pubkey;
+    CKey operator_privkey;
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        if (!pwalletMain->GetKeyFromPool(operator_pubkey, false)) {
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT,
+                "Failed to allocate a new operator key from the wallet keypool. "
+                "Call keypoolrefill and retry.");
+        }
+
+        // Label the address for human-readability in the wallet UI.
+        pwalletMain->SetAddressBookName(operator_pubkey.GetID(),
+                                        "Pool operator key (" + name + ")");
+
+        if (!pwalletMain->GetKey(operator_pubkey.GetID(), operator_privkey)) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                "Wallet returned a fresh pubkey but its private key is unavailable.");
+        }
+    }
+
+    GRC::PoolRegisterPayload payload(cpid, name, url, operator_pubkey);
+
+    if (!payload.Sign(operator_privkey)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Failed to sign the pool registration payload with the operator key.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("name", name);
+    res.pushKV("url", url);
+    res.pushKV("operator_pubkey", HexStr(operator_pubkey));
+    res.pushKV("status", "PENDING");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+namespace {
+
+UniValue SendPoolApprove(const GRC::Cpid& cpid, const GRC::ContractAction action)
+{
+    if (pwalletMain->IsLocked()) {
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
+            "Please enter the wallet passphrase with walletpassphrase first.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolApprovePayload>(
+        action, GRC::PoolApprovePayload(cpid));
+
+    // POOL_APPROVE returns true from RequiresMasterKey(); the network rejects
+    // the broadcast unless the wallet holds a UTXO at the foundation master
+    // address (HasMasterKeyInput, validation.cpp). Surfacing that early would
+    // be nicer but matches addkey's behaviour of trusting SendContract to
+    // raise the failure.
+    if (!contract.RequiresMasterKey()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            "Internal error: POOL_APPROVE contract did not opt into master-key authority.");
+    }
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("action", action == GRC::ContractAction::ADD ? "approve" : "remove");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan approvepool_help{
+    "approvepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE contract that flips the named "
+    "CPID's pool entry to ACTIVE. The contract requires the master key as a "
+    "transaction input (HasMasterKeyInput in validation.cpp). Requires the "
+    "wallet to be unlocked and to hold a UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to approve."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the approved pool."},
+            {RPCResult::Type::STR, "action", "Always \"approve\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& approvepool_helpman() { return approvepool_help; }
+
+UniValue approvepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::ADD);
+}
+
+static const RPCHelpMan removepool_help{
+    "removepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE REMOVE contract that flips the "
+    "named CPID's pool entry to DELETED. The contract requires the master key "
+    "as a transaction input. Requires the wallet to be unlocked and to hold a "
+    "UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to de-list."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the de-listed pool."},
+            {RPCResult::Type::STR, "action", "Always \"remove\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& removepool_helpman() { return removepool_help; }
+
+UniValue removepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::REMOVE);
+}
+
+static const RPCHelpMan listpools_help{
+    "listpools",
+    "Return every pool entry in the on-chain PoolRegistry.",
+    {
+        {"include_inactive", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include PENDING and DELETED entries alongside ACTIVE ones. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "Pool registry entry.",
+                {
+                    {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+                    {RPCResult::Type::STR, "name", "Pool display name."},
+                    {RPCResult::Type::STR, "url", "Pool website URL."},
+                    {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key."},
+                    {RPCResult::Type::STR, "status", "PENDING, ACTIVE, DELETED, or UNKNOWN."},
+                    {RPCResult::Type::NUM_TIME, "timestamp", "Contract timestamp."},
+                    {RPCResult::Type::STR_HEX, "contract_txid", "Transaction hash of the current registry entry."},
+                    {RPCResult::Type::STR_HEX, "previous_contract_txid", "Transaction hash of the prior entry revision."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpools", "") +
+        HelpExampleCli("listpools", "true") +
+        HelpExampleRpc("listpools", "true")},
+};
+const RPCHelpMan& listpools_helpman() { return listpools_help; }
+
+UniValue listpools(const UniValue& params)
+{
+    const bool include_inactive = params.size() >= 1 ? params[0].get_bool() : false;
+
+    UniValue res(UniValue::VARR);
+
+    {
+        LOCK(cs_main);
+
+        for (const auto& iter : GRC::GetPoolRegistry().Entries()) {
+            const GRC::Pool& pool = *iter.second;
+
+            if (!include_inactive && pool.m_status != GRC::PoolStatus::ACTIVE) {
+                continue;
+            }
+
+            res.push_back(PoolToJson(pool));
+        }
+    }
 
     return res;
 }

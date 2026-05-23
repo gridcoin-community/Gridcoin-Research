@@ -11,6 +11,7 @@
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/project.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
@@ -264,6 +265,34 @@ UniValue SideStakePayloadToJson (const GRC::ContractPayload& payload)
     return out;
 }
 
+UniValue PoolRegisterPayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& pool = payload.As<GRC::PoolRegisterPayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("cpid", pool.m_cpid.ToString());
+    out.pushKV("name", pool.m_name);
+    out.pushKV("url", pool.m_url);
+    out.pushKV("operator_pubkey", pool.m_operator_key.IsValid()
+                                      ? HexStr(pool.m_operator_key)
+                                      : std::string{});
+    out.pushKV("signature", HexStr(pool.m_signature));
+
+    return out;
+}
+
+UniValue PoolApprovePayloadToJson(const GRC::ContractPayload& payload)
+{
+    const auto& approve = payload.As<GRC::PoolApprovePayload>();
+
+    UniValue out(UniValue::VOBJ);
+
+    out.pushKV("cpid", approve.m_cpid.ToString());
+
+    return out;
+}
+
 UniValue LegacyVotePayloadToJson(const GRC::ContractPayload& payload)
 {
     const auto& vote = payload.As<GRC::LegacyVote>();
@@ -316,6 +345,12 @@ UniValue ContractToJson(const GRC::Contract& contract)
             break;
         case GRC::ContractType::SIDESTAKE:
             out.pushKV("body", SideStakePayloadToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::POOL_REGISTER:
+            out.pushKV("body", PoolRegisterPayloadToJson(contract.SharePayload()));
+            break;
+        case GRC::ContractType::POOL_APPROVE:
+            out.pushKV("body", PoolApprovePayloadToJson(contract.SharePayload()));
             break;
         default:
             out.pushKV("body", LegacyContractPayloadToJson(contract.SharePayload()));
