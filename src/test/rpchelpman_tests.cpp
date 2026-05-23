@@ -12,6 +12,30 @@
 
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
+// Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
+// captures them into the suite's namespace and breaks linkage. After conversion
+// each function throws std::runtime_error for fHelp=true before touching any
+// node globals or acquiring locks, so calling them with empty params is safe.
+UniValue advertisebeacon(const UniValue& params, bool fHelp);
+UniValue advertisebeaconv3(const UniValue& params, bool fHelp);
+UniValue beaconauth(const UniValue& params, bool fHelp);
+UniValue revokebeacon(const UniValue& params, bool fHelp);
+UniValue beaconreport(const UniValue& params, bool fHelp);
+UniValue beaconconvergence(const UniValue& params, bool fHelp);
+UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
+UniValue beaconstatus(const UniValue& params, bool fHelp);
+UniValue beaconaudit(const UniValue& params, bool fHelp);
+UniValue getmrcinfo(const UniValue& params, bool fHelp);
+UniValue createmrcrequest(const UniValue& params, const bool fHelp);
+UniValue magnitude(const UniValue& params, bool fHelp);
+UniValue explainmagnitude(const UniValue& params, bool fHelp);
+UniValue lifetime(const UniValue& params, bool fHelp);
+UniValue resetcpids(const UniValue& params, bool fHelp);
+UniValue rainbymagnitude(const UniValue& params, bool fHelp);
+UniValue currentcontractaverage(const UniValue& params, bool fHelp);
 
 // Forward declarations of the Tier 2 commands under test. These must live in
 // the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
@@ -430,6 +454,53 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
         BOOST_CHECK(message.find("command must be") != std::string::npos);
         BOOST_CHECK(message.find("add") != std::string::npos);
         BOOST_CHECK(message.find("remove") != std::string::npos);
+    }
+}
+
+// Tier 1b coverage: each converted researcher/beacon/MRC command throws a
+// runtime_error containing its name and the "Examples:" marker when called
+// with fHelp=true. Runs fixture-free — the help-gate fires before any global
+// state is touched.
+BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"advertisebeacon",        &advertisebeacon},
+        {"advertisebeaconv3",      &advertisebeaconv3},
+        {"beaconauth",             &beaconauth},
+        {"revokebeacon",           &revokebeacon},
+        {"beaconreport",           &beaconreport},
+        {"beaconconvergence",      &beaconconvergence},
+        {"pendingbeaconreport",    &pendingbeaconreport},
+        {"beaconstatus",           &beaconstatus},
+        {"beaconaudit",            &beaconaudit},
+        {"getmrcinfo",             &getmrcinfo},
+        {"createmrcrequest",       &createmrcrequest},
+        {"magnitude",              &magnitude},
+        {"explainmagnitude",       &explainmagnitude},
+        {"lifetime",               &lifetime},
+        {"resetcpids",             &resetcpids},
+        {"rainbymagnitude",        &rainbymagnitude},
+        {"currentcontractaverage", &currentcontractaverage},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
     }
 }
 
