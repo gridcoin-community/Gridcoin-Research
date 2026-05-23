@@ -3951,20 +3951,30 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
 }
 
 UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
-    if (fHelp || params.size() > 3) {
-        throw runtime_error("createmrcrequest [dry_run [force [fee]]]\n"
-                            "\n"
-                            "[dry_run] - If true, calculate the reward and fee but do not "
-                            "send the contract. Defaults to false.\n"
-                            "\n"
-                            "[force] - If true, create the request even if it results "
-                            "in a reward loss or ban from the network. Defaults to false. "
-                            "Only works on testnet.\n"
-                            "\n"
-                            "[fee] - If passed, use the fee provided instead of the "
-                            "calculated fee. Must not be lower than the calculated fee.\n"
-                            "\n"
-                            "Creates an MRC request. Requires an unlocked wallet.");
+    static const RPCHelpMan help{
+        "createmrcrequest",
+        "Create an MRC (Manual Research Claim) request. Requires an unlocked wallet.",
+        {
+            {"dry_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, calculate the reward and fee but do not send the contract. Default: false."},
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, create the request even if it results in a reward loss or ban from the "
+                "network. Default: false. Only works on testnet."},
+            {"fee", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                "If passed, use this fee instead of the calculated fee. Must not be lower than "
+                "the calculated fee."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "MRC request result (see createmrcrequest output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "request fields (outstanding_request, limit, mrcs_in_queue, head_fee, pay_limit_position_fee, tail_fee, pos, txid (if not dry_run), mrc)"},
+            }},
+        RPCExamples{
+            HelpExampleCli("createmrcrequest", "") +
+            HelpExampleCli("createmrcrequest", "true") +
+            HelpExampleRpc("createmrcrequest", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw runtime_error(help.ToString());
     }
 
     bool dry_run{false};
