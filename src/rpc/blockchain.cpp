@@ -2444,11 +2444,23 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
 UniValue lifetime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "lifetime [cpid]\n"
-                "\n"
-                "Displays research rewards for the lifetime of a CPID.\n");
+    static const RPCHelpMan help{
+        "lifetime",
+        "Display research rewards for the lifetime of a CPID.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Block height -> research subsidy (GRC) for each block in which the CPID earned research rewards.",
+            {
+                {RPCResult::Type::STR_AMOUNT, "height", "Research subsidy (GRC) paid in that block."},
+            }},
+        RPCExamples{
+            HelpExampleCli("lifetime", "") +
+            HelpExampleRpc("lifetime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
