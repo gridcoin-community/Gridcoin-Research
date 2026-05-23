@@ -3148,11 +3148,29 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
 UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currentcontractaverage\n"
-                "\n"
-                "Displays information on your current contract average with regards to superblock contract\n");
+    static const RPCHelpMan help{
+        "currentcontractaverage",
+        "Display information on your current contract average with regards to the superblock contract.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "contract", "Serialized superblock contract.",
+                    {
+                        {RPCResult::Type::ELISION, "", "superblock fields"},
+                    }},
+                {RPCResult::Type::NUM, "beacon_count", "Total beacon count."},
+                {RPCResult::Type::NUM, "avg_mag", "Average magnitude."},
+                {RPCResult::Type::NUM, "beacon_participant_count", "Number of participating beacons."},
+                {RPCResult::Type::BOOL, "superblock_valid", "Whether the superblock is well-formed."},
+                {RPCResult::Type::STR_HEX, "quorum_hash", "Quorum hash for the superblock."},
+                {RPCResult::Type::NUM, "size", "Serialized size of the superblock in bytes."},
+            }},
+        RPCExamples{
+            HelpExampleCli("currentcontractaverage", "") +
+            HelpExampleRpc("currentcontractaverage", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
