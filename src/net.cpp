@@ -65,7 +65,7 @@ std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
 CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
-uint64_t nLocalHostNonce = 0;
+std::atomic<uint64_t> nLocalHostNonce{0};
 
 
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
@@ -486,7 +486,12 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
-    GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
+    // GetRandBytes() writes raw bytes into the provided buffer; that's
+    // incompatible with memcpy'ing into a std::atomic's storage directly,
+    // so go through a local and store atomically.
+    uint64_t nonce;
+    GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    nLocalHostNonce.store(nonce);
 
     // Snapshot the chain height under cs_main so this method can be called
     // from CNode construction (socket handler thread, no outer locks held)
@@ -504,7 +509,7 @@ void CNode::PushVersion()
         nTime,
         addrYou,
         addrMe,
-        nLocalHostNonce,
+        nLocalHostNonce.load(),
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
         nLocalBestHeight);
 }

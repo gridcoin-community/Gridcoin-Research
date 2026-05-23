@@ -100,7 +100,16 @@ extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
-extern uint64_t nLocalHostNonce;
+// Local-host version nonce, randomised on every outgoing VERSION push and
+// compared against incoming VERSIONs to detect self-connection. It is a
+// global -- written on the socket-handler thread (PushVersion) and read on
+// the message-handler thread (ProcessMessage's "connected to ourself"
+// check), so it must be atomic; TSan G11 reports the race via a memcpy
+// into its raw storage from GetRandBytes. Note: the broader design is
+// imperfect (the same global is clobbered for each outbound connection,
+// so the per-connection nonce identity is lost), but that is a separate
+// follow-up; atomicising here just closes the data race.
+extern std::atomic<uint64_t> nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;
 extern std::map<CInv, CDataStream> mapRelay;
