@@ -1829,14 +1829,34 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconreport <active only>\n"
-                "\n"
-                "<active only> Boolean specifying whether only active beacons should be \n"
-                "              returned. Defaults to false which also includes expired beacons."
-                "\n"
-                "Displays list of valid beacons in the network\n");
+    static const RPCHelpMan help{
+        "beaconreport",
+        "Displays the list of valid beacons in the network.",
+        {
+            {"active_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, return only active (non-expired) beacons. "
+                "Default: false (also includes expired beacons)."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "cpid", "CPID for the beacon."},
+                        {RPCResult::Type::STR, "address", "Beacon payout address."},
+                        {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                        {RPCResult::Type::STR_HEX, "hash", "Beacon hash."},
+                        {RPCResult::Type::STR_HEX, "prev_beacon_hash", "Previous beacon hash in the chainlet."},
+                        {RPCResult::Type::NUM, "status", "Beacon status raw value."},
+                        {RPCResult::Type::STR, "status_text", "Beacon status text."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconreport", "") +
+            HelpExampleCli("beaconreport", "true") +
+            HelpExampleRpc("beaconreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool active_only = false;
 
