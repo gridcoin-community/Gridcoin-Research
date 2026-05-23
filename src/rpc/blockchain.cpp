@@ -1511,16 +1511,26 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconauth(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "beaconauth\n"
-                "\n"
-                "Generate a beacon key pair and return the public key hex.\n"
-                "Use the public key to obtain a BOINC account ownership proof\n"
-                "from a project that supports the ownership proof extension,\n"
-                "then call advertisebeaconv3 with the proof to send the beacon.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+    static const RPCHelpMan help{
+        "beaconauth",
+        "Generate a beacon key pair and return the public key hex. "
+        "Use the public key to obtain a BOINC account ownership proof from a project "
+        "that supports the ownership proof extension, then call advertisebeaconv3 with "
+        "the proof to send the beacon. Requires wallet to be fully unlocked.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconauth", "") +
+            HelpExampleRpc("beaconauth", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
