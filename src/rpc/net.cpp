@@ -542,12 +542,22 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
 
 UniValue getnettotals(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "getnettotals\n"
-                "\n"
-                "Returns information about network traffic, including bytes in, bytes out,\n"
-                "and current time\n");
+    static const RPCHelpMan help{
+        "getnettotals",
+        "Returns information about network traffic, including bytes in, bytes out, and current time.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "totalbytesrecv", "Total cumulative bytes received"},
+                {RPCResult::Type::NUM, "totalbytessent", "Total cumulative bytes sent"},
+                {RPCResult::Type::NUM_TIME, "timemillis", "Current system time in milliseconds since epoch"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnettotals", "") +
+            HelpExampleRpc("getnettotals", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("totalbytesrecv", CNode::GetTotalBytesRecv());
