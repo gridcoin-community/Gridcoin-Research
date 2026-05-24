@@ -99,7 +99,26 @@ install_deps() {
             append_base libssl-dev libevent-dev libboost-all-dev libminiupnpc-dev libqrencode-dev libzip-dev libcurl4-openssl-dev zipcmp zipmerge ziptool
 
             # Qt6 Packages (Qt5 names are not defined here as most are EOL)
-            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools libqt6charts6-dev libqt6svg6-dev libqt6core5compat6-dev
+            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools libqt6charts6-dev libqt6svg6-dev
+
+            # The Qt6Core5Compat dev package was renamed across the Debian/Ubuntu
+            # family in mid-2026:
+            #   - Debian Sid (and forky/trixie) ship only `qt6-5compat-dev`;
+            #     the older `libqt6core5compat6-dev` was dropped.
+            #   - Ubuntu Noble (24.04) ships both -- `libqt6core5compat6-dev` is
+            #     a transitional that pulls in `qt6-5compat-dev`.
+            #   - Ubuntu Jammy (22.04) ships only `libqt6core5compat6-dev`.
+            # Detect which name is available in the current apt cache and use
+            # that. Apt-cache is already populated by this point in the CI
+            # runners (the OS-detect block above triggered an `apt update`
+            # transitively) and on bare-metal dev systems this falls through
+            # to whichever name resolves. `-q -q` keeps the detection quiet on
+            # the success path.
+            if apt-cache -q -q show qt6-5compat-dev >/dev/null 2>&1; then
+                append_qt qt6-5compat-dev
+            else
+                append_qt libqt6core5compat6-dev
+            fi
 
             # Windows Cross-Compile Tools
             # NOTE: We only append NSIS here. The MinGW compiler (g++-mingw-w64-x86-64)
