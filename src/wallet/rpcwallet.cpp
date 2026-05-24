@@ -1333,14 +1333,23 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 
 UniValue addredeemscript(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-    {
-        string msg = "addredeemscript <redeemScript> [account]\n"
-                     "\n"
-                     "Add a P2SH address with a specified redeemScript to the wallet.\n"
-                     "If [account] is specified, assign address to [account].\n";
-        throw runtime_error(msg);
-    }
+    static const RPCHelpMan help{
+        "addredeemscript",
+        "Add a P2SH address with a specified redeemScript to the wallet. "
+        "If [account] is specified, assign address to [account].",
+        {
+            {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The hex-encoded redeem script."},
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The P2SH address corresponding to the redeem script."},
+        RPCExamples{
+            HelpExampleCli("addredeemscript", "\"512103...ae\"") +
+            HelpExampleRpc("addredeemscript", "\"512103...ae\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount;
     if (params.size() > 1)
