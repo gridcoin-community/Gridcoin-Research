@@ -3165,12 +3165,24 @@ UniValue resendtx(const UniValue& params, bool fHelp)
 // ppcoin: make a public-private key pair
 UniValue makekeypair(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "makekeypair [prefix]\n"
-                "\n"
-                "Make a public/private key pair.\n"
-                "[prefix] is optional preferred prefix for the public key.\n");
+    static const RPCHelpMan help{
+        "makekeypair",
+        "Make a public/private key pair.",
+        {
+            {"prefix", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Optional preferred prefix for the public key."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "PrivateKey", "Hex-encoded private key."},
+                {RPCResult::Type::STR_HEX, "PublicKey", "Hex-encoded public key."},
+            }},
+        RPCExamples{
+            HelpExampleCli("makekeypair", "") +
+            HelpExampleRpc("makekeypair", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strPrefix = "";
     if (params.size() > 0)
