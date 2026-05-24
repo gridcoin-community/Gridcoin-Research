@@ -613,13 +613,24 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
 UniValue listpolls(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "listpolls ( showfinished )\n"
-                "\n"
-                "[showfinished] -> If true, show finished polls as well.\n"
-                "\n"
-                "Lists poll details\n");
+    static const RPCHelpMan help{
+        "listpolls",
+        "Lists poll details for all currently active polls (or for all polls if showfinished is true).",
+        {
+            {"showfinished", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, show finished polls as well. Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "Poll detail object; see 'getpollresults' / 'addpoll' for shape."},
+            }},
+        RPCExamples{
+            HelpExampleCli("listpolls", "") +
+            HelpExampleCli("listpolls", "true") +
+            HelpExampleRpc("listpolls", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     UniValue json(UniValue::VARR);
 
