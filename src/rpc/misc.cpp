@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "protocol.h"
+#include <rpc/util.h>
 #include <util.h>
 
 #include <univalue.h>
@@ -49,26 +50,47 @@ static void EnableOrDisableLogCategories(UniValue cats, bool enable) {
 
 UniValue logging(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-    {
-        throw runtime_error(
-           "logging [json array category adds] [json array category removes]\n"
-            "Gets and sets the logging configuration.\n"
-            "When called without an argument, returns the list of categories with status that are currently being debug logged or not.\n"
-            "When called with arguments, adds or removes categories from debug logging and return the lists above.\n"
-            "The arguments are evaluated in order \"include\", \"exclude\".\n"
-            "If an item is both included and excluded, it will thus end up being excluded.\n"
-            "The valid logging categories are: " + ListLogCategories() + ".\n"
-            "In addition, the following are available as category names with special meanings:\n"
-            "all or 1: represent all logging categories.\n"
-            "none or 0: even if other logging categories are specified, ignore all of them.\n\n"
-            "Examples:\n"
-            "logging all net: enables all and disables net.\n"
-            "logging \"\" all: disables all.\n\n"
-            "Note that unlike Bitcoin, we don't process JSON arrays correctly as arguments yet for the command line,\n"
-            "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the full arrays.\n"
-            );
-    }
+    static const RPCHelpMan help{
+        "logging",
+        "Gets and sets the logging configuration.\n"
+        "\n"
+        "When called without an argument, returns the list of categories with status that are currently being\n"
+        "debug logged or not.\n"
+        "When called with arguments, adds or removes categories from debug logging and returns the lists above.\n"
+        "The arguments are evaluated in order \"include\", \"exclude\".\n"
+        "If an item is both included and excluded, it will thus end up being excluded.\n"
+        "\n"
+        "The valid logging categories are the ones reported when this command is called without arguments.\n"
+        "In addition, the following are available as category names with special meanings:\n"
+        "  all  or 1: represent all logging categories.\n"
+        "  none or 0: even if other logging categories are specified, ignore all of them.\n"
+        "\n"
+        "Note that unlike Bitcoin, we don't yet process JSON arrays correctly as arguments for the command line,\n"
+        "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the\n"
+        "full arrays.",
+        {
+            {"include", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+                "JSON array of categories to enable (or a single category string).",
+                {
+                    {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+                }},
+            {"exclude", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+                "JSON array of categories to disable (or a single category string).",
+                {
+                    {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+                }},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of category name to active state",
+            {
+                {RPCResult::Type::BOOL, "category", "Whether the named category is currently logged"},
+            }},
+        RPCExamples{
+            HelpExampleCli("logging", "all net") +
+            HelpExampleCli("logging", "\"\" all") +
+            HelpExampleRpc("logging", "[\"all\"], [\"net\"]")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (params.size() >= 1) EnableOrDisableLogCategories(params[0], true);
 
