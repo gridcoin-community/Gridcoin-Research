@@ -215,11 +215,32 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
 
 UniValue getlaststake(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "getlaststake\n"
-            "\n"
-            "Fetch information about this wallet's last staked block.\n");
+    static const RPCHelpMan help{
+        "getlaststake",
+        "Fetch information about this wallet's last staked block.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "block", "Hash of the block in which the stake was mined."},
+                {RPCResult::Type::NUM, "height", "Block height."},
+                {RPCResult::Type::NUM, "confirmations", "Confirmations since the stake block."},
+                {RPCResult::Type::BOOL, "immature", "Whether the stake is still immature."},
+                {RPCResult::Type::STR_HEX, "txid", "Stake transaction id."},
+                {RPCResult::Type::NUM_TIME, "time", "Block timestamp."},
+                {RPCResult::Type::NUM, "elapsed_seconds", "Seconds elapsed since the stake."},
+                {RPCResult::Type::NUM, "elapsed_days", "Days elapsed since the stake."},
+                {RPCResult::Type::STR_AMOUNT, "mint", "Amount minted to the wallet."},
+                {RPCResult::Type::STR_AMOUNT, "research_reward", "Research subsidy paid."},
+                {RPCResult::Type::STR_AMOUNT, "side_stake", "Side-stake amount paid out."},
+                {RPCResult::Type::STR, "address", "Stake output destination address (empty if undecodable)."},
+                {RPCResult::Type::STR, "label", "Source-account label of the stake transaction."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getlaststake", "") +
+            HelpExampleRpc("getlaststake", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
