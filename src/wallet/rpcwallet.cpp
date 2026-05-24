@@ -363,11 +363,20 @@ UniValue setaccount(const UniValue& params, bool fHelp)
 
 UniValue getaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaccount <gridcoinaddress>\n"
-                "\n"
-                "Returns the account associated with the given address.\n");
+    static const RPCHelpMan help{
+        "getaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the account associated with the given address.",
+        {
+            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
+        },
+        RPCResult{RPCResult::Type::STR, "", "The account name (empty string for the default account)."},
+        RPCExamples{
+            HelpExampleCli("getaccount", "\"S1Example\"") +
+            HelpExampleRpc("getaccount", "\"S1Example\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
