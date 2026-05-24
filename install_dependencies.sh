@@ -264,16 +264,21 @@ install_deps() {
             # that's about to install patterns-devel-base-devel_basis, the
             # canonical GNU gawk/less are what's actually wanted -- the
             # busybox-* variants are minimal alternates the pattern will
-            # replace anyway. The `|| true` keeps this idempotent: if the
-            # busybox packages aren't installed (e.g. an existing fully
-            # provisioned dev box) the rm is a no-op.
+            # replace anyway.
             #
             # Leap and other openSUSE flavours don't hit this in their
-            # current snapshots, so the workaround is gated on Tumbleweed
-            # only.
-            if [[ "$IS_TUMBLEWEED" == "true" ]]; then
-                echo "Removing busybox shims that conflict with devel_basis (busybox-gawk, busybox-less, if present)..."
-                sudo zypper rm -y busybox-gawk busybox-less 2>/dev/null || true
+            # current snapshots, so the workaround is gated on Tumbleweed.
+            # The `rpm -q --quiet` guard skips the rm entirely on systems
+            # where neither shim is installed (e.g. an already-provisioned
+            # dev box) -- no zypper noise and no exit-code dance. When the
+            # rm does run, stderr stays visible so a real removal failure
+            # (repo lock, network, solver problem) surfaces in the CI /
+            # shell log rather than masquerading as the downstream
+            # devel_basis install failure.
+            if [[ "$IS_TUMBLEWEED" == "true" ]] \
+                && { rpm -q --quiet busybox-gawk || rpm -q --quiet busybox-less; }; then
+                echo "Removing busybox shims that conflict with devel_basis (busybox-gawk, busybox-less)..."
+                sudo zypper rm -y busybox-gawk busybox-less
             fi
 
             echo "Installing devel_basis pattern..."
