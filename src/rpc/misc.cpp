@@ -128,19 +128,42 @@ UniValue listsettings(const UniValue& params, bool fHelp)
 
 UniValue changesettings(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "changesettings",
+        "Store or change one or more configuration settings.\n"
+        "\n"
+        "Settings must be passed in the same format as config file entries (name=value).\n"
+        "Additional name=value pairs may be supplied as further positional arguments.",
+        {
+            {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Setting to store/change in the form name=value. Pass additional positional arguments "
+                "to change more than one setting in a single call."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "settings_change_requires_restart",
+                    "True if at least one of the changed settings does not take effect until restart."},
+                {RPCResult::Type::ARR, "settings_stored_with_no_state_change", "",
+                    {
+                        {RPCResult::Type::STR, "setting", "Stored setting whose value did not change."},
+                    }},
+                {RPCResult::Type::ARR, "settings_changed_taking_immediate_effect", "",
+                    {
+                        {RPCResult::Type::STR, "setting", "Setting whose change is now in effect."},
+                    }},
+                {RPCResult::Type::ARR, "settings_changed_requiring_restart", "",
+                    {
+                        {RPCResult::Type::STR, "setting", "Setting whose change requires a restart."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
+            HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
+    };
+    // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does not model
+    // unbounded variadic, so keep the original lower-bound check and render help via the manifest above.
     if (fHelp || params.size() < 1)
-    {
-        throw runtime_error(
-                    "changesettings <name=value> [name=value] ... [name=value]\n"
-                    "\n"
-                    "name=value: name and value pair for setting to store/change (1st mandatory, 2nd+ optional).\n"
-                    "\n"
-                    "Note that the settings should be done in the same format as config file entries.\n"
-                    "\n"
-                    "Example:"
-                    "changesettings enable enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800\n"
-                    );
-    }
+        throw runtime_error(help.ToString());
 
     // -------- name ------------ value - value_changed - immediate_effect
     std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;
