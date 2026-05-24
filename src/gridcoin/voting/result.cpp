@@ -1219,7 +1219,16 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         // GetStartingHeight() returns std::nullopt, fall back to the
         // current tip so VoteCounter still functions; the per-vote
         // recording is best-effort in that degenerate case.
-        const int poll_start_height = poll_ref.GetStartingHeight().value_or(nBestHeight);
+        //
+        // Both GetStartingHeight() (it walks the chain index) and
+        // nBestHeight (annotated GUARDED_BY(cs_main)) require cs_main —
+        // matching the pattern in PollReference::GetActiveVoteWeight at
+        // voting/registry.cpp:510.
+        int poll_start_height;
+        {
+            LOCK(cs_main);
+            poll_start_height = poll_ref.GetStartingHeight().value_or(nBestHeight);
+        }
 
         VoteCounter counter(txdb, result.m_poll, poll_start_height);
 
