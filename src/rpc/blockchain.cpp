@@ -3841,13 +3841,27 @@ UniValue projects(const UniValue& params, bool fHelp)
 
 UniValue readdata(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "readdata <key>\n"
-                "\n"
-                "<key> -> generic key\n"
-                "\n"
-                "Reads generic data from disk from a specified key\n");
+    static const RPCHelpMan help{
+        "readdata",
+        "Reads generic data from disk from a specified key.",
+        {
+            {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Generic key to read."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Error", /*optional=*/true, "Error detail if the read failed."},
+                {RPCResult::Type::STR, "Key", "Key that was read."},
+                {RPCResult::Type::STR, "Result", "Stored value, or \"Failed to read from disk.\" on error."},
+            }},
+        RPCExamples{
+            HelpExampleCli("readdata", "\"mykey\"") +
+            HelpExampleRpc("readdata", "\"mykey\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
