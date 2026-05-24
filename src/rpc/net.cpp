@@ -160,14 +160,31 @@ UniValue getnodeaddresses(const UniValue& params, bool fHelp)
 
 UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getaddednodeinfo <dns> [node]\n"
-                "\n"
-                "Returns information about the given added node, or all added nodes\n"
-                "(note that onetry addnodes are not listed here)\n"
-                "If dns is false, only a list of added nodes will be provided,\n"
-                "otherwise connected information will also be available\n");
+    static const RPCHelpMan help{
+        "getaddednodeinfo",
+        "Returns information about the given added node, or all added nodes\n"
+        "(note that onetry addnodes are not listed here).\n"
+        "If dns is false, only a list of added nodes will be provided,\n"
+        "otherwise connected information will also be available.",
+        {
+            {"dns", RPCArg::Type::BOOL, RPCArg::Optional::NO,
+                "If false, only a list of added nodes will be provided, otherwise connection info too."},
+            {"node", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "If provided, return information about this specific added node, otherwise all are returned."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ELISION, "",
+                    "Shape depends on the 'dns' argument: a map of \"addednode\" -> node string when dns=false, "
+                    "or nested per-node connection detail when dns=true."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getaddednodeinfo", "true") +
+            HelpExampleCli("getaddednodeinfo", "true \"192.168.0.6:32749\"") +
+            HelpExampleRpc("getaddednodeinfo", "true, \"192.168.0.6:32749\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool fDns = params[0].get_bool();
 
