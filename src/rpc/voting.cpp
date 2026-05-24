@@ -790,14 +790,27 @@ UniValue vote(const UniValue& params, bool fHelp)
 
 UniValue votebyid(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "votebyid",
+        "Cast a vote for a poll.",
+        {
+            {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
+            {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Numeric ID of a choice to vote for. Pass additional positional choice IDs for multi-choice polls."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses fields."}}},
+        RPCExamples{
+            HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
+            HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
+            HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
+    };
+    // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
+    // RPCHelpMan does not model unbounded variadic, so keep the original lower-bound check and
+    // render help via the manifest above.
     if (fHelp || params.size() < 2)
-        throw std::runtime_error(
-            "votebyid <poll_id> <choice_id_1> ( choice_id_2... )\n"
-            "\n"
-            "<poll_id> --------> ID of the poll to vote for.\n"
-            "<choice_ids...> --> Numeric IDs of the choices to vote for.\n"
-            "\n"
-            "Cast a vote for a poll.\n");
+        throw std::runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
