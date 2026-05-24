@@ -287,14 +287,25 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 
 UniValue dumpprivkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-            "dumpprivkey <gridcoinaddress> [bool:dump hex]\n"
-            "<gridcoinaddress> -> Address of requested key\n"
-            "[bool:dump hex]   -> Optional; default false boolean to dump private and public key\n"
-            "                     as hex strings to JSON in addition to private key base58 encoded"
-            "\n"
-            "Reveals the private key corresponding to <gridcoinaddress>\n");
+    static const RPCHelpMan help{
+        "dumpprivkey",
+        "Reveals the private key corresponding to <gridcoinaddress>.",
+        {
+            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
+            {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, also include the private and public keys as hex strings in the JSON output. "
+                "Default: false (only the base58 WIF is returned)."},
+        },
+        RPCResult{RPCResult::Type::ANY, "",
+            "When dump_hex is false (default), returns the base58 WIF private key as a string. "
+            "When dump_hex is true, returns a JSON object with base58 and hex representations."},
+        RPCExamples{
+            HelpExampleCli("dumpprivkey", "\"S1Example\"") +
+            HelpExampleCli("dumpprivkey", "\"S1Example\" true") +
+            HelpExampleRpc("dumpprivkey", "\"S1Example\", true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
