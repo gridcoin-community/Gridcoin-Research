@@ -28,10 +28,11 @@ all prior rules unless explicitly changed.
 8. [Block Version 12 — Manual Research Claims](#8-block-version-12)
 9. [Block Version 13 — Mandatory Sidestakes and Configurable Parameters](#9-block-version-13)
 10. [Block Version 14 — Script Timelocks and V3 Beacons](#10-block-version-14)
-11. [Cross-Cutting Consensus Rules](#11-cross-cutting-consensus-rules)
-12. [Coinstake Output Structure Summary](#12-coinstake-output-structure-summary)
-13. [Contract Payload Version Matrix](#13-contract-payload-version-matrix)
-14. [Reward Formula Summary](#14-reward-formula-summary)
+11. [Block Version 15 — On-Chain Pool Registration](#11-block-version-15)
+12. [Cross-Cutting Consensus Rules](#12-cross-cutting-consensus-rules)
+13. [Coinstake Output Structure Summary](#13-coinstake-output-structure-summary)
+14. [Contract Payload Version Matrix](#14-contract-payload-version-matrix)
+15. [Reward Formula Summary](#15-reward-formula-summary)
 
 ---
 
@@ -53,8 +54,9 @@ in `src/chainparams.h`.
 | `BlockV10Height` | 1,420,000 | 629,409 | `IsV10Enabled()` (>= height) |
 | `BlockV11Height` | 2,053,000 | 1,301,500 | `IsV11Enabled()` (>= height) |
 | `BlockV12Height` | 2,671,700 | 1,871,830 | `IsV12Enabled()` (>= height) |
-| `BlockV13Height` | _not yet activated_ | 2,870,000 | `IsV13Enabled()` (>= height) |
-| `BlockV14Height` | _not yet activated_ | 3,126,500 | `IsV14Enabled()` (>= height) |
+| `BlockV13Height` | 3,989,800 | 2,870,000 | `IsV13Enabled()` (>= height) |
+| `BlockV14Height` | 3,990,000 | 3,126,500 | `IsV14Enabled()` (>= height) |
+| `BlockV15Height` | _not yet activated_ | _not yet activated_ | `IsV15Enabled()` (>= height) |
 | `PollV3Height` | 2,671,700 | 1,944,820 | `IsPollV3Enabled()` (>= height) |
 | `ProjectV2Height` | 2,671,700 | 1,944,820 | `IsProjectV2Enabled()` (>= height) |
 | `ProjectV4Height` | _not yet activated_ | 2,870,000 | `IsProjectV4Enabled()` (>= height) |
@@ -511,7 +513,7 @@ New compressed master key installed at height 2,671,700 (mainnet) and
 
 ## 9. Block Version 13 — Mandatory Sidestakes and Configurable Parameters
 
-**Activation:** Mainnet _not yet activated_, Testnet >= 2,870,000
+**Activation:** Mainnet >= 3,989,800, Testnet >= 2,870,000
 
 ### 9.1 Mandatory Sidestakes
 
@@ -585,7 +587,7 @@ Via protocol entry `"magnitudeweightfactor"`:
 
 ## 10. Block Version 14 — Script Timelocks and V3 Beacons
 
-**Activation:** Mainnet _not yet activated_, Testnet >= 3,126,500
+**Activation:** Mainnet >= 3,990,000, Testnet >= 3,126,500
 
 ### 10.1 BIP65 — OP_CHECKLOCKTIMEVERIFY
 
@@ -650,9 +652,63 @@ for trustless atomic operations.
 
 ---
 
-## 11. Cross-Cutting Consensus Rules
+## 11. Block Version 15 — On-Chain Pool Registration
 
-### 11.1 Script Verification Flags
+**Activation:** Mainnet _not yet activated_, Testnet _not yet activated_
+
+Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height itself is a follow-up consensus decision and defaults to `std::numeric_limits<int>::max()` in `CMainParams` / `CTestNetParams` until pinned.
+
+### 11.1 New Contract Types
+
+Two new contract types share a single `PoolRegistry` backed by the standard `RegistryDB` template (history-tracked, reorg-safe). Both are gated by `IsV15Enabled` in `PoolRegistry::BlockValidate`; pre-V15 they are silently invalid.
+
+| Contract Type | Authority | Payload | Effect |
+|---|---|---|---|
+| `POOL_REGISTER` | Operator-self-signed (no master key) | CPID, name, URL, operator pubkey, signature | Lands in `PENDING` (or `DELETED` on REMOVE for operator self-withdrawal). Takeover defense: on re-registration of an existing CPID, signature must verify against the prior operator key. |
+| `POOL_APPROVE` | Master-key (via `Contract::RequiresMasterKey()`) | CPID only (version + cpid) | ADD flips to `ACTIVE`; REMOVE flips to `DELETED`. May also pre-stage placeholders for unknown CPIDs (status `ACTIVE`, no operator key) for future foundation-managed entries. |
+
+> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, dispatch in `src/gridcoin/contract/contract.cpp`.
+
+### 11.2 Grandfathered Builtins
+
+To eliminate a flag-day regression of pool-mode detection, `PoolRegistry`'s constructor pre-populates the same 5 CPIDs that the legacy `MiningPools` list carried (`src/gridcoin/researcher.h:88-95`). Each builtin is seeded at `m_height = 0`, status `ACTIVE`, with an invalid operator key (the slot is unclaimed until the foundation explicitly opens it). Synthetic per-CPID sentinel hashes (`Hash("POOL_BUILTIN_SEED:" + cpid)`) anchor the `m_previous_hash` chain so `Revert` of a first-real-contract restores the builtin unchanged.
+
+Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns exactly the legacy list bit-for-bit (verified by the `builtin_pools_match_g_mining_pools_pre_v15` unit test in `pool_tests.cpp`).
+
+> **Source:** `src/gridcoin/pool.cpp` `BuiltinPoolSeeds()` / `SeedBuiltinPools()`.
+
+### 11.3 Builtin Opportunistic-Claim Protection
+
+A naive "invalid existing key == first POOL_REGISTER claims it" semantic would let any peer seize ownership of a grandfathered builtin (e.g. grcpool.com) at the first block past V15 activation. To prevent this, `BlockValidate` rejects POOL_REGISTER ADD on a CPID that is *both* in `PoolRegistry::m_builtin_seeds` *and* still carries an invalid operator key. The legitimate-claim flow for the 5 existing pools is:
+
+1. Foundation submits `POOL_APPROVE REMOVE` for the builtin CPID (flips to `DELETED`).
+2. Pool operator submits `POOL_REGISTER ADD` (existing entry is `DELETED`, so the takeover check short-circuits and the payload-key is authoritative).
+3. Foundation submits `POOL_APPROVE ADD` to flip to `ACTIVE`.
+
+The "invalid key == claimable" semantic continues to apply to *foundation-pre-staged unknown CPIDs* (which are never builtins), supporting first-class onboarding of brand-new pools.
+
+> **Source:** `src/gridcoin/pool.cpp` `BlockValidate` takeover-check block; `pool_tests.cpp` `is_builtin_recognizes_every_seeded_cpid`.
+
+### 11.4 Active Vote Weight Migration
+
+The two consumers of the legacy `g_mining_pools` list in the voting subsystem are migrated to the registry's height-anchored API:
+
+- `src/gridcoin/voting/registry.cpp` `PollReference::GetActiveVoteWeight`
+- `src/gridcoin/voting/result.cpp` `VoteCounter::ProcessVote` (via cached `m_pool_cpids_at_start`)
+
+Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll_start_height` is obtained from `PollReference::GetStartingHeight()`. The set used in AVW is therefore anchored to the poll's start height — every node tallying the same poll computes identical AVW even after post-V15 POOL contracts mutate the registry. Pre-V15 the registry returns the grandfathered builtins, which match the legacy `g_mining_pools` list bit-for-bit (see §11.2).
+
+> **Source:** `src/gridcoin/pool.cpp` `ActivePoolsAtHeight`; consumer sites in `voting/registry.cpp` and `voting/result.cpp`.
+
+### 11.5 Replay-Clamp Special-Case
+
+`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h:174` is extended with a POOL block analogous to the existing SIDESTAKE block, guarded on `BlockV15Height != std::numeric_limits<int>::max()`. Without the guard, an unactivated V15 would clamp the replay floor to `::max()` and break the clamp's overall semantics. With V15 activated, the clamp prevents contract replay from descending below `BlockV15Height` when the POOL bookmark height is still 0.
+
+---
+
+## 12. Cross-Cutting Consensus Rules
+
+### 12.1 Script Verification Flags
 
 Script verification flags vary by block version:
 
@@ -666,14 +722,14 @@ Policy-level flags (applied to mempool transactions, not consensus):
 
 > **Source:** `src/validation.cpp:1624-1635`, `src/policy/policy.h:19-21`
 
-### 11.2 Block Version Enforcement
+### 12.2 Block Version Enforcement
 
 Blocks must meet the minimum version required at their height. Blocks below
 the mandatory version for their height are rejected:
 - Version 8 mandatory after `BlockV8Height`
 - Each subsequent version mandatory after its activation height
 
-### 11.3 Difficulty Retargeting
+### 12.3 Difficulty Retargeting
 
 - Target block spacing: **90 seconds** (post-protocol v2), **60 seconds**
   (pre-protocol v2)
@@ -697,7 +753,7 @@ where `nInterval = TARGET_TIMESPAN / nTargetSpacing`
 
 > **Source:** `src/gridcoin/staking/difficulty.cpp:22-90`
 
-### 11.4 Stake Modifier Computation
+### 12.4 Stake Modifier Computation
 
 The stake modifier is a 64-bit value recomputed every `nModifierInterval`
 (10 minutes). It is built by selecting 64 blocks from candidates in a time
@@ -716,7 +772,7 @@ Special case: mainnet height 1,009,994 has a hardcoded modifier reset to
 
 > **Source:** `src/gridcoin/staking/kernel.cpp:20-384`
 
-### 11.5 Stake Timestamp Mask
+### 12.5 Stake Timestamp Mask
 
 The `STAKE_TIMESTAMP_MASK` is 15 (0xF), which means:
 - Stake timestamps have 16-second granularity (bottom 4 bits zeroed)
@@ -737,13 +793,13 @@ The `STAKE_TIMESTAMP_MASK` is 15 (0xF), which means:
 
 > **Source:** `src/gridcoin/staking/kernel.h:15,30-33`, `src/gridcoin/staking/status.cpp`
 
-### 11.6 Transaction Version Requirements
+### 12.6 Transaction Version Requirements
 
 - Transaction version 1: Legacy transactions, no contracts
 - Transaction version 2: Required for binary contracts (v11+); enables
   sequence lock enforcement (BIP68 at v14+)
 
-### 11.7 Contract Burn Fees
+### 12.7 Contract Burn Fees
 
 Every non-administrative contract transaction must include an `OP_RETURN`
 output with a burn amount >= the required burn fee:
@@ -752,7 +808,7 @@ output with a burn amount >= the required burn fee:
 
 > **Source:** `src/gridcoin/contract/contract.h:57`, `src/validation.cpp:163-197`
 
-### 11.8 Superblock Spacing
+### 12.8 Superblock Spacing
 
 Superblocks are produced approximately once per day:
 - Pre-height 364,500 (mainnet): every 43,200 seconds (12 hours)
@@ -761,7 +817,7 @@ Superblocks are produced approximately once per day:
 
 > **Source:** `src/chainparams.h:187-190`
 
-### 11.9 Coinbase Maturity
+### 12.9 Coinbase Maturity
 
 Coinbase and coinstake outputs require a minimum depth before they can be
 spent:
@@ -772,7 +828,7 @@ spent:
 
 ---
 
-## 12. Coinstake Output Structure Summary
+## 13. Coinstake Output Structure Summary
 
 | Block Version | Base Limit | MRC Limit | Mandatory SS Limit | Total Max |
 |---|---|---|---|---|
@@ -797,7 +853,7 @@ Notes:
 
 ---
 
-## 13. Contract Payload Version Matrix
+## 14. Contract Payload Version Matrix
 
 This table shows the current (maximum) payload version for each contract type
 and when each version was introduced:
@@ -860,9 +916,9 @@ Current `CURRENT_VERSION` constants:
 
 ---
 
-## 14. Reward Formula Summary
+## 15. Reward Formula Summary
 
-### 14.1 Pre-v10: Coin-Year Interest
+### 15.1 Pre-v10: Coin-Year Interest
 
 ```
 staking_reward = coin_age * interest_rate * 33 / (365 * 33 + 8)
@@ -877,7 +933,7 @@ research_reward = accrual_days * avg_magnitude * magnitude_unit * COIN
 
 Capped at `MaxResearchSubsidy * 255 * COIN` per block.
 
-### 14.2 V10+: Constant Block Reward
+### 15.2 V10+: Constant Block Reward
 
 ```
 staking_reward = GetConstantBlockReward(pindexLast)
@@ -890,7 +946,7 @@ staking_reward = GetConstantBlockReward(pindexLast)
 
 > **Source:** `src/gridcoin/staking/reward.cpp:33-99`
 
-### 14.3 Research Accrual: Snapshot (v11+)
+### 15.3 Research Accrual: Snapshot (v11+)
 
 ```
 accrual = snapshot_balance + delta_accrual
@@ -904,7 +960,7 @@ Where:
 - `magnitude_unit` = 1/4 (fixed, pre-v13) or configurable (v13+)
 - `elapsed_days` = time since the active superblock, in days
 
-### 14.4 Maximum Research Subsidy Schedule
+### 15.4 Maximum Research Subsidy Schedule
 
 The daily maximum research subsidy per CPID decreased over time (see
 [Section 3.3](#33-research-age-mainnet--364501)). From Nov 20, 2015 onward,
@@ -913,7 +969,7 @@ the cap is **50 GRC/day** per CPID. Maximum single-block payout:
 
 > **Source:** `src/gridcoin/accrual/research_age.h:24-42`
 
-### 14.5 MRC Fees (v12+)
+### 15.5 MRC Fees (v12+)
 
 When a researcher submits an MRC:
 1. If within the zero-payment interval (14 days mainnet / 10 min testnet since
