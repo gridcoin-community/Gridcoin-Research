@@ -109,11 +109,11 @@ install_deps() {
             #     a transitional that pulls in `qt6-5compat-dev`.
             #   - Ubuntu Jammy (22.04) ships only `libqt6core5compat6-dev`.
             # Detect which name is available in the current apt cache and use
-            # that. Apt-cache is already populated by this point in the CI
-            # runners (the OS-detect block above triggered an `apt update`
-            # transitively) and on bare-metal dev systems this falls through
-            # to whichever name resolves. `-q -q` keeps the detection quiet on
-            # the success path.
+            # that. In CI this typically works because the base image or
+            # workflow prep has already populated the apt cache; on developer
+            # systems the cache is often already present from prior package
+            # operations. `-q -q` keeps the detection quiet on the success
+            # path.
             if apt-cache -q -q show qt6-5compat-dev >/dev/null 2>&1; then
                 append_qt qt6-5compat-dev
             else
