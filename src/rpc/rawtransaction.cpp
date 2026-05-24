@@ -989,21 +989,29 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
 */
 UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 5)
-        throw runtime_error(
-                "consolidatemsunspent <address> <block-start> <block-end> [max-grc] [max-inputs]\n"
-                "\n"
-                "Searches a block range for a multisig address with unspent utxos\n"
-                "and consolidates them into a transaction ready for signing to\n"
-                "return to the same address in an consolidated amount.\n"
-                "consolidatemsunspent will also determine multi-sig type and ensure\n"
-                "the transaction does not exceed any size limits due to inputs.\n"
-                "\n"
-                "<address> ------------> Multi-signature address\n"
-                "<block-start> --------> Block number to start search from\n"
-                "<block-end> ----------> Block number to end search on\n"
-                "[max-grc] ------------> Highest uxto value to include in search results in halfords (0 is default)\n"
-                "[max-inputs] ---------> Maximum inputs desired. (If the calculated max inputs is less than defined here; argument is overridden)\n");
+    static const RPCHelpMan help{
+        "consolidatemsunspent",
+        "Search a block range for a multisig address with unspent UTXOs and consolidate them into a transaction\n"
+        "ready for signing, returning to the same address in a consolidated amount. The command determines the\n"
+        "multisig type and ensures the transaction does not exceed any size limits due to inputs.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+            {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+            {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+            {"max_grc", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Highest UTXO value to include in search results, in halfords (default: 0 = unlimited)."},
+            {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Consolidation result detail including the unsigned transaction; see source for shape."}}},
+        RPCExamples{
+            HelpExampleCli("consolidatemsunspent", "\"<ms_address>\" 1000000 1100000 0 50") +
+            HelpExampleRpc("consolidatemsunspent", "\"<ms_address>\", 1000000, 1100000, 0, 50")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue result(UniValue::VOBJ);
 
