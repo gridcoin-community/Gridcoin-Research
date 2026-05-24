@@ -3351,13 +3351,29 @@ UniValue debug(const UniValue& params, bool fHelp)
 
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "listprojects <bool>\n"
-                "\n"
-                "<bool> -> true to show all projects, including greylisted and deleted. Defaults to false.\n"
-                "\n"
-                "Displays information about whitelisted projects.\n");
+    static const RPCHelpMan help{
+        "listprojects",
+        "Displays information about whitelisted projects.",
+        {
+            {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show all projects, including greylisted and deleted. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+            {
+                {RPCResult::Type::OBJ, "project_name", "Per-project metadata.",
+                    {
+                        {RPCResult::Type::ELISION, "", "version, display_name, url, base_url, display_url, stats_url, [gdpr_controls], [requires_external_adapter], time, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listprojects", "") +
+            HelpExampleCli("listprojects", "true") +
+            HelpExampleRpc("listprojects", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
