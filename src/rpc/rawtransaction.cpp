@@ -2208,11 +2208,19 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
 
 UniValue sendrawtransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 1)
-        throw runtime_error(
-                "sendrawtransaction <hex string>\n"
-                "\n"
-                "Submits raw transaction (serialized, hex-encoded) to local node and network\n");
+    static const RPCHelpMan help{
+        "sendrawtransaction",
+        "Submit a raw (serialized, hex-encoded) transaction to the local node and network.",
+        {
+            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendrawtransaction", "\"<hex>\"") +
+            HelpExampleRpc("sendrawtransaction", "\"<hex>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VSTR });
 
