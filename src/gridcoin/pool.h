@@ -60,6 +60,7 @@ public:
     int64_t m_timestamp;        //!< Tx time of the contract that produced this entry.
     uint256 m_hash;             //!< Tx hash of the contract that produced this entry.
     uint256 m_previous_hash;    //!< Tx hash of the prior entry for this CPID (history chain).
+    int m_height;               //!< Block height at which this entry was produced. Grandfathered builtins use 0.
     Status m_status;            //!< Current lifecycle status.
 
     Pool();
@@ -103,6 +104,7 @@ public:
         READWRITE(m_timestamp);
         READWRITE(m_hash);
         READWRITE(m_previous_hash);
+        READWRITE(m_height);
         READWRITE(m_status);
     }
 };
@@ -283,11 +285,49 @@ class PoolRegistry : public IContractHandler
 {
 public:
     PoolRegistry()
-        : m_pool_db(1)
+        : m_pool_db(2)
     {
+        SeedBuiltinPools();
     }
 
     typedef std::map<Cpid, Pool_ptr> PoolMap;
+
+    //!
+    //! \brief One row of the static builtin-pool seed list. Mirrors
+    //! MiningPools (researcher.h) so the two stay in sync; see
+    //! BuiltinPoolSeeds() below.
+    //!
+    struct BuiltinSeed
+    {
+        const char* cpid_hex;
+        const char* name;
+        const char* url;
+    };
+
+    //!
+    //! \brief The 5 pre-V15 hardcoded pools, grandfathered into the
+    //! registry at construction so pre-activation queries match the legacy
+    //! g_mining_pools list bit-for-bit. Must stay in sync with the
+    //! MiningPools constructor in researcher.h:88-95.
+    //!
+    static const std::vector<BuiltinSeed>& BuiltinPoolSeeds();
+
+    //!
+    //! \brief Deterministic synthetic tx-hash sentinel for the seed entry
+    //! of a builtin CPID. Used as m_previous_hash when the first real
+    //! contract lands on a builtin so Revert's chain-walk terminates on
+    //! the seed (which is installed in m_pool_db.m_historical at boot
+    //! via RegistryDB::InstallInMemorySeed).
+    //!
+    static uint256 BuiltinSeedHash(const Cpid& cpid);
+
+    //!
+    //! \brief True if the supplied CPID is one of the grandfathered
+    //! builtins. Used by BlockValidate to block opportunistic claims of
+    //! builtin CPIDs (an attacker submitting POOL_REGISTER ADD before the
+    //! legitimate operator notices V15 activation).
+    //!
+    bool IsBuiltin(const Cpid& cpid) const;
 
     //!
     //! \brief Satisfies the RegistryDB pending-map template parameter. Pool
@@ -301,15 +341,33 @@ public:
     typedef std::map<uint256, Pool_ptr> HistoricalPoolMap;
 
     //!
-    //! \brief All entries (active + pending + deleted). Caller filters by status.
+    //! \brief All entries (active + pending + deleted) as a value snapshot
+    //! taken under cs_lock. Caller filters by status. Returns by value
+    //! rather than const-ref to avoid lifetime issues with concurrent
+    //! mutation — the lock is released before the caller iterates.
     //!
-    const PoolMap& Entries() const;
+    std::vector<Pool> Entries() const;
 
     //!
     //! \brief Get all pools currently in the ACTIVE state. Used by the wizard
     //! and the listpools RPC.
     //!
     std::vector<Pool> ActivePools() const;
+
+    //!
+    //! \brief Get all pools that were ACTIVE as of the supplied block
+    //! height — the consensus-critical view used by voting AVW
+    //! (voting/registry.cpp and voting/result.cpp).
+    //!
+    //! For each CPID currently in m_pool_entries, walks back through
+    //! m_previous_hash via m_pool_db.find() (which falls back to LevelDB
+    //! for passivated entries) until reaching an entry with
+    //! m_height <= height. If that entry's m_status == ACTIVE, includes
+    //! it in the result. Grandfathered builtin seeds have m_height == 0
+    //! so they appear in every query for height >= 0, exactly matching
+    //! the pre-V15 hardcoded list bit-for-bit.
+    //!
+    std::vector<Pool> ActivePoolsAtHeight(int height) const;
 
     //!
     //! \brief Get the entry for the supplied CPID, or nullptr.
@@ -382,6 +440,24 @@ private:
     PoolMap m_pool_first_entries{};        //!< Not used; satisfies template.
 
     PoolDB m_pool_db;
+
+    //!
+    //! \brief Extra shared_ptrs to the grandfathered builtin seed entries.
+    //! Pins them against RegistryDB::passivate() — without this extra
+    //! reference, the seeds would be reclaimed from m_pool_db.m_historical
+    //! once the active map's pointer is replaced by a real contract, and
+    //! find() would then miss because the seeds have no LevelDB backing.
+    //! Also doubles as the membership oracle for IsBuiltin().
+    //!
+    std::map<Cpid, Pool_ptr> m_builtin_seeds;
+
+    //!
+    //! \brief Construct seed Pool entries for each row of BuiltinPoolSeeds(),
+    //! install them into m_pool_db.m_historical via InstallInMemorySeed,
+    //! pin them in m_builtin_seeds, and publish them into m_pool_entries
+    //! at status ACTIVE. Called once from the constructor.
+    //!
+    void SeedBuiltinPools();
 
     //!
     //! \brief Apply a POOL_REGISTER contract (operator-self-signed).
