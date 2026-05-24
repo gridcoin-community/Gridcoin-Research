@@ -688,13 +688,22 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
 
 UniValue getvotingclaim(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "getvotingclaim <poll_or_vote_id>\n"
-                "\n"
-                "<poll_or_vote_id> --> Transaction hash of the poll or vote.\n"
-                "\n"
-                "Display the claim for the specified poll or vote.\n");
+    static const RPCHelpMan help{
+        "getvotingclaim",
+        "Display the claim for the specified poll or vote.",
+        {
+            {"poll_or_vote_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Transaction hash of the poll or vote."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Claim object; shape depends on whether the transaction is a poll (PollClaimToJson) or vote (VoteClaimToJson)."}}},
+        RPCExamples{
+            HelpExampleCli("getvotingclaim", "\"<txid>\"") +
+            HelpExampleRpc("getvotingclaim", "\"<txid>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     const uint256 id = uint256S(params[0].get_str());
 
