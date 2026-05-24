@@ -3779,11 +3779,27 @@ UniValue sendblock(const UniValue& params, bool fHelp)
 
 UniValue superblockaverage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockaverage\n"
-                "\n"
-                "Displays average information for current superblock\n");
+    static const RPCHelpMan help{
+        "superblockaverage",
+        "Displays average information for the current superblock.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "beacon_count", "Total beacons in the current superblock."},
+                {RPCResult::Type::NUM, "beacon_participant_count", "Number of beacons in the current superblock with research credit."},
+                {RPCResult::Type::NUM, "average_magnitude", "Average magnitude per participant."},
+                {RPCResult::Type::BOOL, "superblock_valid", "True if the current superblock is well-formed."},
+                {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+                {RPCResult::Type::BOOL, "Dire Need of Superblock", "True if a new superblock is overdue."},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblockaverage", "") +
+            HelpExampleRpc("superblockaverage", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
