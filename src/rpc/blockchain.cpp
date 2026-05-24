@@ -3991,14 +3991,27 @@ UniValue versionreport(const UniValue& params, bool fHelp)
 
 UniValue writedata(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "writedata <key> <value>\n"
-                "\n"
-                "<key> ---> Key where value will be written\n"
-                "<value> -> Value to be written to specified key\n"
-                "\n"
-                "Writes a value to specified key\n");
+    static const RPCHelpMan help{
+        "writedata",
+        "Writes a value to the specified generic-data key on disk.",
+        {
+            {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Key where the value will be written."},
+            {"value", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Value to be written at the specified key."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Result", "\"Success.\", \"Unable to write.\", or \"Unable to Commit.\""},
+            }},
+        RPCExamples{
+            HelpExampleCli("writedata", "\"mykey\" \"myvalue\"") +
+            HelpExampleRpc("writedata", "\"mykey\", \"myvalue\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
