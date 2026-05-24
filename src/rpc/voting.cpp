@@ -884,13 +884,19 @@ UniValue votedetails(const UniValue& params, bool fHelp)
 
 UniValue testpollnotification(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1) {
-        throw std::runtime_error(
-                "testpollnotification <poll txid>\n"
-                "\n"
-                "<poll txid> --> Transaction id of the poll to test notification.\n"
-                "\n"
-                "Test the poll notification system.\n");
+    static const RPCHelpMan help{
+        "testpollnotification",
+        "Test the poll notification system for the specified poll.",
+        {
+            {"poll_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the poll to test notification."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("testpollnotification", "\"<txid>\"") +
+            HelpExampleRpc("testpollnotification", "\"<txid>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     const uint256 txid = uint256S(params[0].get_str());
