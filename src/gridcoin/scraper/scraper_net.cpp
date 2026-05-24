@@ -1030,13 +1030,19 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
 /** Provides hex string output of part object contents. */
 UniValue getmpart(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-    {
-        throw std::runtime_error(
-                "getmpart <hash>\n"
-                "Show content of CPart object.\n"
-                );
-    }
+    static const RPCHelpMan help{
+        "getmpart",
+        "Show content of a CPart object.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the CPart to look up."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded CPart contents."},
+        RPCExamples{
+            HelpExampleCli("getmpart", "\"<hash>\"") +
+            HelpExampleRpc("getmpart", "\"<hash>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     LOCK(CSplitBlob::cs_mapParts);
 
