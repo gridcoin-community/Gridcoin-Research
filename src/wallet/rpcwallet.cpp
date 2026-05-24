@@ -646,11 +646,26 @@ void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXC
 
 UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getreceivedbyaccount <account> [minconf=1]\n"
-                "\n"
-                "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.\n");
+    static const RPCHelpMan help{
+        "getreceivedbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Use getreceivedbyaddress instead.\n"
+        "\n"
+        "Returns the total amount received by addresses with <account> in transactions with at least\n"
+        "[minconf] confirmations.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum confirmations. Default: 1."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "", "Total amount received by addresses in the account."},
+        RPCExamples{
+            HelpExampleCli("getreceivedbyaccount", "\"myaccount\"") +
+            HelpExampleCli("getreceivedbyaccount", "\"myaccount\" 6") +
+            HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
