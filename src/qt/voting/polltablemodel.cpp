@@ -261,11 +261,31 @@ PollTableModel::~PollTableModel()
 
 void PollTableModel::setModel(VotingModel* model)
 {
+    if (m_voting_model == model) {
+        return;
+    }
+
+    // If we are detaching from a model (e.g. shutdown of the GUI sets this to
+    // nullptr before VotingModel goes out of scope), ensure any in-flight
+    // refresh worker has finished dereferencing it. PollTableModel's destructor
+    // also waitForFinished()s, but by then VotingModel may already have been
+    // destroyed -- it is a stack object in StartGridcoinQt() whose scope ends
+    // before BitcoinGUI / VotingPage / PollTableModel are torn down. Draining
+    // here, while VotingModel is still alive, closes that UAF window.
+    if (m_voting_model) {
+        m_refresh_future.waitForFinished();
+        disconnect(m_voting_model, &VotingModel::newVoteReceived,
+                   this, &PollTableModel::handlePollStaleFlag);
+    }
+
     m_voting_model = model;
 
-    // Connect poll stale handler to newVoteReceived signal from voting model, which propagates
-    // from the core.
-    connect(m_voting_model, &VotingModel::newVoteReceived, this, &PollTableModel::handlePollStaleFlag);
+    if (m_voting_model) {
+        // Connect poll stale handler to newVoteReceived signal from voting model,
+        // which propagates from the core.
+        connect(m_voting_model, &VotingModel::newVoteReceived,
+                this, &PollTableModel::handlePollStaleFlag);
+    }
 }
 
 void PollTableModel::setPollFilterFlags(PollFilterFlag flags)
@@ -320,7 +340,13 @@ void PollTableModel::refresh()
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh dispatched", __func__);
 
-    m_refresh_future = QtConcurrent::run([this]() {
+    // Capture the enclosing function name as a string literal so log lines
+    // emitted from inside the worker lambda print "PollTableModel::refresh"
+    // (the enclosing function) rather than "operator()" (which is what
+    // __func__ resolves to inside a lambda body).
+    const char* const func_name = __func__;
+
+    m_refresh_future = QtConcurrent::run([this, func_name]() {
         RenameThread("PollTableModel_refresh");
         util::ThreadSetInternalName("PollTableModel_refresh");
 
@@ -361,7 +387,7 @@ void PollTableModel::refresh()
             },
             Qt::QueuedConnection);
 
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", __func__);
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", func_name);
     });
 }
 
