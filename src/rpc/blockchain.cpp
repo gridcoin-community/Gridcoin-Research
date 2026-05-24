@@ -3549,11 +3549,25 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
 
 UniValue listprotocolentries(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listprotocolentries\n"
-                "\n"
-                "Displays the protocol entries on the network.\n");
+    static const RPCHelpMan help{
+        "listprotocolentries",
+        "Displays the protocol entries on the network.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "current_protocol_entries", "Active protocol entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "protocol entry; key, value, transaction hashes, timestamp, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listprotocolentries", "") +
+            HelpExampleRpc("listprotocolentries", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
