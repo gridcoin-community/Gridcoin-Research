@@ -13,6 +13,7 @@
 
 #include <assert.h>
 
+#include <limits>
 #include <stdexcept>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -70,6 +71,7 @@ public:
         consensus.BlockV12Height = 2671700;
         consensus.BlockV13Height = 3989800;
         consensus.BlockV14Height = 3990000;
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
         consensus.ProtocolVersionGracePeriod = 900 * 7; // ~6.5 days
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
@@ -198,6 +200,7 @@ public:
         consensus.BlockV12Height = 1871830;
         consensus.BlockV13Height = 2870000;
         consensus.BlockV14Height = 3126500;
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
         consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;

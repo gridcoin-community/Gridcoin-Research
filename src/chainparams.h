@@ -193,6 +193,11 @@ inline bool IsV14Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().BlockV14Height;
 }
 
+inline bool IsV15Enabled(int nHeight)
+{
+    return nHeight >= Params().GetConsensus().BlockV15Height;
+}
+
 inline bool IsProjectV4Enabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().ProjectV4Height;

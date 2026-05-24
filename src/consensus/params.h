@@ -38,6 +38,13 @@ struct Params {
     int BlockV13Height;
     /** Block height at which v14 blocks are created (CLTV + CSV + BIP68) */
     int BlockV14Height;
+    /** Block height at which v15 blocks are created. Default
+      * std::numeric_limits<int>::max() means the v15 hard-fork machinery
+      * (including on-chain pool registration, issue #1783) is inert until a
+      * follow-up release pins the activation height by maintainer/community
+      * decision. See doc/consensus.md.
+      */
+    int BlockV15Height;
     /** Grace period in blocks after BlockV14Height before peers on the old
       * protocol version are disconnected. Network-specific to allow testnet
       * a longer window when the fork has already passed before deployment.
