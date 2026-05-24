@@ -952,11 +952,28 @@ UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 
 UniValue movecmd(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 5)
-        throw runtime_error(
-                "move <fromaccount> <toaccount> <amount> [minconf=1] [comment]\n"
-                "\n"
-                "Move from one account in your wallet to another.\n");
+    static const RPCHelpMan help{
+        "move",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Move funds from one account in your wallet to another.\n"
+        "\n"
+        "Note: the C++ function name is `movecmd` (because `move` is a C++ keyword); the dispatch entry\n"
+        "registers it as `move`.",
+        {
+            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Source account name."},
+            {"toaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Destination account name."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "Amount in GRC to move."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Unused parameter retained for backwards compatibility. Default: 1."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional comment string."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True on success."},
+        RPCExamples{
+            HelpExampleCli("move", "\"acct1\" \"acct2\" 0.01") +
+            HelpExampleRpc("move", "\"acct1\", \"acct2\", 0.01")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
