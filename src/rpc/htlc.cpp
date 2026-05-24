@@ -9,6 +9,7 @@
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
@@ -23,22 +24,29 @@ extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsig
 
 UniValue createhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 4 || params.size() > 5)
-        throw runtime_error(
-            "createhtlc <receiver_addr> <sender_addr> <hash_hex> <timeout> [amount]\n"
-            "\n"
-            "Create a Hash Time-Locked Contract.\n"
-            "\n"
-            "Arguments:\n"
-            "1. receiver_addr   (string, required) Address of the receiver (claim path)\n"
-            "2. sender_addr     (string, required) Address of the sender (refund path)\n"
-            "3. hash_hex        (string, required) SHA256 hash of the preimage (64 hex chars)\n"
-            "4. timeout         (numeric, required) Absolute locktime for refund path\n"
-            "5. amount          (numeric, optional) Amount in GRC to fund the HTLC\n"
-            "\n"
-            "Returns a JSON object with the P2SH address and redeem script.\n"
-            "If amount is provided, funds the HTLC with a transaction.\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "createhtlc",
+        "Create a Hash Time-Locked Contract.\n"
+        "\n"
+        "Returns a JSON object with the P2SH address and redeem script. "
+        "If amount is provided, funds the HTLC with a transaction.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
+            {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
+            {"hash_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "SHA256 hash of the preimage (64 hex chars)."},
+            {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Absolute locktime for the refund path."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "Amount in GRC to fund the HTLC."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "HTLC detail object including p2sh address, redeem_script, and optional fund tx."}}},
+        RPCExamples{
+            HelpExampleCli("createhtlc", "\"recv_addr\" \"send_addr\" \"<64-hex-hash>\" 500000 100") +
+            HelpExampleRpc("createhtlc", "\"recv_addr\", \"send_addr\", \"<64-hex-hash>\", 500000, 100")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
