@@ -6366,11 +6366,23 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  */
 UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "deletecscrapermanifest <hash>\n"
-                "delete manifest object.\n"
-                );
+    static const RPCHelpMan help{
+        "deletecscrapermanifest",
+        "Delete a CScraperManifest entry from the global mapManifest map.\n"
+        "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
+        "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
+        "global convergence cache.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Hash of the manifest to delete."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
+        RPCExamples{
+            HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
+            HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     LOCK(CScraperManifest::cs_mapManifest);
 
