@@ -2696,15 +2696,30 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
 UniValue superblocks(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "superblocks [lookback [displaycontract [cpid]]]\n"
-                "\n"
-                "[lookback] -> Optional: # of SB's to show (default 14)\n"
-                "[displaycontract] -> Optional true/false: display SB contract (default false)\n"
-                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
-                "\n"
-                "Display data on recent superblocks\n");
+    static const RPCHelpMan help{
+        "superblocks",
+        "Display data on recent superblocks.",
+        {
+            {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of superblocks to show. Default: 14."},
+            {"displaycontract", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Display the superblock contract. Default: false."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Show magnitude for a CPID across recent superblocks."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "superblock entry; shape depends on options"},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblocks", "") +
+            HelpExampleCli("superblocks", "5 true") +
+            HelpExampleRpc("superblocks", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VARR);
 
