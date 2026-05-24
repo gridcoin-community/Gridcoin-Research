@@ -748,20 +748,30 @@ UniValue sendalert(const UniValue& params, bool fHelp)
 
 UniValue sendalert2(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 7)
-        throw runtime_error(
-            //          0            1    2            3            4        5          6
-            "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
-            "\n"
-            "<privatekey> -> is WIF encoded alert master private key\n"
-            "<id> ---------> is the unique alert number\n"
-            "<subverlist> -> comma separated list of versions warning applies to\n"
-            "<cancellist> -> comma separated ids of alerts to cancel\n"
-            "<expire> -----> alert expiration in days\n"
-            "<priority> ---> integer, >1000->visible\n"
-            "<message> ---->is the alert text message\n"
-            "\n"
-            "Returns summary of what was done.");
+    static const RPCHelpMan help{
+        "sendalert2",
+        "Sign and broadcast a network alert with subversion/cancel list targeting.",
+        {
+            {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "WIF-encoded alert master private key."},
+            {"id", RPCArg::Type::NUM, RPCArg::Optional::NO, "Unique alert number."},
+            {"subverlist", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Comma-separated list of subversion strings the alert applies to (empty for all)."},
+            {"cancellist", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Comma-separated alert IDs to cancel (empty for none)."},
+            {"expire", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Alert expiration window in days."},
+            {"priority", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Integer priority; values >1000 are user-visible."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO, "Alert text message."},
+        },
+        RPCResult{RPCResult::Type::ANY, "", "Summary of what was done; see source for the exact shape."},
+        RPCExamples{
+            HelpExampleCli("sendalert2", "\"<wif>\" 1 \"\" \"\" 7 1500 \"network upgrade required\"") +
+            HelpExampleRpc("sendalert2", "\"<wif>\", 1, \"\", \"\", 7, 1500, \"network upgrade required\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     CAlert alert;
     CKey key;
