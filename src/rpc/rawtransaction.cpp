@@ -24,6 +24,7 @@
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
@@ -397,14 +398,28 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) 
 
 UniValue getrawtransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getrawtransaction <txid> [verbose=bool]\n"
-                "\n"
-                "If verbose is false, returns a string that is\n"
-                "serialized, hex-encoded data for <txid>.\n"
-                "If verbose is true, returns an Object\n"
-                "with information about <txid>\n");
+    static const RPCHelpMan help{
+        "getrawtransaction",
+        "Return raw transaction data.\n"
+        "\n"
+        "If verbose is false, returns a serialized, hex-encoded string for <txid>.\n"
+        "If verbose is true, returns an object with information about <txid>.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+            {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, return an object instead of a hex string. Numeric values are also accepted "
+                "(any non-zero number is treated as true). Default: false."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "",
+            "Hex-encoded serialized transaction when verbose is false. When verbose is true, returns a JSON "
+            "object instead (containing 'hex' plus decoded transaction fields)."},
+        RPCExamples{
+            HelpExampleCli("getrawtransaction", "\"<txid>\"") +
+            HelpExampleCli("getrawtransaction", "\"<txid>\" true") +
+            HelpExampleRpc("getrawtransaction", "\"<txid>\", true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
