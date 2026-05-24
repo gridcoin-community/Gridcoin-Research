@@ -432,13 +432,20 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
 
 UniValue ping(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "ping\n"
-                "\n"
-                "Requests that a ping be sent to all other nodes, to measure ping time.\n"
-                "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
-                "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping\n");
+    static const RPCHelpMan help{
+        "ping",
+        "Requests that a ping be sent to all other nodes, to measure ping time.\n"
+        "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
+        "Ping command is handled in queue with all other commands, so it measures processing backlog,\n"
+        "not just network ping.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("ping", "") +
+            HelpExampleRpc("ping", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
