@@ -357,9 +357,30 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 
 UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
-    if(fHelp)
-        throw runtime_error(
-            "exportstats1 [maxblocks aggregate [endblock]] \n");
+    static const RPCHelpMan help{
+        "exportstats1",
+        "Export aggregated block statistics to a file under the reports directory.",
+        {
+            {"maxblocks", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Maximum number of blocks to scan (default: 805)."},
+            {"aggregate", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Smoothing window size; must be a positive even number (default: 23)."},
+            {"endblock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Ending block height (default: chain head)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "file", "Path to the written report file"},
+                {RPCResult::Type::NUM, "points", "Number of aggregated points written"},
+                {RPCResult::Type::NUM, "smoothing", "Smoothing window applied"},
+                {RPCResult::Type::NUM, "blockcount", "Number of blocks scanned"},
+            }},
+        RPCExamples{
+            HelpExampleCli("exportstats1", "805 23") +
+            HelpExampleRpc("exportstats1", "805, 23")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
     /* count, high */
     long endblock= INT_MAX;
     long maxblocks= 805;
