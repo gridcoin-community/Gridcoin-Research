@@ -175,6 +175,20 @@ public:
                 db_height = Params().GetConsensus().BlockV13Height;
             }
 
+            //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
+            //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
+            //! the clamp. Unlike the SIDESTAKE branch above, this is guarded on
+            //! `BlockV15Height != std::numeric_limits<int>::max()` because the default consensus
+            //! value is ::max() until a follow-up release pins a real activation height — without
+            //! the guard, an unactivated V15 would clamp the replay floor to ::max() and break
+            //! the overall replay semantics. The SIDESTAKE branch doesn't need the guard because
+            //! V13 has a real height baked into chainparams.cpp.
+            if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
+                and Params().GetConsensus().BlockV15Height != std::numeric_limits<int>::max()
+                and db_height < Params().GetConsensus().BlockV15Height) {
+                db_height = Params().GetConsensus().BlockV15Height;
+            }
+
             if (iter.second < lowest_height) {
                 lowest_height = db_height;
             }

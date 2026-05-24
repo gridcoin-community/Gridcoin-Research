@@ -565,6 +565,31 @@ public:
     }
 
     //!
+    //! \brief Install an in-memory-only seed entry into the historical map,
+    //! bypassing LevelDB. Used by registries that grandfather a fixed set of
+    //! entries at construction time (e.g. PoolRegistry's pre-V15 builtin
+    //! pools): the seed must be present in m_historical so that Revert's
+    //! m_previous_hash walkback can resurrect it, but it must NOT be
+    //! persisted to LevelDB — Initialize would otherwise re-load it on the
+    //! next startup and collide with the constructor's re-seeding.
+    //!
+    //! Returns the shared_ptr to the installed entry so the caller can hold
+    //! an extra reference, pinning the entry against passivate() which would
+    //! otherwise reclaim it from m_historical (since the entry has no
+    //! LevelDB row that find() could fall back to).
+    //!
+    entry_ptr InstallInMemorySeed(const uint256& hash, const E& entry)
+    {
+        auto existing = m_historical.find(hash);
+        if (existing != m_historical.end()) {
+            return existing->second;
+        }
+        auto ptr = std::make_shared<E>(entry);
+        m_historical.insert(std::make_pair(hash, ptr));
+        return ptr;
+    }
+
+    //!
     //! \brief Erase a record from the database.
     //!
     //! \param hash The key of the record to erase.

@@ -18,8 +18,12 @@ const std::vector<GRC::ContractType> RegistryBookmarks::CONTRACT_TYPES_WITH_REG_
     // ContractType enum so consumers iterating either type-key see consistent
     // GetRegistryBlockHeight results. The minor wart is that
     // InitializeContracts in gridcoin.cpp calls PoolRegistry::Initialize()
-    // twice per startup; the second call is a no-op because RegistryDB caches
-    // m_database_init after the first successful load.
+    // twice per startup; the second call is idempotent — RegistryDB caches
+    // m_database_init after the first successful load so LoadDBHeight
+    // short-circuits (registry_db.h:114-121) — but the historical entries
+    // are still walked into the in-memory maps on each call. Functionally
+    // safe (the walk is deterministic and the maps are overwritten with
+    // identical state), just not free.
     ContractType::POOL_REGISTER,
     ContractType::POOL_APPROVE
 };
