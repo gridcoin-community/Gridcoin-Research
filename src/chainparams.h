@@ -193,9 +193,19 @@ inline bool IsV14Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().BlockV14Height;
 }
 
+//!
+//! \brief Effective V15 activation height. Returns the value passed via the
+//! hidden `-blockv15height` arg if present (used by isolated-testnet / regtest
+//! runs to activate POOL contracts at a low height), otherwise the consensus
+//! value from chainparams (which defaults to std::numeric_limits<int>::max()
+//! until pinned by a follow-up release). Out-of-line so gArgs / util/system.h
+//! doesn't have to be pulled into this header.
+//!
+int GetBlockV15Height();
+
 inline bool IsV15Enabled(int nHeight)
 {
-    return nHeight >= Params().GetConsensus().BlockV15Height;
+    return nHeight >= GetBlockV15Height();
 }
 
 inline bool IsProjectV4Enabled(int nHeight)

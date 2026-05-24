@@ -10,6 +10,7 @@
 #include <key.h>
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "util/system.h"
 
 #include <assert.h>
 
@@ -291,4 +292,12 @@ void SelectParams(const std::string& network)
 {
     SelectBaseParams(network);
     globalChainParams = CreateChainParams(network);
+}
+
+int GetBlockV15Height()
+{
+    // Hidden `-blockv15height` arg lets isolated testnet / regtest activate
+    // POOL contracts at a low height for end-to-end exercise. Defaults to the
+    // chainparams value (std::numeric_limits<int>::max() until pinned).
+    return gArgs.GetArg("-blockv15height", Params().GetConsensus().BlockV15Height);
 }

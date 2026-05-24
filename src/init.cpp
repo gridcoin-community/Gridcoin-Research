@@ -716,6 +716,14 @@ void SetupServerArgs()
 
     hidden_args.emplace_back("-upgradewallet");
 
+    // Isolated-testnet / regtest override for the V15 (on-chain pool
+    // registration, issue #1783) activation height. Default chainparams
+    // value is std::numeric_limits<int>::max() until pinned by a follow-up
+    // release; this arg lets dev runs activate POOL contracts early so the
+    // full lifecycle can be exercised end-to-end. Read via GetBlockV15Height
+    // in chainparams.cpp.
+    hidden_args.emplace_back("-blockv15height");
+
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options
@@ -1084,7 +1092,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 12 hard fork configured for block %d", Params().GetConsensus().BlockV12Height);
     LogPrintf("Block version 13 hard fork configured for block %d", Params().GetConsensus().BlockV13Height);
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
-    LogPrintf("Block version 15 hard fork configured for block %d", Params().GetConsensus().BlockV15Height);
+    LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
