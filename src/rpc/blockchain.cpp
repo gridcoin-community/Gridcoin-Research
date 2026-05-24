@@ -3730,11 +3730,31 @@ UniValue parselegacysb(const UniValue& params, bool fHelp)
 
 UniValue projects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "projects\n"
-                "\n"
-                "Show the status of locally attached BOINC projects.\n");
+    static const RPCHelpMan help{
+        "projects",
+        "Show the status of locally attached BOINC projects.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "name", "Project name."},
+                        {RPCResult::Type::STR, "url", "Project URL."},
+                        {RPCResult::Type::STR, "cpid", "External CPID for the project."},
+                        {RPCResult::Type::STR, "team", "BOINC team name."},
+                        {RPCResult::Type::BOOL, "eligible", "True if the project is eligible for research rewards."},
+                        {RPCResult::Type::BOOL, "whitelisted", "True if the project is on the whitelist."},
+                        {RPCResult::Type::STR, "error", /*optional=*/true, "Reason the project is ineligible, when applicable."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("projects", "") +
+            HelpExampleRpc("projects", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
