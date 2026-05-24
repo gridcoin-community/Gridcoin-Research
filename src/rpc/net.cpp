@@ -661,19 +661,41 @@ UniValue listalerts(const UniValue& params, bool fHelp)
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
 UniValue sendalert(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 6)
-        throw runtime_error(
-            "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
-            "\n"
-            "<message> ----> is the alert text message\n"
-            "<privatekey> -> is WIF encoded alert master private key\n"
-            "<minver> -----> is the minimum applicable internal client version\n"
-            "<maxver> -----> is the maximum applicable internal client version\n"
-            "<priority> ---> is integer priority number\n"
-            "<id> ---------> is the alert id\n"
-            "[cancelupto] -> cancels all alert ids up to this number\n"
-            "\n"
-            "Returns true or false\n");
+    static const RPCHelpMan help{
+        "sendalert",
+        "Sign and broadcast a network alert. Requires the WIF-encoded alert master private key.",
+        {
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO, "Alert text message."},
+            {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "WIF-encoded alert master private key."},
+            {"minver", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Minimum applicable internal client version."},
+            {"maxver", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Maximum applicable internal client version."},
+            {"priority", RPCArg::Type::NUM, RPCArg::Optional::NO, "Integer priority number."},
+            {"id", RPCArg::Type::NUM, RPCArg::Optional::NO, "Alert ID."},
+            {"cancelupto", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Cancels all alert IDs up to this number."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "strStatusBar", "Status bar text relayed"},
+                {RPCResult::Type::NUM, "nVersion", "Alert protocol version"},
+                {RPCResult::Type::NUM, "nMinVer", "Minimum applicable client version"},
+                {RPCResult::Type::NUM, "nMaxVer", "Maximum applicable client version"},
+                {RPCResult::Type::NUM, "nPriority", "Alert priority"},
+                {RPCResult::Type::NUM, "nID", "Alert ID"},
+                {RPCResult::Type::NUM, "nCancel", /*optional=*/true,
+                    "Cancel-upto value (only present when nonzero)"},
+            }},
+        RPCExamples{
+            HelpExampleCli("sendalert", "\"network outage\" \"<wif>\" 1000000 2000000 100 1") +
+            HelpExampleRpc("sendalert", "\"network outage\", \"<wif>\", 1000000, 2000000, 100, 1")},
+    };
+    // Variadic-tail-by-min: legacy accepted any number of args >= 6, with params[6] used when present.
+    // Keep the same lower bound and let RPCHelpMan's IsValidNumArgs enforce the upper bound (7 declared).
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     CAlert alert;
     CKey key;
