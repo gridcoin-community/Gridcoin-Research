@@ -343,14 +343,20 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
 
 UniValue dumpwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "dumpwallet <filename>\n"
-            "\n"
-            "<filename> -> filename to dump wallet to\n"
-            "\n"
-            "Dumps all wallet keys in a human-readable format into the specified file.\n"
-            "If a path is not specified in the filename, the data directory is used.");
+    static const RPCHelpMan help{
+        "dumpwallet",
+        "Dumps all wallet keys in a human-readable format into the specified file.\n"
+        "If a path is not specified in the filename, the data directory is used.",
+        {
+            {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("dumpwallet", "\"wallet.dump\"") +
+            HelpExampleRpc("dumpwallet", "\"wallet.dump\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
