@@ -3232,21 +3232,31 @@ UniValue burn(const UniValue& params, bool fHelp)
 
 UniValue sethdseed(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2) {
-        throw std::runtime_error(
-            "sethdseed ( \"newkeypool\" \"seed\" )\n"
-            "\nSet or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. Wallets that are already\n"
-            "HD will have a new HD seed set so that new keys added to the keypool will be derived from this new seed.\n"
-            "\nNote that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.\n"
-            "\nArguments:\n"
-            "1. \"newkeypool\"         (boolean, optional, default=true) Whether to flush old unused addresses, including change addresses, from the keypool and regenerate it.\n"
-            "                             If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed.\n"
-            "                             If false, addresses (including change addresses if the wallet already had HD Chain Split enabled) from the existing\n"
-            "                             keypool will be used until it has been depleted.\n"
-            "2. \"seed\"               (string, optional) The WIF private key to use as the new HD seed; if not provided a random seed will be used.\n"
-            "                             The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1\n"
-        );
-    }
+    static const RPCHelpMan help{
+        "sethdseed",
+        "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. "
+        "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
+        "will be derived from this new seed. "
+        "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"newkeypool", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it (default: true). "
+                "If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed. "
+                "If false, addresses from the existing keypool will be used until it has been depleted."},
+            {"seed", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The WIF private key to use as the new HD seed; if not provided a random seed will be used. "
+                "The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("sethdseed", "") +
+            HelpExampleCli("sethdseed", "false") +
+            HelpExampleCli("sethdseed", "true \"wifkey\"") +
+            HelpExampleRpc("sethdseed", "true, \"wifkey\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (IsInitialBlockDownload()) {
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
