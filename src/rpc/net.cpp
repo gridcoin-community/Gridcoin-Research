@@ -409,12 +409,17 @@ UniValue listbanned(const UniValue& params, bool fHelp)
 
 UniValue clearbanned(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "clearbanned\n"
-            "\n"
-            "Clear all banned IPs.\n"
-            );
+    static const RPCHelpMan help{
+        "clearbanned",
+        "Clear all banned IPs.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("clearbanned", "") +
+            HelpExampleRpc("clearbanned", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
