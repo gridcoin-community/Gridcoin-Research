@@ -133,18 +133,25 @@ UniValue createhtlc(const UniValue& params, bool fHelp)
 
 UniValue claimhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 4)
-        throw runtime_error(
-            "claimhtlc <htlc_txid> <vout> <preimage_hex> <destination_addr>\n"
-            "\n"
-            "Claim an HTLC output using the preimage.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. preimage_hex      (string, required) The preimage (hex encoded)\n"
-            "4. destination_addr  (string, required) Address to send claimed funds to\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "claimhtlc",
+        "Claim an HTLC output using the preimage.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+            {"preimage_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The preimage (hex encoded)."},
+            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send claimed funds to."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Claim result object including the spending txid."}}},
+        RPCExamples{
+            HelpExampleCli("claimhtlc", "\"<htlc_txid>\" 0 \"<preimage_hex>\" \"<dest_addr>\"") +
+            HelpExampleRpc("claimhtlc", "\"<htlc_txid>\", 0, \"<preimage_hex>\", \"<dest_addr>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
