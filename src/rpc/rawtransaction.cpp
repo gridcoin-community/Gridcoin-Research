@@ -567,43 +567,40 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
 UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
-    std::stringstream error_strm;
-
-    error_strm << "consolidateunspent <address> [UTXO size] [maximum number of inputs] [sweep all addresses] [sweep change]\n"
-                  "\n"
-                  "<address>:                  The Gridcoin address target for consolidation.\n"
-                  "\n"
-                  "[UTXO size]:                Optional parameter for target consolidation output size.\n"
-                  "\n"
-                  "[maximum number of inputs]: Defaults and clamped to "
-               << ToString(GetMaxInputsForConsolidationTxn())
-               << " maximum to prevent transaction failures.\n"
-                  "\n"
-                  "[sweep all addresses]:      Boolean to indicate whether all addresses should be used for inputs to the\n"
-                  "                            consolidation. If true, the source of the consolidation is all addresses and\n"
-                  "                            the output will be to the specified address, otherwise inputs will only be\n"
-                  "                            sourced from the same address.\n"
-                  "\n"
-                  "[sweep change]:             Boolean to indicate whether change associated with the address should be\n"
-                  "                            consolidated. If [sweep all addresses] is true then this is also forced true.\n"
-                  "\n"
-                  "consolidateunspent performs a single transaction to consolidate UTXOs to/on a given address. The optional\n"
-                  "parameter of UTXO size will result in consolidating UTXOs to generate the largest output possible less\n"
-                  "than that size or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
-                  "\n"
-                  "The script is designed to be run repeatedly and will become a no-op if the UTXO's are consolidated such\n"
-                  "that no more meet the specified criteria. This is ideal for automated periodic scripting.\n"
-                  "\n"
-                  "To consolidate the entire wallet to one address do something like:\n"
-                  "\n"
-                  "consolidateunspent <address> <amount equal or larger than balance> 200 true repeatedly until there are\n"
-                  "no more UTXOs to consolidate.\n"
-                  "\n"
-                  "In all cases the address MUST exist in your wallet beforehand. If doing this for the purpose of creating\n"
-                  "a new smaller wallet, create a new address beforehand to serve as the target of the consolidation.\n";
-
-    if (fHelp || params.size() < 1 || params.size() > 5)
-        throw runtime_error(error_strm.str());
+    static const RPCHelpMan help{
+        "consolidateunspent",
+        "Performs a single transaction to consolidate UTXOs to/on a given address.\n"
+        "\n"
+        "The optional UTXO-size parameter results in consolidating UTXOs to generate the largest output possible\n"
+        "less than that size, or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+        "\n"
+        "The script is designed to be run repeatedly and will become a no-op once no UTXOs meet the criteria, making\n"
+        "it ideal for automated periodic scripting.\n"
+        "\n"
+        "The address MUST exist in your wallet beforehand. To consolidate the entire wallet to one address, run\n"
+        "consolidateunspent <addr> <amount-equal-or-larger-than-balance> 200 true repeatedly.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address target for consolidation. Must exist in the wallet."},
+            {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                "Target consolidation output size."},
+            {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
+                "transaction failures."},
+            {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, source inputs from all wallet addresses (output still goes to <address>). "
+                "Otherwise only the source address contributes inputs."},
+            {"sweep_change", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, consolidate change associated with the address. Forced true when sweep_all_addresses is true."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Consolidation result detail; see source for the exact shape."}}},
+        RPCExamples{
+            HelpExampleCli("consolidateunspent", "\"<address>\" 10000 200 false false") +
+            HelpExampleRpc("consolidateunspent", "\"<address>\", 10000, 200, false, false")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue result(UniValue::VOBJ);
 
