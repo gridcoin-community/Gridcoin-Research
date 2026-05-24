@@ -6336,11 +6336,20 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
  */
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "savescraperfilemanifest <hash>\n"
-                "Saves a CScraperManifest object to disk.\n"
-                );
+    static const RPCHelpMan help{
+        "savescraperfilemanifest",
+        "Save a CScraperManifest object to disk.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Hash of the manifest to save to disk."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
+        RPCExamples{
+            HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
+            HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
