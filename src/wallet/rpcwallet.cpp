@@ -1857,17 +1857,24 @@ UniValue liststakes(const UniValue& params, bool fHelp)
 
 UniValue listaccounts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "listaccounts ( minconf includeWatchonly)\n"
-                "\n"
-                "Returns UniValue that has account names as keys, account balances as values."
-                "1. minconf          (numeric, optional, default=1) Only include transactions with at least this many confirmations\n"
-                "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "{                      (json object where keys are account names, and values are numeric balances\n"
-                "  \"account\": x.xxx,  (numeric) The property name is the account name, and the value is the total balance for the account.\n"
-                );
+    static const RPCHelpMan help{
+        "listaccounts",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns a JSON object where keys are account names and values are account balances.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions with at least this many confirmations. Default: 1."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include balances in watch-only addresses (see importaddress). Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of account name to balance",
+            {{RPCResult::Type::STR_AMOUNT, "account", "Total balance for the account."}}},
+        RPCExamples{
+            HelpExampleCli("listaccounts", "") +
+            HelpExampleRpc("listaccounts", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
