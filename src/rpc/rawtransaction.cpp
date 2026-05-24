@@ -1780,11 +1780,20 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
 
 UniValue decoderawtransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "decoderawtransaction <hex string>\n"
-                "\n"
-                "Return a JSON object representing the serialized, hex-encoded transaction\n");
+    static const RPCHelpMan help{
+        "decoderawtransaction",
+        "Return a JSON object representing the serialized, hex-encoded transaction.",
+        {
+            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Decoded transaction detail; same shape as TxToJSON."}}},
+        RPCExamples{
+            HelpExampleCli("decoderawtransaction", "\"<hex>\"") +
+            HelpExampleRpc("decoderawtransaction", "\"<hex>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VSTR });
 
