@@ -5,6 +5,7 @@
 #include "main.h"
 #include "node/ui_interface.h"
 #include "random.h"
+#include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -6299,11 +6300,17 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
  */
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "sendscraperfilemanifest\n"
-                "Send a CScraperManifest object from the current ScraperFileManifest.\n"
-                );
+    static const RPCHelpMan help{
+        "sendscraperfilemanifest",
+        "Send a CScraperManifest object from the current ScraperFileManifest.",
+        {},
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
+        RPCExamples{
+            HelpExampleCli("sendscraperfilemanifest", "") +
+            HelpExampleRpc("sendscraperfilemanifest", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     CTxDestination AddressOut;
     CKey KeyOut;
