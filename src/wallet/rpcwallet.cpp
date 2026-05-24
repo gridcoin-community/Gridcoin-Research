@@ -579,11 +579,24 @@ UniValue signmessage(const UniValue& params, bool fHelp)
 
 UniValue verifymessage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-                "verifymessage <Gridcoinaddress> <signature> <message>\n"
-                "\n"
-                "Verify a signed message\n");
+    static const RPCHelpMan help{
+        "verifymessage",
+        "Verify a signed message.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address that signed the message."},
+            {"signature", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The base64-encoded compact signature produced by signmessage."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The message that was signed."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "verified", "true if the signature verifies the message for the address."},
+        RPCExamples{
+            HelpExampleCli("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"signature\" \"hello world\"") +
+            HelpExampleRpc("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"signature\", \"hello world\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
