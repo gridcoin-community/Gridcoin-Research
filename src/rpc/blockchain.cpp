@@ -3656,13 +3656,25 @@ UniValue listsidestakes(const UniValue& params, bool fHelp)
 
 UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "listmandatorysidestakes\n"
-            "\n"
-            "Displays the mandatory sidestakes on the network.\n"
-            "\n"
-            "This is equivalent to listsidestakes \"mandatory\".\n");
+    static const RPCHelpMan help{
+        "listmandatorysidestakes",
+        "Displays the mandatory sidestakes on the network. Equivalent to listsidestakes \"mandatory\".",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "sidestake_entries", "Mandatory sidestake entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "see listsidestakes for entry shape"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listmandatorysidestakes", "") +
+            HelpExampleRpc("listmandatorysidestakes", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue filter_params(UniValue::VARR);
     filter_params.push_back("mandatory");
