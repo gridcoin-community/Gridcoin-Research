@@ -689,6 +689,18 @@ CSHA256::CSHA256() : bytes(0)
 
 CSHA256& CSHA256::Write(const unsigned char* data, size_t len)
 {
+    // Early-return on empty input so that we never compute `data + len` with a
+    // null `data`. `nullptr + 0` is undefined behaviour per ISO C++ (UBSan
+    // catches it), and several callers legitimately pass an empty span -- for
+    // instance, hashing the body of a Gridcoin P2P message with empty payload
+    // (verack et al.) goes through here with `data` possibly null and
+    // `len == 0`, since `std::vector::data()` may return nullptr when size()
+    // is 0. Behaviour is preserved: hashing zero bytes was already a no-op
+    // (state unchanged, `bytes` counter not incremented), so the early return
+    // is bit-for-bit identical to the previous control flow on len == 0
+    // inputs.
+    if (len == 0) return *this;
+
     const unsigned char* end = data + len;
     size_t bufsize = bytes % 64;
     if (bufsize && bufsize + len >= 64) {
