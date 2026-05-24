@@ -2998,11 +2998,31 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
 
 UniValue validatepubkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || !params.size() || params.size() > 2)
-        throw runtime_error(
-                "validatepubkey <gridcoinpubkey>\n"
-                "\n"
-                "Return information about <gridcoinpubkey>.\n");
+    static const RPCHelpMan help{
+        "validatepubkey",
+        "Return information about the given Gridcoin public key.",
+        {
+            {"pubkey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The hex-encoded Gridcoin public key to validate."},
+            {"unused", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Unused; preserved for backward compatibility."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "isvalid", "Whether the public key is valid."},
+                {RPCResult::Type::STR, "address", /*optional=*/true, "The derived Gridcoin address (only when valid)."},
+                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the derived address."},
+                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the derived address is a P2SH script (only when ismine)."},
+                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("validatepubkey", "\"03b1c2...\"") +
+            HelpExampleRpc("validatepubkey", "\"03b1c2...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
