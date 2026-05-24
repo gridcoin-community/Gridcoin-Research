@@ -279,17 +279,24 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
 
 UniValue refundhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-            "refundhtlc <htlc_txid> <vout> <destination_addr>\n"
-            "\n"
-            "Refund an HTLC output after the timeout has passed.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. destination_addr  (string, required) Address to send refunded funds to\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "refundhtlc",
+        "Refund an HTLC output after the timeout has passed.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send refunded funds to."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Refund result object including the spending txid."}}},
+        RPCExamples{
+            HelpExampleCli("refundhtlc", "\"<htlc_txid>\" 0 \"<dest_addr>\"") +
+            HelpExampleRpc("refundhtlc", "\"<htlc_txid>\", 0, \"<dest_addr>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
