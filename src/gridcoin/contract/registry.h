@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_CONTRACT_REGISTRY_H
 #define GRIDCOIN_CONTRACT_REGISTRY_H
 
+#include "chainparams.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/pool.h"
@@ -178,15 +179,20 @@ public:
             //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
             //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
             //! the clamp. Unlike the SIDESTAKE branch above, this is guarded on
-            //! `BlockV15Height != std::numeric_limits<int>::max()` because the default consensus
-            //! value is ::max() until a follow-up release pins a real activation height — without
-            //! the guard, an unactivated V15 would clamp the replay floor to ::max() and break
-            //! the overall replay semantics. The SIDESTAKE branch doesn't need the guard because
-            //! V13 has a real height baked into chainparams.cpp.
-            if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
-                and Params().GetConsensus().BlockV15Height != std::numeric_limits<int>::max()
-                and db_height < Params().GetConsensus().BlockV15Height) {
-                db_height = Params().GetConsensus().BlockV15Height;
+            //! `effective_v15_height != std::numeric_limits<int>::max()` because the default
+            //! consensus value is ::max() until a follow-up release pins a real activation height
+            //! — without the guard, an unactivated V15 would clamp the replay floor to ::max()
+            //! and break the overall replay semantics. The SIDESTAKE branch doesn't need the
+            //! guard because V13 has a real height baked into chainparams.cpp.
+            //!
+            //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
+            //! honored consistently with IsV15Enabled and the startup log line.
+            if (iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE) {
+                const int effective_v15_height = GetBlockV15Height();
+                if (effective_v15_height != std::numeric_limits<int>::max()
+                    and db_height < effective_v15_height) {
+                    db_height = effective_v15_height;
+                }
             }
 
             if (iter.second < lowest_height) {
