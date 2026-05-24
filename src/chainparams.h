@@ -166,8 +166,8 @@ inline bool IsProjectV2Enabled(int nHeight)
 
 inline bool IsPollMultiAddressEnabled(int nHeight)
 {
-    // The argument driven override temporarily here to facilitate testing.
-
+    // The argument-driven override is temporary, to facilitate testing on the
+    // isolated testnet before the activation height is set in chainparams.
     return nHeight >= gArgs.GetArg("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
 }
 
