@@ -567,16 +567,32 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() < 1 || params.size() > 3 )
-        throw runtime_error(
-            "getrecentblocks detail count\n"
-            "Show list of <count> recent block hashes and optional details.\n"
-            "detail 0 -> height and hash dict\n"
-            "detail 1,2 -> text data from blockindex\n"
-            "detail 20,21 -> text data from index and block\n"
-            "detail 100 -> json from index\n"
-            "detail 120 -> json from index and block\n"
-        );
+    static const RPCHelpMan help{
+        "getrecentblocks",
+        "Show list of recent block hashes with optional details.\n"
+        "\n"
+        "detail 0     -> height and hash dict\n"
+        "detail 1,2   -> text data from blockindex\n"
+        "detail 20,21 -> text data from index and block\n"
+        "detail 100   -> json from index\n"
+        "detail 120   -> json from index and block",
+        {
+            {"detail", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Detail level (0, 1, 2, 20, 21, 100, or 120). See description."},
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Maximum number of recent blocks to return."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of block height (as string) to per-block detail",
+            {
+                {RPCResult::Type::ELISION, "", "STR for detail<100, OBJ for detail>=100; see description"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getrecentblocks", "0 10") +
+            HelpExampleCli("getrecentblocks", "100 5") +
+            HelpExampleRpc("getrecentblocks", "0, 10")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     long detail= RoundFromString(params[0].get_str(),0);
     long blockcount=0;
