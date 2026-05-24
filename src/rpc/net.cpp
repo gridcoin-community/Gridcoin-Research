@@ -458,11 +458,44 @@ UniValue ping(const UniValue& params, bool fHelp)
 
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getpeerinfo\n"
-                "\n"
-                "Returns data about each connected network node.");
+    static const RPCHelpMan help{
+        "getpeerinfo",
+        "Returns data about each connected network node.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM, "id", "Peer index"},
+                        {RPCResult::Type::STR, "addr", "The IP address and port of the peer"},
+                        {RPCResult::Type::STR, "addrlocal", /*optional=*/true,
+                            "Local address as reported by the peer (if any)"},
+                        {RPCResult::Type::STR_HEX, "services", "Hex-encoded service flags"},
+                        {RPCResult::Type::NUM_TIME, "lastsend", "Timestamp of the last send"},
+                        {RPCResult::Type::NUM_TIME, "lastrecv", "Timestamp of the last receive"},
+                        {RPCResult::Type::NUM, "bytessent", "Total bytes sent"},
+                        {RPCResult::Type::NUM, "bytesrecv", "Total bytes received"},
+                        {RPCResult::Type::NUM_TIME, "conntime", "Connection time as a UNIX epoch"},
+                        {RPCResult::Type::NUM, "timeoffset", "The time offset in seconds"},
+                        {RPCResult::Type::NUM, "pingtime", "Ping time in seconds"},
+                        {RPCResult::Type::NUM, "minping", /*optional=*/true,
+                            "Minimum observed ping time in seconds (if measured)"},
+                        {RPCResult::Type::NUM, "pingwait", /*optional=*/true,
+                            "Seconds spent waiting for a ping response (if a ping is in flight)"},
+                        {RPCResult::Type::NUM, "version", "Peer protocol version"},
+                        {RPCResult::Type::STR, "subver", "Peer subversion string"},
+                        {RPCResult::Type::BOOL, "inbound", "True if connection is inbound"},
+                        {RPCResult::Type::NUM, "startingheight", "Starting block height reported by the peer"},
+                        {RPCResult::Type::NUM, "nTrust", "Peer trust score"},
+                        {RPCResult::Type::NUM, "banscore", "Misbehavior score; nodes are banned once this hits the threshold"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getpeerinfo", "") +
+            HelpExampleRpc("getpeerinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
