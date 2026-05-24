@@ -3584,14 +3584,29 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp)
 
 UniValue listsidestakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "listsidestakes [type]\n"
-            "\n"
-            "Displays all active sidestakes (mandatory and local/voluntary).\n"
-            "\n"
-            "Arguments:\n"
-            "  type    (string, optional) Filter by type: \"mandatory\", \"local\", or \"all\" (default: \"all\")\n");
+    static const RPCHelpMan help{
+        "listsidestakes",
+        "Displays all active sidestakes (mandatory and local/voluntary).",
+        {
+            {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Filter by type: \"mandatory\", \"local\", or \"all\". Default: \"all\"."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "sidestake_entries", "Active sidestake entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "sidestake entry; address, allocation, type, status, and contract metadata if mandatory"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listsidestakes", "") +
+            HelpExampleCli("listsidestakes", "\"mandatory\"") +
+            HelpExampleRpc("listsidestakes", "\"local\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     std::string type_filter = "all";
     if (params.size() == 1) {
