@@ -17,6 +17,7 @@
 #include "gridcoin/voting/fwd.h"
 #include "protocol.h"
 #include "server.h"
+#include <rpc/util.h>
 
 #include <stdexcept>
 
@@ -24,11 +25,61 @@ using namespace std;
 
 UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "getstakinginfo\n"
-            "\n"
-            "Returns an object containing staking-related information\n");
+    static const RPCHelpMan help{
+        "getstakinginfo",
+        "Returns an object containing staking-related information.\n"
+        "Note: `getmininginfo` is a dispatch-table alias for this command.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "blocks", "Current best block height."},
+                {RPCResult::Type::OBJ, "stakeweight", "",
+                    {{RPCResult::Type::ELISION, "", "Stake-weight detail (minimum/maximum/combined/valuesum/legacy)."}}},
+                {RPCResult::Type::NUM, "netstakeweight", "Estimated network stake weight."},
+                {RPCResult::Type::NUM, "netstakingGRCvalue", "Network stake value in GRC."},
+                {RPCResult::Type::BOOL, "staking", "Whether the miner is actively staking."},
+                {RPCResult::Type::STR, "mining-error", "Aggregated miner error string."},
+                {RPCResult::Type::NUM, "time-to-stake_days", "Estimated time-to-stake in days."},
+                {RPCResult::Type::NUM, "expectedtime", "Estimated time-to-stake in seconds."},
+                {RPCResult::Type::NUM, "mining-version", "Block version most recently attempted."},
+                {RPCResult::Type::NUM, "mining-created", "Number of blocks created in this run."},
+                {RPCResult::Type::NUM, "mining-accepted", "Number of blocks accepted by the network."},
+                {RPCResult::Type::NUM, "mining-kernels-found", "Total kernels found."},
+                {RPCResult::Type::NUM, "masked_time_intervals_covered", "Mask intervals covered."},
+                {RPCResult::Type::NUM, "masked_time_intervals_elapsed", "Mask intervals elapsed."},
+                {RPCResult::Type::NUM, "staking_loop_efficiency", "Fraction of time spent in productive staking loops."},
+                {RPCResult::Type::NUM, "actual_cumulative_weight", "Cumulative effective weight observed."},
+                {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
+                {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
+                {RPCResult::Type::OBJ, "stake-splitting", "",
+                    {{RPCResult::Type::ELISION, "", "Stake-splitting enabled flag and (when enabled) parameters."}}},
+                {RPCResult::Type::OBJ, "side_staking", "",
+                    {{RPCResult::Type::ELISION, "", "Local side-staking enabled flag and active side-stake allocations."}}},
+                {RPCResult::Type::OBJ, "difficulty", "",
+                    {
+                        {RPCResult::Type::NUM, "current", "Current difficulty."},
+                        {RPCResult::Type::NUM, "target", "Target difficulty."},
+                        {RPCResult::Type::NUM, "last-search-interval", "Timestamp of last search."},
+                    }},
+                {RPCResult::Type::STR, "errors", "Any warnings or errors."},
+                {RPCResult::Type::NUM, "pooledtx", "Number of pooled transactions."},
+                {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
+                {RPCResult::Type::STR, "CPID", "Researcher CPID."},
+                {RPCResult::Type::NUM, "current_magnitude", /*optional=*/true,
+                    "Current magnitude for the active CPID (omitted if no CPID is configured)."},
+                {RPCResult::Type::NUM, "Magnitude Unit", /*optional=*/true,
+                    "Magnitude unit (omitted if no CPID is configured)."},
+                {RPCResult::Type::STR_AMOUNT, "BoincRewardPending", /*optional=*/true,
+                    "Pending research subsidy (omitted if no CPID is configured)."},
+                {RPCResult::Type::STR, "researcher_status", "Aggregated researcher status string."},
+                {RPCResult::Type::STR, "current_poll", "Title of the current active poll, if any."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getstakinginfo", "") +
+            HelpExampleRpc("getstakinginfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
