@@ -396,11 +396,21 @@ UniValue getaccount(const UniValue& params, bool fHelp)
 
 UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaddressesbyaccount <account>\n"
-                "\n"
-                "Returns the list of addresses for the given account.\n");
+    static const RPCHelpMan help{
+        "getaddressesbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the list of addresses for the given account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {{RPCResult::Type::STR, "address", "An address in the account."}}},
+        RPCExamples{
+            HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
+            HelpExampleRpc("getaddressesbyaccount", "\"myaccount\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = AccountFromValue(params[0]);
 
