@@ -93,11 +93,46 @@ string AccountFromValue(const UniValue& value)
 
 UniValue getinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getinfo\n"
-                "\n"
-                "Returns an object containing various state info.");
+    static const RPCHelpMan help{
+        "getinfo",
+        "Returns an object containing various state info about the running node, network, and wallet.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "version", "Node version string."},
+                {RPCResult::Type::NUM, "minor_version", "Client minor version number."},
+                {RPCResult::Type::NUM, "protocolversion", "P2P protocol version."},
+                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+                {RPCResult::Type::NUM, "blocks", "Current best block height."},
+                {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync with the network."},
+                {RPCResult::Type::NUM, "timeoffset", "Network time offset in seconds."},
+                {RPCResult::Type::NUM, "uptime", "Process uptime in seconds."},
+                {RPCResult::Type::STR_AMOUNT, "moneysupply", "Current network money supply."},
+                {RPCResult::Type::NUM, "connections", "Number of active P2P connections."},
+                {RPCResult::Type::STR, "proxy", "Configured proxy (empty when unset)."},
+                {RPCResult::Type::STR, "ip", "External IP as seen by peers."},
+                {RPCResult::Type::OBJ, "difficulty", "",
+                    {
+                        {RPCResult::Type::NUM, "current", "Current network difficulty."},
+                        {RPCResult::Type::NUM, "target", "Target network difficulty."},
+                    }},
+                {RPCResult::Type::BOOL, "testnet", "Whether the node is running on testnet."},
+                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+                {RPCResult::Type::STR_AMOUNT, "paytxfee", "Configured per-kB transaction fee."},
+                {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value to consider for spending."},
+                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+                {RPCResult::Type::STR, "errors", "Any current error/warning text from the node."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getinfo", "") +
+            HelpExampleRpc("getinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
