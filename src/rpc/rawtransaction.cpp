@@ -1547,37 +1547,39 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
 
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "createrawtransaction [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,\"data\":\"hex\",...}\n"
-                "\nCreate a transaction spending the given inputs and creating new outputs.\n"
-                "Outputs can be addresses or data.\n"
-                "Returns hex-encoded raw transaction.\n"
-                "Note that the transaction's inputs are not signed, and\n"
-                "it is not stored in the wallet or transmitted to the network.\n"
-                "\nArguments:\n"
-                "1. \"transactions\"        (string, required) A json array of json objects\n"
-                "     [\n"
-                "       {\n"
-                "         \"txid\":\"id\",    (string, required) The transaction id\n"
-                "         \"vout\":n        (numeric, required) The output number\n"
-                "       }\n"
-                "       ,...\n"
-                "     ]\n"
-                "2. \"outputs\"             (string, required) a json object with outputs\n"
-                "    {\n"
-                "      \"address\": x.xxx   (numeric, required) The key is the bitcoin address, the value is the CURRENCY_UNIT amount\n"
-                "      \"data\": \"hex\",     (string, required) The key is \"data\", the value is hex encoded data\n"
-                "      ...\n"
-                "    }\n"
-                "\nResult:\n"
-                "\"transaction\"            (string) hex string of the transaction\n"
-                "\nExamples\n"
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"data\\\":\\\"00010203\\\"} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01} "
-                "createrawtransaction \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"} \n"
-                );
+    static const RPCHelpMan help{
+        "createrawtransaction",
+        "Create a transaction spending the given inputs and creating new outputs.\n"
+        "Outputs can be addresses or data. Returns hex-encoded raw transaction.\n"
+        "Note that the transaction's inputs are not signed, and it is not stored in the wallet\n"
+        "or transmitted to the network.",
+        {
+            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of input objects.",
+                {
+                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "An input",
+                        {
+                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                        }},
+                }},
+            {"outputs", RPCArg::Type::OBJ, RPCArg::Optional::NO,
+                "A JSON object whose keys are Gridcoin addresses (values: GRC amount) or the special key \"data\" "
+                "with a hex-encoded value.",
+                {
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "GRC amount to send to this address."},
+                    {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "Hex-encoded data for an OP_RETURN output."},
+                }},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
+        RPCExamples{
+            HelpExampleCli("createrawtransaction",
+                "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"S1Example\\\":0.01}\"") +
+            HelpExampleRpc("createrawtransaction",
+                "[{\"txid\":\"<txid>\",\"vout\":0}], {\"S1Example\":0.01}")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
