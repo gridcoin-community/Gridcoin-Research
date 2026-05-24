@@ -13,7 +13,7 @@
 #include <set>
 #include <vector>
 
-extern MiningPools g_mining_pools;
+extern GRC::MiningPools g_mining_pools;
 
 namespace {
 
@@ -387,7 +387,7 @@ BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
     // height 0 is sufficient: the seeds are all at m_height == 0, so the
     // chain-walk in ActivePoolsAtHeight stops on the seed for every CPID.
     const std::vector<GRC::Pool> registry_pools = registry.ActivePoolsAtHeight(0);
-    const std::vector<MiningPool> legacy_pools = g_mining_pools.GetMiningPools();
+    const std::vector<GRC::MiningPool> legacy_pools = g_mining_pools.GetMiningPools();
 
     BOOST_REQUIRE_EQUAL(registry_pools.size(), legacy_pools.size());
 
@@ -398,7 +398,7 @@ BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
     // matching CPID set with matching names/URLs is the consensus-relevant
     // invariant; ordering is incidental.
     std::map<GRC::Cpid, std::pair<std::string, std::string>> legacy_map;
-    for (const MiningPool& p : legacy_pools) {
+    for (const GRC::MiningPool& p : legacy_pools) {
         legacy_map[p.m_cpid] = {p.m_name, p.m_url};
     }
 
