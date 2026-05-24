@@ -14,6 +14,7 @@
 #include "gridcoin/superblock.h"
 #include "gridcoin/support/block_finder.h"
 #include "node/blockstorage.h"
+#include <rpc/util.h>
 #include <util.h>
 #include <util/string.h>
 
@@ -34,15 +35,39 @@ static bool compare_second(const pair<std::string, int64_t>  &p1, const pair<std
 
 UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 {
-    if(fHelp || params.size() < 1 || params.size() > 3 )
-        throw runtime_error(
-            "getblockstats mode [startheight [endheight]]\n"
-            "\n"
-            "Show stats on what wallets and cpids staked recent blocks.\n"
-            "\n"
-            "Mode 0: Startheight is the starting height, endheight is the chain head if not specified.\n"
-            "Mode 1: Startheight is actually the number of blocks back from endheight or the chain \n"
-            "        head if not specified.");
+    static const RPCHelpMan help{
+        "getblockstats",
+        "Show stats on what wallets and cpids staked recent blocks.\n"
+        "\n"
+        "Mode 0: startheight is the starting height; endheight is the chain head if not specified.\n"
+        "Mode 1: startheight is the number of blocks back from endheight or the chain head if not specified.",
+        {
+            {"mode", RPCArg::Type::NUM, RPCArg::Optional::NO, "0 (range mode) or 1 (lookback mode)."},
+            {"startheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "In mode 0, the starting block height; in mode 1, the number of blocks back."},
+            {"endheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The ending block height (defaults to the chain head)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "general", "", {{RPCResult::Type::ELISION, "", "general stats; see source"}}},
+                {RPCResult::Type::OBJ, "counts", "", {{RPCResult::Type::ELISION, "", "counts; see source"}}},
+                {RPCResult::Type::OBJ, "totals", "", {{RPCResult::Type::ELISION, "", "totals; see source"}}},
+                {RPCResult::Type::OBJ, "averages", "", {{RPCResult::Type::ELISION, "", "averages; see source"}}},
+                {RPCResult::Type::OBJ_DYN, "versions", "Fraction of blocks per client version",
+                    {{RPCResult::Type::NUM, "version", "Fraction of blocks attributable to this client version"}}},
+                {RPCResult::Type::OBJ_DYN, "cpids", "Fraction of blocks per CPID",
+                    {{RPCResult::Type::NUM, "cpid", "Fraction of blocks attributable to this CPID"}}},
+                {RPCResult::Type::OBJ_DYN, "orgs", "Fraction of blocks per organization",
+                    {{RPCResult::Type::NUM, "org", "Fraction of blocks attributable to this organization"}}},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockstats", "0 1000000 1001000") +
+            HelpExampleCli("getblockstats", "1 5000") +
+            HelpExampleRpc("getblockstats", "0, 1000000, 1001000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     unsigned int mode = params[0].get_int();
 
