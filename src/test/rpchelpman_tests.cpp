@@ -58,6 +58,8 @@ UniValue lifetime(const UniValue& params, bool fHelp);
 UniValue resetcpids(const UniValue& params, bool fHelp);
 UniValue rainbymagnitude(const UniValue& params, bool fHelp);
 UniValue currentcontractaverage(const UniValue& params, bool fHelp);
+#include <utility>
+#include <vector>
 
 // Forward declarations of the Tier 2 commands under test. These must live in
 // the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
@@ -87,6 +89,19 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp);
 UniValue readdata(const UniValue& params, bool fHelp);
 UniValue writedata(const UniValue& params, bool fHelp);
 UniValue dumpcontracts(const UniValue& params, bool fHelp);
+
+// Tier 1 PR D1: src/rpc/server.cpp + src/rpc/misc.cpp + src/rpc/dataacq.cpp.
+// Each function's converted body throws via help.ToString() before touching
+// globals (cs_main, gArgs, log instance, file IO), so calling these with
+// fHelp=true and an empty params array is safe in unit tests.
+UniValue help(const UniValue& params, bool fHelp);
+UniValue stop(const UniValue& params, bool fHelp);
+UniValue logging(const UniValue& params, bool fHelp);
+UniValue listsettings(const UniValue& params, bool fHelp);
+UniValue changesettings(const UniValue& params, bool fHelp);
+UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
+UniValue rpc_exportstats(const UniValue& params, bool fHelp);
+UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -530,6 +545,20 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"versionreport",           &versionreport},
     };
 
+BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"help", &help},
+        {"stop", &stop},
+        {"logging", &logging},
+        {"listsettings", &listsettings},
+        {"changesettings", &changesettings},
+        {"getblockstats", &rpc_getblockstats},
+        {"exportstats1", &rpc_exportstats},
+        {"getrecentblocks", &rpc_getrecentblocks},
+    };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
             bool threw = false;
@@ -591,6 +620,11 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
         }
     }
 }
