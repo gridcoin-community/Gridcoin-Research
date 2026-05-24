@@ -775,11 +775,29 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 
 UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "listresearcheraccounts\n"
-            "\n"
-            "List researcher accounts in the accrual system and their current accruals.\n");
+    static const RPCHelpMan help{
+        "listresearcheraccounts",
+        "List researcher accounts in the accrual system and their current accruals.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "number_of_accounts", "Total researcher accounts tracked."},
+                {RPCResult::Type::ARR, "details", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "Researcher CPID."},
+                                {RPCResult::Type::NUM, "accrual_as_of_last_superblock", "Accrual recorded at last superblock."},
+                                {RPCResult::Type::NUM, "current_accrual", "Accrual as of the chain tip."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listresearcheraccounts", "") +
+            HelpExampleRpc("listresearcheraccounts", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue result(UniValue::VOBJ);
     UniValue entries(UniValue::VARR);
