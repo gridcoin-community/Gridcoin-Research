@@ -673,6 +673,13 @@ void SetupServerArgs()
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
 
+    // Feature-specific consensus-height test overrides. Each entry pairs with a
+    // gArgs.GetArg(...) call in the corresponding IsXxxEnabled helper in
+    // chainparams.h. Registering them here suppresses the "argument not
+    // registered" startup warning when an isolated-testnet node sets the
+    // height via the override.
+    hidden_args.emplace_back("-pollmultiaddressheight");
+
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
     // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
     // at V13 height.
