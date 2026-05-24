@@ -2090,35 +2090,38 @@ UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
 
 UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 3)
-        throw runtime_error(
-                "signrawtransactionwithwallet \"hexstring\" "
-                "( [{\"txid\":\"id\",\"vout\":n,\"scriptPubKey\":\"hex\"},...] \"sighashtype\" )\n"
-                "\nSign inputs for raw transaction (serialized, hex-encoded) using wallet keys.\n"
-                "\nArguments:\n"
-                "1. \"hexstring\"           (string, required) The transaction hex string\n"
-                "2. \"prevtxs\"             (array, optional) A json array of previous dependent transaction outputs\n"
-                "    [                      (json array of json objects)\n"
-                "      {\n"
-                "        \"txid\":\"id\",      (string, required) The transaction id\n"
-                "        \"vout\":n,         (numeric, required) The output number\n"
-                "        \"scriptPubKey\":\"hex\" (string, required) script key\n"
-                "      }\n"
-                "      ,...\n"
-                "    ]\n"
-                "3. \"sighashtype\"          (string, optional, default=ALL) The signature hash type. Must be one of\n"
-                "       \"ALL\"\n"
-                "       \"NONE\"\n"
-                "       \"SINGLE\"\n"
-                "       \"ALL|ANYONECANPAY\"\n"
-                "       \"NONE|ANYONECANPAY\"\n"
-                "       \"SINGLE|ANYONECANPAY\"\n"
-                "\nResult:\n"
-                "{\n"
-                "  \"hex\" : \"value\",       (string) The hex-encoded raw transaction with signature(s)\n"
-                "  \"complete\" : true|false  (boolean) If the transaction has a complete set of signatures\n"
-                "}\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "signrawtransactionwithwallet",
+        "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+            {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+                "JSON array of previous dependent transaction outputs.",
+                {
+                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                        {
+                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                            {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                        }},
+                }},
+            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+                "SINGLE|ANYONECANPAY (default: ALL)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+                {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+            }},
+        RPCExamples{
+            HelpExampleCli("signrawtransactionwithwallet", "\"<hex>\"") +
+            HelpExampleRpc("signrawtransactionwithwallet", "\"<hex>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VSTR }, true);
 
