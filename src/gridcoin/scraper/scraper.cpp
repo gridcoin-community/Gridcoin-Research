@@ -6494,15 +6494,23 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
  */
 UniValue convergencereport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "convergencereport [convergence_cache_details]\n"
-                "\n"
-                "convergence_cache_details: optional boolean to provide detailed output\n"
-                "from convergence cache\n"
-                "\n"
-                "Display local node report of scraper convergence.\n"
-                );
+    static const RPCHelpMan help{
+        "convergencereport",
+        "Display the local node's report of scraper convergence.",
+        {
+            {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, include detailed output from the convergence cache. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
+        RPCExamples{
+            HelpExampleCli("convergencereport", "") +
+            HelpExampleCli("convergencereport", "true") +
+            HelpExampleRpc("convergencereport", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
