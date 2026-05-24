@@ -23,11 +23,17 @@ extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "getconnectioncount\n"
-            "\n"
-            "Returns the number of connections to other node\n.");
+    static const RPCHelpMan help{
+        "getconnectioncount",
+        "Returns the number of connections to other nodes.",
+        {},
+        RPCResult{RPCResult::Type::NUM, "", "The connection count."},
+        RPCExamples{
+            HelpExampleCli("getconnectioncount", "") +
+            HelpExampleRpc("getconnectioncount", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_vNodes);
 
