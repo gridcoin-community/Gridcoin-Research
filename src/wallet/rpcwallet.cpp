@@ -292,11 +292,20 @@ CTxDestination GetAccountAddress(string strAccount, bool bForceNew=false) EXCLUS
 
 UniValue getaccountaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaccountaddress <account>\n"
-                "\n"
-                "Returns the current Gridcoin address for receiving payments to this account.\n");
+    static const RPCHelpMan help{
+        "getaccountaddress",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the current Gridcoin address for receiving payments to this account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name (use \"\" for the default account)."},
+        },
+        RPCResult{RPCResult::Type::STR, "", "The address associated with this account."},
+        RPCExamples{
+            HelpExampleCli("getaccountaddress", "\"\"") +
+            HelpExampleRpc("getaccountaddress", "\"myaccount\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
