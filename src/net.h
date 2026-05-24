@@ -253,7 +253,12 @@ public:
     bool fOneShot;
     bool fClient;
     bool fInbound;
-    bool fNetworkNode;
+    // Atomic: written by ThreadOpenConnections2 (OpenNetworkConnection sets true
+    // after a successful outbound connection) and read by both
+    // ThreadSocketHandler2 (close-side bookkeeping) and the message-handler
+    // thread (first-messages "remember this address" path). No common lock --
+    // sibling of the same CNode-scalar pattern atomicised for G6-G10.
+    std::atomic<bool> fNetworkNode;
     bool fSuccessfullyConnected;
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
