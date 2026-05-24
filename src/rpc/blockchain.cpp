@@ -2667,11 +2667,25 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
 
 UniValue superblockage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockage\n"
-                "\n"
-                "Display information regarding superblock age\n");
+    static const RPCHelpMan help{
+        "superblockage",
+        "Display information regarding superblock age.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+                {RPCResult::Type::STR, "Superblock Timestamp", "Human-readable timestamp of the current superblock."},
+                {RPCResult::Type::NUM, "Superblock Block Number", "Block height at which the current superblock was committed."},
+                {RPCResult::Type::NUM, "Pending Superblock Height", "Block height of the pending superblock, if any."},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblockage", "") +
+            HelpExampleRpc("superblockage", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
