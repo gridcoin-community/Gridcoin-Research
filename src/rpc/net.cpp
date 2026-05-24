@@ -830,11 +830,38 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
 
 UniValue getnetworkinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getnetworkinfo\n"
-                "\n"
-                "Displays network related information\n");
+    static const RPCHelpMan help{
+        "getnetworkinfo",
+        "Displays network related information.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "version", "The full Gridcoin version string"},
+                {RPCResult::Type::NUM, "minor_version", "Client minor version"},
+                {RPCResult::Type::NUM, "protocolversion", "P2P protocol version"},
+                {RPCResult::Type::NUM, "timeoffset", "Time offset against the network (seconds)"},
+                {RPCResult::Type::NUM, "connections", "Number of connections to other nodes"},
+                {RPCResult::Type::STR_AMOUNT, "paytxfee", "The fee paid per transaction"},
+                {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value"},
+                {RPCResult::Type::STR, "proxy", "host:port of any active SOCKS proxy, or empty string if none"},
+                {RPCResult::Type::STR, "ip", "Best-effort guess at this node's external IP"},
+                {RPCResult::Type::ARR, "localaddresses", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "address", "A locally bound or advertised address"},
+                                {RPCResult::Type::NUM, "port", "The port number"},
+                                {RPCResult::Type::NUM, "score", "Local-address selection score"},
+                            }},
+                    }},
+                {RPCResult::Type::STR, "errors", "Any current warnings"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnetworkinfo", "") +
+            HelpExampleRpc("getnetworkinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
