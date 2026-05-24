@@ -358,14 +358,28 @@ UniValue setban(const UniValue& params, bool fHelp)
 
 UniValue listbanned(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-    {
-        throw runtime_error(
-            "listbanned\n"
-            "\n"
-            "List all banned IPs/subnets.\n"
-            );
-    }
+    static const RPCHelpMan help{
+        "listbanned",
+        "List all banned IPs/subnets.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "address", "The banned IP or subnet"},
+                        {RPCResult::Type::NUM_TIME, "ban_created", "Timestamp when the ban was created"},
+                        {RPCResult::Type::NUM_TIME, "banned_until", "Timestamp when the ban expires"},
+                        {RPCResult::Type::NUM, "ban_duration", "Configured duration in seconds"},
+                        {RPCResult::Type::NUM, "time_remaining", "Seconds remaining until the ban expires"},
+                        {RPCResult::Type::STR, "ban_reason", "Reason text for the ban"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listbanned", "") +
+            HelpExampleRpc("listbanned", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if(!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
