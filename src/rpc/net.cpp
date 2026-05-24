@@ -568,11 +568,43 @@ UniValue getnettotals(const UniValue& params, bool fHelp)
 
 UniValue listalerts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "listalerts\n"
-                "\n"
-                "Returns information about alerts.\n");
+    static const RPCHelpMan help{
+        "listalerts",
+        "Returns information about alerts.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "alerts", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::NUM, "version", "Alert version"},
+                                {RPCResult::Type::STR, "relay_until", "Timestamp until which the alert is relayed"},
+                                {RPCResult::Type::STR, "expiration", "Timestamp at which the alert expires"},
+                                {RPCResult::Type::NUM, "id", "Alert ID"},
+                                {RPCResult::Type::NUM, "cancel_upto", "Cancels all alert IDs up to this number"},
+                                {RPCResult::Type::ARR, "cancels", "",
+                                    {{RPCResult::Type::NUM, "id", "An alert ID this alert cancels"}}},
+                                {RPCResult::Type::NUM, "minimum_version", "Minimum applicable client version"},
+                                {RPCResult::Type::NUM, "maximum_version", "Maximum applicable client version"},
+                                {RPCResult::Type::ARR, "subversions", "",
+                                    {{RPCResult::Type::STR, "subversion", "A peer subversion string this alert targets"}}},
+                                {RPCResult::Type::NUM, "priority", "Alert priority"},
+                                {RPCResult::Type::STR, "comment", "Comment text"},
+                                {RPCResult::Type::STR, "status_bar", "Status bar text"},
+                                {RPCResult::Type::STR, "reserved", "Reserved field"},
+                                {RPCResult::Type::STR_HEX, "hash", "Hex-encoded alert hash"},
+                                {RPCResult::Type::BOOL, "in_effect", "Whether the alert is currently in effect"},
+                                {RPCResult::Type::BOOL, "applies_to_me", "Whether the alert applies to this node"},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listalerts", "") +
+            HelpExampleRpc("listalerts", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_mapAlerts);
 
