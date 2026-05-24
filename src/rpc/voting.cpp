@@ -649,17 +649,23 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
 UniValue getpollresults(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "getpollresults <poll_title_or_id>\n"
-                "\n"
-                "<poll_title_or_id> --> Title or ID of the poll.\n"
-                "\n"
-                "Display the results for the specified poll.\n"
-                "\n"
-                "Note that in the small chance that a blockchain reorg occurs during\n"
-                "the tally for the poll, this call will return an error. Retrying\n"
-                "should succeed.");
+    static const RPCHelpMan help{
+        "getpollresults",
+        "Display the results for the specified poll.\n"
+        "\n"
+        "Note that in the small chance that a blockchain reorg occurs during the tally for the poll,\n"
+        "this call will return an error. Retrying should succeed.",
+        {
+            {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Poll result object; see source (PollResultToJson) for the exact shape."}}},
+        RPCExamples{
+            HelpExampleCli("getpollresults", "\"Example Poll\"") +
+            HelpExampleRpc("getpollresults", "\"Example Poll\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     const std::string title_or_id = params[0].get_str();
 
