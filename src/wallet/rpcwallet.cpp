@@ -1463,22 +1463,37 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 
 UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listreceivedbyaccount ( minconf includeempty includeWatchonly)\n"
-                "\nList balances by account.\n"
-                "\nArguments:\n"
-                "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty (bool, optional, default=false) Whether to include accounts that haven't received any payments.\n"
-                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-                "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
-                "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
-                "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
-                );
+    static const RPCHelpMan help{
+        "listreceivedbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Use listreceivedbyaddress instead.\n"
+        "\n"
+        "List balances by account.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum confirmations before payments are included. Default: 1."},
+            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include accounts that haven't received any payments. Default: false."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include watch-only addresses (see importaddress). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                            "Only returned if imported addresses were involved in transactions."},
+                        {RPCResult::Type::STR, "account", "Account name of the receiving account."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "Total amount received by addresses in this account."},
+                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listreceivedbyaccount", "") +
+            HelpExampleRpc("listreceivedbyaccount", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
