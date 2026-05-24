@@ -3270,7 +3270,7 @@ GRC::Cpid ParseCpidArg(const UniValue& v)
     // we reject it as an invalid argument.
     if (cpid == GRC::Cpid()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-            "Invalid CPID hex (must be 32 lowercase hex characters).");
+            "Invalid CPID hex (must be 32 hex characters and not all zero).");
     }
 
     return cpid;
@@ -3553,9 +3553,7 @@ UniValue listpools(const UniValue& params)
     {
         LOCK(cs_main);
 
-        for (const auto& iter : GRC::GetPoolRegistry().Entries()) {
-            const GRC::Pool& pool = *iter.second;
-
+        for (const GRC::Pool& pool : GRC::GetPoolRegistry().Entries()) {
             if (!include_inactive && pool.m_status != GRC::PoolStatus::ACTIVE) {
                 continue;
             }
