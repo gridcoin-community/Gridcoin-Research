@@ -5,6 +5,7 @@
 #include "gridcoin/protocol.h"
 #include "main.h"
 #include "gridcoin/beacon.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/quorum.h"
 #include "gridcoin/superblock.h"
 #include "gridcoin/voting/registry.h"
@@ -26,8 +27,6 @@ using LogFlags = BCLog::LogFlags;
 using ResponseDetail = PollResult::ResponseDetail;
 using VoteDetail = PollResult::VoteDetail;
 using Weight = PollResult::Weight;
-
-extern MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -763,13 +762,23 @@ public:
     //!
     //! \param txdb Used to fetch vote contracts from disk.
     //! \param poll Poll to count votes for.
+    //! \param poll_start_height Block height of the poll's starting block,
+    //! used to anchor consensus-critical PoolRegistry queries (AVW) so
+    //! every node tallying the same poll uses an identical registry view.
     //!
-    VoteCounter(CTxDB& txdb, const Poll& poll)
+    VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height)
         : m_txdb(txdb)
         , m_poll(poll)
+        , m_poll_start_height(poll_start_height)
         , m_resolver(txdb, poll)
         , m_legacy(poll)
     {
+        // Snapshot the pool CPID set at the poll's start height into an
+        // unordered_set for O(1) membership in ProcessVote. Single
+        // chain-walk for the whole poll instead of one per vote.
+        for (const GRC::Pool& pool : GRC::GetPoolRegistry().ActivePoolsAtHeight(m_poll_start_height)) {
+            m_pool_cpids_at_start.insert(pool.m_cpid);
+        }
     }
 
     //!
@@ -868,6 +877,8 @@ public:
 private:
     CTxDB& m_txdb;
     const Poll& m_poll;
+    int m_poll_start_height; //!< Anchor for ActivePoolsAtHeight queries — see ctor.
+    std::unordered_set<Cpid> m_pool_cpids_at_start; //!< Cached pool CPIDs as of m_poll_start_height.
     std::vector<VoteDetail> m_votes;
     std::vector<Cpid> m_pools_voted;
     Weight m_magnitude_factor;
@@ -996,31 +1007,17 @@ private:
 
         CalculateWeight(detail, m_magnitude_factor);
 
-        // CONSENSUS NOTE (issue #1783): The hardcoded g_mining_pools list is
-        // intentionally retained on this voting path even though the wallet's
-        // local pool-mode detection in researcher.cpp now consults the
-        // on-chain PoolRegistry. Replacing the list source here would change
-        // m_pools_voted membership for historical polls, which feeds into the
-        // Active Vote Weight calculation in voting/registry.cpp (see the
-        // matching comment there). Migrating this path to PoolRegistry needs
-        // an explicit height gate so that polls before the activation height
-        // continue to compute identical AVW on every node. Track in a
-        // dedicated follow-up; do not bundle with #1783.
-        const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+        // Record if a pool votes. Membership check is O(1) via the cached
+        // m_pool_cpids_at_start set. See VoteCounter ctor for the
+        // height-anchored snapshot rationale.
+        if (const auto cpid_opt = detail.m_mining_id.TryCpid()) {
+            if (m_pool_cpids_at_start.find(*cpid_opt) != m_pool_cpids_at_start.end()) {
+                LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Pool with CPID %s voted on poll %s.",
+                         __func__,
+                         cpid_opt->ToString(),
+                         m_poll.m_title);
 
-        // Record if a pool votes
-        if (detail.m_mining_id.TryCpid()) {
-            for (const auto& pool : mining_pools) {
-                if (detail.m_mining_id == pool.m_cpid) {
-                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Pool with CPID %s voted on poll %s.",
-                             __func__,
-                             detail.m_mining_id.TryCpid()->ToString(),
-                             m_poll.m_title);
-
-                    m_pools_voted.push_back(*detail.m_mining_id.TryCpid());
-
-                    break;
-                }
+                m_pools_voted.push_back(*cpid_opt);
             }
         }
 
@@ -1216,7 +1213,15 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
     if (PollOption poll = poll_ref.TryReadFromDisk()) {
         CTxDB txdb("r");
         PollResult result(std::move(*poll));
-        VoteCounter counter(txdb, result.m_poll);
+
+        // Anchor consensus-critical pool queries (AVW) to the poll's start
+        // height. Skeleton poll references shouldn't reach here, but if
+        // GetStartingHeight() returns std::nullopt, fall back to the
+        // current tip so VoteCounter still functions; the per-vote
+        // recording is best-effort in that degenerate case.
+        const int poll_start_height = poll_ref.GetStartingHeight().value_or(nBestHeight);
+
+        VoteCounter counter(txdb, result.m_poll, poll_start_height);
 
         if (result.m_poll.IncludesMagnitudeWeight()) {
             SuperblockPtr superblock;

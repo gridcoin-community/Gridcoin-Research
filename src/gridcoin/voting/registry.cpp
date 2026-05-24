@@ -6,6 +6,7 @@
 #include "chainparams.h"
 #include "main.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/staking/difficulty.h"
@@ -23,8 +24,6 @@ using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 extern bool fQtActive;
-
-extern MiningPools g_mining_pools;
 
 namespace {
 //!
@@ -601,20 +600,16 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
         return std::nullopt;
     }
 
-    // determine the pools that did NOT vote in the poll (via the result passed in). Only pools that did not
-    // vote contribute to the magnitude correction for pools.
-    //
-    // CONSENSUS NOTE (issue #1783): This iteration is part of the Active Vote
-    // Weight calculation and is consensus-critical. The hardcoded
-    // g_mining_pools list is kept here on purpose even though the local
-    // wallet's pool-mode detection in researcher.cpp now reads from the
-    // on-chain PoolRegistry. Migrating this site to GetPoolRegistry().ActivePools()
-    // would change AVW for historical polls (registry is empty for pre-
-    // activation heights), forking the chain. The migration must be height-
-    // gated and handled in a dedicated PR — see the matching comment in
-    // voting/result.cpp.
-    std::vector<MiningPool> pools_not_voting;
-    const std::vector<MiningPool>& mining_pools = g_mining_pools.GetMiningPools();
+    // Determine the pools that did NOT vote in the poll (via the result passed in). Only pools
+    // that did not vote contribute to the magnitude correction for pools. The pool set is
+    // anchored to the poll's start height so every node tallying the same poll uses the
+    // identical registry view, even after post-V15 POOL contracts mutate the registry. Pre-V15
+    // the registry contains only the grandfathered builtins seeded by PoolRegistry's
+    // constructor, matching the legacy g_mining_pools list bit-for-bit (see plan §3 and the
+    // BuiltinPools_match_g_mining_pools_pre_v15 test).
+    std::vector<GRC::Pool> pools_not_voting;
+    const std::vector<GRC::Pool> mining_pools =
+        GRC::GetPoolRegistry().ActivePoolsAtHeight(pindex_start->nHeight);
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: %u out of %u pool cpids voted.",
              __func__,
