@@ -1237,15 +1237,32 @@ UniValue sendmany(const UniValue& params, bool fHelp)
 
 UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 3)
-    {
-        string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
-                     "\n"
-                     "Add a nrequired-to-sign multisignature address to the wallet\n"
-                     "each key is a Gridcoin address or hex-encoded public key\n"
-                     "If [account] is specified, assign address to [account].\n";
-        throw runtime_error(msg);
-    }
+    static const RPCHelpMan help{
+        "addmultisigaddress",
+        "Add a nrequired-to-sign multisignature address to the wallet. "
+        "Each key is a Gridcoin address or hex-encoded public key. "
+        "If [account] is specified, assign address to [account].",
+        {
+            {"nrequired", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "The number of required signatures out of the n keys."},
+            {"keys", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of Gridcoin addresses or hex-encoded public keys.",
+                {
+                    {"key", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                        "A Gridcoin address or hex-encoded public key."},
+                }},
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The P2SH multisig address."},
+        RPCExamples{
+            HelpExampleCli("addmultisigaddress",
+                "2 \"[\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\",\\\"SkNNd1234567890abcdefghijklmnopqr\\\"]\"") +
+            HelpExampleRpc("addmultisigaddress",
+                "2, [\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\",\"SkNNd1234567890abcdefghijklmnopqr\"]")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nRequired = params[0].get_int();
     const UniValue& keys = params[1].get_array();
