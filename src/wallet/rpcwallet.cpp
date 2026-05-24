@@ -529,11 +529,23 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 
 UniValue signmessage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "signmessage <Gridcoinaddress> <message>\n"
-                "\n"
-                "Sign a message with the private key of an address\n");
+    static const RPCHelpMan help{
+        "signmessage",
+        "Sign a message with the private key of an address. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address that owns the private key to sign with."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The message to sign."},
+        },
+        RPCResult{RPCResult::Type::STR, "signature", "The base64-encoded compact signature."},
+        RPCExamples{
+            HelpExampleCli("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"hello world\"") +
+            HelpExampleRpc("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"hello world\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
