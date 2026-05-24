@@ -312,11 +312,24 @@ extern double CoinToDouble(double surrogate);
 
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "auditsnapshotaccrual [CPID] [report details]\n"
-                "\n"
-                "Report accrual snapshot deltas for the specified CPID.\n");
+    static const RPCHelpMan help{
+        "auditsnapshotaccrual",
+        "Report accrual snapshot deltas for the specified CPID.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "External CPID to audit. Defaults to this researcher's CPID."},
+            {"report_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, include per-snapshot detail in the report. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Snapshot accrual audit object; see source for shape."}}},
+        RPCExamples{
+            HelpExampleCli("auditsnapshotaccrual", "") +
+            HelpExampleCli("auditsnapshotaccrual", "\"<cpid>\" true") +
+            HelpExampleRpc("auditsnapshotaccrual", "\"<cpid>\", true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
