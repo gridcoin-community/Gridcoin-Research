@@ -3664,11 +3664,29 @@ UniValue network(const UniValue& params, bool fHelp)
 
 UniValue parselegacysb(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1)
-        throw runtime_error(
-                "parselegacysb\n"
-                "\n"
-                "Convert a legacy superblock contract to JSON.\n");
+    static const RPCHelpMan help{
+        "parselegacysb",
+        "Convert a legacy superblock contract to JSON.",
+        {
+            {"contract", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Serialized legacy superblock contract string."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "contract", "Parsed superblock contract.",
+                    {
+                        {RPCResult::Type::ELISION, "", "see SuperblockToJson output"},
+                    }},
+                {RPCResult::Type::STR_HEX, "legacy_hash", "Hash of the legacy superblock contract."},
+            }},
+        RPCExamples{
+            HelpExampleCli("parselegacysb", "\"<serialized_contract>\"") +
+            HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue json(UniValue::VOBJ);
 
