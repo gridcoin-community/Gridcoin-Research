@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(sync_legacy_from_state_confirmed)
 {
     CWalletTx wtx;
     uint256 bh = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-    wtx.SetTxState(TxStateConfirmed(bh, 500, 7));
+    wtx.SetTxState(TxStateConfirmed(bh, 7));
 
     BOOST_CHECK_EQUAL(wtx.hashBlock, bh);
     BOOST_CHECK_EQUAL(wtx.nIndex, 7);
@@ -389,7 +389,7 @@ BOOST_AUTO_TEST_CASE(state_transition_mempool_to_confirmed)
 
         // Transition to confirmed
         uint256 block_hash = uint256S("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-        TxState confirmed_state = TxStateConfirmed(block_hash, 100, 5);
+        TxState confirmed_state = TxStateConfirmed(block_hash, 5);
 
         // Manually update state (simulating what SyncTransaction does)
         test_wallet.mapWallet[hash].SetTxState(confirmed_state);
@@ -401,7 +401,6 @@ BOOST_AUTO_TEST_CASE(state_transition_mempool_to_confirmed)
         auto* conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
         BOOST_CHECK(conf != nullptr);
         BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
-        BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 100);
         BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
     }
 }
@@ -423,7 +422,7 @@ BOOST_AUTO_TEST_CASE(state_transition_confirmed_to_inactive_reorg)
         // Start confirmed
         CWalletTx wtx(&test_wallet, tx);
         uint256 block_hash = uint256S("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
-        wtx.SetTxState(TxStateConfirmed(block_hash, 200, 3));
+        wtx.SetTxState(TxStateConfirmed(block_hash, 3));
         test_wallet.mapWallet[hash] = wtx;
 
         BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
@@ -468,7 +467,7 @@ BOOST_AUTO_TEST_CASE(spent_tracking_on_confirmation)
 
         // Add parent to wallet (confirmed)
         CWalletTx parent_wtx(&test_wallet, parent_tx);
-        parent_wtx.SetTxState(TxStateConfirmed(uint256S("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"), 100, 1));
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"), 1));
         parent_wtx.vfSpent.resize(2, false);  // Both outputs unspent initially
         test_wallet.mapWallet[parent_hash] = parent_wtx;
 
@@ -515,7 +514,7 @@ BOOST_AUTO_TEST_CASE(reorg_unmarks_parent_spent)
 
         // Add parent (confirmed, output spent)
         CWalletTx parent_wtx(&test_wallet, parent_tx);
-        parent_wtx.SetTxState(TxStateConfirmed(uint256S("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), 150, 2));
+        parent_wtx.SetTxState(TxStateConfirmed(uint256S("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"), 2));
         parent_wtx.vfSpent.resize(1, true);  // Output 0 is spent
         test_wallet.mapWallet[parent_hash] = parent_wtx;
 
@@ -566,7 +565,7 @@ BOOST_AUTO_TEST_CASE(abandon_then_reconfirm_workflow)
 
         // 4. Edge case: abandoned tx appears in a block (should re-activate)
         uint256 block_hash = uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 300, 4));
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 4));
 
         // Verify it's now confirmed (abandoned flag overridden)
         BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
@@ -659,7 +658,6 @@ BOOST_AUTO_TEST_CASE(unrecognized_migration_with_hashblock)
         if (unrec_state && !unrec_state->m_block_hash.IsNull()) {
             test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(
                 unrec_state->m_block_hash,
-                250,  // height (would come from mapBlockIndex in real code)
                 unrec_state->m_index
             ));
         }
@@ -736,7 +734,7 @@ BOOST_AUTO_TEST_CASE(multiple_state_transitions)
 
         // 3. Confirm (block connected)
         uint256 block_hash = uint256S("9999999999999999999999999999999999999999999999999999999999999999");
-        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 400, 8));
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(block_hash, 8));
         BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
 
         // 4. Reorg back to Inactive (block disconnected)
@@ -749,13 +747,12 @@ BOOST_AUTO_TEST_CASE(multiple_state_transitions)
 
         // 6. Re-confirm in new chain
         uint256 new_block_hash = uint256S("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(new_block_hash, 401, 2));
+        test_wallet.mapWallet[hash].SetTxState(TxStateConfirmed(new_block_hash, 2));
         BOOST_CHECK(test_wallet.mapWallet[hash].isConfirmed());
 
         auto* final_conf = test_wallet.mapWallet[hash].state<TxStateConfirmed>();
         BOOST_CHECK(final_conf != nullptr);
         BOOST_CHECK(final_conf->m_confirmed_block_hash == new_block_hash);
-        BOOST_CHECK_EQUAL(final_conf->m_confirmed_block_height, 401);
     }
 }
 
@@ -770,8 +767,8 @@ BOOST_AUTO_TEST_CASE(state_type_creation)
     BOOST_CHECK(std::holds_alternative<TxStateInMempool>(
         TxState{mempool_state}));
 
-    TxStateConfirmed conf_state(uint256S("00"), 100, 0);
-    BOOST_CHECK_EQUAL(conf_state.m_confirmed_block_height, 100);
+    TxStateConfirmed conf_state(uint256S("00"), 0);
+    BOOST_CHECK_EQUAL(conf_state.m_position_in_block, 0);
 
     TxStateInactive inactive_state(true);
     BOOST_CHECK_EQUAL(inactive_state.m_abandoned, true);
@@ -788,7 +785,7 @@ BOOST_AUTO_TEST_CASE(state_serialization)
     {
         // Confirmed state
         CWalletTx original;
-        original.SetTxState(TxStateConfirmed(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 12345, 7));
+        original.SetTxState(TxStateConfirmed(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 7));
 
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss << original;
@@ -801,7 +798,6 @@ BOOST_AUTO_TEST_CASE(state_serialization)
         BOOST_CHECK(conf != nullptr);
         BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
         // Block height is not serialized in CMerkleTx, so it reconstructs as -1
-        BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, -1);
         BOOST_CHECK_EQUAL(conf->m_position_in_block, 7);
     }
 
@@ -867,7 +863,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_state_helpers)
     BOOST_CHECK(!wtx.isUnrecognized());
 
     // Test confirmed state
-    wtx.SetTxState(TxStateConfirmed(uint256S("00"), 100, 0));
+    wtx.SetTxState(TxStateConfirmed(uint256S("00"), 0));
     BOOST_CHECK(!wtx.isInMempool());
     BOOST_CHECK(wtx.isConfirmed());
     BOOST_CHECK(!wtx.isInactive());
@@ -875,7 +871,6 @@ BOOST_AUTO_TEST_CASE(wallet_tx_state_helpers)
 
     auto* conf = wtx.state<TxStateConfirmed>();
     BOOST_CHECK(conf != nullptr);
-    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 100);
 
     // Test inactive state
     wtx.SetTxState(TxStateInactive(true));
@@ -900,7 +895,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_serialization_with_state)
 {
     // Test that CWalletTx with state serializes correctly
     CWalletTx original;
-    original.SetTxState(TxStateConfirmed(uint256S("abc123"), 500, 3));
+    original.SetTxState(TxStateConfirmed(uint256S("abc123"), 3));
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -913,7 +908,6 @@ BOOST_AUTO_TEST_CASE(wallet_tx_serialization_with_state)
     BOOST_CHECK(conf != nullptr);
     BOOST_CHECK(conf->m_confirmed_block_hash == uint256S("abc123"));
     // Block height is not stored in CMerkleTx, so it's -1 after deserialization
-    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, -1);
     BOOST_CHECK_EQUAL(conf->m_position_in_block, 3);
 }
 
@@ -926,7 +920,7 @@ BOOST_AUTO_TEST_CASE(old_wallet_migration)
 
     // Simulate an old confirmed entry
     CWalletTx oldFormat;
-    oldFormat.SetTxState(TxStateConfirmed(uint256S("def456"), -1, 5));
+    oldFormat.SetTxState(TxStateConfirmed(uint256S("def456"), 5));
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << oldFormat;
@@ -947,19 +941,19 @@ BOOST_AUTO_TEST_CASE(state_template_methods)
     CWalletTx wtx;
 
     // Test template state retrieval
-    wtx.SetTxState(TxStateConfirmed(uint256S("test"), 123, 1));
+    wtx.SetTxState(TxStateConfirmed(uint256S("test"), 1));
 
     // Test const version
     const CWalletTx& const_wtx = wtx;
     const TxStateConfirmed* const_conf = const_wtx.state<TxStateConfirmed>();
     BOOST_CHECK(const_conf != nullptr);
-    BOOST_CHECK_EQUAL(const_conf->m_confirmed_block_height, 123);
+    BOOST_CHECK_EQUAL(const_conf->m_position_in_block, 1);
 
-    // Test non-const version
+    // Test non-const version (mutate through the pointer)
     TxStateConfirmed* conf = wtx.state<TxStateConfirmed>();
     BOOST_CHECK(conf != nullptr);
-    conf->m_confirmed_block_height = 456;
-    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, 456);
+    conf->m_position_in_block = 456;
+    BOOST_CHECK_EQUAL(conf->m_position_in_block, 456);
 
     // Test retrieval of wrong type returns nullptr
     const TxStateInMempool* mempool_ptr = const_wtx.state<TxStateInMempool>();
@@ -1239,7 +1233,7 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
     {
         LOCK(test_wallet.cs_wallet);
         CWalletTx wtx(&test_wallet, tx);
-        wtx.SetTxState(TxStateConfirmed(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 100, 0));
+        wtx.SetTxState(TxStateConfirmed(uint256S("5555555555555555555555555555555555555555555555555555555555555555"), 0));
         test_wallet.mapWallet[hash] = wtx;
     }
 
@@ -1538,7 +1532,6 @@ BOOST_AUTO_TEST_CASE(migrate_legacy_confirmed)
     auto* conf = std::get_if<TxStateConfirmed>(&state);
     BOOST_CHECK(conf != nullptr);
     BOOST_CHECK(conf->m_confirmed_block_hash == block_hash);
-    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, -1);  // Height not known at migration time
     BOOST_CHECK_EQUAL(conf->m_position_in_block, 5);
 }
 
@@ -1576,7 +1569,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_confirmed)
 {
     uint256 bh = uint256S("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
     CWalletTx original;
-    original.SetTxState(TxStateConfirmed(bh, 999, 42));
+    original.SetTxState(TxStateConfirmed(bh, 42));
 
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << original;
@@ -1589,7 +1582,6 @@ BOOST_AUTO_TEST_CASE(wallet_tx_roundtrip_confirmed)
     BOOST_CHECK(conf != nullptr);
     BOOST_CHECK(conf->m_confirmed_block_hash == bh);
     // Block height is not serialized in CMerkleTx
-    BOOST_CHECK_EQUAL(conf->m_confirmed_block_height, -1);
     BOOST_CHECK_EQUAL(conf->m_position_in_block, 42);
 }
 
@@ -1653,7 +1645,7 @@ BOOST_AUTO_TEST_CASE(txstate_serialized_block_hash_helpers)
 
     // Confirmed
     uint256 bh = uint256S("abcd");
-    TxState confirmed = TxStateConfirmed(bh, 100, 5);
+    TxState confirmed = TxStateConfirmed(bh, 5);
     BOOST_CHECK(TxStateSerializedBlockHash(confirmed) == bh);
     BOOST_CHECK_EQUAL(TxStateSerializedIndex(confirmed), 5);
 
@@ -1801,7 +1793,6 @@ BOOST_AUTO_TEST_CASE(txstate_default_constructor_invariants)
     // Guard against someone changing default field values
     TxStateConfirmed conf;
     BOOST_CHECK(conf.m_confirmed_block_hash.IsNull());
-    BOOST_CHECK_EQUAL(conf.m_confirmed_block_height, -1);
     BOOST_CHECK_EQUAL(conf.m_position_in_block, -1);
 
     TxStateInactive inactive;
@@ -2029,7 +2020,7 @@ BOOST_AUTO_TEST_CASE(psgt_imported_tx_confirm_then_reorg)
 
     uint256 bh =
         uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff");
-    wtx.SetTxState(TxStateConfirmed(bh, 12345, 7));
+    wtx.SetTxState(TxStateConfirmed(bh, 7));
     BOOST_CHECK(wtx.isConfirmed());
     BOOST_CHECK(wtx.state<TxStateConfirmed>()->m_confirmed_block_hash == bh);
     BOOST_CHECK_EQUAL(wtx.state<TxStateConfirmed>()->m_position_in_block, 7);

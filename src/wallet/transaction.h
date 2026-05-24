@@ -29,19 +29,24 @@ struct TxStateInMempool {
 };
 
 //! Transaction is confirmed in a block on the active chain.
+//!
+//! Note: this struct does NOT carry the confirming block's height. The
+//! wallet.dat format (CMerkleTx-based) only persists `hashBlock` and
+//! `nIndex`; any height the migration could resolve in memory would be lost
+//! on shutdown, forcing the migration to run again on every boot. Instead,
+//! consumers that need the height call GetConfirmedHeight(state) in
+//! wallet.h, which looks it up from mapBlockIndex on demand. The lookup is
+//! ~50ns; for any consumer that touches a wtx at all, the cost is invisible.
 struct TxStateConfirmed {
     uint256 m_confirmed_block_hash;
-    int m_confirmed_block_height;
     int m_position_in_block;
 
     TxStateConfirmed()
         : m_confirmed_block_hash()
-        , m_confirmed_block_height(-1)
         , m_position_in_block(-1) {}
 
-    TxStateConfirmed(const uint256& hash, int height, int pos)
+    TxStateConfirmed(const uint256& hash, int pos)
         : m_confirmed_block_hash(hash)
-        , m_confirmed_block_height(height)
         , m_position_in_block(pos) {}
 };
 
@@ -113,7 +118,7 @@ inline TxState MigrateFromLegacyHashBlock(const uint256& hashBlock, int nIndex)
     if (hashBlock == ABANDONED_HASH_SENTINEL)   return TxStateInactive{true};
     if (hashBlock == CONFLICTED_HASH_SENTINEL)  return TxStateInactive{false};
     if (IsReservedHashSentinelRange(hashBlock)) return TxStateUnrecognized{};
-    if (!hashBlock.IsNull())                    return TxStateConfirmed(hashBlock, -1, nIndex);
+    if (!hashBlock.IsNull())                    return TxStateConfirmed(hashBlock, nIndex);
     return TxStateUnrecognized{};
 }
 

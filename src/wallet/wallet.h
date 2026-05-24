@@ -39,6 +39,18 @@ class CCoinControl;
 
 GRC::MinedType GetGeneratedType(const CWallet *wallet, const uint256& tx, unsigned int vout) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//! Return the height of the block confirming this state, or -1 if its block
+//! is not in mapBlockIndex. The wallet.dat format does not persist confirming-
+//! block height (CMerkleTx only stores hashBlock + nIndex), so consumers that
+//! need a height look it up from the block index on demand via this helper.
+//! Cost is a single unordered_map lookup, roughly 50 ns. Caller must hold
+//! cs_main because it touches mapBlockIndex.
+inline int GetConfirmedHeight(const TxStateConfirmed& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    auto it = mapBlockIndex.find(state.m_confirmed_block_hash);
+    return (it != mapBlockIndex.end()) ? it->second->nHeight : -1;
+}
+
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 static const unsigned int DEFAULT_KEYPOOL_SIZE_PRE_HD = 1000;
 
@@ -769,9 +781,10 @@ public:
 
             // Reconstruct m_state from the legacy hashBlock/nIndex fields
             // that CMerkleTx deserialized. Works for both old and new wallets.
-            // Note: TxStateConfirmed will have m_confirmed_block_height = -1
-            // because height is not stored in CMerkleTx. ReacceptWalletTransactions
-            // resolves the height from mapBlockIndex on wallet load.
+            // TxStateConfirmed does not carry a height — the wallet.dat format
+            // does not persist one. Consumers that need a height call
+            // GetConfirmedHeight(state) which looks it up from mapBlockIndex
+            // on demand (single ~50 ns unordered_map lookup).
             m_state = MigrateFromLegacyHashBlock(hashBlock, nIndex);
         }
 

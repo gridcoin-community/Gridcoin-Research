@@ -50,25 +50,19 @@ struct CompareValueOnly
     }
 };
 
-//! Returns false if the confirmed state has an invalid block hash, height, or position.
+//! Returns false if the confirmed state references a block we don't know
+//! about, or has a negative position. Routes the block-lookup through the
+//! GetConfirmedHeight() helper so the validation logic shares a single
+//! definition of "is this block known" with consumers that want a height.
 bool ValidateTxStateConfirmed(const TxStateConfirmed& state, const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    auto it = mapBlockIndex.find(state.m_confirmed_block_hash);
-    if (it == mapBlockIndex.end()) {
+    // -1 here means "block hash not in mapBlockIndex", i.e. we don't know
+    // about the block this state claims confirmation in. That's the
+    // "unknown block" failure mode this function exists to catch.
+    if (GetConfirmedHeight(state) < 0) {
         LogPrintf("ValidateTxStateConfirmed: Block %s not found in index for tx %s\n",
-                  state.m_confirmed_block_hash.ToString().substr(0,10), txid.ToString().substr(0,10));
-        return false;
-    }
-
-    CBlockIndex* pindex = it->second;
-
-    if (pindex->nHeight != state.m_confirmed_block_height) {
-        LogPrintf("ValidateTxStateConfirmed: Height mismatch for tx %s: "
-                  "block %s has height %d but state claims %d\n",
-                  txid.ToString().substr(0,10),
                   state.m_confirmed_block_hash.ToString().substr(0,10),
-                  pindex->nHeight,
-                  state.m_confirmed_block_height);
+                  txid.ToString().substr(0,10));
         return false;
     }
 
@@ -140,7 +134,7 @@ bool TryConfirmFromTxIndex(CWalletTx& wtx, const CTxIndex& txindex) EXCLUSIVE_LO
         return false;
     }
 
-    wtx.SetTxState(TxStateConfirmed(hashBlock, it->second->nHeight, vtx_index));
+    wtx.SetTxState(TxStateConfirmed(hashBlock, vtx_index));
     return true;
 }
 
@@ -168,7 +162,7 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
                             "ReacceptWalletTransactions: migrating unrecognized tx %s to confirmed "
                             "(using deserialized hashBlock, vtx index %d, height=%d)\n",
                             wtx.GetHash().ToString(), vtx_index, it->second->nHeight);
-                    wtx.SetTxState(TxStateConfirmed(legacy_hash, it->second->nHeight, vtx_index));
+                    wtx.SetTxState(TxStateConfirmed(legacy_hash, vtx_index));
                 } else {
                     LogPrintf("WARNING: ReacceptWalletTransactions: tx %s not found in block vtx "
                              "despite valid hashBlock %s, marking inactive\n",
@@ -234,13 +228,15 @@ std::pair<bool, bool> ResolveUnrecognizedTx(CWalletTx& wtx, const CTxIndex& txin
     return {fUpdated, fRepeat};
 }
 
-//! Validate a confirmed tx: check block is still in main chain, resolve height=-1.
+//! Validate a confirmed tx: check that its block is still on the active chain.
+//! If the block was orphaned out (either while the wallet was running or
+//! while it was offline), transition the tx to TxStateInactive so consumers
+//! that rely on the variant tag (e.g. AbandonTransaction, RPC state labels)
+//! see honest state. Block height is NOT carried in m_state; consumers that
+//! need it call GetConfirmedHeight() on demand.
 //! Returns {updated, repeat}.
 std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    bool fUpdated = false;
-    bool fRepeat = false;
-
     const auto* conf = wtx.state<TxStateConfirmed>();
     if (!conf) return {false, false};
 
@@ -253,36 +249,7 @@ std::pair<bool, bool> ValidateConfirmedTx(CWalletTx& wtx) EXCLUSIVE_LOCKS_REQUIR
         return {true, true};
     }
 
-    // Resolve height=-1 left by legacy migration
-    if (conf->m_confirmed_block_height < 0) {
-        CBlockIndex* pindex = it->second;
-        CBlock block;
-        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
-            int vtx_index = FindTxInBlock(block, wtx.GetHash());
-            if (vtx_index >= 0) {
-                LogPrint(BCLog::LogFlags::VERBOSE,
-                        "ReacceptWalletTransactions: resolving height for tx %s (height=%d, vtx_index=%d)\n",
-                        wtx.GetHash().ToString(), pindex->nHeight, vtx_index);
-                wtx.SetTxState(TxStateConfirmed(conf->m_confirmed_block_hash, pindex->nHeight, vtx_index));
-                wtx.nIndex = vtx_index;
-                fUpdated = true;
-            } else {
-                LogPrintf("WARNING: ReacceptWalletTransactions: tx %s not found in block vtx "
-                         "despite valid hashBlock %s, marking inactive\n",
-                         wtx.GetHash().ToString(), conf->m_confirmed_block_hash.ToString().substr(0,10));
-                wtx.SetTxState(TxStateInactive{false});
-                fUpdated = true;
-            }
-        } else {
-            LogPrintf("WARNING: ReacceptWalletTransactions: Failed to read block %s "
-                     "for height resolution of tx %s, marking inactive\n",
-                     conf->m_confirmed_block_hash.ToString().substr(0,10), wtx.GetHash().ToString());
-            wtx.SetTxState(TxStateInactive{false});
-            fUpdated = true;
-        }
-    }
-
-    return {fUpdated, fRepeat};
+    return {false, false};
 }
 
 //! Validate a mempool tx: verify still in mempool, try to confirm from index if not.
@@ -836,10 +803,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
             if (unrec && !unrec->m_block_hash.IsNull()) {
                 auto it = mapBlockIndex.find(unrec->m_block_hash);
                 if (it != mapBlockIndex.end()) {
-                    CBlockIndex* pindex = it->second;
                     wtx.SetTxState(TxStateConfirmed(
                         unrec->m_block_hash,
-                        pindex->nHeight,
                         unrec->m_index
                     ));
                 } else {
@@ -861,7 +826,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
                             if (vtx_index >= 0) {
                                 wtx.SetTxState(TxStateConfirmed(
                                     block_hash,
-                                    it->second->nHeight,
                                     vtx_index
                                 ));
                             } else {
@@ -1071,7 +1035,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             }
         }
 
-        state = TxStateConfirmed{block_hash, block_height, position};
+        state = TxStateConfirmed{block_hash, position};
     } else {
         state = TxStateInMempool{};
     }
@@ -1244,7 +1208,7 @@ void CWallet::blockConnected(const CBlock& block, int height)
         }
         SyncTransaction(
             MakeTransactionRef(tx),
-            TxStateConfirmed{block_hash, height, static_cast<int>(index)},
+            TxStateConfirmed{block_hash, static_cast<int>(index)},
             /*update_tx=*/true,
             /*rescanning_old_block=*/false
         );
@@ -1939,7 +1903,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             {
                 const auto& tx = block.vtx[i];
                 CTransactionRef ptx = MakeTransactionRef(tx);
-                TxState state = TxStateConfirmed{block_hash, block_height, static_cast<int>(i)};
+                TxState state = TxStateConfirmed{block_hash, static_cast<int>(i)};
 
                 if (AddToWalletIfInvolvingMe(ptx, state, fUpdate)) {
                     ret++;
@@ -1990,7 +1954,6 @@ int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd
 
                 // Use TxState-aware version with proper confirmed state
                 uint256 block_hash = pindex->pprev->GetBlockHash();
-                int block_height = pindex->pprev->nHeight;
 
                 for (size_t i = 0; i < block.vtx.size(); i++)
                 {
@@ -1999,7 +1962,7 @@ int CWallet::ScanForMRCRequests(CBlockIndex* pindexStart, CBlockIndex* pindexEnd
                             && tx.GetContracts()[0].m_type == GRC::ContractType::MRC)
                     {
                         CTransactionRef ptx = MakeTransactionRef(tx);
-                        TxState state = TxStateConfirmed{block_hash, block_height, static_cast<int>(i)};
+                        TxState state = TxStateConfirmed{block_hash, static_cast<int>(i)};
 
                         if (AddToWalletIfInvolvingMe(ptx, state, fUpdate))
                             ret++;
