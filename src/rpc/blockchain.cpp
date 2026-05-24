@@ -3468,11 +3468,25 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
 
 UniValue listscrapers(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listscrapers\n"
-                "\n"
-                "Displays information about scrapers recognized by the network.\n");
+    static const RPCHelpMan help{
+        "listscrapers",
+        "Displays information about scrapers recognized by the network.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "current_scraper_entries", "Scraper registry entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "scraper entry; address, transaction hashes, timestamp, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listscrapers", "") +
+            HelpExampleRpc("listscrapers", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
