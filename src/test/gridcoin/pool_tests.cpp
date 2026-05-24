@@ -4,11 +4,16 @@
 
 #include "gridcoin/pool.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/researcher.h"
 #include "key.h"
 #include "streams.h"
 
 #include <boost/test/unit_test.hpp>
+#include <map>
+#include <set>
 #include <vector>
+
+extern MiningPools g_mining_pools;
 
 namespace {
 
@@ -20,9 +25,10 @@ namespace {
 struct PoolTestKey
 {
     //!
-    //! \brief Create a valid private key for tests. The key is generated
-    //! deterministically using MakeNewKey so signatures are reproducible
-    //! across runs within a single test process.
+    //! \brief Create a valid private key for tests. MakeNewKey uses the
+    //! RNG, so a fresh random key is generated per call — signatures are
+    //! NOT reproducible across runs. Tests that need to verify a
+    //! signature must call Private() once and reuse the returned key.
     //!
     static CKey Private()
     {
@@ -68,7 +74,7 @@ BOOST_AUTO_TEST_CASE(pool_status_to_string_covers_all_named_values)
 
 BOOST_AUTO_TEST_CASE(register_payload_serialization_round_trip)
 {
-    const CKey private_key = PoolTestKey::Private();
+    CKey private_key = PoolTestKey::Private();
     const CPubKey public_key = private_key.GetPubKey();
 
     GRC::PoolRegisterPayload original(
@@ -76,7 +82,7 @@ BOOST_AUTO_TEST_CASE(register_payload_serialization_round_trip)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(original.Sign(const_cast<CKey&>(private_key)));
+    BOOST_REQUIRE(original.Sign(private_key));
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     original.Serialize(stream, GRC::ContractAction::ADD);
@@ -353,16 +359,104 @@ BOOST_AUTO_TEST_CASE(pool_registry_is_active_pool_name_returns_false_for_unknown
     BOOST_CHECK(!registry.IsActivePoolName("never-registered.example"));
 }
 
-BOOST_AUTO_TEST_CASE(pool_registry_active_pools_starts_empty)
+BOOST_AUTO_TEST_CASE(pool_registry_active_pools_contains_grandfathered_builtins)
 {
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
-    // A pristine wallet under unit-test conditions has no pool entries.
-    // (Registry::Add path exercising requires ContractContext + CBlockIndex
-    // mocking similar to BeaconRegistryTest in beacon_tests.cpp; the
-    // hybrid-authority and reorg-revert cases are tracked as follow-up
-    // work in the test plan.)
-    BOOST_CHECK(registry.ActivePools().empty());
+    // The registry boots with the 5 builtin pools seeded by the
+    // constructor (plan §3). All 5 are ACTIVE. (Registry::Add path
+    // exercising via real contracts requires ContractContext +
+    // CBlockIndex mocking — tracked as follow-up work in the test
+    // plan / PR body.)
+    const std::vector<GRC::Pool> active = registry.ActivePools();
+    BOOST_CHECK_EQUAL(active.size(), GRC::PoolRegistry::BuiltinPoolSeeds().size());
+}
+
+// -----------------------------------------------------------------------------
+// Grandfathered builtin pools (issue #1783 / plan §3, §3.5, §6, Q3, Q4)
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
+{
+    // Q3 shadow check: pre-V15, ActivePoolsAtHeight must yield exactly the
+    // same set of pool CPIDs as the legacy g_mining_pools list, in the same
+    // order. If this assertion fires, grandfathering has diverged from the
+    // hardcoded list and AVW will fork the chain on the next pre-V15 poll.
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    // height 0 is sufficient: the seeds are all at m_height == 0, so the
+    // chain-walk in ActivePoolsAtHeight stops on the seed for every CPID.
+    const std::vector<GRC::Pool> registry_pools = registry.ActivePoolsAtHeight(0);
+    const std::vector<MiningPool> legacy_pools = g_mining_pools.GetMiningPools();
+
+    BOOST_REQUIRE_EQUAL(registry_pools.size(), legacy_pools.size());
+
+    // The legacy list defines the canonical ordering. The registry's
+    // ActivePoolsAtHeight returns entries in std::map<Cpid, ...> iteration
+    // order (lexicographic by CPID bytes), which is NOT the same as the
+    // legacy push-order. So compare as sets rather than as sequences —
+    // matching CPID set with matching names/URLs is the consensus-relevant
+    // invariant; ordering is incidental.
+    std::map<GRC::Cpid, std::pair<std::string, std::string>> legacy_map;
+    for (const MiningPool& p : legacy_pools) {
+        legacy_map[p.m_cpid] = {p.m_name, p.m_url};
+    }
+
+    for (const GRC::Pool& p : registry_pools) {
+        auto it = legacy_map.find(p.m_cpid);
+        BOOST_REQUIRE(it != legacy_map.end());
+        BOOST_CHECK_EQUAL(p.m_name, it->second.first);
+        BOOST_CHECK_EQUAL(p.m_url, it->second.second);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(is_builtin_recognizes_every_seeded_cpid)
+{
+    // §3.5 protection relies on IsBuiltin recognising every seeded CPID.
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        const GRC::Cpid cpid = GRC::Cpid::Parse(seed.cpid_hex);
+        BOOST_CHECK(registry.IsBuiltin(cpid));
+    }
+
+    // Sanity: a non-builtin test CPID should not register as builtin.
+    BOOST_CHECK(!registry.IsBuiltin(PoolTestKey::Cpid()));
+}
+
+BOOST_AUTO_TEST_CASE(builtin_seed_hash_is_deterministic_and_unique)
+{
+    // The sentinel hash must be deterministic so that on-chain
+    // m_previous_hash chains can terminate on it across runs / restarts.
+    // It must also be unique per CPID so two builtin chains never alias.
+    std::set<uint256> seen;
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        const GRC::Cpid cpid = GRC::Cpid::Parse(seed.cpid_hex);
+
+        const uint256 a = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+        const uint256 b = GRC::PoolRegistry::BuiltinSeedHash(cpid);
+        BOOST_CHECK(a == b); // deterministic across calls
+
+        BOOST_CHECK(seen.insert(a).second); // unique vs. all prior seeds
+    }
+}
+
+BOOST_AUTO_TEST_CASE(grandfathered_builtins_have_invalid_operator_key)
+{
+    // The "invalid existing key == claimable" semantic must NOT apply to
+    // builtins (plan §3.5). Verify the seed entries actually carry an
+    // invalid operator key, otherwise the §3.5 guard wouldn't fire.
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
+        const GRC::Cpid cpid = GRC::Cpid::Parse(seed.cpid_hex);
+        GRC::Pool_ptr entry = registry.Try(cpid);
+        BOOST_REQUIRE(entry);
+        BOOST_CHECK(!entry->m_operator_key.IsValid());
+        BOOST_CHECK(entry->m_status == GRC::PoolStatus::ACTIVE);
+        BOOST_CHECK_EQUAL(entry->m_height, 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

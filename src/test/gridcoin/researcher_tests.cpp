@@ -21,26 +21,17 @@ extern leveldb::DB *txdb;
 namespace {
 
 //!
-//! \brief RAII helper that seeds the on-chain PoolRegistry with the canonical
-//! "grcpool.com" test entry that used to live in the hardcoded
-//! MiningPools constructor (researcher.h:90-94). After issue #1783's wiring
-//! of researcher.cpp's IsPoolCpid / IsPoolUsername through GetPoolRegistry(),
-//! tests that previously relied on the compile-time pool list have to seed
-//! the registry explicitly.
+//! \brief RAII helper retained for fixture-using tests. After the V15
+//! rework grandfathered the 5 legacy pools into PoolRegistry's
+//! constructor (plan §3), this fixture is largely a no-op — the
+//! grcpool.com entry it used to seed manually is now present from boot.
+//! The destructor calls ClearForTests() which re-seeds the builtins, so
+//! subsequent tests still see the canonical registry shape. Kept so
+//! existing BOOST_FIXTURE_TEST_CASEs continue to compile.
 //!
 struct PoolRegistryTestFixture
 {
-    PoolRegistryTestFixture()
-    {
-        GRC::Pool entry(
-            GRC::Cpid::Parse("7d0d73fe026d66fd4ab8d5d8da32a611"),
-            "grcpool.com",
-            "https://grcpool.com/",
-            CPubKey{});
-        entry.m_status = GRC::PoolStatus::ACTIVE;
-
-        GRC::GetPoolRegistry().SeedForTests(entry);
-    }
+    PoolRegistryTestFixture() = default;
 
     ~PoolRegistryTestFixture()
     {
