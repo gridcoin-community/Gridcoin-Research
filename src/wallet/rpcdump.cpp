@@ -8,6 +8,7 @@
 #include <key_io.h>
 #include "rpc/server.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "node/ui_interface.h"
 
 #include <stdexcept>
@@ -102,15 +103,25 @@ public:
 
 UniValue importprivkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 3)
-        throw runtime_error(
-        "importprivkey <gridcoinprivkey> [label] [bool:rescan]\n"
+    static const RPCHelpMan help{
+        "importprivkey",
+        "Add a private key (as returned by dumpprivkey) to your wallet.\n"
         "\n"
-        "[label] -------> Optional; Label for imported address\n"
-        "[bool:rescan] -> Optional; Default true\n"
-        "WARNING: if true rescan of blockchain will occur. This could take up to 20 minutes.\n"
-        "\n"
-        "Adds a private key (as returned by dumpprivkey) to your wallet\n");
+        "WARNING: when rescan is true, a full rescan of the blockchain will occur. This can take up to 20 minutes.",
+        {
+            {"gridcoinprivkey", RPCArg::Type::STR, RPCArg::Optional::NO, "Base58 WIF private key."},
+            {"label", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional label for the imported address."},
+            {"rescan", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to rescan the blockchain after import. Default: true."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("importprivkey", "\"<wif>\"") +
+            HelpExampleCli("importprivkey", "\"<wif>\" \"label\" false") +
+            HelpExampleRpc("importprivkey", "\"<wif>\", \"label\", false")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strSecret = params[0].get_str();
     string strLabel = "";
