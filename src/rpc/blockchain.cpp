@@ -3412,15 +3412,30 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
 UniValue getautogreylist(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2) {
-        throw runtime_error(
-            "getautogreylist <bool> <bool> \n"
-            "\n"
-            "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
-            "\n"
-            "<bool> -> true to show greylist history for each project. Defaults to false. \n"
-            "\n"
-            "Displays information about projects that meet auto greylisting criteria.");
+    static const RPCHelpMan help{
+        "getautogreylist",
+        "Displays information about projects that meet auto greylisting criteria.",
+        {
+            {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show all projects, including those that do not meet greylisting criteria. Default: false."},
+            {"show_history", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show greylist history for each project. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "auto_greylist_projects", "Projects considered for auto-greylisting.",
+                    {
+                        {RPCResult::Type::ELISION, "", "project entry; zero-credit-days, whitelist-activity-score, criteria flag, optional history"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getautogreylist", "") +
+            HelpExampleCli("getautogreylist", "true true") +
+            HelpExampleRpc("getautogreylist", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     bool show_all_projects = false;
