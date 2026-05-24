@@ -210,24 +210,33 @@ string CRPCTable::help(string strCommand, rpccategory category) const
 
 UniValue help(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() == 0 || params.size() > 1)
-        return
-            "help [command/category]\n"
-            "Returns help on a specific command or category you request\n"
-            "\n"
-            "help command --> Returns help for specified command; ex. help backupwallet\n"
-            "\n"
-            "Categories:\n"
-            "wallet --------> Returns help for blockchain related commands\n"
-            "staking -------> Returns help for staking/cpid/beacon related commands\n"
-            "developer -----> Returns help for developer commands\n"
-            "network -------> Returns help for network related commands\n"
-            "voting --------> Returns help for voting related commands\n"
-            "\n"
-            "You can support the development of Gridcoin by donating GRC to the\n"
-            "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2\n";
+    static const RPCHelpMan help_rpc{
+        "help",
+        "List commands, or get help for a specified command or category.\n"
+        "\n"
+        "Categories:\n"
+        "  wallet    - blockchain/wallet related commands\n"
+        "  staking   - staking/cpid/beacon related commands (alias: mining)\n"
+        "  developer - developer commands\n"
+        "  network   - network related commands\n"
+        "  voting    - voting related commands\n"
+        "\n"
+        "You can support the development of Gridcoin by donating GRC to the\n"
+        "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2",
+        {
+            {"command", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The command name or category to look up. If omitted, an overview of all categories is returned."},
+        },
+        RPCResult{RPCResult::Type::STR, "", "The help text"},
+        RPCExamples{
+            HelpExampleCli("help", "") +
+            HelpExampleCli("help", "getinfo") +
+            HelpExampleCli("help", "wallet") +
+            HelpExampleRpc("help", "\"getinfo\"")},
+    };
+    if (fHelp || !help_rpc.IsValidNumArgs(params.size()))
+        throw runtime_error(help_rpc.ToString());
 
-    // Allow to process through if params size is > 0
     string strCommand;
 
     if (params.size() > 0)
