@@ -6619,13 +6619,23 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  */
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1 )
-        throw std::runtime_error(
-                "testnewsb [hint bits]\n"
-                "Tests superblock formation. Optional parameter of the number of bits for the reduced hash hint for"
-                " uncached test.\n"
-                "This is limited to a range of 4 to 32, with 32 as the default (which is the normal hint bits).\n"
-                );
+    static const RPCHelpMan help{
+        "testnewsb",
+        "Tests superblock formation.",
+        {
+            {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of bits for the reduced hash hint for the uncached test. "
+                "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
+        RPCExamples{
+            HelpExampleCli("testnewsb", "") +
+            HelpExampleCli("testnewsb", "16") +
+            HelpExampleRpc("testnewsb", "16")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     unsigned int nReducedCacheBits = 32;
 
