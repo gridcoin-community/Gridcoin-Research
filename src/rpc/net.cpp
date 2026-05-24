@@ -108,14 +108,34 @@ UniValue addnode(const UniValue& params, bool fHelp)
 
 UniValue getnodeaddresses(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnodeaddresses [count]\n"
-                "\nReturn known addresses which can potentially be used to find new nodes in the network\n"
-                "count: How many addresses to return. Limited to the smaller of " + std::to_string(ADDRMAN_GETADDR_MAX) +
-                " or " + std::to_string(ADDRMAN_GETADDR_MAX_PCT) + "% of all known addresses. (default = 1)\n");
+    static const RPCHelpMan help{
+        "getnodeaddresses",
+        "Return known addresses, which can potentially be used to find new nodes in the network.",
+        {
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                strprintf("How many addresses to return. Limited to the smaller of %d or %d%% "
+                          "of all known addresses (default: 1).",
+                          ADDRMAN_GETADDR_MAX, ADDRMAN_GETADDR_MAX_PCT)},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM_TIME, "time", "The address timestamp (seconds since epoch)"},
+                        {RPCResult::Type::NUM, "services", "Service flags advertised by the address"},
+                        {RPCResult::Type::STR, "address", "The IP address"},
+                        {RPCResult::Type::NUM, "port", "The port"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnodeaddresses", "8") +
+            HelpExampleRpc("getnodeaddresses", "8")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
     int count = 1;
-    if(!params[0].isNull())
+    if (params.size() > 0 && !params[0].isNull())
         count = params[0].get_int();
 
     if (count <= 0)
