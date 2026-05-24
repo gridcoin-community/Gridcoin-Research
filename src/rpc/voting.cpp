@@ -744,17 +744,25 @@ UniValue getvotingclaim(const UniValue& params, bool fHelp)
 
 UniValue vote(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw std::runtime_error(
-            "DEPRECATED: vote <title> <answer1;answer2...>\n"
-            "\n"
-            "<title> ---> Title of the poll to vote for.\n"
-            "<answers> -> Labels of the choices to vote for separated by semicolons (;).\n"
-            "\n"
-            "Cast a vote for a poll.\n"
-            "\n"
-            "This RPC function is deprecated and may be removed in the future. "
-            "Use \"votebyid\" instead.");
+    static const RPCHelpMan help{
+        "vote",
+        "DEPRECATED. Use votebyid instead. This RPC may be removed in the future.\n"
+        "\n"
+        "Cast a vote for a poll, identified by title.",
+        {
+            {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title of the poll to vote for."},
+            {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Labels of the choices to vote for, separated by semicolons (;)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses."}}},
+        RPCExamples{
+            HelpExampleCli("vote", "\"Example Poll\" \"yes\"") +
+            HelpExampleRpc("vote", "\"Example Poll\", \"yes\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
