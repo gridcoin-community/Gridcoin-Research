@@ -84,7 +84,13 @@ public slots:
     void handlePollStaleFlag(QString poll_txid_string);
 
 private:
-    VotingModel* m_voting_model;
+    // Initialized in-class so the early-return checks in setModel() and the
+    // truthy guard in refresh() never read uninitialized memory before the
+    // first explicit setModel(VotingModel*) call. The previous setModel()
+    // body wrote unconditionally, so reads-before-write never happened
+    // before; the new lifetime-aware setModel() reads first to handle
+    // detach (setModel(nullptr)), which made the lack of init reachable.
+    VotingModel* m_voting_model{nullptr};
     std::unique_ptr<PollTableDataModel> m_data_model;
     GRC::PollFilterFlag m_filter_flags;
     // Debounce flag for refresh(). Set on the GUI thread when a refresh
