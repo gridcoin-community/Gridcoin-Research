@@ -231,13 +231,22 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
 
 UniValue getnewaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnewaddress [account]\n"
-                "\n"
-                "Returns a new Gridcoin address for receiving payments.  "
-                "If [account] is specified, it is added to the address book "
-                "so payments received with the address will be credited to [account].\n");
+    static const RPCHelpMan help{
+        "getnewaddress",
+        "Returns a new Gridcoin address for receiving payments. "
+        "If [account] is specified, it is added to the address book so payments received "
+        "with the address will be credited to [account].",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The new Gridcoin address."},
+        RPCExamples{
+            HelpExampleCli("getnewaddress", "") +
+            HelpExampleRpc("getnewaddress", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
