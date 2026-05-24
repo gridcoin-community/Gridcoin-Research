@@ -829,13 +829,26 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "inspectaccrualsnapshot <height>\n"
-            "\n"
-            "<height> --> block height (and file name) of the snapshot"
-            "\n"
-            "Display the contents of an accrual snapshot from accrual repository on disk.\n");
+    static const RPCHelpMan help{
+        "inspectaccrualsnapshot",
+        "Display the contents of an accrual snapshot from the accrual repository on disk.",
+        {
+            {"height", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Block height (and file name) of the snapshot."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "version", "Snapshot version."},
+                {RPCResult::Type::NUM, "height", "Snapshot block height."},
+                {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
+                    {{RPCResult::Type::NUM, "cpid", "Accrual value at the snapshot for this CPID."}}},
+            }},
+        RPCExamples{
+            HelpExampleCli("inspectaccrualsnapshot", "5000000") +
+            HelpExampleRpc("inspectaccrualsnapshot", "5000000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
 
     const fs::path snapshot_path = SnapshotPath(params[0].get_int());
