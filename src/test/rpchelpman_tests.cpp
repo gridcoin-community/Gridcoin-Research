@@ -119,6 +119,16 @@ UniValue listalerts(const UniValue& params, bool fHelp);
 UniValue sendalert(const UniValue& params, bool fHelp);
 UniValue sendalert2(const UniValue& params, bool fHelp);
 UniValue getnetworkinfo(const UniValue& params, bool fHelp);
+// Tier 1 PR D3: src/rpc/voting.cpp non-deprecated commands. Each function's
+// converted body throws via help.ToString() before touching globals (the
+// poll registry, cs_main, pwalletMain), so calling these with fHelp=true
+// and an empty params array is safe in unit tests.
+UniValue listpolls(const UniValue& params, bool fHelp);
+UniValue getpollresults(const UniValue& params, bool fHelp);
+UniValue getvotingclaim(const UniValue& params, bool fHelp);
+UniValue votebyid(const UniValue& params, bool fHelp);
+UniValue votedetails(const UniValue& params, bool fHelp);
+UniValue testpollnotification(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -588,6 +598,7 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
 BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
+BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
 {
     const UniValue empty(UniValue::VARR);
     using HelpFn = UniValue (*)(const UniValue&, bool);
@@ -628,6 +639,12 @@ BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
         {"sendalert", &sendalert},
         {"sendalert2", &sendalert2},
         {"getnetworkinfo", &getnetworkinfo},
+        {"listpolls", &listpolls},
+        {"getpollresults", &getpollresults},
+        {"getvotingclaim", &getvotingclaim},
+        {"votebyid", &votebyid},
+        {"votedetails", &votedetails},
+        {"testpollnotification", &testpollnotification},
     };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
