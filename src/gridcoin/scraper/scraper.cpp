@@ -6855,11 +6855,19 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  */
 UniValue scraperreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "scraperreport\n"
-                "Report containing various statistics about the scraper.\n"
-                );
+    static const RPCHelpMan help{
+        "scraperreport",
+        "Report containing various statistics about the scraper.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
+        RPCExamples{
+            HelpExampleCli("scraperreport", "") +
+            HelpExampleRpc("scraperreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     UniValue ret(UniValue::VOBJ);
 
