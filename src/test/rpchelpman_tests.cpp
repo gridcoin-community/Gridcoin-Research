@@ -177,6 +177,18 @@ UniValue importprivkey(const UniValue& params, bool fHelp);
 UniValue importwallet(const UniValue& params, bool fHelp);
 UniValue dumpprivkey(const UniValue& params, bool fHelp);
 UniValue dumpwallet(const UniValue& params, bool fHelp);
+// Tier 1 deprecated batch: the deprecated-accounts wallet RPCs plus the
+// deprecated `vote` RPC. Each function's converted body throws via
+// help.ToString() before touching pwalletMain or the poll registry.
+UniValue getaccountaddress(const UniValue& params, bool fHelp);
+UniValue setaccount(const UniValue& params, bool fHelp);
+UniValue getaccount(const UniValue& params, bool fHelp);
+UniValue getaddressesbyaccount(const UniValue& params, bool fHelp);
+UniValue getreceivedbyaccount(const UniValue& params, bool fHelp);
+UniValue listreceivedbyaccount(const UniValue& params, bool fHelp);
+UniValue listaccounts(const UniValue& params, bool fHelp);
+UniValue movecmd(const UniValue& params, bool fHelp);  // dispatched as "move"
+UniValue vote(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -651,6 +663,7 @@ BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
+BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
 {
     const UniValue empty(UniValue::VARR);
     using HelpFn = UniValue (*)(const UniValue&, bool);
@@ -733,6 +746,16 @@ BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
         {"importwallet", &importwallet},
         {"dumpprivkey", &dumpprivkey},
         {"dumpwallet", &dumpwallet},
+        {"getaccountaddress", &getaccountaddress},
+        {"setaccount", &setaccount},
+        {"getaccount", &getaccount},
+        {"getaddressesbyaccount", &getaddressesbyaccount},
+        {"getreceivedbyaccount", &getreceivedbyaccount},
+        {"listreceivedbyaccount", &listreceivedbyaccount},
+        {"listaccounts", &listaccounts},
+        // dispatched RPC name is "move", but the C++ function symbol is movecmd.
+        {"move", &movecmd},
+        {"vote", &vote},
     };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
@@ -756,6 +779,11 @@ BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
                                     "help text missing command name: " << what);
                 BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
                                     "help text missing Examples section: " << what);
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+                BOOST_CHECK_MESSAGE(what.find("DEPRECATED") != std::string::npos,
+                                    "help text missing DEPRECATED marker: " << what);
             }
             BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
         }
