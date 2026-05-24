@@ -174,14 +174,20 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
 
 UniValue importwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "importwallet <filename>\n"
-            "\n"
-            "<filename> -> filename of the wallet to import\n"
-            "\n"
-            "Imports keys from a wallet dump file (see dumpwallet)\n"
-            "If a path is not specified in the filename, the data directory is used.");
+    static const RPCHelpMan help{
+        "importwallet",
+        "Imports keys from a wallet dump file (see dumpwallet).\n"
+        "If a path is not specified in the filename, the data directory is used.",
+        {
+            {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("importwallet", "\"wallet.dump\"") +
+            HelpExampleRpc("importwallet", "\"wallet.dump\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     fs::path PathForImport = fs::path(params[0].get_str());
     fs::path DefaultPathDataDir = GetDataDir();
