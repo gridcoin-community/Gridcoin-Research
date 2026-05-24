@@ -262,6 +262,45 @@ BOOST_AUTO_TEST_CASE(sha256_testvectors) {
     TestSHA256(test1, "a316d55510b49662420f49d145d42fb83f31ef8dc016aa4e32df049991a91e26");
 }
 
+BOOST_AUTO_TEST_CASE(sha256_empty_input_null_data) {
+    // Regression: CSHA256::Write(nullptr, 0) used to compute `nullptr + 0`
+    // inside the function body (`const unsigned char* end = data + len;`),
+    // which is undefined behaviour per ISO C++ and trips UBSan. Several
+    // callers can legitimately reach Write with a null data pointer and
+    // zero length -- e.g., `std::vector<unsigned char>::data()` is allowed
+    // to return nullptr when size() is 0, and Gridcoin P2P paths feed
+    // empty-payload message bodies (verack et al.) through Hash() via a
+    // CDataStream backed by such a vector. The fix is a `len == 0`
+    // early-return at the top of CSHA256::Write.
+    //
+    // The existing sha256_testvectors("", ...) test does NOT cover this
+    // path: it calls Write with `std::string("").data()`, which on
+    // libstdc++ returns a non-null pointer to the string's null terminator,
+    // so it only exercises Write(non_null_ptr, 0). This test exercises
+    // Write(nullptr, 0) directly.
+    const std::vector<unsigned char> empty_sha256 =
+        ParseHex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    unsigned char hash[CSHA256::OUTPUT_SIZE];
+
+    // 1) Pure empty Write with null data must still produce SHA256("").
+    CSHA256().Write(nullptr, 0).Finalize(hash);
+    BOOST_CHECK(std::memcmp(hash, empty_sha256.data(), CSHA256::OUTPUT_SIZE) == 0);
+
+    // 2) Interleaved null-data writes between real data must be identity:
+    //    Write(nullptr, 0) sandwiched around real input produces the same
+    //    hash as the real input alone (SHA256("abc")).
+    const std::string input = "abc";
+    const std::vector<unsigned char> abc_sha256 =
+        ParseHex("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    unsigned char interleaved[CSHA256::OUTPUT_SIZE];
+    CSHA256()
+        .Write(nullptr, 0)
+        .Write(reinterpret_cast<const uint8_t*>(input.data()), input.size())
+        .Write(nullptr, 0)
+        .Finalize(interleaved);
+    BOOST_CHECK(std::memcmp(interleaved, abc_sha256.data(), CSHA256::OUTPUT_SIZE) == 0);
+}
+
 BOOST_AUTO_TEST_CASE(sha512_testvectors) {
     TestSHA512("",
                "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce"
