@@ -878,13 +878,25 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
 
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "parseaccrualsnapshot <filespec>\n"
-                "\n"
-                "<filespec> -> String - path to file."
-                "\n"
-                "Parses accrual snapshot from a valid snapshot file.\n");
+    static const RPCHelpMan help{
+        "parseaccrualsnapshotfile",
+        "Parses an accrual snapshot from a valid snapshot file on disk.",
+        {
+            {"filespec", RPCArg::Type::STR, RPCArg::Optional::NO, "Path to the snapshot file."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "version", "Snapshot version."},
+                {RPCResult::Type::NUM, "height", "Snapshot block height."},
+                {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
+                    {{RPCResult::Type::STR_AMOUNT, "cpid", "Accrual amount at the snapshot for this CPID."}}},
+            }},
+        RPCExamples{
+            HelpExampleCli("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"") +
+            HelpExampleRpc("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
