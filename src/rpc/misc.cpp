@@ -108,13 +108,20 @@ UniValue logging(const UniValue& params, bool fHelp)
 
 UniValue listsettings(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size())
-    {
-        throw runtime_error(
-                    "listsettings\n"
-                    "Outputs all arguments/settings in JSON format.\n"
-                    );
-    }
+    static const RPCHelpMan help{
+        "listsettings",
+        "Outputs all arguments/settings in JSON format.",
+        {},
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
+            {
+                {RPCResult::Type::ELISION, "", "Current value (string, numeric, boolean, or array)"},
+            }},
+        RPCExamples{
+            HelpExampleCli("listsettings", "") +
+            HelpExampleRpc("listsettings", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     return gArgs.OutputArgs();
 }
