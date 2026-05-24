@@ -1648,30 +1648,38 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
 
 UniValue fundrawtransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "fundrawtransaction \"hexstring\" ( options )\n"
-                "\nAdd inputs to a transaction until it has enough in value to meet its out value.\n"
-                "This will not modify existing inputs, and will add one change output to the outputs.\n"
-                "The inputs added will not be signed, use signrawtransaction for that.\n"
-                "\nNote: The transaction must have no existing inputs. Unlike Bitcoin Core's\n"
-                "fundrawtransaction, this command does not yet support adding funds to a\n"
-                "transaction that already has inputs.\n"
-                "\nArguments:\n"
-                "1. \"hexstring\"           (string, required) The hex string of the raw transaction\n"
-                "2. options               (object, optional)\n"
-                "   {\n"
-                "     \"changeAddress\"     (string, optional) The address to receive the change\n"
-                "     \"changePosition\"    (numeric, optional) The index of the change output\n"
-                "     \"includeWatching\"   (boolean, optional, default false) Also select inputs which are watch only\n"
-                "   }\n"
-                "\nResult:\n"
-                "{\n"
-                "  \"hex\":       \"value\", (string) The resulting raw transaction (hex-encoded string)\n"
-                "  \"fee\":       n,       (numeric) Fee in GRC the resulting transaction pays\n"
-                "  \"changepos\": n        (numeric) The position of the added change output, or -1\n"
-                "}\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "fundrawtransaction",
+        "Add inputs to a transaction until it has enough in value to meet its out value.\n"
+        "This will not modify existing inputs, and will add one change output to the outputs.\n"
+        "The inputs added will not be signed; use signrawtransaction for that.\n"
+        "\n"
+        "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
+        "this command does not yet support adding funds to a transaction that already has inputs.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
+            {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                {
+                    {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Address to receive the change."},
+                    {"changePosition", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "Index of the change output."},
+                    {"includeWatching", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                        "Also select inputs which are watch-only. Default: false."},
+                }},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "hex", "The resulting raw transaction."},
+                {RPCResult::Type::STR_AMOUNT, "fee", "Fee in GRC the resulting transaction pays."},
+                {RPCResult::Type::NUM, "changepos", "Position of the added change output, or -1."},
+            }},
+        RPCExamples{
+            HelpExampleCli("fundrawtransaction", "\"<hex>\"") +
+            HelpExampleRpc("fundrawtransaction", "\"<hex>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VSTR });
 
