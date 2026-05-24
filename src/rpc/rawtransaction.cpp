@@ -1290,22 +1290,32 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 
 UniValue scanforunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 5 || params.size() == 4)
-        throw runtime_error(
-                "scanforunspent <address> <block-start> <block-end> [bool:export] [export-type]\n"
-                "\n"
-                "Searches a block range for a specified address with unspent utxos\n"
-                "and displays them in a json response with the option of exporting\n"
-                "to file\n"
-                "\n"
-                "Parameters required:\n"
-                "<address> --------> Multi-signature address\n"
-                "<block-start> ----> Block number to start search from\n"
-                "<block-end> ------> Block number to end search on\n"
-                "\n"
-                "Optional:\n"
-                "[export] ---------> Exports to a file in backup-dir/rpc in format of multisigaddress-datetime.type\n"
-                "[type] -----------> Export to a file with file type (xml, txt or json -- Required if export true)");
+    static const RPCHelpMan help{
+        "scanforunspent",
+        "Search a block range for a specified address with unspent UTXOs and display them as JSON,\n"
+        "with the option of exporting to a file.\n"
+        "\n"
+        "The export and type arguments must be supplied together (4-argument form is rejected).",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+            {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+            {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+            {"export", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, export results to a file in backup-dir/rpc as multisigaddress-datetime.<type>."},
+            {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Export file type: \"xml\", \"txt\", or \"json\". Required when export is true."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Scan result detail; see source for the exact shape."}}},
+        RPCExamples{
+            HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000") +
+            HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000 true json") +
+            HelpExampleRpc("scanforunspent", "\"<ms_address>\", 1000000, 1100000, true, \"json\"")},
+    };
+    // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: IsValidNumArgs allows 3..5,
+    // and a manual check rejects size==4 since params[4] is read whenever params.size() > 3.
+    if (fHelp || !help.IsValidNumArgs(params.size()) || params.size() == 4)
+        throw runtime_error(help.ToString());
 
     // Parameters
     bool fExport = false;
