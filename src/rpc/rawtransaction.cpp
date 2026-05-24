@@ -453,15 +453,39 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
 
 UniValue listunspent(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listunspent [minconf=1] [maxconf=9999999]  [\"address\",...]\n"
-                "\n"
-                "Returns array of unspent transaction outputs\n"
-                "with between minconf and maxconf (inclusive) confirmations.\n"
-                "Optionally filtered to only include txouts paid to specified addresses.\n"
-                "Results are an array of Objects, each of which has:\n"
-                "{txid, vout, scriptPubKey, amount, confirmations}\n");
+    static const RPCHelpMan help{
+        "listunspent",
+        "Returns array of unspent transaction outputs with between minconf and maxconf (inclusive) confirmations.\n"
+        "Optionally filtered to only include txouts paid to specified addresses.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The minimum confirmations to filter (default: 1)."},
+            {"maxconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The maximum confirmations to filter (default: 9999999)."},
+            {"addresses", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+                "Filter to only include UTXOs paid to these addresses.",
+                {
+                    {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "An address."},
+                }},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
+                        {RPCResult::Type::NUM, "vout", "Output index."},
+                        {RPCResult::Type::STR_HEX, "scriptPubKey", "Output script (hex)."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "Output amount."},
+                        {RPCResult::Type::NUM, "confirmations", "Confirmation count."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listunspent", "") +
+            HelpExampleCli("listunspent", "6 9999999 \"[\\\"S1Example\\\"]\"") +
+            HelpExampleRpc("listunspent", "6, 9999999, [\"S1Example\"]")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
