@@ -250,6 +250,37 @@ install_deps() {
             fi
 
             # Pattern Install
+            #
+            # On Tumbleweed (rolling release), the base image as of
+            # snapshot ~20260523 ships busybox-gawk (and busybox-less),
+            # both of which `provide` the generic `gawk` / `less` capability.
+            # `patterns-devel-base-devel_basis` requires the canonical GNU
+            # gawk; zypper refuses the install with "not installable
+            # providers" because busybox-gawk already owns the `gawk`
+            # provider slot. Remove the busybox shims first so the devel
+            # pattern can pull in the real GNU tools.
+            #
+            # Safe for non-CI / bare-metal developer use too: on a system
+            # that's about to install patterns-devel-base-devel_basis, the
+            # canonical GNU gawk/less are what's actually wanted -- the
+            # busybox-* variants are minimal alternates the pattern will
+            # replace anyway.
+            #
+            # Leap and other openSUSE flavours don't hit this in their
+            # current snapshots, so the workaround is gated on Tumbleweed.
+            # The `rpm -q --quiet` guard skips the rm entirely on systems
+            # where neither shim is installed (e.g. an already-provisioned
+            # dev box) -- no zypper noise and no exit-code dance. When the
+            # rm does run, stderr stays visible so a real removal failure
+            # (repo lock, network, solver problem) surfaces in the CI /
+            # shell log rather than masquerading as the downstream
+            # devel_basis install failure.
+            if [[ "$IS_TUMBLEWEED" == "true" ]] \
+                && { rpm -q --quiet busybox-gawk || rpm -q --quiet busybox-less; }; then
+                echo "Removing busybox shims that conflict with devel_basis (busybox-gawk, busybox-less)..."
+                sudo zypper rm -y busybox-gawk busybox-less
+            fi
+
             echo "Installing devel_basis pattern..."
             sudo zypper install -y -t pattern devel_basis
 
