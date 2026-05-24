@@ -1818,11 +1818,20 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
 
 UniValue decodescript(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "decodescript <hex string>\n"
-                "\n"
-                "Decode a hex-encoded script.\n");
+    static const RPCHelpMan help{
+        "decodescript",
+        "Decode a hex-encoded script.",
+        {
+            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script data (empty is allowed)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Script detail and (when applicable) HTLC analysis; see source."}}},
+        RPCExamples{
+            HelpExampleCli("decodescript", "\"<hex>\"") +
+            HelpExampleRpc("decodescript", "\"<hex>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, { UniValue::VSTR });
 
