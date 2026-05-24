@@ -2934,11 +2934,38 @@ public:
 
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "validateaddress <gridcoinaddress>\n"
-                "\n"
-                "Return information about <gridcoinaddress>.\n");
+    static const RPCHelpMan help{
+        "validateaddress",
+        "Return information about the given Gridcoin address.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to validate."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "isvalid", "Whether the address is valid."},
+                {RPCResult::Type::STR, "address", /*optional=*/true, "The decoded address (only when valid)."},
+                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the address."},
+                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the address is a P2SH script address."},
+                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+                {RPCResult::Type::STR, "script", /*optional=*/true, "Script type (only when ismine and isscript)."},
+                {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "Hex-encoded redeem script (script address only)."},
+                {RPCResult::Type::ARR, "addresses", /*optional=*/true, "Embedded addresses (script address only).",
+                    {
+                        {RPCResult::Type::STR, "", "An embedded Gridcoin address."},
+                    }},
+                {RPCResult::Type::NUM, "sigsrequired", /*optional=*/true, "Required signatures (multisig script address only)."},
+                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+                {RPCResult::Type::STR, "hdkeypath", /*optional=*/true, "HD key derivation path (HD wallets only)."},
+                {RPCResult::Type::STR_HEX, "hdmasterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"") +
+            HelpExampleRpc("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
