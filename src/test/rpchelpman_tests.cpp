@@ -140,6 +140,18 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
 UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
+// Tier 1 PR E2: src/gridcoin/scraper/scraper.cpp + scraper_net.cpp commands.
+// Each function's converted body throws via help.ToString() before touching
+// any scraper globals or locks.
+UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
+UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
+UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
+UniValue archivelog(const UniValue& params, bool fHelp);
+UniValue convergencereport(const UniValue& params, bool fHelp);
+UniValue testnewsb(const UniValue& params, bool fHelp);
+UniValue scraperreport(const UniValue& params, bool fHelp);
+UniValue listmanifests(const UniValue& params, bool fHelp);
+UniValue getmpart(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -611,6 +623,7 @@ BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
+BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
 {
     const UniValue empty(UniValue::VARR);
     using HelpFn = UniValue (*)(const UniValue&, bool);
@@ -664,6 +677,15 @@ BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
         {"listresearcheraccounts", &listresearcheraccounts},
         {"inspectaccrualsnapshot", &inspectaccrualsnapshot},
         {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile},
+        {"sendscraperfilemanifest", &sendscraperfilemanifest},
+        {"savescraperfilemanifest", &savescraperfilemanifest},
+        {"deletecscrapermanifest", &deletecscrapermanifest},
+        {"archivelog", &archivelog},
+        {"convergencereport", &convergencereport},
+        {"testnewsb", &testnewsb},
+        {"scraperreport", &scraperreport},
+        {"listmanifests", &listmanifests},
+        {"getmpart", &getmpart},
     };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
