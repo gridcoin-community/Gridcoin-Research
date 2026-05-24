@@ -6399,11 +6399,20 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
  */
 UniValue archivelog(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
-                );
+    static const RPCHelpMan help{
+        "archivelog",
+        "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
+        {
+            {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Which log to archive: either \"debug\" or \"scraper\"."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
+        RPCExamples{
+            HelpExampleCli("archivelog", "debug") +
+            HelpExampleRpc("archivelog", "\"scraper\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     std::string sLogger = params[0].get_str();
 
