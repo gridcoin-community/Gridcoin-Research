@@ -650,11 +650,31 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 
 UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "auditsnapshotaccruals [report only mismatches]\n"
-                "\n"
-                "Report accrual audit for entire population of CPIDs.\n");
+    static const RPCHelpMan help{
+        "auditsnapshotaccruals",
+        "Report accrual audit for entire population of CPIDs.",
+        {
+            {"report_only_mismatches", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, omit matching CPIDs from the report. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "number_of_CPIDs", "Total CPIDs audited."},
+                {RPCResult::Type::NUM, "number_of_matches", "Matching audit results."},
+                {RPCResult::Type::NUM, "number_of_mismatches", "Mismatching audit results."},
+                {RPCResult::Type::NUM, "number_of_mismatches_last_period_only", "Mismatches only in the last accrual period."},
+                {RPCResult::Type::NUM, "number_accrual_accounts_not_present", "CPIDs without an accrual account."},
+                {RPCResult::Type::NUM, "number_not_present", "CPIDs the audit could not produce a result for."},
+                {RPCResult::Type::ARR, "accrual_mismatch_details", "",
+                    {{RPCResult::Type::ELISION, "", "Per-CPID match/mismatch detail object."}}},
+            }},
+        RPCExamples{
+            HelpExampleCli("auditsnapshotaccruals", "") +
+            HelpExampleCli("auditsnapshotaccruals", "true") +
+            HelpExampleRpc("auditsnapshotaccruals", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool report_only_mismatches = false;
 
