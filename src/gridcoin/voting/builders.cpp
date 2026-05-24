@@ -1302,7 +1302,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     SelectFinalInputs<PollPayload>(*pwallet, tx);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim with %u address(es), poll title %s.",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim with %" PRIszu " address(es), poll title %s.",
              __func__,
              poll_payload.m_claim.m_balance_claim.m_address_claims.size(),
              poll_payload.m_poll.m_title
