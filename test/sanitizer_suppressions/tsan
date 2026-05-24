@@ -43,3 +43,31 @@ race:epoll_ctl
 
 # https://github.com/bitcoin/bitcoin/issues/23366
 race:std::__1::ios_base::*
+
+# Gridcoin scraper subsystem — per-instance cs_manifest lock-order false positives
+# -----------------------------------------------------------------------------
+# CScraperManifest objects each carry their own per-instance recursive_mutex
+# (cs_manifest). When the code legitimately iterates the manifest map and
+# acquires each manifest's cs_manifest in turn (BinCScraperManifestsByScraper,
+# ScraperCullAndBinCScraperManifests), TSan's lock-order graph records the
+# acquisitions as edges between distinct mutex addresses that nonetheless
+# semantically represent the SAME class of lock. Combined with the global
+# cs_mapParts / cs_ConvergedScraperStatsCache, TSan constructs a 3-4 hop cycle
+# in its graph that does not correspond to any concrete deadlock scenario:
+# the per-instance cs_manifest in different cycle nodes are different objects,
+# so no single thread is ever blocked waiting for a lock it (or a partner)
+# could deadlock against.
+#
+# The canonical real-lock ordering between the global mutexes is defended
+# in-source (scraper_net.cpp:701 holds LOCK2(cs_mapParts, manifest->cs_manifest)
+# in canonical order; main.cpp:2527 + :2679 document cs_main scoping rules
+# vs cs_mapManifest / cs_manifest). The cycle does not extend beyond the
+# scraper subsystem (no cs_main / cs_wallet / cs_vNodes participation in
+# any of the reported cycles).
+#
+# Validated on the cleanup-branch TSan binary's public-testnet run
+# (gridcoinresearch-5.5.0.2-sanitizer-cleanup-tsan-d27dd6440); 7335 reports
+# audited, all from this single class.
+deadlock:CScraperManifest
+deadlock:CSplitBlob
+deadlock:BinCScraperManifestsByScraper

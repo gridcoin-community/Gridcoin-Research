@@ -281,11 +281,15 @@ public:
 
         account.m_total_research_subsidy += pindex->ResearchSubsidy();
 
-        // TODO: This probably doesn't work correctly given the implicit cast and should be removed. It isn't
-        // used in accrual calculations, only reporting.
+        // m_total_magnitude / m_accuracy back the AverageLifetimeMagnitude
+        // reporting only (not accrual / consensus). m_total_magnitude was
+        // historically uint32_t; the implicit (double -> uint32_t) cast in
+        // the += overflowed once the lifetime sum passed UINT_MAX, which
+        // UBSan reports. Widened to uint64_t in account.h, and the
+        // truncating double-to-integer cast is made explicit here.
         if (pindex->Magnitude() > 0) {
             account.m_accuracy++;
-            account.m_total_magnitude += pindex->Magnitude();
+            account.m_total_magnitude += static_cast<uint64_t>(pindex->Magnitude());
         }
 
         if (account.m_first_block_ptr == nullptr) {
@@ -325,7 +329,7 @@ public:
             // used in accrual calculations, only reporting.
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy++;
-                account.m_total_magnitude += pindex->pprev->Magnitude();
+                account.m_total_magnitude += static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             if (account.m_first_block_ptr == nullptr) {
@@ -434,7 +438,7 @@ public:
 
         if (pindex->Magnitude() > 0) {
             account.m_accuracy--;
-            account.m_total_magnitude -= pindex->Magnitude();
+            account.m_total_magnitude -= static_cast<uint64_t>(pindex->Magnitude());
         }
 
         pindex = FindLastRewardBlock(cpid, pindex);
@@ -484,7 +488,7 @@ public:
 
             if (mrc_researcher->m_magnitude > 0) {
                 account.m_accuracy--;
-                account.m_total_magnitude -= pindex->pprev->Magnitude();
+                account.m_total_magnitude -= static_cast<uint64_t>(pindex->pprev->Magnitude());
             }
 
             const CBlockIndex* last_block_pindex = FindLastRewardBlock(cpid, pindex);

@@ -121,7 +121,7 @@ int64_t nMinimumInputValue = 0;
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
-bool bGridcoinCoreInitComplete = false;
+std::atomic<bool> bGridcoinCoreInitComplete{false};
 
 // Mining status variables
 std::string    msMiningErrors;
@@ -2335,7 +2335,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
-        pfrom->addrLocal = addrMe;
+        pfrom->SetAddrLocal(addrMe);
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
             SeenLocal(addrMe);
@@ -3108,7 +3108,15 @@ bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
-        uint256 hash = Hash(Span<std::byte>{(std::byte*)&vRecv.begin()[0], nMessageSize});
+        // The previous form `&vRecv.begin()[0]` dereferenced begin() to take
+        // its address, which UBSan reported as a null-pointer-of-type bind on
+        // a zero-length message. `vRecv.data()` is well-defined for an empty
+        // container, but the standard permits it to return nullptr when size()
+        // is 0 -- and passing that down to CSHA256::Write would then exhibit
+        // `nullptr + 0` UB inside the hash core. That root is closed (see
+        // CSHA256::Write's len == 0 guard in crypto/sha256.cpp), so
+        // empty-payload messages (verack et al.) hash cleanly here.
+        uint256 hash = Hash(Span<std::byte>{vRecv.data(), nMessageSize});
 
         // We just received a message off the wire, harvest entropy from the time (and the message checksum)
         RandAddEvent(ReadLE32(hash.begin()));

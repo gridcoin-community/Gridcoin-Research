@@ -100,7 +100,16 @@ extern bool fDiscover;
 void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
-extern uint64_t nLocalHostNonce;
+// Local-host version nonce, randomised on every outgoing VERSION push and
+// compared against incoming VERSIONs to detect self-connection. It is a
+// global -- written on the socket-handler thread (PushVersion) and read on
+// the message-handler thread (ProcessMessage's "connected to ourself"
+// check), so it must be atomic; TSan G11 reports the race via a memcpy
+// into its raw storage from GetRandBytes. Note: the broader design is
+// imperfect (the same global is clobbered for each outbound connection,
+// so the per-connection nonce identity is lost), but that is a separate
+// follow-up; atomicising here just closes the data race.
+extern std::atomic<uint64_t> nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;
 extern std::map<CInv, CDataStream> mapRelay;
@@ -203,14 +212,32 @@ public:
     std::atomic<uint64_t> nRecvBytes {0};
     int nRecvVersion GUARDED_BY(cs_vRecvMsg);
 
-    int64_t nLastSend;
-    int64_t nLastRecv;
-    int64_t nTimeConnected;
+    // These three were plain int64_t historically (Bitcoin-Core-inherited).
+    // ThreadSocketHandler2's inactivity-check loop reads them racily against
+    // the message-handler / connection-accept paths that write them; TSan
+    // surfaced races at net.cpp:751,1144,1158,1170,1179,1188 and elsewhere
+    // tracking the same addresses. Atomicising matches the pattern already
+    // used for nSendBytes / nRecvBytes / nTimeOffset directly above.
+    std::atomic<int64_t> nLastSend{0};
+    std::atomic<int64_t> nLastRecv{0};
+    std::atomic<int64_t> nTimeConnected{0};
     int64_t nNextRebroadcastTime;
     std::atomic<int64_t> nTimeOffset{0};
     CAddress addr;
     std::string addrName;
-    CService addrLocal;
+    // addrLocal is the local address as seen by this peer (sent by them in
+    // their VERSION message). It is written once on the message-handler
+    // thread that processes that VERSION, and read concurrently by the GUI
+    // peers-table refresh (under cs_vNodes) and by net.cpp helpers
+    // (GetLocalAddress / IsPeerAddrLocalGood). The pre-existing pattern
+    // covered the readers (which hold cs_vNodes) but not the writer (which
+    // holds cs_vRecvMsg, a different mutex), surfaced as TSan G4/G5 races
+    // in CNetAddr::IsValid via CNode::copyStats.
+    //
+    // Use the GetAddrLocal()/SetAddrLocal() accessors below rather than
+    // touching the field directly.
+    mutable CCriticalSection cs_addrLocal;
+    CService addrLocal GUARDED_BY(cs_addrLocal);
     int nVersion;
     std::string strSubVer;
 	int nTrust;
@@ -226,7 +253,12 @@ public:
     bool fOneShot;
     bool fClient;
     bool fInbound;
-    bool fNetworkNode;
+    // Atomic: written by ThreadOpenConnections2 (OpenNetworkConnection sets true
+    // after a successful outbound connection) and read by both
+    // ThreadSocketHandler2 (close-side bookkeeping) and the message-handler
+    // thread (first-messages "remember this address" path). No common lock --
+    // sibling of the same CNode-scalar pattern atomicised for G6-G10.
+    std::atomic<bool> fNetworkNode;
     bool fSuccessfullyConnected;
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
@@ -260,10 +292,15 @@ public:
     std::multimap<int64_t, CInv> mapAskFor;
 
     // Ping time measurement:
-    // The pong reply we're expecting, or 0 if no pong expected.
-    uint64_t nPingNonceSent;
+    // The pong reply we're expecting, or 0 if no pong expected. Set on the
+    // ping-send path in SendMessages and cleared on the PONG receive path in
+    // ProcessMessage; read raw from ThreadSocketHandler2's timeout check. The
+    // companion nPingUsecTime / nMinPingUsecTime below were already atomic;
+    // atomicising these two closes the matching races (TSan main.cpp:2992 and
+    // net.cpp:1186).
+    std::atomic<uint64_t> nPingNonceSent{0};
     // Time (in usec) the last ping was sent, or 0 if no ping was ever sent.
-    int64_t nPingUsecStart;
+    std::atomic<int64_t> nPingUsecStart{0};
     // Last measured round-trip time.
     std::atomic<int64_t> nPingUsecTime{0};
     // Best measured round-trip time.
@@ -578,6 +615,12 @@ public:
     //! \return The decayed misbehavior score.
     //!
     static int GetMisbehaviorAddr(const CAddress& addr);
+
+    // Thread-safe accessors for addrLocal. See the comment on the field
+    // above for the locking rationale.
+    CService GetAddrLocal() const LOCKS_EXCLUDED(cs_addrLocal);
+    void SetAddrLocal(const CService& addrLocalIn) LOCKS_EXCLUDED(cs_addrLocal);
+
     void copyStats(CNodeStats &stats);
 
     static void CopyNodeStats(std::vector<CNodeStats>& vstats);

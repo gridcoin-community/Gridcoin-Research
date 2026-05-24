@@ -44,7 +44,7 @@ extern void ThreadAppInit2(void* parg);
 using namespace std;
 CWallet* pwalletMain;
 extern bool fQtActive;
-extern bool bGridcoinCoreInitComplete;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;

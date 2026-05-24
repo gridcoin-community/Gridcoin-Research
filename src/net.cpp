@@ -65,7 +65,7 @@ std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
 CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
-uint64_t nLocalHostNonce = 0;
+std::atomic<uint64_t> nLocalHostNonce{0};
 
 
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
@@ -197,7 +197,7 @@ static int GetnScore(const CService& addr)
 // Is our peer's addrLocal potentially useful as an external IP source?
 bool IsPeerAddrLocalGood(CNode *pnode)
 {
-    CService addrLocal = pnode->addrLocal;
+    CService addrLocal = pnode->GetAddrLocal();
     return fDiscover && pnode->addr.IsRoutable() && addrLocal.IsRoutable() &&
            IsReachable(addrLocal);
 }
@@ -216,7 +216,7 @@ void AdvertiseLocal(CNode *pnode)
         if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
              randomNumber == 0))
         {
-            addrLocal.SetIP(pnode->addrLocal);
+            addrLocal.SetIP(pnode->GetAddrLocal());
         }
         if (addrLocal.IsRoutable())
         {
@@ -486,7 +486,22 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
-    GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
+    // GetRandBytes() writes raw bytes into the provided buffer; that's
+    // incompatible with memcpy'ing into a std::atomic's storage directly,
+    // so go through a local and store atomically.
+    //
+    // The local `nonce` is what we send on the wire below -- the atomic
+    // store is only to publish it to ProcessMessage's self-connection
+    // sentinel check. Reading the atomic back here for the PushMessage
+    // payload would lose the value to a concurrent PushVersion() on
+    // another outbound connection that ran between our store() and
+    // load(). (The single-global-nonce design is still racy across
+    // multiple simultaneous outbound connections versus their respective
+    // self-connection echoes -- a separate per-connection-nonce follow-up
+    // is the proper fix; see PR #2957 commit message for context.)
+    uint64_t nonce;
+    GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    nLocalHostNonce.store(nonce);
 
     // Snapshot the chain height under cs_main so this method can be called
     // from CNode construction (socket handler thread, no outer locks held)
@@ -504,7 +519,7 @@ void CNode::PushVersion()
         nTime,
         addrYou,
         addrMe,
-        nLocalHostNonce,
+        nonce,
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
         nLocalBestHeight);
 }
@@ -600,6 +615,23 @@ bool CNode::MisbehavingAddr(const CAddress& addr, int howmuch)
     return false;
 }
 
+CService CNode::GetAddrLocal() const
+{
+    LOCK(cs_addrLocal);
+    return addrLocal;
+}
+
+void CNode::SetAddrLocal(const CService& addrLocalIn)
+{
+    LOCK(cs_addrLocal);
+    if (addrLocal.IsValid()) {
+        LogPrintf("WARN: %s: addrLocal already set for node %d: refusing to change from %s to %s",
+                  __func__, id, addrLocal.ToString(), addrLocalIn.ToString());
+    } else {
+        addrLocal = addrLocalIn;
+    }
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
     stats.id = id;
@@ -636,7 +668,8 @@ void CNode::copyStats(CNodeStats &stats)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
     stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
-    stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
+    const CService al = GetAddrLocal();
+    stats.addrLocal = al.IsValid() ? al.ToString() : "";
 
 }
 
