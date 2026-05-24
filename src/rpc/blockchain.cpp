@@ -278,30 +278,42 @@ UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTr
 
 UniValue dumpcontracts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 5) {
-        std::stringstream help;
+    static const RPCHelpMan help{
+        "dumpcontracts",
+        "Dump serialized or minimal textual contract data gathered from the chain to a specified file.",
+        {
+            {"contract_type", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Contract type to gather data from. Use \"*\" for all. Valid contract types: "
+                "beacon, claim, message, poll, project, protocol, scraper, vote, mrc, sidestake."},
+            {"file", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Output file. A bare filename is written under the data directory; an absolute or relative path with a parent is written verbatim."},
+            {"txids_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output txids and other minimal info in text. Default: false."},
+            {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Low height. Default: genesis."},
+            {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "High height. Default: current head."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "timestamp", "Block time of the high-height block."},
+                {RPCResult::Type::NUM, "low_height", "Lower bound of the scanned range."},
+                {RPCResult::Type::NUM, "high_height", "Upper bound of the scanned range."},
+                {RPCResult::Type::STR, "contract_type", "Contract type filter that was applied."},
+                {RPCResult::Type::NUM, "number_of_blocks_processed_containing_contract_type", "Count of blocks that contained at least one matching contract."},
+                {RPCResult::Type::NUM, "number_of_contracts_exported", "Count of contracts written to the output file."},
+                {RPCResult::Type::NUM, "number_of_beacons_verified", /*optional=*/true,
+                    "Verified-beacon count; present only when contract_type == \"beacon\"."},
+                {RPCResult::Type::STR, "exported_to_file", "Resolved path of the output file."},
+            }},
+        RPCExamples{
+            HelpExampleCli("dumpcontracts", "\"beacon\" \"beacons.txt\"") +
+            HelpExampleCli("dumpcontracts", "\"*\" \"all_contracts.txt\" true") +
+            HelpExampleRpc("dumpcontracts", "\"beacon\", \"beacons.txt\"")},
+    };
 
-        help << "dumpcontracts <contract_type> <file> [txids only] [low height] [high height]\n"
-                "\n"
-                "<contract_type> Contract type to gather data from. Use \"*\" for all.\n"
-                "Valid contract types: ";
-
-        // Skip UNKNOWN here.
-        for (int type = static_cast<int>(GRC::ContractType::UNKNOWN) + 1;
-             type < static_cast<int>(GRC::ContractType::OUT_OF_BOUND); ++type) {
-            if (type > 1) help << ", ";
-            help << GRC::Contract::Type(static_cast<GRC::ContractType>(type)).ToString();
-        }
-
-        help << ".\n\n"
-                "<file>          Output file.\n"
-                "<txids only>    Optional txids only. (If specified just output txids and other minimal info in text.)\n"
-                "<low height>    Optional low height. (If not specified then from genesis.)\n"
-                "<high height>   Optional high height. (If not specified then current head.)\n "
-                "\n"
-                "Dump serialized or minimal textual contract data gathered from the chain to a specified file.\n";
-
-        throw runtime_error(help.str());
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     std::string contract_type_string = params[0].get_str();
