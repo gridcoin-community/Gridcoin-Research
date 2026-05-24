@@ -193,11 +193,29 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getwalletinfo\n"
-                "\n"
-                "Displays information about the wallet\n");
+    static const RPCHelpMan help{
+        "getwalletinfo",
+        "Displays information about the wallet.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+                {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+                {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
+                {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getwalletinfo", "") +
+            HelpExampleRpc("getwalletinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
