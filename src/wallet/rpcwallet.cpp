@@ -192,11 +192,20 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
 UniValue getnewpubkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnewpubkey [account]\n"
-                "\n"
-                "Returns new public key for coinbase generation.\n");
+    static const RPCHelpMan help{
+        "getnewpubkey",
+        "Returns new public key for coinbase generation.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "pubkey", "The new public key, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getnewpubkey", "") +
+            HelpExampleRpc("getnewpubkey", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
