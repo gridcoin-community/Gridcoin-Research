@@ -15,6 +15,7 @@
 #include "protocol.h"
 #include "random.h"
 #include "wallet/db.h"
+#include <rpc/util.h>
 #include <util.h>
 
 #include <boost/asio.hpp>
@@ -262,10 +263,18 @@ UniValue help(const UniValue& params, bool fHelp)
 
 UniValue stop(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-            "stop\n"
-            "Stop Gridcoin server.");
+    static const RPCHelpMan help{
+        "stop",
+        "Stop Gridcoin server.",
+        {},
+        RPCResult{RPCResult::Type::STR, "", "A confirmation string."},
+        RPCExamples{
+            HelpExampleCli("stop", "") +
+            HelpExampleRpc("stop", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
     StartShutdown();
