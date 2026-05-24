@@ -103,6 +103,22 @@ UniValue changesettings(const UniValue& params, bool fHelp);
 UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
+// Tier 1 PR D2: remaining src/rpc/net.cpp commands. Each function's converted
+// body throws via help.ToString() before touching any globals (vNodes,
+// g_banman, mapAlerts, addrman, cs_main, cs_vNodes), so calling these with
+// fHelp=true and an empty params array is safe in unit tests.
+UniValue getconnectioncount(const UniValue& params, bool fHelp);
+UniValue getnodeaddresses(const UniValue& params, bool fHelp);
+UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
+UniValue listbanned(const UniValue& params, bool fHelp);
+UniValue clearbanned(const UniValue& params, bool fHelp);
+UniValue ping(const UniValue& params, bool fHelp);
+UniValue getpeerinfo(const UniValue& params, bool fHelp);
+UniValue getnettotals(const UniValue& params, bool fHelp);
+UniValue listalerts(const UniValue& params, bool fHelp);
+UniValue sendalert(const UniValue& params, bool fHelp);
+UniValue sendalert2(const UniValue& params, bool fHelp);
+UniValue getnetworkinfo(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -571,6 +587,7 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
 // runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
 BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
 BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
+BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
 {
     const UniValue empty(UniValue::VARR);
     using HelpFn = UniValue (*)(const UniValue&, bool);
@@ -599,6 +616,18 @@ BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
         {"getblockstats", &rpc_getblockstats},
         {"exportstats1", &rpc_exportstats},
         {"getrecentblocks", &rpc_getrecentblocks},
+        {"getconnectioncount", &getconnectioncount},
+        {"getnodeaddresses", &getnodeaddresses},
+        {"getaddednodeinfo", &getaddednodeinfo},
+        {"listbanned", &listbanned},
+        {"clearbanned", &clearbanned},
+        {"ping", &ping},
+        {"getpeerinfo", &getpeerinfo},
+        {"getnettotals", &getnettotals},
+        {"listalerts", &listalerts},
+        {"sendalert", &sendalert},
+        {"sendalert2", &sendalert2},
+        {"getnetworkinfo", &getnetworkinfo},
     };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
