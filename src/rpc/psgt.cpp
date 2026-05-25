@@ -432,19 +432,28 @@ UniValue finalizepsgt(const UniValue& params, bool fHelp)
 
 UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-            "walletprocesspsgt \"psgt\" ( sighashtype )\n"
-            "\nSign a PSGT with keys from the wallet.\n"
-            "\nArguments:\n"
-            "1. \"psgt\"             (string, required) A base64 PSGT string\n"
-            "2. \"sighashtype\"      (string, optional, default=ALL) The signature hash type to sign with\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"psgt\"     : \"value\",   (string) The base64-encoded partially signed transaction\n"
-            "  \"complete\" : true|false   (boolean) If the transaction has a complete set of signatures\n"
-            "}\n"
-        );
+    static const RPCHelpMan help{
+        "walletprocesspsgt",
+        "Sign a PSGT with keys from the wallet. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "A base64-encoded PSGT."},
+            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The signature hash type to sign with (default: ALL). "
+                "Valid: \"ALL\", \"ALL|ANYONECANPAY\", \"NONE\", \"NONE|ANYONECANPAY\", \"SINGLE\", \"SINGLE|ANYONECANPAY\"."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "psgt", "The base64-encoded partially-signed transaction."},
+                {RPCResult::Type::BOOL, "complete", "Whether the transaction has a complete set of signatures."},
+            }},
+        RPCExamples{
+            HelpExampleCli("walletprocesspsgt", "\"cHNidP8B...\"") +
+            HelpExampleRpc("walletprocesspsgt", "\"cHNidP8B...\", \"ALL\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
