@@ -3573,16 +3573,24 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
 
 UniValue upgradewallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1) {
-        throw std::runtime_error(
-                "upgradewallet [version]\n"
-                "\n"
-                "Upgrade the wallet. Upgrades to the latest version if no version number is specified\n"
-                "New keys may be generated and a new wallet backup will need to be made.\n"
-                "\n"
-                "[version] - The version number to upgrade to. Default is the latest wallet version."
-        );
-    }
+    static const RPCHelpMan help{
+        "upgradewallet",
+        "Upgrade the wallet to a newer version. Upgrades to the latest version if no version "
+        "number is specified. New keys may be generated and a new wallet backup may be required. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"version", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The version number to upgrade to. Default is the latest wallet version."},
+        },
+        RPCResult{RPCResult::Type::STR, "error",
+            "Empty string on success; otherwise an error message describing why the upgrade failed."},
+        RPCExamples{
+            HelpExampleCli("upgradewallet", "") +
+            HelpExampleCli("upgradewallet", "169900") +
+            HelpExampleRpc("upgradewallet", "169900")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
