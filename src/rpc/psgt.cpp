@@ -594,17 +594,21 @@ UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
 
 UniValue converttopsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "converttopsgt \"hexstring\"\n"
-            "\nConvert a raw transaction to PSGT format.\n"
-            "The resulting PSGT will have empty input metadata; use\n"
-            "utxoupdatepsgt to fill in UTXO information.\n"
-            "\nArguments:\n"
-            "1. \"hexstring\"        (string, required) The hex-encoded raw transaction\n"
-            "\nResult:\n"
-            "  \"psgt\"              (string) The base64-encoded PSGT\n"
-        );
+    static const RPCHelpMan help{
+        "converttopsgt",
+        "Convert a raw transaction to PSGT format. "
+        "The resulting PSGT will have empty input metadata; use utxoupdatepsgt to fill in UTXO information.",
+        {
+            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The hex-encoded raw transaction."},
+        },
+        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+        RPCExamples{
+            HelpExampleCli("converttopsgt", "\"0200000001...\"") +
+            HelpExampleRpc("converttopsgt", "\"0200000001...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
