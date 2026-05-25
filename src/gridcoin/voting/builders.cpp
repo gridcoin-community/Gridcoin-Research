@@ -17,6 +17,7 @@
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
+#include <numeric>
 #include <util/string.h>
 
 using namespace GRC;
@@ -757,12 +758,45 @@ private:
     //!
     //! \param poll Poll contract to generate the claim for.
     //!
+    //! Build a v1 (pre-gate) single-address poll eligibility claim.
+    //!
+    //! The selection is dust-resistant per address:
+    //!
+    //!   1. Group available outputs by address, recording each address's total
+    //!      balance.
+    //!   2. Filter to candidate addresses (per-address total >= threshold).
+    //!      Without this filter, the post-sort walk in step 4 might include
+    //!      every address; with it, the loop only runs over plausible
+    //!      candidates.
+    //!   3. Sort candidates by total balance DESCENDING. Larger-balance
+    //!      addresses are most likely to reach the threshold in the fewest
+    //!      outpoints, so try them first.
+    //!   4. For each candidate, sort its outpoints by value DESCENDING and
+    //!      accumulate top-down until either (a) the running sum reaches
+    //!      POLL_REQUIRED_BALANCE -- success, claim is built from the
+    //!      accumulated outpoints, or (b) the outpoint count hits
+    //!      MAX_OUTPOINTS without reaching the threshold -- move to the next
+    //!      candidate. Walking largest-first means the included outpoints
+    //!      actually sum to the threshold (the previous implementation kept
+    //!      the FIRST 250 in wallet-iteration order, which on a dust-heavy
+    //!      address could build a claim the verifier would reject).
+    //!   5. If no candidate succeeds, the wallet is fragmented enough that
+    //!      no single address can attest to the threshold in 250 or fewer
+    //!      outpoints; report that with a hint to consolidate.
+    //!
+    //! No up-front m_wallet.GetBalance() check is performed here. GetBalance()
+    //! excludes immature coinstake outputs, but AvailableCoins(.., fIncludeStakingCoins=true)
+    //! below includes them and the verifier does not enforce maturity. An
+    //! up-front balance check with the wrong source produces false-negative
+    //! rejections on borderline wallets, so the per-walk checks above are the
+    //! authoritative ones.
     PollEligibilityClaim BuildV1Claim(const Poll& poll) const
     {
         std::vector<COutput> outputs;
         m_wallet.AvailableCoins(outputs, true, nullptr, true);
 
-        // Group outputs by address
+        // Group outputs by address, populating both m_outpoints and m_amounts
+        // via AddressOutputs::Add() (parallel arrays kept consistent).
         std::map<CKeyID, AddressOutputs> outputs_by_address;
         for (const auto& output : outputs) {
             if (output.tx->vout[output.i].nValue < COIN) continue;
@@ -778,35 +812,79 @@ private:
             if (it == outputs_by_address.end()) {
                 it = outputs_by_address.emplace(*keyId, AddressOutputs(*keyId)).first;
             }
-            it->second.m_outpoints.emplace_back(output.tx->GetHash(), output.i);
-            it->second.m_total_amount += output.tx->vout[output.i].nValue;
+            it->second.Add(output);
         }
 
-        // Find the first address with balance >= POLL_REQUIRED_BALANCE
+        // 2. Filter to candidates: per-address total >= POLL_REQUIRED_BALANCE.
+        std::vector<AddressOutputs> candidates;
+        for (auto& [key_id, addr] : outputs_by_address) {
+            if (addr.m_total_amount >= POLL_REQUIRED_BALANCE) {
+                candidates.push_back(std::move(addr));
+            }
+        }
+
+        if (candidates.empty()) {
+            throw VotingError(strprintf(
+                _("No single address has the required %s GRC balance to create a poll."),
+                FormatMoney(POLL_REQUIRED_BALANCE)));
+        }
+
+        // 3. Sort candidate addresses descending by total balance.
+        std::sort(candidates.begin(), candidates.end(), std::greater<AddressOutputs>());
+
+        // 4. For each candidate, sort its outpoints by amount descending and
+        //    accumulate top-down until threshold or cap.
         const AddressClaimBuilder address_builder(m_wallet);
-        for (auto& [key_id, addr_outputs] : outputs_by_address) {
-            if (addr_outputs.m_total_amount < POLL_REQUIRED_BALANCE) continue;
 
-            // Trim to MAX_OUTPOINTS if needed
-            if (addr_outputs.m_outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
-                addr_outputs.m_outpoints.resize(PollEligibilityClaim::MAX_OUTPOINTS);
+        for (auto& cand : candidates) {
+            // Sort this address's outpoints by amount descending, keeping the
+            // parallel m_amounts array in lockstep. Indices are co-sorted via
+            // a temporary index vector to avoid the parallel-sort hazard.
+            const size_t n = cand.m_outpoints.size();
+            std::vector<size_t> idx(n);
+            std::iota(idx.begin(), idx.end(), 0);
+            std::sort(idx.begin(), idx.end(),
+                [&cand](size_t a, size_t b) { return cand.m_amounts[a] > cand.m_amounts[b]; });
+
+            AddressOutputs picked(cand.m_key_id);
+            for (size_t k = 0; k < n; ++k) {
+                if (picked.m_outpoints.size() >= PollEligibilityClaim::MAX_OUTPOINTS) {
+                    break;
+                }
+                const size_t i = idx[k];
+                picked.m_outpoints.push_back(cand.m_outpoints[i]);
+                picked.m_amounts.push_back(cand.m_amounts[i]);
+                picked.m_total_amount += cand.m_amounts[i];
+
+                if (picked.m_total_amount >= POLL_REQUIRED_BALANCE) {
+                    if (auto claim_option = address_builder.TryBuildClaim(std::move(picked))) {
+                        PollEligibilityClaim claim;
+                        claim.m_version = 1;
+                        claim.m_balance_claim.m_address_claims.push_back(std::move(*claim_option));
+
+                        LogPrint(LogFlags::VOTE,
+                            "%s: Built v1 poll claim for address %s with %" PRIszu " UTXOs",
+                            __func__,
+                            EncodeDestination(cand.m_key_id),
+                            claim.m_balance_claim.m_address_claims[0].m_outpoints.size());
+
+                        return claim;
+                    }
+                    // Signing failed for this candidate; fall through to the next.
+                    break;
+                }
             }
-
-            if (auto claim_option = address_builder.TryBuildClaim(std::move(addr_outputs))) {
-                PollEligibilityClaim claim;
-                claim.m_version = 1;
-                claim.m_balance_claim.m_address_claims.push_back(std::move(*claim_option));
-
-                LogPrint(LogFlags::VOTE, "%s: Built v1 poll claim for address %s",
-                    __func__, EncodeDestination(key_id));
-
-                return claim;
-            }
+            // Hit MAX_OUTPOINTS cap before reaching threshold; try next candidate.
         }
 
+        // 5. All candidates exhausted: heavily dust-fragmented within each
+        //    qualifying address. v2 (post-gate) would succeed because it can
+        //    combine outpoints across addresses.
         throw VotingError(strprintf(
-            _("No single address has the required %s GRC balance to create a poll."),
-            FormatMoney(POLL_REQUIRED_BALANCE)));
+            _("No single address can attest to %s GRC in %u or fewer UTXOs. "
+              "Consider consolidating UTXOs."),
+            FormatMoney(POLL_REQUIRED_BALANCE),
+            static_cast<unsigned>(PollEligibilityClaim::MAX_OUTPOINTS)));
     }
 }; // PollClaimBuilder
 
