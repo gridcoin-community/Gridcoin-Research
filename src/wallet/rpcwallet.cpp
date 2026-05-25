@@ -3327,11 +3327,25 @@ UniValue reservebalance(const UniValue& params, bool fHelp)
 // ppcoin: check wallet integrity
 UniValue checkwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "checkwallet\n"
-                "\n"
-                "Check wallet for integrity.\n");
+    static const RPCHelpMan help{
+        "checkwallet",
+        "Check the wallet for integrity (mismatched spent coins).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                    "Present and true when no mismatches were found."},
+                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                    "Number of mismatched spent coins detected (only present when nonzero)."},
+                {RPCResult::Type::STR_AMOUNT, "amount in question", /*optional=*/true,
+                    "Total balance involved in the mismatches (only present when nonzero)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("checkwallet", "") +
+            HelpExampleRpc("checkwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
