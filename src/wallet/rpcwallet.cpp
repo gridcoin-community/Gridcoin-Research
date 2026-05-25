@@ -1844,62 +1844,31 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
 
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "listtransactions ( \"account\" count from includeWatchonly)\n"
-                "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
-                "\nArguments:\n"
-                "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
-                "                                     If \"\" is set, it will list transactions for the default account.\n"
-                "2. count          (numeric, optional, default=10) The number of transactions to return\n"
-                "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
-                "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
-                "                                     If \"\" is set true, it will list sent transactions as well\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
-                "                                                It will be \"\" for the default account.\n"
-                "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
-                "                                                move transactions (category = move).\n"
-                "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
-                "                                                transaction between accounts, and not associated with an address,\n"
-                "                                                transaction id or block. 'send' and 'receive' transactions are \n"
-                "                                                associated with an address, transaction id and block details\n"
-                "    \"amount\": x.xxx,          (numeric) The amount in GRC. This is negative for the 'send' category, and for the\n"
-                "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
-                "                                         and for the 'move' category for inbound funds.\n"
-                "    \"fee\": x.xxx,             (numeric) The amount of the fee in GRC. This is negative and only available for the \n"
-                "                                         'send' category of transactions.\n"
-                "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
-                "                                         'receive' category of transactions.\n"
-                "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
-                "                                          category of transactions.\n"
-                "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
-                "                                          category of transactions.\n"
-                "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
-                "    \"walletconflicts\" : [\n"
-                "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
-                "    ],\n"
-                "    \"respendsobserved\" : [\n"
-                "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
-                "    ],\n"
-                "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
-                "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
-                "                                          for 'send' and 'receive' category of transactions.\n"
-                "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
-                "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
-                "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
-                "                                          negative amounts).\n"
-                "  }\n"
-                "]\n"
-
-                "\nExamples:\n"
-                "\nList the most recent 10 transactions in the systems\n"
-                "\nList the most recent 10 transactions for the tabby account\n"
-                "\nList transactions 100 to 120 from the tabby account\n"
-                "\nAs a json rpc call\n"
-                );
+    static const RPCHelpMan help{
+        "listtransactions",
+        "Returns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name; if omitted, list transactions for all accounts. "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The number of transactions to return (default: 10)."},
+            {"from", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The number of transactions to skip (default: 0)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "transaction object; see 'gettransaction' for the full schema"},
+            }},
+        RPCExamples{
+            HelpExampleCli("listtransactions", "") +
+            HelpExampleCli("listtransactions", "\"*\" 20 100") +
+            HelpExampleRpc("listtransactions", "\"*\", 20, 100")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = "*";
     int nCount = 10;
