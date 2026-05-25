@@ -2543,11 +2543,22 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
 
 UniValue keypoolrefill(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "keypoolrefill [new-size]\n"
-                "Fills the keypool.\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "keypoolrefill",
+        "Fills the keypool. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"newsize", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The new keypool size (default: from -keypool option)."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("keypoolrefill", "") +
+            HelpExampleCli("keypoolrefill", "1000") +
+            HelpExampleRpc("keypoolrefill", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
