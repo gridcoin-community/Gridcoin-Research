@@ -41,8 +41,12 @@ floor whenever a new tier merges.
 What it catches per converted command
 -------------------------------------
   - `help <cmd>` includes Result:/Examples: sections (format regression).
-  - Wrong-arity call surfaces as RPC_MISC_ERROR (-1) with help.ToString()
-    in the message (proves IsValidNumArgs is wired through the dispatcher).
+  - Wrong-arity call is rejected. Most converted commands fail IsValidNumArgs
+    and surface RPC_MISC_ERROR (-1) with help.ToString() in the message.
+    Variadic commands accept the 100 args and fall through to per-argument
+    validation, raising RPC_INVALID_PARAMETER (-8) from the function body.
+    Either constitutes "the command rejected the call", which is enough to
+    verify dispatcher + arity-or-arg-validation behavior end-to-end.
 
 What it does NOT catch (deferred to richer tests once regtest lands)
 -------------------------------------------------------------------
@@ -52,15 +56,23 @@ What it does NOT catch (deferred to richer tests once regtest lands)
     state -- those need Phase 2A regtest to set up deterministically.
 """
 
+from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal
 
 
-# JSON-RPC error code emitted by the dispatcher when an RPC handler throws
-# std::runtime_error -- which is exactly what
-# `throw runtime_error(help.ToString())` does on an arity violation.
-# Defined as RPC_MISC_ERROR in src/rpc/protocol.h.
+# JSON-RPC error codes (src/rpc/protocol.h).
+#
+# RPC_MISC_ERROR (-1) is emitted by the dispatcher when an RPC handler throws
+# std::runtime_error -- exactly what `throw runtime_error(help.ToString())`
+# does on an arity violation. RPC_INVALID_PARAMETER (-8) is what *some*
+# RPCs throw when they reach the function body with the wrong shape (e.g.,
+# variadic commands that accept the 100 args and then fail on individual
+# argument validation). Either constitutes "the command rejected the bad
+# call", which is the per-command invariant we want to assert.
 RPC_MISC_ERROR = -1
+RPC_INVALID_PARAMETER = -8
+RPC_ARITY_REJECTION_CODES = (RPC_MISC_ERROR, RPC_INVALID_PARAMETER)
 
 # Categories advertised by the help RPC (see src/rpc/server.cpp). The help
 # RPC accepts each of these as a single-word category filter and returns a
@@ -180,16 +192,25 @@ class RpcHelpTest(GridcoinTestFramework):
             )
 
         # 2. Wrong-arity call: passing 100 dummy positional args exceeds
-        #    every realistic m_args.size(), so IsValidNumArgs rejects and
-        #    the dispatcher re-throws runtime_error as RPC_MISC_ERROR.
-        #    Pass an empty message substring -- we only assert the error
-        #    code here. (Asserting message content would require knowing
-        #    each command's description; the per-command shape spot-checks
-        #    below cover that for the representative cases.)
+        #    every realistic m_args.size(). Most converted commands reject
+        #    this via IsValidNumArgs -> runtime_error -> RPC_MISC_ERROR (-1).
+        #    Variadic commands (e.g. changesettings) accept the args and
+        #    fail downstream with RPC_INVALID_PARAMETER (-8) on individual
+        #    arg validation. Either outcome satisfies "the command rejected
+        #    the bad call", which is the per-command invariant we want.
         method = getattr(node, name)
-        assert_raises_rpc_error(
-            RPC_MISC_ERROR, None, method, *ARITY_VIOLATION_ARGS,
-        )
+        try:
+            method(*ARITY_VIOLATION_ARGS)
+        except JSONRPCException as e:
+            assert e.error['code'] in RPC_ARITY_REJECTION_CODES, (
+                f"{name}: unexpected JSONRPC error code {e.error['code']} "
+                f"on 100-arg call (expected one of {RPC_ARITY_REJECTION_CODES})"
+            )
+        else:
+            raise AssertionError(
+                f"{name}: 100-arg call did not raise -- the command "
+                f"accepted clearly-bogus args without rejection"
+            )
 
     # --- Test driver -------------------------------------------------------
 

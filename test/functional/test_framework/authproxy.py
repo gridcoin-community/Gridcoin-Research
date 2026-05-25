@@ -127,16 +127,30 @@ class AuthServiceProxy():
     def get_request(self, *args, **argsn):
         AuthServiceProxy.__id_count += 1
 
+        if args and argsn:
+            raise ValueError('Cannot handle both named and positional arguments')
+        # Gridcoin's RPC parser strictly requires `params` to be a JSON array
+        # (or null) -- see src/rpc/server.cpp JSONRequest::parse, which throws
+        # "Params must be an array" otherwise. The Bitcoin Core v0.21.2
+        # expression `args or argsn` returns `{}` when BOTH are empty (Python
+        # short-circuits on the first non-empty operand, and an empty tuple
+        # `or` an empty dict yields the empty dict), which serializes to a
+        # JSON object and is rejected. Coerce the empty case to a real list,
+        # and convert the positional case to a list (was a tuple).
+        if args:
+            params = list(args)
+        elif argsn:
+            params = argsn
+        else:
+            params = []
         log.debug("-{}-> {} {}".format(
             AuthServiceProxy.__id_count,
             self._service_name,
-            json.dumps(args or argsn, default=EncodeDecimal, ensure_ascii=self.ensure_ascii),
+            json.dumps(params, default=EncodeDecimal, ensure_ascii=self.ensure_ascii),
         ))
-        if args and argsn:
-            raise ValueError('Cannot handle both named and positional arguments')
         return {'version': '1.1',
                 'method': self._service_name,
-                'params': args or argsn,
+                'params': params,
                 'id': AuthServiceProxy.__id_count}
 
     def __call__(self, *args, **argsn):

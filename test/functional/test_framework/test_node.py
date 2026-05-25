@@ -101,8 +101,18 @@ class TestNode():
             "-debug",
             "-debugexclude=libevent",
             "-debugexclude=leveldb",
-            "-uacomment=testnode%d" % i,
         ]
+        # Gridcoin's daemon doesn't recognize -uacomment (Bitcoin Core only),
+        # so it's omitted from the defaults above.
+        #
+        # Chain selection must be on the command line: putting `testnet=1` in
+        # the .conf is read but does NOT set the fTestNet global (see
+        # src/init.cpp's `fTestNet = gArgs.GetBoolArg("-testnet")`), which
+        # gates many code paths including genesis-block construction.
+        if self.chain == 'test':
+            self.args.append('-testnet=1')
+        elif self.chain == 'regtest':
+            self.args.append('-regtest=1')
         if use_valgrind:
             default_suppressions_file = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
@@ -229,28 +239,13 @@ class TestNode():
                     coveragedir=self.coverage_dir,
                 )
                 rpc.getblockcount()
-                # If the call to getblockcount() succeeds then the RPC connection is up
-                if self.version_is_at_least(190000):
-                    # getmempoolinfo.loaded is available since commit
-                    # bb8ae2c (version 0.19.0)
-                    wait_until_helper(lambda: rpc.getmempoolinfo()['loaded'], timeout_factor=self.timeout_factor)
-                    # Wait for the node to finish reindex, block import, and
-                    # loading the mempool. Usually importing happens fast or
-                    # even "immediate" when the node is started. However, there
-                    # is no guarantee and sometimes ThreadImport might finish
-                    # later. This is going to cause intermittent test failures,
-                    # because generally the tests assume the node is fully
-                    # ready after being started.
-                    #
-                    # For example, the node will reject block messages from p2p
-                    # when it is still importing with the error "Unexpected
-                    # block message received"
-                    #
-                    # The wait is done here to make tests as robust as possible
-                    # and prevent racy tests and intermittent failures as much
-                    # as possible. Some tests might not need this, but the
-                    # overhead is trivial, and the added guarantees are worth
-                    # the minimal performance cost.
+                # If the call to getblockcount() succeeds then the RPC connection is up.
+                # Bitcoin Core polled getmempoolinfo()['loaded'] here to wait for the
+                # node to finish loading the mempool from disk after restart. Gridcoin
+                # has no getmempoolinfo RPC (RPC_METHOD_NOT_FOUND) and no equivalent
+                # mempool-loading concept, so the poll is omitted. Phase 2A regtest
+                # will revisit whether any node-readiness gate is needed before tests
+                # start issuing further RPCs.
                 self.log.debug("RPC successfully started")
                 if self.use_cli:
                     return
@@ -316,11 +311,12 @@ class TestNode():
             return
         self.log.debug("Stopping node")
         try:
-            # Do not use wait argument when testing older nodes, e.g. in feature_backwards_compatibility.py
-            if self.version_is_at_least(180000):
-                self.stop(wait=wait)
-            else:
-                self.stop()
+            # Gridcoin's stop RPC takes no arguments. Bitcoin Core accepted
+            # an optional `wait` parameter, but Gridcoin's RPC parser rejects
+            # named-arg dicts ({"wait": 0}) with "Params must be an array".
+            # The `wait` kwarg is preserved on stop_node()'s signature for
+            # caller compatibility but not forwarded to the RPC.
+            self.stop()
         except http.client.CannotSendRequest:
             self.log.exception("Unable to stop node.")
 

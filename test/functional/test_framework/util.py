@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 import unittest
 
@@ -350,11 +351,42 @@ def initialize_datadir(dirname, n, chain):
     if chain == 'test':
         chain_name_conf_arg = 'testnet'
         chain_name_conf_section = 'test'
+        chain_subdir = 'testnet'
+    elif chain == 'regtest':
+        chain_name_conf_arg = chain
+        chain_name_conf_section = chain
+        chain_subdir = 'regtest'
     else:
         chain_name_conf_arg = chain
         chain_name_conf_section = chain
+        chain_subdir = ''
+    # Gridcoin requires explicit rpcuser/rpcpassword in the chain-specific
+    # conf when -server is set -- there's no cookie-auth fallback like
+    # Bitcoin Core's, and Gridcoin loads chain-specific settings from
+    # <datadir>/<chain>/gridcoinresearch.conf rather than honoring Bitcoin
+    # Core's [test] section in the top-level conf. Pre-create the chain
+    # subdir and write the auth + port settings there directly; the global
+    # conf below still gets a copy of rpcuser/rpcpassword so get_auth_cookie
+    # can read them from a single known path.
+    rpc_user = "gctest_" + secrets.token_hex(8)
+    rpc_pass = secrets.token_hex(32)
+    if chain_subdir:
+        os.makedirs(os.path.join(datadir, chain_subdir), exist_ok=True)
+        with open(os.path.join(datadir, chain_subdir, "gridcoinresearch.conf"), 'w', encoding='utf8') as f:
+            f.write("rpcuser=" + rpc_user + "\n")
+            f.write("rpcpassword=" + rpc_pass + "\n")
+            f.write("port=" + str(p2p_port(n)) + "\n")
+            f.write("rpcport=" + str(rpc_port(n)) + "\n")
+            f.write("server=1\n")
+            f.write("listen=0\n")
+            f.write("discover=0\n")
+            f.write("dnsseed=0\n")
+            f.write("listenonion=0\n")
+            f.write("upnp=0\n")
     with open(os.path.join(datadir, "gridcoinresearch.conf"), 'w', encoding='utf8') as f:
         f.write("{}=1\n".format(chain_name_conf_arg))
+        f.write("rpcuser=" + rpc_user + "\n")
+        f.write("rpcpassword=" + rpc_pass + "\n")
         f.write("[{}]\n".format(chain_name_conf_section))
         f.write("port=" + str(p2p_port(n)) + "\n")
         f.write("rpcport=" + str(rpc_port(n)) + "\n")
