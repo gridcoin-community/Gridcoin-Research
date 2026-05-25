@@ -256,6 +256,14 @@ UniValue help(const UniValue& params, bool fHelp)
     if (params.size() > 0)
         strCommand = params[0].get_str();
 
+    // With no command argument, return the structured help for `help` itself
+    // (description + categories + arguments + examples). Without this early
+    // return, an empty strCommand would fall through to the lookup loop below
+    // and yield "help: unknown command:" — a regression vs. the pre-RPCHelpMan
+    // behavior where `help` (no args) printed the category overview.
+    if (strCommand.empty())
+        return help_rpc.ToString();
+
     // Subcategory help area
     // Blockchain related commands
     rpccategory category;
