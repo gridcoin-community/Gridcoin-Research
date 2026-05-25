@@ -2,7 +2,7 @@
 # Copyright (c) 2014-2019 The Bitcoin Core developers
 # Copyright (c) 2014-2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
 
 import configparser
@@ -21,19 +21,6 @@ import time
 
 from .authproxy import JSONRPCException
 from . import coverage
-
-
-class NetworkThread:
-    """Placeholder until Phase 3 ports test_framework/p2p.py. No-op start()/close()
-    so tests that don't use P2P (the entire Phase 1 + Phase 2 set) work unchanged."""
-
-    def start(self):
-        pass
-
-    def close(self, timeout=10):
-        pass
-
-
 from .test_node import TestNode
 from .util import (
     MAX_NODES,
@@ -45,6 +32,17 @@ from .util import (
     p2p_port,
     wait_until_helper,
 )
+
+
+class NetworkThread:
+    """Placeholder until Phase 3 ports test_framework/p2p.py. No-op start()/close()
+    so tests that don't use P2P (the entire Phase 1 + Phase 2 set) work unchanged."""
+
+    def start(self):
+        pass
+
+    def close(self, timeout=10):
+        pass
 
 
 class TestStatus(Enum):

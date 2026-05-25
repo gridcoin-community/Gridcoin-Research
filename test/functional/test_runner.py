@@ -2,7 +2,7 @@
 # Copyright (c) 2014-2020 The Bitcoin Core developers
 # Copyright (c) 2014-2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 """Run regression test suite.
 
 This module calls down into individual test cases via subprocess. It will
@@ -40,7 +40,7 @@ except UnicodeDecodeError:
     CROSS = "x "
     CIRCLE = "o "
 
-if os.name != 'nt' or sys.getwindowsversion() >= (10, 0, 14393):
+if os.name != 'nt' or sys.getwindowsversion() >= (10, 0, 14393):  # type: ignore[attr-defined]
     if os.name == 'nt':
         import ctypes
         kernel32 = ctypes.windll.kernel32  # type: ignore
@@ -73,7 +73,7 @@ TEST_FRAMEWORK_MODULES = [
     "util",
 ]
 
-EXTENDED_SCRIPTS = [
+EXTENDED_SCRIPTS: list = [
     # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel.
     # Phase 1 has no extended tests.
