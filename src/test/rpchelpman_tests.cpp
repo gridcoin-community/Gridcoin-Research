@@ -14,11 +14,33 @@
 #include <string>
 #include <vector>
 
-// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
+// Forward declarations of the Tier 1a blockchain-core and Tier 1b
+// researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
 // captures them into the suite's namespace and breaks linkage. After conversion
 // each function throws std::runtime_error for fHelp=true before touching any
 // node globals or acquiring locks, so calling them with empty params is safe.
+UniValue getbestblockhash(const UniValue& params, bool fHelp);
+UniValue getblockcount(const UniValue& params, bool fHelp);
+UniValue getdifficulty(const UniValue& params, bool fHelp);
+UniValue getblockhash(const UniValue& params, bool fHelp);
+UniValue getblock(const UniValue& params, bool fHelp);
+UniValue getblockbynumber(const UniValue& params, bool fHelp);
+UniValue getblockbymintime(const UniValue& params, bool fHelp);
+UniValue getblocksbatch(const UniValue& params, bool fHelp);
+UniValue showblock(const UniValue& params, bool fHelp);
+UniValue getrawmempool(const UniValue& params, bool fHelp);
+UniValue getblockchaininfo(const UniValue& params, bool fHelp);
+UniValue getcheckpoint(const UniValue& params, bool fHelp);
+UniValue getburnreport(const UniValue& params, bool fHelp);
+UniValue rpc_reorganize(const UniValue& params, bool fHelp);
+UniValue currenttime(const UniValue& params, bool fHelp);
+UniValue networktime(const UniValue& params, bool fHelp);
+UniValue network(const UniValue& params, bool fHelp);
+UniValue sendblock(const UniValue& params, bool fHelp);
+UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
+UniValue debug(const UniValue& params, bool fHelp);
+UniValue versionreport(const UniValue& params, bool fHelp);
 UniValue advertisebeacon(const UniValue& params, bool fHelp);
 UniValue advertisebeaconv3(const UniValue& params, bool fHelp);
 UniValue beaconauth(const UniValue& params, bool fHelp);
@@ -454,6 +476,58 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
         BOOST_CHECK(message.find("command must be") != std::string::npos);
         BOOST_CHECK(message.find("add") != std::string::npos);
         BOOST_CHECK(message.find("remove") != std::string::npos);
+    }
+}
+
+// Tier 1a coverage: each converted blockchain-core command throws a
+// runtime_error containing its name and the "Examples:" marker when called
+// with fHelp=true. The check confirms RPCHelpMan is wired (renders) and the
+// help-gate fires correctly. The throw happens before any global state is
+// touched, so the test runs fixture-free.
+BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"getbestblockhash",        &getbestblockhash},
+        {"getblockcount",           &getblockcount},
+        {"getdifficulty",           &getdifficulty},
+        {"getblockhash",            &getblockhash},
+        {"getblock",                &getblock},
+        {"getblockbynumber",        &getblockbynumber},
+        {"getblockbymintime",       &getblockbymintime},
+        {"getblocksbatch",          &getblocksbatch},
+        {"showblock",               &showblock},
+        {"getrawmempool",           &getrawmempool},
+        {"getblockchaininfo",       &getblockchaininfo},
+        {"getcheckpoint",           &getcheckpoint},
+        {"getburnreport",           &getburnreport},
+        {"reorganize",              &rpc_reorganize}, // C++ symbol differs from RPC name
+        {"currenttime",             &currenttime},
+        {"networktime",             &networktime},
+        {"network",                 &network},
+        {"sendblock",               &sendblock},
+        {"askforoutstandingblocks", &askforoutstandingblocks},
+        {"debug",                   &debug},
+        {"versionreport",           &versionreport},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
     }
 }
 
