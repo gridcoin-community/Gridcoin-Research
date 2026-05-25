@@ -2407,24 +2407,27 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     return entry;
 }
 
+static const RPCHelpMan abandontransaction_help{
+    "abandontransaction",
+    "Mark in-wallet transaction <txid> as abandoned. "
+    "This will mark this transaction and all its in-wallet descendants as abandoned, "
+    "which will allow their inputs to be respent. It can be used to replace stuck or evicted transactions. "
+    "It only works on transactions which are not included in a block and are not currently in the mempool. "
+    "It has no effect on transactions which are already conflicted or abandoned.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The transaction id (must be in the wallet)."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+        HelpExampleRpc("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+};
+const RPCHelpMan& abandontransaction_helpman() { return abandontransaction_help; }
+
 UniValue abandontransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "abandontransaction",
-        "Mark in-wallet transaction <txid> as abandoned. "
-        "This will mark this transaction and all its in-wallet descendants as abandoned, "
-        "which will allow their inputs to be respent. It can be used to replace stuck or evicted transactions. "
-        "It only works on transactions which are not included in a block and are not currently in the mempool. "
-        "It has no effect on transactions which are already conflicted or abandoned.",
-        {
-            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The transaction id (must be in the wallet)."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
-            HelpExampleRpc("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
-    };
+    const RPCHelpMan& help = abandontransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2899,46 +2902,49 @@ static const char* ClassifyWalletTxState(const CWalletTx& wtx)
  * Inspect wallet transaction states (DEBUG)
  * Shows the internal state of all wallet transactions for debugging Issue #1157.
  */
+static const RPCHelpMan inspectwalletstate_help{
+    "inspectwalletstate",
+    "Diagnostic command to inspect transaction states in the wallet. "
+    "Shows how many transactions are in each state and identifies issues. "
+    "Useful for debugging the transaction state machine introduced in Issue #1157.",
+    {
+        {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Show per-transaction details including inactive/unrecognized transaction data. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "total_transactions", "Total number of transactions in the wallet."},
+            {RPCResult::Type::OBJ, "state_counts", "",
+                {
+                    {RPCResult::Type::NUM, "mempool",      "Transactions currently in the mempool."},
+                    {RPCResult::Type::NUM, "confirmed",    "Transactions confirmed in a block."},
+                    {RPCResult::Type::NUM, "inactive",     "Transactions in the inactive state (abandoned or conflicted)."},
+                    {RPCResult::Type::NUM, "unrecognized", "Transactions whose state could not be classified."},
+                }},
+            {RPCResult::Type::OBJ, "balance_calculation", "Diagnostic balance breakdown.",
+                {
+                    {RPCResult::Type::ELISION, "", "trusted/confirmed counts and sums"},
+                }},
+            {RPCResult::Type::ARR, "inactive_transactions", /*optional=*/true,
+                "Per-transaction inactive details (verbose only).",
+                {{RPCResult::Type::ELISION, "", ""}}},
+            {RPCResult::Type::ARR, "unrecognized_transactions", /*optional=*/true,
+                "Per-transaction unrecognized details (verbose only).",
+                {{RPCResult::Type::ELISION, "", ""}}},
+            {RPCResult::Type::ARR, "all_transactions", /*optional=*/true,
+                "Every wallet transaction with state breakdown (verbose only).",
+                {{RPCResult::Type::ELISION, "", ""}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("inspectwalletstate", "") +
+        HelpExampleCli("inspectwalletstate", "true") +
+        HelpExampleRpc("inspectwalletstate", "true")},
+};
+const RPCHelpMan& inspectwalletstate_helpman() { return inspectwalletstate_help; }
+
 UniValue inspectwalletstate(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "inspectwalletstate",
-        "Diagnostic command to inspect transaction states in the wallet. "
-        "Shows how many transactions are in each state and identifies issues. "
-        "Useful for debugging the transaction state machine introduced in Issue #1157.",
-        {
-            {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Show per-transaction details including inactive/unrecognized transaction data. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "total_transactions", "Total number of transactions in the wallet."},
-                {RPCResult::Type::OBJ, "state_counts", "",
-                    {
-                        {RPCResult::Type::NUM, "mempool",      "Transactions currently in the mempool."},
-                        {RPCResult::Type::NUM, "confirmed",    "Transactions confirmed in a block."},
-                        {RPCResult::Type::NUM, "inactive",     "Transactions in the inactive state (abandoned or conflicted)."},
-                        {RPCResult::Type::NUM, "unrecognized", "Transactions whose state could not be classified."},
-                    }},
-                {RPCResult::Type::OBJ, "balance_calculation", "Diagnostic balance breakdown.",
-                    {
-                        {RPCResult::Type::ELISION, "", "trusted/confirmed counts and sums"},
-                    }},
-                {RPCResult::Type::ARR, "inactive_transactions", /*optional=*/true,
-                    "Per-transaction inactive details (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-                {RPCResult::Type::ARR, "unrecognized_transactions", /*optional=*/true,
-                    "Per-transaction unrecognized details (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-                {RPCResult::Type::ARR, "all_transactions", /*optional=*/true,
-                    "Every wallet transaction with state breakdown (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("inspectwalletstate", "") +
-            HelpExampleCli("inspectwalletstate", "true") +
-            HelpExampleRpc("inspectwalletstate", "true")},
-    };
+    const RPCHelpMan& help = inspectwalletstate_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
