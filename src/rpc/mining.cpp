@@ -23,86 +23,64 @@
 
 using namespace std;
 
+static const RPCHelpMan getstakinginfo_help{
+    "getstakinginfo",
+    "Returns an object containing staking-related information.\n"
+    "Note: `getmininginfo` is a dispatch-table alias for this command.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "blocks", "Current best block height."},
+            {RPCResult::Type::OBJ, "stakeweight", "",
+                {{RPCResult::Type::ELISION, "", "Stake-weight detail (minimum/maximum/combined/valuesum/legacy)."}}},
+            {RPCResult::Type::NUM, "netstakeweight", "Estimated network stake weight."},
+            {RPCResult::Type::NUM, "netstakingGRCvalue", "Network stake value in GRC."},
+            {RPCResult::Type::BOOL, "staking", "Whether the miner is actively staking."},
+            {RPCResult::Type::STR, "mining-error", "Aggregated miner error string."},
+            {RPCResult::Type::NUM, "time-to-stake_days", "Estimated time-to-stake in days."},
+            {RPCResult::Type::NUM, "expectedtime", "Estimated time-to-stake in seconds."},
+            {RPCResult::Type::NUM, "mining-version", "Block version most recently attempted."},
+            {RPCResult::Type::NUM, "mining-created", "Number of blocks created in this run."},
+            {RPCResult::Type::NUM, "mining-accepted", "Number of blocks accepted by the network."},
+            {RPCResult::Type::NUM, "mining-kernels-found", "Total kernels found."},
+            {RPCResult::Type::NUM, "masked_time_intervals_covered", "Mask intervals covered."},
+            {RPCResult::Type::NUM, "masked_time_intervals_elapsed", "Mask intervals elapsed."},
+            {RPCResult::Type::NUM, "staking_loop_efficiency", "Fraction of time spent in productive staking loops."},
+            {RPCResult::Type::NUM, "actual_cumulative_weight", "Cumulative effective weight observed."},
+            {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
+            {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
+            {RPCResult::Type::OBJ, "stake-splitting", "",
+                {{RPCResult::Type::ELISION, "", "Stake-splitting enabled flag and (when enabled) parameters."}}},
+            {RPCResult::Type::OBJ, "side_staking", "",
+                {{RPCResult::Type::ELISION, "", "Local side-staking enabled flag and active side-stake allocations."}}},
+            {RPCResult::Type::OBJ, "difficulty", "",
+                {
+                    {RPCResult::Type::NUM, "current", "Current difficulty."},
+                    {RPCResult::Type::NUM, "target", "Target difficulty."},
+                    {RPCResult::Type::NUM, "last-search-interval", "Timestamp of last search."},
+                }},
+            {RPCResult::Type::STR, "errors", "Any warnings or errors."},
+            {RPCResult::Type::NUM, "pooledtx", "Number of pooled transactions."},
+            {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
+            {RPCResult::Type::STR, "CPID", "Researcher CPID."},
+            {RPCResult::Type::NUM, "current_magnitude", /*optional=*/true,
+                "Current magnitude for the active CPID (omitted if no CPID is configured)."},
+            {RPCResult::Type::NUM, "Magnitude Unit", /*optional=*/true,
+                "Magnitude unit (omitted if no CPID is configured)."},
+            {RPCResult::Type::STR_AMOUNT, "BoincRewardPending", /*optional=*/true,
+                "Pending research subsidy (omitted if no CPID is configured)."},
+            {RPCResult::Type::STR, "researcher_status", "Aggregated researcher status string."},
+            {RPCResult::Type::STR, "current_poll", "Title of the current active poll, if any."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getstakinginfo", "") +
+        HelpExampleRpc("getstakinginfo", "")},
+};
+const RPCHelpMan& getstakinginfo_helpman() { return getstakinginfo_help; }
+
 UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getstakinginfo",
-        "Returns an object containing staking-related information.\n"
-        "Note: `getmininginfo` is a dispatch-table alias for this command.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "blocks", "Current best block height."},
-                {RPCResult::Type::OBJ, "stakeweight", "Stake-weight detail derived from MinerStatus::SearchReport.",
-                    {
-                        {RPCResult::Type::NUM, "minimum", "Minimum weight observed in the recent search window."},
-                        {RPCResult::Type::NUM, "maximum", "Maximum weight observed in the recent search window."},
-                        {RPCResult::Type::NUM, "combined", "Sum of weights observed in the recent search window."},
-                        {RPCResult::Type::NUM, "valuesum", "Sum of UTXO values participating in the recent search window."},
-                        {RPCResult::Type::NUM, "legacy", "Legacy wallet stake weight (GRC::GetStakeWeight / COIN)."},
-                    }},
-                {RPCResult::Type::NUM, "netstakeweight", "Estimated network stake weight."},
-                {RPCResult::Type::NUM, "netstakingGRCvalue", "Network stake value in GRC."},
-                {RPCResult::Type::BOOL, "staking", "Whether the miner is actively staking."},
-                {RPCResult::Type::STR, "mining-error", "Aggregated miner error string."},
-                {RPCResult::Type::NUM, "time-to-stake_days", "Estimated time-to-stake in days."},
-                {RPCResult::Type::NUM, "expectedtime", "Estimated time-to-stake in seconds."},
-                {RPCResult::Type::NUM, "mining-version", "Block version most recently attempted."},
-                {RPCResult::Type::NUM, "mining-created", "Number of blocks created in this run."},
-                {RPCResult::Type::NUM, "mining-accepted", "Number of blocks accepted by the network."},
-                {RPCResult::Type::NUM, "mining-kernels-found", "Total kernels found."},
-                {RPCResult::Type::NUM, "masked_time_intervals_covered", "Mask intervals covered."},
-                {RPCResult::Type::NUM, "masked_time_intervals_elapsed", "Mask intervals elapsed."},
-                {RPCResult::Type::NUM, "staking_loop_efficiency", "Fraction of time spent in productive staking loops."},
-                {RPCResult::Type::NUM, "actual_cumulative_weight", "Cumulative effective weight observed."},
-                {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
-                {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
-                {RPCResult::Type::OBJ, "stake-splitting", "Stake-splitting enabled flag and (when enabled) parameters.",
-                    {
-                        {RPCResult::Type::BOOL, "stake-splitting-enabled", "Whether stake splitting is enabled."},
-                        {RPCResult::Type::OBJ, "stake-splitting-params", /*optional=*/true, "Present only when stake-splitting-enabled is true.",
-                            {
-                                {RPCResult::Type::NUM, "min-stake-split-value", "Minimum UTXO value (in GRC) eligible for splitting."},
-                                {RPCResult::Type::NUM, "efficiency", "Configured target efficiency."},
-                                {RPCResult::Type::NUM, "stake-split-UTXO-size-for-target-efficiency", "Computed target UTXO size (in GRC)."},
-                            }},
-                    }},
-                {RPCResult::Type::OBJ, "side_staking", "Local side-staking enabled flag and active side-stake allocations.",
-                    {
-                        {RPCResult::Type::BOOL, "local_side_staking_enabled", "Whether local side-staking is enabled. Mandatory side-stakes are always shown."},
-                        {RPCResult::Type::ARR, "side_staking_allocations", "Active side-stake allocations applied by the miner.",
-                            {
-                                {RPCResult::Type::OBJ, "", "",
-                                    {
-                                        {RPCResult::Type::STR, "address", "Destination address for the side-stake."},
-                                        {RPCResult::Type::NUM, "allocation_pct", "Allocation as a percentage."},
-                                        {RPCResult::Type::STR, "status", "Side-stake status (e.g. \"active\", \"mandatory\")."},
-                                    }},
-                            }},
-                    }},
-                {RPCResult::Type::OBJ, "difficulty", "",
-                    {
-                        {RPCResult::Type::NUM, "current", "Current difficulty."},
-                        {RPCResult::Type::NUM, "target", "Target difficulty."},
-                        {RPCResult::Type::NUM_TIME, "last-search-interval", "Masked UNIX epoch timestamp of last miner search (MinerStatus::SearchReport::m_timestamp)."},
-                    }},
-                {RPCResult::Type::STR, "errors", "Any warnings or errors."},
-                {RPCResult::Type::NUM, "pooledtx", "Number of pooled transactions."},
-                {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
-                {RPCResult::Type::STR, "CPID", "Researcher CPID."},
-                {RPCResult::Type::NUM, "current_magnitude", /*optional=*/true,
-                    "Current magnitude for the active CPID (omitted if no CPID is configured)."},
-                {RPCResult::Type::NUM, "Magnitude Unit", /*optional=*/true,
-                    "Magnitude unit (omitted if no CPID is configured)."},
-                {RPCResult::Type::STR_AMOUNT, "BoincRewardPending", /*optional=*/true,
-                    "Pending research subsidy (omitted if no CPID is configured)."},
-                {RPCResult::Type::STR, "researcher_status", "Aggregated researcher status string."},
-                {RPCResult::Type::STR, "current_poll", "Title of the current active poll, if any."},
-            }},
-        RPCExamples{
-            HelpExampleCli("getstakinginfo", "") +
-            HelpExampleRpc("getstakinginfo", "")},
-    };
+    const RPCHelpMan& help = getstakinginfo_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -238,32 +216,35 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
+static const RPCHelpMan getlaststake_help{
+    "getlaststake",
+    "Fetch information about this wallet's last staked block.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "block", "Hash of the block in which the stake was mined."},
+            {RPCResult::Type::NUM, "height", "Block height."},
+            {RPCResult::Type::NUM, "confirmations", "Confirmations since the stake block."},
+            {RPCResult::Type::BOOL, "immature", "Whether the stake is still immature."},
+            {RPCResult::Type::STR_HEX, "txid", "Stake transaction id."},
+            {RPCResult::Type::NUM_TIME, "time", "Block timestamp."},
+            {RPCResult::Type::NUM, "elapsed_seconds", "Seconds elapsed since the stake."},
+            {RPCResult::Type::NUM, "elapsed_days", "Days elapsed since the stake."},
+            {RPCResult::Type::STR_AMOUNT, "mint", "Amount minted to the wallet."},
+            {RPCResult::Type::STR_AMOUNT, "research_reward", "Research subsidy paid."},
+            {RPCResult::Type::STR_AMOUNT, "side_stake", "Side-stake amount paid out."},
+            {RPCResult::Type::STR, "address", "Stake output destination address (empty if undecodable)."},
+            {RPCResult::Type::STR, "label", "Source-account label of the stake transaction."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getlaststake", "") +
+        HelpExampleRpc("getlaststake", "")},
+};
+const RPCHelpMan& getlaststake_helpman() { return getlaststake_help; }
+
 UniValue getlaststake(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getlaststake",
-        "Fetch information about this wallet's last staked block.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "block", "Hash of the block in which the stake was mined."},
-                {RPCResult::Type::NUM, "height", "Block height."},
-                {RPCResult::Type::NUM, "confirmations", "Confirmations since the stake block."},
-                {RPCResult::Type::BOOL, "immature", "Whether the stake is still immature."},
-                {RPCResult::Type::STR_HEX, "txid", "Stake transaction id."},
-                {RPCResult::Type::NUM_TIME, "time", "Block timestamp."},
-                {RPCResult::Type::NUM, "elapsed_seconds", "Seconds elapsed since the stake."},
-                {RPCResult::Type::NUM, "elapsed_days", "Days elapsed since the stake."},
-                {RPCResult::Type::STR_AMOUNT, "mint", "Amount minted to the wallet."},
-                {RPCResult::Type::STR_AMOUNT, "research_reward", "Research subsidy paid."},
-                {RPCResult::Type::STR_AMOUNT, "side_stake", "Side-stake amount paid out."},
-                {RPCResult::Type::STR, "address", "Stake output destination address (empty if undecodable)."},
-                {RPCResult::Type::STR, "label", "Source-account label of the stake transaction."},
-            }},
-        RPCExamples{
-            HelpExampleCli("getlaststake", "") +
-            HelpExampleRpc("getlaststake", "")},
-    };
+    const RPCHelpMan& help = getlaststake_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -335,24 +316,27 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
 
 extern double CoinToDouble(double surrogate);
 
+static const RPCHelpMan auditsnapshotaccrual_help{
+    "auditsnapshotaccrual",
+    "Report accrual snapshot deltas for the specified CPID.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "External CPID to audit. Defaults to this researcher's CPID."},
+        {"report_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include per-snapshot detail in the report. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Snapshot accrual audit object; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("auditsnapshotaccrual", "") +
+        HelpExampleCli("auditsnapshotaccrual", "\"<cpid>\" true") +
+        HelpExampleRpc("auditsnapshotaccrual", "\"<cpid>\", true")},
+};
+const RPCHelpMan& auditsnapshotaccrual_helpman() { return auditsnapshotaccrual_help; }
+
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "auditsnapshotaccrual",
-        "Report accrual snapshot deltas for the specified CPID.",
-        {
-            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "External CPID to audit. Defaults to this researcher's CPID."},
-            {"report_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, include per-snapshot detail in the report. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Snapshot accrual audit object; see source for shape."}}},
-        RPCExamples{
-            HelpExampleCli("auditsnapshotaccrual", "") +
-            HelpExampleCli("auditsnapshotaccrual", "\"<cpid>\" true") +
-            HelpExampleRpc("auditsnapshotaccrual", "\"<cpid>\", true")},
-    };
+    const RPCHelpMan& help = auditsnapshotaccrual_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -673,31 +657,34 @@ UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan auditsnapshotaccruals_help{
+    "auditsnapshotaccruals",
+    "Report accrual audit for entire population of CPIDs.",
+    {
+        {"report_only_mismatches", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, omit matching CPIDs from the report. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "number_of_CPIDs", "Total CPIDs audited."},
+            {RPCResult::Type::NUM, "number_of_matches", "Matching audit results."},
+            {RPCResult::Type::NUM, "number_of_mismatches", "Mismatching audit results."},
+            {RPCResult::Type::NUM, "number_of_mismatches_last_period_only", "Mismatches only in the last accrual period."},
+            {RPCResult::Type::NUM, "number_accrual_accounts_not_present", "CPIDs without an accrual account."},
+            {RPCResult::Type::NUM, "number_not_present", "CPIDs the audit could not produce a result for."},
+            {RPCResult::Type::ARR, "accrual_mismatch_details", "",
+                {{RPCResult::Type::ELISION, "", "Per-CPID match/mismatch detail object."}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("auditsnapshotaccruals", "") +
+        HelpExampleCli("auditsnapshotaccruals", "true") +
+        HelpExampleRpc("auditsnapshotaccruals", "true")},
+};
+const RPCHelpMan& auditsnapshotaccruals_helpman() { return auditsnapshotaccruals_help; }
+
 UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "auditsnapshotaccruals",
-        "Report accrual audit for entire population of CPIDs.",
-        {
-            {"report_only_mismatches", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, omit matching CPIDs from the report. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "number_of_CPIDs", "Total CPIDs audited."},
-                {RPCResult::Type::NUM, "number_of_matches", "Matching audit results."},
-                {RPCResult::Type::NUM, "number_of_mismatches", "Mismatching audit results."},
-                {RPCResult::Type::NUM, "number_of_mismatches_last_period_only", "Mismatches only in the last accrual period."},
-                {RPCResult::Type::NUM, "number_accrual_accounts_not_present", "CPIDs without an accrual account."},
-                {RPCResult::Type::NUM, "number_not_present", "CPIDs the audit could not produce a result for."},
-                {RPCResult::Type::ARR, "accrual_mismatch_details", "",
-                    {{RPCResult::Type::ELISION, "", "Per-CPID match/mismatch detail object."}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("auditsnapshotaccruals", "") +
-            HelpExampleCli("auditsnapshotaccruals", "true") +
-            HelpExampleRpc("auditsnapshotaccruals", "true")},
-    };
+    const RPCHelpMan& help = auditsnapshotaccruals_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -798,29 +785,32 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan listresearcheraccounts_help{
+    "listresearcheraccounts",
+    "List researcher accounts in the accrual system and their current accruals.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "number_of_accounts", "Total researcher accounts tracked."},
+            {RPCResult::Type::ARR, "details", "",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "cpid", "Researcher CPID."},
+                            {RPCResult::Type::NUM, "accrual_as_of_last_superblock", "Accrual recorded at last superblock."},
+                            {RPCResult::Type::NUM, "current_accrual", "Accrual as of the chain tip."},
+                        }},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listresearcheraccounts", "") +
+        HelpExampleRpc("listresearcheraccounts", "")},
+};
+const RPCHelpMan& listresearcheraccounts_helpman() { return listresearcheraccounts_help; }
+
 UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listresearcheraccounts",
-        "List researcher accounts in the accrual system and their current accruals.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "number_of_accounts", "Total researcher accounts tracked."},
-                {RPCResult::Type::ARR, "details", "",
-                    {
-                        {RPCResult::Type::OBJ, "", "",
-                            {
-                                {RPCResult::Type::STR, "cpid", "Researcher CPID."},
-                                {RPCResult::Type::NUM, "accrual_as_of_last_superblock", "Accrual recorded at last superblock."},
-                                {RPCResult::Type::NUM, "current_accrual", "Accrual as of the chain tip."},
-                            }},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("listresearcheraccounts", "") +
-            HelpExampleRpc("listresearcheraccounts", "")},
-    };
+    const RPCHelpMan& help = listresearcheraccounts_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -852,26 +842,29 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan inspectaccrualsnapshot_help{
+    "inspectaccrualsnapshot",
+    "Display the contents of an accrual snapshot from the accrual repository on disk.",
+    {
+        {"height", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Block height (and file name) of the snapshot."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "version", "Snapshot version."},
+            {RPCResult::Type::NUM, "height", "Snapshot block height."},
+            {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
+                {{RPCResult::Type::NUM, "cpid", "Accrual value at the snapshot for this CPID."}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("inspectaccrualsnapshot", "5000000") +
+        HelpExampleRpc("inspectaccrualsnapshot", "5000000")},
+};
+const RPCHelpMan& inspectaccrualsnapshot_helpman() { return inspectaccrualsnapshot_help; }
+
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "inspectaccrualsnapshot",
-        "Display the contents of an accrual snapshot from the accrual repository on disk.",
-        {
-            {"height", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "Block height (and file name) of the snapshot."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "version", "Snapshot version."},
-                {RPCResult::Type::NUM, "height", "Snapshot block height."},
-                {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
-                    {{RPCResult::Type::STR_AMOUNT, "cpid", "Accrual value (in GRC) at the snapshot for this CPID."}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("inspectaccrualsnapshot", "5000000") +
-            HelpExampleRpc("inspectaccrualsnapshot", "5000000")},
-    };
+    const RPCHelpMan& help = inspectaccrualsnapshot_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -901,25 +894,28 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan parseaccrualsnapshotfile_help{
+    "parseaccrualsnapshotfile",
+    "Parses an accrual snapshot from a valid snapshot file on disk.",
+    {
+        {"filespec", RPCArg::Type::STR, RPCArg::Optional::NO, "Path to the snapshot file."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "version", "Snapshot version."},
+            {RPCResult::Type::NUM, "height", "Snapshot block height."},
+            {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
+                {{RPCResult::Type::STR_AMOUNT, "cpid", "Accrual amount at the snapshot for this CPID."}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"") +
+        HelpExampleRpc("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"")},
+};
+const RPCHelpMan& parseaccrualsnapshotfile_helpman() { return parseaccrualsnapshotfile_help; }
+
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "parseaccrualsnapshotfile",
-        "Parses an accrual snapshot from a valid snapshot file on disk.",
-        {
-            {"filespec", RPCArg::Type::STR, RPCArg::Optional::NO, "Path to the snapshot file."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "version", "Snapshot version."},
-                {RPCResult::Type::NUM, "height", "Snapshot block height."},
-                {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
-                    {{RPCResult::Type::STR_AMOUNT, "cpid", "Accrual amount at the snapshot for this CPID."}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"") +
-            HelpExampleRpc("parseaccrualsnapshotfile", "\"/path/to/accrual/5000000\"")},
-    };
+    const RPCHelpMan& help = parseaccrualsnapshotfile_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 

@@ -22,29 +22,32 @@ using namespace std;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
+static const RPCHelpMan createhtlc_help{
+    "createhtlc",
+    "Create a Hash Time-Locked Contract.\n"
+    "\n"
+    "Returns a JSON object with the P2SH address and redeem script. "
+    "If amount is provided, funds the HTLC with a transaction.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
+        {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
+        {"hash_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "SHA256 hash of the preimage (64 hex chars)."},
+        {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Absolute locktime for the refund path."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "Amount in GRC to fund the HTLC."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "HTLC detail object including p2sh address, redeem_script, and optional fund tx."}}},
+    RPCExamples{
+        HelpExampleCli("createhtlc", "\"recv_addr\" \"send_addr\" \"<64-hex-hash>\" 500000 100") +
+        HelpExampleRpc("createhtlc", "\"recv_addr\", \"send_addr\", \"<64-hex-hash>\", 500000, 100")},
+};
+const RPCHelpMan& createhtlc_helpman() { return createhtlc_help; }
+
 UniValue createhtlc(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "createhtlc",
-        "Create a Hash Time-Locked Contract.\n"
-        "\n"
-        "Returns a JSON object with the P2SH address and redeem script. "
-        "If amount is provided, funds the HTLC with a transaction.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
-            {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
-            {"hash_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "SHA256 hash of the preimage (64 hex chars)."},
-            {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Absolute locktime for the refund path."},
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "Amount in GRC to fund the HTLC."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "HTLC detail object including p2sh address, redeem_script, and optional fund tx."}}},
-        RPCExamples{
-            HelpExampleCli("createhtlc", "\"recv_addr\" \"send_addr\" \"<64-hex-hash>\" 500000 100") +
-            HelpExampleRpc("createhtlc", "\"recv_addr\", \"send_addr\", \"<64-hex-hash>\", 500000, 100")},
-    };
+    const RPCHelpMan& help = createhtlc_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -131,25 +134,28 @@ UniValue createhtlc(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan claimhtlc_help{
+    "claimhtlc",
+    "Claim an HTLC output using the preimage.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+        {"preimage_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The preimage (hex encoded)."},
+        {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send claimed funds to."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Claim result object including the spending txid."}}},
+    RPCExamples{
+        HelpExampleCli("claimhtlc", "\"<htlc_txid>\" 0 \"<preimage_hex>\" \"<dest_addr>\"") +
+        HelpExampleRpc("claimhtlc", "\"<htlc_txid>\", 0, \"<preimage_hex>\", \"<dest_addr>\"")},
+};
+const RPCHelpMan& claimhtlc_helpman() { return claimhtlc_help; }
+
 UniValue claimhtlc(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "claimhtlc",
-        "Claim an HTLC output using the preimage.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
-            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
-            {"preimage_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The preimage (hex encoded)."},
-            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send claimed funds to."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Claim result object including the spending txid."}}},
-        RPCExamples{
-            HelpExampleCli("claimhtlc", "\"<htlc_txid>\" 0 \"<preimage_hex>\" \"<dest_addr>\"") +
-            HelpExampleRpc("claimhtlc", "\"<htlc_txid>\", 0, \"<preimage_hex>\", \"<dest_addr>\"")},
-    };
+    const RPCHelpMan& help = claimhtlc_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -277,24 +283,27 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan refundhtlc_help{
+    "refundhtlc",
+    "Refund an HTLC output after the timeout has passed.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+        {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send refunded funds to."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Refund result object including the spending txid."}}},
+    RPCExamples{
+        HelpExampleCli("refundhtlc", "\"<htlc_txid>\" 0 \"<dest_addr>\"") +
+        HelpExampleRpc("refundhtlc", "\"<htlc_txid>\", 0, \"<dest_addr>\"")},
+};
+const RPCHelpMan& refundhtlc_helpman() { return refundhtlc_help; }
+
 UniValue refundhtlc(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "refundhtlc",
-        "Refund an HTLC output after the timeout has passed.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
-            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
-            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send refunded funds to."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Refund result object including the spending txid."}}},
-        RPCExamples{
-            HelpExampleCli("refundhtlc", "\"<htlc_txid>\" 0 \"<dest_addr>\"") +
-            HelpExampleRpc("refundhtlc", "\"<htlc_txid>\", 0, \"<dest_addr>\"")},
-    };
+    const RPCHelpMan& help = refundhtlc_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 

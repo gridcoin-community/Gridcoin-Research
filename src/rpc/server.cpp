@@ -185,22 +185,33 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         if (!strCommand.empty() && pcmd->name != strCommand)
             continue;
 
-        try
-        {
-            UniValue params(UniValue::VARR);
-            rpcfn_type pfn = pcmd->actor;
-            if (setDone.insert(pfn).second)
-                (*pfn)(params, true);
+        // Dedupe aliases (e.g. getmininginfo -> getstakinginfo) by actor pointer:
+        // both rows share the same actor and helpman, so only render once.
+        if (!setDone.insert(pcmd->actor).second)
+            continue;
+
+        string strHelp;
+        if (pcmd->helpman != nullptr) {
+            // Modern path: pull help text directly from the RPCHelpMan
+            // accessor without invoking the command body or using
+            // throw-as-control-flow.
+            strHelp = pcmd->helpman().ToString();
+        } else {
+            // Legacy fallback: call the actor with fHelp=true and capture the
+            // help text from the thrown runtime_error. Retained for commands
+            // that have not yet been converted to the RPCHelpMan pattern
+            // (PSGT and a handful of stragglers).
+            try {
+                UniValue params(UniValue::VARR);
+                (*pcmd->actor)(params, true);
+            } catch (std::exception& e) {
+                strHelp = string(e.what());
+            }
         }
-        catch (std::exception& e)
-        {
-            // Help text is returned in an exception
-            string strHelp = string(e.what());
-            if (strCommand.empty())
-                if (strHelp.find('\n') != string::npos)
-                    strHelp = strHelp.substr(0, strHelp.find('\n'));
-            strRet += strHelp + "\n";
-        }
+        if (strCommand.empty())
+            if (strHelp.find('\n') != string::npos)
+                strHelp = strHelp.substr(0, strHelp.find('\n'));
+        strRet += strHelp + "\n";
     }
     if (strRet.empty())
         strRet = strprintf("help: unknown command: %s\n", strCommand);
@@ -208,32 +219,35 @@ string CRPCTable::help(string strCommand, rpccategory category) const
     return strRet;
 }
 
+static const RPCHelpMan help_help{
+    "help",
+    "List commands, or get help for a specified command or category.\n"
+    "\n"
+    "Categories:\n"
+    "  wallet    - blockchain/wallet related commands\n"
+    "  staking   - staking/cpid/beacon related commands (alias: mining)\n"
+    "  developer - developer commands\n"
+    "  network   - network related commands\n"
+    "  voting    - voting related commands\n"
+    "\n"
+    "You can support the development of Gridcoin by donating GRC to the\n"
+    "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2",
+    {
+        {"command", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The command name or category to look up. If omitted, an overview of all categories is returned."},
+    },
+    RPCResult{RPCResult::Type::STR, "", "The help text"},
+    RPCExamples{
+        HelpExampleCli("help", "") +
+        HelpExampleCli("help", "getinfo") +
+        HelpExampleCli("help", "wallet") +
+        HelpExampleRpc("help", "\"getinfo\"")},
+};
+const RPCHelpMan& help_helpman() { return help_help; }
+
 UniValue help(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help_rpc{
-        "help",
-        "List commands, or get help for a specified command or category.\n"
-        "\n"
-        "Categories:\n"
-        "  wallet    - blockchain/wallet related commands\n"
-        "  staking   - staking/cpid/beacon related commands (alias: mining)\n"
-        "  developer - developer commands\n"
-        "  network   - network related commands\n"
-        "  voting    - voting related commands\n"
-        "\n"
-        "You can support the development of Gridcoin by donating GRC to the\n"
-        "Gridcoin Foundation at this address: bc3NA8e8E3EoTL1qhRmeprbjWcmuoZ26A2",
-        {
-            {"command", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The command name or category to look up. If omitted, an overview of all categories is returned."},
-        },
-        RPCResult{RPCResult::Type::STR, "", "The help text"},
-        RPCExamples{
-            HelpExampleCli("help", "") +
-            HelpExampleCli("help", "getinfo") +
-            HelpExampleCli("help", "wallet") +
-            HelpExampleRpc("help", "\"getinfo\"")},
-    };
+    const RPCHelpMan& help_rpc = help_helpman();
     if (fHelp || !help_rpc.IsValidNumArgs(params.size()))
         throw runtime_error(help_rpc.ToString());
 
@@ -270,17 +284,20 @@ UniValue help(const UniValue& params, bool fHelp)
     return tableRPC.help(strCommand, category);
 }
 
+static const RPCHelpMan stop_help{
+    "stop",
+    "Stop Gridcoin server.",
+    {},
+    RPCResult{RPCResult::Type::STR, "", "A confirmation string."},
+    RPCExamples{
+        HelpExampleCli("stop", "") +
+        HelpExampleRpc("stop", "")},
+};
+const RPCHelpMan& stop_helpman() { return stop_help; }
+
 UniValue stop(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "stop",
-        "Stop Gridcoin server.",
-        {},
-        RPCResult{RPCResult::Type::STR, "", "A confirmation string."},
-        RPCExamples{
-            HelpExampleCli("stop", "") +
-            HelpExampleRpc("stop", "")},
-    };
+    const RPCHelpMan& help = stop_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -303,199 +320,199 @@ UniValue stop(const UniValue& params, bool fHelp)
 static const CRPCCommand vRPCCommands[] =
 { //  name                      function                 category
   //  ------------------------  -----------------------  -----------------
-    { "help",                    &help,                    cat_null          },
+    { "help",                    &help,                    cat_null, &help_helpman          },
 
   // Wallet commands
-    { "addmultisigaddress",      &addmultisigaddress,      cat_wallet        },
-    { "addredeemscript",         &addredeemscript,         cat_wallet        },
-    { "backupwallet",            &backupwallet,            cat_wallet        },
-    { "burn",                    &burn,                    cat_wallet        },
-    { "checkwallet",             &checkwallet,             cat_wallet        },
-    { "claimhtlc",              &claimhtlc,               cat_wallet        },
-    { "createhtlc",             &createhtlc,              cat_wallet        },
-    { "createrawtransaction",    &createrawtransaction,    cat_wallet        },
-    { "consolidatemsunspent",    &consolidatemsunspent,    cat_wallet        },
-    { "decoderawtransaction",    &decoderawtransaction,    cat_wallet        },
-    { "decodescript",            &decodescript,            cat_wallet        },
-    { "dumpprivkey",             &dumpprivkey,             cat_wallet        },
-    { "fundrawtransaction",      &fundrawtransaction,      cat_wallet        },
-    { "dumpwallet",              &dumpwallet,              cat_wallet        },
-    { "encryptwallet",           &encryptwallet,           cat_wallet        },
-    { "getaccount",              &getaccount,              cat_wallet        },
-    { "getaccountaddress",       &getaccountaddress,       cat_wallet        },
-    { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet        },
-    { "getbalance",              &getbalance,              cat_wallet        },
-    { "getbalancedetail",        &getbalancedetail,        cat_wallet        },
-    { "getnewaddress",           &getnewaddress,           cat_wallet        },
-    { "getnewpubkey",            &getnewpubkey,            cat_wallet        },
-    { "getrawtransaction",       &getrawtransaction,       cat_wallet        },
-    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet        },
-    { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet        },
-    { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet        },
-    { "gettransaction",          &gettransaction,          cat_wallet        },
-    { "abandontransaction",      &abandontransaction,      cat_wallet        },
-    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet        },
-    { "getwalletinfo",           &getwalletinfo,           cat_wallet        },
-    { "importprivkey",           &importprivkey,           cat_wallet        },
-    { "importwallet",            &importwallet,            cat_wallet        },
-    { "inspectwalletstate",      &inspectwalletstate,      cat_wallet        },
-    { "keypoolrefill",           &keypoolrefill,           cat_wallet        },
-    { "listaccounts",            &listaccounts,            cat_wallet        },
-    { "listaddressgroupings",    &listaddressgroupings,    cat_wallet        },
-    { "listreceivedbyaccount",   &listreceivedbyaccount,   cat_wallet        },
-    { "listreceivedbyaddress",   &listreceivedbyaddress,   cat_wallet        },
-    { "listsinceblock",          &listsinceblock,          cat_wallet        },
-    { "liststakes",              &liststakes,              cat_wallet        },
-    { "listtransactions",        &listtransactions,        cat_wallet        },
-    { "listunspent",             &listunspent,             cat_wallet        },
-    { "consolidateunspent",      &consolidateunspent,      cat_wallet        },
-    { "makekeypair",             &makekeypair,             cat_wallet        },
-    { "maintainbackups",         &maintainbackups,         cat_wallet        },
-    { "move",                    &movecmd,                 cat_wallet        },
-    { "rainbymagnitude",         &rainbymagnitude,         cat_wallet        },
-    { "refundhtlc",             &refundhtlc,              cat_wallet        },
-    { "repairwallet",            &repairwallet,            cat_wallet        },
-    { "resendtx",                &resendtx,                cat_wallet        },
-    { "reservebalance",          &reservebalance,          cat_wallet        },
-    { "scanforunspent",          &scanforunspent,          cat_wallet        },
-    { "sendfrom",                &sendfrom,                cat_wallet        },
-    { "sendmany",                &sendmany,                cat_wallet        },
-    { "sendrawtransaction",      &sendrawtransaction,      cat_wallet        },
-    { "sendtoaddress",           &sendtoaddress,           cat_wallet        },
-    { "setaccount",              &setaccount,              cat_wallet        },
-    { "sethdseed",               &sethdseed,               cat_wallet        },
-    { "settxfee",                &settxfee,                cat_wallet        },
-    { "signmessage",             &signmessage,             cat_wallet        },
-    { "signrawtransaction",      &signrawtransaction,      cat_wallet        },
-    { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet },
-    { "signrawtransactionwithwallet", &signrawtransactionwithwallet, cat_wallet },
-    { "upgradewallet",           &upgradewallet,           cat_wallet        },
-    { "validateaddress",         &validateaddress,         cat_wallet        },
-    { "validatepubkey",          &validatepubkey,          cat_wallet        },
-    { "verifymessage",           &verifymessage,           cat_wallet        },
-    { "walletlock",              &walletlock,              cat_wallet        },
-    { "walletpassphrase",        &walletpassphrase,        cat_wallet        },
-    { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet        },
-    { "walletdiagnose",          &walletdiagnose,          cat_wallet        },
+    { "addmultisigaddress",      &addmultisigaddress,      cat_wallet, &addmultisigaddress_helpman        },
+    { "addredeemscript",         &addredeemscript,         cat_wallet, &addredeemscript_helpman        },
+    { "backupwallet",            &backupwallet,            cat_wallet, &backupwallet_helpman        },
+    { "burn",                    &burn,                    cat_wallet, &burn_helpman        },
+    { "checkwallet",             &checkwallet,             cat_wallet, &checkwallet_helpman        },
+    { "claimhtlc",              &claimhtlc,               cat_wallet, &claimhtlc_helpman        },
+    { "createhtlc",             &createhtlc,              cat_wallet, &createhtlc_helpman        },
+    { "createrawtransaction",    &createrawtransaction,    cat_wallet, &createrawtransaction_helpman        },
+    { "consolidatemsunspent",    &consolidatemsunspent,    cat_wallet, &consolidatemsunspent_helpman        },
+    { "decoderawtransaction",    &decoderawtransaction,    cat_wallet, &decoderawtransaction_helpman        },
+    { "decodescript",            &decodescript,            cat_wallet, &decodescript_helpman        },
+    { "dumpprivkey",             &dumpprivkey,             cat_wallet, &dumpprivkey_helpman        },
+    { "fundrawtransaction",      &fundrawtransaction,      cat_wallet, &fundrawtransaction_helpman        },
+    { "dumpwallet",              &dumpwallet,              cat_wallet, &dumpwallet_helpman        },
+    { "encryptwallet",           &encryptwallet,           cat_wallet, &encryptwallet_helpman        },
+    { "getaccount",              &getaccount,              cat_wallet, &getaccount_helpman        },
+    { "getaccountaddress",       &getaccountaddress,       cat_wallet, &getaccountaddress_helpman        },
+    { "getaddressesbyaccount",   &getaddressesbyaccount,   cat_wallet, &getaddressesbyaccount_helpman        },
+    { "getbalance",              &getbalance,              cat_wallet, &getbalance_helpman        },
+    { "getbalancedetail",        &getbalancedetail,        cat_wallet, &getbalancedetail_helpman        },
+    { "getnewaddress",           &getnewaddress,           cat_wallet, &getnewaddress_helpman        },
+    { "getnewpubkey",            &getnewpubkey,            cat_wallet, &getnewpubkey_helpman        },
+    { "getrawtransaction",       &getrawtransaction,       cat_wallet, &getrawtransaction_helpman        },
+    { "getrawwallettransaction", &getrawwallettransaction, cat_wallet, &getrawwallettransaction_helpman        },
+    { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet, &getreceivedbyaccount_helpman        },
+    { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet, &getreceivedbyaddress_helpman        },
+    { "gettransaction",          &gettransaction,          cat_wallet, &gettransaction_helpman        },
+    { "abandontransaction",      &abandontransaction,      cat_wallet, nullptr        },
+    { "getunconfirmedbalance",   &getunconfirmedbalance,   cat_wallet, &getunconfirmedbalance_helpman        },
+    { "getwalletinfo",           &getwalletinfo,           cat_wallet, &getwalletinfo_helpman        },
+    { "importprivkey",           &importprivkey,           cat_wallet, &importprivkey_helpman        },
+    { "importwallet",            &importwallet,            cat_wallet, &importwallet_helpman        },
+    { "inspectwalletstate",      &inspectwalletstate,      cat_wallet, nullptr        },
+    { "keypoolrefill",           &keypoolrefill,           cat_wallet, &keypoolrefill_helpman        },
+    { "listaccounts",            &listaccounts,            cat_wallet, &listaccounts_helpman        },
+    { "listaddressgroupings",    &listaddressgroupings,    cat_wallet, &listaddressgroupings_helpman        },
+    { "listreceivedbyaccount",   &listreceivedbyaccount,   cat_wallet, &listreceivedbyaccount_helpman        },
+    { "listreceivedbyaddress",   &listreceivedbyaddress,   cat_wallet, &listreceivedbyaddress_helpman        },
+    { "listsinceblock",          &listsinceblock,          cat_wallet, &listsinceblock_helpman        },
+    { "liststakes",              &liststakes,              cat_wallet, &liststakes_helpman        },
+    { "listtransactions",        &listtransactions,        cat_wallet, &listtransactions_helpman        },
+    { "listunspent",             &listunspent,             cat_wallet, &listunspent_helpman        },
+    { "consolidateunspent",      &consolidateunspent,      cat_wallet, &consolidateunspent_helpman        },
+    { "makekeypair",             &makekeypair,             cat_wallet, &makekeypair_helpman        },
+    { "maintainbackups",         &maintainbackups,         cat_wallet, &maintainbackups_helpman        },
+    { "move",                    &movecmd,                 cat_wallet, &movecmd_helpman        },
+    { "rainbymagnitude",         &rainbymagnitude,         cat_wallet, &rainbymagnitude_helpman        },
+    { "refundhtlc",             &refundhtlc,              cat_wallet, &refundhtlc_helpman        },
+    { "repairwallet",            &repairwallet,            cat_wallet, &repairwallet_helpman        },
+    { "resendtx",                &resendtx,                cat_wallet, &resendtx_helpman        },
+    { "reservebalance",          &reservebalance,          cat_wallet, &reservebalance_helpman        },
+    { "scanforunspent",          &scanforunspent,          cat_wallet, &scanforunspent_helpman        },
+    { "sendfrom",                &sendfrom,                cat_wallet, &sendfrom_helpman        },
+    { "sendmany",                &sendmany,                cat_wallet, &sendmany_helpman        },
+    { "sendrawtransaction",      &sendrawtransaction,      cat_wallet, &sendrawtransaction_helpman        },
+    { "sendtoaddress",           &sendtoaddress,           cat_wallet, &sendtoaddress_helpman        },
+    { "setaccount",              &setaccount,              cat_wallet, &setaccount_helpman        },
+    { "sethdseed",               &sethdseed,               cat_wallet, &sethdseed_helpman        },
+    { "settxfee",                &settxfee,                cat_wallet, &settxfee_helpman        },
+    { "signmessage",             &signmessage,             cat_wallet, &signmessage_helpman        },
+    { "signrawtransaction",      &signrawtransaction,      cat_wallet, &signrawtransaction_helpman        },
+    { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet, &signrawtransactionwithkey_helpman },
+    { "signrawtransactionwithwallet", &signrawtransactionwithwallet, cat_wallet, &signrawtransactionwithwallet_helpman },
+    { "upgradewallet",           &upgradewallet,           cat_wallet, &upgradewallet_helpman        },
+    { "validateaddress",         &validateaddress,         cat_wallet, &validateaddress_helpman        },
+    { "validatepubkey",          &validatepubkey,          cat_wallet, &validatepubkey_helpman        },
+    { "verifymessage",           &verifymessage,           cat_wallet, &verifymessage_helpman        },
+    { "walletlock",              &walletlock,              cat_wallet, &walletlock_helpman        },
+    { "walletpassphrase",        &walletpassphrase,        cat_wallet, &walletpassphrase_helpman        },
+    { "walletpassphrasechange",  &walletpassphrasechange,  cat_wallet, &walletpassphrasechange_helpman        },
+    { "walletdiagnose",          &walletdiagnose,          cat_wallet, &walletdiagnose_helpman        },
 
   // PSGT commands
-    { "createpsgt",              &createpsgt,              cat_wallet        },
-    { "decodepsgt",              &decodepsgt,              cat_wallet        },
-    { "combinepsgt",             &combinepsgt,             cat_wallet        },
-    { "finalizepsgt",            &finalizepsgt,            cat_wallet        },
-    { "walletprocesspsgt",       &walletprocesspsgt,       cat_wallet        },
-    { "utxoupdatepsgt",          &utxoupdatepsgt,          cat_wallet        },
-    { "converttopsgt",           &converttopsgt,           cat_wallet        },
-    { "walletcreatefundedpsgt",  &walletcreatefundedpsgt,  cat_wallet        },
+    { "createpsgt",              &createpsgt,              cat_wallet, nullptr        },
+    { "decodepsgt",              &decodepsgt,              cat_wallet, nullptr        },
+    { "combinepsgt",             &combinepsgt,             cat_wallet, nullptr        },
+    { "finalizepsgt",            &finalizepsgt,            cat_wallet, nullptr        },
+    { "walletprocesspsgt",       &walletprocesspsgt,       cat_wallet, nullptr        },
+    { "utxoupdatepsgt",          &utxoupdatepsgt,          cat_wallet, nullptr        },
+    { "converttopsgt",           &converttopsgt,           cat_wallet, nullptr        },
+    { "walletcreatefundedpsgt",  &walletcreatefundedpsgt,  cat_wallet, nullptr        },
 
   // Staking commands
-    { "advertisebeacon",         &advertisebeacon,         cat_staking        },
-    { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking        },
-    { "beaconauth",              &beaconauth,              cat_staking        },
-    { "beaconconvergence",       &beaconconvergence,       cat_staking        },
-    { "beaconreport",            &beaconreport,            cat_staking        },
-    { "beaconstatus",            &beaconstatus,            cat_staking        },
-    { "createmrcrequest",        &createmrcrequest,        cat_staking        },
-    { "explainmagnitude",        &explainmagnitude,        cat_staking        },
-    { "getlaststake",            &getlaststake,            cat_staking        },
-    { "getmrcinfo",              &getmrcinfo,              cat_staking        },
-    { "getstakinginfo",          &getstakinginfo,          cat_staking        },
-    { "getmininginfo",           &getstakinginfo,          cat_staking        }, //alias for getstakinginfo (compatibility)
-    { "lifetime",                &lifetime,                cat_staking        },
-    { "magnitude",               &magnitude,               cat_staking        },
-    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking        },
-    { "resetcpids",              &resetcpids,              cat_staking        },
-    { "revokebeacon",            &revokebeacon,            cat_staking        },
-    { "superblockage",           &superblockage,           cat_staking        },
-    { "superblocks",             &superblocks,             cat_staking        },
+    { "advertisebeacon",         &advertisebeacon,         cat_staking, &advertisebeacon_helpman        },
+    { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking, &advertisebeaconv3_helpman        },
+    { "beaconauth",              &beaconauth,              cat_staking, &beaconauth_helpman        },
+    { "beaconconvergence",       &beaconconvergence,       cat_staking, &beaconconvergence_helpman        },
+    { "beaconreport",            &beaconreport,            cat_staking, &beaconreport_helpman        },
+    { "beaconstatus",            &beaconstatus,            cat_staking, &beaconstatus_helpman        },
+    { "createmrcrequest",        &createmrcrequest,        cat_staking, &createmrcrequest_helpman        },
+    { "explainmagnitude",        &explainmagnitude,        cat_staking, &explainmagnitude_helpman        },
+    { "getlaststake",            &getlaststake,            cat_staking, &getlaststake_helpman        },
+    { "getmrcinfo",              &getmrcinfo,              cat_staking, &getmrcinfo_helpman        },
+    { "getstakinginfo",          &getstakinginfo,          cat_staking, &getstakinginfo_helpman        },
+    { "getmininginfo",           &getstakinginfo,          cat_staking, &getstakinginfo_helpman        }, //alias for getstakinginfo (compatibility)
+    { "lifetime",                &lifetime,                cat_staking, &lifetime_helpman        },
+    { "magnitude",               &magnitude,               cat_staking, &magnitude_helpman        },
+    { "pendingbeaconreport",     &pendingbeaconreport,     cat_staking, &pendingbeaconreport_helpman        },
+    { "resetcpids",              &resetcpids,              cat_staking, &resetcpids_helpman        },
+    { "revokebeacon",            &revokebeacon,            cat_staking, &revokebeacon_helpman        },
+    { "superblockage",           &superblockage,           cat_staking, &superblockage_helpman        },
+    { "superblocks",             &superblocks,             cat_staking, &superblocks_helpman        },
 
   // Developer commands
-    { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer     },
-    { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer     },
-    { "addkey",                  &addkey,                  cat_developer     },
-    { "beaconaudit",             &beaconaudit,             cat_developer     },
-    { "changesettings",          &changesettings,          cat_developer     },
-    { "currentcontractaverage",  &currentcontractaverage,  cat_developer     },
-    { "debug",                   &debug,                   cat_developer     },
-    { "dumpcontracts",           &dumpcontracts,           cat_developer     },
-    { "exportstats1",            &rpc_exportstats,         cat_developer     },
-    { "getblockstats",           &rpc_getblockstats,       cat_developer     },
-    { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer     },
-    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
-    { "listalerts",              &listalerts,              cat_developer     },
-    { "listprojects",            &listprojects,            cat_developer     },
-    { "getrawprojectstatus",     &getrawprojectstatus,     cat_developer     },
-    { "getautogreylist",         &getautogreylist,         cat_developer     },
-    { "listprotocolentries",     &listprotocolentries,     cat_developer     },
-    { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
-    { "listscrapers",            &listscrapers,            cat_developer     },
-    { "listsidestakes",          &listsidestakes,           cat_developer     },
-    { "listmandatorysidestakes", &listmandatorysidestakes, cat_developer     },
-    { "listsettings",            &listsettings,            cat_developer     },
-    { "logging",                 &logging,                 cat_developer     },
-    { "network",                 &network,                 cat_developer     },
-    { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer     },
-    { "parselegacysb",           &parselegacysb,           cat_developer     },
-    { "projects",                &projects,                cat_developer     },
-    { "readdata",                &readdata,                cat_developer     },
-    { "reorganize",              &rpc_reorganize,          cat_developer     },
-    { "sendalert",               &sendalert,               cat_developer     },
-    { "sendalert2",              &sendalert2,              cat_developer     },
-    { "sendblock",               &sendblock,               cat_developer     },
-    { "superblockaverage",       &superblockaverage,       cat_developer     },
-    { "versionreport",           &versionreport,           cat_developer     },
-    { "writedata",               &writedata,               cat_developer     },
+    { "auditsnapshotaccrual",    &auditsnapshotaccrual,    cat_developer, &auditsnapshotaccrual_helpman     },
+    { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer, &auditsnapshotaccruals_helpman     },
+    { "addkey",                  &addkey,                  cat_developer, &addkey_helpman     },
+    { "beaconaudit",             &beaconaudit,             cat_developer, &beaconaudit_helpman     },
+    { "changesettings",          &changesettings,          cat_developer, &changesettings_helpman     },
+    { "currentcontractaverage",  &currentcontractaverage,  cat_developer, &currentcontractaverage_helpman     },
+    { "debug",                   &debug,                   cat_developer, &debug_helpman     },
+    { "dumpcontracts",           &dumpcontracts,           cat_developer, &dumpcontracts_helpman     },
+    { "exportstats1",            &rpc_exportstats,         cat_developer, &rpc_exportstats_helpman     },
+    { "getblockstats",           &rpc_getblockstats,       cat_developer, &rpc_getblockstats_helpman     },
+    { "getrecentblocks",         &rpc_getrecentblocks,     cat_developer, &rpc_getrecentblocks_helpman     },
+    { "getrawprojectstatus",     &getrawprojectstatus,     cat_developer, &getrawprojectstatus_helpman     },
+    { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer, &inspectaccrualsnapshot_helpman     },
+    { "listalerts",              &listalerts,              cat_developer, &listalerts_helpman     },
+    { "listprojects",            &listprojects,            cat_developer, &listprojects_helpman     },
+    { "getautogreylist",         &getautogreylist,         cat_developer, &getautogreylist_helpman     },
+    { "listprotocolentries",     &listprotocolentries,     cat_developer, &listprotocolentries_helpman     },
+    { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer, &listresearcheraccounts_helpman     },
+    { "listscrapers",            &listscrapers,            cat_developer, &listscrapers_helpman     },
+    { "listsidestakes",          &listsidestakes,           cat_developer, &listsidestakes_helpman     },
+    { "listmandatorysidestakes", &listmandatorysidestakes, cat_developer, &listmandatorysidestakes_helpman     },
+    { "listsettings",            &listsettings,            cat_developer, &listsettings_helpman     },
+    { "logging",                 &logging,                 cat_developer, &logging_helpman     },
+    { "network",                 &network,                 cat_developer, &network_helpman     },
+    { "parseaccrualsnapshotfile",&parseaccrualsnapshotfile,cat_developer, &parseaccrualsnapshotfile_helpman     },
+    { "parselegacysb",           &parselegacysb,           cat_developer, &parselegacysb_helpman     },
+    { "projects",                &projects,                cat_developer, &projects_helpman     },
+    { "readdata",                &readdata,                cat_developer, &readdata_helpman     },
+    { "reorganize",              &rpc_reorganize,          cat_developer, &rpc_reorganize_helpman     },
+    { "sendalert",               &sendalert,               cat_developer, &sendalert_helpman     },
+    { "sendalert2",              &sendalert2,              cat_developer, &sendalert2_helpman     },
+    { "sendblock",               &sendblock,               cat_developer, &sendblock_helpman     },
+    { "superblockaverage",       &superblockaverage,       cat_developer, &superblockaverage_helpman     },
+    { "versionreport",           &versionreport,           cat_developer, &versionreport_helpman     },
+    { "writedata",               &writedata,               cat_developer, &writedata_helpman     },
 
-    { "listmanifests",           &listmanifests,           cat_developer     },
-    { "getmpart",                &getmpart,                cat_developer     },
-    { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer     },
-    { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer     },
-    { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer     },
-    { "archivelog",              &archivelog,              cat_developer     },
-    { "testnewsb",               &testnewsb,               cat_developer     },
-    { "convergencereport",       &convergencereport,       cat_developer     },
-    { "scraperreport",           &scraperreport,           cat_developer     },
+    { "listmanifests",           &listmanifests,           cat_developer, &listmanifests_helpman     },
+    { "getmpart",                &getmpart,                cat_developer, &getmpart_helpman     },
+    { "sendscraperfilemanifest", &sendscraperfilemanifest, cat_developer, &sendscraperfilemanifest_helpman     },
+    { "savescraperfilemanifest", &savescraperfilemanifest, cat_developer, &savescraperfilemanifest_helpman     },
+    { "deletecscrapermanifest",  &deletecscrapermanifest,  cat_developer, &deletecscrapermanifest_helpman     },
+    { "archivelog",              &archivelog,              cat_developer, &archivelog_helpman     },
+    { "testnewsb",               &testnewsb,               cat_developer, &testnewsb_helpman     },
+    { "convergencereport",       &convergencereport,       cat_developer, &convergencereport_helpman     },
+    { "scraperreport",           &scraperreport,           cat_developer, &scraperreport_helpman     },
 
   // Network commands
-    { "addnode",                 &addnode,                 cat_network       },
-    { "askforoutstandingblocks", &askforoutstandingblocks, cat_network       },
-    { "getblockchaininfo",       &getblockchaininfo,       cat_network       },
-    { "getnetworkinfo",          &getnetworkinfo,          cat_network       },
-    { "clearbanned",             &clearbanned,             cat_network       },
-    { "currenttime",             &currenttime,             cat_network       },
-    { "getaddednodeinfo",        &getaddednodeinfo,        cat_network       },
-    { "getnodeaddresses",        &getnodeaddresses,        cat_network       },
-    { "getbestblockhash",        &getbestblockhash,        cat_network       },
-    { "getblock",                &getblock,                cat_network       },
-    { "getblockbynumber",        &getblockbynumber,        cat_network       },
-    { "getblockbymintime",       &getblockbymintime,       cat_network       },
-    { "getblocksbatch",          &getblocksbatch,          cat_network       },
-    { "getblockcount",           &getblockcount,           cat_network       },
-    { "getblockhash",            &getblockhash,            cat_network       },
-    { "getburnreport",           &getburnreport,           cat_network       },
-    { "getcheckpoint",           &getcheckpoint,           cat_network       },
-    { "getconnectioncount",      &getconnectioncount,      cat_network       },
-    { "getdifficulty",           &getdifficulty,           cat_network       },
-    { "getinfo",                 &getinfo,                 cat_network       },
-    { "getnettotals",            &getnettotals,            cat_network       },
-    { "getpeerinfo",             &getpeerinfo,             cat_network       },
-    { "getrawmempool",           &getrawmempool,           cat_network       },
-    { "listbanned",              &listbanned,              cat_network       },
-    { "networktime",             &networktime,             cat_network       },
-    { "ping",                    &ping,                    cat_network       },
-    { "setban",                  &setban,                  cat_network       },
-    { "showblock",               &showblock,               cat_network       },
-    { "stop",                    &stop,                    cat_network       },
+    { "addnode",                 &addnode,                 cat_network, &addnode_helpman       },
+    { "askforoutstandingblocks", &askforoutstandingblocks, cat_network, &askforoutstandingblocks_helpman       },
+    { "getblockchaininfo",       &getblockchaininfo,       cat_network, &getblockchaininfo_helpman       },
+    { "getnetworkinfo",          &getnetworkinfo,          cat_network, &getnetworkinfo_helpman       },
+    { "clearbanned",             &clearbanned,             cat_network, &clearbanned_helpman       },
+    { "currenttime",             &currenttime,             cat_network, &currenttime_helpman       },
+    { "getaddednodeinfo",        &getaddednodeinfo,        cat_network, &getaddednodeinfo_helpman       },
+    { "getnodeaddresses",        &getnodeaddresses,        cat_network, &getnodeaddresses_helpman       },
+    { "getbestblockhash",        &getbestblockhash,        cat_network, &getbestblockhash_helpman       },
+    { "getblock",                &getblock,                cat_network, &getblock_helpman       },
+    { "getblockbynumber",        &getblockbynumber,        cat_network, &getblockbynumber_helpman       },
+    { "getblockbymintime",       &getblockbymintime,       cat_network, &getblockbymintime_helpman       },
+    { "getblocksbatch",          &getblocksbatch,          cat_network, &getblocksbatch_helpman       },
+    { "getblockcount",           &getblockcount,           cat_network, &getblockcount_helpman       },
+    { "getblockhash",            &getblockhash,            cat_network, &getblockhash_helpman       },
+    { "getburnreport",           &getburnreport,           cat_network, &getburnreport_helpman       },
+    { "getcheckpoint",           &getcheckpoint,           cat_network, &getcheckpoint_helpman       },
+    { "getconnectioncount",      &getconnectioncount,      cat_network, &getconnectioncount_helpman       },
+    { "getdifficulty",           &getdifficulty,           cat_network, &getdifficulty_helpman       },
+    { "getinfo",                 &getinfo,                 cat_network, &getinfo_helpman       },
+    { "getnettotals",            &getnettotals,            cat_network, &getnettotals_helpman       },
+    { "getpeerinfo",             &getpeerinfo,             cat_network, &getpeerinfo_helpman       },
+    { "getrawmempool",           &getrawmempool,           cat_network, &getrawmempool_helpman       },
+    { "listbanned",              &listbanned,              cat_network, &listbanned_helpman       },
+    { "networktime",             &networktime,             cat_network, &networktime_helpman       },
+    { "ping",                    &ping,                    cat_network, &ping_helpman       },
+    { "setban",                  &setban,                  cat_network, &setban_helpman       },
+    { "showblock",               &showblock,               cat_network, &showblock_helpman       },
+    { "stop",                    &stop,                    cat_network, &stop_helpman       },
 
   // Voting commands
-    { "addpoll",                 &addpoll,                 cat_voting        },
-    { "getpollresults",          &getpollresults,          cat_voting        },
-    { "getvotingclaim",          &getvotingclaim,          cat_voting        },
-    { "listpolls",               &listpolls,               cat_voting        },
-    { "testpollnotification",    &testpollnotification,    cat_voting        },
-    { "vote",                    &vote,                    cat_voting        },
-    { "votebyid",                &votebyid,                cat_voting        },
-    { "votedetails",             &votedetails,             cat_voting        },
+    { "addpoll",                 &addpoll,                 cat_voting, nullptr        },
+    { "getpollresults",          &getpollresults,          cat_voting, &getpollresults_helpman        },
+    { "getvotingclaim",          &getvotingclaim,          cat_voting, &getvotingclaim_helpman        },
+    { "listpolls",               &listpolls,               cat_voting, &listpolls_helpman        },
+    { "testpollnotification",    &testpollnotification,    cat_voting, &testpollnotification_helpman        },
+    { "vote",                    &vote,                    cat_voting, &vote_helpman        },
+    { "votebyid",                &votebyid,                cat_voting, &votebyid_helpman        },
+    { "votedetails",             &votedetails,             cat_voting, &votedetails_helpman        },
 };
 
 static constexpr const char* DEPRECATED_RPCS[] {

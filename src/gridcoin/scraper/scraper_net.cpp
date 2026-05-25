@@ -939,24 +939,27 @@ UniValue CScraperManifest::dentry::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSpli
 }
 
 /** RPC function to list manifests and optionally provide their contents in JSON form. */
+static const RPCHelpMan listmanifests_help{
+    "listmanifests",
+    "Show list of known ScraperManifest objects.",
+    {
+        {"details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, show full details of each manifest. Default: false."},
+        {"manifest_hash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+            "Hash of a specific manifest. If omitted, all are returned."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of manifest hash to manifest detail",
+        {{RPCResult::Type::ELISION, "", "Manifest object; shape depends on the 'details' flag."}}},
+    RPCExamples{
+        HelpExampleCli("listmanifests", "") +
+        HelpExampleCli("listmanifests", "true") +
+        HelpExampleRpc("listmanifests", "true")},
+};
+const RPCHelpMan& listmanifests_helpman() { return listmanifests_help; }
+
 UniValue listmanifests(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listmanifests",
-        "Show list of known ScraperManifest objects.",
-        {
-            {"details", RPCArg::Type::BOOL, RPCArg::Default{false},
-                "If true, show full details of each manifest."},
-            {"manifest_hash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
-                "Hash of a specific manifest. If omitted, all are returned."},
-        },
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of manifest hash to manifest detail",
-            {{RPCResult::Type::ELISION, "", "Manifest object; shape depends on the 'details' flag."}}},
-        RPCExamples{
-            HelpExampleCli("listmanifests", "") +
-            HelpExampleCli("listmanifests", "true") +
-            HelpExampleRpc("listmanifests", "true")},
-    };
+    const RPCHelpMan& help = listmanifests_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
     UniValue obj(UniValue::VOBJ);
@@ -1028,19 +1031,22 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
 }
 
 /** Provides hex string output of part object contents. */
+static const RPCHelpMan getmpart_help{
+    "getmpart",
+    "Show content of a CPart object.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the CPart to look up."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded CPart contents."},
+    RPCExamples{
+        HelpExampleCli("getmpart", "\"<hash>\"") +
+        HelpExampleRpc("getmpart", "\"<hash>\"")},
+};
+const RPCHelpMan& getmpart_helpman() { return getmpart_help; }
+
 UniValue getmpart(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getmpart",
-        "Show content of a CPart object.",
-        {
-            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the CPart to look up."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded CPart contents."},
-        RPCExamples{
-            HelpExampleCli("getmpart", "\"<hash>\"") +
-            HelpExampleRpc("getmpart", "\"<hash>\"")},
-    };
+    const RPCHelpMan& help = getmpart_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 

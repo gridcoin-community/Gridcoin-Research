@@ -91,46 +91,49 @@ string AccountFromValue(const UniValue& value)
     return strAccount;
 }
 
+static const RPCHelpMan getinfo_help{
+    "getinfo",
+    "Returns an object containing various state info about the running node, network, and wallet.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "version", "Node version string."},
+            {RPCResult::Type::NUM, "minor_version", "Client minor version number."},
+            {RPCResult::Type::NUM, "protocolversion", "P2P protocol version."},
+            {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+            {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+            {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+            {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+            {RPCResult::Type::NUM, "blocks", "Current best block height."},
+            {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync with the network."},
+            {RPCResult::Type::NUM, "timeoffset", "Network time offset in seconds."},
+            {RPCResult::Type::NUM, "uptime", "Process uptime in seconds."},
+            {RPCResult::Type::STR_AMOUNT, "moneysupply", "Current network money supply."},
+            {RPCResult::Type::NUM, "connections", "Number of active P2P connections."},
+            {RPCResult::Type::STR, "proxy", "Configured proxy (empty when unset)."},
+            {RPCResult::Type::STR, "ip", "External IP as seen by peers."},
+            {RPCResult::Type::OBJ, "difficulty", "",
+                {
+                    {RPCResult::Type::NUM, "current", "Current network difficulty."},
+                    {RPCResult::Type::NUM, "target", "Target network difficulty."},
+                }},
+            {RPCResult::Type::BOOL, "testnet", "Whether the node is running on testnet."},
+            {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+            {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+            {RPCResult::Type::STR_AMOUNT, "paytxfee", "Configured per-kB transaction fee."},
+            {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value to consider for spending."},
+            {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+            {RPCResult::Type::STR, "errors", "Any current error/warning text from the node."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getinfo", "") +
+        HelpExampleRpc("getinfo", "")},
+};
+const RPCHelpMan& getinfo_helpman() { return getinfo_help; }
+
 UniValue getinfo(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getinfo",
-        "Returns an object containing various state info about the running node, network, and wallet.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "version", "Node version string."},
-                {RPCResult::Type::NUM, "minor_version", "Client minor version number."},
-                {RPCResult::Type::NUM, "protocolversion", "P2P protocol version."},
-                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
-                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
-                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
-                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
-                {RPCResult::Type::NUM, "blocks", "Current best block height."},
-                {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync with the network."},
-                {RPCResult::Type::NUM, "timeoffset", "Network time offset in seconds."},
-                {RPCResult::Type::NUM, "uptime", "Process uptime in seconds."},
-                {RPCResult::Type::STR_AMOUNT, "moneysupply", "Current network money supply."},
-                {RPCResult::Type::NUM, "connections", "Number of active P2P connections."},
-                {RPCResult::Type::STR, "proxy", "Configured proxy (empty when unset)."},
-                {RPCResult::Type::STR, "ip", "External IP as seen by peers."},
-                {RPCResult::Type::OBJ, "difficulty", "",
-                    {
-                        {RPCResult::Type::NUM, "current", "Current network difficulty."},
-                        {RPCResult::Type::NUM, "target", "Target network difficulty."},
-                    }},
-                {RPCResult::Type::BOOL, "testnet", "Whether the node is running on testnet."},
-                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
-                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
-                {RPCResult::Type::STR_AMOUNT, "paytxfee", "Configured per-kB transaction fee."},
-                {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value to consider for spending."},
-                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
-                {RPCResult::Type::STR, "errors", "Any current error/warning text from the node."},
-            }},
-        RPCExamples{
-            HelpExampleCli("getinfo", "") +
-            HelpExampleRpc("getinfo", "")},
-    };
+    const RPCHelpMan& help = getinfo_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -191,29 +194,32 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     return obj;
 }
 
+static const RPCHelpMan getwalletinfo_help{
+    "getwalletinfo",
+    "Displays information about the wallet.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+            {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+            {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+            {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+            {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+            {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+            {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+            {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+            {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
+            {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getwalletinfo", "") +
+        HelpExampleRpc("getwalletinfo", "")},
+};
+const RPCHelpMan& getwalletinfo_helpman() { return getwalletinfo_help; }
+
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getwalletinfo",
-        "Displays information about the wallet.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
-                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
-                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
-                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
-                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
-                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
-                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
-                {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
-                {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
-                {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
-            }},
-        RPCExamples{
-            HelpExampleCli("getwalletinfo", "") +
-            HelpExampleRpc("getwalletinfo", "")},
-    };
+    const RPCHelpMan& help = getwalletinfo_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -243,20 +249,23 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
     return res;
 }
 
+static const RPCHelpMan getnewpubkey_help{
+    "getnewpubkey",
+    "Returns new public key for coinbase generation.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "pubkey", "The new public key, hex-encoded."},
+    RPCExamples{
+        HelpExampleCli("getnewpubkey", "") +
+        HelpExampleRpc("getnewpubkey", "")},
+};
+const RPCHelpMan& getnewpubkey_helpman() { return getnewpubkey_help; }
+
 UniValue getnewpubkey(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getnewpubkey",
-        "Returns new public key for coinbase generation.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "pubkey", "The new public key, hex-encoded."},
-        RPCExamples{
-            HelpExampleCli("getnewpubkey", "") +
-            HelpExampleRpc("getnewpubkey", "")},
-    };
+    const RPCHelpMan& help = getnewpubkey_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -282,22 +291,25 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan getnewaddress_help{
+    "getnewaddress",
+    "Returns a new Gridcoin address for receiving payments. "
+    "If [account] is specified, it is added to the address book so payments received "
+    "with the address will be credited to [account].",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+    },
+    RPCResult{RPCResult::Type::STR, "address", "The new Gridcoin address."},
+    RPCExamples{
+        HelpExampleCli("getnewaddress", "") +
+        HelpExampleRpc("getnewaddress", "")},
+};
+const RPCHelpMan& getnewaddress_helpman() { return getnewaddress_help; }
+
 UniValue getnewaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getnewaddress",
-        "Returns a new Gridcoin address for receiving payments. "
-        "If [account] is specified, it is added to the address book so payments received "
-        "with the address will be credited to [account].",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
-        },
-        RPCResult{RPCResult::Type::STR, "address", "The new Gridcoin address."},
-        RPCExamples{
-            HelpExampleCli("getnewaddress", "") +
-            HelpExampleRpc("getnewaddress", "")},
-    };
+    const RPCHelpMan& help = getnewaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -361,20 +373,23 @@ CTxDestination GetAccountAddress(string strAccount, bool bForceNew=false) EXCLUS
     return CTxDestination(account.vchPubKey.GetID());
 }
 
+static const RPCHelpMan getaccountaddress_help{
+    "getaccountaddress",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Returns the current Gridcoin address for receiving payments to this account.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name (use \"\" for the default account)."},
+    },
+    RPCResult{RPCResult::Type::STR, "", "The address associated with this account."},
+    RPCExamples{
+        HelpExampleCli("getaccountaddress", "\"\"") +
+        HelpExampleRpc("getaccountaddress", "\"myaccount\"")},
+};
+const RPCHelpMan& getaccountaddress_helpman() { return getaccountaddress_help; }
+
 UniValue getaccountaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getaccountaddress",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Returns the current Gridcoin address for receiving payments to this account.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name (use \"\" for the default account)."},
-        },
-        RPCResult{RPCResult::Type::STR, "", "The address associated with this account."},
-        RPCExamples{
-            HelpExampleCli("getaccountaddress", "\"\"") +
-            HelpExampleRpc("getaccountaddress", "\"myaccount\"")},
-    };
+    const RPCHelpMan& help = getaccountaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -390,21 +405,24 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan setaccount_help{
+    "setaccount",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Sets the account associated with the given address.",
+    {
+        {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The account name. Default: empty string."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("setaccount", "\"S1Example\" \"myaccount\"") +
+        HelpExampleRpc("setaccount", "\"S1Example\", \"myaccount\"")},
+};
+const RPCHelpMan& setaccount_helpman() { return setaccount_help; }
+
 UniValue setaccount(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "setaccount",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Sets the account associated with the given address.",
-        {
-            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The account name. Default: empty string."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("setaccount", "\"S1Example\" \"myaccount\"") +
-            HelpExampleRpc("setaccount", "\"S1Example\", \"myaccount\"")},
-    };
+    const RPCHelpMan& help = setaccount_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -432,20 +450,23 @@ UniValue setaccount(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan getaccount_help{
+    "getaccount",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Returns the account associated with the given address.",
+    {
+        {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
+    },
+    RPCResult{RPCResult::Type::STR, "", "The account name (empty string for the default account)."},
+    RPCExamples{
+        HelpExampleCli("getaccount", "\"S1Example\"") +
+        HelpExampleRpc("getaccount", "\"S1Example\"")},
+};
+const RPCHelpMan& getaccount_helpman() { return getaccount_help; }
+
 UniValue getaccount(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getaccount",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Returns the account associated with the given address.",
-        {
-            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
-        },
-        RPCResult{RPCResult::Type::STR, "", "The account name (empty string for the default account)."},
-        RPCExamples{
-            HelpExampleCli("getaccount", "\"S1Example\"") +
-            HelpExampleRpc("getaccount", "\"S1Example\"")},
-    };
+    const RPCHelpMan& help = getaccount_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -465,21 +486,24 @@ UniValue getaccount(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan getaddressesbyaccount_help{
+    "getaddressesbyaccount",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Returns the list of addresses for the given account.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {{RPCResult::Type::STR, "address", "An address in the account."}}},
+    RPCExamples{
+        HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
+        HelpExampleRpc("getaddressesbyaccount", "\"myaccount\"")},
+};
+const RPCHelpMan& getaddressesbyaccount_helpman() { return getaddressesbyaccount_help; }
+
 UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getaddressesbyaccount",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Returns the list of addresses for the given account.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "Addresses associated with the given account.",
-            {{RPCResult::Type::STR, "", "An address in the account."}}},
-        RPCExamples{
-            HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
-            HelpExampleRpc("getaddressesbyaccount", "\"myaccount\"")},
-    };
+    const RPCHelpMan& help = getaddressesbyaccount_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -500,30 +524,33 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan sendtoaddress_help{
+    "sendtoaddress",
+    "Send an amount of GRC to the given Gridcoin address. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address to send to."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+            "The amount in GRC to send (rounded to the nearest 0.000001)."},
+        {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Comment used to store what the transaction is for. Not part of the transaction, just kept in your wallet."},
+        {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Comment to store the name of the person or organization to which you're sending the transaction. Not part of the transaction."},
+        {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Optional message to add to the receiver (TxMessage contract)."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100") +
+        HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 \"donation\" \"charity\"") +
+        HelpExampleRpc("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, \"donation\", \"charity\"")},
+};
+const RPCHelpMan& sendtoaddress_helpman() { return sendtoaddress_help; }
+
 UniValue sendtoaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sendtoaddress",
-        "Send an amount of GRC to the given Gridcoin address. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address to send to."},
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
-                "The amount in GRC to send (rounded to the nearest 0.000001)."},
-            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Comment used to store what the transaction is for. Not part of the transaction, just kept in your wallet."},
-            {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Comment to store the name of the person or organization to which you're sending the transaction. Not part of the transaction."},
-            {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Optional message to add to the receiver (TxMessage contract)."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
-        RPCExamples{
-            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100") +
-            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 \"donation\" \"charity\"") +
-            HelpExampleRpc("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, \"donation\", \"charity\"")},
-    };
+    const RPCHelpMan& help = sendtoaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -559,29 +586,32 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
+static const RPCHelpMan listaddressgroupings_help{
+    "listaddressgroupings",
+    "Lists groups of addresses which have had their common ownership made public by "
+    "common use as inputs or as the resulting change in past transactions.",
+    {},
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::ARR, "", "A grouping of addresses",
+                {
+                    {RPCResult::Type::ARR_FIXED, "", "address/balance/account triple",
+                        {
+                            {RPCResult::Type::STR, "address", "The Gridcoin address."},
+                            {RPCResult::Type::STR_AMOUNT, "balance", "The balance attributed to the address."},
+                            {RPCResult::Type::STR, "account", /*optional=*/true, "Account name (deprecated; present when set)."},
+                        }},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listaddressgroupings", "") +
+        HelpExampleRpc("listaddressgroupings", "")},
+};
+const RPCHelpMan& listaddressgroupings_helpman() { return listaddressgroupings_help; }
+
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listaddressgroupings",
-        "Lists groups of addresses which have had their common ownership made public by "
-        "common use as inputs or as the resulting change in past transactions.",
-        {},
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::ARR, "", "A grouping of addresses",
-                    {
-                        {RPCResult::Type::ARR_FIXED, "", "address/balance/account triple",
-                            {
-                                {RPCResult::Type::STR, "address", "The Gridcoin address."},
-                                {RPCResult::Type::STR_AMOUNT, "balance", "The balance attributed to the address."},
-                                {RPCResult::Type::STR, "account", /*optional=*/true, "Account name (deprecated; present when set)."},
-                            }},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("listaddressgroupings", "") +
-            HelpExampleRpc("listaddressgroupings", "")},
-    };
+    const RPCHelpMan& help = listaddressgroupings_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -608,23 +638,26 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp)
     return jsonGroupings;
 }
 
+static const RPCHelpMan signmessage_help{
+    "signmessage",
+    "Sign a message with the private key of an address. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address that owns the private key to sign with."},
+        {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The message to sign."},
+    },
+    RPCResult{RPCResult::Type::STR, "signature", "The base64-encoded compact signature."},
+    RPCExamples{
+        HelpExampleCli("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"hello world\"") +
+        HelpExampleRpc("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"hello world\"")},
+};
+const RPCHelpMan& signmessage_helpman() { return signmessage_help; }
+
 UniValue signmessage(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "signmessage",
-        "Sign a message with the private key of an address. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address that owns the private key to sign with."},
-            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The message to sign."},
-        },
-        RPCResult{RPCResult::Type::STR, "signature", "The base64-encoded compact signature."},
-        RPCExamples{
-            HelpExampleCli("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"hello world\"") +
-            HelpExampleRpc("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"hello world\"")},
-    };
+    const RPCHelpMan& help = signmessage_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -658,24 +691,27 @@ UniValue signmessage(const UniValue& params, bool fHelp)
     return EncodeBase64(&vchSig[0], vchSig.size());
 }
 
+static const RPCHelpMan verifymessage_help{
+    "verifymessage",
+    "Verify a signed message.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address that signed the message."},
+        {"signature", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The base64-encoded compact signature produced by signmessage."},
+        {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The message that was signed."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "verified", "true if the signature verifies the message for the address."},
+    RPCExamples{
+        HelpExampleCli("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"signature\" \"hello world\"") +
+        HelpExampleRpc("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"signature\", \"hello world\"")},
+};
+const RPCHelpMan& verifymessage_helpman() { return verifymessage_help; }
+
 UniValue verifymessage(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "verifymessage",
-        "Verify a signed message.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address that signed the message."},
-            {"signature", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The base64-encoded compact signature produced by signmessage."},
-            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The message that was signed."},
-        },
-        RPCResult{RPCResult::Type::BOOL, "verified", "true if the signature verifies the message for the address."},
-        RPCExamples{
-            HelpExampleCli("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"signature\" \"hello world\"") +
-            HelpExampleRpc("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"signature\", \"hello world\"")},
-    };
+    const RPCHelpMan& help = verifymessage_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -711,24 +747,27 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan getreceivedbyaddress_help{
+    "getreceivedbyaddress",
+    "Returns the total amount received by the given Gridcoin address in transactions "
+    "with at least [minconf] confirmations.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address to total received-by."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Minimum number of confirmations for transactions to be counted (default: 1)."},
+    },
+    RPCResult{RPCResult::Type::STR_AMOUNT, "amount",
+        "The total amount received by the address."},
+    RPCExamples{
+        HelpExampleCli("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 6") +
+        HelpExampleRpc("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 6")},
+};
+const RPCHelpMan& getreceivedbyaddress_helpman() { return getreceivedbyaddress_help; }
+
 UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getreceivedbyaddress",
-        "Returns the total amount received by the given Gridcoin address in transactions "
-        "with at least [minconf] confirmations.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address to total received-by."},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Minimum number of confirmations for transactions to be counted (default: 1)."},
-        },
-        RPCResult{RPCResult::Type::STR_AMOUNT, "amount",
-            "The total amount received by the address."},
-        RPCExamples{
-            HelpExampleCli("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 6") +
-            HelpExampleRpc("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 6")},
-    };
+    const RPCHelpMan& help = getreceivedbyaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -781,26 +820,29 @@ void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXC
     }
 }
 
+static const RPCHelpMan getreceivedbyaccount_help{
+    "getreceivedbyaccount",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Use getreceivedbyaddress instead.\n"
+    "\n"
+    "Returns the total amount received by addresses with <account> in transactions with at least\n"
+    "[minconf] confirmations.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Minimum confirmations. Default: 1."},
+    },
+    RPCResult{RPCResult::Type::STR_AMOUNT, "", "Total amount received by addresses in the account."},
+    RPCExamples{
+        HelpExampleCli("getreceivedbyaccount", "\"myaccount\"") +
+        HelpExampleCli("getreceivedbyaccount", "\"myaccount\" 6") +
+        HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
+};
+const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
+
 UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getreceivedbyaccount",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Use getreceivedbyaddress instead.\n"
-        "\n"
-        "Returns the total amount received by addresses with <account> in transactions with at least\n"
-        "[minconf] confirmations.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Minimum confirmations. Default: 1."},
-        },
-        RPCResult{RPCResult::Type::STR_AMOUNT, "", "Total amount received by addresses in the account."},
-        RPCExamples{
-            HelpExampleCli("getreceivedbyaccount", "\"myaccount\"") +
-            HelpExampleCli("getreceivedbyaccount", "\"myaccount\" 6") +
-            HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
-    };
+    const RPCHelpMan& help = getreceivedbyaccount_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -874,29 +916,32 @@ int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
 }
 
 
+static const RPCHelpMan getbalance_help{
+    "getbalance",
+    "If account is not specified, returns the server's total available balance. "
+    "If account is specified, returns the balance in the account. "
+    "Note that the account \"\" is not the same as leaving the parameter out. "
+    "The server total may be different to the balance in the default \"\" account.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The selected account, or \"*\" for the entire wallet (default account is \"\"). "
+            "Accounts subsystem is deprecated and may be removed in a future release."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Only include transactions confirmed at least this many times (default: 1)."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+    },
+    RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC for this account/wallet."},
+    RPCExamples{
+        HelpExampleCli("getbalance", "") +
+        HelpExampleCli("getbalance", "\"*\" 5") +
+        HelpExampleRpc("getbalance", "\"*\", 5")},
+};
+const RPCHelpMan& getbalance_helpman() { return getbalance_help; }
+
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getbalance",
-        "If account is not specified, returns the server's total available balance. "
-        "If account is specified, returns the balance in the account. "
-        "Note that the account \"\" is not the same as leaving the parameter out. "
-        "The server total may be different to the balance in the default \"\" account.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The selected account, or \"*\" for the entire wallet (default account is \"\"). "
-                "Accounts subsystem is deprecated and may be removed in a future release."},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Only include transactions confirmed at least this many times (default: 1)."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
-        },
-        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC for this account/wallet."},
-        RPCExamples{
-            HelpExampleCli("getbalance", "") +
-            HelpExampleCli("getbalance", "\"*\" 5") +
-            HelpExampleRpc("getbalance", "\"*\", 5")},
-    };
+    const RPCHelpMan& help = getbalance_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -964,32 +1009,35 @@ UniValue getbalance(const UniValue& params, bool fHelp)
     return ValueFromAmount(nBalance);
 }
 
+static const RPCHelpMan getbalancedetail_help{
+    "getbalancedetail",
+    "Returns the wallet balance broken down by the outputs that compose it. "
+    "The output list is similar to listtransactions and totals to the wallet's spendable balance.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Only include transactions confirmed at least this many times (default: 1)."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_AMOUNT, "balance", "Sum of received minus sent, in GRC."},
+            {RPCResult::Type::STR_AMOUNT, "fees", "Sum of fees attributed to this wallet's transactions."},
+            {RPCResult::Type::ARR, "list", "",
+                {
+                    {RPCResult::Type::ELISION, "", "output detail (see listtransactions)"},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getbalancedetail", "") +
+        HelpExampleCli("getbalancedetail", "6 true") +
+        HelpExampleRpc("getbalancedetail", "6, true")},
+};
+const RPCHelpMan& getbalancedetail_helpman() { return getbalancedetail_help; }
+
 UniValue getbalancedetail(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getbalancedetail",
-        "Returns the wallet balance broken down by the outputs that compose it. "
-        "The output list is similar to listtransactions and totals to the wallet's spendable balance.",
-        {
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Only include transactions confirmed at least this many times (default: 1)."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_AMOUNT, "balance", "Sum of received minus sent, in GRC."},
-                {RPCResult::Type::STR_AMOUNT, "fees", "Sum of fees attributed to this wallet's transactions."},
-                {RPCResult::Type::ARR, "list", "",
-                    {
-                        {RPCResult::Type::ELISION, "", "output detail (see listtransactions)"},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("getbalancedetail", "") +
-            HelpExampleCli("getbalancedetail", "6 true") +
-            HelpExampleRpc("getbalancedetail", "6, true")},
-    };
+    const RPCHelpMan& help = getbalancedetail_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1093,17 +1141,20 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan getunconfirmedbalance_help{
+    "getunconfirmedbalance",
+    "Returns the unconfirmed balance in the wallet.",
+    {},
+    RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "Total unconfirmed balance in GRC."},
+    RPCExamples{
+        HelpExampleCli("getunconfirmedbalance", "") +
+        HelpExampleRpc("getunconfirmedbalance", "")},
+};
+const RPCHelpMan& getunconfirmedbalance_helpman() { return getunconfirmedbalance_help; }
+
 UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getunconfirmedbalance",
-        "Returns the unconfirmed balance in the wallet.",
-        {},
-        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "Total unconfirmed balance in GRC."},
-        RPCExamples{
-            HelpExampleCli("getunconfirmedbalance", "") +
-            HelpExampleRpc("getunconfirmedbalance", "")},
-    };
+    const RPCHelpMan& help = getunconfirmedbalance_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1112,28 +1163,31 @@ UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 
 
 
+static const RPCHelpMan movecmd_help{
+    "move",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Move funds from one account in your wallet to another.\n"
+    "\n"
+    "Note: the C++ function name is `movecmd` (because `move` is a C++ keyword); the dispatch entry\n"
+    "registers it as `move`.",
+    {
+        {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Source account name."},
+        {"toaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Destination account name."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "Amount in GRC to move."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Unused parameter retained for backwards compatibility. Default: 1."},
+        {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional comment string."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True on success."},
+    RPCExamples{
+        HelpExampleCli("move", "\"acct1\" \"acct2\" 0.01") +
+        HelpExampleRpc("move", "\"acct1\", \"acct2\", 0.01")},
+};
+const RPCHelpMan& movecmd_helpman() { return movecmd_help; }
+
 UniValue movecmd(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "move",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Move funds from one account in your wallet to another.\n"
-        "\n"
-        "Note: the C++ function name is `movecmd` (because `move` is a C++ keyword); the dispatch entry\n"
-        "registers it as `move`.",
-        {
-            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Source account name."},
-            {"toaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Destination account name."},
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "Amount in GRC to move."},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Unused parameter retained for backwards compatibility. Default: 1."},
-            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional comment string."},
-        },
-        RPCResult{RPCResult::Type::BOOL, "", "True on success."},
-        RPCExamples{
-            HelpExampleCli("move", "\"acct1\" \"acct2\" 0.01") +
-            HelpExampleRpc("move", "\"acct1\", \"acct2\", 0.01")},
-    };
+    const RPCHelpMan& help = movecmd_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1185,34 +1239,37 @@ UniValue movecmd(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan sendfrom_help{
+    "sendfrom",
+    "Send GRC from an account to a Gridcoin address. "
+    "Accounts subsystem is deprecated and may be removed in a future release. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Account to send from."},
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address to send to."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+            "The amount in GRC (rounded to the nearest 0.000001)."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Only use the balance confirmed at least this many times (default: 1)."},
+        {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Wallet-local comment describing what the transaction is for."},
+        {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Wallet-local comment naming the recipient."},
+        {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Optional message to add to the receiver (TxMessage contract)."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("sendfrom", "\"tabby\" \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 6") +
+        HelpExampleRpc("sendfrom", "\"tabby\", \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, 6")},
+};
+const RPCHelpMan& sendfrom_helpman() { return sendfrom_help; }
+
 UniValue sendfrom(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sendfrom",
-        "Send GRC from an account to a Gridcoin address. "
-        "Accounts subsystem is deprecated and may be removed in a future release. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Account to send from."},
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address to send to."},
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
-                "The amount in GRC (rounded to the nearest 0.000001)."},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Only use the balance confirmed at least this many times (default: 1)."},
-            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Wallet-local comment describing what the transaction is for."},
-            {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Wallet-local comment naming the recipient."},
-            {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Optional message to add to the receiver (TxMessage contract)."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
-        RPCExamples{
-            HelpExampleCli("sendfrom", "\"tabby\" \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 6") +
-            HelpExampleRpc("sendfrom", "\"tabby\", \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, 6")},
-    };
+    const RPCHelpMan& help = sendfrom_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1257,34 +1314,37 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
+static const RPCHelpMan sendmany_help{
+    "sendmany",
+    "Send GRC to multiple addresses in a single transaction. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Specify account name to use; use \"\" to use all addresses in the wallet. "
+            "Accounts subsystem is deprecated and may be removed in a future release."},
+        {"amounts", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "A JSON object with addresses as keys and GRC amounts as values.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                    "GRC amount to send to this address (rounded to the nearest 0.000001)."},
+            }},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Only use balance confirmed at least this many times (default: 1)."},
+        {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Wallet-local comment describing what the transaction is for."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("sendmany",
+            "\"\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":1.5,\\\"SkNNd1234567890abcdefghijklmnopqr\\\":0.5}\"") +
+        HelpExampleRpc("sendmany",
+            "\"\", {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":1.5,\"SkNNd1234567890abcdefghijklmnopqr\":0.5}")},
+};
+const RPCHelpMan& sendmany_helpman() { return sendmany_help; }
+
 UniValue sendmany(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sendmany",
-        "Send GRC to multiple addresses in a single transaction. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Specify account name to use; use \"\" to use all addresses in the wallet. "
-                "Accounts subsystem is deprecated and may be removed in a future release."},
-            {"amounts", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
-                "A JSON object with addresses as keys and GRC amounts as values.",
-                {
-                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                        "GRC amount to send to this address (rounded to the nearest 0.000001)."},
-                }},
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Only use balance confirmed at least this many times (default: 1)."},
-            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Wallet-local comment describing what the transaction is for."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
-        RPCExamples{
-            HelpExampleCli("sendmany",
-                "\"\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":1.5,\\\"SkNNd1234567890abcdefghijklmnopqr\\\":0.5}\"") +
-            HelpExampleRpc("sendmany",
-                "\"\", {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":1.5,\"SkNNd1234567890abcdefghijklmnopqr\":0.5}")},
-    };
+    const RPCHelpMan& help = sendmany_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1387,32 +1447,35 @@ UniValue sendmany(const UniValue& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
+static const RPCHelpMan addmultisigaddress_help{
+    "addmultisigaddress",
+    "Add a nrequired-to-sign multisignature address to the wallet. "
+    "Each key is a Gridcoin address or hex-encoded public key. "
+    "If [account] is specified, assign address to [account].",
+    {
+        {"nrequired", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "The number of required signatures out of the n keys."},
+        {"keys", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of Gridcoin addresses or hex-encoded public keys.",
+            {
+                {"key", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                    "A Gridcoin address or hex-encoded public key."},
+            }},
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+    },
+    RPCResult{RPCResult::Type::STR, "address", "The P2SH multisig address."},
+    RPCExamples{
+        HelpExampleCli("addmultisigaddress",
+            "2 \"[\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\",\\\"SkNNd1234567890abcdefghijklmnopqr\\\"]\"") +
+        HelpExampleRpc("addmultisigaddress",
+            "2, [\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\",\"SkNNd1234567890abcdefghijklmnopqr\"]")},
+};
+const RPCHelpMan& addmultisigaddress_helpman() { return addmultisigaddress_help; }
+
 UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "addmultisigaddress",
-        "Add a nrequired-to-sign multisignature address to the wallet. "
-        "Each key is a Gridcoin address or hex-encoded public key. "
-        "If [account] is specified, assign address to [account].",
-        {
-            {"nrequired", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "The number of required signatures out of the n keys."},
-            {"keys", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of Gridcoin addresses or hex-encoded public keys.",
-                {
-                    {"key", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                        "A Gridcoin address or hex-encoded public key."},
-                }},
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
-        },
-        RPCResult{RPCResult::Type::STR, "address", "The P2SH multisig address."},
-        RPCExamples{
-            HelpExampleCli("addmultisigaddress",
-                "2 \"[\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\",\\\"SkNNd1234567890abcdefghijklmnopqr\\\"]\"") +
-            HelpExampleRpc("addmultisigaddress",
-                "2, [\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\",\"SkNNd1234567890abcdefghijklmnopqr\"]")},
-    };
+    const RPCHelpMan& help = addmultisigaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1483,23 +1546,26 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
     return EncodeDestination(innerID);
 }
 
+static const RPCHelpMan addredeemscript_help{
+    "addredeemscript",
+    "Add a P2SH address with a specified redeemScript to the wallet. "
+    "If [account] is specified, assign address to [account].",
+    {
+        {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The hex-encoded redeem script."},
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+    },
+    RPCResult{RPCResult::Type::STR, "address", "The P2SH address corresponding to the redeem script."},
+    RPCExamples{
+        HelpExampleCli("addredeemscript", "\"512103...ae\"") +
+        HelpExampleRpc("addredeemscript", "\"512103...ae\"")},
+};
+const RPCHelpMan& addredeemscript_helpman() { return addredeemscript_help; }
+
 UniValue addredeemscript(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "addredeemscript",
-        "Add a P2SH address with a specified redeemScript to the wallet. "
-        "If [account] is specified, assign address to [account].",
-        {
-            {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The hex-encoded redeem script."},
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
-        },
-        RPCResult{RPCResult::Type::STR, "address", "The P2SH address corresponding to the redeem script."},
-        RPCExamples{
-            HelpExampleCli("addredeemscript", "\"512103...ae\"") +
-            HelpExampleRpc("addredeemscript", "\"512103...ae\"")},
-    };
+    const RPCHelpMan& help = addredeemscript_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1657,36 +1723,39 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
     return ret;
 }
 
+static const RPCHelpMan listreceivedbyaddress_help{
+    "listreceivedbyaddress",
+    "List balances by receiving address.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The minimum number of confirmations before payments are included (default: 1)."},
+        {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to include addresses that haven't received any payments (default: false)."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to include watchonly addresses (see 'importaddress'). Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                        "Only returned if imported addresses were involved in transaction."},
+                    {RPCResult::Type::STR, "address", "The receiving Gridcoin address."},
+                    {RPCResult::Type::STR, "account", "The account of the receiving address (deprecated; default account is \"\")."},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC received by the address."},
+                    {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction included."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listreceivedbyaddress", "") +
+        HelpExampleCli("listreceivedbyaddress", "6 true") +
+        HelpExampleRpc("listreceivedbyaddress", "6, true, true")},
+};
+const RPCHelpMan& listreceivedbyaddress_helpman() { return listreceivedbyaddress_help; }
+
 UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listreceivedbyaddress",
-        "List balances by receiving address.",
-        {
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The minimum number of confirmations before payments are included (default: 1)."},
-            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Whether to include addresses that haven't received any payments (default: false)."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Whether to include watchonly addresses (see 'importaddress'). Default: false."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::OBJ, "", "",
-                    {
-                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
-                            "Only returned if imported addresses were involved in transaction."},
-                        {RPCResult::Type::STR, "address", "The receiving Gridcoin address."},
-                        {RPCResult::Type::STR, "account", "The account of the receiving address (deprecated; default account is \"\")."},
-                        {RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC received by the address."},
-                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction included."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("listreceivedbyaddress", "") +
-            HelpExampleCli("listreceivedbyaddress", "6 true") +
-            HelpExampleRpc("listreceivedbyaddress", "6, true, true")},
-    };
+    const RPCHelpMan& help = listreceivedbyaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1695,37 +1764,40 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
     return ListReceived(params, false);
 }
 
+static const RPCHelpMan listreceivedbyaccount_help{
+    "listreceivedbyaccount",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Use listreceivedbyaddress instead.\n"
+    "\n"
+    "List balances by account.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Minimum confirmations before payments are included. Default: 1."},
+        {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include accounts that haven't received any payments. Default: false."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include watch-only addresses (see importaddress). Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                        "Only returned if imported addresses were involved in transactions."},
+                    {RPCResult::Type::STR, "account", "Account name of the receiving account."},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Total amount received by addresses in this account."},
+                    {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listreceivedbyaccount", "") +
+        HelpExampleRpc("listreceivedbyaccount", "6, true")},
+};
+const RPCHelpMan& listreceivedbyaccount_helpman() { return listreceivedbyaccount_help; }
+
 UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listreceivedbyaccount",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Use listreceivedbyaddress instead.\n"
-        "\n"
-        "List balances by account.",
-        {
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Minimum confirmations before payments are included. Default: 1."},
-            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Include accounts that haven't received any payments. Default: false."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Include watch-only addresses (see importaddress). Default: false."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::OBJ, "", "",
-                    {
-                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
-                            "Only returned if imported addresses were involved in transactions."},
-                        {RPCResult::Type::STR, "account", "Account name of the receiving account."},
-                        {RPCResult::Type::STR_AMOUNT, "amount", "Total amount received by addresses in this account."},
-                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("listreceivedbyaccount", "") +
-            HelpExampleRpc("listreceivedbyaccount", "6, true")},
-    };
+    const RPCHelpMan& help = listreceivedbyaccount_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1887,31 +1959,34 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
     }
 }
 
+static const RPCHelpMan listtransactions_help{
+    "listtransactions",
+    "Returns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.",
+    {
+        {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The account name; if omitted, list transactions for all accounts. "
+            "Accounts subsystem is deprecated and may be removed in a future release."},
+        {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The number of transactions to return (default: 10)."},
+        {"from", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The number of transactions to skip (default: 0)."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "transaction object; see 'gettransaction' for the full schema"},
+        }},
+    RPCExamples{
+        HelpExampleCli("listtransactions", "") +
+        HelpExampleCli("listtransactions", "\"*\" 20 100") +
+        HelpExampleRpc("listtransactions", "\"*\", 20, 100")},
+};
+const RPCHelpMan& listtransactions_helpman() { return listtransactions_help; }
+
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listtransactions",
-        "Returns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.",
-        {
-            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The account name; if omitted, list transactions for all accounts. "
-                "Accounts subsystem is deprecated and may be removed in a future release."},
-            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The number of transactions to return (default: 10)."},
-            {"from", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The number of transactions to skip (default: 0)."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::ELISION, "", "transaction object; see 'gettransaction' for the full schema"},
-            }},
-        RPCExamples{
-            HelpExampleCli("listtransactions", "") +
-            HelpExampleCli("listtransactions", "\"*\" 20 100") +
-            HelpExampleRpc("listtransactions", "\"*\", 20, 100")},
-    };
+    const RPCHelpMan& help = listtransactions_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1996,24 +2071,27 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan liststakes_help{
+    "liststakes",
+    "Returns the count most recent stake transactions.",
+    {
+        {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum number of stake transactions to return (default: 10)."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "stake transaction object; see 'listtransactions'"},
+        }},
+    RPCExamples{
+        HelpExampleCli("liststakes", "") +
+        HelpExampleCli("liststakes", "25") +
+        HelpExampleRpc("liststakes", "25")},
+};
+const RPCHelpMan& liststakes_helpman() { return liststakes_help; }
+
 UniValue liststakes(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "liststakes",
-        "Returns the count most recent stake transactions.",
-        {
-            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Maximum number of stake transactions to return (default: 10)."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::ELISION, "", "stake transaction object; see 'listtransactions'"},
-            }},
-        RPCExamples{
-            HelpExampleCli("liststakes", "") +
-            HelpExampleCli("liststakes", "25") +
-            HelpExampleRpc("liststakes", "25")},
-    };
+    const RPCHelpMan& help = liststakes_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2070,24 +2148,27 @@ UniValue liststakes(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan listaccounts_help{
+    "listaccounts",
+    "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+    "Returns a JSON object where keys are account names and values are account balances.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Only include transactions with at least this many confirmations. Default: 1."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include balances in watch-only addresses (see importaddress). Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of account name to balance",
+        {{RPCResult::Type::STR_AMOUNT, "account", "Total balance for the account."}}},
+    RPCExamples{
+        HelpExampleCli("listaccounts", "") +
+        HelpExampleRpc("listaccounts", "6, true")},
+};
+const RPCHelpMan& listaccounts_helpman() { return listaccounts_help; }
+
 UniValue listaccounts(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listaccounts",
-        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-        "Returns a JSON object where keys are account names and values are account balances.",
-        {
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Only include transactions with at least this many confirmations. Default: 1."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Include balances in watch-only addresses (see importaddress). Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of account name to balance",
-            {{RPCResult::Type::STR_AMOUNT, "account", "Total balance for the account."}}},
-        RPCExamples{
-            HelpExampleCli("listaccounts", "") +
-            HelpExampleRpc("listaccounts", "6, true")},
-    };
+    const RPCHelpMan& help = listaccounts_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2147,35 +2228,38 @@ UniValue listaccounts(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan listsinceblock_help{
+    "listsinceblock",
+    "Get all transactions in blocks since block [blockhash], or all transactions if omitted.",
+    {
+        {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+            "The block hash to list transactions since."},
+        {"target_confirmations", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The confirmations required, must be 1 or more."},
+        {"include_watchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "transactions", "",
+                {
+                    {RPCResult::Type::ELISION, "", "transaction object; see 'listtransactions'"},
+                }},
+            {RPCResult::Type::STR_HEX, "lastblock",
+                "The hash of the last block considered."},
+        }},
+    RPCExamples{
+        HelpExampleCli("listsinceblock", "") +
+        HelpExampleCli("listsinceblock",
+            "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\" 6") +
+        HelpExampleRpc("listsinceblock",
+            "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\", 6")},
+};
+const RPCHelpMan& listsinceblock_helpman() { return listsinceblock_help; }
+
 UniValue listsinceblock(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listsinceblock",
-        "Get all transactions in blocks since block [blockhash], or all transactions if omitted.",
-        {
-            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
-                "The block hash to list transactions since."},
-            {"target_confirmations", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The confirmations required, must be 1 or more."},
-            {"include_watchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::ARR, "transactions", "",
-                    {
-                        {RPCResult::Type::ELISION, "", "transaction object; see 'listtransactions'"},
-                    }},
-                {RPCResult::Type::STR_HEX, "lastblock",
-                    "The hash of the last block considered."},
-            }},
-        RPCExamples{
-            HelpExampleCli("listsinceblock", "") +
-            HelpExampleCli("listsinceblock",
-                "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\" 6") +
-            HelpExampleRpc("listsinceblock",
-                "\"36507bf934ffeb556b4140a8d57750954ad4c3c3cd8abad3b8a7fd293ae6e93b\", 6")},
-    };
+    const RPCHelpMan& help = listsinceblock_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2234,25 +2318,28 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
 }
 
+static const RPCHelpMan gettransaction_help{
+    "gettransaction",
+    "Get detailed information about an in-wallet transaction.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The transaction id."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to include watchonly addresses in balance calculation and details[]. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "transaction detail; see WalletTxToJSON for full keys"},
+        }},
+    RPCExamples{
+        HelpExampleCli("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+        HelpExampleRpc("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+};
+const RPCHelpMan& gettransaction_helpman() { return gettransaction_help; }
+
 UniValue gettransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "gettransaction",
-        "Get detailed information about an in-wallet transaction.",
-        {
-            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The transaction id."},
-            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Whether to include watchonly addresses in balance calculation and details[]. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::ELISION, "", "transaction detail; see WalletTxToJSON for full keys"},
-            }},
-        RPCExamples{
-            HelpExampleCli("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
-            HelpExampleRpc("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
-    };
+    const RPCHelpMan& help = gettransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2322,24 +2409,24 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
 
 UniValue abandontransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "abandontransaction",
-        "Mark in-wallet transaction <txid> as abandoned. "
-        "This will mark this transaction and all its in-wallet descendants as abandoned, "
-        "which will allow their inputs to be respent. It can be used to replace stuck or evicted transactions. "
-        "It only works on transactions which are not included in a block and are not currently in the mempool. "
-        "It has no effect on transactions which are already conflicted or abandoned.",
-        {
-            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The transaction id (must be in the wallet)."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
-            HelpExampleRpc("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
-    };
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "abandontransaction \"txid\"\n"
+                "\nMark in-wallet transaction <txid> as abandoned.\n"
+                "This will mark this transaction and all its in-wallet descendants as abandoned\n"
+                "which will allow their inputs to be respent. It can be used to replace \"stuck\"\n"
+                "or evicted transactions.\n"
+                "It only works on transactions which are not included in a block and are not\n"
+                "currently in the mempool.\n"
+                "It has no effect on transactions which are already conflicted or abandoned.\n"
+                "\nArguments:\n"
+                "1. \"txid\"    (string, required) The transaction id\n"
+                "\nResult:\n"
+                "null\n"
+                "\nExamples:\n"
+                "\nabandon a transaction\n"
+                "\n> gridcoinresearchd abandontransaction \"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"\n"
+        );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2355,21 +2442,24 @@ UniValue abandontransaction(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+static const RPCHelpMan getrawwallettransaction_help{
+    "getrawwallettransaction",
+    "Get a string that is serialized, hex-encoded data for the given txid from the wallet.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The transaction id (must be in the wallet)."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "data",
+        "Serialized, hex-encoded data for the transaction."},
+    RPCExamples{
+        HelpExampleCli("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+        HelpExampleRpc("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+};
+const RPCHelpMan& getrawwallettransaction_helpman() { return getrawwallettransaction_help; }
+
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getrawwallettransaction",
-        "Get a string that is serialized, hex-encoded data for the given txid from the wallet.",
-        {
-            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The transaction id (must be in the wallet)."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "data",
-            "Serialized, hex-encoded data for the transaction."},
-        RPCExamples{
-            HelpExampleCli("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
-            HelpExampleRpc("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
-    };
+    const RPCHelpMan& help = getrawwallettransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2390,28 +2480,31 @@ UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan backupwallet_help{
+    "backupwallet",
+    "Backup the wallet, config, and settings files. Old retained backups are pruned.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "Backup wallet success", "Whether wallet.dat was backed up successfully."},
+            {RPCResult::Type::BOOL, "Backup config success", "Whether gridcoinresearch.conf was backed up successfully."},
+            {RPCResult::Type::BOOL, "Backup settings success", "Whether gridcoinsettings.json was backed up successfully."},
+            {RPCResult::Type::BOOL, "Maintain backup file retention success", "Whether retention pruning succeeded."},
+            {RPCResult::Type::NUM, "Number of files removed", "Number of old backup files pruned."},
+            {RPCResult::Type::ARR, "Files removed", "Names of pruned backup files.",
+                {
+                    {RPCResult::Type::STR, "", "Name of a removed backup file."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("backupwallet", "") +
+        HelpExampleRpc("backupwallet", "")},
+};
+const RPCHelpMan& backupwallet_helpman() { return backupwallet_help; }
+
 UniValue backupwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "backupwallet",
-        "Backup the wallet, config, and settings files. Old retained backups are pruned.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "Backup wallet success", "Whether wallet.dat was backed up successfully."},
-                {RPCResult::Type::BOOL, "Backup config success", "Whether gridcoinresearch.conf was backed up successfully."},
-                {RPCResult::Type::BOOL, "Backup settings success", "Whether gridcoinsettings.json was backed up successfully."},
-                {RPCResult::Type::BOOL, "Maintain backup file retention success", "Whether retention pruning succeeded."},
-                {RPCResult::Type::NUM, "Number of files removed", "Number of old backup files pruned."},
-                {RPCResult::Type::ARR, "Files removed", "Names of pruned backup files.",
-                    {
-                        {RPCResult::Type::STR, "", "Name of a removed backup file."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("backupwallet", "") +
-            HelpExampleRpc("backupwallet", "")},
-    };
+    const RPCHelpMan& help = backupwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2448,47 +2541,50 @@ UniValue backupwallet(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan maintainbackups_help{
+    "maintainbackups",
+    "Maintain backup file retention by pruning old wallet backup files.\n"
+    "\n"
+    "To run this command, -maintainbackupretention must be set as an argument "
+    "during Gridcoin startup or given in the config file with "
+    "maintainbackupretention=1.\n"
+    "\n"
+    "If arguments are omitted, the values from walletbackupretainnumfiles and "
+    "walletbackupretainnumdays in the config file are used (defaulting to 365 "
+    "each). Both arguments must be supplied together or both omitted.\n"
+    "\n"
+    "WARNING: retention will not allow both values to be set lower than 7 — "
+    "values below 7 are clamped to 7 to prevent unintended data loss. The "
+    "rule that retains the greater number of files wins.",
+    {
+        {"retention_by_number", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of most-recent backup files to retain (non-negative integer)."},
+        {"retention_by_days", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of days of backups to retain (non-negative integer)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "Maintain backup file retention success",
+                "Whether the maintenance succeeded."},
+            {RPCResult::Type::NUM, "Number of files removed",
+                "Count of files deleted from the backup directory."},
+            {RPCResult::Type::ARR, "Files removed",
+                "List of file paths that were removed.",
+                {
+                    {RPCResult::Type::STR, "", "Path of a removed file."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("maintainbackups", "")
+      + HelpExampleCli("maintainbackups", "30 90")
+      + HelpExampleRpc("maintainbackups", "30, 90")
+    }
+};
+const RPCHelpMan& maintainbackups_helpman() { return maintainbackups_help; }
+
 UniValue maintainbackups(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "maintainbackups",
-        "Maintain backup file retention by pruning old wallet backup files.\n"
-        "\n"
-        "To run this command, -maintainbackupretention must be set as an argument "
-        "during Gridcoin startup or given in the config file with "
-        "maintainbackupretention=1.\n"
-        "\n"
-        "If arguments are omitted, the values from walletbackupretainnumfiles and "
-        "walletbackupretainnumdays in the config file are used (defaulting to 365 "
-        "each). Both arguments must be supplied together or both omitted.\n"
-        "\n"
-        "WARNING: retention will not allow both values to be set lower than 7 — "
-        "values below 7 are clamped to 7 to prevent unintended data loss. The "
-        "rule that retains the greater number of files wins.",
-        {
-            {"retention_by_number", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Number of most-recent backup files to retain (non-negative integer)."},
-            {"retention_by_days", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Number of days of backups to retain (non-negative integer)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "Maintain backup file retention success",
-                    "Whether the maintenance succeeded."},
-                {RPCResult::Type::NUM, "Number of files removed",
-                    "Count of files deleted from the backup directory."},
-                {RPCResult::Type::ARR, "Files removed",
-                    "List of file paths that were removed.",
-                    {
-                        {RPCResult::Type::STR, "", "Path of a removed file."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("maintainbackups", "")
-          + HelpExampleCli("maintainbackups", "30 90")
-          + HelpExampleRpc("maintainbackups", "30, 90")
-        }
-    };
+    const RPCHelpMan& help = maintainbackups_helpman();
 
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
@@ -2541,22 +2637,25 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan keypoolrefill_help{
+    "keypoolrefill",
+    "Fills the keypool. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"newsize", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The new keypool size (default: from -keypool option)."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("keypoolrefill", "") +
+        HelpExampleCli("keypoolrefill", "1000") +
+        HelpExampleRpc("keypoolrefill", "1000")},
+};
+const RPCHelpMan& keypoolrefill_helpman() { return keypoolrefill_help; }
+
 UniValue keypoolrefill(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "keypoolrefill",
-        "Fills the keypool. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"newsize", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The new keypool size (default: from -keypool option)."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("keypoolrefill", "") +
-            HelpExampleCli("keypoolrefill", "1000") +
-            HelpExampleRpc("keypoolrefill", "1000")},
-    };
+    const RPCHelpMan& help = keypoolrefill_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2633,36 +2732,39 @@ void ThreadCleanWalletPassphrase(void* parg)
     delete (int64_t*)parg;
 }
 
+static const RPCHelpMan walletpassphrase_help{
+    "walletpassphrase",
+    "Stores the wallet decryption key in memory for <timeout> seconds, "
+    "allowing operations that require an unlocked wallet (sending, signing, "
+    "staking). Requires the wallet to be encrypted.\n"
+    "\n"
+    "If <stakingonly> is true, the wallet is unlocked for staking only and "
+    "sending functions remain disabled until walletlock is called and the "
+    "wallet is re-unlocked with <stakingonly> false.\n"
+    "\n"
+    "Timeouts greater than 100000000 seconds are clamped to that value to "
+    "avoid a macOS/libevent bug.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The wallet passphrase."},
+        {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "The time in seconds to keep the decryption key in memory."},
+        {"stakingonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, unlock for staking only; sending functions remain "
+            "disabled. Defaults to false."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60")
+      + HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60 true")
+      + HelpExampleRpc("walletpassphrase", "\"mypassphrase\", 60")
+    }
+};
+const RPCHelpMan& walletpassphrase_helpman() { return walletpassphrase_help; }
+
 UniValue walletpassphrase(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletpassphrase",
-        "Stores the wallet decryption key in memory for <timeout> seconds, "
-        "allowing operations that require an unlocked wallet (sending, signing, "
-        "staking). Requires the wallet to be encrypted.\n"
-        "\n"
-        "If <stakingonly> is true, the wallet is unlocked for staking only and "
-        "sending functions remain disabled until walletlock is called and the "
-        "wallet is re-unlocked with <stakingonly> false.\n"
-        "\n"
-        "Timeouts greater than 100000000 seconds are clamped to that value to "
-        "avoid a macOS/libevent bug.",
-        {
-            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The wallet passphrase."},
-            {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "The time in seconds to keep the decryption key in memory."},
-            {"stakingonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, unlock for staking only; sending functions remain "
-                "disabled. Defaults to false."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60")
-          + HelpExampleCli("walletpassphrase", "\"mypassphrase\" 60 true")
-          + HelpExampleRpc("walletpassphrase", "\"mypassphrase\", 60")
-        }
-    };
+    const RPCHelpMan& help = walletpassphrase_helpman();
 
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
@@ -2726,24 +2828,27 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan walletpassphrasechange_help{
+    "walletpassphrasechange",
+    "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>. "
+    "Requires the wallet to be encrypted.",
+    {
+        {"oldpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The current wallet passphrase."},
+        {"newpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The new wallet passphrase."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("walletpassphrasechange", "\"oldpassphrase\" \"newpassphrase\"")
+      + HelpExampleRpc("walletpassphrasechange", "\"oldpassphrase\", \"newpassphrase\"")
+    }
+};
+const RPCHelpMan& walletpassphrasechange_helpman() { return walletpassphrasechange_help; }
+
 UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletpassphrasechange",
-        "Changes the wallet passphrase from <oldpassphrase> to <newpassphrase>. "
-        "Requires the wallet to be encrypted.",
-        {
-            {"oldpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The current wallet passphrase."},
-            {"newpassphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The new wallet passphrase."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("walletpassphrasechange", "\"oldpassphrase\" \"newpassphrase\"")
-          + HelpExampleRpc("walletpassphrasechange", "\"oldpassphrase\", \"newpassphrase\"")
-        }
-    };
+    const RPCHelpMan& help = walletpassphrasechange_helpman();
 
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
@@ -2796,46 +2901,24 @@ static const char* ClassifyWalletTxState(const CWalletTx& wtx)
  */
 UniValue inspectwalletstate(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "inspectwalletstate",
-        "Diagnostic command to inspect transaction states in the wallet. "
-        "Shows how many transactions are in each state and identifies issues. "
-        "Useful for debugging the transaction state machine introduced in Issue #1157.",
-        {
-            {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Show per-transaction details including inactive/unrecognized transaction data. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::NUM, "total_transactions", "Total number of transactions in the wallet."},
-                {RPCResult::Type::OBJ, "state_counts", "",
-                    {
-                        {RPCResult::Type::NUM, "mempool",      "Transactions currently in the mempool."},
-                        {RPCResult::Type::NUM, "confirmed",    "Transactions confirmed in a block."},
-                        {RPCResult::Type::NUM, "inactive",     "Transactions in the inactive state (abandoned or conflicted)."},
-                        {RPCResult::Type::NUM, "unrecognized", "Transactions whose state could not be classified."},
-                    }},
-                {RPCResult::Type::OBJ, "balance_calculation", "Diagnostic balance breakdown.",
-                    {
-                        {RPCResult::Type::ELISION, "", "trusted/confirmed counts and sums"},
-                    }},
-                {RPCResult::Type::ARR, "inactive_transactions", /*optional=*/true,
-                    "Per-transaction inactive details (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-                {RPCResult::Type::ARR, "unrecognized_transactions", /*optional=*/true,
-                    "Per-transaction unrecognized details (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-                {RPCResult::Type::ARR, "all_transactions", /*optional=*/true,
-                    "Every wallet transaction with state breakdown (verbose only).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("inspectwalletstate", "") +
-            HelpExampleCli("inspectwalletstate", "true") +
-            HelpExampleRpc("inspectwalletstate", "true")},
-    };
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "inspectwalletstate ( verbose )\n"
+                "\n"
+                "Diagnostic command to inspect transaction states in the wallet.\n"
+                "Shows how many transactions are in each state and identifies issues.\n"
+                "\nArguments:\n"
+                "1. verbose (boolean, optional, default=false) Show per-transaction details\n"
+                "   including inactive/unrecognized transaction data.\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"total_transactions\": n,\n"
+                "  \"state_counts\": { \"mempool\": n, \"confirmed\": n, \"inactive\": n, \"unrecognized\": n },\n"
+                "  \"balance_calculation\": { ... },\n"
+                "  \"inactive_transactions\": [...],    (verbose only)\n"
+                "  \"unrecognized_transactions\": [...], (verbose only)\n"
+                "  \"all_transactions\": [...]           (verbose only)\n"
+                "}\n");
 
     bool fVerbose = false;
     if (params.size() > 0)
@@ -2963,21 +3046,24 @@ UniValue inspectwalletstate(const UniValue& params, bool fHelp)
 /**
  * Run the wallet diagnose checks
  */
+static const RPCHelpMan walletdiagnose_help{
+    "walletdiagnose",
+    "Runs several diagnostic tests on the wallet (connection counts, sync state, "
+    "client version, BOINC path, CPID, clock, TCP port, difficulty, ETTS).",
+    {},
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "diagnostic key/result entry"},
+        }},
+    RPCExamples{
+        HelpExampleCli("walletdiagnose", "") +
+        HelpExampleRpc("walletdiagnose", "")},
+};
+const RPCHelpMan& walletdiagnose_helpman() { return walletdiagnose_help; }
+
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletdiagnose",
-        "Runs several diagnostic tests on the wallet (connection counts, sync state, "
-        "client version, BOINC path, CPID, clock, TCP port, difficulty, ETTS).",
-        {},
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "",
-            {
-                {RPCResult::Type::ELISION, "", "diagnostic key/result entry"},
-            }},
-        RPCExamples{
-            HelpExampleCli("walletdiagnose", "") +
-            HelpExampleRpc("walletdiagnose", "")},
-    };
+    const RPCHelpMan& help = walletdiagnose_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3053,21 +3139,24 @@ UniValue walletdiagnose(const UniValue& params, bool fHelp)
     return obj;
 }
 
+static const RPCHelpMan walletlock_help{
+    "walletlock",
+    "Removes the wallet encryption key from memory, locking the wallet. "
+    "After calling this method, you will need to call walletpassphrase again "
+    "before being able to call any methods which require the wallet to be "
+    "unlocked. Requires the wallet to be encrypted.",
+    {},
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("walletlock", "")
+      + HelpExampleRpc("walletlock", "")
+    }
+};
+const RPCHelpMan& walletlock_helpman() { return walletlock_help; }
+
 UniValue walletlock(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletlock",
-        "Removes the wallet encryption key from memory, locking the wallet. "
-        "After calling this method, you will need to call walletpassphrase again "
-        "before being able to call any methods which require the wallet to be "
-        "unlocked. Requires the wallet to be encrypted.",
-        {},
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("walletlock", "")
-          + HelpExampleRpc("walletlock", "")
-        }
-    };
+    const RPCHelpMan& help = walletlock_helpman();
 
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
@@ -3087,22 +3176,25 @@ UniValue walletlock(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan encryptwallet_help{
+    "encryptwallet",
+    "Encrypts the wallet with the given passphrase. "
+    "After encryption, the node will shut down and must be restarted.",
+    {
+        {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The passphrase used to encrypt the wallet. Must be non-empty."},
+    },
+    RPCResult{RPCResult::Type::STR, "message",
+        "Confirmation message; the daemon stops after returning."},
+    RPCExamples{
+        HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
+        HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
+};
+const RPCHelpMan& encryptwallet_helpman() { return encryptwallet_help; }
+
 UniValue encryptwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "encryptwallet",
-        "Encrypts the wallet with the given passphrase. "
-        "After encryption, the node will shut down and must be restarted.",
-        {
-            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The passphrase used to encrypt the wallet. Must be non-empty."},
-        },
-        RPCResult{RPCResult::Type::STR, "message",
-            "Confirmation message; the daemon stops after returning."},
-        RPCExamples{
-            HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
-            HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
-    };
+    const RPCHelpMan& help = encryptwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3166,38 +3258,41 @@ public:
     }
 };
 
+static const RPCHelpMan validateaddress_help{
+    "validateaddress",
+    "Return information about the given Gridcoin address.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address to validate."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "isvalid", "Whether the address is valid."},
+            {RPCResult::Type::STR, "address", /*optional=*/true, "The decoded address (only when valid)."},
+            {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the address."},
+            {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the address is a P2SH script address."},
+            {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+            {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+            {RPCResult::Type::STR, "script", /*optional=*/true, "Script type (only when ismine and isscript)."},
+            {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "Hex-encoded redeem script (script address only)."},
+            {RPCResult::Type::ARR, "addresses", /*optional=*/true, "Embedded addresses (script address only).",
+                {
+                    {RPCResult::Type::STR, "", "An embedded Gridcoin address."},
+                }},
+            {RPCResult::Type::NUM, "sigsrequired", /*optional=*/true, "Required signatures (multisig script address only)."},
+            {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+            {RPCResult::Type::STR, "hdkeypath", /*optional=*/true, "HD key derivation path (HD wallets only)."},
+            {RPCResult::Type::STR_HEX, "hdmasterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"") +
+        HelpExampleRpc("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"")},
+};
+const RPCHelpMan& validateaddress_helpman() { return validateaddress_help; }
+
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "validateaddress",
-        "Return information about the given Gridcoin address.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address to validate."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "isvalid", "Whether the address is valid."},
-                {RPCResult::Type::STR, "address", /*optional=*/true, "The decoded address (only when valid)."},
-                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the address."},
-                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the address is a P2SH script address."},
-                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
-                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
-                {RPCResult::Type::STR, "script", /*optional=*/true, "Script type (only when ismine and isscript)."},
-                {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "Hex-encoded redeem script (script address only)."},
-                {RPCResult::Type::ARR, "addresses", /*optional=*/true, "Embedded addresses (script address only).",
-                    {
-                        {RPCResult::Type::STR, "", "An embedded Gridcoin address."},
-                    }},
-                {RPCResult::Type::NUM, "sigsrequired", /*optional=*/true, "Required signatures (multisig script address only)."},
-                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
-                {RPCResult::Type::STR, "hdkeypath", /*optional=*/true, "HD key derivation path (HD wallets only)."},
-                {RPCResult::Type::STR_HEX, "hdmasterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
-            }},
-        RPCExamples{
-            HelpExampleCli("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"") +
-            HelpExampleRpc("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"")},
-    };
+    const RPCHelpMan& help = validateaddress_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3230,31 +3325,34 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
     return ret;
 }
 
+static const RPCHelpMan validatepubkey_help{
+    "validatepubkey",
+    "Return information about the given Gridcoin public key.",
+    {
+        {"pubkey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The hex-encoded Gridcoin public key to validate."},
+        {"unused", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Unused; preserved for backward compatibility."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "isvalid", "Whether the public key is valid."},
+            {RPCResult::Type::STR, "address", /*optional=*/true, "The derived Gridcoin address (only when valid)."},
+            {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the derived address."},
+            {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+            {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the derived address is a P2SH script (only when ismine)."},
+            {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+            {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("validatepubkey", "\"03b1c2...\"") +
+        HelpExampleRpc("validatepubkey", "\"03b1c2...\"")},
+};
+const RPCHelpMan& validatepubkey_helpman() { return validatepubkey_help; }
+
 UniValue validatepubkey(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "validatepubkey",
-        "Return information about the given Gridcoin public key.",
-        {
-            {"pubkey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The hex-encoded Gridcoin public key to validate."},
-            {"unused", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Unused; preserved for backward compatibility."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "isvalid", "Whether the public key is valid."},
-                {RPCResult::Type::STR, "address", /*optional=*/true, "The derived Gridcoin address (only when valid)."},
-                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the derived address."},
-                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
-                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the derived address is a P2SH script (only when ismine)."},
-                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
-                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
-            }},
-        RPCExamples{
-            HelpExampleCli("validatepubkey", "\"03b1c2...\"") +
-            HelpExampleRpc("validatepubkey", "\"03b1c2...\"")},
-    };
+    const RPCHelpMan& help = validatepubkey_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3291,30 +3389,33 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
 }
 
 // ppcoin: reserve balance from being staked for network protection
+static const RPCHelpMan reservebalance_help{
+    "reservebalance",
+    "Reserve a balance in the wallet that will not be used for staking, leaving it "
+    "spendable at any time. The reserve will protect UTXOs of any size to honor this "
+    "setting. If no parameters are provided, the current setting is printed.",
+    {
+        {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "true to turn balance reserve on, false to turn it off."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "The amount in GRC to reserve (rounded to cent). Required when reserve=true; forbidden when reserve=false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "reserve", "Whether a reserve amount is currently set."},
+            {RPCResult::Type::STR_AMOUNT, "amount", "The current reserve amount in GRC."},
+        }},
+    RPCExamples{
+        HelpExampleCli("reservebalance", "") +
+        HelpExampleCli("reservebalance", "true 1000") +
+        HelpExampleCli("reservebalance", "false") +
+        HelpExampleRpc("reservebalance", "true, 1000")},
+};
+const RPCHelpMan& reservebalance_helpman() { return reservebalance_help; }
+
 UniValue reservebalance(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "reservebalance",
-        "Reserve a balance in the wallet that will not be used for staking, leaving it "
-        "spendable at any time. The reserve will protect UTXOs of any size to honor this "
-        "setting. If no parameters are provided, the current setting is printed.",
-        {
-            {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "true to turn balance reserve on, false to turn it off."},
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                "The amount in GRC to reserve (rounded to cent). Required when reserve=true; forbidden when reserve=false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "reserve", "Whether a reserve amount is currently set."},
-                {RPCResult::Type::STR_AMOUNT, "amount", "The current reserve amount in GRC."},
-            }},
-        RPCExamples{
-            HelpExampleCli("reservebalance", "") +
-            HelpExampleCli("reservebalance", "true 1000") +
-            HelpExampleCli("reservebalance", "false") +
-            HelpExampleRpc("reservebalance", "true, 1000")},
-    };
+    const RPCHelpMan& help = reservebalance_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3347,25 +3448,28 @@ UniValue reservebalance(const UniValue& params, bool fHelp)
 
 
 // ppcoin: check wallet integrity
+static const RPCHelpMan checkwallet_help{
+    "checkwallet",
+    "Check the wallet for integrity (mismatched spent coins).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                "Present and true when no mismatches were found."},
+            {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                "Number of mismatched spent coins detected (only present when nonzero)."},
+            {RPCResult::Type::STR_AMOUNT, "amount in question", /*optional=*/true,
+                "Total balance involved in the mismatches (only present when nonzero)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("checkwallet", "") +
+        HelpExampleRpc("checkwallet", "")},
+};
+const RPCHelpMan& checkwallet_helpman() { return checkwallet_help; }
+
 UniValue checkwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "checkwallet",
-        "Check the wallet for integrity (mismatched spent coins).",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
-                    "Present and true when no mismatches were found."},
-                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
-                    "Number of mismatched spent coins detected (only present when nonzero)."},
-                {RPCResult::Type::STR_AMOUNT, "amount in question", /*optional=*/true,
-                    "Total balance involved in the mismatches (only present when nonzero)."},
-            }},
-        RPCExamples{
-            HelpExampleCli("checkwallet", "") +
-            HelpExampleRpc("checkwallet", "")},
-    };
+    const RPCHelpMan& help = checkwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3385,25 +3489,28 @@ UniValue checkwallet(const UniValue& params, bool fHelp)
 
 
 // ppcoin: repair wallet
+static const RPCHelpMan repairwallet_help{
+    "repairwallet",
+    "Repair the wallet if checkwallet reports any problem (fixes mismatched spent coins).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                "Present and true when no mismatches were found."},
+            {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                "Number of mismatches that were corrected (only present when nonzero)."},
+            {RPCResult::Type::STR_AMOUNT, "amount affected by repair", /*optional=*/true,
+                "Total balance involved in the corrections (only present when nonzero)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("repairwallet", "") +
+        HelpExampleRpc("repairwallet", "")},
+};
+const RPCHelpMan& repairwallet_helpman() { return repairwallet_help; }
+
 UniValue repairwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "repairwallet",
-        "Repair the wallet if checkwallet reports any problem (fixes mismatched spent coins).",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
-                    "Present and true when no mismatches were found."},
-                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
-                    "Number of mismatches that were corrected (only present when nonzero)."},
-                {RPCResult::Type::STR_AMOUNT, "amount affected by repair", /*optional=*/true,
-                    "Total balance involved in the corrections (only present when nonzero)."},
-            }},
-        RPCExamples{
-            HelpExampleCli("repairwallet", "") +
-            HelpExampleRpc("repairwallet", "")},
-    };
+    const RPCHelpMan& help = repairwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3422,17 +3529,20 @@ UniValue repairwallet(const UniValue& params, bool fHelp)
 }
 
 // NovaCoin: resend unconfirmed wallet transactions
+static const RPCHelpMan resendtx_help{
+    "resendtx",
+    "Re-send unconfirmed transactions in the wallet.",
+    {},
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("resendtx", "") +
+        HelpExampleRpc("resendtx", "")},
+};
+const RPCHelpMan& resendtx_helpman() { return resendtx_help; }
+
 UniValue resendtx(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "resendtx",
-        "Re-send unconfirmed transactions in the wallet.",
-        {},
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("resendtx", "") +
-            HelpExampleRpc("resendtx", "")},
-    };
+    const RPCHelpMan& help = resendtx_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3445,24 +3555,27 @@ UniValue resendtx(const UniValue& params, bool fHelp)
 }
 
 // ppcoin: make a public-private key pair
+static const RPCHelpMan makekeypair_help{
+    "makekeypair",
+    "Make a public/private key pair.",
+    {
+        {"prefix", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Optional preferred prefix for the public key."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "PrivateKey", "Hex-encoded private key."},
+            {RPCResult::Type::STR_HEX, "PublicKey", "Hex-encoded public key."},
+        }},
+    RPCExamples{
+        HelpExampleCli("makekeypair", "") +
+        HelpExampleRpc("makekeypair", "")},
+};
+const RPCHelpMan& makekeypair_helpman() { return makekeypair_help; }
+
 UniValue makekeypair(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "makekeypair",
-        "Make a public/private key pair.",
-        {
-            {"prefix", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Optional preferred prefix for the public key."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "PrivateKey", "Hex-encoded private key."},
-                {RPCResult::Type::STR_HEX, "PublicKey", "Hex-encoded public key."},
-            }},
-        RPCExamples{
-            HelpExampleCli("makekeypair", "") +
-            HelpExampleRpc("makekeypair", "")},
-    };
+    const RPCHelpMan& help = makekeypair_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3479,24 +3592,27 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan burn_help{
+    "burn",
+    "Send an amount to an unspendable OP_RETURN output, optionally with a hex data payload. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+            "Amount to burn in GRC (rounded to the nearest 0.00000001)."},
+        {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+            "Optional hex-encoded payload to attach to the OP_RETURN output."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("burn", "1.0") +
+        HelpExampleCli("burn", "1.0 \"deadbeef\"") +
+        HelpExampleRpc("burn", "1.0, \"deadbeef\"")},
+};
+const RPCHelpMan& burn_helpman() { return burn_help; }
+
 UniValue burn(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "burn",
-        "Send an amount to an unspendable OP_RETURN output, optionally with a hex data payload. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
-                "Amount to burn in GRC (rounded to the nearest 0.00000001)."},
-            {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
-                "Optional hex-encoded payload to attach to the OP_RETURN output."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
-        RPCExamples{
-            HelpExampleCli("burn", "1.0") +
-            HelpExampleCli("burn", "1.0 \"deadbeef\"") +
-            HelpExampleRpc("burn", "1.0, \"deadbeef\"")},
-    };
+    const RPCHelpMan& help = burn_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3524,31 +3640,34 @@ UniValue burn(const UniValue& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
+static const RPCHelpMan sethdseed_help{
+    "sethdseed",
+    "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. "
+    "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
+    "will be derived from this new seed. "
+    "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"newkeypool", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it (default: true). "
+            "If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed. "
+            "If false, addresses from the existing keypool will be used until it has been depleted."},
+        {"seed", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The WIF private key to use as the new HD seed; if not provided a random seed will be used. "
+            "The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("sethdseed", "") +
+        HelpExampleCli("sethdseed", "false") +
+        HelpExampleCli("sethdseed", "true \"wifkey\"") +
+        HelpExampleRpc("sethdseed", "true, \"wifkey\"")},
+};
+const RPCHelpMan& sethdseed_helpman() { return sethdseed_help; }
+
 UniValue sethdseed(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sethdseed",
-        "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being an HD wallet. "
-        "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
-        "will be derived from this new seed. "
-        "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"newkeypool", RPCArg::Type::BOOL, RPCArg::Default{true},
-                "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it. "
-                "If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed. "
-                "If false, addresses from the existing keypool will be used until it has been depleted."},
-            {"seed", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The WIF private key to use as the new HD seed; if not provided a random seed will be used. "
-                "The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("sethdseed", "") +
-            HelpExampleCli("sethdseed", "false") +
-            HelpExampleCli("sethdseed", "true \"wifkey\"") +
-            HelpExampleRpc("sethdseed", "true, \"wifkey\"")},
-    };
+    const RPCHelpMan& help = sethdseed_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -3593,24 +3712,27 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+static const RPCHelpMan upgradewallet_help{
+    "upgradewallet",
+    "Upgrade the wallet to a newer version. Upgrades to the latest version if no version "
+    "number is specified. New keys may be generated and a new wallet backup may be required. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"version", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The version number to upgrade to. Default is the latest wallet version."},
+    },
+    RPCResult{RPCResult::Type::STR, "error",
+        "Empty string on success; otherwise an error message describing why the upgrade failed."},
+    RPCExamples{
+        HelpExampleCli("upgradewallet", "") +
+        HelpExampleCli("upgradewallet", "169900") +
+        HelpExampleRpc("upgradewallet", "169900")},
+};
+const RPCHelpMan& upgradewallet_helpman() { return upgradewallet_help; }
+
 UniValue upgradewallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "upgradewallet",
-        "Upgrade the wallet to a newer version. Upgrades to the latest version if no version "
-        "number is specified. New keys may be generated and a new wallet backup may be required. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"version", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The version number to upgrade to. Default is the latest wallet version."},
-        },
-        RPCResult{RPCResult::Type::STR, "error",
-            "Empty string on success; otherwise an error message describing why the upgrade failed."},
-        RPCExamples{
-            HelpExampleCli("upgradewallet", "") +
-            HelpExampleCli("upgradewallet", "169900") +
-            HelpExampleRpc("upgradewallet", "169900")},
-    };
+    const RPCHelpMan& help = upgradewallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
