@@ -2392,11 +2392,28 @@ UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 
 UniValue backupwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "backupwallet\n"
-                "\n"
-                "Backup your wallet, config, and settings files.\n");
+    static const RPCHelpMan help{
+        "backupwallet",
+        "Backup the wallet, config, and settings files. Old retained backups are pruned.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "Backup wallet success", "Whether wallet.dat was backed up successfully."},
+                {RPCResult::Type::BOOL, "Backup config success", "Whether gridcoinresearch.conf was backed up successfully."},
+                {RPCResult::Type::BOOL, "Backup settings success", "Whether gridcoinsettings.json was backed up successfully."},
+                {RPCResult::Type::BOOL, "Maintain backup file retention success", "Whether retention pruning succeeded."},
+                {RPCResult::Type::NUM, "Number of files removed", "Number of old backup files pruned."},
+                {RPCResult::Type::ARR, "Files removed", "Names of pruned backup files.",
+                    {
+                        {RPCResult::Type::STR, "", "Name of a removed backup file."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("backupwallet", "") +
+            HelpExampleRpc("backupwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
