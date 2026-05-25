@@ -2191,17 +2191,25 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
 UniValue gettransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "gettransaction \"txid\" ( includeWatchonly )\n"
-                "\nGet detailed information about in-wallet transaction <txid>\n"
-                "\nArguments:\n"
-                "1. \"txid\"    (string, required) The transaction id\n"
-                "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
-                "\nResult:\n"
-                "{\n"
-                "  \"amount\" : x.xxx,        (numeric) The transaction amount in grc\n"
-                );
+    static const RPCHelpMan help{
+        "gettransaction",
+        "Get detailed information about an in-wallet transaction.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The transaction id."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include watchonly addresses in balance calculation and details[]. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "transaction detail; see WalletTxToJSON for full keys"},
+            }},
+        RPCExamples{
+            HelpExampleCli("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+            HelpExampleRpc("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
