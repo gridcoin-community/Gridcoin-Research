@@ -347,15 +347,23 @@ UniValue decodepsgt(const UniValue& params, bool fHelp)
 
 UniValue combinepsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "combinepsgt [\"psgt\",...]\n"
-            "\nCombine multiple PSGTs for the same transaction into one.\n"
-            "\nArguments:\n"
-            "1. \"psgts\"            (array, required) A json array of base64 PSGT strings\n"
-            "\nResult:\n"
-            "  \"psgt\"              (string) The base64-encoded combined PSGT\n"
-        );
+    static const RPCHelpMan help{
+        "combinepsgt",
+        "Combine multiple PSGTs for the same transaction into one merged PSGT.",
+        {
+            {"psgts", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of base64-encoded PSGT strings to combine.",
+                {
+                    {"psgt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A base64-encoded PSGT."},
+                }},
+        },
+        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded combined PSGT."},
+        RPCExamples{
+            HelpExampleCli("combinepsgt", "\"[\\\"cHNidP8B...\\\", \\\"cHNidP8B...\\\"]\"") +
+            HelpExampleRpc("combinepsgt", "[\"cHNidP8B...\", \"cHNidP8B...\"]")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, {UniValue::VARR});
     UniValue psgtArr = params[0].get_array();
