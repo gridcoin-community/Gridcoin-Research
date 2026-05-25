@@ -511,6 +511,39 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
     }
 }
 
+BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"help", &help},
+        {"stop", &stop},
+        {"logging", &logging},
+        {"listsettings", &listsettings},
+        {"changesettings", &changesettings},
+        {"getblockstats", &rpc_getblockstats},
+        {"exportstats1", &rpc_exportstats},
+        {"getrecentblocks", &rpc_getrecentblocks},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
 // Tier 1a coverage: each converted blockchain-core command throws a
 // runtime_error containing its name and the "Examples:" marker when called
 // with fHelp=true. The check confirms RPCHelpMan is wired (renders) and the
