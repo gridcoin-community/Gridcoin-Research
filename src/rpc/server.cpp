@@ -305,10 +305,6 @@ const RPCHelpMan& stop_helpman() { return stop_help; }
 
 UniValue stop(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = stop_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
     StartShutdown();
@@ -967,6 +963,19 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     const CRPCCommand *pcmd = tableRPC[strMethod];
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+
+    // PR M2: when the command exposes an RPCHelpMan accessor, pre-check the
+    // arity here and throw the help text on mismatch. The command body no
+    // longer carries a redundant `if (fHelp || !help.IsValidNumArgs(...))`
+    // gate, so the dispatcher is now the authoritative arity-enforcement
+    // site for converted commands. Legacy commands (nullptr helpman) keep
+    // their body-level checks.
+    if (pcmd->helpman != nullptr) {
+        const RPCHelpMan& help = pcmd->helpman();
+        if (!help.IsValidNumArgs(params.size())) {
+            throw runtime_error(help.ToString());
+        }
+    }
 
     // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful

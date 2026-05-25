@@ -631,10 +631,6 @@ const RPCHelpMan& listpolls_helpman() { return listpolls_help; }
 
 UniValue listpolls(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listpolls_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     UniValue json(UniValue::VARR);
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
@@ -669,10 +665,6 @@ const RPCHelpMan& getpollresults_helpman() { return getpollresults_help; }
 
 UniValue getpollresults(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getpollresults_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const std::string title_or_id = params[0].get_str();
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
@@ -710,10 +702,6 @@ const RPCHelpMan& getvotingclaim_helpman() { return getvotingclaim_help; }
 
 UniValue getvotingclaim(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getvotingclaim_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const uint256 id = uint256S(params[0].get_str());
 
     CTransaction tx;
@@ -772,10 +760,6 @@ const RPCHelpMan& vote_helpman() { return vote_help; }
 
 UniValue vote(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = vote_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
     }
@@ -828,12 +812,11 @@ const RPCHelpMan& votebyid_helpman() { return votebyid_help; }
 
 UniValue votebyid(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = votebyid_helpman();
     // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
-    // RPCHelpMan does not model unbounded variadic, so keep the original lower-bound check and
-    // render help via the manifest above.
-    if (fHelp || params.size() < 2)
-        throw std::runtime_error(help.ToString());
+    // RPCHelpMan does not model unbounded variadic, so retain a body-level lower-bound check
+    // after the dispatcher has handled the help-rendering and arity-upper-bound paths.
+    if (params.size() < 2)
+        throw std::runtime_error(votebyid_helpman().ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
@@ -886,10 +869,6 @@ const RPCHelpMan& votedetails_helpman() { return votedetails_help; }
 
 UniValue votedetails(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = votedetails_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const std::string title_or_id = params[0].get_str();
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
@@ -923,11 +902,6 @@ const RPCHelpMan& testpollnotification_helpman() { return testpollnotification_h
 
 UniValue testpollnotification(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = testpollnotification_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     const uint256 txid = uint256S(params[0].get_str());
 
     const PollReference* ref = GetPollRegistry().TryByTxid(txid);

@@ -133,10 +133,6 @@ const RPCHelpMan& getinfo_helpman() { return getinfo_help; }
 
 UniValue getinfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
 
@@ -219,10 +215,6 @@ const RPCHelpMan& getwalletinfo_helpman() { return getwalletinfo_help; }
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getwalletinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     {
@@ -265,10 +257,6 @@ const RPCHelpMan& getnewpubkey_helpman() { return getnewpubkey_help; }
 
 UniValue getnewpubkey(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getnewpubkey_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
     if (params.size() > 0)
@@ -309,10 +297,6 @@ const RPCHelpMan& getnewaddress_helpman() { return getnewaddress_help; }
 
 UniValue getnewaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getnewaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
     if (params.size() > 0)
@@ -389,10 +373,6 @@ const RPCHelpMan& getaccountaddress_helpman() { return getaccountaddress_help; }
 
 UniValue getaccountaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getaccountaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
 
@@ -422,10 +402,6 @@ const RPCHelpMan& setaccount_helpman() { return setaccount_help; }
 
 UniValue setaccount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = setaccount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -466,10 +442,6 @@ const RPCHelpMan& getaccount_helpman() { return getaccount_help; }
 
 UniValue getaccount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getaccount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -503,10 +475,6 @@ const RPCHelpMan& getaddressesbyaccount_helpman() { return getaddressesbyaccount
 
 UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getaddressesbyaccount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount = AccountFromValue(params[0]);
 
     // Find all addresses that have the given account
@@ -550,10 +518,6 @@ const RPCHelpMan& sendtoaddress_helpman() { return sendtoaddress_help; }
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendtoaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -611,10 +575,6 @@ const RPCHelpMan& listaddressgroupings_helpman() { return listaddressgroupings_h
 
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listaddressgroupings_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     UniValue jsonGroupings(UniValue::VARR);
@@ -657,10 +617,6 @@ const RPCHelpMan& signmessage_helpman() { return signmessage_help; }
 
 UniValue signmessage(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = signmessage_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
@@ -711,10 +667,6 @@ const RPCHelpMan& verifymessage_helpman() { return verifymessage_help; }
 
 UniValue verifymessage(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = verifymessage_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
     string strMessage  = params[2].get_str();
@@ -767,10 +719,6 @@ const RPCHelpMan& getreceivedbyaddress_helpman() { return getreceivedbyaddress_h
 
 UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getreceivedbyaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Bitcoin address
@@ -842,10 +790,6 @@ const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_h
 
 UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getreceivedbyaccount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     accountingDeprecationCheck();
 
     // Minimum confirmations
@@ -941,10 +885,6 @@ const RPCHelpMan& getbalance_helpman() { return getbalance_help; }
 
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getbalance_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (params.size() == 0)
@@ -1037,10 +977,6 @@ const RPCHelpMan& getbalancedetail_helpman() { return getbalancedetail_help; }
 
 UniValue getbalancedetail(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getbalancedetail_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     int nMinDepth = 1;
@@ -1154,10 +1090,6 @@ const RPCHelpMan& getunconfirmedbalance_helpman() { return getunconfirmedbalance
 
 UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getunconfirmedbalance_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
 }
 
@@ -1187,10 +1119,6 @@ const RPCHelpMan& movecmd_helpman() { return movecmd_help; }
 
 UniValue movecmd(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = movecmd_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     accountingDeprecationCheck();
 
     string strFrom = AccountFromValue(params[0]);
@@ -1269,10 +1197,6 @@ const RPCHelpMan& sendfrom_helpman() { return sendfrom_help; }
 
 UniValue sendfrom(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendfrom_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount = AccountFromValue(params[0]);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1344,10 +1268,6 @@ const RPCHelpMan& sendmany_helpman() { return sendmany_help; }
 
 UniValue sendmany(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendmany_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount = AccountFromValue(params[0]);
     bool bFromAccount = false;
 
@@ -1475,10 +1395,6 @@ const RPCHelpMan& addmultisigaddress_helpman() { return addmultisigaddress_help;
 
 UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = addmultisigaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nRequired = params[0].get_int();
     const UniValue& keys = params[1].get_array();
     string strAccount;
@@ -1565,10 +1481,6 @@ const RPCHelpMan& addredeemscript_helpman() { return addredeemscript_help; }
 
 UniValue addredeemscript(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = addredeemscript_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount;
     if (params.size() > 1)
         strAccount = AccountFromValue(params[1]);
@@ -1755,10 +1667,6 @@ const RPCHelpMan& listreceivedbyaddress_helpman() { return listreceivedbyaddress
 
 UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listreceivedbyaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     return ListReceived(params, false);
@@ -1797,10 +1705,6 @@ const RPCHelpMan& listreceivedbyaccount_helpman() { return listreceivedbyaccount
 
 UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listreceivedbyaccount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     accountingDeprecationCheck();
@@ -1986,10 +1890,6 @@ const RPCHelpMan& listtransactions_helpman() { return listtransactions_help; }
 
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listtransactions_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount = "*";
     int nCount = 10;
     int nFrom = 0;
@@ -2091,10 +1991,6 @@ const RPCHelpMan& liststakes_helpman() { return liststakes_help; }
 
 UniValue liststakes(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = liststakes_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strAccount = "*";
     int nCount = 10;
     isminefilter filter = ISMINE_SPENDABLE;
@@ -2168,10 +2064,6 @@ const RPCHelpMan& listaccounts_helpman() { return listaccounts_help; }
 
 UniValue listaccounts(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listaccounts_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     accountingDeprecationCheck();
 
     int nMinDepth = 1;
@@ -2259,10 +2151,6 @@ const RPCHelpMan& listsinceblock_helpman() { return listsinceblock_help; }
 
 UniValue listsinceblock(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listsinceblock_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CBlockIndex* pindex = nullptr;
@@ -2339,10 +2227,6 @@ const RPCHelpMan& gettransaction_helpman() { return gettransaction_help; }
 
 UniValue gettransaction(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = gettransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     uint256 hash;
     hash.SetHex(params[0].get_str());
     isminefilter filter = ISMINE_SPENDABLE;
@@ -2427,10 +2311,6 @@ const RPCHelpMan& abandontransaction_helpman() { return abandontransaction_help;
 
 UniValue abandontransaction(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = abandontransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     uint256 hash;
@@ -2462,10 +2342,6 @@ const RPCHelpMan& getrawwallettransaction_helpman() { return getrawwallettransac
 
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getrawwallettransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const uint256 hash = uint256S(params[0].get_str());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2507,10 +2383,6 @@ const RPCHelpMan& backupwallet_helpman() { return backupwallet_help; }
 
 UniValue backupwallet(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = backupwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     bool bWalletBackupResults = GRC::BackupWallet(*pwalletMain, GRC::GetBackupFilename("wallet.dat"));
@@ -2587,11 +2459,6 @@ const RPCHelpMan& maintainbackups_helpman() { return maintainbackups_help; }
 
 UniValue maintainbackups(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = maintainbackups_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     // IsValidNumArgs accepts 0, 1, or 2 because RPCHelpMan ranges are contiguous.
     // maintainbackups only accepts {0, 2} — reject 1 explicitly.
     if (params.size() == 1) {
@@ -2658,10 +2525,6 @@ const RPCHelpMan& keypoolrefill_helpman() { return keypoolrefill_help; }
 
 UniValue keypoolrefill(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = keypoolrefill_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     unsigned int default_size = pwalletMain->IsHDEnabled() ? DEFAULT_KEYPOOL_SIZE : DEFAULT_KEYPOOL_SIZE_PRE_HD;
@@ -2767,11 +2630,6 @@ const RPCHelpMan& walletpassphrase_helpman() { return walletpassphrase_help; }
 
 UniValue walletpassphrase(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletpassphrase_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
 
@@ -2851,11 +2709,6 @@ const RPCHelpMan& walletpassphrasechange_helpman() { return walletpassphrasechan
 
 UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletpassphrasechange_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
 
@@ -2944,10 +2797,6 @@ const RPCHelpMan& inspectwalletstate_helpman() { return inspectwalletstate_help;
 
 UniValue inspectwalletstate(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = inspectwalletstate_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool fVerbose = false;
     if (params.size() > 0)
         fVerbose = params[0].get_bool();
@@ -3091,10 +2940,6 @@ const RPCHelpMan& walletdiagnose_helpman() { return walletdiagnose_help; }
 
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletdiagnose_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
     //Construct the tests needed.
     //If need to add a test m just add it to the below set.
@@ -3184,11 +3029,6 @@ const RPCHelpMan& walletlock_helpman() { return walletlock_help; }
 
 UniValue walletlock(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletlock_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
 
@@ -3222,10 +3062,6 @@ const RPCHelpMan& encryptwallet_helpman() { return encryptwallet_help; }
 
 UniValue encryptwallet(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = encryptwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
 
@@ -3320,10 +3156,6 @@ const RPCHelpMan& validateaddress_helpman() { return validateaddress_help; }
 
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = validateaddress_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
@@ -3380,10 +3212,6 @@ const RPCHelpMan& validatepubkey_helpman() { return validatepubkey_help; }
 
 UniValue validatepubkey(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = validatepubkey_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     std::vector<unsigned char> vchPubKey = ParseHex(params[0].get_str());
@@ -3443,10 +3271,6 @@ const RPCHelpMan& reservebalance_helpman() { return reservebalance_help; }
 
 UniValue reservebalance(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = reservebalance_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (params.size() > 0)
     {
         bool fReserve = params[0].get_bool();
@@ -3497,10 +3321,6 @@ const RPCHelpMan& checkwallet_helpman() { return checkwallet_help; }
 
 UniValue checkwallet(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = checkwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion, true);
@@ -3538,10 +3358,6 @@ const RPCHelpMan& repairwallet_helpman() { return repairwallet_help; }
 
 UniValue repairwallet(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = repairwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
@@ -3570,10 +3386,6 @@ const RPCHelpMan& resendtx_helpman() { return resendtx_help; }
 
 UniValue resendtx(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = resendtx_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     {
         LOCK2(cs_main, cs_setpwalletRegistered);
         ResendWalletTransactions(true);
@@ -3603,10 +3415,6 @@ const RPCHelpMan& makekeypair_helpman() { return makekeypair_help; }
 
 UniValue makekeypair(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = makekeypair_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strPrefix = "";
     if (params.size() > 0)
         strPrefix = params[0].get_str();
@@ -3640,10 +3448,6 @@ const RPCHelpMan& burn_helpman() { return burn_help; }
 
 UniValue burn(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = burn_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 
@@ -3695,10 +3499,6 @@ const RPCHelpMan& sethdseed_helpman() { return sethdseed_help; }
 
 UniValue sethdseed(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sethdseed_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (IsInitialBlockDownload()) {
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
     }
@@ -3760,10 +3560,6 @@ const RPCHelpMan& upgradewallet_helpman() { return upgradewallet_help; }
 
 UniValue upgradewallet(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = upgradewallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     EnsureWalletIsUnlocked();
 
     int version = 0;

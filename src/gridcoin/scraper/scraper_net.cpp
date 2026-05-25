@@ -959,9 +959,6 @@ const RPCHelpMan& listmanifests_helpman() { return listmanifests_help; }
 
 UniValue listmanifests(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listmanifests_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
     UniValue obj(UniValue::VOBJ);
     UniValue subset(UniValue::VOBJ);
 
@@ -1046,10 +1043,6 @@ const RPCHelpMan& getmpart_helpman() { return getmpart_help; }
 
 UniValue getmpart(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getmpart_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     LOCK(CSplitBlob::cs_mapParts);
 
     auto ipart = CSplitBlob::mapParts.find(uint256S(params[0].get_str()));

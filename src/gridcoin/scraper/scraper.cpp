@@ -6311,10 +6311,6 @@ const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemani
 
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendscraperfilemanifest_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
@@ -6353,10 +6349,6 @@ const RPCHelpMan& savescraperfilemanifest_helpman() { return savescraperfilemani
 
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = savescraperfilemanifest_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
     return UniValue(ret);
@@ -6389,10 +6381,6 @@ const RPCHelpMan& deletecscrapermanifest_helpman() { return deletecscrapermanife
 
 UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = deletecscrapermanifest_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     LOCK(CScraperManifest::cs_mapManifest);
 
     bool ret = CScraperManifest::DeleteManifest(uint256S(params[0].get_str()), true);
@@ -6422,10 +6410,6 @@ const RPCHelpMan& archivelog_helpman() { return archivelog_help; }
 
 UniValue archivelog(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = archivelog_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     std::string sLogger = params[0].get_str();
 
     fs::path pfile_out;
@@ -6523,10 +6507,6 @@ const RPCHelpMan& convergencereport_helpman() { return convergencereport_help; }
 
 UniValue convergencereport(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = convergencereport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
     // See if converged stats/contract update needed...
@@ -6651,10 +6631,6 @@ const RPCHelpMan& testnewsb_helpman() { return testnewsb_help; }
 
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = testnewsb_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     unsigned int nReducedCacheBits = 32;
 
     if (params.size() == 1) nReducedCacheBits = params[0].get_int();
@@ -6886,10 +6862,6 @@ const RPCHelpMan& scraperreport_helpman() { return scraperreport_help; }
 
 UniValue scraperreport(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = scraperreport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     UniValue ret(UniValue::VOBJ);
 
     UniValue global_scraper_net(UniValue::VOBJ);
