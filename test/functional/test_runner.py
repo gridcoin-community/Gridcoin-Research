@@ -81,9 +81,13 @@ EXTENDED_SCRIPTS: list = [
 
 BASE_SCRIPTS = [
     # Scripts that are run by default.
-    # Phase 1 ships a single smoke test that exercises the framework against
-    # gridcoinresearchd -testnet. Phase 4 expands the suite.
+    # Phase 1 ships:
+    #   - feature_hello.py: framework smoke test (start node, getblockchaininfo)
+    #   - rpc_help.py: RPCHelpMan rollout coverage (the motivating use case
+    #     from #2922 — exercises `help`, structured help format, and
+    #     IsValidNumArgs() arity validation on converted commands)
     'feature_hello.py',
+    'rpc_help.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
