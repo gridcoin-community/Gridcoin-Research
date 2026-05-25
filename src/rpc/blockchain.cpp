@@ -497,21 +497,32 @@ UniValue dumpcontracts(const UniValue& params, bool fHelp)
 
 UniValue getmrcinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "getmrcinfo [detailed MRC info [CPID [low height [high height]]]]\n"
-                "\n"
-                "[detailed MRC info]: optional boolean to output MRC details.\n"
-                "                     Defaults to false.\n"
-                "[CPID]:              optional CPID. Defaults to current wallet CPID.\n"
-                "                     Use \"*\" for all CPIDs (network wide).\n"
-                "                     Note that block level mrc summary statistics are\n"
-                "                     specific to the scope specified with CPID.\n"
-                "[low height]:        optional low height for scope.\n"
-                "                     Defaults to V12 block height.\n"
-                "[high height]:       optional high height for scope.\n"
-                "                     Defaults to current block.\n"
-                );
+    static const RPCHelpMan help{
+        "getmrcinfo",
+        "Display MRC (Manual Research Claim) summary statistics for the given CPID and block range.",
+        {
+            {"detailed_mrc_info", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output detailed per-MRC info. Default: false."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to scope to. Defaults to the current wallet CPID. Use \"*\" for all CPIDs "
+                "(network-wide). Block-level MRC summary statistics are specific to the scope "
+                "specified by this CPID."},
+            {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Low height for scope. Defaults to V12 block height."},
+            {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "High height for scope. Defaults to current block."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "MRC summary report (see getmrcinfo output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "report fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getmrcinfo", "") +
+            HelpExampleCli("getmrcinfo", "true \"*\"") +
+            HelpExampleRpc("getmrcinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool output_mrc_details = false;
     bool output_all_cpids = false;
@@ -1220,20 +1231,31 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 
 UniValue rainbymagnitude(const UniValue& params, bool fHelp)
     {
-    if (fHelp || (params.size() < 2 || params.size() > 4))
-        throw runtime_error(
-                "rainbymagnitude project_id amount ( trial_run output_details )\n"
-                "\n"
-                "project_id     -> Required: Limits rain to a specific project. Use \"*\" for\n"
-                "                  network-wide. Call \"listprojects\" for the IDs of eligible\n"
-                "                  projects."
-                "amount         -> Required: Amount to rain (1000 GRC minimum).\n"
-                "trial_run      -> Optional: Boolean to specify a trial run instead of an actual\n"
-                "                  transaction (default: false).\n"
-                "output_details -> Optional: Boolean to output recipient details (default: false\n"
-                "                  if not trial run, true if trial run).\n"
-                "\n"
-                "rain coins by magnitude on network");
+    static const RPCHelpMan help{
+        "rainbymagnitude",
+        "Rain coins by magnitude on the network.",
+        {
+            {"project_id", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Limits rain to a specific project. Use \"*\" for network-wide. "
+                "Call \"listprojects\" for the IDs of eligible projects."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "Amount to rain (1000 GRC minimum)."},
+            {"trial_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, perform a trial run instead of an actual transaction. Default: false."},
+            {"output_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output recipient details. "
+                "Default: false (or true if trial_run is true)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Rain result (see rainbymagnitude output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "result fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("rainbymagnitude", "\"*\" 1000 true") +
+            HelpExampleRpc("rainbymagnitude", "\"*\", 1000, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
     UniValue details(UniValue::VARR);
@@ -1504,16 +1526,29 @@ UniValue rainbymagnitude(const UniValue& params, bool fHelp)
 
 UniValue advertisebeacon(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "advertisebeacon ( force )\n"
-                "\n"
-                "[force] --> If true, generate new beacon keys and send a new "
-                "beacon even when an active or pending beacon exists for your "
-                "CPID. This is useful if you lose a wallet with your original "
-                "beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Advertise a beacon (Requires wallet to be fully unlocked)\n");
+    static const RPCHelpMan help{
+        "advertisebeacon",
+        "Advertise a beacon. Requires wallet to be fully unlocked.",
+        {
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, generate new beacon keys and send a new beacon even when an active "
+                "or pending beacon exists for your CPID. Useful if you lose a wallet with your "
+                "original beacon keys; not necessary otherwise. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("advertisebeacon", "") +
+            HelpExampleCli("advertisebeacon", "true") +
+            HelpExampleRpc("advertisebeacon", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
@@ -1586,16 +1621,26 @@ UniValue advertisebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconauth(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "beaconauth\n"
-                "\n"
-                "Generate a beacon key pair and return the public key hex.\n"
-                "Use the public key to obtain a BOINC account ownership proof\n"
-                "from a project that supports the ownership proof extension,\n"
-                "then call advertisebeaconv3 with the proof to send the beacon.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+    static const RPCHelpMan help{
+        "beaconauth",
+        "Generate a beacon key pair and return the public key hex. "
+        "Use the public key to obtain a BOINC account ownership proof from a project "
+        "that supports the ownership proof extension, then call advertisebeaconv3 with "
+        "the proof to send the beacon. Requires wallet to be fully unlocked.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconauth", "") +
+            HelpExampleRpc("beaconauth", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
@@ -1641,23 +1686,33 @@ UniValue beaconauth(const UniValue& params, bool fHelp)
 
 UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "advertisebeaconv3 <ownership_proof_xml> ( force )\n"
-                "\n"
-                "Send a v3 beacon with a BOINC account ownership proof.\n"
-                "\n"
-                "<ownership_proof_xml> --> The XML block returned by the BOINC project's\n"
-                "  proof-of-account-ownership page. Must contain <master_url>, <msg>,\n"
-                "  and <signature> elements. The <msg> field should have the format:\n"
-                "  \"{account_id} {beacon_public_key_hex}\" (the project generates this\n"
-                "  when you enter the beacon public key from beaconauth).\n"
-                "\n"
-                "[force] --> If true, send the beacon even when an active or pending\n"
-                "  beacon already exists for your CPID. This is useful if you lose a\n"
-                "  wallet with your original beacon keys but not necessary otherwise.\n"
-                "\n"
-                "Requires wallet to be fully unlocked.\n");
+    static const RPCHelpMan help{
+        "advertisebeaconv3",
+        "Send a v3 beacon with a BOINC account ownership proof. Requires wallet to be fully unlocked.",
+        {
+            {"ownership_proof_xml", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The XML block returned by the BOINC project's proof-of-account-ownership page. "
+                "Must contain <master_url>, <msg>, and <signature> elements. The <msg> field "
+                "should have the format \"{account_id} {beacon_public_key_hex}\" "
+                "(the project generates this when you enter the beacon public key from beaconauth)."},
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, send the beacon even when an active or pending beacon already exists "
+                "for your CPID. Useful if you lose a wallet with your original beacon keys; not "
+                "necessary otherwise. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The beacon's public key."},
+                {RPCResult::Type::STR, "verification_code", "The beacon's verification code."},
+            }},
+        RPCExamples{
+            HelpExampleCli("advertisebeaconv3", "\"<xml>...</xml>\"") +
+            HelpExampleRpc("advertisebeaconv3", "\"<xml>...</xml>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
@@ -1796,13 +1851,25 @@ UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
 
 UniValue revokebeacon(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "revokebeacon [cpid]\n"
-                "\n"
-                "[cpid] CPID associated with the beacon to revoke. If omitted, uses the current CPID.\n"
-                "\n"
-                "Revoke a beacon (Requires wallet to be fully unlocked)\n");
+    static const RPCHelpMan help{
+        "revokebeacon",
+        "Revoke a beacon. Requires wallet to be fully unlocked.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID associated with the beacon to revoke. If omitted, uses the current CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "result", "\"SUCCESS\" on success."},
+                {RPCResult::Type::STR, "cpid", "The CPID associated with the revoked beacon."},
+                {RPCResult::Type::STR_HEX, "public_key", "The revoked beacon's public key."},
+            }},
+        RPCExamples{
+            HelpExampleCli("revokebeacon", "") +
+            HelpExampleRpc("revokebeacon", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
@@ -1872,14 +1939,34 @@ UniValue revokebeacon(const UniValue& params, bool fHelp)
 
 UniValue beaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconreport <active only>\n"
-                "\n"
-                "<active only> Boolean specifying whether only active beacons should be \n"
-                "              returned. Defaults to false which also includes expired beacons."
-                "\n"
-                "Displays list of valid beacons in the network\n");
+    static const RPCHelpMan help{
+        "beaconreport",
+        "Displays the list of valid beacons in the network.",
+        {
+            {"active_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, return only active (non-expired) beacons. "
+                "Default: false (also includes expired beacons)."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "cpid", "CPID for the beacon."},
+                        {RPCResult::Type::STR, "address", "Beacon payout address."},
+                        {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                        {RPCResult::Type::STR_HEX, "hash", "Beacon hash."},
+                        {RPCResult::Type::STR_HEX, "prev_beacon_hash", "Previous beacon hash in the chainlet."},
+                        {RPCResult::Type::NUM, "status", "Beacon status raw value."},
+                        {RPCResult::Type::STR, "status_text", "Beacon status text."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconreport", "") +
+            HelpExampleCli("beaconreport", "true") +
+            HelpExampleRpc("beaconreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool active_only = false;
 
@@ -1926,30 +2013,52 @@ UniValue beaconreport(const UniValue& params, bool fHelp)
 
 UniValue beaconconvergence(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "beaconconvergence\n"
-                "\n"
-                "Displays verified and pending beacons from the scraper or subscriber viewpoint.\n"
-                "\n"
-                "There are three output sections:\n"
-                "\n"
-                "verified_beacons_from_scraper_global:\n"
-                "\n"
-                "Comes directly from the scraper global map for verified beacons. This is\n"
-                "for scraper monitoring of an individual scraper and will be empty if not\n"
-                "run on an actual scraper node."
-                "\n"
-                "verified_beacons_from_latest_convergence:\n"
-                "\n"
-                "From the latest convergence formed from all of the scrapers. This list\n"
-                "is what will be activated in the next superblock.\n"
-                "\n"
-                "pending_beacons_from_GetConsensusBeaconList:\n"
-                "\n"
-                "This is a list of pending beacons. Note that it is subject to a one\n"
-                "hour ladder, so it will lag the information from the\n"
-                "pendingbeaconreport rpc call.\n");
+    static const RPCHelpMan help{
+        "beaconconvergence",
+        "Displays verified and pending beacons from the scraper or subscriber viewpoint. "
+        "Output has three sections: verified_beacons_from_scraper_global (the scraper's "
+        "local verified-beacon map; empty on non-scraper nodes), "
+        "verified_beacons_from_latest_convergence (verified beacons from the latest "
+        "all-scrapers convergence, to be activated in the next superblock), and "
+        "pending_beacons_from_GetConsensusBeaconList (pending beacons; subject to a one-hour "
+        "ladder, so this lags the pendingbeaconreport RPC).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "verified_beacons_from_scraper_global", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+                {RPCResult::Type::ARR, "verified_beacons_from_latest_convergence", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+                {RPCResult::Type::ARR, "pending_beacons_from_GetConsensusBeaconList", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "cpid", "CPID."},
+                                {RPCResult::Type::STR, "verification_code", "Verification code."},
+                                {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconconvergence", "") +
+            HelpExampleRpc("beaconconvergence", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue results(UniValue::VOBJ);
 
@@ -2006,11 +2115,26 @@ UniValue beaconconvergence(const UniValue& params, bool fHelp)
 
 UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "pendingbeaconreport\n"
-                "\n"
-                "Displays pending beacons directly from the beacon registry.\n");
+    static const RPCHelpMan help{
+        "pendingbeaconreport",
+        "Displays pending beacons directly from the beacon registry.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "cpid", "CPID."},
+                        {RPCResult::Type::STR, "key_id", "Beacon key id."},
+                        {RPCResult::Type::STR, "address", "Beacon payout address."},
+                        {RPCResult::Type::NUM_TIME, "timestamp", "Beacon timestamp."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("pendingbeaconreport", "") +
+            HelpExampleRpc("pendingbeaconreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue results(UniValue::VARR);
 
@@ -2046,13 +2170,30 @@ UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
 
 UniValue beaconstatus(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "beaconstatus [cpid]\n"
-                "\n"
-                "[cpid] -> Optional parameter of cpid\n"
-                "\n"
-                "Displays status of your beacon or specified beacon on the network\n");
+    static const RPCHelpMan help{
+        "beaconstatus",
+        "Displays the status of your beacon, or of the specified beacon on the network.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "active", "Active beacons for this CPID.",
+                    {
+                        {RPCResult::Type::ELISION, "", "beacon entry (cpid, active, pending, expired, renewable, timestamp, address, public_key, private_key_available, magnitude, verification_code, is_mine)"},
+                    }},
+                {RPCResult::Type::ARR, "pending", "Pending beacons for this CPID.",
+                    {
+                        {RPCResult::Type::ELISION, "", "beacon entry (same fields as active)"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconstatus", "") +
+            HelpExampleRpc("beaconstatus", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -2123,17 +2264,29 @@ UniValue beaconstatus(const UniValue& params, bool fHelp)
 
 UniValue beaconaudit(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-            "beaconaudit [errors only] [cpid]\n"
-            "\n"
-            "[errors only] -> Boolean to provide errors only. Defaults to true.\n"
-            "[cpid] -> Optional parameter of cpid. Defaults to current cpid. * means all active CPIDs.\n"
-            "\n"
-            "Conducts consistency audit for beacon contracts and beacon chain for given CPID.\n"
-            "This is currently limited to looking at multiple renewals for the same CPID in\n"
-            "the same block and reporting inconsistencies between the normal contract order\n"
-            "and the historical beacon entries (beacon chainlet) for the CPID.\n");
+    static const RPCHelpMan help{
+        "beaconaudit",
+        "Conduct a consistency audit for beacon contracts and the beacon chain for the given CPID. "
+        "Currently limited to looking at multiple renewals for the same CPID in the same block and "
+        "reporting inconsistencies between the normal contract order and the historical beacon entries "
+        "(beacon chainlet) for the CPID.",
+        {
+            {"errors_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, return only errors. Default: true."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to audit. Defaults to the current wallet CPID. Use \"*\" for all active CPIDs."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Audit report (see beaconaudit output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "audit fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("beaconaudit", "") +
+            HelpExampleCli("beaconaudit", "true \"*\"") +
+            HelpExampleRpc("beaconaudit", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool errors_only = true;
     bool global = false;
@@ -2323,13 +2476,28 @@ UniValue beaconaudit(const UniValue& params, bool fHelp)
 
 UniValue explainmagnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "explainmagnitude ( cpid )\n"
-                "\n"
-                "[cpid] -> Optional CPID to explain magnitude for\n"
-                "\n"
-                "Itemize your CPID magnitudes by project.\n");
+    static const RPCHelpMan help{
+        "explainmagnitude",
+        "Itemize a CPID's magnitude contribution by project.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to explain magnitude for. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "project", "Project name (or \"total\" for the summary row)."},
+                        {RPCResult::Type::NUM, "rac", "Recent average credit for the project."},
+                        {RPCResult::Type::NUM, "magnitude", "Magnitude contribution from the project."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("explainmagnitude", "") +
+            HelpExampleRpc("explainmagnitude", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -2375,11 +2543,23 @@ UniValue explainmagnitude(const UniValue& params, bool fHelp)
 
 UniValue lifetime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "lifetime [cpid]\n"
-                "\n"
-                "Displays research rewards for the lifetime of a CPID.\n");
+    static const RPCHelpMan help{
+        "lifetime",
+        "Display research rewards for the lifetime of a CPID.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Block height -> research subsidy (GRC) for each block in which the CPID earned research rewards.",
+            {
+                {RPCResult::Type::STR_AMOUNT, "height", "Research subsidy (GRC) paid in that block."},
+            }},
+        RPCExamples{
+            HelpExampleCli("lifetime", "") +
+            HelpExampleRpc("lifetime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -2415,13 +2595,23 @@ UniValue lifetime(const UniValue& params, bool fHelp)
 
 UniValue magnitude(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "magnitude <cpid>\n"
-                "\n"
-                "<cpid> -> cpid to look up\n"
-                "\n"
-                "Displays information for the magnitude of all cpids or specified in the network\n");
+    static const RPCHelpMan help{
+        "magnitude",
+        "Display magnitude information for the specified CPID, or for the current wallet CPID if omitted.",
+        {
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "CPID to look up. Defaults to the current wallet CPID."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Magnitude report (see MagnitudeReport output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "report fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("magnitude", "") +
+            HelpExampleRpc("magnitude", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -2442,11 +2632,20 @@ UniValue magnitude(const UniValue& params, bool fHelp)
 
 UniValue resetcpids(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "resetcpids\n"
-                "\n"
-                "Reloads cpids\n");
+    static const RPCHelpMan help{
+        "resetcpids",
+        "Reload CPIDs from the config file.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "Reset", "Always 1 on success."},
+            }},
+        RPCExamples{
+            HelpExampleCli("resetcpids", "") +
+            HelpExampleRpc("resetcpids", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3037,11 +3236,29 @@ UniValue addkey(const UniValue& params, bool fHelp)
 
 UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currentcontractaverage\n"
-                "\n"
-                "Displays information on your current contract average with regards to superblock contract\n");
+    static const RPCHelpMan help{
+        "currentcontractaverage",
+        "Display information on your current contract average with regards to the superblock contract.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "contract", "Serialized superblock contract.",
+                    {
+                        {RPCResult::Type::ELISION, "", "superblock fields"},
+                    }},
+                {RPCResult::Type::NUM, "beacon_count", "Total beacon count."},
+                {RPCResult::Type::NUM, "avg_mag", "Average magnitude."},
+                {RPCResult::Type::NUM, "beacon_participant_count", "Number of participating beacons."},
+                {RPCResult::Type::BOOL, "superblock_valid", "Whether the superblock is well-formed."},
+                {RPCResult::Type::STR_HEX, "quorum_hash", "Quorum hash for the superblock."},
+                {RPCResult::Type::NUM, "size", "Serialized size of the superblock in bytes."},
+            }},
+        RPCExamples{
+            HelpExampleCli("currentcontractaverage", "") +
+            HelpExampleRpc("currentcontractaverage", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -4024,20 +4241,30 @@ UniValue getburnreport(const UniValue& params, bool fHelp)
 }
 
 UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
-    if (fHelp || params.size() > 3) {
-        throw runtime_error("createmrcrequest [dry_run [force [fee]]]\n"
-                            "\n"
-                            "[dry_run] - If true, calculate the reward and fee but do not "
-                            "send the contract. Defaults to false.\n"
-                            "\n"
-                            "[force] - If true, create the request even if it results "
-                            "in a reward loss or ban from the network. Defaults to false. "
-                            "Only works on testnet.\n"
-                            "\n"
-                            "[fee] - If passed, use the fee provided instead of the "
-                            "calculated fee. Must not be lower than the calculated fee.\n"
-                            "\n"
-                            "Creates an MRC request. Requires an unlocked wallet.");
+    static const RPCHelpMan help{
+        "createmrcrequest",
+        "Create an MRC (Manual Research Claim) request. Requires an unlocked wallet.",
+        {
+            {"dry_run", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, calculate the reward and fee but do not send the contract. Default: false."},
+            {"force", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, create the request even if it results in a reward loss or ban from the "
+                "network. Default: false. Only works on testnet."},
+            {"fee", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                "If passed, use this fee instead of the calculated fee. Must not be lower than "
+                "the calculated fee."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "MRC request result (see createmrcrequest output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "request fields (outstanding_request, limit, mrcs_in_queue, head_fee, pay_limit_position_fee, tail_fee, pos, txid (if not dry_run), mrc)"},
+            }},
+        RPCExamples{
+            HelpExampleCli("createmrcrequest", "") +
+            HelpExampleCli("createmrcrequest", "true") +
+            HelpExampleRpc("createmrcrequest", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw runtime_error(help.ToString());
     }
 
     bool dry_run{false};
