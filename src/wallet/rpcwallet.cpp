@@ -3271,15 +3271,30 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
 // ppcoin: reserve balance from being staked for network protection
 UniValue reservebalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "reservebalance [<reserve> [amount]]\n"
-                "\n"
-                "<reserve> is true or false to turn balance reserve on or off.\n"
-                "<amount> is a real and rounded to cent.\n"
-                "Reserved amount secures a balance in wallet that can be spendable at anytime.\n"
-                "However reserve will secure utxo(s) of any size to respect this setting.\n"
-                "If no parameters provided current setting is printed.\n");
+    static const RPCHelpMan help{
+        "reservebalance",
+        "Reserve a balance in the wallet that will not be used for staking, leaving it "
+        "spendable at any time. The reserve will protect UTXOs of any size to honor this "
+        "setting. If no parameters are provided, the current setting is printed.",
+        {
+            {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "true to turn balance reserve on, false to turn it off."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                "The amount in GRC to reserve (rounded to cent). Required when reserve=true; forbidden when reserve=false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "reserve", "Whether a reserve amount is currently set."},
+                {RPCResult::Type::STR_AMOUNT, "amount", "The current reserve amount in GRC."},
+            }},
+        RPCExamples{
+            HelpExampleCli("reservebalance", "") +
+            HelpExampleCli("reservebalance", "true 1000") +
+            HelpExampleCli("reservebalance", "false") +
+            HelpExampleRpc("reservebalance", "true, 1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (params.size() > 0)
     {
