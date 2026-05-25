@@ -12,6 +12,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
@@ -60,8 +61,6 @@ UniValue lifetime(const UniValue& params, bool fHelp);
 UniValue resetcpids(const UniValue& params, bool fHelp);
 UniValue rainbymagnitude(const UniValue& params, bool fHelp);
 UniValue currentcontractaverage(const UniValue& params, bool fHelp);
-#include <utility>
-#include <vector>
 
 // Forward declarations of the Tier 2 commands under test. These must live in
 // the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
