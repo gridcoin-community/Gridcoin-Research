@@ -954,16 +954,32 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
 UniValue getbalancedetail(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-         throw runtime_error(
-                "getbalancedetail ( minconf includeWatchonly )\n"
-                "\n"
-                "\nArguments:\n"
-                "1. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
-                "2. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "detailed list       (JSON) A list of outputs similar to listtransactions that compose the entire balance.\n"
-                );
+    static const RPCHelpMan help{
+        "getbalancedetail",
+        "Returns the wallet balance broken down by the outputs that compose it. "
+        "The output list is similar to listtransactions and totals to the wallet's spendable balance.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions confirmed at least this many times (default: 1)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_AMOUNT, "balance", "Sum of received minus sent, in GRC."},
+                {RPCResult::Type::STR_AMOUNT, "fees", "Sum of fees attributed to this wallet's transactions."},
+                {RPCResult::Type::ARR, "list", "",
+                    {
+                        {RPCResult::Type::ELISION, "", "output detail (see listtransactions)"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getbalancedetail", "") +
+            HelpExampleCli("getbalancedetail", "6 true") +
+            HelpExampleRpc("getbalancedetail", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
