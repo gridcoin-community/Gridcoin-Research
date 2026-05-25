@@ -772,13 +772,22 @@ UniValue getmrcinfo(const UniValue& params, bool fHelp)
 
 UniValue showblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "showblock <index>\n"
-                "\n"
-                "<index> Block number\n"
-                "\n"
-                "Returns all information about the block at <index>\n");
+    static const RPCHelpMan help{
+        "showblock",
+        "Returns all information about the block at the given index.",
+        {
+            {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("showblock", "1000") +
+            HelpExampleRpc("showblock", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
@@ -798,11 +807,17 @@ UniValue showblock(const UniValue& params, bool fHelp)
 
 UniValue getbestblockhash(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getbestblockhash\n"
-                "\n"
-                "Returns the hash of the best block in the longest block chain\n");
+    static const RPCHelpMan help{
+        "getbestblockhash",
+        "Returns the hash of the best block in the longest block chain.",
+        {},
+        RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getbestblockhash", "") +
+            HelpExampleRpc("getbestblockhash", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
@@ -811,11 +826,17 @@ UniValue getbestblockhash(const UniValue& params, bool fHelp)
 
 UniValue getblockcount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockcount\n"
-                "\n"
-                "Returns the number of blocks in the longest block chain\n");
+    static const RPCHelpMan help{
+        "getblockcount",
+        "Returns the number of blocks in the longest block chain.",
+        {},
+        RPCResult{RPCResult::Type::NUM, "", "The current block count."},
+        RPCExamples{
+            HelpExampleCli("getblockcount", "") +
+            HelpExampleRpc("getblockcount", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
@@ -824,11 +845,21 @@ UniValue getblockcount(const UniValue& params, bool fHelp)
 
 UniValue getdifficulty(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getdifficulty\n"
-                "\n"
-                "Returns the difficulty as a multiple of the minimum difficulty\n");
+    static const RPCHelpMan help{
+        "getdifficulty",
+        "Returns the difficulty as a multiple of the minimum difficulty.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "current", "Current difficulty."},
+                {RPCResult::Type::NUM, "target", "Target difficulty."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getdifficulty", "") +
+            HelpExampleRpc("getdifficulty", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
@@ -874,12 +905,20 @@ UniValue settxfee(const UniValue& params, bool fHelp)
 
 UniValue getrawmempool(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getrawmempool\n"
-                "\n"
-                "Returns all transaction ids in memory pool\n");
-
+    static const RPCHelpMan help{
+        "getrawmempool",
+        "Returns all transaction ids in the memory pool.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "", "Transaction id, hex-encoded."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getrawmempool", "") +
+            HelpExampleRpc("getrawmempool", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     vector<uint256> vtxid;
 
@@ -898,13 +937,19 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
 
 UniValue getblockhash(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getblockhash <index>\n"
-                "\n"
-                "<index> Block number for requested hash\n"
-                "\n"
-                "Returns hash of block in best-block-chain at <index>\n");
+    static const RPCHelpMan help{
+        "getblockhash",
+        "Returns the hash of the block in the best-block-chain at the given index.",
+        {
+            {"index", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number for requested hash."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "", "The block hash, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getblockhash", "1000") +
+            HelpExampleRpc("getblockhash", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
@@ -922,13 +967,23 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
 
 UniValue getblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblock <hash> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-hash\n");
+    static const RPCHelpMan help{
+        "getblock",
+        "Returns details of a block with the given block-hash.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The block hash."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("getblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     std::string strHash = params[0].get_str();
     uint256 hash = uint256S(strHash);
@@ -947,13 +1002,23 @@ UniValue getblock(const UniValue& params, bool fHelp)
 
 UniValue getblockbynumber(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbynumber <number> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of a block with given block-number\n");
+    static const RPCHelpMan help{
+        "getblockbynumber",
+        "Returns details of a block with the given block-number.",
+        {
+            {"number", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block height."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockbynumber", "1000") +
+            HelpExampleRpc("getblockbynumber", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nHeight = params[0].get_int();
 
@@ -972,13 +1037,23 @@ UniValue getblockbynumber(const UniValue& params, bool fHelp)
 
 UniValue getblockbymintime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getblockbymintime <timestamp> [bool:txinfo]\n"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns details of the block at or just after the given timestamp\n");
+    static const RPCHelpMan help{
+        "getblockbymintime",
+        "Returns details of the block at or just after the given timestamp.",
+        {
+            {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, "Unix timestamp (seconds)."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "Block details (see blockToJSON output for the full schema).",
+            {
+                {RPCResult::Type::ELISION, "", "block fields"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockbymintime", "1577836800") +
+            HelpExampleRpc("getblockbymintime", "1577836800")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int64_t nTimestamp = params[0].get_int64();
 
@@ -999,20 +1074,33 @@ UniValue getblocksbatch(const UniValue& params, bool fHelp)
 {
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
 
-    if (fHelp || params.size() < 2 || params.size() > 3)
+    static const RPCHelpMan help{
+        "getblocksbatch",
+        "Returns a JSON object with details of the requested blocks starting with the given block-number or hash.",
+        {
+            {"start", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The block number or hash for the block at the start of the batch."},
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "The number of blocks to return in the batch, limited to 1000."},
+            {"txinfo", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Print more detailed tx info. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "block_count",
+                    "Number of blocks actually returned (may be less than the requested count if the chain head is reached)."},
+                {RPCResult::Type::ARR, "blocks", "",
+                    {
+                        {RPCResult::Type::ELISION, "", "block details; see 'getblock'"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblocksbatch", "1000 10") +
+            HelpExampleRpc("getblocksbatch", "1000, 10")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
     {
-        throw runtime_error(
-                "getblocksbatch <starting block number or hash> <number of blocks> [bool:txinfo]\n"
-                "\n"
-                "<starting block number or hash> the block number or hash for the block at the\n"
-                "start of the batch\n"
-                "\n"
-                "<number of blocks> the number of blocks to return in the batch, limited to 1000"
-                "\n"
-                "[bool:txinfo] optional to print more detailed tx info\n"
-                "\n"
-                "Returns a JSON array with details of the requested blocks starting with\n"
-                "the given block-number or hash.\n");
+        throw runtime_error(help.ToString());
     }
 
     UniValue result(UniValue::VOBJ);
@@ -2972,14 +3060,23 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp)
 
 UniValue debug(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "debug <bool>\n"
-                "\n"
-                "<bool> -> Specify true or false\n"
-                "\n"
-                "Enable or disable VERBOSE logging category (aka old debug) on the fly\n"
-                "This is deprecated by the \"logging verbose\" command.\n");
+    static const RPCHelpMan help{
+        "debug",
+        "Enable or disable the VERBOSE logging category (aka old debug) on the fly. "
+        "This is deprecated by the \"logging verbose\" command.",
+        {
+            {"enable", RPCArg::Type::BOOL, RPCArg::Optional::NO, "true to enable, false to disable."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Logging category VERBOSE (aka old debug) ", "\"Enabled.\" or \"Disabled.\"."},
+            }},
+        RPCExamples{
+            HelpExampleCli("debug", "true") +
+            HelpExampleRpc("debug", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3260,11 +3357,26 @@ UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
 
 UniValue network(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "network\n"
-                "\n"
-                "Display information about the network health\n");
+    static const RPCHelpMan help{
+        "network",
+        "Display information about the network health.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "total_magnitude", "Sum of all CPID magnitudes."},
+                {RPCResult::Type::NUM, "average_magnitude", "Average CPID magnitude."},
+                {RPCResult::Type::NUM, "magnitude_unit", "Current magnitude unit."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_two_weeks", "Research subsidies paid in the past two weeks (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_daily_average", "Average daily research subsidy over the past two weeks (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "research_paid_daily_limit", "Daily research subsidy emission limit (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "total_money_supply", "Total money supply (GRC)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("network", "") +
+            HelpExampleRpc("network", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3381,13 +3493,23 @@ UniValue readdata(const UniValue& params, bool fHelp)
 
 UniValue sendblock(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "sendblock <blockhash>\n"
-                "\n"
-                "<blockhash> Blockhash of block to send to network\n"
-                "\n"
-                "Sends a block to the network\n");
+    static const RPCHelpMan help{
+        "sendblock",
+        "Sends a block to the network.",
+        {
+            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the block to send to the network."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "Requesting", "The block hash being requested."},
+                {RPCResult::Type::BOOL, "Result", "Whether the request was issued."},
+            }},
+        RPCExamples{
+            HelpExampleCli("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("sendblock", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3427,15 +3549,23 @@ UniValue superblockaverage(const UniValue& params, bool fHelp)
 
 UniValue versionreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "versionreport <lookback:int> <full:bool>\n"
-                "\n"
-                "<lookback> --> Number of blocks to tally from the chain head "
-                    "(default: " + ToString(BLOCKS_PER_DAY) + ").\n"
-                "<full> ------> Classify by commit suffix (default: false).\n"
-                "\n"
-                "Display the software versions of nodes that recently staked.\n");
+    static const RPCHelpMan help{
+        "versionreport",
+        "Display the software versions of nodes that recently staked.",
+        {
+            {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of blocks to tally from the chain head. Default: BLOCKS_PER_DAY."},
+            {"full", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Classify by commit suffix. Default: false."},
+        },
+        RPCResult{RPCResult::Type::ANY, "", "Per-version tally (see GetJSONVersionReport)."},
+        RPCExamples{
+            HelpExampleCli("versionreport", "") +
+            HelpExampleCli("versionreport", "1440 true") +
+            HelpExampleRpc("versionreport", "1440, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const int64_t lookback = params.size() > 0
         ? std::max(params[0].get_int(), 1)
@@ -3485,11 +3615,20 @@ UniValue writedata(const UniValue& params, bool fHelp)
 
 UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
         {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "askforoutstandingblocks\n"
-                "\n"
-                "Requests network for outstanding blocks\n");
+    static const RPCHelpMan help{
+        "askforoutstandingblocks",
+        "Requests the network for outstanding blocks.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "Sent.", "Whether the request was issued."},
+            }},
+        RPCExamples{
+            HelpExampleCli("askforoutstandingblocks", "") +
+            HelpExampleRpc("askforoutstandingblocks", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3502,11 +3641,29 @@ UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
 
 UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getblockchaininfo\n"
-                "\n"
-                "Displays data on current blockchain\n");
+    static const RPCHelpMan help{
+        "getblockchaininfo",
+        "Displays data on the current blockchain.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "blocks", "Current best block height."},
+                {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync."},
+                {RPCResult::Type::STR_AMOUNT, "moneysupply", "Total money supply (GRC)."},
+                {RPCResult::Type::OBJ, "difficulty", "",
+                    {
+                        {RPCResult::Type::NUM, "current", "Current difficulty."},
+                        {RPCResult::Type::NUM, "target", "Target difficulty."},
+                    }},
+                {RPCResult::Type::BOOL, "testnet", "Whether this node is on testnet."},
+                {RPCResult::Type::STR, "errors", "Any warnings or errors."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getblockchaininfo", "") +
+            HelpExampleRpc("getblockchaininfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_main);
 
@@ -3527,11 +3684,21 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
 
 UniValue currenttime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "currenttime\n"
-                "\n"
-                "Displays UTC Unix time as well as date and time in UTC\n");
+    static const RPCHelpMan help{
+        "currenttime",
+        "Displays the UTC Unix time as well as the date and time in UTC.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "Unix", "Current adjusted Unix time."},
+                {RPCResult::Type::STR, "UTC", "Human-readable UTC timestamp."},
+            }},
+        RPCExamples{
+            HelpExampleCli("currenttime", "") +
+            HelpExampleRpc("currenttime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3543,11 +3710,20 @@ UniValue currenttime(const UniValue& params, bool fHelp)
 
 UniValue networktime(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "networktime\n"
-                "\n"
-                "Displays current network time\n");
+    static const RPCHelpMan help{
+        "networktime",
+        "Displays the current network time.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "Network Time", "Current adjusted network time."},
+            }},
+        RPCExamples{
+            HelpExampleCli("networktime", "") +
+            HelpExampleRpc("networktime", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -3708,10 +3884,22 @@ UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version)
 // ppcoin: get information of sync-checkpoint
 UniValue getcheckpoint(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getcheckpoint\n"
-                "Show info of synchronized checkpoint.\n");
+    static const RPCHelpMan help{
+        "getcheckpoint",
+        "Show info of the synchronized checkpoint.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "synccheckpoint", /*optional=*/true, "Checkpoint block hash."},
+                {RPCResult::Type::NUM, "height", /*optional=*/true, "Checkpoint block height."},
+                {RPCResult::Type::STR, "timestamp", /*optional=*/true, "Checkpoint block timestamp."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getcheckpoint", "") +
+            HelpExampleRpc("getcheckpoint", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue result(UniValue::VOBJ);
 
@@ -3730,12 +3918,24 @@ UniValue getcheckpoint(const UniValue& params, bool fHelp)
 //Brod
 UniValue rpc_reorganize(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "reorganize",
+        "Roll back the block chain to the specified block hash. "
+        "The block hash must already be present in the block index.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The target block hash."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "RollbackChain", "Whether the reorganize succeeded."},
+            }},
+        RPCExamples{
+            HelpExampleCli("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"") +
+            HelpExampleRpc("reorganize", "\"00000000000003a20def7a05a77361b9657ff954b2f2080e135ea6f5970da215\"")},
+    };
     UniValue results(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "reorganize <hash>\n"
-                "Roll back the block chain to specified block hash.\n"
-                "The block hash must already be present in block index");
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     uint256 NewHash;
     NewHash.SetHex(params[0].get_str());
@@ -3747,10 +3947,25 @@ UniValue rpc_reorganize(const UniValue& params, bool fHelp)
 
 UniValue getburnreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getburnreport\n"
-                "Scan for and aggregate network-wide amounts for provably-destroyed outputs.\n");
+    static const RPCHelpMan help{
+        "getburnreport",
+        "Scan for and aggregate network-wide amounts for provably-destroyed outputs.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_AMOUNT, "total", "Total burned amount (GRC)."},
+                {RPCResult::Type::STR_AMOUNT, "voluntary", "Voluntary burns not tied to a contract (GRC)."},
+                {RPCResult::Type::OBJ_DYN, "contracts", "Per-contract-type burn totals.",
+                    {
+                        {RPCResult::Type::STR_AMOUNT, "type", "Burn total for the contract type (GRC)."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getburnreport", "") +
+            HelpExampleRpc("getburnreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     CBlock block;
     CAmount total_amount = 0;
