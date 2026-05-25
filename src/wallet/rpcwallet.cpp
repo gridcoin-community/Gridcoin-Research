@@ -2322,24 +2322,24 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
 
 UniValue abandontransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "abandontransaction \"txid\"\n"
-                "\nMark in-wallet transaction <txid> as abandoned.\n"
-                "This will mark this transaction and all its in-wallet descendants as abandoned\n"
-                "which will allow their inputs to be respent. It can be used to replace \"stuck\"\n"
-                "or evicted transactions.\n"
-                "It only works on transactions which are not included in a block and are not\n"
-                "currently in the mempool.\n"
-                "It has no effect on transactions which are already conflicted or abandoned.\n"
-                "\nArguments:\n"
-                "1. \"txid\"    (string, required) The transaction id\n"
-                "\nResult:\n"
-                "null\n"
-                "\nExamples:\n"
-                "\nabandon a transaction\n"
-                "\n> gridcoinresearchd abandontransaction \"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"\n"
-        );
+    static const RPCHelpMan help{
+        "abandontransaction",
+        "Mark in-wallet transaction <txid> as abandoned. "
+        "This will mark this transaction and all its in-wallet descendants as abandoned, "
+        "which will allow their inputs to be respent. It can be used to replace stuck or evicted transactions. "
+        "It only works on transactions which are not included in a block and are not currently in the mempool. "
+        "It has no effect on transactions which are already conflicted or abandoned.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The transaction id (must be in the wallet)."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+            HelpExampleRpc("abandontransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
