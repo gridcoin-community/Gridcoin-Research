@@ -3402,12 +3402,17 @@ UniValue repairwallet(const UniValue& params, bool fHelp)
 // NovaCoin: resend unconfirmed wallet transactions
 UniValue resendtx(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "resendtx\n"
-                "\n"
-                "Re-send unconfirmed transactions.\n"
-                );
+    static const RPCHelpMan help{
+        "resendtx",
+        "Re-send unconfirmed transactions in the wallet.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("resendtx", "") +
+            HelpExampleRpc("resendtx", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     {
         LOCK2(cs_main, cs_setpwalletRegistered);
