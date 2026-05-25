@@ -80,10 +80,6 @@ const RPCHelpMan& getstakinginfo_helpman() { return getstakinginfo_help; }
 
 UniValue getstakinginfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getstakinginfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
     UniValue weight(UniValue::VOBJ);
@@ -244,10 +240,6 @@ const RPCHelpMan& getlaststake_helpman() { return getlaststake_help; }
 
 UniValue getlaststake(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getlaststake_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
     if (!stake_tx) {
@@ -336,10 +328,6 @@ const RPCHelpMan& auditsnapshotaccrual_helpman() { return auditsnapshotaccrual_h
 
 UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = auditsnapshotaccrual_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -684,10 +672,6 @@ const RPCHelpMan& auditsnapshotaccruals_helpman() { return auditsnapshotaccruals
 
 UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = auditsnapshotaccruals_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool report_only_mismatches = false;
 
     if (params.size() > 0)
@@ -810,10 +794,6 @@ const RPCHelpMan& listresearcheraccounts_helpman() { return listresearcheraccoun
 
 UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listresearcheraccounts_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue result(UniValue::VOBJ);
     UniValue entries(UniValue::VARR);
 
@@ -864,11 +844,6 @@ const RPCHelpMan& inspectaccrualsnapshot_helpman() { return inspectaccrualsnapsh
 
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = inspectaccrualsnapshot_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
-
     const fs::path snapshot_path = SnapshotPath(params[0].get_int());
     const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
 
@@ -915,10 +890,6 @@ const RPCHelpMan& parseaccrualsnapshotfile_helpman() { return parseaccrualsnapsh
 
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = parseaccrualsnapshotfile_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     const fs::path snapshot_path = params[0].get_str();

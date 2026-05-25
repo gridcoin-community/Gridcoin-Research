@@ -34,10 +34,6 @@ const RPCHelpMan& getconnectioncount_helpman() { return getconnectioncount_help;
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getconnectioncount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_vNodes);
 
     return (int)vNodes.size();
@@ -65,10 +61,6 @@ const RPCHelpMan& addnode_helpman() { return addnode_help; }
 
 UniValue addnode(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = addnode_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const string strCommand = params[1].get_str();
     if (strCommand != "onetry" && strCommand != "add" && strCommand != "remove") {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
@@ -139,10 +131,6 @@ const RPCHelpMan& getnodeaddresses_helpman() { return getnodeaddresses_help; }
 
 UniValue getnodeaddresses(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getnodeaddresses_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int count = 1;
     if (params.size() > 0 && !params[0].isNull())
         count = params[0].get_int();
@@ -194,10 +182,6 @@ const RPCHelpMan& getaddednodeinfo_helpman() { return getaddednodeinfo_help; }
 
 UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getaddednodeinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool fDns = params[0].get_bool();
 
     list<string> laddedNodes(0);
@@ -307,10 +291,6 @@ const RPCHelpMan& setban_helpman() { return setban_help; }
 
 UniValue setban(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = setban_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const std::string strCommand = params[1].get_str();
     if (strCommand != "add" && strCommand != "remove") {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
@@ -395,10 +375,6 @@ const RPCHelpMan& listbanned_helpman() { return listbanned_help; }
 
 UniValue listbanned(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listbanned_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if(!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
     }
@@ -438,10 +414,6 @@ const RPCHelpMan& clearbanned_helpman() { return clearbanned_help; }
 
 UniValue clearbanned(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = clearbanned_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
     }
@@ -467,10 +439,6 @@ const RPCHelpMan& ping_helpman() { return ping_help; }
 
 UniValue ping(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = ping_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
     for (auto const& pNode : vNodes) {
@@ -520,10 +488,6 @@ const RPCHelpMan& getpeerinfo_helpman() { return getpeerinfo_help; }
 
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getpeerinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
 
@@ -585,10 +549,6 @@ const RPCHelpMan& getnettotals_helpman() { return getnettotals_help; }
 
 UniValue getnettotals(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getnettotals_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("totalbytesrecv", CNode::GetTotalBytesRecv());
     obj.pushKV("totalbytessent", CNode::GetTotalBytesSent());
@@ -635,10 +595,6 @@ const RPCHelpMan& listalerts_helpman() { return listalerts_help; }
 
 UniValue listalerts(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = listalerts_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_mapAlerts);
 
     UniValue result(UniValue::VOBJ);
@@ -727,12 +683,6 @@ const RPCHelpMan& sendalert_helpman() { return sendalert_help; }
 
 UniValue sendalert(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendalert_helpman();
-    // Variadic-tail-by-min: legacy accepted any number of args >= 6, with params[6] used when present.
-    // Keep the same lower bound and let RPCHelpMan's IsValidNumArgs enforce the upper bound (7 declared).
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     CAlert alert;
     CKey key;
 
@@ -808,10 +758,6 @@ const RPCHelpMan& sendalert2_helpman() { return sendalert2_help; }
 
 UniValue sendalert2(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = sendalert2_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     CAlert alert;
     CKey key;
 
@@ -901,10 +847,6 @@ const RPCHelpMan& getnetworkinfo_helpman() { return getnetworkinfo_help; }
 
 UniValue getnetworkinfo(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = getnetworkinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     proxyType proxy;

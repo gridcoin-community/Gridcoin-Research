@@ -99,10 +99,6 @@ const RPCHelpMan& createpsgt_helpman() { return createpsgt_help; }
 
 UniValue createpsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = createpsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
     UniValue inputs = params[0].get_array();
@@ -176,10 +172,6 @@ const RPCHelpMan& decodepsgt_helpman() { return decodepsgt_help; }
 
 UniValue decodepsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = decodepsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     PartiallySignedTransaction psgt;
     string error;
     if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
@@ -370,10 +362,6 @@ const RPCHelpMan& combinepsgt_helpman() { return combinepsgt_help; }
 
 UniValue combinepsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = combinepsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, {UniValue::VARR});
     UniValue psgtArr = params[0].get_array();
 
@@ -417,10 +405,6 @@ const RPCHelpMan& finalizepsgt_helpman() { return finalizepsgt_help; }
 
 UniValue finalizepsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = finalizepsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     PartiallySignedTransaction psgt;
     string error;
     if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
@@ -466,10 +450,6 @@ const RPCHelpMan& walletprocesspsgt_helpman() { return walletprocesspsgt_help; }
 
 UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletprocesspsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     EnsureWalletIsUnlocked();
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -585,10 +565,6 @@ const RPCHelpMan& utxoupdatepsgt_helpman() { return utxoupdatepsgt_help; }
 
 UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = utxoupdatepsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     PartiallySignedTransaction psgt;
     string error;
     if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
@@ -627,10 +603,6 @@ const RPCHelpMan& converttopsgt_helpman() { return converttopsgt_help; }
 
 UniValue converttopsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = converttopsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
     CTransaction tx;
@@ -707,10 +679,6 @@ const RPCHelpMan& walletcreatefundedpsgt_helpman() { return walletcreatefundedps
 
 UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = walletcreatefundedpsgt_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
     EnsureWalletIsUnlocked();

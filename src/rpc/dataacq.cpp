@@ -68,10 +68,6 @@ const RPCHelpMan& rpc_getblockstats_helpman() { return rpc_getblockstats_help; }
 
 UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = rpc_getblockstats_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     unsigned int mode = params[0].get_int();
 
     int64_t lowheight = 0;
@@ -384,9 +380,6 @@ const RPCHelpMan& rpc_exportstats_helpman() { return rpc_exportstats_help; }
 
 UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = rpc_exportstats_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
     /* count, high */
     long endblock= INT_MAX;
     long maxblocks= 805;
@@ -602,10 +595,6 @@ const RPCHelpMan& rpc_getrecentblocks_helpman() { return rpc_getrecentblocks_hel
 
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help = rpc_getrecentblocks_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     long detail= RoundFromString(params[0].get_str(),0);
     long blockcount=0;
     long maxblocks= RoundFromString(params[1].get_str(),0);
