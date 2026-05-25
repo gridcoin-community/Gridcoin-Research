@@ -756,6 +756,63 @@ BOOST_AUTO_TEST_CASE(multiple_state_transitions)
     }
 }
 
+BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
+{
+    // Pins the invariant CommitTransaction relies on at wallet.cpp:3324:
+    // a wtx that enters mapWallet with TxStateInMempool must remain in
+    // TxStateInMempool after AcceptToMemoryPool fires the
+    // transactionAddedToMempool callback (main.cpp:576) for the originating
+    // wallet. The callback path goes through SyncTransaction ->
+    // AddToWalletIfInvolvingMe with fUpdate=false on an existing entry, so
+    // the state-assignment branch at line 1171 is skipped and the state set
+    // at CommitTransaction:3324 must survive untouched.
+
+    CWallet test_wallet;
+
+    // Add a key so the tx's output is IsMine -- otherwise
+    // AddToWalletIfInvolvingMe short-circuits at the fIsMine==false check
+    // (wallet.cpp:1121) and never reaches the branch under test.
+    CKey key;
+    key.MakeNewKey(true);
+    {
+        LOCK(test_wallet.cs_wallet);
+        BOOST_REQUIRE(test_wallet.AddKey(key));
+    }
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1 * COIN;
+    mtx.vout[0].scriptPubKey = CScript() << key.GetPubKey() << OP_CHECKSIG;
+    CTransaction tx(mtx);
+    uint256 hash = tx.GetHash();
+    CTransactionRef ptx = MakeTransactionRef(tx);
+
+    {
+        LOCK(test_wallet.cs_wallet);
+
+        // Mirror CommitTransaction:3324 then the AddToWallet insertion at
+        // wallet.cpp:3328 -- we insert directly rather than calling
+        // AddToWallet to avoid the cs_main / CWalletDB scaffolding it
+        // requires, which isn't what's under test.
+        CWalletTx wtxNew(&test_wallet, tx);
+        wtxNew.SetTxState(TxStateInMempool{});
+        BOOST_REQUIRE(wtxNew.isInMempool());
+
+        test_wallet.mapWallet[hash] = wtxNew;
+        BOOST_REQUIRE(test_wallet.mapWallet[hash].isInMempool());
+        BOOST_REQUIRE(test_wallet.IsMine(tx) != ISMINE_NO);
+
+        // The callback that AcceptToMemoryPool fires at main.cpp:576.
+        test_wallet.transactionAddedToMempool(ptx);
+
+        BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInMempool>() != nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateUnrecognized>() == nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateConfirmed>() == nullptr);
+        BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInactive>() == nullptr);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(wallet_state_tests)
