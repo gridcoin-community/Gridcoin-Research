@@ -3459,12 +3459,24 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
 
 UniValue burn(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "burn <amount> [hex string]\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.00000001\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "burn",
+        "Send an amount to an unspendable OP_RETURN output, optionally with a hex data payload. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "Amount to burn in GRC (rounded to the nearest 0.00000001)."},
+            {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+                "Optional hex-encoded payload to attach to the OP_RETURN output."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("burn", "1.0") +
+            HelpExampleCli("burn", "1.0 \"deadbeef\"") +
+            HelpExampleRpc("burn", "1.0, \"deadbeef\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
