@@ -1023,13 +1023,6 @@ static void check_straggler_help_renders(
     const UniValue empty(UniValue::VARR);
 {
     const UniValue empty(UniValue::VARR);
-
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"abandontransaction", &abandontransaction},
-        {"inspectwalletstate", &inspectwalletstate},
-    };
-
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
             bool threw = false;
@@ -1154,6 +1147,21 @@ BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
         {"utxoupdatepsgt",         &utxoupdatepsgt_helpman},
         {"converttopsgt",          &converttopsgt_helpman},
         {"walletcreatefundedpsgt", &walletcreatefundedpsgt_helpman},
+    });
+}
+
+// PSGT commands (Partially Signed Gridcoin Transaction, introduced in #2877 G).
+BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
+{
+    check_straggler_help_renders({
+        {"createpsgt",             &createpsgt},
+        {"decodepsgt",             &decodepsgt},
+        {"combinepsgt",            &combinepsgt},
+        {"finalizepsgt",           &finalizepsgt},
+        {"walletprocesspsgt",      &walletprocesspsgt},
+        {"utxoupdatepsgt",         &utxoupdatepsgt},
+        {"converttopsgt",          &converttopsgt},
+        {"walletcreatefundedpsgt", &walletcreatefundedpsgt},
     });
 }
 
