@@ -624,4 +624,46 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
     }
 }
 
+// Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
+// commands. Each fHelp=true throw happens before any globals are touched, so this
+// runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
+BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"superblocks", superblocks},
+        {"superblockage", superblockage},
+        {"superblockaverage", superblockaverage},
+        {"parselegacysb", parselegacysb},
+        {"listscrapers", listscrapers},
+        {"listprojects", listprojects},
+        {"projects", projects},
+        {"getautogreylist", getautogreylist},
+        {"listsidestakes", listsidestakes},
+        {"listmandatorysidestakes", listmandatorysidestakes},
+        {"listprotocolentries", listprotocolentries},
+        {"readdata", readdata},
+        {"writedata", writedata},
+        {"dumpcontracts", dumpcontracts},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    "help message missing command name");
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    "help message missing Examples section");
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected std::runtime_error to be thrown");
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
