@@ -502,18 +502,30 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 5)
-        throw runtime_error(
-                "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to] [message]\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.000001\n"
-                "[comment] a comment used to store what the transaction is for.\n"
-                "         This is not part of the transaction, just kept in your wallet.\n"
-                "[comment_to] a comment to store the name of the person or organization\n"
-                "             to which you're sending the transaction. This is not part of the \n"
-                "             transaction, just kept in your wallet.\n"
-                "[message] Optional message to add to the receiver.\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "sendtoaddress",
+        "Send an amount of GRC to the given Gridcoin address. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to send to."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "The amount in GRC to send (rounded to the nearest 0.000001)."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Comment used to store what the transaction is for. Not part of the transaction, just kept in your wallet."},
+            {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Comment to store the name of the person or organization to which you're sending the transaction. Not part of the transaction."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Optional message to add to the receiver (TxMessage contract)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100") +
+            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 \"donation\" \"charity\"") +
+            HelpExampleRpc("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, \"donation\", \"charity\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
