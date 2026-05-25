@@ -701,11 +701,24 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
 
 UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
-                "\n"
-                "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.\n");
+    static const RPCHelpMan help{
+        "getreceivedbyaddress",
+        "Returns the total amount received by the given Gridcoin address in transactions "
+        "with at least [minconf] confirmations.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to total received-by."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum number of confirmations for transactions to be counted (default: 1)."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount",
+            "The total amount received by the address."},
+        RPCExamples{
+            HelpExampleCli("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 6") +
+            HelpExampleRpc("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
