@@ -611,24 +611,27 @@ UniValue addpoll(const UniValue& params, bool fHelp)
     return PollToJson(payload->m_poll, result_tx.GetHash());
 }
 
+static const RPCHelpMan listpolls_help{
+    "listpolls",
+    "Lists poll details for all currently active polls (or for all polls if showfinished is true).",
+    {
+        {"showfinished", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, show finished polls as well. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::ELISION, "", "Poll detail object; see 'getpollresults' / 'addpoll' for shape."},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpolls", "") +
+        HelpExampleCli("listpolls", "true") +
+        HelpExampleRpc("listpolls", "true")},
+};
+const RPCHelpMan& listpolls_helpman() { return listpolls_help; }
+
 UniValue listpolls(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listpolls",
-        "Lists poll details for all currently active polls (or for all polls if showfinished is true).",
-        {
-            {"showfinished", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, show finished polls as well. Default: false."},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::ELISION, "", "Poll detail object; see 'getpollresults' / 'addpoll' for shape."},
-            }},
-        RPCExamples{
-            HelpExampleCli("listpolls", "") +
-            HelpExampleCli("listpolls", "true") +
-            HelpExampleRpc("listpolls", "true")},
-    };
+    const RPCHelpMan& help = listpolls_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -647,23 +650,26 @@ UniValue listpolls(const UniValue& params, bool fHelp)
     return json;
 }
 
+static const RPCHelpMan getpollresults_help{
+    "getpollresults",
+    "Display the results for the specified poll.\n"
+    "\n"
+    "Note that in the small chance that a blockchain reorg occurs during the tally for the poll,\n"
+    "this call will return an error. Retrying should succeed.",
+    {
+        {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Poll result object; see source (PollResultToJson) for the exact shape."}}},
+    RPCExamples{
+        HelpExampleCli("getpollresults", "\"Example Poll\"") +
+        HelpExampleRpc("getpollresults", "\"Example Poll\"")},
+};
+const RPCHelpMan& getpollresults_helpman() { return getpollresults_help; }
+
 UniValue getpollresults(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getpollresults",
-        "Display the results for the specified poll.\n"
-        "\n"
-        "Note that in the small chance that a blockchain reorg occurs during the tally for the poll,\n"
-        "this call will return an error. Retrying should succeed.",
-        {
-            {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Poll result object; see source (PollResultToJson) for the exact shape."}}},
-        RPCExamples{
-            HelpExampleCli("getpollresults", "\"Example Poll\"") +
-            HelpExampleRpc("getpollresults", "\"Example Poll\"")},
-    };
+    const RPCHelpMan& help = getpollresults_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -686,22 +692,25 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
 
+static const RPCHelpMan getvotingclaim_help{
+    "getvotingclaim",
+    "Display the claim for the specified poll or vote.",
+    {
+        {"poll_or_vote_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Transaction hash of the poll or vote."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Claim object; shape depends on whether the transaction is a poll (PollClaimToJson) or vote (VoteClaimToJson)."}}},
+    RPCExamples{
+        HelpExampleCli("getvotingclaim", "\"<txid>\"") +
+        HelpExampleRpc("getvotingclaim", "\"<txid>\"")},
+};
+const RPCHelpMan& getvotingclaim_helpman() { return getvotingclaim_help; }
+
 UniValue getvotingclaim(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getvotingclaim",
-        "Display the claim for the specified poll or vote.",
-        {
-            {"poll_or_vote_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "Transaction hash of the poll or vote."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Claim object; shape depends on whether the transaction is a poll (PollClaimToJson) or vote (VoteClaimToJson)."}}},
-        RPCExamples{
-            HelpExampleCli("getvotingclaim", "\"<txid>\"") +
-            HelpExampleRpc("getvotingclaim", "\"<txid>\"")},
-    };
+    const RPCHelpMan& help = getvotingclaim_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -742,25 +751,28 @@ UniValue getvotingclaim(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_MISC_ERROR, "Transaction contains no voting contract");
 }
 
+static const RPCHelpMan vote_help{
+    "vote",
+    "DEPRECATED. Use votebyid instead. This RPC may be removed in the future.\n"
+    "\n"
+    "Cast a vote for a poll, identified by title.",
+    {
+        {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title of the poll to vote for."},
+        {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Labels of the choices to vote for, separated by semicolons (;)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses."}}},
+    RPCExamples{
+        HelpExampleCli("vote", "\"Example Poll\" \"yes\"") +
+        HelpExampleRpc("vote", "\"Example Poll\", \"yes\"")},
+};
+const RPCHelpMan& vote_helpman() { return vote_help; }
+
 UniValue vote(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "vote",
-        "DEPRECATED. Use votebyid instead. This RPC may be removed in the future.\n"
-        "\n"
-        "Cast a vote for a poll, identified by title.",
-        {
-            {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title of the poll to vote for."},
-            {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Labels of the choices to vote for, separated by semicolons (;)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses."}}},
-        RPCExamples{
-            HelpExampleCli("vote", "\"Example Poll\" \"yes\"") +
-            HelpExampleRpc("vote", "\"Example Poll\", \"yes\"")},
-    };
+    const RPCHelpMan& help = vote_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -796,24 +808,27 @@ UniValue vote(const UniValue& params, bool fHelp)
     return SubmitVote(*poll, std::move(builder));
 }
 
+static const RPCHelpMan votebyid_help{
+    "votebyid",
+    "Cast a vote for a poll.",
+    {
+        {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
+        {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Numeric ID of a choice to vote for. Pass additional positional choice IDs for multi-choice polls."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses fields."}}},
+    RPCExamples{
+        HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
+        HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
+        HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
+};
+const RPCHelpMan& votebyid_helpman() { return votebyid_help; }
+
 UniValue votebyid(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "votebyid",
-        "Cast a vote for a poll.",
-        {
-            {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
-            {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "Numeric ID of a choice to vote for. Pass additional positional choice IDs for multi-choice polls."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses fields."}}},
-        RPCExamples{
-            HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
-            HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
-            HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
-    };
+    const RPCHelpMan& help = votebyid_helpman();
     // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
     // RPCHelpMan does not model unbounded variadic, so keep the original lower-bound check and
     // render help via the manifest above.
@@ -852,23 +867,26 @@ UniValue votebyid(const UniValue& params, bool fHelp)
     return SubmitVote(*poll, std::move(builder));
 }
 
+static const RPCHelpMan votedetails_help{
+    "votedetails",
+    "Display the vote details for the specified poll.\n"
+    "\n"
+    "Note that in the small chance that a blockchain reorg occurs during the tally for the vote details,\n"
+    "this call will return an error. Retrying should succeed.",
+    {
+        {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Vote details object; see source (VoteDetailsToJson) for shape."}}},
+    RPCExamples{
+        HelpExampleCli("votedetails", "\"Example Poll\"") +
+        HelpExampleRpc("votedetails", "\"Example Poll\"")},
+};
+const RPCHelpMan& votedetails_helpman() { return votedetails_help; }
+
 UniValue votedetails(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "votedetails",
-        "Display the vote details for the specified poll.\n"
-        "\n"
-        "Note that in the small chance that a blockchain reorg occurs during the tally for the vote details,\n"
-        "this call will return an error. Retrying should succeed.",
-        {
-            {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Vote details object; see source (VoteDetailsToJson) for shape."}}},
-        RPCExamples{
-            HelpExampleCli("votedetails", "\"Example Poll\"") +
-            HelpExampleRpc("votedetails", "\"Example Poll\"")},
-    };
+    const RPCHelpMan& help = votedetails_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -890,19 +908,22 @@ UniValue votedetails(const UniValue& params, bool fHelp)
     throw JSONRPCError(RPC_MISC_ERROR, "No matching poll found");
 }
 
+static const RPCHelpMan testpollnotification_help{
+    "testpollnotification",
+    "Test the poll notification system for the specified poll.",
+    {
+        {"poll_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the poll to test notification."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("testpollnotification", "\"<txid>\"") +
+        HelpExampleRpc("testpollnotification", "\"<txid>\"")},
+};
+const RPCHelpMan& testpollnotification_helpman() { return testpollnotification_help; }
+
 UniValue testpollnotification(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "testpollnotification",
-        "Test the poll notification system for the specified poll.",
-        {
-            {"poll_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the poll to test notification."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("testpollnotification", "\"<txid>\"") +
-            HelpExampleRpc("testpollnotification", "\"<txid>\"")},
-    };
+    const RPCHelpMan& help = testpollnotification_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size())) {
         throw std::runtime_error(help.ToString());
     }

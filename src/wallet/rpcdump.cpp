@@ -101,25 +101,28 @@ public:
     }
 };
 
+static const RPCHelpMan importprivkey_help{
+    "importprivkey",
+    "Add a private key (as returned by dumpprivkey) to your wallet.\n"
+    "\n"
+    "WARNING: when rescan is true, a full rescan of the blockchain will occur. This can take up to 20 minutes.",
+    {
+        {"gridcoinprivkey", RPCArg::Type::STR, RPCArg::Optional::NO, "Base58 WIF private key."},
+        {"label", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional label for the imported address."},
+        {"rescan", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Whether to rescan the blockchain after import. Default: true."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("importprivkey", "\"<wif>\"") +
+        HelpExampleCli("importprivkey", "\"<wif>\" \"label\" false") +
+        HelpExampleRpc("importprivkey", "\"<wif>\", \"label\", false")},
+};
+const RPCHelpMan& importprivkey_helpman() { return importprivkey_help; }
+
 UniValue importprivkey(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "importprivkey",
-        "Add a private key (as returned by dumpprivkey) to your wallet.\n"
-        "\n"
-        "WARNING: when rescan is true, a full rescan of the blockchain will occur. This can take up to 20 minutes.",
-        {
-            {"gridcoinprivkey", RPCArg::Type::STR, RPCArg::Optional::NO, "Base58 WIF private key."},
-            {"label", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional label for the imported address."},
-            {"rescan", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Whether to rescan the blockchain after import. Default: true."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("importprivkey", "\"<wif>\"") +
-            HelpExampleCli("importprivkey", "\"<wif>\" \"label\" false") +
-            HelpExampleRpc("importprivkey", "\"<wif>\", \"label\", false")},
-    };
+    const RPCHelpMan& help = importprivkey_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -172,20 +175,23 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
     return NullUniValue;
 }
 
+static const RPCHelpMan importwallet_help{
+    "importwallet",
+    "Imports keys from a wallet dump file (see dumpwallet).\n"
+    "If a path is not specified in the filename, the data directory is used.",
+    {
+        {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("importwallet", "\"wallet.dump\"") +
+        HelpExampleRpc("importwallet", "\"wallet.dump\"")},
+};
+const RPCHelpMan& importwallet_helpman() { return importwallet_help; }
+
 UniValue importwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "importwallet",
-        "Imports keys from a wallet dump file (see dumpwallet).\n"
-        "If a path is not specified in the filename, the data directory is used.",
-        {
-            {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("importwallet", "\"wallet.dump\"") +
-            HelpExampleRpc("importwallet", "\"wallet.dump\"")},
-    };
+    const RPCHelpMan& help = importwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -285,25 +291,28 @@ UniValue importwallet(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan dumpprivkey_help{
+    "dumpprivkey",
+    "Reveals the private key corresponding to <gridcoinaddress>.",
+    {
+        {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
+        {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, also include the private and public keys as hex strings in the JSON output. "
+            "Default: false (only the base58 WIF is returned)."},
+    },
+    RPCResult{RPCResult::Type::ANY, "",
+        "When dump_hex is false (default), returns the base58 WIF private key as a string. "
+        "When dump_hex is true, returns a JSON object with base58 and hex representations."},
+    RPCExamples{
+        HelpExampleCli("dumpprivkey", "\"S1Example\"") +
+        HelpExampleCli("dumpprivkey", "\"S1Example\" true") +
+        HelpExampleRpc("dumpprivkey", "\"S1Example\", true")},
+};
+const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
+
 UniValue dumpprivkey(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "dumpprivkey",
-        "Reveals the private key corresponding to <gridcoinaddress>.",
-        {
-            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
-            {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, also include the private and public keys as hex strings in the JSON output. "
-                "Default: false (only the base58 WIF is returned)."},
-        },
-        RPCResult{RPCResult::Type::ANY, "",
-            "When dump_hex is false (default), returns the base58 WIF private key as a string. "
-            "When dump_hex is true, returns a JSON object with base58 and hex representations."},
-        RPCExamples{
-            HelpExampleCli("dumpprivkey", "\"S1Example\"") +
-            HelpExampleCli("dumpprivkey", "\"S1Example\" true") +
-            HelpExampleRpc("dumpprivkey", "\"S1Example\", true")},
-    };
+    const RPCHelpMan& help = dumpprivkey_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -341,20 +350,23 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     return EncodeSecret(vchSecret);
 }
 
+static const RPCHelpMan dumpwallet_help{
+    "dumpwallet",
+    "Dumps all wallet keys in a human-readable format into the specified file.\n"
+    "If a path is not specified in the filename, the data directory is used.",
+    {
+        {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("dumpwallet", "\"wallet.dump\"") +
+        HelpExampleRpc("dumpwallet", "\"wallet.dump\"")},
+};
+const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
+
 UniValue dumpwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "dumpwallet",
-        "Dumps all wallet keys in a human-readable format into the specified file.\n"
-        "If a path is not specified in the filename, the data directory is used.",
-        {
-            {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
-        },
-        RPCResult{RPCResult::Type::NONE, "", ""},
-        RPCExamples{
-            HelpExampleCli("dumpwallet", "\"wallet.dump\"") +
-            HelpExampleRpc("dumpwallet", "\"wallet.dump\"")},
-    };
+    const RPCHelpMan& help = dumpwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 

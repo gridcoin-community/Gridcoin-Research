@@ -48,47 +48,50 @@ static void EnableOrDisableLogCategories(UniValue cats, bool enable) {
     }
 }
 
+static const RPCHelpMan logging_help{
+    "logging",
+    "Gets and sets the logging configuration.\n"
+    "\n"
+    "When called without an argument, returns the list of categories with status that are currently being\n"
+    "debug logged or not.\n"
+    "When called with arguments, adds or removes categories from debug logging and returns the lists above.\n"
+    "The arguments are evaluated in order \"include\", \"exclude\".\n"
+    "If an item is both included and excluded, it will thus end up being excluded.\n"
+    "\n"
+    "The valid logging categories are the ones reported when this command is called without arguments.\n"
+    "In addition, the following are available as category names with special meanings:\n"
+    "  all  or 1: represent all logging categories.\n"
+    "  none or 0: even if other logging categories are specified, ignore all of them.\n"
+    "\n"
+    "Note that unlike Bitcoin, we don't yet process JSON arrays correctly as arguments for the command line,\n"
+    "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the\n"
+    "full arrays.",
+    {
+        {"include", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of categories to enable (or a single category string).",
+            {
+                {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+            }},
+        {"exclude", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of categories to disable (or a single category string).",
+            {
+                {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
+            }},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of category name to active state",
+        {
+            {RPCResult::Type::BOOL, "category", "Whether the named category is currently logged"},
+        }},
+    RPCExamples{
+        HelpExampleCli("logging", "all net") +
+        HelpExampleCli("logging", "\"\" all") +
+        HelpExampleRpc("logging", "[\"all\"], [\"net\"]")},
+};
+const RPCHelpMan& logging_helpman() { return logging_help; }
+
 UniValue logging(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "logging",
-        "Gets and sets the logging configuration.\n"
-        "\n"
-        "When called without an argument, returns the list of categories with status that are currently being\n"
-        "debug logged or not.\n"
-        "When called with arguments, adds or removes categories from debug logging and returns the lists above.\n"
-        "The arguments are evaluated in order \"include\", \"exclude\".\n"
-        "If an item is both included and excluded, it will thus end up being excluded.\n"
-        "\n"
-        "The valid logging categories are the ones reported when this command is called without arguments.\n"
-        "In addition, the following are available as category names with special meanings:\n"
-        "  all  or 1: represent all logging categories.\n"
-        "  none or 0: even if other logging categories are specified, ignore all of them.\n"
-        "\n"
-        "Note that unlike Bitcoin, we don't yet process JSON arrays correctly as arguments for the command line,\n"
-        "so, for the rpc cli, it is limited to one enable and/or one disable category. Using CURL works with the\n"
-        "full arrays.",
-        {
-            {"include", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of categories to enable (or a single category string).",
-                {
-                    {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
-                }},
-            {"exclude", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of categories to disable (or a single category string).",
-                {
-                    {"category", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A logging category name."},
-                }},
-        },
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of category name to active state",
-            {
-                {RPCResult::Type::BOOL, "category", "Whether the named category is currently logged"},
-            }},
-        RPCExamples{
-            HelpExampleCli("logging", "all net") +
-            HelpExampleCli("logging", "\"\" all") +
-            HelpExampleRpc("logging", "[\"all\"], [\"net\"]")},
-    };
+    const RPCHelpMan& help = logging_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -106,60 +109,66 @@ UniValue logging(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan listsettings_help{
+    "listsettings",
+    "Outputs all arguments/settings in JSON format.",
+    {},
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
+        {
+            {RPCResult::Type::ELISION, "", "Current value (string, numeric, boolean, or array)"},
+        }},
+    RPCExamples{
+        HelpExampleCli("listsettings", "") +
+        HelpExampleRpc("listsettings", "")},
+};
+const RPCHelpMan& listsettings_helpman() { return listsettings_help; }
+
 UniValue listsettings(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listsettings",
-        "Outputs all arguments/settings in JSON format.",
-        {},
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of setting name to its current value",
-            {
-                {RPCResult::Type::ELISION, "", "Current value (string, numeric, boolean, or array)"},
-            }},
-        RPCExamples{
-            HelpExampleCli("listsettings", "") +
-            HelpExampleRpc("listsettings", "")},
-    };
+    const RPCHelpMan& help = listsettings_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
     return gArgs.OutputArgs();
 }
 
+static const RPCHelpMan changesettings_help{
+    "changesettings",
+    "Store or change one or more configuration settings.\n"
+    "\n"
+    "Settings must be passed in the same format as config file entries (name=value).\n"
+    "Additional name=value pairs may be supplied as further positional arguments.",
+    {
+        {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Setting to store/change in the form name=value. Pass additional positional arguments "
+            "to change more than one setting in a single call."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "settings_change_requires_restart",
+                "True if at least one of the changed settings does not take effect until restart."},
+            {RPCResult::Type::ARR, "settings_stored_with_no_state_change", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Stored setting whose value did not change."},
+                }},
+            {RPCResult::Type::ARR, "settings_changed_taking_immediate_effect", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Setting whose change is now in effect."},
+                }},
+            {RPCResult::Type::ARR, "settings_changed_requiring_restart", "",
+                {
+                    {RPCResult::Type::STR, "setting", "Setting whose change requires a restart."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
+        HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
+};
+const RPCHelpMan& changesettings_helpman() { return changesettings_help; }
+
 UniValue changesettings(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "changesettings",
-        "Store or change one or more configuration settings.\n"
-        "\n"
-        "Settings must be passed in the same format as config file entries (name=value).\n"
-        "Additional name=value pairs may be supplied as further positional arguments.",
-        {
-            {"setting", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Setting to store/change in the form name=value. Pass additional positional arguments "
-                "to change more than one setting in a single call."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::BOOL, "settings_change_requires_restart",
-                    "True if at least one of the changed settings does not take effect until restart."},
-                {RPCResult::Type::ARR, "settings_stored_with_no_state_change", "",
-                    {
-                        {RPCResult::Type::STR, "setting", "Stored setting whose value did not change."},
-                    }},
-                {RPCResult::Type::ARR, "settings_changed_taking_immediate_effect", "",
-                    {
-                        {RPCResult::Type::STR, "setting", "Setting whose change is now in effect."},
-                    }},
-                {RPCResult::Type::ARR, "settings_changed_requiring_restart", "",
-                    {
-                        {RPCResult::Type::STR, "setting", "Setting whose change requires a restart."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
-            HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
-    };
+    const RPCHelpMan& help = changesettings_helpman();
     // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does not model
     // unbounded variadic, so keep the original lower-bound check and render help via the manifest above.
     if (fHelp || params.size() < 1)

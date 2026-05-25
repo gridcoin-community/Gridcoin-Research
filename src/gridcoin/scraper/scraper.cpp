@@ -6298,17 +6298,20 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
  * @param fHelp
  * @return bool true if successful
  */
+static const RPCHelpMan sendscraperfilemanifest_help{
+    "sendscraperfilemanifest",
+    "Send a CScraperManifest object from the current ScraperFileManifest.",
+    {},
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
+    RPCExamples{
+        HelpExampleCli("sendscraperfilemanifest", "") +
+        HelpExampleRpc("sendscraperfilemanifest", "")},
+};
+const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemanifest_help; }
+
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sendscraperfilemanifest",
-        "Send a CScraperManifest object from the current ScraperFileManifest.",
-        {},
-        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
-        RPCExamples{
-            HelpExampleCli("sendscraperfilemanifest", "") +
-            HelpExampleRpc("sendscraperfilemanifest", "")},
-    };
+    const RPCHelpMan& help = sendscraperfilemanifest_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6334,20 +6337,23 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return bool true if successful
  */
+static const RPCHelpMan savescraperfilemanifest_help{
+    "savescraperfilemanifest",
+    "Save a CScraperManifest object to disk.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to save to disk."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
+    RPCExamples{
+        HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
+        HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& savescraperfilemanifest_helpman() { return savescraperfilemanifest_help; }
+
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "savescraperfilemanifest",
-        "Save a CScraperManifest object to disk.",
-        {
-            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "Hash of the manifest to save to disk."},
-        },
-        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
-        RPCExamples{
-            HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
-            HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
-    };
+    const RPCHelpMan& help = savescraperfilemanifest_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6364,23 +6370,26 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return bool true if successful
  */
+static const RPCHelpMan deletecscrapermanifest_help{
+    "deletecscrapermanifest",
+    "Delete a CScraperManifest entry from the global mapManifest map.\n"
+    "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
+    "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
+    "global convergence cache.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to delete."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
+    RPCExamples{
+        HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
+        HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& deletecscrapermanifest_helpman() { return deletecscrapermanifest_help; }
+
 UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "deletecscrapermanifest",
-        "Delete a CScraperManifest entry from the global mapManifest map.\n"
-        "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
-        "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
-        "global convergence cache.",
-        {
-            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "Hash of the manifest to delete."},
-        },
-        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
-        RPCExamples{
-            HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
-            HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
-    };
+    const RPCHelpMan& help = deletecscrapermanifest_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6397,20 +6406,23 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return bool true if successful
  */
+static const RPCHelpMan archivelog_help{
+    "archivelog",
+    "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
+    {
+        {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Which log to archive: either \"debug\" or \"scraper\"."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
+    RPCExamples{
+        HelpExampleCli("archivelog", "debug") +
+        HelpExampleRpc("archivelog", "\"scraper\"")},
+};
+const RPCHelpMan& archivelog_helpman() { return archivelog_help; }
+
 UniValue archivelog(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "archivelog",
-        "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
-        {
-            {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "Which log to archive: either \"debug\" or \"scraper\"."},
-        },
-        RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
-        RPCExamples{
-            HelpExampleCli("archivelog", "debug") +
-            HelpExampleRpc("archivelog", "\"scraper\"")},
-    };
+    const RPCHelpMan& help = archivelog_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6492,23 +6504,26 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
  * @param fHelp
  * @return JSON report of convergence state with optional details
  */
+static const RPCHelpMan convergencereport_help{
+    "convergencereport",
+    "Display the local node's report of scraper convergence.",
+    {
+        {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include detailed output from the convergence cache. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
+    RPCExamples{
+        HelpExampleCli("convergencereport", "") +
+        HelpExampleCli("convergencereport", "true") +
+        HelpExampleRpc("convergencereport", "true")},
+};
+const RPCHelpMan& convergencereport_helpman() { return convergencereport_help; }
+
 UniValue convergencereport(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "convergencereport",
-        "Display the local node's report of scraper convergence.",
-        {
-            {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, include detailed output from the convergence cache. Default: false."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
-        RPCExamples{
-            HelpExampleCli("convergencereport", "") +
-            HelpExampleCli("convergencereport", "true") +
-            HelpExampleRpc("convergencereport", "true")},
-    };
+    const RPCHelpMan& help = convergencereport_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6617,23 +6632,26 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return report of test results
  */
+static const RPCHelpMan testnewsb_help{
+    "testnewsb",
+    "Tests superblock formation.",
+    {
+        {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of bits for the reduced hash hint for the uncached test. "
+            "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("testnewsb", "") +
+        HelpExampleCli("testnewsb", "16") +
+        HelpExampleRpc("testnewsb", "16")},
+};
+const RPCHelpMan& testnewsb_helpman() { return testnewsb_help; }
+
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "testnewsb",
-        "Tests superblock formation.",
-        {
-            {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Number of bits for the reduced hash hint for the uncached test. "
-                "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
-        RPCExamples{
-            HelpExampleCli("testnewsb", "") +
-            HelpExampleCli("testnewsb", "16") +
-            HelpExampleRpc("testnewsb", "16")},
-    };
+    const RPCHelpMan& help = testnewsb_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 
@@ -6853,19 +6871,22 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  * @param fHelp
  * @return JSON report of scraper status
  */
+static const RPCHelpMan scraperreport_help{
+    "scraperreport",
+    "Report containing various statistics about the scraper.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
+    RPCExamples{
+        HelpExampleCli("scraperreport", "") +
+        HelpExampleRpc("scraperreport", "")},
+};
+const RPCHelpMan& scraperreport_helpman() { return scraperreport_help; }
+
 UniValue scraperreport(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "scraperreport",
-        "Report containing various statistics about the scraper.",
-        {},
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
-        RPCExamples{
-            HelpExampleCli("scraperreport", "") +
-            HelpExampleRpc("scraperreport", "")},
-    };
+    const RPCHelpMan& help = scraperreport_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw std::runtime_error(help.ToString());
 

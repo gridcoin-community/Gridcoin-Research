@@ -33,39 +33,42 @@ static bool compare_second(const pair<std::string, int64_t>  &p1, const pair<std
     return p1.second > p2.second;
 }
 
+static const RPCHelpMan rpc_getblockstats_help{
+    "getblockstats",
+    "Show stats on what wallets and cpids staked recent blocks.\n"
+    "\n"
+    "Mode 0: startheight is the starting height; endheight is the chain head if not specified.\n"
+    "Mode 1: startheight is the number of blocks back from endheight or the chain head if not specified.",
+    {
+        {"mode", RPCArg::Type::NUM, RPCArg::Optional::NO, "0 (range mode) or 1 (lookback mode)."},
+        {"startheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "In mode 0, the starting block height; in mode 1, the number of blocks back."},
+        {"endheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The ending block height (defaults to the chain head)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "general", "", {{RPCResult::Type::ELISION, "", "general stats; see source"}}},
+            {RPCResult::Type::OBJ, "counts", "", {{RPCResult::Type::ELISION, "", "counts; see source"}}},
+            {RPCResult::Type::OBJ, "totals", "", {{RPCResult::Type::ELISION, "", "totals; see source"}}},
+            {RPCResult::Type::OBJ, "averages", "", {{RPCResult::Type::ELISION, "", "averages; see source"}}},
+            {RPCResult::Type::OBJ_DYN, "versions", "Fraction of blocks per client version",
+                {{RPCResult::Type::NUM, "version", "Fraction of blocks attributable to this client version"}}},
+            {RPCResult::Type::OBJ_DYN, "cpids", "Fraction of blocks per CPID",
+                {{RPCResult::Type::NUM, "cpid", "Fraction of blocks attributable to this CPID"}}},
+            {RPCResult::Type::OBJ_DYN, "orgs", "Fraction of blocks per organization",
+                {{RPCResult::Type::NUM, "org", "Fraction of blocks attributable to this organization"}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("getblockstats", "0 1000000 1001000") +
+        HelpExampleCli("getblockstats", "1 5000") +
+        HelpExampleRpc("getblockstats", "0, 1000000, 1001000")},
+};
+const RPCHelpMan& rpc_getblockstats_helpman() { return rpc_getblockstats_help; }
+
 UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getblockstats",
-        "Show stats on what wallets and cpids staked recent blocks.\n"
-        "\n"
-        "Mode 0: startheight is the starting height; endheight is the chain head if not specified.\n"
-        "Mode 1: startheight is the number of blocks back from endheight or the chain head if not specified.",
-        {
-            {"mode", RPCArg::Type::NUM, RPCArg::Optional::NO, "0 (range mode) or 1 (lookback mode)."},
-            {"startheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "In mode 0, the starting block height; in mode 1, the number of blocks back."},
-            {"endheight", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The ending block height (defaults to the chain head)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::OBJ, "general", "", {{RPCResult::Type::ELISION, "", "general stats; see source"}}},
-                {RPCResult::Type::OBJ, "counts", "", {{RPCResult::Type::ELISION, "", "counts; see source"}}},
-                {RPCResult::Type::OBJ, "totals", "", {{RPCResult::Type::ELISION, "", "totals; see source"}}},
-                {RPCResult::Type::OBJ, "averages", "", {{RPCResult::Type::ELISION, "", "averages; see source"}}},
-                {RPCResult::Type::OBJ_DYN, "versions", "Fraction of blocks per client version",
-                    {{RPCResult::Type::NUM, "version", "Fraction of blocks attributable to this client version"}}},
-                {RPCResult::Type::OBJ_DYN, "cpids", "Fraction of blocks per CPID",
-                    {{RPCResult::Type::NUM, "cpid", "Fraction of blocks attributable to this CPID"}}},
-                {RPCResult::Type::OBJ_DYN, "orgs", "Fraction of blocks per organization",
-                    {{RPCResult::Type::NUM, "org", "Fraction of blocks attributable to this organization"}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("getblockstats", "0 1000000 1001000") +
-            HelpExampleCli("getblockstats", "1 5000") +
-            HelpExampleRpc("getblockstats", "0, 1000000, 1001000")},
-    };
+    const RPCHelpMan& help = rpc_getblockstats_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -355,30 +358,33 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
     return result1;
 }
 
+static const RPCHelpMan rpc_exportstats_help{
+    "exportstats1",
+    "Export aggregated block statistics to a file under the reports directory.",
+    {
+        {"maxblocks", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum number of blocks to scan (default: 805)."},
+        {"aggregate", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Smoothing window size; must be a positive even number (default: 23)."},
+        {"endblock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Ending block height (default: chain head)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "file", "Path to the written report file"},
+            {RPCResult::Type::NUM, "points", "Number of aggregated points written"},
+            {RPCResult::Type::NUM, "smoothing", "Smoothing window applied"},
+            {RPCResult::Type::NUM, "blockcount", "Number of blocks scanned"},
+        }},
+    RPCExamples{
+        HelpExampleCli("exportstats1", "805 23") +
+        HelpExampleRpc("exportstats1", "805, 23")},
+};
+const RPCHelpMan& rpc_exportstats_helpman() { return rpc_exportstats_help; }
+
 UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "exportstats1",
-        "Export aggregated block statistics to a file under the reports directory.",
-        {
-            {"maxblocks", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Maximum number of blocks to scan (default: 805)."},
-            {"aggregate", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Smoothing window size; must be a positive even number (default: 23)."},
-            {"endblock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Ending block height (default: chain head)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "file", "Path to the written report file"},
-                {RPCResult::Type::NUM, "points", "Number of aggregated points written"},
-                {RPCResult::Type::NUM, "smoothing", "Smoothing window applied"},
-                {RPCResult::Type::NUM, "blockcount", "Number of blocks scanned"},
-            }},
-        RPCExamples{
-            HelpExampleCli("exportstats1", "805 23") +
-            HelpExampleRpc("exportstats1", "805, 23")},
-    };
+    const RPCHelpMan& help = rpc_exportstats_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
     /* count, high */
@@ -565,32 +571,35 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
     return result1;
 }
 
+static const RPCHelpMan rpc_getrecentblocks_help{
+    "getrecentblocks",
+    "Show list of recent block hashes with optional details.\n"
+    "\n"
+    "detail 0     -> height and hash dict\n"
+    "detail 1,2   -> text data from blockindex\n"
+    "detail 20,21 -> text data from index and block\n"
+    "detail 100   -> json from index\n"
+    "detail 120   -> json from index and block",
+    {
+        {"detail", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Detail level (0, 1, 2, 20, 21, 100, or 120). See description."},
+        {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Maximum number of recent blocks to return."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of block height (as string) to per-block detail",
+        {
+            {RPCResult::Type::ELISION, "", "STR for detail<100, OBJ for detail>=100; see description"},
+        }},
+    RPCExamples{
+        HelpExampleCli("getrecentblocks", "0 10") +
+        HelpExampleCli("getrecentblocks", "100 5") +
+        HelpExampleRpc("getrecentblocks", "0, 10")},
+};
+const RPCHelpMan& rpc_getrecentblocks_helpman() { return rpc_getrecentblocks_help; }
+
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getrecentblocks",
-        "Show list of recent block hashes with optional details.\n"
-        "\n"
-        "detail 0     -> height and hash dict\n"
-        "detail 1,2   -> text data from blockindex\n"
-        "detail 20,21 -> text data from index and block\n"
-        "detail 100   -> json from index\n"
-        "detail 120   -> json from index and block",
-        {
-            {"detail", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "Detail level (0, 1, 2, 20, 21, 100, or 120). See description."},
-            {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
-                "Maximum number of recent blocks to return."},
-        },
-        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of block height (as string) to per-block detail",
-            {
-                {RPCResult::Type::ELISION, "", "STR for detail<100, OBJ for detail>=100; see description"},
-            }},
-        RPCExamples{
-            HelpExampleCli("getrecentblocks", "0 10") +
-            HelpExampleCli("getrecentblocks", "100 5") +
-            HelpExampleRpc("getrecentblocks", "0, 10")},
-    };
+    const RPCHelpMan& help = rpc_getrecentblocks_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
