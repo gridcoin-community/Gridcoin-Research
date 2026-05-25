@@ -1150,18 +1150,92 @@ BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
     });
 }
 
-// PSGT commands (Partially Signed Gridcoin Transaction, introduced in #2877 G).
+// Tier 1b — researcher/beacon/MRC (17 commands).
+BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
+{
+    check_help_renders({
+        {"advertisebeacon",        &advertisebeacon_helpman},
+        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
+        {"beaconauth",             &beaconauth_helpman},
+        {"revokebeacon",           &revokebeacon_helpman},
+        {"beaconreport",           &beaconreport_helpman},
+        {"beaconconvergence",      &beaconconvergence_helpman},
+        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
+        {"beaconstatus",           &beaconstatus_helpman},
+        {"beaconaudit",            &beaconaudit_helpman},
+        {"getmrcinfo",             &getmrcinfo_helpman},
+        {"createmrcrequest",       &createmrcrequest_helpman},
+        {"magnitude",              &magnitude_helpman},
+        {"explainmagnitude",       &explainmagnitude_helpman},
+        {"lifetime",               &lifetime_helpman},
+        {"resetcpids",             &resetcpids_helpman},
+        {"rainbymagnitude",        &rainbymagnitude_helpman},
+        {"currentcontractaverage", &currentcontractaverage_helpman},
+    });
+}
+
+// Tier 1 F3 — wallet read-only queries (12 commands).
+BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
+{
+    check_help_renders({
+        {"getinfo",                 &getinfo_helpman},
+        {"getwalletinfo",           &getwalletinfo_helpman},
+        {"listaddressgroupings",    &listaddressgroupings_helpman},
+        {"getreceivedbyaddress",    &getreceivedbyaddress_helpman},
+        {"getbalance",              &getbalance_helpman},
+        {"getbalancedetail",        &getbalancedetail_helpman},
+        {"getunconfirmedbalance",   &getunconfirmedbalance_helpman},
+        {"listreceivedbyaddress",   &listreceivedbyaddress_helpman},
+        {"listtransactions",        &listtransactions_helpman},
+        {"liststakes",              &liststakes_helpman},
+        {"gettransaction",          &gettransaction_helpman},
+        {"getrawwallettransaction", &getrawwallettransaction_helpman},
+    });
+}
+
+// Tier 1 F4 — wallet mgmt + send (13 commands).
+BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
+{
+    check_help_renders({
+        {"sendtoaddress",   &sendtoaddress_helpman},
+        {"sendfrom",        &sendfrom_helpman},
+        {"sendmany",        &sendmany_helpman},
+        {"backupwallet",    &backupwallet_helpman},
+        {"keypoolrefill",   &keypoolrefill_helpman},
+        {"walletdiagnose",  &walletdiagnose_helpman},
+        {"encryptwallet",   &encryptwallet_helpman},
+        {"reservebalance",  &reservebalance_helpman},
+        {"checkwallet",     &checkwallet_helpman},
+        {"repairwallet",    &repairwallet_helpman},
+        {"resendtx",        &resendtx_helpman},
+        {"burn",            &burn_helpman},
+        {"upgradewallet",   &upgradewallet_helpman},
+    });
+}
+
+// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2,
+// lifted to helpman accessors via the straggler integration in PR M).
+BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
+{
+    check_help_renders({
+        {"abandontransaction", &abandontransaction_helpman},
+        {"inspectwalletstate", &inspectwalletstate_helpman},
+    });
+}
+
+// PSGT commands (Partially Signed Gridcoin Transaction, lifted to helpman
+// accessors via the straggler integration in PR M).
 BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
 {
-    check_straggler_help_renders({
-        {"createpsgt",             &createpsgt},
-        {"decodepsgt",             &decodepsgt},
-        {"combinepsgt",            &combinepsgt},
-        {"finalizepsgt",           &finalizepsgt},
-        {"walletprocesspsgt",      &walletprocesspsgt},
-        {"utxoupdatepsgt",         &utxoupdatepsgt},
-        {"converttopsgt",          &converttopsgt},
-        {"walletcreatefundedpsgt", &walletcreatefundedpsgt},
+    check_help_renders({
+        {"createpsgt",             &createpsgt_helpman},
+        {"decodepsgt",             &decodepsgt_helpman},
+        {"combinepsgt",            &combinepsgt_helpman},
+        {"finalizepsgt",           &finalizepsgt_helpman},
+        {"walletprocesspsgt",      &walletprocesspsgt_helpman},
+        {"utxoupdatepsgt",         &utxoupdatepsgt_helpman},
+        {"converttopsgt",          &converttopsgt_helpman},
+        {"walletcreatefundedpsgt", &walletcreatefundedpsgt_helpman},
     });
 }
 
