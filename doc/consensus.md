@@ -87,6 +87,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
+| `PendingPoolRetention` | 28,800 blocks (~20 days) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `src/chainparams.cpp:61-91` (mainnet), `src/chainparams.cpp:184-213`
 > (testnet)
@@ -660,14 +661,16 @@ Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/178
 
 ### 11.1 New Contract Types
 
-Two new contract types share a single `PoolRegistry` backed by the standard `RegistryDB` template (history-tracked, reorg-safe). Both are gated by `IsV15Enabled` in `PoolRegistry::BlockValidate`; pre-V15 they are silently invalid.
+Two new contract types share a single `PoolRegistry` backed by the standard `RegistryDB` template (history-tracked, reorg-safe). Both are gated by `IsV15Enabled` in `PoolRegistry::ValidateAtHeight` (called from both `Validate` at mempool admission and `BlockValidate` at block validation); pre-V15 they are silently invalid in both paths.
 
 | Contract Type | Authority | Payload | Effect |
 |---|---|---|---|
-| `POOL_REGISTER` | Operator-self-signed (no master key) | CPID, name, URL, operator pubkey, signature | Lands in `PENDING` (or `DELETED` on REMOVE for operator self-withdrawal). Takeover defense: on re-registration of an existing CPID, signature must verify against the prior operator key. |
-| `POOL_APPROVE` | Master-key (via `Contract::RequiresMasterKey()`) | CPID only (version + cpid) | ADD flips to `ACTIVE`; REMOVE flips to `DELETED`. May also pre-stage placeholders for unknown CPIDs (status `ACTIVE`, no operator key) for future foundation-managed entries. |
+| `POOL_REGISTER` | Operator-self-signed (no master key) | CPID, name, URL, operator pubkey, signature | Lands in `PENDING` (or `DELETED` on REMOVE for operator self-withdrawal). The takeover defense applies to **both ADD and REMOVE**: on re-registration of an existing CPID, the signature must verify against the prior operator key on file. Without this, anyone could broadcast REMOVE for any pool and burn the slot. |
+| `POOL_APPROVE` | Master-key (via `Contract::RequiresMasterKey()`) | CPID + (for `OPEN`) authorized operator pubkey | ADD flips to `ACTIVE`. REMOVE flips to `DELETED`. **OPEN** pre-authorizes a specific operator pubkey to claim a builtin pool slot — status is preserved from the prior chained entry; `Pool::m_authorized_operator_key` and `m_authorization_height` are set on the new chained entry. May also pre-stage placeholders for unknown CPIDs (foundation-managed entries; status `ACTIVE` on ADD, `DELETED` on REMOVE/OPEN). |
 
-> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, dispatch in `src/gridcoin/contract/contract.cpp`.
+The `ContractAction` enum gains `OPEN` (parsed/printed as `"O"`); ADD and REMOVE keep their existing wire ordinals (1 and 2). The conditional serialization of `m_authorized_operator_key` only on OPEN means ADD/REMOVE payloads keep the original `(version, cpid) = 20 bytes` wire shape; OPEN extends to `(version, cpid, pubkey) = 53 bytes`.
+
+> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, `src/gridcoin/contract/payload.h`, dispatch in `src/gridcoin/contract/contract.cpp`.
 
 ### 11.2 Grandfathered Builtins
 
@@ -677,17 +680,73 @@ Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns exactly the lega
 
 > **Source:** `src/gridcoin/pool.cpp` `BuiltinPoolSeeds()` / `SeedBuiltinPools()`.
 
-### 11.3 Builtin Opportunistic-Claim Protection
+### 11.3 Builtin Sticky-Claim Protection (Path 1 / Path 2)
 
-A naive "invalid existing key == first POOL_REGISTER claims it" semantic would let any peer seize ownership of a grandfathered builtin (e.g. grcpool.com) at the first block past V15 activation. To prevent this, `BlockValidate` rejects POOL_REGISTER ADD on a CPID that is *both* in `PoolRegistry::m_builtin_seeds` *and* still carries an invalid operator key. The legitimate-claim flow for the 5 existing pools is:
+Builtin pool slots are **permanently sticky** — every `POOL_REGISTER` on a builtin CPID is gated regardless of whether the slot was ever claimed before. The gate is implemented as a status-driven Path 1 / Path 2 split in `PoolRegistry::VerifyRegisterAuth` (called by both `Validate` and `BlockValidate`):
 
-1. Foundation submits `POOL_APPROVE REMOVE` for the builtin CPID (flips to `DELETED`).
-2. Pool operator submits `POOL_REGISTER ADD` (existing entry is `DELETED`, so the takeover check short-circuits and the payload-key is authoritative).
-3. Foundation submits `POOL_APPROVE ADD` to flip to `ACTIVE`.
+- **Path 1 — operational claimed builtin** (`m_status != DELETED && m_operator_key.IsValid()`). The slot has a live operator. Signature must verify against the existing operator key (rotation / withdrawal / update / takeover defense).
+- **Path 2 — everything else** (fresh unclaimed seed, post-operator-REMOVE, post-Foundation-REMOVE of a previously-claimed builtin). The slot requires a fresh `POOL_APPROVE OPEN` authorization:
+  1. `existing->m_authorized_operator_key.IsValid()` — Foundation must have OPEN'd; else reject.
+  2. `at_height ≤ existing->m_authorization_height + consensus.PendingPoolRetention` — authorization not expired.
+  3. `existing->m_authorized_operator_key == payload->m_operator_key` — payload key matches the pre-authorization.
 
-The "invalid key == claimable" semantic continues to apply to *foundation-pre-staged unknown CPIDs* (which are never builtins), supporting first-class onboarding of brand-new pools.
+If all three hold, the payload's own key authenticates the first claim (the new entry's operator key is set from the payload), and the auth fields are cleared on the chained entry — single-use consumption.
 
-> **Source:** `src/gridcoin/pool.cpp` `BlockValidate` takeover-check block; `pool_tests.cpp` `is_builtin_recognizes_every_seeded_cpid`.
+Discriminating on `m_status` rather than on `m_operator_key.IsValid()` closes a regression hole: a previously-claimed builtin that the Foundation later REMOVEs retains `K_real` on the propagated DELETED entry. A key-validity-only check would treat that state as "fall through to standard takeover" but the `!= DELETED` filter would exclude the entry, opening an identity-hijack window. The status-driven split sends that case to Path 2 (sticky), correctly requiring fresh OPEN authorization for re-claim.
+
+#### Legitimate-claim flows for a builtin (e.g. `grcpool.com`)
+
+Both variants are valid; the 3-step flow is preferred for wallet UX (no DELETED window where BOINC mode detection drops the pool).
+
+**4-step flow** (REMOVE first):
+
+1. Pre-V15: builtin seeded `ACTIVE`, empty operator key.
+2. Post-V15: Foundation `POOL_APPROVE REMOVE` → status `DELETED`.
+3. Opportunistic `POOL_REGISTER ADD` → Path 2 rejects (no auth).
+4. Foundation `POOL_APPROVE OPEN` with `K_real` → status stays `DELETED`, auth fields set.
+5. Real operator `POOL_REGISTER ADD` signed by `K_real`, payload key `K_real` → Path 2 accepts; status `PENDING`; auth cleared.
+6. Foundation `POOL_APPROVE ADD` → status `ACTIVE`.
+
+**3-step flow** (skip REMOVE — preferred):
+
+1. Pre-V15: builtin seeded `ACTIVE`, empty operator key.
+2. Post-V15: Foundation `POOL_APPROVE OPEN` with `K_real` directly on the still-`ACTIVE` seed → status stays `ACTIVE`, auth fields set. Wallets continue to see the pool as active during the transition.
+3. Real operator `POOL_REGISTER ADD` signed by `K_real` → Path 2 accepts; status `PENDING`. Wallets briefly see PENDING.
+4. Foundation `POOL_APPROVE ADD` → status `ACTIVE`.
+
+If step 5 (4-step) / step 3 (3-step) doesn't happen within `consensus.PendingPoolRetention` blocks of the OPEN, the authorization expires at query time and the sticky-reject re-engages. Foundation can re-issue OPEN to refresh.
+
+#### Authorization-field propagation
+
+`m_authorized_operator_key` and `m_authorization_height` propagate through chained entries unchanged in `ApplyApprove` ADD/REMOVE. Only `ApplyApprove` OPEN sets them; only a successful `ApplyRegister` ADD that consumed the authorization clears them. This decouples auth validity from `m_height`, so Foundation admin actions between OPEN and the operator's claim don't shift the retention window. `ApplyRegister` constructs a fresh `Pool` from the payload, so the new entry starts with empty auth fields — implicit single-use clearing.
+
+#### Non-builtin OPEN
+
+`POOL_APPROVE OPEN` is admissible on any CPID, but the Path 2 sticky gate fires only on builtins. Foundation OPEN on a non-builtin CPID chains an entry with the auth fields set but no consensus rule treats them as required — non-builtin claims go through the standard first-claim path. Left admissible (rather than rejected) to support future extensions (e.g. curated whitelist mode).
+
+> **Source:** `src/gridcoin/pool.cpp` `VerifyRegisterAuth`, `ValidateAtHeight`; `src/gridcoin/contract/payload.h` `ContractAction::OPEN`.
+
+### 11.3.1 PENDING + OPEN Retention
+
+`Consensus::Params::PendingPoolRetention` (default `28800` blocks ≈ 20 days at ~60s spacing) bounds two things:
+
+- **PENDING entries** become query-time expired once `at_height > entry.m_height + retention`. The chained entry remains in storage but consensus treats it as absent for the takeover-check; a fresh `POOL_REGISTER ADD` from any key can supersede an expired PENDING **on a non-builtin slot**. On a builtin in Path 1 (claimed-operational), expired PENDING is NOT transparent — claimed-builtin protection persists regardless of retention.
+- **OPEN authorizations** become query-time expired once `at_height > entry.m_authorization_height + retention`. Path 2 rejects POOL_REGISTER with an expired auth.
+
+Both checks are pure functions of stored fields — no state mutation at the expiration boundary. Reorg back across the boundary naturally surfaces the entry as live again. This explicitly avoids the beacon-style stateful expiration which mutates state at superblock boundaries and requires reorg-resurrection logic.
+
+#### Hidden `-pendingpoolretention` override
+
+For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~20 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. **CONSENSUS-AFFECTING:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries and **will fork off the network** if used on mainnet / public testnet. Mirrors the existing `-blockv15height` pattern in scope and warning.
+
+> **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
+
+### 11.3.2 Operator Handbook (practical guidance)
+
+- **Submit ADD within ~7 days of receiving Foundation OPEN.** A `POOL_REGISTER ADD` held in mempool through unusual block-inclusion delay can land at a height past `auth_height + retention` → rejected by Path 2 → 100 GRC burn for a tx the chain rejects (not actually burned since rejected at mempool / BlockValidate, but operator wastes fee-estimation + signing work). At 28800-block retention the practical risk is low; the guidance is conservative.
+- **Foundation re-OPENs if no claim within ~21 days.** Keeps a comfortable margin before retention expires.
+- **Do not bundle OPEN + operator-ADD + Foundation-ratify in the same block.** Order-dependence within a block is fragile — wrong tx ordering produces invalid blocks. Stage across blocks: OPEN in block N, operator's ADD in N+1, ratify in N+2.
+- **Foundation does not `POOL_APPROVE ADD` before the operator's `POOL_REGISTER ADD` lands.** Doing so creates a zombie ACTIVE-with-no-operator-key state (the protocol doesn't enforce a PENDING precondition on `POOL_APPROVE ADD`); wallets would route BOINC users to a slot with no aggregation service. Order matters; always ratify a real PENDING.
 
 ### 11.4 Active Vote Weight Migration
 
