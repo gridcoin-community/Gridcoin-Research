@@ -1614,23 +1614,36 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
 
 UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
-                "\nList balances by receiving address.\n"
-                "\nArguments:\n"
-                "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty  (bool, optional, default=false) Whether to include addresses that haven't received any payments.\n"
-                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-                "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
-                "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
-                "    \"amount\" : x.xxx,                  (numeric) The total amount in GRC received by the address\n"
-                "\nExamples:\n"
-                );
+    static const RPCHelpMan help{
+        "listreceivedbyaddress",
+        "List balances by receiving address.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The minimum number of confirmations before payments are included (default: 1)."},
+            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include addresses that haven't received any payments (default: false)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                            "Only returned if imported addresses were involved in transaction."},
+                        {RPCResult::Type::STR, "address", "The receiving Gridcoin address."},
+                        {RPCResult::Type::STR, "account", "The account of the receiving address (deprecated; default account is \"\")."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC received by the address."},
+                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction included."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listreceivedbyaddress", "") +
+            HelpExampleCli("listreceivedbyaddress", "6 true") +
+            HelpExampleRpc("listreceivedbyaddress", "6, true, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
