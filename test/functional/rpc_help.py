@@ -16,10 +16,20 @@ Discovery model
 Rather than maintaining a hand-curated list of converted commands (which
 goes stale the moment a new conversion PR merges), the test walks the help
 RPC's categories to enumerate every command the daemon advertises, then
-classifies each as RPCHelpMan-converted or legacy by inspecting its
-`help <name>` output. Converted commands -- the ones whose help contains
-both `Result:` and `Examples:` sections -- get the full pattern check.
-Legacy commands are logged and skipped.
+classifies each as RPCHelpMan-converted, legacy, or category-alias by
+inspecting its `help <name>` output. Converted commands -- the ones whose
+help contains both `Result:` and `Examples:` sections -- get the full
+pattern check. Legacy commands are logged and skipped.
+
+Category-alias commands cover an awkward Gridcoin-specific case: the help
+RPC routes <name> lookups through a category check first, so calling
+`help <name>` for a command whose name collides with a category name (e.g.
+`network`, which is both a real RPC and the network category) returns the
+category listing instead of the command's own help. classify_command()
+detects this (first non-blank line of the help text doesn't start with
+the command name) and short-circuits to 'category_alias', skipping the
+per-command pattern check. The command itself may still be converted --
+it just can't be validated through the help RPC alone.
 
 That means a reviewer validating a pending RPCHelpMan PR (#2958-#2975 as
 of this writing, plus future ones) needs only:
@@ -173,15 +183,40 @@ class RpcHelpTest(GridcoinTestFramework):
                     names.add(cand)
         return sorted(names)
 
-    def is_converted(self, node, name):
-        """Return (True, help_text) if `help <name>` looks RPCHelpMan-formatted."""
+    def classify_command(self, node, name):
+        """Classify `name` as 'converted', 'legacy', or 'category_alias'.
+
+        Returns a (status, help_text) tuple. Per-command pattern checks only
+        run for 'converted'. 'category_alias' covers the case where Gridcoin's
+        help RPC returns a category listing instead of the command's own help
+        because `name` collides with one of the category names -- the only
+        current collision is `network`, which is both a real RPCHelpMan-
+        converted command AND the name of the network category. Without
+        special handling, our format inspection would misclassify it as
+        legacy.
+
+        Detection heuristic: a real command's help (whether RPCHelpMan or
+        legacy throw-runtime_error) always starts with the command name in
+        the synopsis line ("name [arg1] [arg2]\\n..."). A category listing
+        starts with whichever command sorts first in that category, never
+        with `name` itself.
+        """
         try:
             text = node.help(name)
         except Exception:
-            return False, ""
+            return "legacy", ""
         if not isinstance(text, str):
-            return False, ""
-        return all(marker in text for marker in HELPMAN_MARKERS), text
+            return "legacy", ""
+        first_line = next((ln for ln in text.splitlines() if ln.strip()), "")
+        if not first_line.startswith(name):
+            # help returned a category listing, not the command's own help.
+            # Skip per-command checks for this name -- the command may still
+            # be RPCHelpMan-converted (network is), but we can't inspect its
+            # format through the help RPC alone.
+            return "category_alias", text
+        if all(marker in text for marker in HELPMAN_MARKERS):
+            return "converted", text
+        return "legacy", text
 
     # --- Per-command pattern check -----------------------------------------
 
@@ -237,26 +272,35 @@ class RpcHelpTest(GridcoinTestFramework):
 
         converted = []
         legacy = []
+        category_aliases = []
         for name in all_names:
-            ok, text = self.is_converted(node, name)
-            if ok:
+            status, text = self.classify_command(node, name)
+            if status == "converted":
                 converted.append((name, text))
-            else:
+            elif status == "legacy":
                 legacy.append(name)
+            else:  # category_alias
+                category_aliases.append(name)
 
         self.log.info(
-            "Discovered %d total RPCs: %d RPCHelpMan-converted, %d legacy",
+            "Discovered %d total RPCs: %d RPCHelpMan-converted, %d legacy, "
+            "%d category-alias (skipped: %s)",
             len(all_names), len(converted), len(legacy),
+            len(category_aliases),
+            ", ".join(category_aliases) if category_aliases else "(none)",
         )
 
         # Regression guard: fail loudly if we lost coverage on previously-
         # converted commands (catches accidental reverts to legacy or a
-        # discovery walk that broke).
+        # discovery walk that broke). category-alias commands are excluded
+        # from this count because we can't introspect their help text from
+        # the help RPC alone (see classify_command).
         assert len(converted) >= MIN_CONVERTED_COMMANDS, (
             f"Only {len(converted)} converted commands discovered; "
             f"expected at least {MIN_CONVERTED_COMMANDS}. "
             f"Either a conversion was reverted or discovery is broken.\n"
-            f"Legacy commands seen: {legacy}"
+            f"Legacy commands seen: {legacy}\n"
+            f"Category-alias commands seen: {category_aliases}"
         )
 
         # Pattern check every converted command.
