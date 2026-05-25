@@ -549,13 +549,29 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
 
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
-    if (fHelp)
-        throw runtime_error(
-                "listaddressgroupings\n"
-                "\n"
-                "Lists groups of addresses which have had their common ownership\n"
-                "made public by common use as inputs or as the resulting change\n"
-                "in past transactions\n");
+    static const RPCHelpMan help{
+        "listaddressgroupings",
+        "Lists groups of addresses which have had their common ownership made public by "
+        "common use as inputs or as the resulting change in past transactions.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ARR, "", "A grouping of addresses",
+                    {
+                        {RPCResult::Type::ARR_FIXED, "", "address/balance/account triple",
+                            {
+                                {RPCResult::Type::STR, "address", "The Gridcoin address."},
+                                {RPCResult::Type::STR_AMOUNT, "balance", "The balance attributed to the address."},
+                                {RPCResult::Type::STR, "account", /*optional=*/true, "Account name (deprecated; present when set)."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listaddressgroupings", "") +
+            HelpExampleRpc("listaddressgroupings", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
