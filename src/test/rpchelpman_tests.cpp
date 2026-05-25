@@ -648,11 +648,39 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
 // with fHelp=true. Runs fixture-free — the help-gate fires before any global
 // state is touched.
 BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
+// Shared helper for tier-level help-rendering tests. Each converted command's
+// body throws std::runtime_error(help.ToString()) when fHelp=true, before
+// touching any global state. Iterating with empty params is therefore safe
+// fixture-free.
+namespace {
+using HelpFn = UniValue (*)(const UniValue&, bool);
+
+void check_help_renders(const std::vector<std::pair<const char*, HelpFn>>& cases)
 {
     const UniValue empty(UniValue::VARR);
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+} // namespace
 
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
+// Tier 1a — blockchain-core (21 commands).
+BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
+{
+    check_help_renders({
         {"getbestblockhash",        &getbestblockhash},
         {"getblockcount",           &getblockcount},
         {"getdifficulty",           &getdifficulty},
@@ -694,107 +722,158 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
 // Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
 // commands. Each fHelp=true throw happens before any globals are touched, so this
 // runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
+    });
+}
+
+// Tier 1c — snapshots / registries / generic-data (14 commands).
 BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
+{
+    check_help_renders({
+        {"superblocks",              &superblocks},
+        {"superblockage",            &superblockage},
+        {"superblockaverage",        &superblockaverage},
+        {"parselegacysb",            &parselegacysb},
+        {"listscrapers",             &listscrapers},
+        {"listprojects",             &listprojects},
+        {"projects",                 &projects},
+        {"getautogreylist",          &getautogreylist},
+        {"listsidestakes",           &listsidestakes},
+        {"listmandatorysidestakes",  &listmandatorysidestakes},
+        {"listprotocolentries",      &listprotocolentries},
+        {"readdata",                 &readdata},
+        {"writedata",                &writedata},
+        {"dumpcontracts",            &dumpcontracts},
+    });
+}
+
+// Tier 1 D1 — server / misc / dataacq (8 commands).
 BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
+{
+    check_help_renders({
+        {"help",            &help},
+        {"stop",            &stop},
+        {"logging",         &logging},
+        {"listsettings",    &listsettings},
+        {"changesettings",  &changesettings},
+        {"getblockstats",   &rpc_getblockstats},
+        {"exportstats1",    &rpc_exportstats},
+        {"getrecentblocks", &rpc_getrecentblocks},
+    });
+}
+
+// Tier 1 D2 — net.cpp remaining (12 commands).
 BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
+{
+    check_help_renders({
+        {"getconnectioncount", &getconnectioncount},
+        {"getnodeaddresses",   &getnodeaddresses},
+        {"getaddednodeinfo",   &getaddednodeinfo},
+        {"listbanned",         &listbanned},
+        {"clearbanned",        &clearbanned},
+        {"ping",               &ping},
+        {"getpeerinfo",        &getpeerinfo},
+        {"getnettotals",       &getnettotals},
+        {"listalerts",         &listalerts},
+        {"sendalert",          &sendalert},
+        {"sendalert2",         &sendalert2},
+        {"getnetworkinfo",     &getnetworkinfo},
+    });
+}
+
+// Tier 1 D3 — voting.cpp (6 commands).
 BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
+{
+    check_help_renders({
+        {"listpolls",            &listpolls},
+        {"getpollresults",       &getpollresults},
+        {"getvotingclaim",       &getvotingclaim},
+        {"votebyid",             &votebyid},
+        {"votedetails",          &votedetails},
+        {"testpollnotification", &testpollnotification},
+    });
+}
+
+// Tier 1 E1 — mining.cpp (7 commands).
 BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
+{
+    check_help_renders({
+        {"getstakinginfo",          &getstakinginfo},
+        {"getlaststake",            &getlaststake},
+        {"auditsnapshotaccrual",    &auditsnapshotaccrual},
+        {"auditsnapshotaccruals",   &auditsnapshotaccruals},
+        {"listresearcheraccounts",  &listresearcheraccounts},
+        {"inspectaccrualsnapshot",  &inspectaccrualsnapshot},
+        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile},
+    });
+}
+
+// Tier 1 E2 — scrapers (9 commands).
 BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
+{
+    check_help_renders({
+        {"sendscraperfilemanifest", &sendscraperfilemanifest},
+        {"savescraperfilemanifest", &savescraperfilemanifest},
+        {"deletecscrapermanifest",  &deletecscrapermanifest},
+        {"archivelog",              &archivelog},
+        {"convergencereport",       &convergencereport},
+        {"testnewsb",               &testnewsb},
+        {"scraperreport",           &scraperreport},
+        {"listmanifests",           &listmanifests},
+        {"getmpart",                &getmpart},
+    });
+}
+
+// Tier 1 E3 — rawtransaction + htlc (16 commands).
 BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
+{
+    check_help_renders({
+        {"getrawtransaction",           &getrawtransaction},
+        {"listunspent",                 &listunspent},
+        {"consolidateunspent",          &consolidateunspent},
+        {"consolidatemsunspent",        &consolidatemsunspent},
+        {"scanforunspent",              &scanforunspent},
+        {"createrawtransaction",        &createrawtransaction},
+        {"fundrawtransaction",          &fundrawtransaction},
+        {"decoderawtransaction",        &decoderawtransaction},
+        {"decodescript",                &decodescript},
+        {"signrawtransactionwithkey",   &signrawtransactionwithkey},
+        {"signrawtransactionwithwallet", &signrawtransactionwithwallet},
+        {"signrawtransaction",          &signrawtransaction},
+        {"sendrawtransaction",          &sendrawtransaction},
+        {"createhtlc",                  &createhtlc},
+        {"claimhtlc",                   &claimhtlc},
+        {"refundhtlc",                  &refundhtlc},
+    });
+}
+
+// Tier 1 F1 — rpcdump (4 commands).
 BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
+{
+    check_help_renders({
+        {"importprivkey", &importprivkey},
+        {"importwallet",  &importwallet},
+        {"dumpprivkey",   &dumpprivkey},
+        {"dumpwallet",    &dumpwallet},
+    });
+}
+
+// Tier 1 Deprecated — wallet account-system commands + `vote` wrapper (9 commands).
+// In addition to the standard name/Examples checks, each command's help text
+// must contain the literal "DEPRECATED" banner per the conversion convention.
 BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
 {
     const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
     const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"superblocks", superblocks},
-        {"superblockage", superblockage},
-        {"superblockaverage", superblockaverage},
-        {"parselegacysb", parselegacysb},
-        {"listscrapers", listscrapers},
-        {"listprojects", listprojects},
-        {"projects", projects},
-        {"getautogreylist", getautogreylist},
-        {"listsidestakes", listsidestakes},
-        {"listmandatorysidestakes", listmandatorysidestakes},
-        {"listprotocolentries", listprotocolentries},
-        {"readdata", readdata},
-        {"writedata", writedata},
-        {"dumpcontracts", dumpcontracts},
-    };
-
-        {"help", &help},
-        {"stop", &stop},
-        {"logging", &logging},
-        {"listsettings", &listsettings},
-        {"changesettings", &changesettings},
-        {"getblockstats", &rpc_getblockstats},
-        {"exportstats1", &rpc_exportstats},
-        {"getrecentblocks", &rpc_getrecentblocks},
-        {"getconnectioncount", &getconnectioncount},
-        {"getnodeaddresses", &getnodeaddresses},
-        {"getaddednodeinfo", &getaddednodeinfo},
-        {"listbanned", &listbanned},
-        {"clearbanned", &clearbanned},
-        {"ping", &ping},
-        {"getpeerinfo", &getpeerinfo},
-        {"getnettotals", &getnettotals},
-        {"listalerts", &listalerts},
-        {"sendalert", &sendalert},
-        {"sendalert2", &sendalert2},
-        {"getnetworkinfo", &getnetworkinfo},
-        {"listpolls", &listpolls},
-        {"getpollresults", &getpollresults},
-        {"getvotingclaim", &getvotingclaim},
-        {"votebyid", &votebyid},
-        {"votedetails", &votedetails},
-        {"testpollnotification", &testpollnotification},
-        {"getstakinginfo", &getstakinginfo},
-        {"getlaststake", &getlaststake},
-        {"auditsnapshotaccrual", &auditsnapshotaccrual},
-        {"auditsnapshotaccruals", &auditsnapshotaccruals},
-        {"listresearcheraccounts", &listresearcheraccounts},
-        {"inspectaccrualsnapshot", &inspectaccrualsnapshot},
-        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile},
-        {"sendscraperfilemanifest", &sendscraperfilemanifest},
-        {"savescraperfilemanifest", &savescraperfilemanifest},
-        {"deletecscrapermanifest", &deletecscrapermanifest},
-        {"archivelog", &archivelog},
-        {"convergencereport", &convergencereport},
-        {"testnewsb", &testnewsb},
-        {"scraperreport", &scraperreport},
-        {"listmanifests", &listmanifests},
-        {"getmpart", &getmpart},
-        {"getrawtransaction", &getrawtransaction},
-        {"listunspent", &listunspent},
-        {"consolidateunspent", &consolidateunspent},
-        {"consolidatemsunspent", &consolidatemsunspent},
-        {"scanforunspent", &scanforunspent},
-        {"createrawtransaction", &createrawtransaction},
-        {"fundrawtransaction", &fundrawtransaction},
-        {"decoderawtransaction", &decoderawtransaction},
-        {"decodescript", &decodescript},
-        {"signrawtransactionwithkey", &signrawtransactionwithkey},
-        {"signrawtransactionwithwallet", &signrawtransactionwithwallet},
-        {"signrawtransaction", &signrawtransaction},
-        {"sendrawtransaction", &sendrawtransaction},
-        {"createhtlc", &createhtlc},
-        {"claimhtlc", &claimhtlc},
-        {"refundhtlc", &refundhtlc},
-        {"importprivkey", &importprivkey},
-        {"importwallet", &importwallet},
-        {"dumpprivkey", &dumpprivkey},
-        {"dumpwallet", &dumpwallet},
-        {"getaccountaddress", &getaccountaddress},
-        {"setaccount", &setaccount},
-        {"getaccount", &getaccount},
+        {"getaccountaddress",     &getaccountaddress},
+        {"setaccount",            &setaccount},
+        {"getaccount",            &getaccount},
         {"getaddressesbyaccount", &getaddressesbyaccount},
-        {"getreceivedbyaccount", &getreceivedbyaccount},
+        {"getreceivedbyaccount",  &getreceivedbyaccount},
         {"listreceivedbyaccount", &listreceivedbyaccount},
-        {"listaccounts", &listaccounts},
-        // dispatched RPC name is "move", but the C++ function symbol is movecmd.
-        {"move", &movecmd},
-        {"vote", &vote},
+        {"listaccounts",          &listaccounts},
+        // Dispatched RPC name is "move", but the C++ function symbol is movecmd.
+        {"move",                  &movecmd},
+        {"vote",                  &vote},
     };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
@@ -808,6 +887,8 @@ BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
                     rpc_name << ": help text missing command name; got: " << what);
                 BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
                     rpc_name << ": help text missing 'Examples:' section");
+                BOOST_CHECK_MESSAGE(what.find("DEPRECATED") != std::string::npos,
+                    rpc_name << ": help text missing DEPRECATED banner; got: " << what);
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
                     "help message missing command name");
@@ -825,6 +906,9 @@ BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
                                     "help text missing DEPRECATED marker: " << what);
             }
             BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
+        }
+    }
+}
 // Tier 1 F2: each of the 10 wallet-keys commands renders help text on fHelp=true
 // before touching pwalletMain / cs_main / cs_wallet. The conversion-gate throws
 // before any global state is read, so iterating these in a fixture-free test is
@@ -903,6 +987,10 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
 // Tier 1 F3: each of the wallet-query commands renders help text on fHelp=true
 // before touching pwalletMain / cs_main / cs_wallet. Same fixture-free pattern
 // as the F2 test above.
