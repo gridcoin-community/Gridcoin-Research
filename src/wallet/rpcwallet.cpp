@@ -1083,10 +1083,17 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
 UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error("getunconfirmedbalance\n"
-                            "\n"
-                            "returns the unconfirmed balance in the wallet\n");
+    static const RPCHelpMan help{
+        "getunconfirmedbalance",
+        "Returns the unconfirmed balance in the wallet.",
+        {},
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "Total unconfirmed balance in GRC."},
+        RPCExamples{
+            HelpExampleCli("getunconfirmedbalance", "") +
+            HelpExampleRpc("getunconfirmedbalance", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
 }
