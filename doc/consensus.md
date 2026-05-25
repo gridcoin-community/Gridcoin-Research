@@ -741,7 +741,17 @@ For isolated-testnet / regtest runs that need to exercise expiration boundaries 
 
 > **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
 
-### 11.3.2 Operator Handbook (practical guidance)
+### 11.3.2 Registration Burn — 100 GRC (Issue #5)
+
+`PoolRegisterPayload::RequiredBurnAmount()` returns `100 * COIN`, set as the `REGISTRATION_BURN` constant on the payload. Pool registration is a heavier on-chain commitment than a beacon (0.5 GRC) or a poll (50 GRC + 100K GRC balance attestation): a pool operator is asking the network and the researchers staking through their pool to trust them with honest BOINC aggregation, infrastructure, and reported policy, sustained over time. The 100 GRC burn ranks pools above polls in cost ordering as a deliberate trust-weight signal.
+
+Symmetric for ADD and REMOVE — keeping a single `RequiredBurnAmount()` per payload type matches the framework's existing pattern, and REMOVE's spam control is structural (the existing-key signature check in `VerifyRegisterAuth`, not the burn). The modest "exit fee" trade-off is acceptable vs. the framework cost of asymmetric burns. Constant rather than consensus parameter — no need for administrative adjustability; the fee scale should be stable across releases.
+
+Defense-in-depth interaction with §11.3.1 (PENDING + OPEN retention): a hypothetical race-attack on a builtin slot is bounded to ~1,200 GRC/year per slot at the 100 GRC × retention-cycle rate, instead of the previous "indefinite war of attrition at 0.5 GRC per round."
+
+> **Source:** `src/gridcoin/pool.h` `PoolRegisterPayload::REGISTRATION_BURN`.
+
+### 11.3.3 Operator Handbook (practical guidance)
 
 - **Submit ADD within ~7 days of receiving Foundation OPEN.** A `POOL_REGISTER ADD` held in mempool through unusual block-inclusion delay can land at a height past `auth_height + retention` → rejected by Path 2 → 100 GRC burn for a tx the chain rejects (not actually burned since rejected at mempool / BlockValidate, but operator wastes fee-estimation + signing work). At 28800-block retention the practical risk is low; the guidance is conservative.
 - **Foundation re-OPENs if no claim within ~21 days.** Keeps a comfortable margin before retention expires.

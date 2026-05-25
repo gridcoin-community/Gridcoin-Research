@@ -164,6 +164,29 @@ public:
     //!
     static constexpr size_t MAX_URL_SIZE = 500;
 
+    //!
+    //! \brief GRC burned by every POOL_REGISTER tx, both ADD and REMOVE.
+    //!
+    //! Set higher than the standard 0.5 GRC anti-spam floor because pool
+    //! registration is a heavier on-chain commitment than a beacon — a
+    //! pool operator is asking the network and the researchers staking
+    //! through their pool to trust them with honest BOINC aggregation,
+    //! infrastructure, and reported policy, sustained over time. 100 GRC
+    //! puts the cost above the 50 GRC poll-creation burn (poll creation
+    //! also gates on a 100K GRC balance attestation; pools don't but
+    //! deserve at least the same ordering). Symmetric for ADD and REMOVE
+    //! to keep the framework's per-payload-constant pattern — REMOVE's
+    //! spam control is the existing-key signature check
+    //! (PoolRegistry::VerifyRegisterAuth), not the burn. Reviewed and
+    //! endorsed by James Cowens on #2955.
+    //!
+    //! Combined with the PENDING + OPEN retention window (issue #1783
+    //! findings J + L), this turns a builtin-slot race attack from
+    //! "indefinite war of attrition at 0.5 GRC per round" into
+    //! "bounded cost, bounded duration."
+    //!
+    static constexpr CAmount REGISTRATION_BURN = 100 * COIN;
+
     static constexpr uint32_t CURRENT_VERSION = 1;
 
     uint32_t m_version = CURRENT_VERSION;
@@ -204,8 +227,7 @@ public:
 
     CAmount RequiredBurnAmount() const override
     {
-        // Matches BeaconPayload to discourage spam PENDING submissions.
-        return COIN / 2;
+        return REGISTRATION_BURN;
     }
 
     //!

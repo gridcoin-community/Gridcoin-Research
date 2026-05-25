@@ -264,10 +264,18 @@ BOOST_AUTO_TEST_CASE(register_payload_contract_type_is_pool_register)
     BOOST_CHECK(payload.ContractType() == GRC::ContractType::POOL_REGISTER);
 }
 
-BOOST_AUTO_TEST_CASE(register_payload_burn_amount_matches_beacon)
+BOOST_AUTO_TEST_CASE(register_payload_burn_amount_is_100_grc)
 {
+    // Pool registration is a heavier on-chain commitment than a beacon
+    // (operator trusted with BOINC aggregation, infrastructure, policy
+    // honored over time). 100 GRC matches the REGISTRATION_BURN
+    // constant; if a future PR retunes it, this test becomes a
+    // documentation tripwire alongside doc/consensus.md §11. Symmetric
+    // for ADD and REMOVE — the spam control on REMOVE is the
+    // existing-key signature check, not the burn.
     GRC::PoolRegisterPayload payload;
-    BOOST_CHECK_EQUAL(payload.RequiredBurnAmount(), COIN / 2);
+    BOOST_CHECK_EQUAL(payload.RequiredBurnAmount(), 100 * COIN);
+    BOOST_CHECK_EQUAL(GRC::PoolRegisterPayload::REGISTRATION_BURN, 100 * COIN);
 }
 
 // -----------------------------------------------------------------------------
