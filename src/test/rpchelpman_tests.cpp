@@ -228,6 +228,9 @@ UniValue repairwallet(const UniValue& params, bool fHelp);
 UniValue resendtx(const UniValue& params, bool fHelp);
 UniValue burn(const UniValue& params, bool fHelp);
 UniValue upgradewallet(const UniValue& params, bool fHelp);
+// Forward declarations of the wallet transaction-state debug commands under test.
+UniValue abandontransaction(const UniValue& params, bool fHelp);
+UniValue inspectwalletstate(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -1060,6 +1063,34 @@ BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
                                 std::string{"help text missing command name: "} + name);
             BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
                                 std::string{"help text missing Examples marker: "} + name);
+// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2).
+// Each converted command throws runtime_error(help.ToString()) on fHelp=true
+// before any wallet/state access, so this test runs fixture-free like the
+// other Tier 1 help-rendering cases.
+BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"abandontransaction", &abandontransaction},
+        {"inspectwalletstate", &inspectwalletstate},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
         }
     }
 }
