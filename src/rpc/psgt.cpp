@@ -555,17 +555,21 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
 
 UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "utxoupdatepsgt \"psgt\"\n"
-            "\nUpdate a PSGT with UTXO data from the node.\n"
-            "For each input, if the non_witness_utxo is missing, attempt to\n"
-            "look up the previous transaction and fill it in.\n"
-            "\nArguments:\n"
-            "1. \"psgt\"             (string, required) A base64 PSGT string\n"
-            "\nResult:\n"
-            "  \"psgt\"              (string) The base64-encoded updated PSGT\n"
-        );
+    static const RPCHelpMan help{
+        "utxoupdatepsgt",
+        "Update a PSGT with UTXO data from the node. "
+        "For each input where non_witness_utxo is missing, look up the previous transaction and fill it in.",
+        {
+            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "A base64-encoded PSGT."},
+        },
+        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded updated PSGT."},
+        RPCExamples{
+            HelpExampleCli("utxoupdatepsgt", "\"cHNidP8B...\"") +
+            HelpExampleRpc("utxoupdatepsgt", "\"cHNidP8B...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     PartiallySignedTransaction psgt;
     string error;
