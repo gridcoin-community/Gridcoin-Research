@@ -1,3 +1,4 @@
+#include <optional>
 #include <stdexcept>
 
 #include "init.h"
@@ -351,15 +352,16 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 }
 } // Anonymous namespace
 
-UniValue addpoll(const UniValue& params, bool fHelp)
+// addpoll's helpman is rebuilt per call because the "type" argument description
+// embeds the runtime-resolved valid-poll-type list (depends on IsPollV3Enabled at
+// nBestHeight, which flips at fork height). thread_local storage with std::optional
+// keeps the returned reference valid until the next call on the same thread.
+const RPCHelpMan& addpoll_helpman()
 {
-    // The set of valid poll types depends on whether PollV3 is active, so the help
-    // text must be constructed per-call from the runtime-resolved list.
     uint32_t payload_version = 0;
     std::vector<PollType> valid_poll_types;
     {
         LOCK(cs_main);
-
         payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
         valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
     }
@@ -372,14 +374,15 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
 
-    const RPCHelpMan help{
+    thread_local std::optional<RPCHelpMan> help;
+    help.emplace(
         "addpoll",
         "Add a poll to the network.\n"
         "Requires 100K GRC balance. Costs 50 GRC.\n"
         "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
         "Certain poll types require additional fields. Call `addpoll <type>` with no other "
         "parameters to see the required fields for a specific type.",
-        {
+        std::vector<RPCArg>{
             {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
              strprintf("Type of poll. Valid types for the active protocol version: %s.",
                        types_ss.str())},
@@ -448,8 +451,32 @@ UniValue addpoll(const UniValue& params, bool fHelp)
             + HelpExampleRpc("addpoll",
                 "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
                 "\"https://example.org/discussion\"")
-        },
-    };
+        }
+    );
+    return *help;
+}
+
+UniValue addpoll(const UniValue& params, bool fHelp)
+{
+    const RPCHelpMan& help = addpoll_helpman();
+
+    // Body still needs valid_poll_types (and the dynamic types_ss for error messages)
+    // for parameter validation below.
+    uint32_t payload_version = 0;
+    std::vector<PollType> valid_poll_types;
+    {
+        LOCK(cs_main);
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
+    }
+
+    std::stringstream types_ss;
+    for (const auto& type : valid_poll_types) {
+        if (types_ss.str() != std::string{}) {
+            types_ss << ", ";
+        }
+        types_ss << ToLower(Poll::PollTypeToString(type, false));
+    }
 
     // Preserve the interactive wizard: `addpoll <type>` (one arg) shows the required-fields
     // hint for that type. Fall through past the help gate and intercept after type resolution.

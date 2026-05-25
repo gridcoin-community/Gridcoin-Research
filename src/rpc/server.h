@@ -47,9 +47,9 @@ typedef UniValue(*rpcfn_type)(const UniValue& params, bool fHelp);
 
 // Accessor pointer for an RPCHelpMan tied to a registered command. Used by the
 // dispatcher to render help text and validate arity directly, without invoking
-// the command body via the legacy throw-on-fHelp convention. Commands that
-// have not been converted to the RPCHelpMan pattern register `nullptr` and
-// continue to use the legacy fHelp throw path inside `CRPCTable::help`.
+// the command body via the legacy throw-on-fHelp convention. Every registered
+// command must provide a non-null accessor (the last nullptr — addpoll — was
+// lifted to a dynamic helpman in PR M3).
 typedef const RPCHelpMan& (*rpchelpman_fn)();
 
 enum rpccategory
@@ -68,7 +68,7 @@ public:
     std::string name;
     rpcfn_type actor;
     rpccategory category;
-    rpchelpman_fn helpman; // nullptr for legacy commands; see typedef above.
+    rpchelpman_fn helpman; // required for all commands; see typedef above.
 };
 
 /**
@@ -320,6 +320,7 @@ extern const RPCHelpMan& abandontransaction_helpman();
 extern const RPCHelpMan& addkey_helpman();
 extern const RPCHelpMan& addmultisigaddress_helpman();
 extern const RPCHelpMan& addnode_helpman();
+extern const RPCHelpMan& addpoll_helpman();
 extern const RPCHelpMan& addredeemscript_helpman();
 extern const RPCHelpMan& advertisebeacon_helpman();
 extern const RPCHelpMan& advertisebeaconv3_helpman();

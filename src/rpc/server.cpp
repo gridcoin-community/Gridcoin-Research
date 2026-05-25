@@ -190,28 +190,10 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         if (!setDone.insert(pcmd->actor).second)
             continue;
 
-        string strHelp;
-        if (pcmd->helpman != nullptr) {
-            // Modern path: pull help text directly from the RPCHelpMan
-            // accessor without invoking the command body or using
-            // throw-as-control-flow.
-            strHelp = pcmd->helpman().ToString();
-        } else {
-            // Legacy fallback: call the actor with fHelp=true and capture the
-            // help text from the thrown runtime_error. Retained for commands
-            // that have not yet been converted to the RPCHelpMan pattern
-            // (PSGT and a handful of stragglers).
-            try {
-                UniValue params(UniValue::VARR);
-                (*pcmd->actor)(params, true);
-                // Actor returned normally instead of throwing help text via
-                // runtime_error. Without a placeholder strHelp stays empty and
-                // the rendered help list shows a blank line for this command.
-                strHelp = strprintf("%s: (no help text)", strMethod);
-            } catch (std::exception& e) {
-                strHelp = string(e.what());
-            }
-        }
+        // Every command now has a helpman accessor (addpoll's was lifted in PR M3);
+        // pull help text directly from it without invoking the command body or
+        // using throw-as-control-flow.
+        string strHelp = pcmd->helpman().ToString();
         if (strCommand.empty())
             if (strHelp.find('\n') != string::npos)
                 strHelp = strHelp.substr(0, strHelp.find('\n'));
@@ -509,7 +491,7 @@ static const CRPCCommand vRPCCommands[] =
     { "stop",                    &stop,                    cat_network, &stop_helpman       },
 
   // Voting commands
-    { "addpoll",                 &addpoll,                 cat_voting, nullptr        },
+    { "addpoll",                 &addpoll,                 cat_voting, &addpoll_helpman        },
     { "getpollresults",          &getpollresults,          cat_voting, &getpollresults_helpman        },
     { "getvotingclaim",          &getvotingclaim,          cat_voting, &getvotingclaim_helpman        },
     { "listpolls",               &listpolls,               cat_voting, &listpolls_helpman        },
@@ -968,11 +950,13 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     // arity here and throw the help text on mismatch. The command body no
     // longer carries a redundant `if (fHelp || !help.IsValidNumArgs(...))`
     // gate, so the dispatcher is now the authoritative arity-enforcement
-    // site for converted commands. Legacy commands (nullptr helpman) keep
-    // their body-level checks. Commands marked variadic via RPCHelpMan's
-    // MarkVariadic() opt out of the pre-check (their helpman declaration
-    // captures the typical shape but the body accepts an open-ended count);
-    // their body retains the arity gate appropriate to the actual semantics.
+    // site for converted commands. Commands marked variadic via
+    // RPCHelpMan's MarkVariadic() opt out of the pre-check (their helpman
+    // declaration captures the typical shape but the body accepts an
+    // open-ended count); their body retains the arity gate appropriate to
+    // the actual semantics. addpoll's helpman is itself marked variadic
+    // so the `addpoll <type>` 1-arg wizard form reaches its body's hint
+    // logic.
     if (pcmd->helpman != nullptr) {
         const RPCHelpMan& help = pcmd->helpman();
         if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
