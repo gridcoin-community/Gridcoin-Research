@@ -103,8 +103,16 @@ HELPMAN_MARKERS = ("Result", "Examples")
 # that must be present in the result. Restricted to commands that work
 # against a fresh -testnet datadir (genesis-only, no peers, no wallet
 # activity).
+#
+# Schema notes (Gridcoin diverges from Bitcoin Core intentionally):
+#   - getblockchaininfo emits `testnet: bool` (driven by fTestNet) instead
+#     of `chain: str`, no bestblockhash, no softforks. The fields below are
+#     all unconditional pushKVs in src/rpc/blockchain.cpp:getblockchaininfo
+#     -- stable enough to assert on without flapping.
 OBJ_SHAPE_CHECKS = {
-    "getblockchaininfo": {"chain", "blocks", "bestblockhash"},
+    "getblockchaininfo": {
+        "blocks", "in_sync", "moneysupply", "difficulty", "testnet", "errors",
+    },
 }
 
 

@@ -5,9 +5,16 @@
 """Phase 1 smoke test for the functional-test framework.
 
 Starts gridcoinresearchd in -testnet mode with no outbound peers, calls
-getblockchaininfo over RPC, and asserts the daemon reports chain=="test".
-The point is to prove the Python framework can start the binary, authenticate,
-issue an RPC, parse the response, and shut the binary down cleanly.
+getblockchaininfo over RPC, and asserts the daemon reports it's running on
+testnet. The point is to prove the Python framework can start the binary,
+authenticate, issue an RPC, parse the response, and shut the binary down
+cleanly.
+
+Note on schema: Gridcoin's getblockchaininfo result intentionally diverges
+from Bitcoin Core's. It exposes `testnet: bool` (driven by the fTestNet
+global) instead of `chain: str`, and omits Bitcoin Core fields like
+bestblockhash and softforks. See src/rpc/blockchain.cpp:getblockchaininfo
+for the canonical schema.
 
 Phase 2A introduces CRegTestParams; after that lands, additional tests can run
 against -regtest and exercise generate/staking/contract code paths. For Phase
@@ -37,9 +44,9 @@ class FeatureHelloTest(GridcoinTestFramework):
     def run_test(self):
         node = self.nodes[0]
         info = node.getblockchaininfo()
-        assert_equal(info["chain"], "test")
-        self.log.info("feature_hello: getblockchaininfo OK (chain=%s, blocks=%d)",
-                      info["chain"], info["blocks"])
+        assert_equal(info["testnet"], True)
+        self.log.info("feature_hello: getblockchaininfo OK (testnet=%s, blocks=%d)",
+                      info["testnet"], info["blocks"])
 
 
 if __name__ == "__main__":
