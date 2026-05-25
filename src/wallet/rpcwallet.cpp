@@ -2943,11 +2943,21 @@ UniValue inspectwalletstate(const UniValue& params, bool fHelp)
  */
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "walletdiagnose\n"
-                "\n"
-                "Runs several tests to diagnose issues in the wallet.");
+    static const RPCHelpMan help{
+        "walletdiagnose",
+        "Runs several diagnostic tests on the wallet (connection counts, sync state, "
+        "client version, BOINC path, CPID, clock, TCP port, difficulty, ETTS).",
+        {},
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "diagnostic key/result entry"},
+            }},
+        RPCExamples{
+            HelpExampleCli("walletdiagnose", "") +
+            HelpExampleRpc("walletdiagnose", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
     //Construct the tests needed.
