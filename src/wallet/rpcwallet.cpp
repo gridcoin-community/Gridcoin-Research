@@ -2312,12 +2312,21 @@ UniValue abandontransaction(const UniValue& params, bool fHelp)
 
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getrawwallettransaction <txid>\n"
-                "\n"
-                "Get a string that is serialized, hex-encoded data for <txid> "
-                "from the wallet.\n");
+    static const RPCHelpMan help{
+        "getrawwallettransaction",
+        "Get a string that is serialized, hex-encoded data for the given txid from the wallet.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The transaction id (must be in the wallet)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "data",
+            "Serialized, hex-encoded data for the transaction."},
+        RPCExamples{
+            HelpExampleCli("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+            HelpExampleRpc("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const uint256 hash = uint256S(params[0].get_str());
 
