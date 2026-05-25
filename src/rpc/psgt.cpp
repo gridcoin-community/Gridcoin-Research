@@ -66,37 +66,40 @@ static void FillHDKeypaths(const CWallet& wallet,
     }
 }
 
+static const RPCHelpMan createpsgt_help{
+    "createpsgt",
+    "Creates an unsigned Partially Signed Gridcoin Transaction (PSGT).",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of inputs.",
+            {
+                {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "A JSON object with addresses as keys and GRC amounts as values.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                    "The GRC amount to send to this address."},
+            }},
+        {"ntime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Transaction timestamp (default: current adjusted time)."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded unsigned PSGT."},
+    RPCExamples{
+        HelpExampleCli("createpsgt",
+            "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"") +
+        HelpExampleRpc("createpsgt",
+            "[{\"txid\":\"myid\",\"vout\":0}], {\"address\":0.01}")},
+};
+const RPCHelpMan& createpsgt_helpman() { return createpsgt_help; }
+
 UniValue createpsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "createpsgt",
-        "Creates an unsigned Partially Signed Gridcoin Transaction (PSGT).",
-        {
-            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of inputs.",
-                {
-                    {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
-                        }},
-                }},
-            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
-                "A JSON object with addresses as keys and GRC amounts as values.",
-                {
-                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                        "The GRC amount to send to this address."},
-                }},
-            {"ntime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Transaction timestamp (default: current adjusted time)."},
-        },
-        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded unsigned PSGT."},
-        RPCExamples{
-            HelpExampleCli("createpsgt",
-                "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"") +
-            HelpExampleRpc("createpsgt",
-                "[{\"txid\":\"myid\",\"vout\":0}], {\"address\":0.01}")},
-    };
+    const RPCHelpMan& help = createpsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -149,28 +152,31 @@ UniValue createpsgt(const UniValue& params, bool fHelp)
     return EncodeBase64(data.data(), data.size());
 }
 
+static const RPCHelpMan decodepsgt_help{
+    "decodepsgt",
+    "Return a JSON object representing the given PSGT (Partially Signed Gridcoin Transaction).",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::OBJ, "tx", "The decoded unsigned transaction (same shape as decoderawtransaction).",
+                {{RPCResult::Type::ELISION, "", ""}}},
+            {RPCResult::Type::ARR, "inputs", "Per-input PSGT metadata.",
+                {{RPCResult::Type::ELISION, "", "input fields: non_witness_utxo, partial_signatures, sighash, redeem_script, final_scriptSig, bip32_derivs, unknown"}}},
+            {RPCResult::Type::ARR, "outputs", "Per-output PSGT metadata.",
+                {{RPCResult::Type::ELISION, "", "output fields: redeem_script, bip32_derivs, unknown"}}},
+        }},
+    RPCExamples{
+        HelpExampleCli("decodepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("decodepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& decodepsgt_helpman() { return decodepsgt_help; }
+
 UniValue decodepsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "decodepsgt",
-        "Return a JSON object representing the given PSGT (Partially Signed Gridcoin Transaction).",
-        {
-            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The base64-encoded PSGT."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::OBJ, "tx", "The decoded unsigned transaction (same shape as decoderawtransaction).",
-                    {{RPCResult::Type::ELISION, "", ""}}},
-                {RPCResult::Type::ARR, "inputs", "Per-input PSGT metadata.",
-                    {{RPCResult::Type::ELISION, "", "input fields: non_witness_utxo, partial_signatures, sighash, redeem_script, final_scriptSig, bip32_derivs, unknown"}}},
-                {RPCResult::Type::ARR, "outputs", "Per-output PSGT metadata.",
-                    {{RPCResult::Type::ELISION, "", "output fields: redeem_script, bip32_derivs, unknown"}}},
-            }},
-        RPCExamples{
-            HelpExampleCli("decodepsgt", "\"cHNidP8B...\"") +
-            HelpExampleRpc("decodepsgt", "\"cHNidP8B...\"")},
-    };
+    const RPCHelpMan& help = decodepsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -345,23 +351,26 @@ UniValue decodepsgt(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan combinepsgt_help{
+    "combinepsgt",
+    "Combine multiple PSGTs for the same transaction into one merged PSGT.",
+    {
+        {"psgts", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of base64-encoded PSGT strings to combine.",
+            {
+                {"psgt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A base64-encoded PSGT."},
+            }},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded combined PSGT."},
+    RPCExamples{
+        HelpExampleCli("combinepsgt", "\"[\\\"cHNidP8B...\\\", \\\"cHNidP8B...\\\"]\"") +
+        HelpExampleRpc("combinepsgt", "[\"cHNidP8B...\", \"cHNidP8B...\"]")},
+};
+const RPCHelpMan& combinepsgt_helpman() { return combinepsgt_help; }
+
 UniValue combinepsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "combinepsgt",
-        "Combine multiple PSGTs for the same transaction into one merged PSGT.",
-        {
-            {"psgts", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of base64-encoded PSGT strings to combine.",
-                {
-                    {"psgt", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A base64-encoded PSGT."},
-                }},
-        },
-        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded combined PSGT."},
-        RPCExamples{
-            HelpExampleCli("combinepsgt", "\"[\\\"cHNidP8B...\\\", \\\"cHNidP8B...\\\"]\"") +
-            HelpExampleRpc("combinepsgt", "[\"cHNidP8B...\", \"cHNidP8B...\"]")},
-    };
+    const RPCHelpMan& help = combinepsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -386,26 +395,29 @@ UniValue combinepsgt(const UniValue& params, bool fHelp)
     return EncodeBase64(data.data(), data.size());
 }
 
+static const RPCHelpMan finalizepsgt_help{
+    "finalizepsgt",
+    "Finalize a PSGT. If all inputs have been signed, extract the complete transaction and return it as hex.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", /*optional=*/true,
+                "The hex-encoded raw transaction (only present when complete)."},
+            {RPCResult::Type::BOOL, "complete",
+                "Whether the transaction is fully signed and ready to broadcast."},
+        }},
+    RPCExamples{
+        HelpExampleCli("finalizepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("finalizepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& finalizepsgt_helpman() { return finalizepsgt_help; }
+
 UniValue finalizepsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "finalizepsgt",
-        "Finalize a PSGT. If all inputs have been signed, extract the complete transaction and return it as hex.",
-        {
-            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "A base64-encoded PSGT."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "hex", /*optional=*/true,
-                    "The hex-encoded raw transaction (only present when complete)."},
-                {RPCResult::Type::BOOL, "complete",
-                    "Whether the transaction is fully signed and ready to broadcast."},
-            }},
-        RPCExamples{
-            HelpExampleCli("finalizepsgt", "\"cHNidP8B...\"") +
-            HelpExampleRpc("finalizepsgt", "\"cHNidP8B...\"")},
-    };
+    const RPCHelpMan& help = finalizepsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -430,28 +442,31 @@ UniValue finalizepsgt(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan walletprocesspsgt_help{
+    "walletprocesspsgt",
+    "Sign a PSGT with keys from the wallet. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "The signature hash type to sign with (default: ALL). "
+            "Valid: \"ALL\", \"ALL|ANYONECANPAY\", \"NONE\", \"NONE|ANYONECANPAY\", \"SINGLE\", \"SINGLE|ANYONECANPAY\"."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "psgt", "The base64-encoded partially-signed transaction."},
+            {RPCResult::Type::BOOL, "complete", "Whether the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("walletprocesspsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("walletprocesspsgt", "\"cHNidP8B...\", \"ALL\"")},
+};
+const RPCHelpMan& walletprocesspsgt_helpman() { return walletprocesspsgt_help; }
+
 UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletprocesspsgt",
-        "Sign a PSGT with keys from the wallet. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "A base64-encoded PSGT."},
-            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "The signature hash type to sign with (default: ALL). "
-                "Valid: \"ALL\", \"ALL|ANYONECANPAY\", \"NONE\", \"NONE|ANYONECANPAY\", \"SINGLE\", \"SINGLE|ANYONECANPAY\"."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "psgt", "The base64-encoded partially-signed transaction."},
-                {RPCResult::Type::BOOL, "complete", "Whether the transaction has a complete set of signatures."},
-            }},
-        RPCExamples{
-            HelpExampleCli("walletprocesspsgt", "\"cHNidP8B...\"") +
-            HelpExampleRpc("walletprocesspsgt", "\"cHNidP8B...\", \"ALL\"")},
-    };
+    const RPCHelpMan& help = walletprocesspsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -553,21 +568,24 @@ UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan utxoupdatepsgt_help{
+    "utxoupdatepsgt",
+    "Update a PSGT with UTXO data from the node. "
+    "For each input where non_witness_utxo is missing, look up the previous transaction and fill it in.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded updated PSGT."},
+    RPCExamples{
+        HelpExampleCli("utxoupdatepsgt", "\"cHNidP8B...\"") +
+        HelpExampleRpc("utxoupdatepsgt", "\"cHNidP8B...\"")},
+};
+const RPCHelpMan& utxoupdatepsgt_helpman() { return utxoupdatepsgt_help; }
+
 UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "utxoupdatepsgt",
-        "Update a PSGT with UTXO data from the node. "
-        "For each input where non_witness_utxo is missing, look up the previous transaction and fill it in.",
-        {
-            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "A base64-encoded PSGT."},
-        },
-        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded updated PSGT."},
-        RPCExamples{
-            HelpExampleCli("utxoupdatepsgt", "\"cHNidP8B...\"") +
-            HelpExampleRpc("utxoupdatepsgt", "\"cHNidP8B...\"")},
-    };
+    const RPCHelpMan& help = utxoupdatepsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -592,21 +610,24 @@ UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
     return EncodeBase64(data.data(), data.size());
 }
 
+static const RPCHelpMan converttopsgt_help{
+    "converttopsgt",
+    "Convert a raw transaction to PSGT format. "
+    "The resulting PSGT will have empty input metadata; use utxoupdatepsgt to fill in UTXO information.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The hex-encoded raw transaction."},
+    },
+    RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+    RPCExamples{
+        HelpExampleCli("converttopsgt", "\"0200000001...\"") +
+        HelpExampleRpc("converttopsgt", "\"0200000001...\"")},
+};
+const RPCHelpMan& converttopsgt_helpman() { return converttopsgt_help; }
+
 UniValue converttopsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "converttopsgt",
-        "Convert a raw transaction to PSGT format. "
-        "The resulting PSGT will have empty input metadata; use utxoupdatepsgt to fill in UTXO information.",
-        {
-            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
-                "The hex-encoded raw transaction."},
-        },
-        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
-        RPCExamples{
-            HelpExampleCli("converttopsgt", "\"0200000001...\"") +
-            HelpExampleRpc("converttopsgt", "\"0200000001...\"")},
-    };
+    const RPCHelpMan& help = converttopsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -642,48 +663,51 @@ UniValue converttopsgt(const UniValue& params, bool fHelp)
     return EncodeBase64(data.data(), data.size());
 }
 
+static const RPCHelpMan walletcreatefundedpsgt_help{
+    "walletcreatefundedpsgt",
+    "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted and `sign` is true.",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
+            {
+                {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+            "A JSON object with addresses as keys and GRC amounts as values.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                    "The GRC amount to send to this address."},
+            }},
+        {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED,
+            "Optional funding options.",
+            {
+                {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                    "Address to receive change. Default: a new address from the keypool."},
+            }},
+        {"sign", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Also sign the PSGT with wallet keys. Default: true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "The fee paid in GRC."},
+        }},
+    RPCExamples{
+        HelpExampleCli("walletcreatefundedpsgt",
+            "\"[]\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":0.1}\"") +
+        HelpExampleRpc("walletcreatefundedpsgt",
+            "[], {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":0.1}")},
+};
+const RPCHelpMan& walletcreatefundedpsgt_helpman() { return walletcreatefundedpsgt_help; }
+
 UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "walletcreatefundedpsgt",
-        "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted and `sign` is true.",
-        {
-            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
-                {
-                    {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
-                        }},
-                }},
-            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
-                "A JSON object with addresses as keys and GRC amounts as values.",
-                {
-                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                        "The GRC amount to send to this address."},
-                }},
-            {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED,
-                "Optional funding options.",
-                {
-                    {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                        "Address to receive change. Default: a new address from the keypool."},
-                }},
-            {"sign", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Also sign the PSGT with wallet keys. Default: true."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
-                {RPCResult::Type::STR_AMOUNT, "fee", "The fee paid in GRC."},
-            }},
-        RPCExamples{
-            HelpExampleCli("walletcreatefundedpsgt",
-                "\"[]\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":0.1}\"") +
-            HelpExampleRpc("walletcreatefundedpsgt",
-                "[], {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":0.1}")},
-    };
+    const RPCHelpMan& help = walletcreatefundedpsgt_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
