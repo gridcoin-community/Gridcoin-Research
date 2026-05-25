@@ -151,33 +151,28 @@ UniValue createpsgt(const UniValue& params, bool fHelp)
 
 UniValue decodepsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "decodepsgt \"psgt\"\n"
-            "\nReturn a JSON object representing the PSGT.\n"
-            "\nArguments:\n"
-            "1. \"psgt\"             (string, required) The base64-encoded PSGT string\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"tx\" : {              (json object) The decoded unsigned transaction\n"
-            "    ...                    (same format as decoderawtransaction)\n"
-            "  },\n"
-            "  \"inputs\" : [          (array of json objects)\n"
-            "    {\n"
-            "      \"non_witness_utxo\" : {...},\n"
-            "      \"partial_signatures\" : {...},\n"
-            "      \"sighash\" : \"type\",\n"
-            "      \"redeem_script\" : {...},\n"
-            "      \"final_scriptSig\" : {...}\n"
-            "    }\n"
-            "  ],\n"
-            "  \"outputs\" : [         (array of json objects)\n"
-            "    {\n"
-            "      \"redeem_script\" : {...}\n"
-            "    }\n"
-            "  ]\n"
-            "}\n"
-        );
+    static const RPCHelpMan help{
+        "decodepsgt",
+        "Return a JSON object representing the given PSGT (Partially Signed Gridcoin Transaction).",
+        {
+            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The base64-encoded PSGT."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "tx", "The decoded unsigned transaction (same shape as decoderawtransaction).",
+                    {{RPCResult::Type::ELISION, "", ""}}},
+                {RPCResult::Type::ARR, "inputs", "Per-input PSGT metadata.",
+                    {{RPCResult::Type::ELISION, "", "input fields: non_witness_utxo, partial_signatures, sighash, redeem_script, final_scriptSig, bip32_derivs, unknown"}}},
+                {RPCResult::Type::ARR, "outputs", "Per-output PSGT metadata.",
+                    {{RPCResult::Type::ELISION, "", "output fields: redeem_script, bip32_derivs, unknown"}}},
+            }},
+        RPCExamples{
+            HelpExampleCli("decodepsgt", "\"cHNidP8B...\"") +
+            HelpExampleRpc("decodepsgt", "\"cHNidP8B...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     PartiallySignedTransaction psgt;
     string error;
