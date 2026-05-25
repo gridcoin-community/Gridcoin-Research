@@ -322,13 +322,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
     strHTML += "<b>" + tr("TX ID") + ":</b> " + wtx.GetHash().ToString().c_str() + "<br>";
 
-    std::string sHashBlock = wtx.hashBlock.ToString();
-
-    if (wtx.hashBlock.IsNull())
+    if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+        strHTML += "<b>" + tr("Block Hash") + ":</b> " + conf->m_confirmed_block_hash.ToString().c_str() + "<br>";
+    } else {
         strHTML += "<b>" + tr("Block Hash") + ":</b> Not yet in chain<br>";
-
-    else
-        strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
+    }
 
     const std::string tx_message = GetMessage(wtx);
 

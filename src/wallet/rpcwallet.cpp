@@ -18,13 +18,13 @@
 #include "gridcoin/tx_message.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "wallet/walletutil.h"
 #include "wallet/ismine.h"
 #include "wallet/diagnose.h"
 
 #include <regex>
 #include <stdexcept>
 #include <univalue.h>
-#include <variant>
 
 using namespace std;
 
@@ -70,9 +70,11 @@ void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry) EXCLUSIVE_LOCKS_REQUI
         entry.pushKV("generated", true);
     if (confirms > 0)
     {
-        entry.pushKV("blockhash", wtx.hashBlock.GetHex());
-        entry.pushKV("blockindex", wtx.nIndex);
-        entry.pushKV("blocktime", (int)(mapBlockIndex[wtx.hashBlock]->nTime));
+        if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+            entry.pushKV("blockhash", conf->m_confirmed_block_hash.GetHex());
+            entry.pushKV("blockindex", conf->m_position_in_block);
+            entry.pushKV("blocktime", (int)(mapBlockIndex[conf->m_confirmed_block_hash]->nTime));
+        }
     }
     entry.pushKV("txid", wtx.GetHash().GetHex());
     entry.pushKV("time", wtx.GetTxTime());
@@ -1642,15 +1644,22 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
 
     // iterate backwards until we have nCount items to return:
+    // Use hash-based lookup and value-based storage to avoid dangling pointers
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
-        CWalletTx* const pwtx = it->second.first;
-        if (pwtx != nullptr) {
-            ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
+        const uint256& txid = it->second.first;
+        // Look up transaction by hash if it's not a zero hash (which indicates an accounting entry)
+        if (!txid.IsNull()) {
+            auto wtx_it = pwalletMain->mapWallet.find(txid);
+            if (wtx_it != pwalletMain->mapWallet.end()) {
+                ListTransactions(wtx_it->second, strAccount, 0, true, ret, filter);
+            }
         }
-        CAccountingEntry* const pacentry = it->second.second;
-        if (pacentry != nullptr) {
-            AcentryToJSON(*pacentry, strAccount, ret);
+
+        // Access the optional accounting entry (copy, not pointer)
+        const auto& pacentry_opt = it->second.second;
+        if (pacentry_opt.has_value()) {
+            AcentryToJSON(pacentry_opt.value(), strAccount, ret);
         }
 
         if ((int)ret.size() >= (nCount + nFrom)) {
@@ -1713,14 +1722,23 @@ UniValue liststakes(const UniValue& params, bool fHelp)
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
 
     // iterate backwards until we have at least nCount items to return:
+    // Use hash-based lookup and value-based storage to avoid dangling pointers
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
-        CWalletTx *const pwtx = it->second.first;
-        if (pwtx != nullptr)
-            ListTransactions(*pwtx, strAccount, 0, true, ret_superset, filter, true);
-        CAccountingEntry *const pacentry = it->second.second;
-        if (pacentry != nullptr)
-            AcentryToJSON(*pacentry, strAccount, ret_superset);
+        const uint256& txid = it->second.first;
+        // Look up transaction by hash if it's not a zero hash (which indicates an accounting entry)
+        if (!txid.IsNull()) {
+            auto wtx_it = pwalletMain->mapWallet.find(txid);
+            if (wtx_it != pwalletMain->mapWallet.end()) {
+                ListTransactions(wtx_it->second, strAccount, 0, true, ret_superset, filter, true);
+            }
+        }
+
+        // Access the optional accounting entry (copy, not pointer)
+        const auto& pacentry_opt = it->second.second;
+        if (pacentry_opt.has_value()) {
+            AcentryToJSON(pacentry_opt.value(), strAccount, ret_superset);
+        }
 
         if ((int)ret_superset.size() >= nCount) break;
     }
@@ -1968,6 +1986,41 @@ UniValue gettransaction(const UniValue& params, bool fHelp)
     }
 
     return entry;
+}
+
+UniValue abandontransaction(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+                "abandontransaction \"txid\"\n"
+                "\nMark in-wallet transaction <txid> as abandoned.\n"
+                "This will mark this transaction and all its in-wallet descendants as abandoned\n"
+                "which will allow their inputs to be respent. It can be used to replace \"stuck\"\n"
+                "or evicted transactions.\n"
+                "It only works on transactions which are not included in a block and are not\n"
+                "currently in the mempool.\n"
+                "It has no effect on transactions which are already conflicted or abandoned.\n"
+                "\nArguments:\n"
+                "1. \"txid\"    (string, required) The transaction id\n"
+                "\nResult:\n"
+                "null\n"
+                "\nExamples:\n"
+                "\nabandon a transaction\n"
+                "\n> gridcoinresearchd abandontransaction \"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"\n"
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    uint256 hash;
+    hash.SetHex(params[0].get_str());
+
+    if (!pwalletMain->mapWallet.count(hash))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid or non-wallet transaction id");
+
+    if (!pwalletMain->AbandonTransaction(hash))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not eligible for abandonment");
+
+    return NullUniValue;
 }
 
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
@@ -2356,6 +2409,164 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
     }
 
     return NullUniValue;
+}
+
+/** Classify a wallet transaction's TxState into a human-readable name. */
+static const char* ClassifyWalletTxState(const CWalletTx& wtx)
+{
+    if (wtx.isInMempool())     return "mempool";
+    if (wtx.isConfirmed())     return "confirmed";
+    if (wtx.isInactive())      return "inactive";
+    if (wtx.isUnrecognized())  return "unrecognized";
+    return "unknown";
+}
+
+/**
+ * Inspect wallet transaction states (DEBUG)
+ * Shows the internal state of all wallet transactions for debugging Issue #1157.
+ */
+UniValue inspectwalletstate(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+                "inspectwalletstate ( verbose )\n"
+                "\n"
+                "Diagnostic command to inspect transaction states in the wallet.\n"
+                "Shows how many transactions are in each state and identifies issues.\n"
+                "\nArguments:\n"
+                "1. verbose (boolean, optional, default=false) Show per-transaction details\n"
+                "   including inactive/unrecognized transaction data.\n"
+                "\nResult:\n"
+                "{\n"
+                "  \"total_transactions\": n,\n"
+                "  \"state_counts\": { \"mempool\": n, \"confirmed\": n, \"inactive\": n, \"unrecognized\": n },\n"
+                "  \"balance_calculation\": { ... },\n"
+                "  \"inactive_transactions\": [...],    (verbose only)\n"
+                "  \"unrecognized_transactions\": [...], (verbose only)\n"
+                "  \"all_transactions\": [...]           (verbose only)\n"
+                "}\n");
+
+    bool fVerbose = false;
+    if (params.size() > 0)
+        fVerbose = params[0].get_bool();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    UniValue result(UniValue::VOBJ);
+    UniValue state_counts(UniValue::VOBJ);
+    UniValue inactive_list(UniValue::VARR);
+    UniValue unrecognized_list(UniValue::VARR);
+    UniValue verbose_list(UniValue::VARR);
+
+    int total = 0;
+    int mempool_count = 0;
+    int confirmed_count = 0;
+    int inactive_count = 0;
+    int unrecognized_count = 0;
+
+    int trusted_confirmed = 0;
+    int64_t balance_sum = 0;
+
+    for (const auto& item : pwalletMain->mapWallet)
+    {
+        const CWalletTx& wtx = item.second;
+        total++;
+
+        // Classify using TxState (always active — the state system is the
+        // single source of truth after wallet load / migration).
+        if (wtx.isInMempool()) {
+            mempool_count++;
+        } else if (wtx.isConfirmed()) {
+            confirmed_count++;
+        } else if (wtx.isInactive()) {
+            inactive_count++;
+
+            if (fVerbose) {
+                UniValue info(UniValue::VOBJ);
+                info.pushKV("txid", wtx.GetHash().GetHex());
+                info.pushKV("depth", wtx.GetDepthInMainChain());
+                if (const auto* inactive = wtx.state<TxStateInactive>()) {
+                    info.pushKV("abandoned", inactive->m_abandoned);
+                }
+                info.pushKV("hashBlock_legacy", wtx.hashBlock.GetHex());
+                info.pushKV("isConfirmed", wtx.IsConfirmed());
+                info.pushKV("isTrusted", wtx.IsTrusted());
+                info.pushKV("amount", ValueFromAmount(wtx.GetCredit() - wtx.GetDebit()));
+                info.pushKV("time", (int64_t)wtx.nTime);
+                inactive_list.push_back(info);
+            }
+        } else if (wtx.isUnrecognized()) {
+            unrecognized_count++;
+
+            if (fVerbose) {
+                UniValue info(UniValue::VOBJ);
+                info.pushKV("txid", wtx.GetHash().GetHex());
+                info.pushKV("depth", wtx.GetDepthInMainChain());
+                if (const auto* unrec = wtx.state<TxStateUnrecognized>()) {
+                    info.pushKV("legacy_block_hash", unrec->m_block_hash.GetHex());
+                    info.pushKV("legacy_index", unrec->m_index);
+                }
+                info.pushKV("isConfirmed", wtx.IsConfirmed());
+                info.pushKV("isTrusted", wtx.IsTrusted());
+                unrecognized_list.push_back(info);
+            }
+        }
+
+        // Balance calculation audit
+        if (wtx.IsTrusted() && (wtx.IsConfirmed() || wtx.fFromMe)) {
+            trusted_confirmed++;
+            balance_sum += wtx.GetAvailableCredit();
+        }
+
+        // Verbose: full per-transaction dump
+        if (fVerbose) {
+            UniValue tx_info(UniValue::VOBJ);
+            tx_info.pushKV("txid", wtx.GetHash().GetHex());
+            tx_info.pushKV("state", ClassifyWalletTxState(wtx));
+            tx_info.pushKV("depth", wtx.GetDepthInMainChain());
+            tx_info.pushKV("isConfirmed", wtx.IsConfirmed());
+            tx_info.pushKV("isTrusted", wtx.IsTrusted());
+            tx_info.pushKV("credit", ValueFromAmount(wtx.GetAvailableCredit()));
+            tx_info.pushKV("counted_in_balance", wtx.IsTrusted() && (wtx.IsConfirmed() || wtx.fFromMe));
+            verbose_list.push_back(tx_info);
+        }
+    }
+
+    // --- Always-visible summary ---
+    result.pushKV("total_transactions", total);
+
+    state_counts.pushKV("mempool", mempool_count);
+    state_counts.pushKV("confirmed", confirmed_count);
+    state_counts.pushKV("inactive", inactive_count);
+    state_counts.pushKV("unrecognized", unrecognized_count);
+    result.pushKV("state_counts", state_counts);
+
+    UniValue balance_info(UniValue::VOBJ);
+    balance_info.pushKV("transactions_counted_in_balance", trusted_confirmed);
+    balance_info.pushKV("calculated_balance", ValueFromAmount(balance_sum));
+    balance_info.pushKV("getbalance_result", ValueFromAmount(pwalletMain->GetBalance()));
+    result.pushKV("balance_calculation", balance_info);
+
+    // Warnings (always shown as counts; per-tx detail gated behind verbose)
+    if (inactive_count > 0) {
+        result.pushKV("warning_inactive",
+            strprintf("Found %d inactive transaction(s) — these won't contribute to balance", inactive_count));
+    }
+    if (unrecognized_count > 0) {
+        result.pushKV("warning_unrecognized",
+            strprintf("Found %d unrecognized transaction(s) — may not be counted in balance", unrecognized_count));
+    }
+
+    // --- Verbose-only detail ---
+    if (fVerbose) {
+        if (inactive_count > 0)
+            result.pushKV("inactive_transactions", inactive_list);
+        if (unrecognized_count > 0)
+            result.pushKV("unrecognized_transactions", unrecognized_list);
+        result.pushKV("all_transactions", verbose_list);
+    }
+
+    return result;
 }
 
 /**

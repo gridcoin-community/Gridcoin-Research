@@ -139,8 +139,8 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
             + HelpRequiringPassphrase());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-    // The wallet-registry lock is needed for the SyncWithWallets dispatch
-    // after AcceptToMemoryPool below.
+    // The wallet-registry lock is needed for the transactionAddedToMempool
+    // dispatch after AcceptToMemoryPool below.
     LOCK(cs_main);
     LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);
@@ -255,7 +255,6 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);
@@ -278,8 +277,8 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
             + HelpRequiringPassphrase());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-    // The wallet-registry lock is needed for the SyncWithWallets dispatch
-    // after AcceptToMemoryPool below.
+    // The wallet-registry lock is needed for the transactionAddedToMempool
+    // dispatch after AcceptToMemoryPool below.
     LOCK(cs_main);
     LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);
@@ -403,7 +402,6 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);

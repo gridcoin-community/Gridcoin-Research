@@ -192,31 +192,6 @@ void static EraseFromWallets(uint256 hash)
         pwallet->EraseFromWallet(hash);
 }
 
-// make sure all wallets know about the given transaction, in the given block
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
-{
-    if (!fConnect)
-    {
-        // ppcoin: wallets need to refund inputs when disconnecting coinstake
-        if (tx.IsCoinStake())
-        {
-            for (auto const& pwallet : setpwalletRegistered)
-            {
-                if (pwallet->IsFromMe(tx))
-                {
-                    pwallet->DisableTransaction(tx);
-                    g_miner_status.ClearLastStake();
-                }
-            }
-        }
-        return;
-    }
-
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->AddToWalletIfInvolvingMe(tx, pblock, fUpdate);
-}
-
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
     EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
@@ -591,6 +566,17 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         pool.addUnchecked(hash, tx);
     }
 
+    // Notify registered wallets that transaction was added to mempool
+    // This enables incoming transactions to appear immediately with 0 confirmations
+    {
+        LOCK(cs_setpwalletRegistered);
+        CTransactionRef ptx = MakeTransactionRef(tx);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->transactionAddedToMempool(ptx);
+        }
+    }
+
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
     if (ptxOld)
@@ -677,14 +663,15 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    if (hashBlock.IsNull() || nIndex == -1)
-        return 0;
     AssertLockHeld(cs_main);
 
-    // Find the block it claims to be in
+    if (hashBlock.IsNull() || nIndex == -1)
+        return 0;
+
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
         return 0;
+
     CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;

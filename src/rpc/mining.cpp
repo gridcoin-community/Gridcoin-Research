@@ -170,6 +170,11 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "No prior staked blocks found.");
     }
 
+    const auto* stake_conf = stake_tx->state<TxStateConfirmed>();
+    if (!stake_conf) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Last stake transaction is not in confirmed state.");
+    }
+
     int64_t height;
     int64_t timestamp;
     int64_t confirmations;
@@ -181,7 +186,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     {
         LOCK(cs_main);
 
-        const CBlockIndex* const pindex = mapBlockIndex[stake_tx->hashBlock];
+        const CBlockIndex* const pindex = mapBlockIndex[stake_conf->m_confirmed_block_hash];
 
         height = pindex->nHeight;
         timestamp = pindex->nTime;
@@ -200,7 +205,7 @@ UniValue getlaststake(const UniValue& params, bool fHelp)
     const int64_t elapsed_seconds = GetAdjustedTime() - timestamp;
     UniValue json(UniValue::VOBJ);
 
-    json.pushKV("block", stake_tx->hashBlock.ToString());
+    json.pushKV("block", stake_conf->m_confirmed_block_hash.ToString());
     json.pushKV("height", height);
     json.pushKV("confirmations", confirmations);
     json.pushKV("immature", confirmations < nCoinbaseMaturity);

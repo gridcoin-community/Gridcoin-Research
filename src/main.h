@@ -110,9 +110,21 @@ class CReserveKey;
 class CTxDB;
 class CTxIndex;
 
+/** Reason why transaction was removed from mempool */
+// TODO: Consider moving MemPoolRemovalReason to a shared header (e.g. txmempool.h)
+// so that both main.cpp and wallet code can reference it without pulling in all of main.h.
+enum class MemPoolRemovalReason {
+    UNKNOWN = 0,      //!< Manually removed or unknown reason
+    EXPIRY = 1,       //!< Expired from mempool
+    SIZELIMIT = 2,    //!< Removed due to size limit
+    REORG = 3,        //!< Removed for reorganization
+    BLOCK = 4,        //!< Removed because included in block
+    CONFLICT = 5,     //!< Removed due to conflict
+    REPLACED = 6      //!< Removed due to replacement (RBF)
+};
+
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
 void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
@@ -192,8 +204,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction
 {
-private:
-    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
+protected:
+    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
 public:
     uint256 hashBlock;
     int nIndex;
@@ -207,6 +219,8 @@ public:
     {
         Init();
     }
+
+    virtual ~CMerkleTx() = default;
 
     void Init()
     {
