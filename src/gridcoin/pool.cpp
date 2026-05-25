@@ -472,11 +472,21 @@ bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
     }
 
     // BlockValidate runs after Validate; do the takeover check here for
-    // POOL_REGISTER ADD against the existing operator key, since we have
+    // POOL_REGISTER against the existing operator key, since we have
     // cs_main (held in ConnectBlock) and can safely read the registry.
-    if (ctx.m_contract.m_type == ContractType::POOL_REGISTER
-        && ctx.m_contract.m_action == ContractAction::ADD)
-    {
+    //
+    // Applies to BOTH ADD and REMOVE. Without the REMOVE half of this
+    // check, anyone could sign a POOL_REGISTER REMOVE for any pool with
+    // their own key, burn the registration fee, and force the pool to
+    // DELETED — locking out the legitimate operator and breaking
+    // IsActivePool detection. REMOVE is operator self-withdrawal; the
+    // signature must match the prior operator key the same way ADD does.
+    //
+    // POOL_REGISTER on a DELETED entry falls through to Validate (the
+    // entry is filtered out by the != DELETED clause below). That path
+    // admits both ADD (re-registration of a withdrawn non-builtin slot)
+    // and REMOVE (no-op on already-DELETED, burn-protected).
+    if (ctx.m_contract.m_type == ContractType::POOL_REGISTER) {
         const auto payload = ctx.m_contract.SharePayloadAs<PoolRegisterPayload>();
 
         Pool_ptr existing;
