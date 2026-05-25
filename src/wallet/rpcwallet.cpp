@@ -3067,11 +3067,22 @@ UniValue walletlock(const UniValue& params, bool fHelp)
 
 UniValue encryptwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "encryptwallet <passphrase>\n"
-                "\n"
-                "Encrypts the wallet with <passphrase>.\n");
+    static const RPCHelpMan help{
+        "encryptwallet",
+        "Encrypts the wallet with the given passphrase. "
+        "After encryption, the node will shut down and must be restarted.",
+        {
+            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The passphrase used to encrypt the wallet. Must be non-empty."},
+        },
+        RPCResult{RPCResult::Type::STR, "message",
+            "Confirmation message; the daemon stops after returning."},
+        RPCExamples{
+            HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
+            HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
