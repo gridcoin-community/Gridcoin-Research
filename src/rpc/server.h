@@ -13,9 +13,17 @@
 
 class CBlockIndex;
 class uint256;
+// Forward-declare RPCHelpMan rather than #include <rpc/util.h>: the util
+// header transitively defines `enum class Optional { NO, ... }`, and on
+// macOS `NO` is a Foundation/Objective-C macro that clobbers the enumerator
+// when the header reaches any TU that also pulls in <Foundation/Foundation.h>
+// (e.g. via Qt's macOS shims). Forward-declaring lets us name `RPCHelpMan`
+// in the `rpchelpman_fn` typedef below without forcing util.h on every
+// includer of server.h. The full type is needed only inside server.cpp,
+// where util.h is already included directly.
+class RPCHelpMan;
 
 #include <univalue.h>
-#include <rpc/util.h>
 
 void StartRPCThreads();
 void StopRPCThreads();
