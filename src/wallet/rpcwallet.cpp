@@ -1259,14 +1259,34 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
 
 UniValue sendmany(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 4)
-        throw runtime_error(
-                "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
-                "\n"
-                "<fromaccount> Specify account name to use or use '' to use all addresses in wallet\n"
-                "\n"
-                "amounts are double-precision floating point numbers\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "sendmany",
+        "Send GRC to multiple addresses in a single transaction. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Specify account name to use; use \"\" to use all addresses in the wallet. "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"amounts", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+                "A JSON object with addresses as keys and GRC amounts as values.",
+                {
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "GRC amount to send to this address (rounded to the nearest 0.000001)."},
+                }},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only use balance confirmed at least this many times (default: 1)."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Wallet-local comment describing what the transaction is for."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendmany",
+                "\"\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":1.5,\\\"SkNNd1234567890abcdefghijklmnopqr\\\":0.5}\"") +
+            HelpExampleRpc("sendmany",
+                "\"\", {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":1.5,\"SkNNd1234567890abcdefghijklmnopqr\":0.5}")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = AccountFromValue(params[0]);
     bool bFromAccount = false;
