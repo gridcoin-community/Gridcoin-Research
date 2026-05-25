@@ -12,6 +12,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
