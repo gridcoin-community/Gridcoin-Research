@@ -7,8 +7,10 @@
 
 #include "sync.h"
 #include "gridcoin/voting/poll.h"
+#include "primitives/transaction.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 extern CCriticalSection cs_main;
@@ -220,6 +222,26 @@ public:
     PollBuilder AddAdditionalField(Poll::AdditionalField field);
 
     //!
+    //! \brief Specify an explicit UTXO to use for fee payment, overriding
+    //! the default largest-first selection.
+    //!
+    //! By default the poll-creation tx selects the smallest set of largest
+    //! UTXOs sufficient to cover the burn-fee + tx-fee. On a heavily
+    //! fragmented wallet (one with many small UTXOs) this keeps the
+    //! resulting tx well below the standard size limit. For full
+    //! coin-control, callers can pin a specific UTXO via this method; the
+    //! wallet will use ONLY that outpoint for the fee-paying inputs.
+    //!
+    //! Note: the fee-payment UTXO is independent of the balance-attestation
+    //! outpoints carried in the poll's eligibility claim. The claim
+    //! outpoints are referenced but not spent by the poll tx; the
+    //! fee-payment outpoint IS spent.
+    //!
+    //! \param outpoint The UTXO to use for fee payment.
+    //!
+    PollBuilder SetFeeOutpoint(const COutPoint& outpoint);
+
+    //!
     //! \brief Generate a poll contract transaction with the constructed poll.
     //!
     //! \param pwallet Points to a wallet instance to generate the claim from.
@@ -234,6 +256,7 @@ public:
 private:
     std::unique_ptr<Poll> m_poll;    //!< The poll under construction.
     uint32_t m_poll_payload_version; //!< The poll payload version appropriate for the current block height
+    std::optional<COutPoint> m_fee_outpoint; //!< Optional explicit fee-payment UTXO; default = largest-first.
 }; // PollBuilder
 
 //!
