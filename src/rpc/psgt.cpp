@@ -388,19 +388,26 @@ UniValue combinepsgt(const UniValue& params, bool fHelp)
 
 UniValue finalizepsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "finalizepsgt \"psgt\"\n"
-            "\nFinalize a PSGT. If all inputs have been signed, extract the\n"
-            "complete transaction and return it as hex.\n"
-            "\nArguments:\n"
-            "1. \"psgt\"             (string, required) A base64 PSGT string\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"hex\"   : \"value\",   (string) The hex-encoded raw transaction (if complete)\n"
-            "  \"complete\" : true|false (boolean) If the transaction is fully signed and ready to broadcast\n"
-            "}\n"
-        );
+    static const RPCHelpMan help{
+        "finalizepsgt",
+        "Finalize a PSGT. If all inputs have been signed, extract the complete transaction and return it as hex.",
+        {
+            {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "A base64-encoded PSGT."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "hex", /*optional=*/true,
+                    "The hex-encoded raw transaction (only present when complete)."},
+                {RPCResult::Type::BOOL, "complete",
+                    "Whether the transaction is fully signed and ready to broadcast."},
+            }},
+        RPCExamples{
+            HelpExampleCli("finalizepsgt", "\"cHNidP8B...\"") +
+            HelpExampleRpc("finalizepsgt", "\"cHNidP8B...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     PartiallySignedTransaction psgt;
     string error;
