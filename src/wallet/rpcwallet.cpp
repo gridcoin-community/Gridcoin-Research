@@ -1953,12 +1953,24 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
 UniValue liststakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "liststakes ( count )\n"
-                "\n"
-                "Returns count most recent stakes."
-                );
+    static const RPCHelpMan help{
+        "liststakes",
+        "Returns the count most recent stake transactions.",
+        {
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Maximum number of stake transactions to return (default: 10)."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "stake transaction object; see 'listtransactions'"},
+            }},
+        RPCExamples{
+            HelpExampleCli("liststakes", "") +
+            HelpExampleCli("liststakes", "25") +
+            HelpExampleRpc("liststakes", "25")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = "*";
     int nCount = 10;
