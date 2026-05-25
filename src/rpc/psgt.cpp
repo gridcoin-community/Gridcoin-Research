@@ -8,6 +8,7 @@
 #include <main.h>
 #include <rpc/server.h>
 #include <rpc/protocol.h>
+#include <rpc/util.h>
 #include <script/sign.h>
 #include <script/standard.h>
 #include <streams.h>
@@ -67,30 +68,37 @@ static void FillHDKeypaths(const CWallet& wallet,
 
 UniValue createpsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 3)
-        throw runtime_error(
-            "createpsgt [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,...} ( ntime )\n"
-            "\nCreates an unsigned PSGT (Partially Signed Gridcoin Transaction).\n"
-            "\nArguments:\n"
-            "1. \"inputs\"           (array, required) A json array of json objects\n"
-            "     [\n"
-            "       {\n"
-            "         \"txid\":\"id\",    (string, required) The transaction id\n"
-            "         \"vout\":n          (numeric, required) The output number\n"
-            "       }\n"
-            "       ,...\n"
-            "     ]\n"
-            "2. \"outputs\"          (object, required) a json object with addresses as keys and amounts as values\n"
-            "    {\n"
-            "      \"address\": x.xxx    (numeric, required) The key is the Gridcoin address, the value is the GRC amount\n"
-            "      ,...\n"
-            "    }\n"
-            "3. ntime                (numeric, optional) Transaction timestamp (default: current adjusted time)\n"
-            "\nResult:\n"
-            "  \"psgt\"               (string) The base64-encoded unsigned PSGT\n"
-            "\nExamples:\n"
-            "createpsgt \"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"\n"
-        );
+    static const RPCHelpMan help{
+        "createpsgt",
+        "Creates an unsigned Partially Signed Gridcoin Transaction (PSGT).",
+        {
+            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of inputs.",
+                {
+                    {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                        {
+                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                        }},
+                }},
+            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+                "A JSON object with addresses as keys and GRC amounts as values.",
+                {
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "The GRC amount to send to this address."},
+                }},
+            {"ntime", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Transaction timestamp (default: current adjusted time)."},
+        },
+        RPCResult{RPCResult::Type::STR, "psgt", "The base64-encoded unsigned PSGT."},
+        RPCExamples{
+            HelpExampleCli("createpsgt",
+                "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"") +
+            HelpExampleRpc("createpsgt",
+                "[{\"txid\":\"myid\",\"vout\":0}], {\"address\":0.01}")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
