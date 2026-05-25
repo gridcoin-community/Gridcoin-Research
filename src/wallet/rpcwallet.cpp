@@ -864,27 +864,29 @@ int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
 
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-         throw runtime_error(
-                "getbalance ( \"account\" minconf includeWatchonly )\n"
-                "\n"
-                "\nIf account is not specified, returns the server's total available balance.\n"
-                "If account is specified, returns the balance in the account.\n"
-                "Note that the account \"\" is not the same as leaving the parameter out.\n"
-                "The server total may be different to the balance in the default \"\" account.\n"
-                "\nArguments:\n"
-                "1. \"account\"      (string, optional) The selected account, or \"*\" for entire wallet. It may be the default account using \"\".\n"
-                "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
-                "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "amount              (numeric) The total amount in GRC received for this account.\n"
-                "\nExamples:\n"
-                "\nThe total amount in the server across all accounts\n"
-                "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
-                "\nThe total amount in the default account with at least 1 confirmation\n"
-                "\nThe total amount in the account named tabby with at least 6 confirmations\n"
-                "\nAs a json rpc call\n"
-                );
+    static const RPCHelpMan help{
+        "getbalance",
+        "If account is not specified, returns the server's total available balance. "
+        "If account is specified, returns the balance in the account. "
+        "Note that the account \"\" is not the same as leaving the parameter out. "
+        "The server total may be different to the balance in the default \"\" account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The selected account, or \"*\" for the entire wallet (default account is \"\"). "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions confirmed at least this many times (default: 1)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC for this account/wallet."},
+        RPCExamples{
+            HelpExampleCli("getbalance", "") +
+            HelpExampleCli("getbalance", "\"*\" 5") +
+            HelpExampleRpc("getbalance", "\"*\", 5")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
