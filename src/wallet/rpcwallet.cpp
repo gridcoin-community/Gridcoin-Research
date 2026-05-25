@@ -3365,11 +3365,25 @@ UniValue checkwallet(const UniValue& params, bool fHelp)
 // ppcoin: repair wallet
 UniValue repairwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "repairwallet\n"
-                "\n"
-                "Repair wallet if checkwallet reports any problem.\n");
+    static const RPCHelpMan help{
+        "repairwallet",
+        "Repair the wallet if checkwallet reports any problem (fixes mismatched spent coins).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                    "Present and true when no mismatches were found."},
+                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                    "Number of mismatches that were corrected (only present when nonzero)."},
+                {RPCResult::Type::STR_AMOUNT, "amount affected by repair", /*optional=*/true,
+                    "Total balance involved in the corrections (only present when nonzero)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("repairwallet", "") +
+            HelpExampleRpc("repairwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
