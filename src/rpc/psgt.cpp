@@ -644,24 +644,48 @@ UniValue converttopsgt(const UniValue& params, bool fHelp)
 
 UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 4)
-        throw runtime_error(
-            "walletcreatefundedpsgt [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,...} ( options sign )\n"
-            "\nCreate and fund a PSGT with wallet UTXOs, optionally signing it.\n"
-            "\nArguments:\n"
-            "1. \"inputs\"           (array, required) A json array of json objects (can be empty for auto-selection)\n"
-            "2. \"outputs\"          (object, required) a json object with addresses as keys and amounts as values\n"
-            "3. \"options\"          (object, optional)\n"
-            "    {\n"
-            "      \"changeAddress\" : \"addr\"   (string, optional) Address for change output\n"
-            "    }\n"
-            "4. sign                 (boolean, optional, default true) Also sign the PSGT with wallet keys\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"psgt\"       : \"value\",   (string) The base64-encoded PSGT\n"
-            "  \"fee\"        : n            (numeric) The fee paid\n"
-            "}\n"
-        );
+    static const RPCHelpMan help{
+        "walletcreatefundedpsgt",
+        "Create and fund a PSGT with wallet UTXOs, optionally signing it. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted and `sign` is true.",
+        {
+            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of inputs (empty array allows auto-selection from wallet UTXOs).",
+                {
+                    {"input", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                        {
+                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                        }},
+                }},
+            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+                "A JSON object with addresses as keys and GRC amounts as values.",
+                {
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "The GRC amount to send to this address."},
+                }},
+            {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED,
+                "Optional funding options.",
+                {
+                    {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                        "Address to receive change. Default: a new address from the keypool."},
+                }},
+            {"sign", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Also sign the PSGT with wallet keys. Default: true."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "psgt", "The base64-encoded PSGT."},
+                {RPCResult::Type::STR_AMOUNT, "fee", "The fee paid in GRC."},
+            }},
+        RPCExamples{
+            HelpExampleCli("walletcreatefundedpsgt",
+                "\"[]\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":0.1}\"") +
+            HelpExampleRpc("walletcreatefundedpsgt",
+                "[], {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":0.1}")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
