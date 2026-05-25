@@ -9,9 +9,12 @@
 #include "gridcoin/voting/poll.h"
 #include "gridcoin/voting/registry.h"
 #include "gridcoin/voting/result.h"
+#include "primitives/transaction.h"
 #include "protocol.h"
 #include "rpc/util.h"
 #include "server.h"
+#include "uint256.h"
+#include "util/strencodings.h"
 #include "util/time.h"
 
 using namespace GRC;
@@ -395,6 +398,12 @@ UniValue addpoll(const UniValue& params, bool fHelp)
              "Semicolon-separated name=value pairs for poll types that require additional fields "
              "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
              "to discover the required fields for a given poll type."},
+            {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+             "Optional explicit UTXO to use for the 50 GRC poll-creation fee, in "
+             "\"<txid>:<vout>\" form. When omitted, the wallet picks the smallest set of "
+             "largest UTXOs that covers the fee. Use this for coin-control over the fee-paying "
+             "input on a wallet where the default largest-first selection picks something you'd "
+             "rather keep, or when you want a specific UTXO to be the one consumed."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "",
             {
@@ -519,7 +528,7 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         builder = builder.SetChoices(split(params[4].get_str(), ";"));
     }
 
-    if (params.size() == 9 && !params[8].isNull() && !params[8].get_str().empty()) {
+    if (params.size() >= 9 && !params[8].isNull() && !params[8].get_str().empty()) {
         std::vector<std::string> name_value_pairs = split(params[8].get_str(), ";");
         Poll::AdditionalFieldList fields;
 
@@ -550,6 +559,34 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         }
 
         builder = builder.AddAdditionalFields(fields);
+    }
+
+    // Optional fee_outpoint param: "<txid>:<vout>". When provided, the wallet
+    // uses ONLY that outpoint for the fee-paying inputs (coin-control). When
+    // omitted, the wallet picks largest-first to bound the resulting tx size.
+    if (params.size() >= 10 && !params[9].isNull() && !params[9].get_str().empty()) {
+        const std::string fee_outpoint_str = params[9].get_str();
+        const auto colon_pos = fee_outpoint_str.find(':');
+        if (colon_pos == std::string::npos) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "fee_outpoint must be in \"<txid>:<vout>\" form.");
+        }
+
+        const std::string txid_str = fee_outpoint_str.substr(0, colon_pos);
+        const std::string vout_str = fee_outpoint_str.substr(colon_pos + 1);
+
+        if (txid_str.size() != 64 || !IsHex(txid_str)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "fee_outpoint txid must be a 64-character hex string.");
+        }
+
+        uint32_t vout;
+        if (!ParseUInt32(vout_str, &vout)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER,
+                "fee_outpoint vout must be a non-negative integer.");
+        }
+
+        builder = builder.SetFeeOutpoint(COutPoint(uint256S(txid_str), vout));
     }
 
     std::pair<CWalletTx, std::string> result_pair;

@@ -16,8 +16,10 @@
 #include "gridcoin/voting/registry.h"
 #include "node/blockstorage.h"
 #include "node/ui_interface.h"
+#include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 #include <numeric>
+#include <optional>
 #include <util/string.h>
 
 using namespace GRC;
@@ -964,8 +966,82 @@ private:
 //! large enough to settle the cost of the transaction or when the wallet
 //! encounters an error while building the transaction.
 //!
+//! Pick a CCoinControl set of fee-paying inputs for a contract tx.
+//!
+//! The default wallet coin-selection for contract txs (SelectSmallestCoins
+//! in CWallet::SelectCoins) prefers the smallest available UTXOs in order
+//! to preserve large coins for staking. That heuristic is fine when the
+//! wallet has a modest UTXO set, but it pathologically blows up the tx
+//! size on dust-fragmented wallets -- on a wallet with tens of thousands
+//! of dust outputs, the resulting tx can easily exceed the 100 KB standard
+//! transaction size limit and be rejected by CreateTransaction with an
+//! opaque "tx size too large" error.
+//!
+//! For contract txs (poll-creation, voting), the right policy is the
+//! opposite: pick the smallest set of LARGEST UTXOs that suffices. A
+//! single sufficiently-large UTXO produces a minimum-size tx; if no single
+//! UTXO is large enough, accumulate top-down by amount.
+//!
+//! \param wallet The wallet whose UTXOs are eligible for fee payment.
+//! \param needed The minimum amount the selection must cover (burn fee
+//! plus a small headroom for the tx-fee that CreateTransaction will
+//! itself add).
+//! \param explicit_outpoint If set, the user has pinned an exact UTXO
+//! (coin-control). Use only that outpoint; fail if it cannot cover the
+//! requirement.
+//! \return A CCoinControl with the selected outpoints pinned. If no
+//! selection covers \p needed the returned CCoinControl contains a partial
+//! selection; the downstream CreateTransaction call reports the
+//! insufficient-funds error via its existing path. The helper itself never
+//! throws.
+inline CCoinControl PickLargestFirstFeeInputs(
+    CWallet& wallet,
+    const CAmount& needed,
+    const std::optional<COutPoint>& explicit_outpoint)
+{
+    CCoinControl coin_control;
+
+    if (explicit_outpoint) {
+        // User-specified — pin exactly this UTXO. If it can't cover, the
+        // downstream CreateTransaction call will fail and we throw the
+        // existing insufficient-funds path. Don't validate the outpoint
+        // here (it could be unconfirmed, conflicted, not ours, spent, etc.)
+        // — let AvailableCoins filter it out and let the wallet report.
+        coin_control.Select(*explicit_outpoint);
+        return coin_control;
+    }
+
+    // Default: accumulate largest-first until covered. Pass a CCoinControl
+    // with fAllowWatchOnly=false (the default) to AvailableCoins so the
+    // candidate set excludes watch-only outputs -- selecting a large
+    // watch-only UTXO would propagate to CreateTransaction and fail
+    // signing because we don't hold the key.
+    std::vector<COutput> available;
+    CCoinControl filter;
+    wallet.AvailableCoins(available, true, &filter, false);
+
+    std::sort(available.begin(), available.end(),
+        [](const COutput& a, const COutput& b) {
+            return a.tx->vout[a.i].nValue > b.tx->vout[b.i].nValue;
+        });
+
+    CAmount accumulated = 0;
+    for (const auto& utxo : available) {
+        coin_control.Select(COutPoint(utxo.tx->GetHash(), utxo.i));
+        accumulated += utxo.tx->vout[utxo.i].nValue;
+        if (accumulated >= needed) break;
+    }
+
+    // If we didn't find enough, return the partial selection anyway.
+    // CreateTransaction will report Insufficient funds via the existing
+    // error path -- consistent with the previous behavior for under-funded
+    // wallets.
+    return coin_control;
+}
+
 template <typename PayloadType>
-void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
+void SelectFinalInputs(CWallet& wallet, CWalletTx& tx,
+                       const std::optional<COutPoint>& explicit_fee_outpoint = std::nullopt)
 {
     CWalletTx mock_tx = tx;
 
@@ -980,13 +1056,28 @@ void SelectFinalInputs(CWallet& wallet, CWalletTx& tx)
     CReserveKey reserve_key(&wallet); // unused
     CAmount out_applied_fee;
 
+    // Pre-select fee-paying inputs largest-first (or honor the user's
+    // explicit outpoint). This avoids CreateTransaction's default
+    // SelectSmallestCoins() path for contract txs, which on a dust-heavy
+    // wallet selects hundreds of small UTXOs and blows past the 100 KB
+    // standard tx size limit.
+    //
+    // Headroom = COIN (1 GRC) covers any reasonable per-byte fee that
+    // CreateTransaction will add for a contract-sized tx. If the headroom
+    // turns out to be insufficient (very unlikely on a normal fee
+    // schedule), CreateTransaction will return false and we throw via the
+    // existing Insufficient-funds path.
+    const CAmount needed = burn_fee + COIN;
+    CCoinControl coin_control = PickLargestFirstFeeInputs(
+        wallet, needed, explicit_fee_outpoint);
+
     if (!wallet.CreateTransaction(
         CScript() << OP_RETURN,
         burn_fee,
         mock_tx,
         reserve_key,
         out_applied_fee,
-        nullptr))
+        &coin_control))
     {
         if (burn_fee + out_applied_fee > wallet.GetBalance()) {
             throw VotingError(_("Insufficient funds."));
@@ -1048,7 +1139,9 @@ uint256 GRC::SendVoteContract(VoteBuilder builder)
 // Class: PollBuilder
 // -----------------------------------------------------------------------------
 
-PollBuilder::PollBuilder() : m_poll(std::make_unique<Poll>())
+PollBuilder::PollBuilder()
+    : m_poll(std::make_unique<Poll>())
+    , m_fee_outpoint(std::nullopt)
 {
 }
 
@@ -1335,6 +1428,12 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
     return std::move(*this);
 }
 
+PollBuilder PollBuilder::SetFeeOutpoint(const COutPoint& outpoint)
+{
+    m_fee_outpoint = outpoint;
+    return std::move(*this);
+}
+
 CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pwallet) {
@@ -1377,7 +1476,7 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
         static_cast<CTransaction&>(tx) = CTransaction(std::move(mtx));
     }
 
-    SelectFinalInputs<PollPayload>(*pwallet, tx);
+    SelectFinalInputs<PollPayload>(*pwallet, tx, m_fee_outpoint);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
 
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim with %" PRIszu " address(es), poll title %s.",
