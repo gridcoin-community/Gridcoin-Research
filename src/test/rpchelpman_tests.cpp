@@ -232,6 +232,16 @@ UniValue upgradewallet(const UniValue& params, bool fHelp);
 UniValue abandontransaction(const UniValue& params, bool fHelp);
 UniValue inspectwalletstate(const UniValue& params, bool fHelp);
 
+// Forward declarations of the PSGT (Partially Signed Gridcoin Transaction) commands under test.
+UniValue createpsgt(const UniValue& params, bool fHelp);
+UniValue decodepsgt(const UniValue& params, bool fHelp);
+UniValue combinepsgt(const UniValue& params, bool fHelp);
+UniValue finalizepsgt(const UniValue& params, bool fHelp);
+UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
+UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
+UniValue converttopsgt(const UniValue& params, bool fHelp);
+UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -1068,15 +1078,13 @@ BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
 // before any wallet/state access, so this test runs fixture-free like the
 // other Tier 1 help-rendering cases.
 BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
+// Helper for the straggler-batch help-rendering tests below. Each converted
+// command throws runtime_error(help.ToString()) on fHelp=true before any
+// wallet/state access, so iterating fixture-free is safe.
+static void check_straggler_help_renders(
+    const std::vector<std::pair<const char*, UniValue (*)(const UniValue&, bool)>>& cases)
 {
     const UniValue empty(UniValue::VARR);
-
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"abandontransaction", &abandontransaction},
-        {"inspectwalletstate", &inspectwalletstate},
-    };
-
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
             bool threw = false;
@@ -1093,6 +1101,30 @@ BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
         }
     }
+}
+
+// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2).
+BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
+{
+    check_straggler_help_renders({
+        {"abandontransaction", &abandontransaction},
+        {"inspectwalletstate", &inspectwalletstate},
+    });
+}
+
+// PSGT commands (Partially Signed Gridcoin Transaction, introduced in #2877 G).
+BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
+{
+    check_straggler_help_renders({
+        {"createpsgt",             &createpsgt},
+        {"decodepsgt",             &decodepsgt},
+        {"combinepsgt",            &combinepsgt},
+        {"finalizepsgt",           &finalizepsgt},
+        {"walletprocesspsgt",      &walletprocesspsgt},
+        {"utxoupdatepsgt",         &utxoupdatepsgt},
+        {"converttopsgt",          &converttopsgt},
+        {"walletcreatefundedpsgt", &walletcreatefundedpsgt},
+    });
 }
 
 BOOST_AUTO_TEST_SUITE_END()
