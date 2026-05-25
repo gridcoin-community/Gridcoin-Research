@@ -229,7 +229,7 @@ public:
     //!
     //! \throws VotingError If the constructed poll is malformed.
     //!
-    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version);
+    CWalletTx BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 private:
     std::unique_ptr<Poll> m_poll;    //!< The poll under construction.

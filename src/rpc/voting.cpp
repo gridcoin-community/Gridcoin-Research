@@ -291,7 +291,7 @@ UniValue PollClaimToJson(const PollEligibilityClaim& claim)
     UniValue json(UniValue::VOBJ);
 
     json.pushKV("version", (uint64_t)claim.m_version);
-    json.pushKV("address_claim", AddressClaimToJson(claim.m_address_claim));
+    json.pushKV("balance_claim", BalanceClaimToJson(claim.m_balance_claim));
 
     return json;
 }

@@ -633,32 +633,94 @@ public:
     //!
     //! \param poll Poll contract to generate the claim for.
     //!
-    PollEligibilityClaim BuildClaim(const Poll& poll) const
+    PollEligibilityClaim BuildClaim(const Poll& poll) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
-        const AddressClaimBuilder builder(m_wallet);
+        if (!IsPollMultiAddressEnabled(nBestHeight)) {
+            return BuildV1Claim(poll);
+        }
+
         PollEligibilityClaim claim;
+        claim.m_version = 2;
 
-        for (auto& address : CoinPicker(m_wallet).PickCoins()) {
-            // Addresses are sorted in descending order by amount. We can exit
-            // early when we find an address less than the required amount:
-            if (address.m_total_amount < POLL_REQUIRED_BALANCE) {
-                break;
-            }
+        // STEP 1: Get ALL outputs, sort GLOBALLY by size (same as votes)
+        std::vector<COutput> outputs;
+        m_wallet.AvailableCoins(outputs, true, nullptr, true);
 
-            if (!TryTrimAddress(address)) {
-                continue;
-            }
+        const auto descending_by_amount = [](const COutput& a, const COutput& b) {
+            return a.tx->vout[a.i].nValue > b.tx->vout[b.i].nValue;
+        };
+        std::sort(outputs.begin(), outputs.end(), descending_by_amount);
 
-            if (auto claim_option = builder.TryBuildClaim(std::move(address))) {
-                claim.m_address_claim = std::move(*claim_option);
-                return claim;
+        LogPrint(LogFlags::VOTE, "%s: wallet supplied %" PRIszu " outputs",
+            __func__, outputs.size());
+
+        // STEP 2: Select top outputs (up to MAX_OUTPOINTS)
+        std::map<CKeyID, std::vector<COutPoint>> selected_by_address;
+        CAmount total_amount = 0;
+        size_t outpoint_count = 0;
+
+        for (const auto& output : outputs) {
+            if (outpoint_count >= PollEligibilityClaim::MAX_OUTPOINTS) break;
+
+            // Filter same as votes: >= 1 GRC, confirmed, P2PKH only
+            if (output.tx->vout[output.i].nValue < COIN) break;
+            if (!output.tx->IsTrusted() || !output.tx->IsConfirmed()) continue;
+
+            CTxDestination dest;
+            if (!ExtractDestination(output.tx->vout[output.i].scriptPubKey, dest)) continue;
+
+            const CKeyID* keyId = std::get_if<CKeyID>(&dest);
+            if (!keyId) continue;
+
+            // Add to selection
+            selected_by_address[*keyId].emplace_back(output.tx->GetHash(), output.i);
+            total_amount += output.tx->vout[output.i].nValue;
+            ++outpoint_count;
+
+            LogPrint(LogFlags::VOTE,
+                "  selected output for address %s: %s GRC (total: %s)",
+                EncodeDestination(*keyId),
+                FormatMoney(output.tx->vout[output.i].nValue),
+                FormatMoney(total_amount));
+
+            // Early exit if we have enough
+            if (total_amount >= POLL_REQUIRED_BALANCE) break;
+        }
+
+        // STEP 3: Verify sufficient balance
+        if (total_amount < POLL_REQUIRED_BALANCE) {
+            throw VotingError(strprintf(
+                _("Wallet balance of %s in top %s UTXOs is less than required %s GRC."),
+                FormatMoney(total_amount),
+                ToString(outpoint_count),
+                FormatMoney(POLL_REQUIRED_BALANCE)));
+        }
+
+        // STEP 4: Build address claims (same as votes)
+        const AddressClaimBuilder address_builder(m_wallet);
+        claim.m_balance_claim.m_address_claims.reserve(selected_by_address.size());
+
+        for (auto& [key_id, outpoints] : selected_by_address) {
+            AddressOutputs addr_outputs(key_id);
+            addr_outputs.m_outpoints = std::move(outpoints);
+
+            if (auto claim_option = address_builder.TryBuildClaim(std::move(addr_outputs))) {
+                claim.m_balance_claim.m_address_claims.emplace_back(
+                    std::move(*claim_option));
             }
         }
 
-        throw VotingError(strprintf(
-            _("No address contains %s GRC in %s UTXOs or fewer."),
-            FormatMoney(POLL_REQUIRED_BALANCE),
-            ToString(PollEligibilityClaim::MAX_OUTPOINTS)));
+        // STEP 5: Sort address claims
+        std::sort(claim.m_balance_claim.m_address_claims.begin(),
+                  claim.m_balance_claim.m_address_claims.end());
+
+        LogPrint(LogFlags::VOTE, "%s: Built poll claim: %s addresses, %s UTXOs, %s GRC",
+            __func__,
+            ToString(claim.m_balance_claim.m_address_claims.size()),
+            ToString(outpoint_count),
+            FormatMoney(total_amount));
+
+        return claim;
     }
 
     //!
@@ -674,53 +736,77 @@ public:
         const ClaimMessage message = PackPollMessage(payload.m_poll, tx);
         const AddressClaimBuilder builder(m_wallet);
 
-        return builder.SignClaim(payload.m_claim.m_address_claim, message);
+        // Sign all address claims in the balance claim
+        for (auto& address_claim : payload.m_claim.m_balance_claim.m_address_claims) {
+            if (!builder.SignClaim(address_claim, message)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 private:
     const CWallet& m_wallet; //!< Supplies balance context and signing keys.
 
     //!
-    //! \brief Remove outputs from the address until the address fits into a
-    //! poll address claim or until the total claimed amount for the address
-    //! falls below the required threshold.
+    //! \brief Generate a v1 single-address poll eligibility claim.
     //!
-    //! \param address The intermediate address container to trim.
+    //! Used before PollMultiAddressHeight activation to maintain backward
+    //! compatibility with nodes that do not understand v2 claims.
     //!
-    //! \return \c false if the trimmed amount for the address does not meet
-    //! the balance requirement for a poll.
+    //! \param poll Poll contract to generate the claim for.
     //!
-    static bool TryTrimAddress(AddressOutputs& address)
+    PollEligibilityClaim BuildV1Claim(const Poll& poll) const
     {
-        std::vector<COutPoint>& outpoints = address.m_outpoints;
-        std::vector<CAmount>& amounts = address.m_amounts;
+        std::vector<COutput> outputs;
+        m_wallet.AvailableCoins(outputs, true, nullptr, true);
 
-        while (outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
-            address.m_total_amount -= amounts.back();
+        // Group outputs by address
+        std::map<CKeyID, AddressOutputs> outputs_by_address;
+        for (const auto& output : outputs) {
+            if (output.tx->vout[output.i].nValue < COIN) continue;
+            if (!output.tx->IsTrusted() || !output.tx->IsConfirmed()) continue;
 
-            if (address.m_total_amount < POLL_REQUIRED_BALANCE) {
-                LogPrint(LogFlags::VOTE, "%s: exceeded max outputs for %s",
-                    __func__,
-                    EncodeDestination(address.m_key_id));
+            CTxDestination dest;
+            if (!ExtractDestination(output.tx->vout[output.i].scriptPubKey, dest)) continue;
 
-                return false;
+            const CKeyID* keyId = std::get_if<CKeyID>(&dest);
+            if (!keyId) continue;
+
+            auto it = outputs_by_address.find(*keyId);
+            if (it == outputs_by_address.end()) {
+                it = outputs_by_address.emplace(*keyId, AddressOutputs(*keyId)).first;
+            }
+            it->second.m_outpoints.emplace_back(output.tx->GetHash(), output.i);
+            it->second.m_total_amount += output.tx->vout[output.i].nValue;
+        }
+
+        // Find the first address with balance >= POLL_REQUIRED_BALANCE
+        const AddressClaimBuilder address_builder(m_wallet);
+        for (auto& [key_id, addr_outputs] : outputs_by_address) {
+            if (addr_outputs.m_total_amount < POLL_REQUIRED_BALANCE) continue;
+
+            // Trim to MAX_OUTPOINTS if needed
+            if (addr_outputs.m_outpoints.size() > PollEligibilityClaim::MAX_OUTPOINTS) {
+                addr_outputs.m_outpoints.resize(PollEligibilityClaim::MAX_OUTPOINTS);
             }
 
-            outpoints.pop_back();
-            amounts.pop_back();
+            if (auto claim_option = address_builder.TryBuildClaim(std::move(addr_outputs))) {
+                PollEligibilityClaim claim;
+                claim.m_version = 1;
+                claim.m_balance_claim.m_address_claims.push_back(std::move(*claim_option));
+
+                LogPrint(LogFlags::VOTE, "%s: Built v1 poll claim for address %s",
+                    __func__, EncodeDestination(key_id));
+
+                return claim;
+            }
         }
 
-        // Trim any remaining outputs that we don't need to satisfy the balance
-        // requirement for the poll:
-        //
-        while (address.m_total_amount - amounts.back() > POLL_REQUIRED_BALANCE) {
-            outpoints.pop_back();
-            amounts.pop_back();
-
-            address.m_total_amount -= amounts.back();
-        }
-
-        return true;
+        throw VotingError(strprintf(
+            _("No single address has the required %s GRC balance to create a poll."),
+            FormatMoney(POLL_REQUIRED_BALANCE)));
     }
 }; // PollClaimBuilder
 
@@ -1171,7 +1257,7 @@ PollBuilder PollBuilder::AddAdditionalField(Poll::AdditionalField field)
     return std::move(*this);
 }
 
-CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version)
+CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& contract_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pwallet) {
         throw VotingError(_("No wallet available."));
@@ -1216,9 +1302,9 @@ CWalletTx PollBuilder::BuildContractTx(CWallet* const pwallet, const uint32_t& c
     SelectFinalInputs<PollPayload>(*pwallet, tx);
     PollPayload& poll_payload = tx.vContracts.back().SharePayload().As<PollPayload>();
 
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim address %s, poll title %s.",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: tx contract payload claim with %" PRIszu " address(es), poll title %s.",
              __func__,
-             EncodeDestination(poll_payload.m_claim.m_address_claim.m_public_key.GetID()),
+             poll_payload.m_claim.m_balance_claim.m_address_claims.size(),
              poll_payload.m_poll.m_title
              );
 

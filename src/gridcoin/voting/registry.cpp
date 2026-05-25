@@ -178,7 +178,18 @@ public:
         const ClaimMessage message = PackPollMessage(payload.m_poll, tx);
 
         try {
-            return VerifyClaim(payload.m_claim.m_address_claim, message);
+            if (payload.m_claim.m_version == 1) {
+                // Legacy single address (converted by serialization)
+                if (payload.m_claim.m_balance_claim.m_address_claims.size() != 1) {
+                    return false;
+                }
+                return VerifyAddressClaim(
+                    payload.m_claim.m_balance_claim.m_address_claims[0],
+                    message);
+            } else {
+                // Version 2+: multiple addresses
+                return VerifyBalanceClaim(payload.m_claim.m_balance_claim, message);
+            }
         } catch (const InvalidPollError& e) {
             LogPrint(LogFlags::VOTE, "%s: bad poll claim", __func__);
             return false;
@@ -187,6 +198,36 @@ public:
 
 private:
     CTxDB& m_txdb; //!< Used to resolve unspent amount claims.
+
+    //!
+    //! \brief Determine whether the balance claim (multiple addresses)
+    //! establishes eligibility for creating the poll.
+    //!
+    //! \param claim   The balance claim to verify minimum balance for.
+    //! \param message Serialized context for claim signature verification.
+    //!
+    //! \return \c true If the resolved amount for the claim meets the
+    //! minimum balance requirement to create a poll.
+    //!
+    bool VerifyBalanceClaim(const BalanceClaim& claim, const ClaimMessage& message)
+    {
+        CAmount total_amount = 0;
+
+        for (const auto& address_claim : claim.m_address_claims) {
+            if (!address_claim.VerifySignature(message)) {
+                LogPrint(LogFlags::VOTE, "%s: bad address signature", __func__);
+                return false;
+            }
+
+            const CTxDestination address = address_claim.m_public_key.GetID();
+
+            for (const auto& txo : address_claim.m_outpoints) {
+                total_amount += Resolve(txo, address);
+            }
+        }
+
+        return total_amount >= POLL_REQUIRED_BALANCE;
+    }
 
     //!
     //! \brief Determine whether the address claim establishes eligibility for
@@ -198,7 +239,7 @@ private:
     //! \return \c true If the resolved amount for the claim meets the
     //! minimum balance requirement to create a poll.
     //!
-    bool VerifyClaim(const AddressClaim& claim, const ClaimMessage& message)
+    bool VerifyAddressClaim(const AddressClaim& claim, const ClaimMessage& message)
     {
         if (!claim.VerifySignature(message)) {
             LogPrint(LogFlags::VOTE, "%s: bad address signature", __func__);
@@ -327,6 +368,7 @@ PollReference::PollReference()
     : m_txid(uint256{})
     , m_payload_version(0)
     , m_type(PollType::UNKNOWN)
+    , m_weight_type(PollWeightType::UNKNOWN)
     , m_ptitle(nullptr)
     , m_timestamp(0)
     , m_duration_days(0)
@@ -1042,10 +1084,30 @@ bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
 
     const auto payload = ctx->SharePayloadAs<PollPayload>();
 
-    // This is why we had to introduce BlockValidate, and this is critical
-    // to ensure that v2 poll payloads are not allowed in blocks for the v3
-    // height and beyond.
+    // Enforce v3 polls at PollV3Height
     if (IsPollV3Enabled(ctx.m_pindex->nHeight) && payload->m_version < 3) {
+        return false;
+    }
+
+    // Reject v2+ claims before multi-address activation (bidirectional enforcement)
+    if (!IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
+        && payload->m_claim.m_version >= 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v2 poll claim before multi-address activation at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
+        return false;
+    }
+
+    // Enforce multi-address claims at PollMultiAddressHeight
+    if (IsPollMultiAddressEnabled(ctx.m_pindex->nHeight)
+        && payload->m_claim.m_version < 2) {
+        DoS = 25;
+        LogPrint(LogFlags::CONTRACT,
+            "%s: rejected v1 poll claim after multi-address activation at height %d",
+            __func__,
+            ctx.m_pindex->nHeight);
         return false;
     }
 
@@ -1102,6 +1164,7 @@ void PollRegistry::AddPoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(
         poll_ref.m_title = poll_title;
         poll_ref.m_payload_version = payload->m_version;
         poll_ref.m_type = payload->m_poll.m_type.Value();
+        poll_ref.m_weight_type = payload->m_poll.m_weight_type.Value();
         poll_ref.m_timestamp = ctx.m_tx.nTime;
         poll_ref.m_duration_days = payload->m_poll.m_duration_days;
 
@@ -1192,7 +1255,13 @@ void PollRegistry::DeletePoll(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
 
     int64_t poll_time = payload->m_poll.m_timestamp;
 
-    PollReference* poll_ref = TryBy(payload->m_poll.m_title);
+    PollReference* poll_ref = TryBy(ToLower(payload->m_poll.m_title));
+
+    if (!poll_ref) {
+        LogPrint(BCLog::LogFlags::VOTE, "%s: poll \"%s\" not found in registry.",
+                 __func__, payload->m_poll.m_title);
+        return;
+    }
 
     if (poll_ref) {
         // Note this reference will effectively disappear once this function exits, but this is ok, because there will
