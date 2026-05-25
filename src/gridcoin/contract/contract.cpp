@@ -864,6 +864,7 @@ Contract::Action Contract::Action::Parse(std::string input)
 {
     if (input == "A")  return ContractAction::ADD;
     if (input == "D")  return ContractAction::REMOVE;
+    if (input == "O")  return ContractAction::OPEN;
 
     return ContractAction::UNKNOWN;
 }
@@ -873,6 +874,7 @@ std::string Contract::Action::ToString() const
     switch (m_value) {
         case ContractAction::ADD:    return "A";
         case ContractAction::REMOVE: return "D";
+        case ContractAction::OPEN:   return "O";
         default:                     return "";
     }
 }

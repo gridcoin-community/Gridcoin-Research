@@ -724,6 +724,16 @@ void SetupServerArgs()
     // in chainparams.cpp.
     hidden_args.emplace_back("-blockv15height");
 
+    // Isolated-testnet / regtest override for the PENDING / OPEN expiration
+    // window on POOL contracts (issue #1783). Default chainparams value is
+    // 28800 blocks (~20 days at mainnet ~60s spacing); this arg shortens
+    // the window so dev runs can exercise expiration boundaries without
+    // waiting weeks. CONSENSUS-AFFECTING — nodes with differing values
+    // disagree on POOL_REGISTER admission across expiration boundaries
+    // and will fork off the network if used on mainnet/public-testnet.
+    // Read via GetPendingPoolRetention in chainparams.cpp.
+    hidden_args.emplace_back("-pendingpoolretention");
+
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options

@@ -290,6 +290,14 @@ UniValue PoolApprovePayloadToJson(const GRC::ContractPayload& payload)
 
     out.pushKV("cpid", approve.m_cpid.ToString());
 
+    // The authorized-operator-key field is only meaningful for OPEN
+    // payloads; ADD/REMOVE serialize 20 bytes without it. Emit only
+    // when valid so JSON output isn't cluttered with empty hex strings
+    // for the common ADD/REMOVE paths.
+    if (approve.m_authorized_operator_key.IsValid()) {
+        out.pushKV("authorized_operator_pubkey", HexStr(approve.m_authorized_operator_key));
+    }
+
     return out;
 }
 

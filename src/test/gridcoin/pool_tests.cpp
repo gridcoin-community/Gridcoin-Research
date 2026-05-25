@@ -5,6 +5,7 @@
 #include "gridcoin/pool.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/researcher.h"
+#include "chainparams.h"
 #include "key.h"
 #include "streams.h"
 
@@ -302,6 +303,60 @@ BOOST_AUTO_TEST_CASE(approve_payload_well_formed_rejects_unknown_action)
     BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::UNKNOWN));
 }
 
+BOOST_AUTO_TEST_CASE(approve_payload_well_formed_accepts_open_with_valid_auth_key)
+{
+    CKey op_priv = PoolTestKey::Private();
+    GRC::PoolApprovePayload payload(PoolTestKey::Cpid(), op_priv.GetPubKey());
+
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::OPEN));
+}
+
+BOOST_AUTO_TEST_CASE(approve_payload_well_formed_rejects_open_with_invalid_auth_key)
+{
+    // Finding N: an OPEN payload with a default-constructed (invalid)
+    // m_authorized_operator_key would silently do nothing — the IsBuiltin
+    // guard's auth.IsValid() check would reject every claim attempt. Fail
+    // fast at the WellFormed gate.
+    GRC::PoolApprovePayload payload(PoolTestKey::Cpid(), CPubKey{} /* invalid */);
+
+    BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::OPEN));
+}
+
+BOOST_AUTO_TEST_CASE(approve_payload_serialization_round_trip_open_includes_auth_key)
+{
+    CKey op_priv = PoolTestKey::Private();
+    GRC::PoolApprovePayload original(PoolTestKey::Cpid(), op_priv.GetPubKey());
+
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    original.Serialize(stream, GRC::ContractAction::OPEN);
+
+    GRC::PoolApprovePayload decoded;
+    decoded.Unserialize(stream, GRC::ContractAction::OPEN);
+
+    BOOST_CHECK(decoded.m_cpid == original.m_cpid);
+    BOOST_CHECK(decoded.m_authorized_operator_key == original.m_authorized_operator_key);
+}
+
+BOOST_AUTO_TEST_CASE(approve_payload_serialization_add_excludes_auth_key_field)
+{
+    // The conditional serialization in PoolApprovePayload::SerializationOp
+    // means ADD/REMOVE wire-shape is (version, cpid) = 20 bytes. An OPEN
+    // payload extends to (version, cpid, pubkey) = 53 bytes. Setting an
+    // auth key on an ADD payload should NOT change the serialized size
+    // (key omitted on the wire).
+    CKey op_priv = PoolTestKey::Private();
+    GRC::PoolApprovePayload with_auth(PoolTestKey::Cpid(), op_priv.GetPubKey());
+    GRC::PoolApprovePayload without_auth(PoolTestKey::Cpid());
+
+    CDataStream stream_with(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream stream_without(SER_NETWORK, PROTOCOL_VERSION);
+    with_auth.Serialize(stream_with, GRC::ContractAction::ADD);
+    without_auth.Serialize(stream_without, GRC::ContractAction::ADD);
+
+    BOOST_CHECK_EQUAL(stream_with.size(), stream_without.size());
+    BOOST_CHECK_EQUAL(stream_with.size(), 4u + 16u); // version (uint32) + cpid (16 bytes)
+}
+
 BOOST_AUTO_TEST_CASE(approve_payload_contract_type_is_pool_approve)
 {
     GRC::PoolApprovePayload payload;
@@ -444,9 +499,10 @@ BOOST_AUTO_TEST_CASE(builtin_seed_hash_is_deterministic_and_unique)
 
 BOOST_AUTO_TEST_CASE(grandfathered_builtins_have_invalid_operator_key)
 {
-    // The "invalid existing key == claimable" semantic must NOT apply to
-    // builtins (plan §3.5). Verify the seed entries actually carry an
-    // invalid operator key, otherwise the §3.5 guard wouldn't fire.
+    // The Path 2 sticky-claim semantic relies on builtins having an
+    // invalid operator key by default — that's what sends them down
+    // Path 2 instead of Path 1 until a real claim takes hold (plan
+    // §3.5, finding K).
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
     for (const auto& seed : GRC::PoolRegistry::BuiltinPoolSeeds()) {
@@ -456,7 +512,109 @@ BOOST_AUTO_TEST_CASE(grandfathered_builtins_have_invalid_operator_key)
         BOOST_CHECK(!entry->m_operator_key.IsValid());
         BOOST_CHECK(entry->m_status == GRC::PoolStatus::ACTIVE);
         BOOST_CHECK_EQUAL(entry->m_height, 0);
+        // Auth fields default to "no authorization."
+        BOOST_CHECK(!entry->m_authorized_operator_key.IsValid());
+        BOOST_CHECK_EQUAL(entry->m_authorization_height, -1);
     }
+}
+
+// -----------------------------------------------------------------------------
+// IsPendingExpired / IsAuthorizationExpired pure-function tests
+//
+// These verify the height-comparison logic without setting up registry state.
+// The full BlockValidate / lifecycle tests that exercise expired-PENDING
+// transparency, OPEN-authorization expiry, sticky-claim rejection, etc., need
+// ContractContext + CBlockIndex mocking and ride along with the deferred
+// test-infrastructure PR (same pattern as the rework's existing deferrals).
+// -----------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(is_pending_expired_only_fires_for_pending_status)
+{
+    GRC::Pool entry;
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = 100;
+    // Well past the default retention window — would expire if status mattered.
+    BOOST_CHECK(!GRC::PoolRegistry::IsPendingExpired(entry, 100 + 1'000'000));
+
+    entry.m_status = GRC::PoolStatus::DELETED;
+    BOOST_CHECK(!GRC::PoolRegistry::IsPendingExpired(entry, 100 + 1'000'000));
+
+    entry.m_status = GRC::PoolStatus::PENDING;
+    BOOST_CHECK(GRC::PoolRegistry::IsPendingExpired(entry, 100 + 1'000'000));
+}
+
+BOOST_AUTO_TEST_CASE(is_pending_expired_height_boundary)
+{
+    const int retention = GRC::GetPendingPoolRetention();
+
+    GRC::Pool entry;
+    entry.m_status = GRC::PoolStatus::PENDING;
+    entry.m_height = 100;
+
+    // At and below the boundary: not expired.
+    BOOST_CHECK(!GRC::PoolRegistry::IsPendingExpired(entry, 100 + retention));
+    BOOST_CHECK(!GRC::PoolRegistry::IsPendingExpired(entry, 100 + retention - 1));
+
+    // Above the boundary: expired.
+    BOOST_CHECK(GRC::PoolRegistry::IsPendingExpired(entry, 100 + retention + 1));
+}
+
+BOOST_AUTO_TEST_CASE(is_pending_expired_handles_seed_height_sentinel)
+{
+    // Builtin seeds use m_height == 0 with status ACTIVE. PENDING with a
+    // negative height (defensive — never happens in practice) is treated
+    // as not-expired so we don't fire on uninitialized memory.
+    GRC::Pool entry;
+    entry.m_status = GRC::PoolStatus::PENDING;
+    entry.m_height = -1;
+    BOOST_CHECK(!GRC::PoolRegistry::IsPendingExpired(entry, 1'000'000));
+}
+
+BOOST_AUTO_TEST_CASE(is_authorization_expired_only_fires_with_valid_auth_key)
+{
+    GRC::Pool entry;
+    entry.m_authorization_height = 100;
+    // No auth key — never expired (nothing to expire).
+    BOOST_CHECK(!entry.m_authorized_operator_key.IsValid());
+    BOOST_CHECK(!GRC::PoolRegistry::IsAuthorizationExpired(entry, 100 + 1'000'000));
+}
+
+BOOST_AUTO_TEST_CASE(is_authorization_expired_height_boundary)
+{
+    const int retention = GRC::GetPendingPoolRetention();
+    CKey op_priv = PoolTestKey::Private();
+
+    GRC::Pool entry;
+    entry.m_authorized_operator_key = op_priv.GetPubKey();
+    entry.m_authorization_height = 100;
+
+    BOOST_CHECK(!GRC::PoolRegistry::IsAuthorizationExpired(entry, 100 + retention));
+    BOOST_CHECK(!GRC::PoolRegistry::IsAuthorizationExpired(entry, 100 + retention - 1));
+    BOOST_CHECK(GRC::PoolRegistry::IsAuthorizationExpired(entry, 100 + retention + 1));
+}
+
+BOOST_AUTO_TEST_CASE(is_authorization_expired_handles_sentinel_height)
+{
+    // Sentinel m_authorization_height == -1 means "no authorization ever
+    // set"; the auth-key-validity check should already short-circuit, but
+    // belt-and-suspenders.
+    CKey op_priv = PoolTestKey::Private();
+
+    GRC::Pool entry;
+    entry.m_authorized_operator_key = op_priv.GetPubKey();
+    entry.m_authorization_height = -1;
+    BOOST_CHECK(!GRC::PoolRegistry::IsAuthorizationExpired(entry, 1'000'000));
+}
+
+BOOST_AUTO_TEST_CASE(pending_pool_retention_default_is_28800)
+{
+    // Sanity: the default retention should match what the plan and
+    // chainparams.cpp declare. If a future commit retunes this, the test
+    // becomes a documentation tripwire.
+    //
+    // GetPendingPoolRetention() reads the -pendingpoolretention override
+    // when set; in the unit-test harness no override is in play.
+    BOOST_CHECK_EQUAL(GRC::GetPendingPoolRetention(), 28800);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

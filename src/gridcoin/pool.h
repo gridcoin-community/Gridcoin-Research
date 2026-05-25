@@ -34,6 +34,16 @@ namespace GRC {
 //!   POOL_APPROVE ADD  (master-key signed) -->  ACTIVE   (must reference a known PENDING/ACTIVE CPID)
 //!   POOL_APPROVE REMOVE (master-key)      -->  DELETED  (foundation de-list)
 //!   POOL_REGISTER REMOVE (operator-signed) -->  DELETED  (operator self-withdrawal)
+//!   POOL_APPROVE OPEN  (master-key)       -->  status unchanged; sets
+//!                                              Pool::m_authorized_operator_key
+//!                                              authorizing a specific
+//!                                              operator pubkey to claim a
+//!                                              builtin slot (see §11 of
+//!                                              doc/consensus.md).
+//!
+//! Note: PENDING entries and OPEN authorizations are query-time expired
+//! after consensus.PendingPoolRetention blocks via IsPendingExpired /
+//! IsAuthorizationExpired — pure functions, no state mutation, reorg-safe.
 //!
 enum class PoolStatus : uint8_t
 {
@@ -62,6 +72,25 @@ public:
     uint256 m_previous_hash;    //!< Tx hash of the prior entry for this CPID (history chain).
     int m_height;               //!< Block height at which this entry was produced. Grandfathered builtins use 0.
     Status m_status;            //!< Current lifecycle status.
+
+    //!
+    //! \brief Foundation-pre-authorized operator pubkey allowed to claim a
+    //! builtin pool slot. Set by POOL_APPROVE OPEN, cleared on successful
+    //! POOL_REGISTER ADD that consumes the authorization, propagated
+    //! unchanged through other chained actions (so Foundation can perform
+    //! unrelated admin actions between OPEN and the operator's claim
+    //! without invalidating the authorization). See doc/consensus.md §11.
+    //!
+    CPubKey m_authorized_operator_key;
+
+    //!
+    //! \brief Block height at which the OPEN authorization was set. Used by
+    //! the IsAuthorizationExpired check; tracked separately from m_height
+    //! so retention does NOT drift forward when an inheriting action (e.g.
+    //! Foundation POOL_APPROVE ADD/REMOVE) chains a new entry between the
+    //! OPEN and the operator's claim. Sentinel -1 == no authorization set.
+    //!
+    int m_authorization_height;
 
     Pool();
 
@@ -106,6 +135,8 @@ public:
         READWRITE(m_previous_hash);
         READWRITE(m_height);
         READWRITE(m_status);
+        READWRITE(m_authorized_operator_key);
+        READWRITE(m_authorization_height);
     }
 };
 
@@ -218,14 +249,22 @@ public:
 //!
 //! \brief The body of a POOL_APPROVE contract. Master-key authenticated.
 //!
-//! Foundation submits this to flip a PENDING entry to ACTIVE (action=ADD) or
-//! to de-list an active pool (action=REMOVE). The transaction is authenticated
-//! by Contract::RequiresMasterKey() returning true for POOL_APPROVE; the
-//! framework's existing HasMasterKeyInput check enforces it at the validation
-//! boundary (see src/validation.cpp:175).
+//! Foundation submits this to flip a PENDING entry to ACTIVE (action=ADD),
+//! to de-list an active pool (action=REMOVE), or to pre-authorize a
+//! specific operator pubkey to claim a builtin pool slot (action=OPEN).
+//! The transaction is authenticated by Contract::RequiresMasterKey()
+//! returning true for POOL_APPROVE; the framework's existing
+//! HasMasterKeyInput check enforces master-key authority at the validation
+//! boundary (see src/validation.cpp:175) for all three actions.
 //!
-//! The payload itself is minimal because the authority is in the tx inputs;
-//! we only need to identify which CPID the action targets.
+//! For ADD/REMOVE the payload is minimal — version + cpid — because the
+//! authority is in the tx inputs and the target is identified by CPID.
+//! For OPEN it additionally carries m_authorized_operator_key naming the
+//! operator pubkey the Foundation is authorizing to claim the slot.
+//!
+//! CURRENT_VERSION stays at 1 because POOL_APPROVE was introduced by this
+//! PR and has no on-chain v1 payload to be backward-compatible with —
+//! conditional serialization on contract_action is sufficient.
 //!
 class PoolApprovePayload : public IContractPayload
 {
@@ -236,9 +275,22 @@ public:
 
     Cpid m_cpid;
 
+    //!
+    //! \brief Operator pubkey authorized to claim the slot. Populated only
+    //! for action=OPEN; default-constructed (invalid) for ADD/REMOVE.
+    //! WellFormed(OPEN) rejects payloads where this key isn't valid.
+    //!
+    CPubKey m_authorized_operator_key;
+
     PoolApprovePayload();
 
     explicit PoolApprovePayload(Cpid cpid);
+
+    //!
+    //! \brief Construct an OPEN payload pre-authorizing the supplied
+    //! operator pubkey to claim the given builtin slot.
+    //!
+    PoolApprovePayload(Cpid cpid, CPubKey authorized_operator_key);
 
     GRC::ContractType ContractType() const override
     {
@@ -269,6 +321,14 @@ public:
     {
         READWRITE(m_version);
         READWRITE(m_cpid);
+
+        // m_authorized_operator_key is serialized only for OPEN. Pre-OPEN
+        // POOL_APPROVE contracts (ADD/REMOVE) keep the original v1 wire
+        // shape of (version, cpid) = 20 bytes; an OPEN payload extends to
+        // (version, cpid, pubkey) = 20 + 33 = 53 bytes.
+        if (contract_action == ContractAction::OPEN) {
+            READWRITE(m_authorized_operator_key);
+        }
     }
 };
 
@@ -285,7 +345,7 @@ class PoolRegistry : public IContractHandler
 {
 public:
     PoolRegistry()
-        : m_pool_db(2)
+        : m_pool_db(3)
     {
         SeedBuiltinPools();
     }
@@ -384,6 +444,27 @@ public:
     //!
     bool IsActivePoolName(const std::string& name) const;
 
+    //!
+    //! \brief True if the supplied entry is in PENDING status AND its
+    //! registration height + consensus.PendingPoolRetention is below the
+    //! query height. Pure function, no state mutation — expired-PENDING
+    //! entries remain in storage but are treated as absent by queries and
+    //! by the takeover-defense paths in Validate / BlockValidate. Reorg
+    //! back across the boundary naturally surfaces the entry as PENDING
+    //! again. See doc/consensus.md §11.
+    //!
+    static bool IsPendingExpired(const Pool& entry, int at_height);
+
+    //!
+    //! \brief True if the supplied entry has a valid
+    //! m_authorized_operator_key AND its m_authorization_height plus
+    //! consensus.PendingPoolRetention is below the query height. Pure
+    //! function, same reorg-safety properties as IsPendingExpired. Used by
+    //! the IsBuiltin sticky-claim guard so an unused OPEN goes stale on
+    //! the same budget as PENDING.
+    //!
+    static bool IsAuthorizationExpired(const Pool& entry, int at_height);
+
     void Reset() override;
 
     bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
@@ -472,8 +553,38 @@ private:
     //!
     //! ADD: flip the named CPID's entry to ACTIVE (must already exist).
     //! REMOVE: flip to DELETED.
+    //! OPEN: pre-authorize an operator pubkey to claim a builtin slot
+    //! (sets m_authorized_operator_key / m_authorization_height; status
+    //! preserved from the prior chained entry).
     //!
     void ApplyApprove(const ContractContext& ctx);
+
+    //!
+    //! \brief Shared core for Validate (mempool admission, chain-tip
+    //! height) and BlockValidate (block validation, block height). Runs:
+    //!   1. V15 activation gate (finding P).
+    //!   2. WellFormed for the payload type.
+    //!   3. Registry-aware authentication for POOL_REGISTER (Issue 2's
+    //!      key-selection rule + the IsBuiltin Path 1 / Path 2 guard
+    //!      from findings B, K, M, and the non-builtin expired-PENDING
+    //!      transparency from finding J).
+    //!
+    //! Factoring this out lets Validate (no block context, uses chain
+    //! tip height under cs_main) and BlockValidate (block context, uses
+    //! ctx.m_pindex->nHeight) share identical logic. The mempool view
+    //! is best-effort; BlockValidate is authoritative.
+    //!
+    bool ValidateAtHeight(const Contract& contract, int at_height, int& DoS) const;
+
+    //!
+    //! \brief Compute and verify the authorization for a POOL_REGISTER
+    //! against the current registry state at the given height. Sets
+    //! DoS on rejection. Implements the IsBuiltin Path 1 / Path 2 split
+    //! and the non-builtin expired-PENDING transparency.
+    //!
+    bool VerifyRegisterAuth(const PoolRegisterPayload& payload,
+                            int at_height,
+                            int& DoS) const;
 };
 
 //!
