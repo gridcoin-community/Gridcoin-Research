@@ -957,7 +957,7 @@ static const RPCHelpMan listmanifests_help{
 };
 const RPCHelpMan& listmanifests_helpman() { return listmanifests_help; }
 
-UniValue listmanifests(const UniValue& params, bool fHelp)
+UniValue listmanifests(const UniValue& params)
 {
     UniValue obj(UniValue::VOBJ);
     UniValue subset(UniValue::VOBJ);
@@ -1041,7 +1041,7 @@ static const RPCHelpMan getmpart_help{
 };
 const RPCHelpMan& getmpart_helpman() { return getmpart_help; }
 
-UniValue getmpart(const UniValue& params, bool fHelp)
+UniValue getmpart(const UniValue& params)
 {
     LOCK(CSplitBlob::cs_mapParts);
 

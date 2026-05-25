@@ -131,7 +131,7 @@ static const RPCHelpMan getinfo_help{
 };
 const RPCHelpMan& getinfo_helpman() { return getinfo_help; }
 
-UniValue getinfo(const UniValue& params, bool fHelp)
+UniValue getinfo(const UniValue& params)
 {
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
@@ -213,7 +213,7 @@ static const RPCHelpMan getwalletinfo_help{
 };
 const RPCHelpMan& getwalletinfo_helpman() { return getwalletinfo_help; }
 
-UniValue getwalletinfo(const UniValue& params, bool fHelp)
+UniValue getwalletinfo(const UniValue& params)
 {
     UniValue res(UniValue::VOBJ);
 
@@ -255,7 +255,7 @@ static const RPCHelpMan getnewpubkey_help{
 };
 const RPCHelpMan& getnewpubkey_helpman() { return getnewpubkey_help; }
 
-UniValue getnewpubkey(const UniValue& params, bool fHelp)
+UniValue getnewpubkey(const UniValue& params)
 {
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -295,7 +295,7 @@ static const RPCHelpMan getnewaddress_help{
 };
 const RPCHelpMan& getnewaddress_helpman() { return getnewaddress_help; }
 
-UniValue getnewaddress(const UniValue& params, bool fHelp)
+UniValue getnewaddress(const UniValue& params)
 {
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -371,7 +371,7 @@ static const RPCHelpMan getaccountaddress_help{
 };
 const RPCHelpMan& getaccountaddress_helpman() { return getaccountaddress_help; }
 
-UniValue getaccountaddress(const UniValue& params, bool fHelp)
+UniValue getaccountaddress(const UniValue& params)
 {
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -400,7 +400,7 @@ static const RPCHelpMan setaccount_help{
 };
 const RPCHelpMan& setaccount_helpman() { return setaccount_help; }
 
-UniValue setaccount(const UniValue& params, bool fHelp)
+UniValue setaccount(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -440,7 +440,7 @@ static const RPCHelpMan getaccount_help{
 };
 const RPCHelpMan& getaccount_helpman() { return getaccount_help; }
 
-UniValue getaccount(const UniValue& params, bool fHelp)
+UniValue getaccount(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -473,7 +473,7 @@ static const RPCHelpMan getaddressesbyaccount_help{
 };
 const RPCHelpMan& getaddressesbyaccount_helpman() { return getaddressesbyaccount_help; }
 
-UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
+UniValue getaddressesbyaccount(const UniValue& params)
 {
     string strAccount = AccountFromValue(params[0]);
 
@@ -516,7 +516,7 @@ static const RPCHelpMan sendtoaddress_help{
 };
 const RPCHelpMan& sendtoaddress_helpman() { return sendtoaddress_help; }
 
-UniValue sendtoaddress(const UniValue& params, bool fHelp)
+UniValue sendtoaddress(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -573,7 +573,7 @@ static const RPCHelpMan listaddressgroupings_help{
 };
 const RPCHelpMan& listaddressgroupings_helpman() { return listaddressgroupings_help; }
 
-UniValue listaddressgroupings(const UniValue& params, bool fHelp)
+UniValue listaddressgroupings(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -615,7 +615,7 @@ static const RPCHelpMan signmessage_help{
 };
 const RPCHelpMan& signmessage_helpman() { return signmessage_help; }
 
-UniValue signmessage(const UniValue& params, bool fHelp)
+UniValue signmessage(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -665,7 +665,7 @@ static const RPCHelpMan verifymessage_help{
 };
 const RPCHelpMan& verifymessage_helpman() { return verifymessage_help; }
 
-UniValue verifymessage(const UniValue& params, bool fHelp)
+UniValue verifymessage(const UniValue& params)
 {
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
@@ -717,7 +717,7 @@ static const RPCHelpMan getreceivedbyaddress_help{
 };
 const RPCHelpMan& getreceivedbyaddress_helpman() { return getreceivedbyaddress_help; }
 
-UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
+UniValue getreceivedbyaddress(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -788,7 +788,7 @@ static const RPCHelpMan getreceivedbyaccount_help{
 };
 const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
 
-UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
+UniValue getreceivedbyaccount(const UniValue& params)
 {
     accountingDeprecationCheck();
 
@@ -883,7 +883,7 @@ static const RPCHelpMan getbalance_help{
 };
 const RPCHelpMan& getbalance_helpman() { return getbalance_help; }
 
-UniValue getbalance(const UniValue& params, bool fHelp)
+UniValue getbalance(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -975,7 +975,7 @@ static const RPCHelpMan getbalancedetail_help{
 };
 const RPCHelpMan& getbalancedetail_helpman() { return getbalancedetail_help; }
 
-UniValue getbalancedetail(const UniValue& params, bool fHelp)
+UniValue getbalancedetail(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1088,7 +1088,7 @@ static const RPCHelpMan getunconfirmedbalance_help{
 };
 const RPCHelpMan& getunconfirmedbalance_helpman() { return getunconfirmedbalance_help; }
 
-UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
+UniValue getunconfirmedbalance(const UniValue& params)
 {
     return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
 }
@@ -1117,7 +1117,7 @@ static const RPCHelpMan movecmd_help{
 };
 const RPCHelpMan& movecmd_helpman() { return movecmd_help; }
 
-UniValue movecmd(const UniValue& params, bool fHelp)
+UniValue movecmd(const UniValue& params)
 {
     accountingDeprecationCheck();
 
@@ -1195,7 +1195,7 @@ static const RPCHelpMan sendfrom_help{
 };
 const RPCHelpMan& sendfrom_helpman() { return sendfrom_help; }
 
-UniValue sendfrom(const UniValue& params, bool fHelp)
+UniValue sendfrom(const UniValue& params)
 {
     string strAccount = AccountFromValue(params[0]);
 
@@ -1266,7 +1266,7 @@ static const RPCHelpMan sendmany_help{
 };
 const RPCHelpMan& sendmany_helpman() { return sendmany_help; }
 
-UniValue sendmany(const UniValue& params, bool fHelp)
+UniValue sendmany(const UniValue& params)
 {
     string strAccount = AccountFromValue(params[0]);
     bool bFromAccount = false;
@@ -1393,7 +1393,7 @@ static const RPCHelpMan addmultisigaddress_help{
 };
 const RPCHelpMan& addmultisigaddress_helpman() { return addmultisigaddress_help; }
 
-UniValue addmultisigaddress(const UniValue& params, bool fHelp)
+UniValue addmultisigaddress(const UniValue& params)
 {
     int nRequired = params[0].get_int();
     const UniValue& keys = params[1].get_array();
@@ -1479,7 +1479,7 @@ static const RPCHelpMan addredeemscript_help{
 };
 const RPCHelpMan& addredeemscript_helpman() { return addredeemscript_help; }
 
-UniValue addredeemscript(const UniValue& params, bool fHelp)
+UniValue addredeemscript(const UniValue& params)
 {
     string strAccount;
     if (params.size() > 1)
@@ -1665,7 +1665,7 @@ static const RPCHelpMan listreceivedbyaddress_help{
 };
 const RPCHelpMan& listreceivedbyaddress_helpman() { return listreceivedbyaddress_help; }
 
-UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
+UniValue listreceivedbyaddress(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1703,7 +1703,7 @@ static const RPCHelpMan listreceivedbyaccount_help{
 };
 const RPCHelpMan& listreceivedbyaccount_helpman() { return listreceivedbyaccount_help; }
 
-UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
+UniValue listreceivedbyaccount(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1888,7 +1888,7 @@ static const RPCHelpMan listtransactions_help{
 };
 const RPCHelpMan& listtransactions_helpman() { return listtransactions_help; }
 
-UniValue listtransactions(const UniValue& params, bool fHelp)
+UniValue listtransactions(const UniValue& params)
 {
     string strAccount = "*";
     int nCount = 10;
@@ -1989,7 +1989,7 @@ static const RPCHelpMan liststakes_help{
 };
 const RPCHelpMan& liststakes_helpman() { return liststakes_help; }
 
-UniValue liststakes(const UniValue& params, bool fHelp)
+UniValue liststakes(const UniValue& params)
 {
     string strAccount = "*";
     int nCount = 10;
@@ -2062,7 +2062,7 @@ static const RPCHelpMan listaccounts_help{
 };
 const RPCHelpMan& listaccounts_helpman() { return listaccounts_help; }
 
-UniValue listaccounts(const UniValue& params, bool fHelp)
+UniValue listaccounts(const UniValue& params)
 {
     accountingDeprecationCheck();
 
@@ -2149,7 +2149,7 @@ static const RPCHelpMan listsinceblock_help{
 };
 const RPCHelpMan& listsinceblock_helpman() { return listsinceblock_help; }
 
-UniValue listsinceblock(const UniValue& params, bool fHelp)
+UniValue listsinceblock(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2225,7 +2225,7 @@ static const RPCHelpMan gettransaction_help{
 };
 const RPCHelpMan& gettransaction_helpman() { return gettransaction_help; }
 
-UniValue gettransaction(const UniValue& params, bool fHelp)
+UniValue gettransaction(const UniValue& params)
 {
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -2309,7 +2309,7 @@ static const RPCHelpMan abandontransaction_help{
 };
 const RPCHelpMan& abandontransaction_helpman() { return abandontransaction_help; }
 
-UniValue abandontransaction(const UniValue& params, bool fHelp)
+UniValue abandontransaction(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2340,7 +2340,7 @@ static const RPCHelpMan getrawwallettransaction_help{
 };
 const RPCHelpMan& getrawwallettransaction_helpman() { return getrawwallettransaction_help; }
 
-UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
+UniValue getrawwallettransaction(const UniValue& params)
 {
     const uint256 hash = uint256S(params[0].get_str());
 
@@ -2381,7 +2381,7 @@ static const RPCHelpMan backupwallet_help{
 };
 const RPCHelpMan& backupwallet_helpman() { return backupwallet_help; }
 
-UniValue backupwallet(const UniValue& params, bool fHelp)
+UniValue backupwallet(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2457,7 +2457,7 @@ static const RPCHelpMan maintainbackups_help{
 };
 const RPCHelpMan& maintainbackups_helpman() { return maintainbackups_help; }
 
-UniValue maintainbackups(const UniValue& params, bool fHelp)
+UniValue maintainbackups(const UniValue& params)
 {
     // IsValidNumArgs accepts 0, 1, or 2 because RPCHelpMan ranges are contiguous.
     // maintainbackups only accepts {0, 2} — reject 1 explicitly.
@@ -2523,7 +2523,7 @@ static const RPCHelpMan keypoolrefill_help{
 };
 const RPCHelpMan& keypoolrefill_helpman() { return keypoolrefill_help; }
 
-UniValue keypoolrefill(const UniValue& params, bool fHelp)
+UniValue keypoolrefill(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2628,7 +2628,7 @@ static const RPCHelpMan walletpassphrase_help{
 };
 const RPCHelpMan& walletpassphrase_helpman() { return walletpassphrase_help; }
 
-UniValue walletpassphrase(const UniValue& params, bool fHelp)
+UniValue walletpassphrase(const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
@@ -2707,7 +2707,7 @@ static const RPCHelpMan walletpassphrasechange_help{
 };
 const RPCHelpMan& walletpassphrasechange_helpman() { return walletpassphrasechange_help; }
 
-UniValue walletpassphrasechange(const UniValue& params, bool fHelp)
+UniValue walletpassphrasechange(const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrasechange was called.");
@@ -2795,7 +2795,7 @@ static const RPCHelpMan inspectwalletstate_help{
 };
 const RPCHelpMan& inspectwalletstate_helpman() { return inspectwalletstate_help; }
 
-UniValue inspectwalletstate(const UniValue& params, bool fHelp)
+UniValue inspectwalletstate(const UniValue& params)
 {
     bool fVerbose = false;
     if (params.size() > 0)
@@ -2938,7 +2938,7 @@ static const RPCHelpMan walletdiagnose_help{
 };
 const RPCHelpMan& walletdiagnose_helpman() { return walletdiagnose_help; }
 
-UniValue walletdiagnose(const UniValue& params, bool fHelp)
+UniValue walletdiagnose(const UniValue& params)
 {
     std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
     //Construct the tests needed.
@@ -3027,7 +3027,7 @@ static const RPCHelpMan walletlock_help{
 };
 const RPCHelpMan& walletlock_helpman() { return walletlock_help; }
 
-UniValue walletlock(const UniValue& params, bool fHelp)
+UniValue walletlock(const UniValue& params)
 {
     if (!pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
@@ -3060,7 +3060,7 @@ static const RPCHelpMan encryptwallet_help{
 };
 const RPCHelpMan& encryptwallet_helpman() { return encryptwallet_help; }
 
-UniValue encryptwallet(const UniValue& params, bool fHelp)
+UniValue encryptwallet(const UniValue& params)
 {
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
@@ -3154,7 +3154,7 @@ static const RPCHelpMan validateaddress_help{
 };
 const RPCHelpMan& validateaddress_helpman() { return validateaddress_help; }
 
-UniValue validateaddress(const UniValue& params, bool fHelp)
+UniValue validateaddress(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -3210,7 +3210,7 @@ static const RPCHelpMan validatepubkey_help{
 };
 const RPCHelpMan& validatepubkey_helpman() { return validatepubkey_help; }
 
-UniValue validatepubkey(const UniValue& params, bool fHelp)
+UniValue validatepubkey(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -3269,7 +3269,7 @@ static const RPCHelpMan reservebalance_help{
 };
 const RPCHelpMan& reservebalance_helpman() { return reservebalance_help; }
 
-UniValue reservebalance(const UniValue& params, bool fHelp)
+UniValue reservebalance(const UniValue& params)
 {
     if (params.size() > 0)
     {
@@ -3319,7 +3319,7 @@ static const RPCHelpMan checkwallet_help{
 };
 const RPCHelpMan& checkwallet_helpman() { return checkwallet_help; }
 
-UniValue checkwallet(const UniValue& params, bool fHelp)
+UniValue checkwallet(const UniValue& params)
 {
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -3356,7 +3356,7 @@ static const RPCHelpMan repairwallet_help{
 };
 const RPCHelpMan& repairwallet_helpman() { return repairwallet_help; }
 
-UniValue repairwallet(const UniValue& params, bool fHelp)
+UniValue repairwallet(const UniValue& params)
 {
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -3384,7 +3384,7 @@ static const RPCHelpMan resendtx_help{
 };
 const RPCHelpMan& resendtx_helpman() { return resendtx_help; }
 
-UniValue resendtx(const UniValue& params, bool fHelp)
+UniValue resendtx(const UniValue& params)
 {
     {
         LOCK2(cs_main, cs_setpwalletRegistered);
@@ -3413,7 +3413,7 @@ static const RPCHelpMan makekeypair_help{
 };
 const RPCHelpMan& makekeypair_helpman() { return makekeypair_help; }
 
-UniValue makekeypair(const UniValue& params, bool fHelp)
+UniValue makekeypair(const UniValue& params)
 {
     string strPrefix = "";
     if (params.size() > 0)
@@ -3446,7 +3446,7 @@ static const RPCHelpMan burn_help{
 };
 const RPCHelpMan& burn_helpman() { return burn_help; }
 
-UniValue burn(const UniValue& params, bool fHelp)
+UniValue burn(const UniValue& params)
 {
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -3497,7 +3497,7 @@ static const RPCHelpMan sethdseed_help{
 };
 const RPCHelpMan& sethdseed_helpman() { return sethdseed_help; }
 
-UniValue sethdseed(const UniValue& params, bool fHelp)
+UniValue sethdseed(const UniValue& params)
 {
     if (IsInitialBlockDownload()) {
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
@@ -3558,7 +3558,7 @@ static const RPCHelpMan upgradewallet_help{
 };
 const RPCHelpMan& upgradewallet_helpman() { return upgradewallet_help; }
 
-UniValue upgradewallet(const UniValue& params, bool fHelp)
+UniValue upgradewallet(const UniValue& params)
 {
     EnsureWalletIsUnlocked();
 

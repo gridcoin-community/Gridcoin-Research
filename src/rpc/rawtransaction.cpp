@@ -424,7 +424,7 @@ static const RPCHelpMan getrawtransaction_help{
 };
 const RPCHelpMan& getrawtransaction_helpman() { return getrawtransaction_help; }
 
-UniValue getrawtransaction(const UniValue& params, bool fHelp)
+UniValue getrawtransaction(const UniValue& params)
 {
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -489,7 +489,7 @@ static const RPCHelpMan listunspent_help{
 };
 const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
 
-UniValue listunspent(const UniValue& params, bool fHelp)
+UniValue listunspent(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
@@ -603,7 +603,7 @@ static const RPCHelpMan consolidateunspent_help{
 };
 const RPCHelpMan& consolidateunspent_helpman() { return consolidateunspent_help; }
 
-UniValue consolidateunspent(const UniValue& params, bool fHelp)
+UniValue consolidateunspent(const UniValue& params)
 {
     UniValue result(UniValue::VOBJ);
 
@@ -1013,7 +1013,7 @@ static const RPCHelpMan consolidatemsunspent_help{
 };
 const RPCHelpMan& consolidatemsunspent_helpman() { return consolidatemsunspent_help; }
 
-UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
+UniValue consolidatemsunspent(const UniValue& params)
 {
     UniValue result(UniValue::VOBJ);
 
@@ -1314,7 +1314,7 @@ static const RPCHelpMan scanforunspent_help{
 };
 const RPCHelpMan& scanforunspent_helpman() { return scanforunspent_help; }
 
-UniValue scanforunspent(const UniValue& params, bool fHelp)
+UniValue scanforunspent(const UniValue& params)
 {
     // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: the dispatcher's
     // IsValidNumArgs check allows 3..5 (declared in the helpman), and a body-level check
@@ -1583,7 +1583,7 @@ static const RPCHelpMan createrawtransaction_help{
 };
 const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
 
-UniValue createrawtransaction(const UniValue& params, bool fHelp)
+UniValue createrawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
@@ -1682,7 +1682,7 @@ static const RPCHelpMan fundrawtransaction_help{
 };
 const RPCHelpMan& fundrawtransaction_helpman() { return fundrawtransaction_help; }
 
-UniValue fundrawtransaction(const UniValue& params, bool fHelp)
+UniValue fundrawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR });
 
@@ -1795,7 +1795,7 @@ static const RPCHelpMan decoderawtransaction_help{
 };
 const RPCHelpMan& decoderawtransaction_helpman() { return decoderawtransaction_help; }
 
-UniValue decoderawtransaction(const UniValue& params, bool fHelp)
+UniValue decoderawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR });
 
@@ -1832,7 +1832,7 @@ static const RPCHelpMan decodescript_help{
 };
 const RPCHelpMan& decodescript_helpman() { return decodescript_help; }
 
-UniValue decodescript(const UniValue& params, bool fHelp)
+UniValue decodescript(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR });
 
@@ -2063,7 +2063,7 @@ static const RPCHelpMan signrawtransactionwithkey_help{
 };
 const RPCHelpMan& signrawtransactionwithkey_helpman() { return signrawtransactionwithkey_help; }
 
-UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
+UniValue signrawtransactionwithkey(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
@@ -2120,7 +2120,7 @@ static const RPCHelpMan signrawtransactionwithwallet_help{
 };
 const RPCHelpMan& signrawtransactionwithwallet_helpman() { return signrawtransactionwithwallet_help; }
 
-UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
+UniValue signrawtransactionwithwallet(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VSTR }, true);
 
@@ -2172,7 +2172,7 @@ static const RPCHelpMan signrawtransaction_help{
 };
 const RPCHelpMan& signrawtransaction_helpman() { return signrawtransaction_help; }
 
-UniValue signrawtransaction(const UniValue& params, bool fHelp)
+UniValue signrawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
@@ -2217,7 +2217,7 @@ static const RPCHelpMan sendrawtransaction_help{
 };
 const RPCHelpMan& sendrawtransaction_helpman() { return sendrawtransaction_help; }
 
-UniValue sendrawtransaction(const UniValue& params, bool fHelp)
+UniValue sendrawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR });
 

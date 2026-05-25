@@ -32,7 +32,7 @@ static const RPCHelpMan getconnectioncount_help{
 };
 const RPCHelpMan& getconnectioncount_helpman() { return getconnectioncount_help; }
 
-UniValue getconnectioncount(const UniValue& params, bool fHelp)
+UniValue getconnectioncount(const UniValue& params)
 {
     LOCK(cs_vNodes);
 
@@ -59,7 +59,7 @@ static const RPCHelpMan addnode_help{
 };
 const RPCHelpMan& addnode_helpman() { return addnode_help; }
 
-UniValue addnode(const UniValue& params, bool fHelp)
+UniValue addnode(const UniValue& params)
 {
     const string strCommand = params[1].get_str();
     if (strCommand != "onetry" && strCommand != "add" && strCommand != "remove") {
@@ -129,7 +129,7 @@ static const RPCHelpMan getnodeaddresses_help{
 };
 const RPCHelpMan& getnodeaddresses_helpman() { return getnodeaddresses_help; }
 
-UniValue getnodeaddresses(const UniValue& params, bool fHelp)
+UniValue getnodeaddresses(const UniValue& params)
 {
     int count = 1;
     if (params.size() > 0 && !params[0].isNull())
@@ -180,7 +180,7 @@ static const RPCHelpMan getaddednodeinfo_help{
 };
 const RPCHelpMan& getaddednodeinfo_helpman() { return getaddednodeinfo_help; }
 
-UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
+UniValue getaddednodeinfo(const UniValue& params)
 {
     bool fDns = params[0].get_bool();
 
@@ -289,7 +289,7 @@ static const RPCHelpMan setban_help{
 };
 const RPCHelpMan& setban_helpman() { return setban_help; }
 
-UniValue setban(const UniValue& params, bool fHelp)
+UniValue setban(const UniValue& params)
 {
     const std::string strCommand = params[1].get_str();
     if (strCommand != "add" && strCommand != "remove") {
@@ -373,7 +373,7 @@ static const RPCHelpMan listbanned_help{
 };
 const RPCHelpMan& listbanned_helpman() { return listbanned_help; }
 
-UniValue listbanned(const UniValue& params, bool fHelp)
+UniValue listbanned(const UniValue& params)
 {
     if(!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
@@ -412,7 +412,7 @@ static const RPCHelpMan clearbanned_help{
 };
 const RPCHelpMan& clearbanned_helpman() { return clearbanned_help; }
 
-UniValue clearbanned(const UniValue& params, bool fHelp)
+UniValue clearbanned(const UniValue& params)
 {
     if (!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
@@ -437,7 +437,7 @@ static const RPCHelpMan ping_help{
 };
 const RPCHelpMan& ping_helpman() { return ping_help; }
 
-UniValue ping(const UniValue& params, bool fHelp)
+UniValue ping(const UniValue& params)
 {
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
@@ -486,7 +486,7 @@ static const RPCHelpMan getpeerinfo_help{
 };
 const RPCHelpMan& getpeerinfo_helpman() { return getpeerinfo_help; }
 
-UniValue getpeerinfo(const UniValue& params, bool fHelp)
+UniValue getpeerinfo(const UniValue& params)
 {
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
@@ -547,7 +547,7 @@ static const RPCHelpMan getnettotals_help{
 };
 const RPCHelpMan& getnettotals_helpman() { return getnettotals_help; }
 
-UniValue getnettotals(const UniValue& params, bool fHelp)
+UniValue getnettotals(const UniValue& params)
 {
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("totalbytesrecv", CNode::GetTotalBytesRecv());
@@ -593,7 +593,7 @@ static const RPCHelpMan listalerts_help{
 };
 const RPCHelpMan& listalerts_helpman() { return listalerts_help; }
 
-UniValue listalerts(const UniValue& params, bool fHelp)
+UniValue listalerts(const UniValue& params)
 {
     LOCK(cs_mapAlerts);
 
@@ -685,7 +685,7 @@ static const RPCHelpMan sendalert_help = RPCHelpMan{
 }.MarkVariadic();
 const RPCHelpMan& sendalert_helpman() { return sendalert_help; }
 
-UniValue sendalert(const UniValue& params, bool fHelp)
+UniValue sendalert(const UniValue& params)
 {
     CAlert alert;
     CKey key;
@@ -760,7 +760,7 @@ static const RPCHelpMan sendalert2_help{
 };
 const RPCHelpMan& sendalert2_helpman() { return sendalert2_help; }
 
-UniValue sendalert2(const UniValue& params, bool fHelp)
+UniValue sendalert2(const UniValue& params)
 {
     CAlert alert;
     CKey key;
@@ -849,7 +849,7 @@ static const RPCHelpMan getnetworkinfo_help{
 };
 const RPCHelpMan& getnetworkinfo_helpman() { return getnetworkinfo_help; }
 
-UniValue getnetworkinfo(const UniValue& params, bool fHelp)
+UniValue getnetworkinfo(const UniValue& params)
 {
     UniValue res(UniValue::VOBJ);
 

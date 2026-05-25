@@ -19,47 +19,47 @@
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
 // researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
-// captures them into the suite's namespace and breaks linkage. After conversion
-// each function throws std::runtime_error for fHelp=true before touching any
-// node globals or acquiring locks, so calling them with empty params is safe.
-UniValue getbestblockhash(const UniValue& params, bool fHelp);
-UniValue getblockcount(const UniValue& params, bool fHelp);
-UniValue getdifficulty(const UniValue& params, bool fHelp);
-UniValue getblockhash(const UniValue& params, bool fHelp);
-UniValue getblock(const UniValue& params, bool fHelp);
-UniValue getblockbynumber(const UniValue& params, bool fHelp);
-UniValue getblockbymintime(const UniValue& params, bool fHelp);
-UniValue getblocksbatch(const UniValue& params, bool fHelp);
-UniValue showblock(const UniValue& params, bool fHelp);
-UniValue getrawmempool(const UniValue& params, bool fHelp);
-UniValue getblockchaininfo(const UniValue& params, bool fHelp);
-UniValue getcheckpoint(const UniValue& params, bool fHelp);
-UniValue getburnreport(const UniValue& params, bool fHelp);
-UniValue rpc_reorganize(const UniValue& params, bool fHelp);
-UniValue currenttime(const UniValue& params, bool fHelp);
-UniValue networktime(const UniValue& params, bool fHelp);
-UniValue network(const UniValue& params, bool fHelp);
-UniValue sendblock(const UniValue& params, bool fHelp);
-UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
-UniValue debug(const UniValue& params, bool fHelp);
-UniValue versionreport(const UniValue& params, bool fHelp);
-UniValue advertisebeacon(const UniValue& params, bool fHelp);
-UniValue advertisebeaconv3(const UniValue& params, bool fHelp);
-UniValue beaconauth(const UniValue& params, bool fHelp);
-UniValue revokebeacon(const UniValue& params, bool fHelp);
-UniValue beaconreport(const UniValue& params, bool fHelp);
-UniValue beaconconvergence(const UniValue& params, bool fHelp);
-UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
-UniValue beaconstatus(const UniValue& params, bool fHelp);
-UniValue beaconaudit(const UniValue& params, bool fHelp);
-UniValue getmrcinfo(const UniValue& params, bool fHelp);
-UniValue createmrcrequest(const UniValue& params, const bool fHelp);
-UniValue magnitude(const UniValue& params, bool fHelp);
-UniValue explainmagnitude(const UniValue& params, bool fHelp);
-UniValue lifetime(const UniValue& params, bool fHelp);
-UniValue resetcpids(const UniValue& params, bool fHelp);
-UniValue rainbymagnitude(const UniValue& params, bool fHelp);
-UniValue currentcontractaverage(const UniValue& params, bool fHelp);
+// captures them into the suite's namespace and breaks linkage. The tier
+// help-rendering tests below call each command's RPCHelpMan accessor (not the
+// body), so no fixture is needed.
+UniValue getbestblockhash(const UniValue& params);
+UniValue getblockcount(const UniValue& params);
+UniValue getdifficulty(const UniValue& params);
+UniValue getblockhash(const UniValue& params);
+UniValue getblock(const UniValue& params);
+UniValue getblockbynumber(const UniValue& params);
+UniValue getblockbymintime(const UniValue& params);
+UniValue getblocksbatch(const UniValue& params);
+UniValue showblock(const UniValue& params);
+UniValue getrawmempool(const UniValue& params);
+UniValue getblockchaininfo(const UniValue& params);
+UniValue getcheckpoint(const UniValue& params);
+UniValue getburnreport(const UniValue& params);
+UniValue rpc_reorganize(const UniValue& params);
+UniValue currenttime(const UniValue& params);
+UniValue networktime(const UniValue& params);
+UniValue network(const UniValue& params);
+UniValue sendblock(const UniValue& params);
+UniValue askforoutstandingblocks(const UniValue& params);
+UniValue debug(const UniValue& params);
+UniValue versionreport(const UniValue& params);
+UniValue advertisebeacon(const UniValue& params);
+UniValue advertisebeaconv3(const UniValue& params);
+UniValue beaconauth(const UniValue& params);
+UniValue revokebeacon(const UniValue& params);
+UniValue beaconreport(const UniValue& params);
+UniValue beaconconvergence(const UniValue& params);
+UniValue pendingbeaconreport(const UniValue& params);
+UniValue beaconstatus(const UniValue& params);
+UniValue beaconaudit(const UniValue& params);
+UniValue getmrcinfo(const UniValue& params);
+UniValue createmrcrequest(const UniValue& params);
+UniValue magnitude(const UniValue& params);
+UniValue explainmagnitude(const UniValue& params);
+UniValue lifetime(const UniValue& params);
+UniValue resetcpids(const UniValue& params);
+UniValue rainbymagnitude(const UniValue& params);
+UniValue currentcontractaverage(const UniValue& params);
 
 // Forward declarations of the Tier 2 commands under test. These must live in
 // the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
@@ -68,178 +68,178 @@ UniValue currentcontractaverage(const UniValue& params, bool fHelp);
 // Each command's converted body throws for fHelp=true before touching any
 // globals (vNodes, g_banman, pwalletMain, mapBlockIndex, locks), so calling
 // these with fHelp=true and an empty params array is safe in unit tests.
-UniValue settxfee(const UniValue& params, bool fHelp);
-UniValue addnode(const UniValue& params, bool fHelp);
-UniValue setban(const UniValue& params, bool fHelp);
-UniValue listsinceblock(const UniValue& params, bool fHelp);
+UniValue settxfee(const UniValue& params);
+UniValue addnode(const UniValue& params);
+UniValue setban(const UniValue& params);
+UniValue listsinceblock(const UniValue& params);
 
 // Tier 1c forward declarations (snapshots, registries, generic-data, dumpcontracts).
 // Same global-namespace placement requirement as the Tier 2 block above.
-UniValue superblocks(const UniValue& params, bool fHelp);
-UniValue superblockage(const UniValue& params, bool fHelp);
-UniValue superblockaverage(const UniValue& params, bool fHelp);
-UniValue parselegacysb(const UniValue& params, bool fHelp);
-UniValue listscrapers(const UniValue& params, bool fHelp);
-UniValue listprojects(const UniValue& params, bool fHelp);
-UniValue projects(const UniValue& params, bool fHelp);
-UniValue getautogreylist(const UniValue& params, bool fHelp);
-UniValue listsidestakes(const UniValue& params, bool fHelp);
-UniValue listmandatorysidestakes(const UniValue& params, bool fHelp);
-UniValue listprotocolentries(const UniValue& params, bool fHelp);
-UniValue readdata(const UniValue& params, bool fHelp);
-UniValue writedata(const UniValue& params, bool fHelp);
-UniValue dumpcontracts(const UniValue& params, bool fHelp);
+UniValue superblocks(const UniValue& params);
+UniValue superblockage(const UniValue& params);
+UniValue superblockaverage(const UniValue& params);
+UniValue parselegacysb(const UniValue& params);
+UniValue listscrapers(const UniValue& params);
+UniValue listprojects(const UniValue& params);
+UniValue projects(const UniValue& params);
+UniValue getautogreylist(const UniValue& params);
+UniValue listsidestakes(const UniValue& params);
+UniValue listmandatorysidestakes(const UniValue& params);
+UniValue listprotocolentries(const UniValue& params);
+UniValue readdata(const UniValue& params);
+UniValue writedata(const UniValue& params);
+UniValue dumpcontracts(const UniValue& params);
 // Tier 1 PR D1: src/rpc/server.cpp + src/rpc/misc.cpp + src/rpc/dataacq.cpp.
 // Each function's converted body throws via help.ToString() before touching
 // globals (cs_main, gArgs, log instance, file IO), so calling these with
 // fHelp=true and an empty params array is safe in unit tests.
-UniValue help(const UniValue& params, bool fHelp);
-UniValue stop(const UniValue& params, bool fHelp);
-UniValue logging(const UniValue& params, bool fHelp);
-UniValue listsettings(const UniValue& params, bool fHelp);
-UniValue changesettings(const UniValue& params, bool fHelp);
-UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
-UniValue rpc_exportstats(const UniValue& params, bool fHelp);
-UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
+UniValue help(const UniValue& params);
+UniValue stop(const UniValue& params);
+UniValue logging(const UniValue& params);
+UniValue listsettings(const UniValue& params);
+UniValue changesettings(const UniValue& params);
+UniValue rpc_getblockstats(const UniValue& params);
+UniValue rpc_exportstats(const UniValue& params);
+UniValue rpc_getrecentblocks(const UniValue& params);
 // Tier 1 PR D2: remaining src/rpc/net.cpp commands. Each function's converted
 // body throws via help.ToString() before touching any globals (vNodes,
 // g_banman, mapAlerts, addrman, cs_main, cs_vNodes), so calling these with
 // fHelp=true and an empty params array is safe in unit tests.
-UniValue getconnectioncount(const UniValue& params, bool fHelp);
-UniValue getnodeaddresses(const UniValue& params, bool fHelp);
-UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
-UniValue listbanned(const UniValue& params, bool fHelp);
-UniValue clearbanned(const UniValue& params, bool fHelp);
-UniValue ping(const UniValue& params, bool fHelp);
-UniValue getpeerinfo(const UniValue& params, bool fHelp);
-UniValue getnettotals(const UniValue& params, bool fHelp);
-UniValue listalerts(const UniValue& params, bool fHelp);
-UniValue sendalert(const UniValue& params, bool fHelp);
-UniValue sendalert2(const UniValue& params, bool fHelp);
-UniValue getnetworkinfo(const UniValue& params, bool fHelp);
+UniValue getconnectioncount(const UniValue& params);
+UniValue getnodeaddresses(const UniValue& params);
+UniValue getaddednodeinfo(const UniValue& params);
+UniValue listbanned(const UniValue& params);
+UniValue clearbanned(const UniValue& params);
+UniValue ping(const UniValue& params);
+UniValue getpeerinfo(const UniValue& params);
+UniValue getnettotals(const UniValue& params);
+UniValue listalerts(const UniValue& params);
+UniValue sendalert(const UniValue& params);
+UniValue sendalert2(const UniValue& params);
+UniValue getnetworkinfo(const UniValue& params);
 // Tier 1 PR D3: src/rpc/voting.cpp non-deprecated commands. Each function's
 // converted body throws via help.ToString() before touching globals (the
 // poll registry, cs_main, pwalletMain), so calling these with fHelp=true
 // and an empty params array is safe in unit tests.
-UniValue listpolls(const UniValue& params, bool fHelp);
-UniValue getpollresults(const UniValue& params, bool fHelp);
-UniValue getvotingclaim(const UniValue& params, bool fHelp);
-UniValue votebyid(const UniValue& params, bool fHelp);
-UniValue votedetails(const UniValue& params, bool fHelp);
-UniValue testpollnotification(const UniValue& params, bool fHelp);
+UniValue listpolls(const UniValue& params);
+UniValue getpollresults(const UniValue& params);
+UniValue getvotingclaim(const UniValue& params);
+UniValue votebyid(const UniValue& params);
+UniValue votedetails(const UniValue& params);
+UniValue testpollnotification(const UniValue& params);
 // Tier 1 PR E1: src/rpc/mining.cpp commands. Each function's converted body
 // throws via help.ToString() before touching globals (g_miner_status,
 // cs_main, pwalletMain, snapshot files), so calling these with fHelp=true
 // and an empty params array is safe in unit tests.
-UniValue getstakinginfo(const UniValue& params, bool fHelp);
-UniValue getlaststake(const UniValue& params, bool fHelp);
-UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
-UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
-UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
-UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
-UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
+UniValue getstakinginfo(const UniValue& params);
+UniValue getlaststake(const UniValue& params);
+UniValue auditsnapshotaccrual(const UniValue& params);
+UniValue auditsnapshotaccruals(const UniValue& params);
+UniValue listresearcheraccounts(const UniValue& params);
+UniValue inspectaccrualsnapshot(const UniValue& params);
+UniValue parseaccrualsnapshotfile(const UniValue& params);
 // Tier 1 PR E2: src/gridcoin/scraper/scraper.cpp + scraper_net.cpp commands.
 // Each function's converted body throws via help.ToString() before touching
 // any scraper globals or locks.
-UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
-UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
-UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
-UniValue archivelog(const UniValue& params, bool fHelp);
-UniValue convergencereport(const UniValue& params, bool fHelp);
-UniValue testnewsb(const UniValue& params, bool fHelp);
-UniValue scraperreport(const UniValue& params, bool fHelp);
-UniValue listmanifests(const UniValue& params, bool fHelp);
-UniValue getmpart(const UniValue& params, bool fHelp);
+UniValue sendscraperfilemanifest(const UniValue& params);
+UniValue savescraperfilemanifest(const UniValue& params);
+UniValue deletecscrapermanifest(const UniValue& params);
+UniValue archivelog(const UniValue& params);
+UniValue convergencereport(const UniValue& params);
+UniValue testnewsb(const UniValue& params);
+UniValue scraperreport(const UniValue& params);
+UniValue listmanifests(const UniValue& params);
+UniValue getmpart(const UniValue& params);
 // Tier 1 PR E3: src/rpc/rawtransaction.cpp + src/rpc/htlc.cpp commands.
 // Each function's converted body throws via help.ToString() before touching
 // any globals (cs_main, pwalletMain, mempool).
-UniValue getrawtransaction(const UniValue& params, bool fHelp);
-UniValue listunspent(const UniValue& params, bool fHelp);
-UniValue consolidateunspent(const UniValue& params, bool fHelp);
-UniValue consolidatemsunspent(const UniValue& params, bool fHelp);
-UniValue scanforunspent(const UniValue& params, bool fHelp);
-UniValue createrawtransaction(const UniValue& params, bool fHelp);
-UniValue fundrawtransaction(const UniValue& params, bool fHelp);
-UniValue decoderawtransaction(const UniValue& params, bool fHelp);
-UniValue decodescript(const UniValue& params, bool fHelp);
-UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp);
-UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp);
-UniValue signrawtransaction(const UniValue& params, bool fHelp);
-UniValue sendrawtransaction(const UniValue& params, bool fHelp);
-UniValue createhtlc(const UniValue& params, bool fHelp);
-UniValue claimhtlc(const UniValue& params, bool fHelp);
-UniValue refundhtlc(const UniValue& params, bool fHelp);
+UniValue getrawtransaction(const UniValue& params);
+UniValue listunspent(const UniValue& params);
+UniValue consolidateunspent(const UniValue& params);
+UniValue consolidatemsunspent(const UniValue& params);
+UniValue scanforunspent(const UniValue& params);
+UniValue createrawtransaction(const UniValue& params);
+UniValue fundrawtransaction(const UniValue& params);
+UniValue decoderawtransaction(const UniValue& params);
+UniValue decodescript(const UniValue& params);
+UniValue signrawtransactionwithkey(const UniValue& params);
+UniValue signrawtransactionwithwallet(const UniValue& params);
+UniValue signrawtransaction(const UniValue& params);
+UniValue sendrawtransaction(const UniValue& params);
+UniValue createhtlc(const UniValue& params);
+UniValue claimhtlc(const UniValue& params);
+UniValue refundhtlc(const UniValue& params);
 // Tier 1 PR F1: src/wallet/rpcdump.cpp commands. Each function's converted
 // body throws via help.ToString() before touching pwalletMain or file IO.
-UniValue importprivkey(const UniValue& params, bool fHelp);
-UniValue importwallet(const UniValue& params, bool fHelp);
-UniValue dumpprivkey(const UniValue& params, bool fHelp);
-UniValue dumpwallet(const UniValue& params, bool fHelp);
+UniValue importprivkey(const UniValue& params);
+UniValue importwallet(const UniValue& params);
+UniValue dumpprivkey(const UniValue& params);
+UniValue dumpwallet(const UniValue& params);
 // Tier 1 deprecated batch: the deprecated-accounts wallet RPCs plus the
 // deprecated `vote` RPC. Each function's converted body throws via
 // help.ToString() before touching pwalletMain or the poll registry.
-UniValue getaccountaddress(const UniValue& params, bool fHelp);
-UniValue setaccount(const UniValue& params, bool fHelp);
-UniValue getaccount(const UniValue& params, bool fHelp);
-UniValue getaddressesbyaccount(const UniValue& params, bool fHelp);
-UniValue getreceivedbyaccount(const UniValue& params, bool fHelp);
-UniValue listreceivedbyaccount(const UniValue& params, bool fHelp);
-UniValue listaccounts(const UniValue& params, bool fHelp);
-UniValue movecmd(const UniValue& params, bool fHelp);  // dispatched as "move"
-UniValue vote(const UniValue& params, bool fHelp);
+UniValue getaccountaddress(const UniValue& params);
+UniValue setaccount(const UniValue& params);
+UniValue getaccount(const UniValue& params);
+UniValue getaddressesbyaccount(const UniValue& params);
+UniValue getreceivedbyaccount(const UniValue& params);
+UniValue listreceivedbyaccount(const UniValue& params);
+UniValue listaccounts(const UniValue& params);
+UniValue movecmd(const UniValue& params);  // dispatched as "move"
+UniValue vote(const UniValue& params);
 // Forward declarations of the Tier 1 F2 wallet-keys commands under test.
-UniValue getnewpubkey(const UniValue& params, bool fHelp);
-UniValue getnewaddress(const UniValue& params, bool fHelp);
-UniValue signmessage(const UniValue& params, bool fHelp);
-UniValue verifymessage(const UniValue& params, bool fHelp);
-UniValue addmultisigaddress(const UniValue& params, bool fHelp);
-UniValue addredeemscript(const UniValue& params, bool fHelp);
-UniValue validateaddress(const UniValue& params, bool fHelp);
-UniValue validatepubkey(const UniValue& params, bool fHelp);
-UniValue makekeypair(const UniValue& params, bool fHelp);
-UniValue sethdseed(const UniValue& params, bool fHelp);
+UniValue getnewpubkey(const UniValue& params);
+UniValue getnewaddress(const UniValue& params);
+UniValue signmessage(const UniValue& params);
+UniValue verifymessage(const UniValue& params);
+UniValue addmultisigaddress(const UniValue& params);
+UniValue addredeemscript(const UniValue& params);
+UniValue validateaddress(const UniValue& params);
+UniValue validatepubkey(const UniValue& params);
+UniValue makekeypair(const UniValue& params);
+UniValue sethdseed(const UniValue& params);
 
 // Forward declarations of the Tier 1 F3 wallet-query commands under test.
-UniValue getinfo(const UniValue& params, bool fHelp);
-UniValue getwalletinfo(const UniValue& params, bool fHelp);
-UniValue listaddressgroupings(const UniValue& params, bool fHelp);
-UniValue getreceivedbyaddress(const UniValue& params, bool fHelp);
-UniValue getbalance(const UniValue& params, bool fHelp);
-UniValue getbalancedetail(const UniValue& params, bool fHelp);
-UniValue getunconfirmedbalance(const UniValue& params, bool fHelp);
-UniValue listreceivedbyaddress(const UniValue& params, bool fHelp);
-UniValue listtransactions(const UniValue& params, bool fHelp);
-UniValue liststakes(const UniValue& params, bool fHelp);
-UniValue gettransaction(const UniValue& params, bool fHelp);
-UniValue getrawwallettransaction(const UniValue& params, bool fHelp);
+UniValue getinfo(const UniValue& params);
+UniValue getwalletinfo(const UniValue& params);
+UniValue listaddressgroupings(const UniValue& params);
+UniValue getreceivedbyaddress(const UniValue& params);
+UniValue getbalance(const UniValue& params);
+UniValue getbalancedetail(const UniValue& params);
+UniValue getunconfirmedbalance(const UniValue& params);
+UniValue listreceivedbyaddress(const UniValue& params);
+UniValue listtransactions(const UniValue& params);
+UniValue liststakes(const UniValue& params);
+UniValue gettransaction(const UniValue& params);
+UniValue getrawwallettransaction(const UniValue& params);
 
 // Forward declarations of the Tier 1 F4 wallet management/send commands under test.
-UniValue sendtoaddress(const UniValue& params, bool fHelp);
-UniValue sendfrom(const UniValue& params, bool fHelp);
-UniValue sendmany(const UniValue& params, bool fHelp);
-UniValue backupwallet(const UniValue& params, bool fHelp);
-UniValue keypoolrefill(const UniValue& params, bool fHelp);
-UniValue walletdiagnose(const UniValue& params, bool fHelp);
-UniValue encryptwallet(const UniValue& params, bool fHelp);
-UniValue reservebalance(const UniValue& params, bool fHelp);
-UniValue checkwallet(const UniValue& params, bool fHelp);
-UniValue repairwallet(const UniValue& params, bool fHelp);
-UniValue resendtx(const UniValue& params, bool fHelp);
-UniValue burn(const UniValue& params, bool fHelp);
-UniValue upgradewallet(const UniValue& params, bool fHelp);
+UniValue sendtoaddress(const UniValue& params);
+UniValue sendfrom(const UniValue& params);
+UniValue sendmany(const UniValue& params);
+UniValue backupwallet(const UniValue& params);
+UniValue keypoolrefill(const UniValue& params);
+UniValue walletdiagnose(const UniValue& params);
+UniValue encryptwallet(const UniValue& params);
+UniValue reservebalance(const UniValue& params);
+UniValue checkwallet(const UniValue& params);
+UniValue repairwallet(const UniValue& params);
+UniValue resendtx(const UniValue& params);
+UniValue burn(const UniValue& params);
+UniValue upgradewallet(const UniValue& params);
 // Forward declarations of the wallet transaction-state debug commands under test.
-UniValue abandontransaction(const UniValue& params, bool fHelp);
-UniValue inspectwalletstate(const UniValue& params, bool fHelp);
+UniValue abandontransaction(const UniValue& params);
+UniValue inspectwalletstate(const UniValue& params);
 
 // Forward declarations of the PSGT (Partially Signed Gridcoin Transaction) commands under test.
-UniValue createpsgt(const UniValue& params, bool fHelp);
-UniValue decodepsgt(const UniValue& params, bool fHelp);
-UniValue combinepsgt(const UniValue& params, bool fHelp);
-UniValue finalizepsgt(const UniValue& params, bool fHelp);
-UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
-UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
-UniValue converttopsgt(const UniValue& params, bool fHelp);
-UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
+UniValue createpsgt(const UniValue& params);
+UniValue decodepsgt(const UniValue& params);
+UniValue combinepsgt(const UniValue& params);
+UniValue finalizepsgt(const UniValue& params);
+UniValue walletprocesspsgt(const UniValue& params);
+UniValue utxoupdatepsgt(const UniValue& params);
+UniValue converttopsgt(const UniValue& params);
+UniValue walletcreatefundedpsgt(const UniValue& params);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -677,7 +677,7 @@ BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
     params.push_back("x");
     params.push_back("bogus");
     try {
-        addnode(params, /*fHelp=*/false);
+        addnode(params);
         BOOST_FAIL("expected UniValue JSON-RPC error");
     } catch (const UniValue& e) {
         BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
@@ -698,7 +698,7 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
     params.push_back("1.2.3.4");
     params.push_back("bogus");
     try {
-        setban(params, /*fHelp=*/false);
+        setban(params);
         BOOST_FAIL("expected UniValue JSON-RPC error");
     } catch (const UniValue& e) {
         BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);

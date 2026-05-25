@@ -1829,7 +1829,7 @@ void ScraperSubscriber()
     }
 }
 
-UniValue testnewsb(const UniValue& params, bool fHelp);
+UniValue testnewsb(const UniValue& params);
 
 bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
@@ -1870,7 +1870,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
         int nReducedCacheBits = 5;
 
         input_params.push_back(nReducedCacheBits);
-        testnewsb(input_params, false);
+        testnewsb(input_params);
     }
 
     // Show this node's contract hash in the log.
@@ -6295,7 +6295,6 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 /**
  * @brief Publishes a CScraperManifest to the network from the current file manifest IF the node is authorized.
  * @param params
- * @param fHelp
  * @return bool true if successful
  */
 static const RPCHelpMan sendscraperfilemanifest_help{
@@ -6309,7 +6308,7 @@ static const RPCHelpMan sendscraperfilemanifest_help{
 };
 const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemanifest_help; }
 
-UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
+UniValue sendscraperfilemanifest(const UniValue& params)
 {
     CTxDestination AddressOut;
     CKey KeyOut;
@@ -6330,7 +6329,6 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Saves a CScraperManifest to disk
  * @param params Takes a single parameter which is the hash of the manifest to save to disk.
- * @param fHelp
  * @return bool true if successful
  */
 static const RPCHelpMan savescraperfilemanifest_help{
@@ -6347,7 +6345,7 @@ static const RPCHelpMan savescraperfilemanifest_help{
 };
 const RPCHelpMan& savescraperfilemanifest_helpman() { return savescraperfilemanifest_help; }
 
-UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
+UniValue savescraperfilemanifest(const UniValue& params)
 {
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
@@ -6359,7 +6357,6 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  * create a grace period entry in the pending deleted manifest map. It also will not delete the underlying manifest object
  * if a shared pointer to the manifest object is also held by the global convergence cache.
  * @param params Takes a single parameter which is the hash if the manifest to delete.
- * @param fHelp
  * @return bool true if successful
  */
 static const RPCHelpMan deletecscrapermanifest_help{
@@ -6379,7 +6376,7 @@ static const RPCHelpMan deletecscrapermanifest_help{
 };
 const RPCHelpMan& deletecscrapermanifest_helpman() { return deletecscrapermanifest_help; }
 
-UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
+UniValue deletecscrapermanifest(const UniValue& params)
 {
     LOCK(CScraperManifest::cs_mapManifest);
 
@@ -6391,7 +6388,6 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Immediately archives the specified log, either the debug.log of scraper.log
  * @param params Takes a single parameter specifying the log to archive, debug or scraper.
- * @param fHelp
  * @return bool true if successful
  */
 static const RPCHelpMan archivelog_help{
@@ -6408,7 +6404,7 @@ static const RPCHelpMan archivelog_help{
 };
 const RPCHelpMan& archivelog_helpman() { return archivelog_help; }
 
-UniValue archivelog(const UniValue& params, bool fHelp)
+UniValue archivelog(const UniValue& params)
 {
     std::string sLogger = params[0].get_str();
 
@@ -6485,7 +6481,6 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 /**
  * @brief Reports on the state of the convergence on the local node.
  * @param params bool true to provide detailed output
- * @param fHelp
  * @return JSON report of convergence state with optional details
  */
 static const RPCHelpMan convergencereport_help{
@@ -6505,7 +6500,7 @@ static const RPCHelpMan convergencereport_help{
 };
 const RPCHelpMan& convergencereport_helpman() { return convergencereport_help; }
 
-UniValue convergencereport(const UniValue& params, bool fHelp)
+UniValue convergencereport(const UniValue& params)
 {
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
@@ -6609,7 +6604,6 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @brief Tests superblock formation
  * @param params unsigned int to specify the number of bits for the reduced hash hint to force more duplicates to check. This
  * is clamped between 4 and 32, with 32 as the default, which is the normal hint bits.
- * @param fHelp
  * @return report of test results
  */
 static const RPCHelpMan testnewsb_help{
@@ -6629,7 +6623,7 @@ static const RPCHelpMan testnewsb_help{
 };
 const RPCHelpMan& testnewsb_helpman() { return testnewsb_help; }
 
-UniValue testnewsb(const UniValue& params, bool fHelp)
+UniValue testnewsb(const UniValue& params)
 {
     unsigned int nReducedCacheBits = 32;
 
@@ -6844,7 +6838,6 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  * @brief Generates a comprehensive report of the scraper convergence, manifest and parts objects. This report is mainly
  * used for integrity checking of the scraper's internal operation
  * @param params none
- * @param fHelp
  * @return JSON report of scraper status
  */
 static const RPCHelpMan scraperreport_help{
@@ -6860,7 +6853,7 @@ static const RPCHelpMan scraperreport_help{
 };
 const RPCHelpMan& scraperreport_helpman() { return scraperreport_help; }
 
-UniValue scraperreport(const UniValue& params, bool fHelp)
+UniValue scraperreport(const UniValue& params)
 {
     UniValue ret(UniValue::VOBJ);
 

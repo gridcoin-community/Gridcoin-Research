@@ -97,7 +97,7 @@ static const RPCHelpMan createpsgt_help{
 };
 const RPCHelpMan& createpsgt_helpman() { return createpsgt_help; }
 
-UniValue createpsgt(const UniValue& params, bool fHelp)
+UniValue createpsgt(const UniValue& params)
 {
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 
@@ -170,7 +170,7 @@ static const RPCHelpMan decodepsgt_help{
 };
 const RPCHelpMan& decodepsgt_helpman() { return decodepsgt_help; }
 
-UniValue decodepsgt(const UniValue& params, bool fHelp)
+UniValue decodepsgt(const UniValue& params)
 {
     PartiallySignedTransaction psgt;
     string error;
@@ -360,7 +360,7 @@ static const RPCHelpMan combinepsgt_help{
 };
 const RPCHelpMan& combinepsgt_helpman() { return combinepsgt_help; }
 
-UniValue combinepsgt(const UniValue& params, bool fHelp)
+UniValue combinepsgt(const UniValue& params)
 {
     RPCTypeCheck(params, {UniValue::VARR});
     UniValue psgtArr = params[0].get_array();
@@ -403,7 +403,7 @@ static const RPCHelpMan finalizepsgt_help{
 };
 const RPCHelpMan& finalizepsgt_helpman() { return finalizepsgt_help; }
 
-UniValue finalizepsgt(const UniValue& params, bool fHelp)
+UniValue finalizepsgt(const UniValue& params)
 {
     PartiallySignedTransaction psgt;
     string error;
@@ -448,7 +448,7 @@ static const RPCHelpMan walletprocesspsgt_help{
 };
 const RPCHelpMan& walletprocesspsgt_helpman() { return walletprocesspsgt_help; }
 
-UniValue walletprocesspsgt(const UniValue& params, bool fHelp)
+UniValue walletprocesspsgt(const UniValue& params)
 {
     EnsureWalletIsUnlocked();
 
@@ -563,7 +563,7 @@ static const RPCHelpMan utxoupdatepsgt_help{
 };
 const RPCHelpMan& utxoupdatepsgt_helpman() { return utxoupdatepsgt_help; }
 
-UniValue utxoupdatepsgt(const UniValue& params, bool fHelp)
+UniValue utxoupdatepsgt(const UniValue& params)
 {
     PartiallySignedTransaction psgt;
     string error;
@@ -601,7 +601,7 @@ static const RPCHelpMan converttopsgt_help{
 };
 const RPCHelpMan& converttopsgt_helpman() { return converttopsgt_help; }
 
-UniValue converttopsgt(const UniValue& params, bool fHelp)
+UniValue converttopsgt(const UniValue& params)
 {
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
     CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
@@ -677,7 +677,7 @@ static const RPCHelpMan walletcreatefundedpsgt_help{
 };
 const RPCHelpMan& walletcreatefundedpsgt_helpman() { return walletcreatefundedpsgt_help; }
 
-UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp)
+UniValue walletcreatefundedpsgt(const UniValue& params)
 {
     RPCTypeCheck(params, {UniValue::VARR, UniValue::VOBJ});
 

@@ -89,7 +89,7 @@ static const RPCHelpMan logging_help{
 };
 const RPCHelpMan& logging_helpman() { return logging_help; }
 
-UniValue logging(const UniValue& params, bool fHelp)
+UniValue logging(const UniValue& params)
 {
     if (params.size() >= 1) EnableOrDisableLogCategories(params[0], true);
 
@@ -119,7 +119,7 @@ static const RPCHelpMan listsettings_help{
 };
 const RPCHelpMan& listsettings_helpman() { return listsettings_help; }
 
-UniValue listsettings(const UniValue& params, bool fHelp)
+UniValue listsettings(const UniValue& params)
 {
     return gArgs.OutputArgs();
 }
@@ -162,7 +162,7 @@ static const RPCHelpMan changesettings_help = RPCHelpMan{
 }.MarkVariadic();
 const RPCHelpMan& changesettings_helpman() { return changesettings_help; }
 
-UniValue changesettings(const UniValue& params, bool fHelp)
+UniValue changesettings(const UniValue& params)
 {
     // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does
     // not model unbounded variadic, so retain a body-level lower-bound check after the dispatcher

@@ -78,7 +78,7 @@ static const RPCHelpMan getstakinginfo_help{
 };
 const RPCHelpMan& getstakinginfo_helpman() { return getstakinginfo_help; }
 
-UniValue getstakinginfo(const UniValue& params, bool fHelp)
+UniValue getstakinginfo(const UniValue& params)
 {
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
@@ -241,7 +241,7 @@ static const RPCHelpMan getlaststake_help{
 };
 const RPCHelpMan& getlaststake_helpman() { return getlaststake_help; }
 
-UniValue getlaststake(const UniValue& params, bool fHelp)
+UniValue getlaststake(const UniValue& params)
 {
     const std::optional<CWalletTx> stake_tx = g_miner_status.GetLastStake(*pwalletMain);
 
@@ -329,7 +329,7 @@ static const RPCHelpMan auditsnapshotaccrual_help{
 };
 const RPCHelpMan& auditsnapshotaccrual_helpman() { return auditsnapshotaccrual_help; }
 
-UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp)
+UniValue auditsnapshotaccrual(const UniValue& params)
 {
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
@@ -673,7 +673,7 @@ static const RPCHelpMan auditsnapshotaccruals_help{
 };
 const RPCHelpMan& auditsnapshotaccruals_helpman() { return auditsnapshotaccruals_help; }
 
-UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
+UniValue auditsnapshotaccruals(const UniValue& params)
 {
     bool report_only_mismatches = false;
 
@@ -712,7 +712,7 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 
         UniValue match_status(UniValue::VOBJ);
 
-        UniValue audit(auditsnapshotaccrual(internal_params, false));
+        UniValue audit(auditsnapshotaccrual(internal_params));
 
         if (!audit.empty()) {
             const CAmount& accrual_by_audit = find_value(audit, "accrual_by_audit").get_int64();
@@ -795,7 +795,7 @@ static const RPCHelpMan listresearcheraccounts_help{
 };
 const RPCHelpMan& listresearcheraccounts_helpman() { return listresearcheraccounts_help; }
 
-UniValue listresearcheraccounts(const UniValue& params, bool fHelp)
+UniValue listresearcheraccounts(const UniValue& params)
 {
     UniValue result(UniValue::VOBJ);
     UniValue entries(UniValue::VARR);
@@ -845,7 +845,7 @@ static const RPCHelpMan inspectaccrualsnapshot_help{
 };
 const RPCHelpMan& inspectaccrualsnapshot_helpman() { return inspectaccrualsnapshot_help; }
 
-UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
+UniValue inspectaccrualsnapshot(const UniValue& params)
 {
     const fs::path snapshot_path = SnapshotPath(params[0].get_int());
     const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
@@ -891,7 +891,7 @@ static const RPCHelpMan parseaccrualsnapshotfile_help{
 };
 const RPCHelpMan& parseaccrualsnapshotfile_helpman() { return parseaccrualsnapshotfile_help; }
 
-UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp)
+UniValue parseaccrualsnapshotfile(const UniValue& params)
 {
     UniValue res(UniValue::VOBJ);
 

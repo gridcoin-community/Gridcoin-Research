@@ -231,8 +231,10 @@ static const RPCHelpMan help_help{
 };
 const RPCHelpMan& help_helpman() { return help_help; }
 
-UniValue help(const UniValue& params, bool fHelp)
+UniValue help(const UniValue& params)
 {
+    // Arity is pre-checked by the dispatcher via help_helpman()->IsValidNumArgs;
+    // by the time we get here, params.size() is in range.
     string strCommand;
 
     if (params.size() > 0)
@@ -285,7 +287,7 @@ static const RPCHelpMan stop_help{
 };
 const RPCHelpMan& stop_helpman() { return stop_help; }
 
-UniValue stop(const UniValue& params, bool fHelp)
+UniValue stop(const UniValue& params)
 {
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
@@ -946,17 +948,15 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
-    // PR M2: when the command exposes an RPCHelpMan accessor, pre-check the
-    // arity here and throw the help text on mismatch. The command body no
-    // longer carries a redundant `if (fHelp || !help.IsValidNumArgs(...))`
-    // gate, so the dispatcher is now the authoritative arity-enforcement
-    // site for converted commands. Commands marked variadic via
-    // RPCHelpMan's MarkVariadic() opt out of the pre-check (their helpman
-    // declaration captures the typical shape but the body accepts an
-    // open-ended count); their body retains the arity gate appropriate to
-    // the actual semantics. addpoll's helpman is itself marked variadic
-    // so the `addpoll <type>` 1-arg wizard form reaches its body's hint
-    // logic.
+    // arity here and throw the help text on mismatch. PR M3 dropped the
+    // `bool fHelp` parameter entirely, so the dispatcher is now the sole
+    // arity-enforcement site for converted commands. Commands marked
+    // variadic via RPCHelpMan's MarkVariadic() opt out of the pre-check
+    // (their helpman declaration captures the typical shape but the body
+    // accepts an open-ended count); their body retains the arity gate
+    // appropriate to the actual semantics. addpoll's helpman is itself
+    // marked variadic so the `addpoll <type>` 1-arg wizard form reaches
+    // its body's hint logic.
     if (pcmd->helpman != nullptr) {
         const RPCHelpMan& help = pcmd->helpman();
         if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
@@ -976,12 +976,12 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
             nRPCtimebegin = GetTimeMillis();
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
             LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
 
         return result;
     }

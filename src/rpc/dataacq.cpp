@@ -66,7 +66,7 @@ static const RPCHelpMan rpc_getblockstats_help{
 };
 const RPCHelpMan& rpc_getblockstats_helpman() { return rpc_getblockstats_help; }
 
-UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
+UniValue rpc_getblockstats(const UniValue& params)
 {
     unsigned int mode = params[0].get_int();
 
@@ -378,7 +378,7 @@ static const RPCHelpMan rpc_exportstats_help{
 };
 const RPCHelpMan& rpc_exportstats_helpman() { return rpc_exportstats_help; }
 
-UniValue rpc_exportstats(const UniValue& params, bool fHelp)
+UniValue rpc_exportstats(const UniValue& params)
 {
     /* count, high */
     long endblock= INT_MAX;
@@ -593,7 +593,7 @@ static const RPCHelpMan rpc_getrecentblocks_help{
 };
 const RPCHelpMan& rpc_getrecentblocks_helpman() { return rpc_getrecentblocks_help; }
 
-UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
+UniValue rpc_getrecentblocks(const UniValue& params)
 {
     long detail= RoundFromString(params[0].get_str(),0);
     long blockcount=0;

@@ -456,7 +456,7 @@ const RPCHelpMan& addpoll_helpman()
     return *help;
 }
 
-UniValue addpoll(const UniValue& params, bool fHelp)
+UniValue addpoll(const UniValue& params)
 {
     const RPCHelpMan& help = addpoll_helpman();
 
@@ -478,12 +478,11 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
 
-    // Preserve the interactive wizard: `addpoll <type>` (one arg) shows the required-fields
-    // hint for that type. Fall through past the help gate and intercept after type resolution.
-    if (params.size() != 1) {
-        if (fHelp || !help.IsValidNumArgs(params.size())) {
-            throw std::runtime_error(help.ToString());
-        }
+    // The dispatcher's arity pre-check skips addpoll (because of the wizard interaction
+    // — `addpoll <type>` with one arg). Enforce arity here for non-wizard calls: allow
+    // 1 arg (wizard path below) or whatever the helpman declares (8 or 9 args).
+    if (params.size() != 1 && !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     std::string type_string = ToLower(params[0].get_str());
@@ -656,7 +655,7 @@ static const RPCHelpMan listpolls_help{
 };
 const RPCHelpMan& listpolls_helpman() { return listpolls_help; }
 
-UniValue listpolls(const UniValue& params, bool fHelp)
+UniValue listpolls(const UniValue& params)
 {
     UniValue json(UniValue::VARR);
 
@@ -690,7 +689,7 @@ static const RPCHelpMan getpollresults_help{
 };
 const RPCHelpMan& getpollresults_helpman() { return getpollresults_help; }
 
-UniValue getpollresults(const UniValue& params, bool fHelp)
+UniValue getpollresults(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
@@ -727,7 +726,7 @@ static const RPCHelpMan getvotingclaim_help{
 };
 const RPCHelpMan& getvotingclaim_helpman() { return getvotingclaim_help; }
 
-UniValue getvotingclaim(const UniValue& params, bool fHelp)
+UniValue getvotingclaim(const UniValue& params)
 {
     const uint256 id = uint256S(params[0].get_str());
 
@@ -785,7 +784,7 @@ static const RPCHelpMan vote_help{
 };
 const RPCHelpMan& vote_helpman() { return vote_help; }
 
-UniValue vote(const UniValue& params, bool fHelp)
+UniValue vote(const UniValue& params)
 {
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
@@ -842,7 +841,7 @@ static const RPCHelpMan votebyid_help = RPCHelpMan{
 }.MarkVariadic();
 const RPCHelpMan& votebyid_helpman() { return votebyid_help; }
 
-UniValue votebyid(const UniValue& params, bool fHelp)
+UniValue votebyid(const UniValue& params)
 {
     // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
     // RPCHelpMan does not model unbounded variadic, so retain a body-level lower-bound check
@@ -899,7 +898,7 @@ static const RPCHelpMan votedetails_help{
 };
 const RPCHelpMan& votedetails_helpman() { return votedetails_help; }
 
-UniValue votedetails(const UniValue& params, bool fHelp)
+UniValue votedetails(const UniValue& params)
 {
     const std::string title_or_id = params[0].get_str();
 
@@ -932,7 +931,7 @@ static const RPCHelpMan testpollnotification_help{
 };
 const RPCHelpMan& testpollnotification_helpman() { return testpollnotification_help; }
 
-UniValue testpollnotification(const UniValue& params, bool fHelp)
+UniValue testpollnotification(const UniValue& params)
 {
     const uint256 txid = uint256S(params[0].get_str());
 

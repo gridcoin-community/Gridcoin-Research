@@ -45,7 +45,7 @@ static const RPCHelpMan createhtlc_help{
 };
 const RPCHelpMan& createhtlc_helpman() { return createhtlc_help; }
 
-UniValue createhtlc(const UniValue& params, bool fHelp)
+UniValue createhtlc(const UniValue& params)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -149,7 +149,7 @@ static const RPCHelpMan claimhtlc_help{
 };
 const RPCHelpMan& claimhtlc_helpman() { return claimhtlc_help; }
 
-UniValue claimhtlc(const UniValue& params, bool fHelp)
+UniValue claimhtlc(const UniValue& params)
 {
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
@@ -293,7 +293,7 @@ static const RPCHelpMan refundhtlc_help{
 };
 const RPCHelpMan& refundhtlc_helpman() { return refundhtlc_help; }
 
-UniValue refundhtlc(const UniValue& params, bool fHelp)
+UniValue refundhtlc(const UniValue& params)
 {
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool

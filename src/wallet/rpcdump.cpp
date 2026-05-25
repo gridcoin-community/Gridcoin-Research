@@ -120,7 +120,7 @@ static const RPCHelpMan importprivkey_help{
 };
 const RPCHelpMan& importprivkey_helpman() { return importprivkey_help; }
 
-UniValue importprivkey(const UniValue& params, bool fHelp)
+UniValue importprivkey(const UniValue& params)
 {
     string strSecret = params[0].get_str();
     string strLabel = "";
@@ -185,7 +185,7 @@ static const RPCHelpMan importwallet_help{
 };
 const RPCHelpMan& importwallet_helpman() { return importwallet_help; }
 
-UniValue importwallet(const UniValue& params, bool fHelp)
+UniValue importwallet(const UniValue& params)
 {
     fs::path PathForImport = fs::path(params[0].get_str());
     fs::path DefaultPathDataDir = GetDataDir();
@@ -302,7 +302,7 @@ static const RPCHelpMan dumpprivkey_help{
 };
 const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
 
-UniValue dumpprivkey(const UniValue& params, bool fHelp)
+UniValue dumpprivkey(const UniValue& params)
 {
     EnsureWalletIsUnlocked();
 
@@ -352,7 +352,7 @@ static const RPCHelpMan dumpwallet_help{
 };
 const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
-UniValue dumpwallet(const UniValue& params, bool fHelp)
+UniValue dumpwallet(const UniValue& params)
 {
     EnsureWalletIsUnlocked();
 
