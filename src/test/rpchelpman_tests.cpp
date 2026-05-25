@@ -215,6 +215,21 @@ UniValue liststakes(const UniValue& params, bool fHelp);
 UniValue gettransaction(const UniValue& params, bool fHelp);
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp);
 
+// Forward declarations of the Tier 1 F4 wallet management/send commands under test.
+UniValue sendtoaddress(const UniValue& params, bool fHelp);
+UniValue sendfrom(const UniValue& params, bool fHelp);
+UniValue sendmany(const UniValue& params, bool fHelp);
+UniValue backupwallet(const UniValue& params, bool fHelp);
+UniValue keypoolrefill(const UniValue& params, bool fHelp);
+UniValue walletdiagnose(const UniValue& params, bool fHelp);
+UniValue encryptwallet(const UniValue& params, bool fHelp);
+UniValue reservebalance(const UniValue& params, bool fHelp);
+UniValue checkwallet(const UniValue& params, bool fHelp);
+UniValue repairwallet(const UniValue& params, bool fHelp);
+UniValue resendtx(const UniValue& params, bool fHelp);
+UniValue burn(const UniValue& params, bool fHelp);
+UniValue upgradewallet(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -908,6 +923,43 @@ BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
         {"liststakes",              &liststakes},
         {"gettransaction",          &gettransaction},
         {"getrawwallettransaction", &getrawwallettransaction},
+    };
+
+    const UniValue params(UniValue::VARR);
+    for (const auto& [name, fn] : commands) {
+        try {
+            fn(params, /*fHelp=*/true);
+            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
+        } catch (const std::runtime_error& e) {
+            const std::string what{e.what()};
+            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
+                                std::string{"help text missing command name: "} + name);
+            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                std::string{"help text missing Examples marker: "} + name);
+        }
+    }
+}
+
+// Tier 1 F4: each of the wallet-mgmt/send commands renders help text on
+// fHelp=true before touching pwalletMain / cs_main / cs_wallet. Same
+// fixture-free pattern as the F2/F3 tests above.
+BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
+{
+    using HelpFn = UniValue(*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> commands{
+        {"sendtoaddress",   &sendtoaddress},
+        {"sendfrom",        &sendfrom},
+        {"sendmany",        &sendmany},
+        {"backupwallet",    &backupwallet},
+        {"keypoolrefill",   &keypoolrefill},
+        {"walletdiagnose",  &walletdiagnose},
+        {"encryptwallet",   &encryptwallet},
+        {"reservebalance",  &reservebalance},
+        {"checkwallet",     &checkwallet},
+        {"repairwallet",    &repairwallet},
+        {"resendtx",        &resendtx},
+        {"burn",            &burn},
+        {"upgradewallet",   &upgradewallet},
     };
 
     const UniValue params(UniValue::VARR);
