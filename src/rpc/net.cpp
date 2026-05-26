@@ -671,6 +671,12 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
         connections = (int)vNodes.size();
     }
 
+    std::string addr_seen_by_peer_ip;
+    {
+        LOCK(cs_addrSeenByPeer);
+        addr_seen_by_peer_ip = addrSeenByPeer.ToStringIP();
+    }
+
     LOCK(cs_main);
 
     res.pushKV("version",         FormatFullVersion());
@@ -681,7 +687,7 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     res.pushKV("paytxfee",        ValueFromAmount(nTransactionFee));
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
     res.pushKV("proxy",           (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
-    res.pushKV("ip",              addrSeenByPeer.ToStringIP());
+    res.pushKV("ip",              addr_seen_by_peer_ip);
 
     UniValue localAddresses(UniValue::VARR);
     {

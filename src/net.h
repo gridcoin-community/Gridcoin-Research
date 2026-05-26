@@ -113,7 +113,12 @@ extern ServiceFlags nLocalServices;
 // so the per-connection nonce identity is lost), but that is a separate
 // follow-up; atomicising here just closes the data race.
 extern std::atomic<uint64_t> nLocalHostNonce;
-extern CAddress addrSeenByPeer;
+//! \brief Guards \ref addrSeenByPeer. Written by ProcessMessage's version
+//! handler when a peer reports the address it sees us at, read by RPC
+//! handlers (getinfo in rpc/net.cpp + wallet/rpcwallet.cpp). CAddress
+//! assignment/copy is not atomic.
+extern CCriticalSection cs_addrSeenByPeer;
+extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
 extern CAddrMan addrman;
 extern CCriticalSection cs_mapRelay;
 extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);

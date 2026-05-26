@@ -64,7 +64,8 @@ CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
-CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
+CCriticalSection cs_addrSeenByPeer;
+CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer)(LookupNumeric("0.0.0.0", 0), nLocalServices);
 std::atomic<uint64_t> nLocalHostNonce{0};
 
 

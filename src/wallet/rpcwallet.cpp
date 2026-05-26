@@ -114,6 +114,14 @@ UniValue getinfo(const UniValue& params, bool fHelp)
         connections = (int)vNodes.size();
     }
 
+    // Same pattern: snapshot the peer-reported external IP before the
+    // heavier cs_main+cs_wallet acquisition.
+    std::string addr_seen_by_peer_ip;
+    {
+        LOCK(cs_addrSeenByPeer);
+        addr_seen_by_peer_ip = addrSeenByPeer.ToStringIP();
+    }
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     obj.pushKV("version",       FormatFullVersion());
@@ -131,7 +139,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
     obj.pushKV("connections",   connections);
     obj.pushKV("proxy",         (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
-    obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
+    obj.pushKV("ip",            addr_seen_by_peer_ip);
 
     diff.pushKV("current", GRC::GetCurrentDifficulty());
     diff.pushKV("target", GRC::GetTargetDifficulty());
