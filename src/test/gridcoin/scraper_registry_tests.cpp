@@ -7,6 +7,15 @@
 
 #include <boost/test/unit_test.hpp>
 
+// Tests are single-threaded and drive the ScraperRegistry contract
+// handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+// suppress the analyzer for this file rather than take a lock the
+// tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
 // anonymous namespace
 namespace {
 void AddRemoveScraperEntryV1(const std::string& address, const std::string& value,
@@ -538,3 +547,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

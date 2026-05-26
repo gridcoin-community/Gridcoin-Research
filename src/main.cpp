@@ -95,15 +95,17 @@ CBlockIndex* pindexBest = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
 std::atomic<bool> g_reorg_in_progress = false;
-CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
+CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
 
 
 
 
 // Orphan block storage managed by g_orphan_blocks (node/orphan_blocks.h)
 
-map<uint256, CTransaction> mapOrphanTransactions;
-map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
+// Orphan transaction storage. All accesses occur under cs_main from
+// ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
+map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
@@ -245,7 +247,7 @@ double CoinToDouble(double surrogate)
 // mapOrphanTransactions
 //
 
-bool AddOrphanTx(const CTransaction& tx)
+bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = tx.GetHash();
     if (mapOrphanTransactions.count(hash))
@@ -275,7 +277,7 @@ bool AddOrphanTx(const CTransaction& tx)
     return true;
 }
 
-void static EraseOrphanTx(uint256 hash)
+void static EraseOrphanTx(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!mapOrphanTransactions.count(hash))
         return;
@@ -289,7 +291,7 @@ void static EraseOrphanTx(uint256 hash)
     mapOrphanTransactions.erase(hash);
 }
 
-unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
+unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     unsigned int nEvicted = 0;
     while (mapOrphanTransactions.size() > nMaxOrphans)
@@ -2387,6 +2389,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 pfrom->PushGetBlocks(pindexBest, uint256());
                 LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
             }
+            // cPeerBlockCounts is read by GetNumBlocksOfPeers / IsInitialBlockDownload
+            // under cs_main, so the input also belongs under cs_main.
+            cPeerBlockCounts.input(pfrom->nStartingHeight);
         }
 
         // Relay alerts
@@ -2405,8 +2410,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
-
-        cPeerBlockCounts.input(pfrom->nStartingHeight);
     }
     else if (pfrom->nVersion == 0)
     {

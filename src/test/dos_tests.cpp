@@ -18,10 +18,20 @@
 #include <stdint.h>
 
 // Tests this internal-to-main.cpp method:
-extern bool AddOrphanTx(const CTransaction& tx);
-extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans);
-extern std::map<uint256, CTransaction> mapOrphanTransactions;
-extern std::map<uint256, std::set<uint256> > mapOrphanTransactionsByPrev;
+extern bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+extern unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+extern std::map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+extern std::map<uint256, std::set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
+
+// The orphan-tx tests below are single-threaded and drive
+// AddOrphanTx / LimitOrphanTxSize / mapOrphanTransactions directly. All
+// three are GUARDED_BY / EXCLUSIVE_LOCKS_REQUIRED(cs_main) in main.cpp;
+// suppress the analyzer for this file rather than take a lock the tests
+// do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 CService ip(uint32_t i)
 {
@@ -124,7 +134,7 @@ BOOST_AUTO_TEST_CASE(DoS_misbehavior_decay)
     BOOST_CHECK(nodestats.nMisbehavior == 0); // nMisbehavior should be 0.
 }
 
-CTransaction RandomOrphan()
+CTransaction RandomOrphan() NO_THREAD_SAFETY_ANALYSIS
 {
     auto it = mapOrphanTransactions.lower_bound(InsecureRand256());
     if (it == mapOrphanTransactions.end())
@@ -442,3 +452,7 @@ BOOST_AUTO_TEST_CASE(DoS_checkblock_validation_state)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

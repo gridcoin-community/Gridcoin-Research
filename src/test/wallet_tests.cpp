@@ -756,6 +756,15 @@ BOOST_AUTO_TEST_CASE(multiple_state_transitions)
     }
 }
 
+// Single-threaded test that drives CWallet::transactionAddedToMempool
+// directly; that method is EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+// LOCKS_EXCLUDED(cs_wallet). The test holds cs_wallet but not cs_main,
+// which mirrors the wallet-internal callback shape we're pinning here.
+// Suppress the analyzer for this test case.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
 {
     // Pins the invariant CommitTransaction relies on at wallet.cpp:3324:
@@ -812,6 +821,9 @@ BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
         BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInactive>() == nullptr);
     }
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()
 

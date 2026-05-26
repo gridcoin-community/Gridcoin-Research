@@ -149,7 +149,7 @@ void RemoveTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 }
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
-                      const int& height, const bool& reset_registry = false)
+                      const int& height, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 

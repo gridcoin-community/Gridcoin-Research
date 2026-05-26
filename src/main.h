@@ -126,7 +126,7 @@ enum class MemPoolRemovalReason {
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state);
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
@@ -134,10 +134,15 @@ FILE* AppendBlockFile(unsigned int& nFileRet);
 // (the internal LOCK would deadlock under non-recursive locking; cs_main
 // is currently recursive but the annotation contract documents the intent).
 bool LoadBlockIndex(bool fAllowNew=true);
-void PrintBlockTree();
+void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
 bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
+// Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
+// cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires
+// cs_main again internally for each section it needs. The current pattern
+// is recursive-safe but TSA cannot model the recursive-acquire correctly,
+// so the function intentionally has no EXCLUSIVE_LOCKS_REQUIRED annotation.
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
@@ -197,8 +202,8 @@ bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
-                        CValidationState& state, bool* pfMissingInputs);
-bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
+                        CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 /** A transaction with a merkle branch linking it to the block chain. */
