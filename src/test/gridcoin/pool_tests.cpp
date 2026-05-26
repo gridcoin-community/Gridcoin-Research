@@ -553,7 +553,7 @@ BOOST_AUTO_TEST_CASE(is_pending_expired_only_fires_for_pending_status)
 
 BOOST_AUTO_TEST_CASE(is_pending_expired_height_boundary)
 {
-    const int retention = GRC::GetPendingPoolRetention();
+    const int retention = GetPendingPoolRetention();
 
     GRC::Pool entry;
     entry.m_status = GRC::PoolStatus::PENDING;
@@ -589,7 +589,7 @@ BOOST_AUTO_TEST_CASE(is_authorization_expired_only_fires_with_valid_auth_key)
 
 BOOST_AUTO_TEST_CASE(is_authorization_expired_height_boundary)
 {
-    const int retention = GRC::GetPendingPoolRetention();
+    const int retention = GetPendingPoolRetention();
     CKey op_priv = PoolTestKey::Private();
 
     GRC::Pool entry;
@@ -622,7 +622,7 @@ BOOST_AUTO_TEST_CASE(pending_pool_retention_default_is_28800)
     //
     // GetPendingPoolRetention() reads the -pendingpoolretention override
     // when set; in the unit-test harness no override is in play.
-    BOOST_CHECK_EQUAL(GRC::GetPendingPoolRetention(), 28800);
+    BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 28800);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

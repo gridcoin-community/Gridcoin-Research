@@ -3438,7 +3438,7 @@ UniValue registerpool(const UniValue& params)
                                   "expired (issued at height %d, retention %d blocks). Ask "
                                   "Foundation to re-OPEN.",
                                   cpid.ToString(), existing->m_authorization_height,
-                                  GRC::GetPendingPoolRetention()));
+                                  GetPendingPoolRetention()));
                 }
                 if (!auth_matches) {
                     throw JSONRPCError(RPC_INVALID_PARAMETER,
