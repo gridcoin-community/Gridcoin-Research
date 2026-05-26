@@ -97,7 +97,7 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     */
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppcoin: get transaction coin age
+bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main); // ppcoin: get transaction coin age
 
 int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 

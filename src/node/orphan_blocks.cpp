@@ -9,11 +9,11 @@
 #include "gridcoin/staking/spam.h"
 #include "util.h"
 
-extern GRC::SeenStakes g_seen_stakes;
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
 
-OrphanBlockManager g_orphan_blocks;
+OrphanBlockManager g_orphan_blocks GUARDED_BY(cs_main);
 
-bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t now)
+bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Reject duplicates.
     if (m_orphans.count(hash)) {
@@ -44,7 +44,7 @@ bool OrphanBlockManager::Add(const uint256& hash, const CBlock& block, int64_t n
 
 size_t OrphanBlockManager::ProcessQueue(
     const uint256& accepted_hash,
-    std::function<bool(CBlock&)> accept_fn)
+    std::function<bool(CBlock&)> accept_fn) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::vector<uint256> work_queue;
     work_queue.push_back(accepted_hash);
@@ -89,22 +89,22 @@ size_t OrphanBlockManager::ProcessQueue(
     return accepted_count;
 }
 
-const CBlock* OrphanBlockManager::GetRootBlock(const uint256& hash) const
+const CBlock* OrphanBlockManager::GetRootBlock(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return FindRootBlock(hash);
 }
 
-bool OrphanBlockManager::Contains(const uint256& hash) const
+bool OrphanBlockManager::Contains(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_orphans.count(hash) > 0;
 }
 
-bool OrphanBlockManager::HasChildrenOf(const uint256& prev_hash) const
+bool OrphanBlockManager::HasChildrenOf(const uint256& prev_hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_by_prev.count(prev_hash) > 0;
 }
 
-size_t OrphanBlockManager::EraseExpired(int64_t now)
+size_t OrphanBlockManager::EraseExpired(int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     size_t count = 0;
 
@@ -138,12 +138,12 @@ size_t OrphanBlockManager::EraseExpired(int64_t now)
     return count;
 }
 
-size_t OrphanBlockManager::Size() const
+size_t OrphanBlockManager::Size() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return m_orphans.size();
 }
 
-void OrphanBlockManager::Clear()
+void OrphanBlockManager::Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (auto& [hash, entry] : m_orphans) {
         if (entry.block->IsProofOfStake()) {
@@ -179,7 +179,7 @@ std::unique_ptr<CBlock> OrphanBlockManager::EraseInternal(const uint256& hash)
     return block;
 }
 
-void OrphanBlockManager::EvictRandom()
+void OrphanBlockManager::EvictRandom() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (m_orphans.empty()) {
         return;

@@ -27,8 +27,8 @@ static const int64_t MIN_STAKE_SPLIT_VALUE_GRC = 800;
 void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, int64_t &nReward,
                           bool &fEnableStakeSplit, bool &fEnableSideStaking,
                           int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency);
-bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue);
+unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool CreateMRCRewards(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
                       CBlock &blocknew,

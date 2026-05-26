@@ -6,6 +6,7 @@
 #define GRIDCOIN_STAKING_SPAM_H
 
 #include "kernel.h"
+#include "sync.h"
 #include "uint256.h"
 #include "random.h"
 
@@ -13,6 +14,8 @@
 #include <cmath>
 #include <map>
 #include <vector>
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -49,7 +52,7 @@ public:
     //!
     //! \param Proof hash of the stake used to generate a block.
     //!
-    void Remember(uint256 hashProof)
+    void Remember(uint256 hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         m_proofs_seen[GetOffset(hashProof)] = hashProof;
     }
@@ -59,7 +62,7 @@ public:
     //!
     //! \param coinstake Coinstake transaction from the block.
     //!
-    void RememberOrphan(const CTransaction& coinstake)
+    void RememberOrphan(const CTransaction& coinstake) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         const int64_t stake_time = MaskStakeTime(coinstake.nTime);
@@ -75,7 +78,7 @@ public:
     //!
     //! \return \c true if this container holds a matching proof hash.
     //!
-    bool ContainsProof(const uint256& hashProof) const
+    bool ContainsProof(const uint256& hashProof) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return m_proofs_seen[GetOffset(hashProof)] == hashProof;
     }
@@ -88,7 +91,7 @@ public:
     //!
     //! \return \c true if this container holds a matching proof hash.
     //!
-    bool ContainsOrphan(const CTransaction& coinstake) const
+    bool ContainsOrphan(const CTransaction& coinstake) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         const auto iter_pair = m_orphan_proofs_seen.find(stake_prevout);
@@ -109,7 +112,7 @@ public:
     //!
     //! \param coinstake Coinstake transaction from the block.
     //!
-    void ForgetOrphan(const CTransaction& coinstake)
+    void ForgetOrphan(const CTransaction& coinstake) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         const COutPoint& stake_prevout = coinstake.vin[0].prevout;
         auto iter_pair = m_orphan_proofs_seen.find(stake_prevout);
@@ -138,7 +141,7 @@ public:
     //! blocks re-supplied via P2P would be rejected as duplicate
     //! proof-of-stake.
     //!
-    void Clear()
+    void Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         m_proofs_seen = {};
     }
@@ -148,7 +151,7 @@ public:
     //!
     //! \param pindex Points to the block index for the chain tip.
     //!
-    void Refill(const CBlockIndex* pindex)
+    void Refill(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         for (size_t i = 0; pindex && i < m_proofs_seen.size(); ++i) {
             pindex = pindex->pprev;

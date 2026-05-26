@@ -35,7 +35,7 @@ extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = 
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-arith_uint256 GetChainTrust(const CBlockIndex* pindex);
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 UniValue ContractToJson(const GRC::Contract& contract);

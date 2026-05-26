@@ -137,13 +137,13 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-GRC::SeenStakes g_seen_stakes;
-GRC::ChainTrustCache g_chain_trust;
+GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
 
 //!
 //! \brief Re-exports chain trust values for reporting.
 //!
-arith_uint256 GetChainTrust(const CBlockIndex* pindex)
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_chain_trust.GetTrust(pindex);
 }

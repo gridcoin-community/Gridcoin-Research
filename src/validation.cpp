@@ -34,8 +34,8 @@
 #include <set>
 #include <stdexcept>
 
-extern GRC::SeenStakes g_seen_stakes;
-extern GRC::ChainTrustCache g_chain_trust;
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
 
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
@@ -484,7 +484,7 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
+bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
@@ -719,7 +719,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent) EXCLUSIVE_LOCKS_REQ
     return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
 
-bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age)
+bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_coin_age = 0;
 

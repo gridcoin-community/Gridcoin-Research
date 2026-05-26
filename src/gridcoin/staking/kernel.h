@@ -33,7 +33,7 @@ TimeType MaskStakeTime(const TimeType timestamp)
 }
 
 // Compute the hash modifier for proof-of-stake
-bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier);
+bool ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // Get time weight using supplied timestamps
 int64_t GetWeight(int64_t nIntervalBeginning, int64_t nIntervalEnd);
@@ -58,7 +58,7 @@ bool ReadStakedInput(
     const uint256 prevout_hash,
     CBlockHeader& out_header,
     CTransaction& out_txprev,
-    CBlockIndex* pindexPrev = nullptr);
+    CBlockIndex* pindexPrev = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Calculate the provided block's proof hash with the version 3 staking
@@ -92,7 +92,7 @@ bool CalculateLegacyV3HashProof(
     const CBlock& block,
     const double por_nonce,
     CValidationState& state,
-    uint256& out_hash_proof);
+    uint256& out_hash_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //Block version 8+ Staking
 bool CheckProofOfStakeV8(
@@ -101,9 +101,9 @@ bool CheckProofOfStakeV8(
     CBlock& Block, //block to check
     bool generated_by_me,
     CValidationState& state,
-    uint256& hashProofOfStake); //proof hash out-parameter
+    uint256& hashProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main); //proof hash out-parameter
 
-bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight);
+bool FindStakeModifierRev(uint64_t& StakeModifier, CBlockIndex* pindexPrev, int &nHeight) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 // Kernel for V8
 uint256 CalculateStakeHashV8(

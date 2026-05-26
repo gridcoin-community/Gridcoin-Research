@@ -1180,7 +1180,7 @@ void SplitCoinStakeOutput(CMutableTransaction& mtxCoinstake, CBlock &blocknew, i
     // MRC output 1 is always to the foundation (it is essentially a sidestake) and represents a cut of the MRC fees.
 }
 
-unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency)
+unsigned int GetNumberOfStakeOutputs(int64_t &nValue, int64_t &nMinStakeSplitValue, double &dEfficiency) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     int64_t nDesiredStakeOutputValue = 0;
     unsigned int nStakeOutputs = 1;
@@ -1403,7 +1403,7 @@ bool IsMiningAllowed(CWallet *pwallet)
 
 // This function parses the config file for the directives for stake splitting. It is used
 // in StakeMiner for the miner loop and also called by rpc getstakinginfo.
-bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue)
+bool GetStakeSplitStatusAndParams(int64_t& nMinStakeSplitValue, double& dEfficiency, int64_t& nDesiredStakeOutputValue) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Parse StakeSplit and SideStaking flags.
     bool fEnableStakeSplit = gArgs.GetBoolArg("-enablestakesplit");
@@ -1462,7 +1462,13 @@ void StakeMiner(CWallet *pwallet)
     while (!fShutdown)
     {
         // nMinStakeSplitValue and dEfficiency are out parameters.
-        bool fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
+        // cs_main is required for the GetAverageDifficulty(160) lookup inside;
+        // scope it tightly so the MilliSleep below doesn't hold the lock.
+        bool fEnableStakeSplit;
+        {
+            LOCK(cs_main);
+            fEnableStakeSplit = GetStakeSplitStatusAndParams(nMinStakeSplitValue, dEfficiency, nDesiredStakeOutputValue);
+        }
 
         // If the vSideStakeAlloc is not empty, then set fEnableSideStaking to true. Note that vSideStakeAlloc will not be empty
         // if non-zero allocation mandatory sidestakes are set OR local sidestaking is turned on by the -enablesidestaking config

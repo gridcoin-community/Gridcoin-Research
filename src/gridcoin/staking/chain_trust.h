@@ -6,9 +6,12 @@
 #define GRIDCOIN_STAKING_CHAIN_TRUST_H
 
 #include "arith_uint256.h"
+#include "sync.h"
 
 #include <array>
 #include <vector>
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 //!
@@ -42,7 +45,7 @@ public:
     //! \param genesis Blockchain index for the genesis block.
     //! \param tip     Blockchain index for the highest known block.
     //!
-    void Initialize(const CBlockIndex* genesis, const CBlockIndex* tip)
+    void Initialize(const CBlockIndex* genesis, const CBlockIndex* tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         int64_t start_time = GetTimeMillis();
 
@@ -72,7 +75,7 @@ public:
     //!
     //! \return Chain trust value at the current best block.
     //!
-    arith_uint256 Best() const
+    arith_uint256 Best() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return m_best_trust;
     }
@@ -85,7 +88,7 @@ public:
     //!
     //! \return \c true if the specified block exhibits greater chain trust.
     //!
-    bool Favors(const CBlockIndex* pindex) const
+    bool Favors(const CBlockIndex* pindex) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetTrust(pindex) > Best();
     }
@@ -97,7 +100,7 @@ public:
     //!
     //! \return Chain trust value for the specified block.
     //!
-    arith_uint256 GetTrust(const CBlockIndex* pindex) const
+    arith_uint256 GetTrust(const CBlockIndex* pindex) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         arith_uint256 chain_trust;
 
@@ -140,7 +143,7 @@ public:
     //! \param pindex Points to the block index entry selected as the tip of
     //! the chain.
     //!
-    void SetBest(const CBlockIndex* pindex)
+    void SetBest(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         m_best_trust = pindex->GetBlockTrust() + GetTrust(pindex->pprev);
         m_best_pindex = pindex;
