@@ -245,7 +245,7 @@ bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int bloc
     return false;
 }
 
-bool DisconnectInputs(CTransaction& tx, CTxDB& txdb)
+bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Relinquish previous transactions' spent pointers
     if (!tx.IsCoinBase())
@@ -528,7 +528,7 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSI
 }
 
 
-int GetDepthInMainChain(const CTxIndex& txi)
+int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Read block header
     CBlock block;
@@ -1561,7 +1561,7 @@ bool CheckBlockSignature(const CBlock& block)
 //! \param tx The transaction that contains the contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS)
+bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
     // know to arrive at this virtual method implementation).
@@ -1707,7 +1707,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
 //! \param mrc The MRC contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     int64_t research_owed = 0;
     const int64_t& mrc_time = mrc_last_pindex->nTime;
