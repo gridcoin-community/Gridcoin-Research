@@ -203,7 +203,7 @@ bool Intro::showIfNeeded(bool& did_show_intro)
         /* Use selectParams here to guarantee Params() can be used by node interface when we implement it from
            Bitcoin. */
         try {
-            SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+            SelectParams(gArgs.GetChainName());
         } catch (const std::exception&) {
             return false;
         }

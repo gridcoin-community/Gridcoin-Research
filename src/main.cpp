@@ -697,6 +697,12 @@ int CMerkleTx::GetBlocksToMaturity() const
 {
     if (!(IsCoinBase() || IsCoinStake()))
         return 0;
+    // Under -regtest, treat coinbase/coinstake outputs as immediately mature so
+    // the genesis premine can be staked at height 1 without bootstrap loops.
+    // The +10 below would otherwise make regtest unable to produce a first
+    // PoS block (no spendable UTXO to stake against).
+    if (Params().IsMockableChain())
+        return 0;
     return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
 }
 
@@ -1221,7 +1227,10 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: cs_tx_val_commit_to_disk locked", __func__);
 
             if (pindexGenesisBlock == nullptr) {
-                if (hash != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet)) {
+                const uint256 expected_genesis = Params().IsMockableChain()
+                    ? (hashGenesisBlockRegTest.IsNull() ? hash : hashGenesisBlockRegTest)
+                    : (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+                if (hash != expected_genesis) {
                     txdb.TxnAbort();
                     return error("%s: genesis block hash does not match", __func__);
                 }
@@ -1846,7 +1855,17 @@ bool LoadBlockIndex(bool fAllowNew)
 {
     LOCK(cs_main);
 
-    if (fTestNet)
+    if (Params().IsMockableChain())
+    {
+        // GLOBAL REGTEST SETTINGS — staking and maturity gated to 0 so the kernel
+        // checks at gridcoin/staking/kernel.cpp:617,654 pass trivially. nGrandfather
+        // is irrelevant at regtest heights.
+        nStakeMinAge = 0;
+        nCoinbaseMaturity = 10;
+        nGrandfather = 0;
+        MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
+    }
+    else if (fTestNet)
     {
         // GLOBAL TESTNET SETTINGS - R HALFORD
         nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
@@ -1856,7 +1875,7 @@ bool LoadBlockIndex(bool fAllowNew)
         MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
     }
 
-    LogPrintf("Mode=%s", fTestNet ? "TestNet" : "Prod");
+    LogPrintf("Mode=%s", Params().IsMockableChain() ? "RegTest" : fTestNet ? "TestNet" : "Prod");
 
     //
     // Load block index
@@ -1895,24 +1914,57 @@ bool LoadBlockIndex(bool fAllowNew)
         CMutableTransaction txNew;
         //GENESIS TIME
         txNew.nVersion = 1;
-        txNew.nTime = 1413033777;
+        txNew.nTime = Params().IsMockableChain() ? 1296688602u : 1413033777u;
         txNew.vin.resize(1);
-        txNew.vout.resize(1);
         txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
-        txNew.vout[0].SetEmpty();
+
+        if (Params().IsMockableChain()) {
+            // Regtest premine. Pays 10 UTXOs of 100,000 GRC each (1M total) to
+            // the well-known secp256k1 privkey=1 P2PKH address. The matching
+            // private key is `01..01` (32 bytes of 0x01... no, scalar value 1)
+            // and is imported into the wallet by init.cpp under -regtest. UTXOs
+            // are marked immediately mature by GetBlocksToMaturity's regtest
+            // shortcut so the staker can use them at height 1.
+            //
+            // Master plan calls for 10M GRC across 100 UTXOs (final amount/dist
+            // needs maintainer signoff — flagged in PR description). Tonight's
+            // smaller layout is enough to fund Phase 2B.2 generate tests.
+            const std::vector<unsigned char> kRegtestPubKeyHash = {
+                0x75, 0x1e, 0x76, 0xe8, 0x19, 0x91, 0x96, 0xd4, 0x54, 0x94,
+                0x1c, 0x45, 0xd1, 0xb3, 0xa3, 0x23, 0xf1, 0x43, 0x3b, 0xd6
+            };
+            const CScript premine_script = CScript()
+                << OP_DUP << OP_HASH160
+                << kRegtestPubKeyHash
+                << OP_EQUALVERIFY << OP_CHECKSIG;
+            txNew.vout.resize(10);
+            for (size_t i = 0; i < txNew.vout.size(); ++i) {
+                txNew.vout[i].nValue = 100000 * COIN;
+                txNew.vout[i].scriptPubKey = premine_script;
+            }
+        } else {
+            txNew.vout.resize(1);
+            txNew.vout[0].SetEmpty();
+        }
         CBlock block;
         block.vtx.push_back(CTransaction(txNew));
         block.hashPrevBlock.SetNull();
         block.hashMerkleRoot = BlockMerkleRoot(block);
-        block.nVersion = 1;
+        const bool fRegTest = Params().IsMockableChain();
+        // Regtest genesis announces a modern block version so the staker
+        // walking back to it via GetProofOfStakeReward() sees pindexPrev->nVersion
+        // >= 10 and uses GetConstantBlockReward(); with nVersion=1 the call
+        // falls into the coin-age formula with our nCoinAge=0 argument and
+        // returns a zero subsidy, which fails Claim::WellFormed.
+        block.nVersion = fRegTest ? 14 : 1;
         //R&D - Testers Wanted Thread:
-        block.nTime    = !fTestNet ? 1413033777 : 1406674534;
+        block.nTime    = fRegTest ? 1296688602 : !fTestNet ? 1413033777 : 1406674534;
         //Official Launch time:
         block.nBits    = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
-        block.nNonce = !fTestNet ? 130208 : 22436;
+        block.nNonce = fRegTest ? 0 : !fTestNet ? 130208 : 22436;
         LogPrintf("starting Genesis Check...");
         // If genesis block hash does not match, then generate new genesis hash.
-        if (block.GetHash(true) != (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+        if (block.GetHash(true) != (fRegTest ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
         {
             LogPrintf("Searching for genesis block...");
             // This will figure out a valid hash and Nonce if you're
@@ -1946,9 +1998,16 @@ bool LoadBlockIndex(bool fAllowNew)
         //// debug print
 
         //GENESIS3: Official Merkle Root
-        uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
-        assert(block.hashMerkleRoot == merkle_root);
-        assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        if (!fRegTest) {
+            uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
+            assert(block.hashMerkleRoot == merkle_root);
+            assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        } else {
+            LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u (bake hashGenesisBlockRegTest)",
+                      block.GetHash(true).ToString(),
+                      block.hashMerkleRoot.ToString(),
+                      block.nNonce, block.nTime);
+        }
         { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
 
         // Start new block file
@@ -1956,8 +2015,37 @@ bool LoadBlockIndex(bool fAllowNew)
         unsigned int nBlockPos;
         if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
-        if (!AddToBlockIndex(block, nFile, nBlockPos, hashGenesisBlock))
+        const uint256 genesis_proof = fRegTest ? block.GetHash(true)
+                                               : hashGenesisBlock;
+        if (!AddToBlockIndex(block, nFile, nBlockPos, genesis_proof))
             return error("LoadBlockIndex() : genesis block not accepted");
+
+        // Under -regtest the genesis coinbase carries spendable premine
+        // outputs (see chainparams.cpp). LoadBlockIndex bypasses ConnectBlock
+        // for genesis, so the txindex/UpdateTxIndex path that normally writes
+        // each block's transactions is never taken — leaving CheckProofOfStakeV8
+        // unable to ReadStakedInput for the premine UTXO. Write the genesis
+        // coinbase to the tx index directly so the staker can spend it at
+        // height 1.
+        if (fRegTest) {
+            CTxDB regtxdb;
+            const unsigned int nTxPos = nBlockPos
+                + ::GetSerializeSize<CBlockHeader>(block, SER_DISK, CLIENT_VERSION)
+                + GetSizeOfCompactSize(block.vtx.size());
+            const CDiskTxPos pos(nFile, nBlockPos, nTxPos);
+            const uint256 genesis_coinbase_hash = block.vtx[0].GetHash();
+            if (!regtxdb.AddTxIndex(block.vtx[0], pos, /*nHeight=*/0)) {
+                return error("LoadBlockIndex() : failed to write regtest genesis tx index");
+            }
+            LogPrintf("regtest: wrote genesis coinbase %s to tx index at file=%u blockpos=%u txpos=%u",
+                      genesis_coinbase_hash.ToString(), nFile, nBlockPos, nTxPos);
+            CTxIndex verify_index;
+            if (regtxdb.ReadTxIndex(genesis_coinbase_hash, verify_index)) {
+                LogPrintf("regtest: verified genesis coinbase readable from tx index");
+            } else {
+                LogPrintf("regtest: WARN — genesis coinbase NOT readable back from tx index");
+            }
+        }
     }
 
     if (fRequestShutdown) {
