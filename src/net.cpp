@@ -87,7 +87,8 @@ vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 CCriticalSection cs_mapRelay;
 map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
 deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
-map<CInv, int64_t> mapAlreadyAskedFor;
+CCriticalSection cs_mapAlreadyAskedFor;
+map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 
 CCriticalSection cs_vOneShots;
 static deque<string> vOneShots GUARDED_BY(cs_vOneShots);

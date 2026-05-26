@@ -1593,7 +1593,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
                 // request time first to guarantee that the node does not postpone
                 // the message:
                 //
-                mapAlreadyAskedFor[ancestor_request] = 0;
+                {
+                    LOCK(cs_mapAlreadyAskedFor);
+                    mapAlreadyAskedFor[ancestor_request] = 0;
+                }
                 pfrom->AskFor(ancestor_request);
             }
         }
@@ -2807,7 +2810,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
         {
             RelayTransaction(tx, inv.hash);
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             vWorkQueue.push_back(inv.hash);
             vEraseQueue.push_back(inv.hash);
 
@@ -2828,7 +2834,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     {
                         LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
                         RelayTransaction(orphanTx, orphanTxHash);
-                        mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        {
+                            LOCK(cs_mapAlreadyAskedFor);
+                            mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        }
                         vWorkQueue.push_back(orphanTxHash);
                         vEraseQueue.push_back(orphanTxHash);
                         pfrom->nTrust++;
@@ -2880,7 +2889,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CValidationState state;
         if (ProcessBlock(pfrom, &block, false, state))
         {
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             pfrom->nTrust++;
         }
         int nDoS = 0;
@@ -3354,7 +3366,12 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // receives the object. If the request does not exist in this map, we
         // don't need to ask for the object again:
         //
-        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        bool already_asked_present;
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            already_asked_present = mapAlreadyAskedFor.find(inv) != mapAlreadyAskedFor.end();
+        }
+        if (!already_asked_present)
         {
             pto->mapAskFor.erase(pto->mapAskFor.begin());
             continue;
@@ -3388,7 +3405,10 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            mapAlreadyAskedFor[inv] = nNow;
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor[inv] = nNow;
+            }
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }

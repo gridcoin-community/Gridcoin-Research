@@ -123,7 +123,14 @@ extern CAddrMan addrman;
 extern CCriticalSection cs_mapRelay;
 extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
 extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
-extern std::map<CInv, int64_t> mapAlreadyAskedFor;
+//! \brief Guards \ref mapAlreadyAskedFor. Written and read from
+//! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
+//! from ProcessBlock, from SendMessages' getdata loop, and from
+//! CSplitBlob::RecvPart on the scraper PART path which does NOT hold
+//! cs_main. A dedicated leaf-level mutex avoids hoisting cs_main into
+//! the PART path and keeps the lock as narrow as possible.
+extern CCriticalSection cs_mapAlreadyAskedFor;
+extern std::map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 extern ThreadHandler* netThreads;
 
 
@@ -466,6 +473,8 @@ public:
         // We're using mapAskFor as a priority queue,
         // the key is the earliest time the request can be sent
         if (mapAskFor.size() > 50000) return;
+
+        LOCK(cs_mapAlreadyAskedFor);
 
         int64_t& nRequestTime = mapAlreadyAskedFor[inv];
         LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));

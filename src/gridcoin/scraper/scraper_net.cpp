@@ -44,7 +44,10 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     */
     auto& ss = vRecv;
     uint256 hash(Hash(ss));
-    mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
+    }
 
     LOCK(cs_mapParts);
 
