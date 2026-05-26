@@ -3405,9 +3405,19 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
+            // Re-check presence under the lock before refreshing the
+            // timestamp. Another thread may have removed the entry
+            // between the initial presence check above and here
+            // (e.g. the inventory arrived and was processed via the
+            // TX / BLOCK handlers in ProcessMessage, which erase under
+            // cs_mapAlreadyAskedFor). If the entry is gone, the
+            // request is satisfied and we should not reinsert it.
             {
                 LOCK(cs_mapAlreadyAskedFor);
-                mapAlreadyAskedFor[inv] = nNow;
+                auto it = mapAlreadyAskedFor.find(inv);
+                if (it != mapAlreadyAskedFor.end()) {
+                    it->second = nNow;
+                }
             }
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());

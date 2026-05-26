@@ -474,9 +474,16 @@ public:
         // the key is the earliest time the request can be sent
         if (mapAskFor.size() > 50000) return;
 
-        LOCK(cs_mapAlreadyAskedFor);
+        // Snapshot the current request time under the mutex. The
+        // logging / time-formatting / static-counter arithmetic below
+        // does not touch mapAlreadyAskedFor and should not hold the
+        // global mutex.
+        int64_t nRequestTime;
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            nRequestTime = mapAlreadyAskedFor[inv];
+        }
 
-        int64_t& nRequestTime = mapAlreadyAskedFor[inv];
         LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
 
         // Make sure not to reuse time indexes to keep things in the same order
@@ -487,8 +494,12 @@ public:
         nLastTime = nNow;
 
         // Each retry is 2 minutes after the last
-        nRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
-        mapAskFor.insert(std::make_pair(nRequestTime, inv));
+        const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            mapAlreadyAskedFor[inv] = nNewRequestTime;
+        }
+        mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
     }
 
     void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)
