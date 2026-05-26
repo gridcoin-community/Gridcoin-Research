@@ -1611,12 +1611,21 @@ private: // SuperblockValidator methods
 //!
 //! \brief Stores recent superblock data.
 //!
-SuperblockIndex g_superblock_index;
+//! Touched by Quorum static methods that mutate (PushSuperblock,
+//! PopSuperblock, CommitSuperblock, LoadSuperblockIndex) or read
+//! (CurrentSuperblock, PendingSuperblock, HasPendingSuperblock, GetMagnitude).
+//! Has no internal mutex; cs_main is the external protection per the
+//! Quorum class contract.
+//!
+SuperblockIndex g_superblock_index GUARDED_BY(cs_main);
 
 //!
 //! \brief Orchestrates superblock voting for legacy quorum consensus.
 //!
-LegacyConsensus g_legacy_consensus;
+//! Touched by Quorum's vote-recording methods (FindPopularHash, RecordVote,
+//! ForgetVote). No internal mutex; cs_main is the external protection.
+//!
+LegacyConsensus g_legacy_consensus GUARDED_BY(cs_main);
 
 } // anonymous namespace
 
@@ -1630,7 +1639,7 @@ bool Quorum::Participating(const std::string& grc_address, const int64_t time)
     return LegacyConsensus::Participating(grc_address, time);
 }
 
-QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex)
+QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_legacy_consensus.FindPopularHash(pindex);
 }
@@ -1638,12 +1647,12 @@ QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex)
 void Quorum::RecordVote(
     const QuorumHash quorum_hash,
     const std::string& grc_address,
-    const CBlockIndex* const pindex)
+    const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     g_legacy_consensus.RecordVote(quorum_hash, grc_address, pindex);
 }
 
-void Quorum::ForgetVote(const CBlockIndex* const pindex)
+void Quorum::ForgetVote(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     g_legacy_consensus.ForgetVote(pindex);
 }
@@ -1743,12 +1752,12 @@ bool Quorum::ValidateSuperblock(
     return result != Result::INVALID;
 }
 
-Magnitude Quorum::GetMagnitude(const Cpid cpid)
+Magnitude Quorum::GetMagnitude(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
 }
 
-Magnitude Quorum::GetMagnitude(const MiningId mining_id)
+Magnitude Quorum::GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (const auto cpid_option = mining_id.TryCpid()) {
         return GetMagnitude(*cpid_option);
@@ -1806,17 +1815,17 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     return projects;
 }
 
-SuperblockPtr Quorum::CurrentSuperblock()
+SuperblockPtr Quorum::CurrentSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.Current();
 }
 
-SuperblockPtr Quorum::PendingSuperblock()
+SuperblockPtr Quorum::PendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.Pending();
 }
 
-bool Quorum::HasPendingSuperblock()
+bool Quorum::HasPendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.HasPending();
 }
@@ -1834,7 +1843,7 @@ bool Quorum::SuperblockNeeded(const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_mai
 
 }
 
-void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
+void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindexLast) {
         return;
@@ -1848,21 +1857,21 @@ Superblock Quorum::CreateSuperblock()
     return ScraperGetSuperblockContract();
 }
 
-void Quorum::PushSuperblock(SuperblockPtr superblock)
+void Quorum::PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", superblock.m_height);
 
     g_superblock_index.PushSuperblock(std::move(superblock));
 }
 
-void Quorum::PopSuperblock(const CBlockIndex* const pindex)
+void Quorum::PopSuperblock(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Quorum::PopSuperblock(%" PRId64 ")", pindex->nHeight);
 
     g_superblock_index.PopSuperblock();
 }
 
-bool Quorum::CommitSuperblock(const uint32_t height)
+bool Quorum::CommitSuperblock(const uint32_t height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.Commit(height);
 }

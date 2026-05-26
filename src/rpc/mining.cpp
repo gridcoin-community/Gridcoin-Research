@@ -574,7 +574,16 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp)
 
     UniValue result(UniValue::VOBJ);
 
-    SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
+    // Hold cs_main only long enough to copy the SuperblockPtr (a refcounted
+    // handle to immutable data). The per-CPID iteration below calls
+    // auditsnapshotaccrual, which takes its own LOCK(cs_main) for each call.
+    // Holding cs_main across the whole loop would freeze the node for minutes
+    // on a full network (one full audit can take that long).
+    SuperblockPtr superblock;
+    {
+        LOCK(cs_main);
+        superblock = GRC::Quorum::CurrentSuperblock();
+    }
 
     UniValue entries(UniValue::VARR);
     int number_of_cpids = 0;
