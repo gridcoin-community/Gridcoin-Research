@@ -325,7 +325,7 @@ ScraperEntryOption ScraperRegistry::TryAuthorized(const CKeyID& key_id) const
     return nullptr;
 }
 
-void ScraperRegistry::Reset()
+void ScraperRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -411,17 +411,17 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void ScraperRegistry::Add(const ContractContext& ctx)
+void ScraperRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ScraperRegistry::Delete(const ContractContext& ctx)
+void ScraperRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ScraperRegistry::Revert(const ContractContext& ctx)
+void ScraperRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<ScraperEntryPayload>();
 
@@ -488,7 +488,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (contract.m_version < 1) {
         return true;
@@ -512,7 +512,7 @@ bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx,
     return true;
 }
 
-bool ScraperRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool ScraperRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }

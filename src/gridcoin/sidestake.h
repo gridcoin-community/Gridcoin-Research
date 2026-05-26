@@ -719,7 +719,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for sidestake entries.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid.
@@ -730,7 +730,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid sidestake entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid including block context. This is used
@@ -742,7 +742,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
@@ -751,7 +751,7 @@ public:
     //!
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry
@@ -759,7 +759,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
@@ -786,7 +786,7 @@ public:
     //!
     //! \param ctx References the sidestake entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the sidestakeRegistry, which now includes restoring the state of the sidestakeRegistry from

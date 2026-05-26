@@ -478,7 +478,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for protocol entries.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid.
@@ -489,7 +489,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid protocol entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid including block context. This is used
@@ -501,7 +501,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a protocol entry to the registry from contract data. For the protocol registry
@@ -509,7 +509,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Mark a protocol entry deleted in the registry from contract data. For the protocol registry
@@ -517,7 +517,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the protocol entry to the state prior
@@ -526,7 +526,7 @@ public:
     //!
     //! \param ctx References the protocol entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the ProtocolRegistry, which now includes restoring the state of the ProtocolRegistry from

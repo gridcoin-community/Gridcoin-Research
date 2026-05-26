@@ -1032,7 +1032,7 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main, PollRegistry::cs_poll_registry)
     return ref;
 }
 
-void PollRegistry::Reset()
+void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_poll_registry);
 
@@ -1043,7 +1043,7 @@ void PollRegistry::Reset()
     reorg_occurred_during_reg_traversal = false;
 }
 
-bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
+bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:
@@ -1073,7 +1073,7 @@ bool PollRegistry::Validate(const Contract& contract, const CTransaction& tx, in
     return true;
 }
 
-bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool PollRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Vote contract claims do not affect consensus. Vote claim validation
     // occurs on-demand while computing the results of the poll:

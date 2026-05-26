@@ -335,7 +335,7 @@ ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& 
     }
 }
 
-void ProtocolRegistry::Reset()
+void ProtocolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -418,17 +418,17 @@ void ProtocolRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void ProtocolRegistry::Add(const ContractContext& ctx)
+void ProtocolRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Delete(const ContractContext& ctx)
+void ProtocolRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Revert(const ContractContext& ctx)
+void ProtocolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<ProtocolEntryPayload>();
 
@@ -494,7 +494,7 @@ void ProtocolRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (contract.m_version < 1) {
         return true;
@@ -517,7 +517,7 @@ bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx
     return true;
 }
 
-bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }

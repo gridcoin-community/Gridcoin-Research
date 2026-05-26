@@ -426,7 +426,7 @@ public:
     //! \brief Destroy the contract handler state to prepare for historical
     //! contract replay.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract.
@@ -437,7 +437,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -448,21 +448,21 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Register a poll or vote from contract data.
     //!
     //! \param ctx References the poll or vote contract and associated context.
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Deregister the poll or vote specified by contract data.
     //!
     //! \param ctx References the poll or vote contract and associated context.
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Detect reorganizations that would affect registry traversal.

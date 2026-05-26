@@ -5,11 +5,14 @@
 #ifndef GRIDCOIN_CONTRACT_HANDLER_H
 #define GRIDCOIN_CONTRACT_HANDLER_H
 
+#include "sync.h"
+
 #include <cstdint>
 #include <string>
 
 class CBlockIndex;
 class CTransaction;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -75,6 +78,12 @@ public:
 //! its methods that provide the read-only access to the contract data imported
 //! by this interface.
 //!
+//! THREAD SAFETY: The "applies from only one thread" promise above is realized
+//! by gating all of these mutation/validation entry points on cs_main —
+//! Validate/BlockValidate/Reset/Add/Delete/Revert are all annotated
+//! EXCLUSIVE_LOCKS_REQUIRED(cs_main). Read-only query methods are NOT part of
+//! this interface; subclasses provide their own thread-safe accessors.
+//!
 struct IContractHandler
 {
     //!
@@ -91,7 +100,7 @@ struct IContractHandler
     //!
     //! \return \c false If the contract fails validation.
     //!
-    virtual bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const = 0;
+    virtual bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -102,27 +111,27 @@ struct IContractHandler
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    virtual bool BlockValidate(const ContractContext& ctx, int& DoS) const = 0;
+    virtual bool BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
     //! contract replay.
     //!
-    virtual void Reset() = 0;
+    virtual void Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
     //! \brief Handle an contract addition.
     //!
     //! \param ctx References the contract and associated context.
     //!
-    virtual void Add(const ContractContext& ctx) = 0;
+    virtual void Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
     //! \brief Handle a contract deletion.
     //!
     //! \param ctx References the contract and associated context.
     //!
-    virtual void Delete(const ContractContext& ctx) = 0;
+    virtual void Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
     //! \brief Revert a contract found in a disconnected block.
@@ -134,7 +143,7 @@ struct IContractHandler
     //!
     //! \param ctx References the contract and associated context.
     //!
-    virtual void Revert(const ContractContext& ctx);
+    virtual void Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief This method is implemented for those contract handlers that have a registry (backing) database.
