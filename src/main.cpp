@@ -87,11 +87,11 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
-CBlockIndex* pindexGenesisBlock = nullptr;
-int nBestHeight = -1;
+CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main) = nullptr;
+int nBestHeight GUARDED_BY(cs_main) = -1;
 
-uint256 hashBestChain;
-CBlockIndex* pindexBest = nullptr;
+uint256 hashBestChain GUARDED_BY(cs_main);
+CBlockIndex* pindexBest GUARDED_BY(cs_main) = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
 std::atomic<bool> g_reorg_in_progress = false;
@@ -2383,11 +2383,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
+        size_t numNodes;
+        {
+            LOCK(cs_vNodes);
+            numNodes = vNodes.size();
+        }
         {
             LOCK(cs_main);
             if (!pfrom->fClient && !pfrom->fOneShot &&
                 (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-                 (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
+                 (nAskedForBlocks < 1 || (numNodes <= 1 && nAskedForBlocks < 1)))
             {
                 nAskedForBlocks++;
                 pfrom->PushGetBlocks(pindexBest, uint256());

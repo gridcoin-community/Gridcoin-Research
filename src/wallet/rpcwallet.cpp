@@ -105,6 +105,15 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
 
+    // Snapshot vNodes.size() under cs_vNodes before acquiring the heavier
+    // cs_main + cs_wallet pair so the size read is GUARDED_BY-clean and we
+    // do not introduce a new cs_main→cs_vNodes ordering edge.
+    int connections;
+    {
+        LOCK(cs_vNodes);
+        connections = (int)vNodes.size();
+    }
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     obj.pushKV("version",       FormatFullVersion());
@@ -120,7 +129,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     obj.pushKV("timeoffset",    GetTimeOffset());
     obj.pushKV("uptime",        g_timer.GetElapsedTime("uptime", "default") / 1000);
     obj.pushKV("moneysupply",   ValueFromAmount(pindexBest->nMoneySupply));
-    obj.pushKV("connections",   (int)vNodes.size());
+    obj.pushKV("connections",   connections);
     obj.pushKV("proxy",         (proxy.IsValid() ? proxy.ToStringIPPort() : string()));
     obj.pushKV("ip",            addrSeenByPeer.ToStringIP());
 

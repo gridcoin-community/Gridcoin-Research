@@ -665,13 +665,19 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
 
+    int connections;
+    {
+        LOCK(cs_vNodes);
+        connections = (int)vNodes.size();
+    }
+
     LOCK(cs_main);
 
     res.pushKV("version",         FormatFullVersion());
     res.pushKV("minor_version",   CLIENT_VERSION_MINOR);
     res.pushKV("protocolversion", PROTOCOL_VERSION);
     res.pushKV("timeoffset",      GetTimeOffset());
-    res.pushKV("connections",     (int)vNodes.size());
+    res.pushKV("connections",     connections);
     res.pushKV("paytxfee",        ValueFromAmount(nTransactionFee));
     res.pushKV("mininput",        ValueFromAmount(nMinimumInputValue));
     res.pushKV("proxy",           (proxy.IsValid() ? proxy.ToStringIPPort() : string()));

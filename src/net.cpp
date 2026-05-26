@@ -78,14 +78,14 @@ CAddrMan addrman;
 // Initialization of static class variable.
 std::atomic<NodeId> CNode::nLastNodeId {-1};
 
-vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
+vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 CCriticalSection cs_vAddedNodes;
 vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
-map<CInv, CDataStream> mapRelay;
-deque<pair<int64_t, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
+map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 map<CInv, int64_t> mapAlreadyAskedFor;
 
 CCriticalSection cs_vOneShots;
@@ -1174,10 +1174,14 @@ void ThreadSocketHandler2(void* parg)
             // Inactivity checking
             //
             // Consider this for future removal as this really is not beneficial nor harmful.
-            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
+            // Read vNodesCopy.size() (the snapshot taken under cs_vNodes above
+            // at line 1100) rather than vNodes.size() — vNodes is GUARDED_BY
+            // (cs_vNodes) and the size at iteration time is what this check
+            // wants anyway.
+            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodesCopy.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     LogPrint(BCLog::LogFlags::NET, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
-                             pnode->addr.ToString(), vNodes.size());
+                             pnode->addr.ToString(), vNodesCopy.size());
 
                     pnode->fDisconnect = true;
 

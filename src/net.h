@@ -22,7 +22,10 @@
 
 class CNode;
 class CBlockIndex;
-extern int nBestHeight;
+extern CCriticalSection cs_main;
+// Duplicate extern of the main.h:82 declaration; both must carry the
+// GUARDED_BY annotation so cross-TU readers via net.h see the contract.
+extern int nBestHeight GUARDED_BY(cs_main);
 
 
 /** Time between pings automatically sent out for latency probing and keepalive (in seconds). */
@@ -52,8 +55,8 @@ bool StopNode();
 // Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
 // pnode->cs_vSend and needs the complete CNode type).
 void SocketSendData(CNode *pnode);
-extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
+extern std::vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 
 struct LocalServiceInfo {
     int nScore;
@@ -112,9 +115,9 @@ extern ServiceFlags nLocalServices;
 extern std::atomic<uint64_t> nLocalHostNonce;
 extern CAddress addrSeenByPeer;
 extern CAddrMan addrman;
-extern std::map<CInv, CDataStream> mapRelay;
-extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration;
 extern CCriticalSection cs_mapRelay;
+extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 extern std::map<CInv, int64_t> mapAlreadyAskedFor;
 extern ThreadHandler* netThreads;
 
