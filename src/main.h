@@ -102,7 +102,14 @@ extern bool fEnforceCanonical;
 // Minimum disk space required - used in CheckDiskSpace()
 static const uint64_t nMinDiskSpace = 52428800;
 
-extern std::string  msMiningErrors;
+//! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
+//! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
+//! model on their respective threads. std::string assignment / copy is not
+//! atomic, so the writer's release of internal buffer storage can race with a
+//! reader's traversal of the same buffer — undefined behaviour without
+//! serialization.
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 extern int nGrandfather;
 

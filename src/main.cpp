@@ -126,7 +126,8 @@ bool fQtActive = false;
 std::atomic<bool> bGridcoinCoreInitComplete{false};
 
 // Mining status variables
-std::string    msMiningErrors;
+CCriticalSection cs_msMiningErrors;
+std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;

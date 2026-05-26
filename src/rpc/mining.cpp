@@ -150,7 +150,13 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
 
     std::string current_poll;
 
-    obj.pushKV("researcher_status", msMiningErrors);
+    std::string researcher_status;
+    {
+        LOCK(cs_msMiningErrors);
+        researcher_status = msMiningErrors;
+    }
+
+    obj.pushKV("researcher_status", researcher_status);
     obj.pushKV("current_poll", GRC::GetCurrentPollTitle());
 
     return obj;
