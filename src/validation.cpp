@@ -34,8 +34,8 @@
 #include <set>
 #include <stdexcept>
 
-extern GRC::SeenStakes g_seen_stakes;
-extern GRC::ChainTrustCache g_chain_trust;
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
 
 static constexpr CAmount nGenesisSupply = 340569880;
 bool fColdBoot = true;
@@ -245,7 +245,7 @@ bool HasMasterKeyInput(const CTransaction& tx, const MapPrevTx& inputs, int bloc
     return false;
 }
 
-bool DisconnectInputs(CTransaction& tx, CTxDB& txdb)
+bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Relinquish previous transactions' spent pointers
     if (!tx.IsCoinBase())
@@ -484,7 +484,7 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
 // guaranteed to be in main chain by sync-checkpoint. This rule is
 // introduced to help nodes establish a consistent view of the coin
 // age (trust score) of competing branches.
-bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
+bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     arith_uint256 bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
@@ -528,7 +528,7 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge)
 }
 
 
-int GetDepthInMainChain(const CTxIndex& txi)
+int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Read block header
     CBlock block;
@@ -719,7 +719,7 @@ int64_t ReturnCurrentMoneySupply(CBlockIndex* pindexcurrent) EXCLUSIVE_LOCKS_REQ
     return (pindexcurrent->pprev? pindexcurrent->pprev->nMoneySupply : nGenesisSupply);
 }
 
-bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age)
+bool GetCoinstakeAge(CTxDB& txdb, const CBlock& block, uint64_t& out_coin_age) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_coin_age = 0;
 
@@ -1561,7 +1561,7 @@ bool CheckBlockSignature(const CBlock& block)
 //! \param tx The transaction that contains the contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS)
+bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The MRC transaction should only have one contract on it, and the contract type should be MRC (which we already
     // know to arrive at this virtual method implementation).
@@ -1707,7 +1707,7 @@ bool ValidateMRC(const GRC::Contract& contract, const CTransaction& tx, int& DoS
 //! \param mrc The MRC contract
 //! \return true if successfully validated
 //!
-bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc)
+bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     int64_t research_owed = 0;
     const int64_t& mrc_time = mrc_last_pindex->nTime;

@@ -159,7 +159,7 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp)
             if (block.vtx[1].IsCoinStake())
             {
                 poscount++;
-                double diff = GRC::GetDifficulty(cur);
+                double diff = GRC::GetBlockDifficulty(cur->nBits);
                 diff_sum += diff;
                 diff_max = std::max(diff_max, diff);
                 diff_min = std::min(diff_min, diff);
@@ -405,7 +405,7 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
         if(cur->nHeight>endblock)
             continue;
 
-        double i_diff = GRC::GetDifficulty(cur);
+        double i_diff = GRC::GetBlockDifficulty(cur->nBits);
         sum_diff= sum_diff + i_diff;
         min_diff=std::min(min_diff,i_diff);
         max_diff=std::max(max_diff,i_diff);
@@ -559,7 +559,7 @@ UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp)
             100 json
         */
 
-        double diff = GRC::GetDifficulty(cur);
+        double diff = GRC::GetBlockDifficulty(cur->nBits);
         signed int delta = 0;
         if(cur->pprev)
             delta = (cur->nTime - cur->pprev->nTime);

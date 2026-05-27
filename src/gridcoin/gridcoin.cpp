@@ -168,7 +168,7 @@ bool VerifyCheckpoints(const CBlockIndex* const pindexBest) EXCLUSIVE_LOCKS_REQU
 //!
 //! \param pindexBest Block index of the tip of the chain.
 //!
-void InitializeSuperblockQuorum(const CBlockIndex* pindexBest)
+void InitializeSuperblockQuorum(const CBlockIndex* pindexBest) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (IsV9Enabled(pindexBest->nHeight)) {
         LogPrintf("Gridcoin: Loading superblock cache...");

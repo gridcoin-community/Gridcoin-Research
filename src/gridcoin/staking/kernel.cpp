@@ -279,7 +279,7 @@ static bool SelectBlockFromCandidates(
 // block. This is to make it difficult for an attacker to gain control of
 // additional bits in the stake modifier, even after generating a chain of
 // blocks.
-bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier)
+bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     nStakeModifier = 0;
     fGeneratedStakeModifier = false;
@@ -388,7 +388,7 @@ bool GRC::ReadStakedInput(
     const uint256 prevout_hash,
     CBlockHeader& out_header,
     CTransaction& out_txprev,
-    CBlockIndex* pindexPrev)
+    CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CTxIndex tx_index;
 
@@ -440,7 +440,7 @@ bool GRC::CalculateLegacyV3HashProof(
     const CBlock& block,
     const double por_nonce,
     CValidationState& state,
-    uint256& out_hash_proof)
+    uint256& out_hash_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CTransaction& coinstake = block.vtx[1];
     const COutPoint& prevout = coinstake.vin[0].prevout;
@@ -557,7 +557,7 @@ int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
 
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
-bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod)
+bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     nStakeModifier = 0;
     CBlockIndex* pindex_mod = pindexPrev;
@@ -585,7 +585,7 @@ bool GRC::CheckProofOfStakeV8(
     CBlock& Block, //block to check
     bool generated_by_me,
     CValidationState& state,
-    uint256& hashProofOfStake) //proof hash out-parameter
+    uint256& hashProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main) //proof hash out-parameter
 {
     //Block Transaction 0 is coin:base
     //Block Transaction 1 is coin:stake

@@ -15,7 +15,7 @@
 
 #include <limits>
 
-extern GRC::SeenStakes g_seen_stakes;
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
 
 namespace GRC {
 

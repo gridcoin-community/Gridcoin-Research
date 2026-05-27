@@ -745,7 +745,7 @@ WhitelistSnapshot Whitelist::Snapshot(const ProjectEntry::ProjectFilterFlag& fil
     return WhitelistSnapshot(std::make_shared<ProjectList>(projects), filter);
 }
 
-void Whitelist::Reset()
+void Whitelist::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -882,17 +882,17 @@ void Whitelist::AddDelete(const ContractContext& ctx)
 
 }
 
-void Whitelist::Add(const ContractContext& ctx)
+void Whitelist::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void Whitelist::Delete(const ContractContext& ctx)
+void Whitelist::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void Whitelist::Revert(const ContractContext& ctx)
+void Whitelist::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<Project>();
 
@@ -967,7 +967,7 @@ void Whitelist::Revert(const ContractContext& ctx)
     }
 }
 
-bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // No validation is done with contract versions of 2 or less.
     if (contract.m_version <= 2) {
@@ -993,7 +993,7 @@ bool Whitelist::Validate(const Contract& contract, const CTransaction& tx, int &
     return true;
 }
 
-bool Whitelist::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool Whitelist::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx.m_contract.SharePayloadAs<Project>();
 

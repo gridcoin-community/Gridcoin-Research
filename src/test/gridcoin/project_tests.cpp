@@ -9,6 +9,16 @@
 
 #include <boost/test/unit_test.hpp>
 
+// Tests are single-threaded and drive the Whitelist contract handler
+// directly (not via ApplyContracts). The handler is
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main) under the thread-safety annotation
+// rollout; suppress the analyzer for this file rather than take a lock
+// the tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
 namespace {
 void AddProjectEntry(const uint32_t& payload_version, const std::string& name, const std::string& url,
                      const bool& gdpr_status, const int& height, const uint64_t time, const bool& reset_registry = false)
@@ -1535,3 +1545,7 @@ BOOST_AUTO_TEST_CASE(it_applies_benefit_of_doubt_correctly)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

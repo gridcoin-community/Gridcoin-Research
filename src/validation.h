@@ -82,6 +82,12 @@ bool DisconnectInputs(CTransaction& tx, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs
     @param[out] fInvalid	returns true if tx is invalid
     @return	Returns true if all inputs are in txdb or mapTestPool
 */
+// No EXCLUSIVE_LOCKS_REQUIRED(cs_main): FetchInputs reads only txdb (its
+// own subsystem) and mempool (which takes mempool.cs internally via
+// mempool.lookup); it does not touch mapBlockIndex / pindexBest /
+// nBestHeight. Block-processing callers (ConnectInputs / CreateNewBlock)
+// hold cs_main for other reasons, but FetchInputs itself is callable
+// from RPC paths (signrawtransaction*) without cs_main.
 bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const std::map<uint256, CTxIndex>& mapTestPool, bool fBlock, bool fMiner, MapPrevTx& inputsRet, bool& fInvalid);
 
 /** Sanity check previous transactions, then, if all checks succeed,
@@ -97,7 +103,7 @@ bool FetchInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, const s
     */
 bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPrevTx inputs, std::map<uint256, CTxIndex>& mapTestPool, const CDiskTxPos& posThisTx, const CBlockIndex* pindexBlock, bool fBlock, bool fMiner) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge); // ppcoin: get transaction coin age
+bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSIVE_LOCKS_REQUIRED(cs_main); // ppcoin: get transaction coin age
 
 int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -106,8 +112,8 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
 bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool ConnectBlock(CBlock& block, CValidationState& state, CTxDB& txdb, CBlockIndex* pindex, bool fJustCheck=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, const uint256& hashProof) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false);
-bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me);
+bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool fCheckPOW=true, bool fCheckMerkleRoot=true, bool fCheckSig=true, bool fLoadingIndex=false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckBlockSignature(const CBlock& block);
 
 // Returns the script flags which should be checked for a given block

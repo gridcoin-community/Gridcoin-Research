@@ -133,7 +133,7 @@ public:
     static CAmount GetAccrual(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr);
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief A value of the accrual that is near the MaxReward for the accrual computer in context based on
@@ -149,7 +149,7 @@ public:
     static CAmount AccrualNearLimit(
             const Cpid cpid,
             const int64_t payment_time,
-            const CBlockIndex* const last_block_ptr);
+            const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Compute "catch-up" accrual to correct for newbie accrual bug.
@@ -170,7 +170,7 @@ public:
     static AccrualComputer GetComputer(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr);
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! \brief Get an accrual computer instance that calculates accrual using
     //! delta snapshot rules.
@@ -192,7 +192,7 @@ public:
         const ResearchAccount& account,
         const int64_t payment_time,
         const CBlockIndex* const last_block_ptr,
-        const SuperblockPtr superblock);
+        const SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get an accrual computer instance that calculates accrual using
@@ -211,7 +211,7 @@ public:
     static AccrualComputer GetSnapshotComputer(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr);
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get an accrual computer instance that calculates accrual using
@@ -230,7 +230,7 @@ public:
     static AccrualComputer GetLegacyComputer(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr);
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //!
@@ -261,7 +261,7 @@ public:
     //!
     //! \return \c false if an IO error occurred while processing the superblock.
     //!
-    static bool RevertSuperblock();
+    static bool RevertSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Recount the two-week network averages.
@@ -273,7 +273,7 @@ public:
     //!
     //! \param pindex Index of the block to start recounting backward from.
     //!
-    static void LegacyRecount(const CBlockIndex* pindex);
+    static void LegacyRecount(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Return the baseline snapshot height for the tally.

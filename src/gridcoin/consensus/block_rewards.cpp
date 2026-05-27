@@ -803,7 +803,7 @@ bool BlockRewardRules::CheckResearchRewardDrift(std::string& error_out) const
     return true;
 }
 
-bool BlockRewardRules::CheckClaimMagnitude(std::string& error_out) const
+bool BlockRewardRules::CheckClaimMagnitude(std::string& error_out) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const Claim& claim = m_block->GetClaim();
     const double mag = Quorum::GetMagnitude(claim.m_mining_id).Floating();

@@ -87,23 +87,25 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
-CBlockIndex* pindexGenesisBlock = nullptr;
-int nBestHeight = -1;
+CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main) = nullptr;
+int nBestHeight GUARDED_BY(cs_main) = -1;
 
-uint256 hashBestChain;
-CBlockIndex* pindexBest = nullptr;
+uint256 hashBestChain GUARDED_BY(cs_main);
+CBlockIndex* pindexBest GUARDED_BY(cs_main) = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
 std::atomic<bool> g_reorg_in_progress = false;
-CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
+CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
 
 
 
 
 // Orphan block storage managed by g_orphan_blocks (node/orphan_blocks.h)
 
-map<uint256, CTransaction> mapOrphanTransactions;
-map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
+// Orphan transaction storage. All accesses occur under cs_main from
+// ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
+map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
@@ -124,7 +126,8 @@ bool fQtActive = false;
 std::atomic<bool> bGridcoinCoreInitComplete{false};
 
 // Mining status variables
-std::string    msMiningErrors;
+CCriticalSection cs_msMiningErrors;
+std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;
@@ -137,13 +140,13 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-GRC::SeenStakes g_seen_stakes;
-GRC::ChainTrustCache g_chain_trust;
+GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
 
 //!
 //! \brief Re-exports chain trust values for reporting.
 //!
-arith_uint256 GetChainTrust(const CBlockIndex* pindex)
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_chain_trust.GetTrust(pindex);
 }
@@ -245,7 +248,7 @@ double CoinToDouble(double surrogate)
 // mapOrphanTransactions
 //
 
-bool AddOrphanTx(const CTransaction& tx)
+bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = tx.GetHash();
     if (mapOrphanTransactions.count(hash))
@@ -275,7 +278,7 @@ bool AddOrphanTx(const CTransaction& tx)
     return true;
 }
 
-void static EraseOrphanTx(uint256 hash)
+void static EraseOrphanTx(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!mapOrphanTransactions.count(hash))
         return;
@@ -289,7 +292,7 @@ void static EraseOrphanTx(uint256 hash)
     mapOrphanTransactions.erase(hash);
 }
 
-unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
+unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     unsigned int nEvicted = 0;
     while (mapOrphanTransactions.size() > nMaxOrphans)
@@ -1590,7 +1593,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
                 // request time first to guarantee that the node does not postpone
                 // the message:
                 //
-                mapAlreadyAskedFor[ancestor_request] = 0;
+                {
+                    LOCK(cs_mapAlreadyAskedFor);
+                    mapAlreadyAskedFor[ancestor_request] = 0;
+                }
                 pfrom->AskFor(ancestor_request);
             }
         }
@@ -1604,7 +1610,11 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidatio
 
     // Recursively process any orphan blocks that depended on this one.
     // ProcessQueue handles BFS traversal and SeenStakes cleanup internally.
-    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) -> bool {
+    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main) so the lambda runs
+    // with cs_main held, but TSA cannot propagate that into the lambda
+    // body — suppress the analyzer here rather than tag every chain-state
+    // access AcceptBlock makes downstream.
+    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
         CValidationState orphan_state;
         return AcceptBlock(orphan, orphan_state, generated_by_me);
     });
@@ -2337,8 +2347,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // record my external IP reported by peer
-        if (addrMe.IsRoutable())
+        if (addrMe.IsRoutable()) {
+            LOCK(cs_addrSeenByPeer);
             addrSeenByPeer = addrMe;
+        }
 
         // Be shy and don't send version until we hear
         if (pfrom->fInbound)
@@ -2377,16 +2389,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
+        size_t numNodes;
+        {
+            LOCK(cs_vNodes);
+            numNodes = vNodes.size();
+        }
         {
             LOCK(cs_main);
             if (!pfrom->fClient && !pfrom->fOneShot &&
                 (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-                 (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
+                 (nAskedForBlocks < 1 || (numNodes <= 1 && nAskedForBlocks < 1)))
             {
                 nAskedForBlocks++;
                 pfrom->PushGetBlocks(pindexBest, uint256());
                 LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
             }
+            // cPeerBlockCounts is read by GetNumBlocksOfPeers / IsInitialBlockDownload
+            // under cs_main, so the input also belongs under cs_main.
+            cPeerBlockCounts.input(pfrom->nStartingHeight);
         }
 
         // Relay alerts
@@ -2405,8 +2425,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
-
-        cPeerBlockCounts.input(pfrom->nStartingHeight);
     }
     else if (pfrom->nVersion == 0)
     {
@@ -2792,7 +2810,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
         {
             RelayTransaction(tx, inv.hash);
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             vWorkQueue.push_back(inv.hash);
             vEraseQueue.push_back(inv.hash);
 
@@ -2813,7 +2834,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     {
                         LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
                         RelayTransaction(orphanTx, orphanTxHash);
-                        mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        {
+                            LOCK(cs_mapAlreadyAskedFor);
+                            mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        }
                         vWorkQueue.push_back(orphanTxHash);
                         vEraseQueue.push_back(orphanTxHash);
                         pfrom->nTrust++;
@@ -2865,7 +2889,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CValidationState state;
         if (ProcessBlock(pfrom, &block, false, state))
         {
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             pfrom->nTrust++;
         }
         int nDoS = 0;
@@ -3339,7 +3366,12 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // receives the object. If the request does not exist in this map, we
         // don't need to ask for the object again:
         //
-        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        bool already_asked_present;
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            already_asked_present = mapAlreadyAskedFor.find(inv) != mapAlreadyAskedFor.end();
+        }
+        if (!already_asked_present)
         {
             pto->mapAskFor.erase(pto->mapAskFor.begin());
             continue;
@@ -3373,7 +3405,20 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            mapAlreadyAskedFor[inv] = nNow;
+            // Re-check presence under the lock before refreshing the
+            // timestamp. Another thread may have removed the entry
+            // between the initial presence check above and here
+            // (e.g. the inventory arrived and was processed via the
+            // TX / BLOCK handlers in ProcessMessage, which erase under
+            // cs_mapAlreadyAskedFor). If the entry is gone, the
+            // request is satisfied and we should not reinsert it.
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                auto it = mapAlreadyAskedFor.find(inv);
+                if (it != mapAlreadyAskedFor.end()) {
+                    it->second = nNow;
+                }
+            }
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }

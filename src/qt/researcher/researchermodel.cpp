@@ -445,7 +445,12 @@ QString ResearcherModel::formatStatus() const
     }
 
     // TODO: The getstakinginfo RPC shares this global. Refactor to remove it:
-    return QString::fromStdString(msMiningErrors);
+    std::string status;
+    {
+        LOCK(cs_msMiningErrors);
+        status = msMiningErrors;
+    }
+    return QString::fromStdString(status);
 }
 
 QString ResearcherModel::formatBoincPath() const

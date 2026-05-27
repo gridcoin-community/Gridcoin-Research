@@ -7,6 +7,15 @@
 
 #include <boost/test/unit_test.hpp>
 
+// Tests are single-threaded and drive the ProtocolRegistry contract
+// handler directly. The handler is EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+// suppress the analyzer for this file rather than take a lock the
+// tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
 // anonymous namespace
 namespace {
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
@@ -186,3 +195,7 @@ BOOST_AUTO_TEST_CASE(protocol_DeletingEntryShouldSuppressReversionShouldRestore)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

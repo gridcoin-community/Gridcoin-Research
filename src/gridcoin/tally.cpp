@@ -1124,7 +1124,7 @@ const ResearchAccount& Tally::GetAccount(const Cpid cpid)
 CAmount Tally::GetAccrual(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetComputer(cpid, payment_time, last_block_ptr)->Accrual();
 }
@@ -1132,7 +1132,7 @@ CAmount Tally::GetAccrual(
 CAmount Tally::AccrualNearLimit(
         const Cpid cpid,
         const int64_t payment_time,
-        const CBlockIndex* const last_block_ptr)
+        const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return (GetComputer(cpid, payment_time, last_block_ptr)->NearRewardLimit()) ;
 }
@@ -1340,7 +1340,7 @@ CAmount Tally::GetNewbieSuperblockAccrualCorrection(const Cpid& cpid, const Supe
 AccrualComputer Tally::GetComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!last_block_ptr) {
         return std::make_unique<NullAccrualComputer>();
@@ -1358,7 +1358,7 @@ AccrualComputer Tally::GetSnapshotComputer(
     const ResearchAccount& account,
     const int64_t payment_time,
     const CBlockIndex* const last_block_ptr,
-    const SuperblockPtr superblock)
+    const SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return std::make_unique<SnapshotAccrualComputer>(
         cpid,
@@ -1371,7 +1371,7 @@ AccrualComputer Tally::GetSnapshotComputer(
 AccrualComputer Tally::GetSnapshotComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return GetSnapshotComputer(
         cpid,
@@ -1384,7 +1384,7 @@ AccrualComputer Tally::GetSnapshotComputer(
 AccrualComputer Tally::GetLegacyComputer(
     const Cpid cpid,
     const int64_t payment_time,
-    const CBlockIndex* const last_block_ptr)
+    const CBlockIndex* const last_block_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const ResearchAccount& account = GetAccount(cpid);
 
@@ -1451,12 +1451,12 @@ bool Tally::ApplySuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(c
     return g_researcher_tally.ApplySuperblock(std::move(superblock));
 }
 
-bool Tally::RevertSuperblock()
+bool Tally::RevertSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_researcher_tally.RevertSuperblock(Quorum::CurrentSuperblock());
 }
 
-void Tally::LegacyRecount(const CBlockIndex* pindex)
+void Tally::LegacyRecount(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindex) {
         return;

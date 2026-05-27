@@ -670,7 +670,7 @@ std::vector<SideStake_ptr> SideStakeRegistry::TryActive(const CTxDestination& ke
     return result;
 }
 
-void SideStakeRegistry::Reset()
+void SideStakeRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -753,12 +753,12 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void SideStakeRegistry::Add(const ContractContext& ctx)
+void SideStakeRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void SideStakeRegistry::Delete(const ContractContext& ctx)
+void SideStakeRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
@@ -790,7 +790,7 @@ void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, con
     }
 }
 
-void SideStakeRegistry::Revert(const ContractContext& ctx)
+void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<SideStakePayload>();
 
@@ -856,7 +856,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = contract.SharePayloadAs<SideStakePayload>();
 
@@ -886,7 +886,7 @@ bool SideStakeRegistry::Validate(const Contract& contract, const CTransaction& t
     return true;
 }
 
-bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool SideStakeRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return (IsV13Enabled(ctx.m_pindex->nHeight) && Validate(ctx.m_contract, ctx.m_tx, DoS));
 }

@@ -22,7 +22,10 @@
 
 class CNode;
 class CBlockIndex;
-extern int nBestHeight;
+extern CCriticalSection cs_main;
+// Duplicate extern of the main.h:82 declaration; both must carry the
+// GUARDED_BY annotation so cross-TU readers via net.h see the contract.
+extern int nBestHeight GUARDED_BY(cs_main);
 
 
 /** Time between pings automatically sent out for latency probing and keepalive (in seconds). */
@@ -52,8 +55,8 @@ bool StopNode();
 // Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
 // pnode->cs_vSend and needs the complete CNode type).
 void SocketSendData(CNode *pnode);
-extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
+extern std::vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 
 struct LocalServiceInfo {
     int nScore;
@@ -110,12 +113,24 @@ extern ServiceFlags nLocalServices;
 // so the per-connection nonce identity is lost), but that is a separate
 // follow-up; atomicising here just closes the data race.
 extern std::atomic<uint64_t> nLocalHostNonce;
-extern CAddress addrSeenByPeer;
+//! \brief Guards \ref addrSeenByPeer. Written by ProcessMessage's version
+//! handler when a peer reports the address it sees us at, read by RPC
+//! handlers (getinfo in rpc/net.cpp + wallet/rpcwallet.cpp). CAddress
+//! assignment/copy is not atomic.
+extern CCriticalSection cs_addrSeenByPeer;
+extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
 extern CAddrMan addrman;
-extern std::map<CInv, CDataStream> mapRelay;
-extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration;
 extern CCriticalSection cs_mapRelay;
-extern std::map<CInv, int64_t> mapAlreadyAskedFor;
+extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
+//! \brief Guards \ref mapAlreadyAskedFor. Written and read from
+//! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
+//! from ProcessBlock, from SendMessages' getdata loop, and from
+//! CSplitBlob::RecvPart on the scraper PART path which does NOT hold
+//! cs_main. A dedicated leaf-level mutex avoids hoisting cs_main into
+//! the PART path and keeps the lock as narrow as possible.
+extern CCriticalSection cs_mapAlreadyAskedFor;
+extern std::map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 extern ThreadHandler* netThreads;
 
 
@@ -459,7 +474,16 @@ public:
         // the key is the earliest time the request can be sent
         if (mapAskFor.size() > 50000) return;
 
-        int64_t& nRequestTime = mapAlreadyAskedFor[inv];
+        // Snapshot the current request time under the mutex. The
+        // logging / time-formatting / static-counter arithmetic below
+        // does not touch mapAlreadyAskedFor and should not hold the
+        // global mutex.
+        int64_t nRequestTime;
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            nRequestTime = mapAlreadyAskedFor[inv];
+        }
+
         LogPrint(BCLog::LogFlags::NET, "askfor %s   %" PRId64 " (%s)", inv.ToString(), nRequestTime, DateTimeStrFormat("%H:%M:%S", nRequestTime/1000000));
 
         // Make sure not to reuse time indexes to keep things in the same order
@@ -470,8 +494,12 @@ public:
         nLastTime = nNow;
 
         // Each retry is 2 minutes after the last
-        nRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
-        mapAskFor.insert(std::make_pair(nRequestTime, inv));
+        const int64_t nNewRequestTime = std::max(nRequestTime + 2 * 60 * 1000000, nNow);
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            mapAlreadyAskedFor[inv] = nNewRequestTime;
+        }
+        mapAskFor.insert(std::make_pair(nNewRequestTime, inv));
     }
 
     void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCKS_REQUIRED(cs_vSend)

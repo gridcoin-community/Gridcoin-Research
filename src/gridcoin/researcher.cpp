@@ -31,7 +31,8 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_ScraperGlobals;
-extern std::string msMiningErrors;
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 extern unsigned int nActiveBeforeSB;
 
 std::vector<MiningPool> MiningPools::GetMiningPools()
@@ -457,22 +458,26 @@ bool DetectSplitCpid(const MiningProjectMap& projects)
 void StoreResearcher(Researcher context)
 {
     // TODO: this belongs in presentation layer code:
-    switch (context.Status()) {
-        case ResearcherStatus::ACTIVE:
-            msMiningErrors = _("Eligible for Research Rewards");
-            break;
-        case ResearcherStatus::POOL:
-            msMiningErrors = _("Staking Only - Pool Detected");
-            break;
-        case ResearcherStatus::NO_PROJECTS:
-            msMiningErrors = _("Staking Only - No Eligible Research Projects");
-            break;
-        case ResearcherStatus::NO_BEACON:
-            msMiningErrors = _("Staking Only - No active beacon");
-            break;
-        case ResearcherStatus::NONCRUNCHER:
-            msMiningErrors = _("Staking Only - Non-cruncher Mode");
-            break;
+    {
+        LOCK(cs_msMiningErrors);
+
+        switch (context.Status()) {
+            case ResearcherStatus::ACTIVE:
+                msMiningErrors = _("Eligible for Research Rewards");
+                break;
+            case ResearcherStatus::POOL:
+                msMiningErrors = _("Staking Only - Pool Detected");
+                break;
+            case ResearcherStatus::NO_PROJECTS:
+                msMiningErrors = _("Staking Only - No Eligible Research Projects");
+                break;
+            case ResearcherStatus::NO_BEACON:
+                msMiningErrors = _("Staking Only - No active beacon");
+                break;
+            case ResearcherStatus::NONCRUNCHER:
+                msMiningErrors = _("Staking Only - Non-cruncher Mode");
+                break;
+        }
     }
 
     std::atomic_store(

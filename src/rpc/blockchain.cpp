@@ -35,7 +35,7 @@ extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = 
 extern ScraperPendingBeaconMap GetPendingBeaconsForReport();
 extern ScraperPendingBeaconMap GetVerifiedBeaconsForReport(bool from_global = false);
 extern UniValue GetJSONVersionReport(const int64_t lookback, const bool full_version) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-arith_uint256 GetChainTrust(const CBlockIndex* pindex);
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 UniValue ContractToJson(const GRC::Contract& contract);
@@ -2675,12 +2675,21 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
     UniValue res(UniValue::VOBJ);
 
-    const GRC::SuperblockPtr superblock = GRC::Quorum::CurrentSuperblock();
+    // Hold cs_main only long enough to read the current and pending
+    // superblocks. SuperblockPtr is a refcounted handle to immutable data;
+    // copying it out lets the formatting / pushKV calls run lock-free.
+    GRC::SuperblockPtr superblock;
+    int64_t pending_height = 0;
+    {
+        LOCK(cs_main);
+        superblock = GRC::Quorum::CurrentSuperblock();
+        pending_height = GRC::Quorum::PendingSuperblock().m_height;
+    }
 
     res.pushKV("Superblock Age", superblock.Age(GetAdjustedTime()));
     res.pushKV("Superblock Timestamp", TimestampToHRDate(superblock.m_timestamp));
     res.pushKV("Superblock Block Number", superblock.m_height);
-    res.pushKV("Pending Superblock Height", GRC::Quorum::PendingSuperblock().m_height);
+    res.pushKV("Pending Superblock Height", pending_height);
 
     return res;
 }

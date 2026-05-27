@@ -1323,7 +1323,10 @@ bool AppInit2(ThreadHandlerPtr threads)
             LOCK(cs_main);
             txdb.LoadBlockIndex();
         }
-        PrintBlockTree();
+        {
+            LOCK(cs_main);
+            PrintBlockTree();
+        }
         return false;
     }
 
@@ -1359,6 +1362,7 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (gArgs.GetBoolArg("-printblockindex") || gArgs.GetBoolArg("-printblocktree"))
     {
+        LOCK(cs_main);
         PrintBlockTree();
         return false;
     }

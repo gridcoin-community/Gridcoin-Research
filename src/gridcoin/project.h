@@ -907,7 +907,7 @@ public:
     //! \brief Destroy the contract handler state to prepare for historical
     //! contract replay.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract.
@@ -918,7 +918,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Perform contextual validation for the provided contract including block context. This is used
@@ -929,21 +929,21 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a project to the whitelist from contract data.
     //!
     //! \param ctx References the project contract and associated context.
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Remove the specified project from the whitelist.
     //!
     //! \param ctx References the project contract and associated context.
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the project entry to the state prior
@@ -952,7 +952,7 @@ public:
     //!
     //! \param ctx References the project entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the Project Whitelist (registry), which now includes restoring the state of the whitelist from

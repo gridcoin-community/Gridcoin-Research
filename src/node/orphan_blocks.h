@@ -33,7 +33,7 @@ public:
 
     //! Add an orphan block. Returns false if the block is a duplicate.
     //! The caller must hold cs_main.
-    bool Add(const uint256& hash, const CBlock& block, int64_t now);
+    bool Add(const uint256& hash, const CBlock& block, int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Process the orphan chain rooted at \p accepted_hash using breadth-first
     //! traversal. For each orphan whose parent has been accepted, calls
@@ -42,27 +42,27 @@ public:
     //! Returns the count of orphans for which accept_fn returned true.
     size_t ProcessQueue(
         const uint256& accepted_hash,
-        std::function<bool(CBlock&)> accept_fn);
+        std::function<bool(CBlock&)> accept_fn) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Get the root block of the orphan chain containing \p hash.
     //! Returns nullptr if \p hash is not a known orphan.
-    const CBlock* GetRootBlock(const uint256& hash) const;
+    const CBlock* GetRootBlock(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Returns true if \p hash is a known orphan.
-    bool Contains(const uint256& hash) const;
+    bool Contains(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Returns true if any orphan claims \p prev_hash as its parent.
-    bool HasChildrenOf(const uint256& prev_hash) const;
+    bool HasChildrenOf(const uint256& prev_hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Evict orphans older than MAX_ORPHAN_AGE_SECONDS relative to \p now.
     //! Returns the number evicted.
-    size_t EraseExpired(int64_t now);
+    size_t EraseExpired(int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Current number of stored orphans.
-    size_t Size() const;
+    size_t Size() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Remove all orphans and clean up associated SeenStakes entries.
-    void Clear();
+    void Clear() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 private:
     struct OrphanEntry
@@ -92,6 +92,6 @@ private:
 };
 
 //! Global orphan block manager instance. Requires cs_main for all access.
-extern OrphanBlockManager g_orphan_blocks;
+extern OrphanBlockManager g_orphan_blocks GUARDED_BY(cs_main);
 
 #endif // GRIDCOIN_NODE_ORPHAN_BLOCKS_H

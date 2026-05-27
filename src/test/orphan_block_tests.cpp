@@ -6,6 +6,15 @@
 
 #include <boost/test/unit_test.hpp>
 
+// Tests construct OrphanBlockManager instances locally and exercise them
+// single-threaded. The handler methods are EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+// under the thread-safety annotation rollout; suppress the analyzer for
+// this file rather than take a lock the tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
+
 namespace {
 
 //! Create a minimal test block with a given previous hash and a unique nTime
@@ -334,3 +343,7 @@ BOOST_AUTO_TEST_CASE(clear_empties_everything)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
