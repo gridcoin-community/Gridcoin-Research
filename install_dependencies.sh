@@ -92,6 +92,16 @@ install_deps() {
             ;;
 
         debian|ubuntu|linuxmint)
+            # Refresh the apt package index BEFORE we probe for renamed
+            # Qt6 packages below. On a fresh debian:sid / ubuntu:noble
+            # container the baseline image may ship with stale or empty
+            # /var/lib/apt/lists; without an update here the apt-cache
+            # probes would miss the new package names and fall back to
+            # the legacy names that no longer exist, reintroducing the
+            # original Sid CI failure. The subsequent `apt-get install`
+            # at the bottom of this case relies on the same fresh index.
+            sudo apt-get update
+
             # Base Build Tools
             append_base build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 cmake git curl ccache doxygen graphviz bison xxd libxkbcommon-dev
 
@@ -113,14 +123,13 @@ install_deps() {
             #   - Ubuntu Jammy (22.04):           old names only
             #
             # `prefer_new_qt_package` picks the new name when apt-cache
-            # knows about it, otherwise falls back to the old name. Apt-
-            # cache is already populated by this point in the CI runners
-            # (the OS-detect block above triggered an `apt update`
-            # transitively); on bare-metal dev systems each call falls
-            # through to whichever name resolves. `-q -q` keeps the
-            # detection quiet on the success path. Future renames of
-            # other modules in this family only need another one-line
-            # call to this helper.
+            # knows about it, otherwise falls back to the old name. The
+            # apt index was refreshed just above so the probe sees the
+            # current package set on any environment (CI image, bare-
+            # metal dev, fresh container). `-q -q` keeps the detection
+            # quiet on the success path. Future renames of other modules
+            # in this family only need another one-line call to this
+            # helper.
             prefer_new_qt_package() {
                 local new=$1 old=$2
                 if apt-cache -q -q show "$new" >/dev/null 2>&1; then
@@ -450,7 +459,9 @@ install_deps() {
             brew install $PKGS_TO_INSTALL
             ;;
         debian|ubuntu|linuxmint)
-            sudo apt-get update
+            # apt-get update was run earlier in the debian/ubuntu/linuxmint
+            # branch above (before the Qt6 rename-detection probes), so the
+            # index is already fresh here.
             sudo apt-get install -y --no-install-recommends $PKGS_TO_INSTALL
 
             # MinGW Threading Fix (Linux Only)
