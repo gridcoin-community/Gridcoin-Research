@@ -92,6 +92,16 @@ install_deps() {
             ;;
 
         debian|ubuntu|linuxmint)
+            # Refresh the apt package index BEFORE we probe for renamed
+            # Qt6 packages below. On a fresh debian:sid / ubuntu:noble
+            # container the baseline image may ship with stale or empty
+            # /var/lib/apt/lists; without an update here the apt-cache
+            # probes would miss the new package names and fall back to
+            # the legacy names that no longer exist, reintroducing the
+            # original Sid CI failure. The subsequent `apt-get install`
+            # at the bottom of this case relies on the same fresh index.
+            sudo apt-get update
+
             # Base Build Tools
             append_base build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 cmake git curl ccache doxygen graphviz bison xxd libxkbcommon-dev
 
@@ -99,26 +109,38 @@ install_deps() {
             append_base libssl-dev libevent-dev libboost-all-dev libminiupnpc-dev libqrencode-dev libzip-dev libcurl4-openssl-dev zipcmp zipmerge ziptool
 
             # Qt6 Packages (Qt5 names are not defined here as most are EOL)
-            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools libqt6charts6-dev libqt6svg6-dev
+            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools
 
-            # The Qt6Core5Compat dev package was renamed across the Debian/Ubuntu
-            # family in mid-2026:
-            #   - Debian Sid (and forky/trixie) ship only `qt6-5compat-dev`;
-            #     the older `libqt6core5compat6-dev` was dropped.
-            #   - Ubuntu Noble (24.04) ships both -- `libqt6core5compat6-dev` is
-            #     a transitional that pulls in `qt6-5compat-dev`.
-            #   - Ubuntu Jammy (22.04) ships only `libqt6core5compat6-dev`.
-            # Detect which name is available in the current apt cache and use
-            # that. Apt-cache is already populated by this point in the CI
-            # runners (the OS-detect block above triggered an `apt update`
-            # transitively) and on bare-metal dev systems this falls through
-            # to whichever name resolves. `-q -q` keeps the detection quiet on
-            # the success path.
-            if apt-cache -q -q show qt6-5compat-dev >/dev/null 2>&1; then
-                append_qt qt6-5compat-dev
-            else
-                append_qt libqt6core5compat6-dev
-            fi
+            # Several Qt6 module -dev packages were renamed across the
+            # Debian/Ubuntu family between 2024 and 2026, moving from the
+            # legacy `libqt6<module>6-dev` naming to the upstream-aligned
+            # `qt6-<module>-dev` naming. The transitional metapackages have
+            # been dropped at different points per distro:
+            #
+            #   - Debian Sid / forky / trixie:    new names only
+            #   - Debian Bookworm (12):           new names only
+            #   - Ubuntu Noble (24.04):           new names only
+            #   - Ubuntu Jammy (22.04):           old names only
+            #
+            # `prefer_new_qt_package` picks the new name when apt-cache
+            # knows about it, otherwise falls back to the old name. The
+            # apt index was refreshed just above so the probe sees the
+            # current package set on any environment (CI image, bare-
+            # metal dev, fresh container). `-q -q` keeps the detection
+            # quiet on the success path. Future renames of other modules
+            # in this family only need another one-line call to this
+            # helper.
+            prefer_new_qt_package() {
+                local new=$1 old=$2
+                if apt-cache -q -q show "$new" >/dev/null 2>&1; then
+                    append_qt "$new"
+                else
+                    append_qt "$old"
+                fi
+            }
+            prefer_new_qt_package qt6-charts-dev   libqt6charts6-dev
+            prefer_new_qt_package qt6-svg-dev      libqt6svg6-dev
+            prefer_new_qt_package qt6-5compat-dev  libqt6core5compat6-dev
 
             # Windows Cross-Compile Tools
             # NOTE: We only append NSIS here. The MinGW compiler (g++-mingw-w64-x86-64)
@@ -437,7 +459,9 @@ install_deps() {
             brew install $PKGS_TO_INSTALL
             ;;
         debian|ubuntu|linuxmint)
-            sudo apt-get update
+            # apt-get update was run earlier in the debian/ubuntu/linuxmint
+            # branch above (before the Qt6 rename-detection probes), so the
+            # index is already fresh here.
             sudo apt-get install -y --no-install-recommends $PKGS_TO_INSTALL
 
             # MinGW Threading Fix (Linux Only)
