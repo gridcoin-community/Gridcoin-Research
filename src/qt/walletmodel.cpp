@@ -443,11 +443,25 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             // Requires a non-empty snapshot — if every prior pass failed
             // we have no input set to pin and we fall through to the
             // TransactionCreationFailed return below.
+            //
+            // Pinning the inputs locks transaction size against
+            // SelectCoins-driven input-count flipping, but the wallet's
+            // own internal fee-bumping can still raise the fee one more
+            // notch on the pinned tx: sub-CENT change handling
+            // (wallet.cpp:3064-3078) moves a tiny nChange into the fee
+            // when nFeeRet < GetBaseFee, GetMinFee's dust-spam guard
+            // raises the floor when any output is below CENT, and
+            // small per-signature length variation can push nBytes
+            // across the 1 KB byte tier if the snapshot iteration sat
+            // right at the boundary. So we run a short bounded loop on
+            // the rescue too, with the same strict-equality convergence
+            // test as the outer loop. With inputs pinned the wallet's
+            // fee is monotonic across rescue iterations, and the rescue
+            // converges in 1-2 attempts in practice; if it does not
+            // converge in 5, bail rather than commit a mismatched
+            // subtract-fee tx.
             if (!fConverged && !vinsAtMaxFee.empty())
             {
-                if (!BuildSubtractedVecSend(nMaxFeeSeen))
-                    return SendCoinsReturn(FeeExceedsSubtractedAmount, nMaxFeeSeen);
-
                 // Copy any caller-supplied options (destChange,
                 // fAllowWatchOnly) and add the pinned outpoints. CCoinControl
                 // uses default copy semantics; setSelected, destChange, and
@@ -457,8 +471,33 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 for (const COutPoint& op : vinsAtMaxFee)
                     pinControl.Select(op);
 
-                nFeeRequired = 0;
-                fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, &pinControl);
+                int64_t nRescueFee = nMaxFeeSeen;
+                bool fRescueConverged = false;
+                for (int nRescueAttempt = 0; nRescueAttempt < 5; ++nRescueAttempt)
+                {
+                    if (!BuildSubtractedVecSend(nRescueFee))
+                        return SendCoinsReturn(FeeExceedsSubtractedAmount, nRescueFee);
+
+                    int64_t nRescuePrev = nRescueFee;
+                    nFeeRequired = 0;
+                    fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, &pinControl);
+                    if (!fCreated)
+                        break;
+
+                    if (nFeeRequired == nRescuePrev)
+                    {
+                        fRescueConverged = true;
+                        break;
+                    }
+                    nRescueFee = nFeeRequired;
+                }
+
+                // Non-converging rescue: fall through to the
+                // TransactionCreationFailed return below rather than
+                // commit a tx whose subtract-fee accounting doesn't
+                // match the wallet's actual charge.
+                if (!fRescueConverged)
+                    fCreated = false;
             }
         }
 
