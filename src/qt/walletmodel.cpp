@@ -445,21 +445,34 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             // TransactionCreationFailed return below.
             //
             // Pinning the inputs locks transaction size against
-            // SelectCoins-driven input-count flipping, but the wallet's
-            // own internal fee-bumping can still raise the fee one more
-            // notch on the pinned tx: sub-CENT change handling
-            // (wallet.cpp:3064-3078) moves a tiny nChange into the fee
-            // when nFeeRet < GetBaseFee, GetMinFee's dust-spam guard
-            // raises the floor when any output is below CENT, and
-            // small per-signature length variation can push nBytes
-            // across the 1 KB byte tier if the snapshot iteration sat
-            // right at the boundary. So we run a short bounded loop on
-            // the rescue too, with the same strict-equality convergence
-            // test as the outer loop. With inputs pinned the wallet's
-            // fee is monotonic across rescue iterations, and the rescue
-            // converges in 1-2 attempts in practice; if it does not
-            // converge in 5, bail rather than commit a mismatched
-            // subtract-fee tx.
+            // SelectCoins-driven input-count flipping. Under default
+            // Gridcoin fee parameters and reasonable UTXO shapes the
+            // wallet returns the same fee on the rescue call that
+            // produced the snapshot — fee-tier transitions happen at
+            // the 1 KB byte boundary, and the only remaining structural
+            // variation (change-vout present/absent, ±34 bytes) plus
+            // per-signature DER length variation (1-2 bytes per input)
+            // are not enough to cross 1 KB at typical input counts:
+            // 6 pinned inputs span 936-970 bytes (tier 1×), 7 pinned
+            // span 1084-1118 bytes (tier 2×). So in practice the rescue
+            // converges in iter 0.
+            //
+            // The bounded loop is defensive against pathologies I can
+            // describe but cannot construct concretely: keypool
+            // exhaustion mid-rescue (CreateTransaction returns false on
+            // reservekey.GetReservedKey), an unusually low custom
+            // -paytxfee combined with an adversarial UTXO sum that
+            // re-activates the sub-CENT change handler at
+            // wallet.cpp:3064-3078 (which is dormant under defaults
+            // because the trigger nFeeRet < GetBaseFee is false once
+            // nFeeRet equals the default nTransactionFee), or a future
+            // change to wallet internals that introduces new
+            // fee-determining factors. The strict-equality convergence
+            // check matches the outer loop; on non-convergence we set
+            // fCreated = false so the caller returns
+            // TransactionCreationFailed rather than commit a tx whose
+            // subtract-fee accounting doesn't match the wallet's actual
+            // charge.
             if (!fConverged && !vinsAtMaxFee.empty())
             {
                 // Copy any caller-supplied options (destChange,
