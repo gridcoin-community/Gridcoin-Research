@@ -325,12 +325,17 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         // since nFeeRequired is initialized to nTransactionFee and provides a
         // reasonable starting estimate.
         //
-        // The outer loop handles fee refinement: CreateTransaction may discover
-        // that the actual fee (based on transaction size) exceeds the initial
-        // estimate. When that happens, it updates nFeeRequired and fails because
-        // SelectCoins can't cover the higher total. We detect the fee increase,
-        // rebuild outputs with the new fee, and retry. This converges quickly
-        // since fees are monotonically non-decreasing and bounded by tx size.
+        // The outer loop refines the subtracted fee until it converges with the
+        // fee the wallet actually charges. A single retry is not enough because
+        // CreateTransaction's own internal fee-bumping (sub-CENT change
+        // handling at wallet.cpp:3064, GetMinFee dust-spam guard, byte-tier
+        // crossing) can return an nFeeRequired that exceeds the value we just
+        // subtracted from the recipient. If we stop iterating at first-success,
+        // wtx commits with too little subtracted: the recipient gets more than
+        // intended and the "extra" fee silently comes from the sender's change
+        // instead of being deducted from the amount (issue #2981). Loop until
+        // nFeeRequired stops growing; the 10-attempt cap protects against a
+        // pathological non-converging case.
         if (fAnySubtractFeeFromAmount)
         {
             int nSubtractRecipients = 0;
@@ -339,7 +344,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 if (rcp.fSubtractFeeFromAmount) ++nSubtractRecipients;
             }
 
-            // Retry limit prevents infinite loops in pathological cases
             for (int nAttempt = 0; nAttempt < 10; ++nAttempt)
             {
                 vecSend.clear();
@@ -372,11 +376,14 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 int64_t nFeePrev = nFeeRequired;
                 fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
-                if (fCreated || nFeeRequired <= nFeePrev)
+                // Converged: the wallet's actual fee is <= what we already
+                // subtracted. (If fCreated is false at this point we will fall
+                // through to the TransactionCreationFailed return below.)
+                if (nFeeRequired <= nFeePrev)
                     break;
 
-                // Fee increased (tx was larger than estimated) — retry with
-                // the updated fee subtracted from recipient amounts.
+                // Fee grew during the build (size bump, dust guard, sub-CENT
+                // change). Re-subtract the new fee and try again.
             }
         }
 
