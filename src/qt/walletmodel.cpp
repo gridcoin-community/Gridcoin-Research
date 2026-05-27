@@ -330,11 +330,17 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         //
         // The loop refines the subtracted fee against the fee the wallet
         // actually charges. A single retry is not enough because the
-        // wallet's own internal fee-bumping (sub-CENT change handling at
-        // wallet.cpp:3064, GetMinFee dust-spam guard, byte-tier crossing)
-        // can return an nFeeRequired that exceeds what we subtracted —
-        // committing at that point under-debits the recipient and silently
-        // absorbs the surplus into the sender's change (issue #2981).
+        // wallet's own internal fee-bumping — primarily byte-tier
+        // crossing where nPayFee = nTransactionFee * (1 + nBytes/1000)
+        // jumps when the signed tx crosses each 1 KB boundary
+        // (wallet.cpp:3191) — can return an nFeeRequired that exceeds
+        // what we subtracted. Committing at that point under-debits the
+        // recipient and silently absorbs the surplus into the sender's
+        // change (issue #2981). Sub-CENT change handling
+        // (wallet.cpp:3064-3078) is a second potential fee-bumper but
+        // is dormant under default fee parameters because its trigger
+        // `nFeeRet < GetBaseFee` is false when nFeeRet is seeded from
+        // the default nTransactionFee.
         //
         // We require strict equality (subtracted == returned) for
         // convergence. The earlier `<=` form let the inverse case
@@ -405,12 +411,21 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
             };
 
             // Track the largest fee returned and the input set that
-            // produced it. Seed from pass 1 if it succeeded; otherwise
-            // the first successful iteration below populates it.
-            int64_t nMaxFeeSeen = nFeeRequired;
+            // produced it. Seed from pass 1 only if it succeeded —
+            // seeding nMaxFeeSeen from a *failed* pass-1 call would
+            // leave a phantom high fee with no corresponding snapshot
+            // (the wallet sets nFeeRet = nTransactionFee on entry and
+            // can bump it before returning false), which would then
+            // block subsequent successful iterations with lower fees
+            // from populating vinsAtMaxFee via the `>` comparison.
+            // Inside the loop, snapshot on the first success regardless
+            // of fee value (vinsAtMaxFee.empty()) so we always have a
+            // valid input set to pin if the rescue is needed.
+            int64_t nMaxFeeSeen = 0;
             std::vector<COutPoint> vinsAtMaxFee;
             if (fCreated)
             {
+                nMaxFeeSeen = nFeeRequired;
                 for (const CTxIn& in : wtx.vin)
                     vinsAtMaxFee.push_back(in.prevout);
             }
@@ -430,7 +445,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                     break;
                 }
 
-                if (fCreated && nFeeRequired > nMaxFeeSeen)
+                if (fCreated && (vinsAtMaxFee.empty() || nFeeRequired > nMaxFeeSeen))
                 {
                     nMaxFeeSeen = nFeeRequired;
                     vinsAtMaxFee.clear();
