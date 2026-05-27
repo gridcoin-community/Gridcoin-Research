@@ -7,6 +7,7 @@
 
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
+#include "wallet/coincontrol.h"
 #include "main.h"
 #include <key_io.h>
 #include "util.h"
@@ -319,18 +320,56 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         int64_t nFeeRequired = 0;
         bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
-        // If any recipient has "subtract fee from amount" enabled, rebuild the
-        // outputs with the fee deducted and create the transaction again.
-        // This runs even if the first pass failed (e.g. sending entire balance),
-        // since nFeeRequired is initialized to nTransactionFee and provides a
-        // reasonable starting estimate.
+        // If any recipient has "subtract fee from amount" enabled, rebuild
+        // the outputs with the fee deducted and create the transaction
+        // again. This runs even if the first pass failed (e.g. sending
+        // entire balance), since CWallet::CreateTransaction overwrites the
+        // caller's nFeeRet to nTransactionFee on entry (wallet.cpp:2964)
+        // and bumps from there — so even a failed pass leaves a reasonable
+        // starting estimate.
         //
-        // The outer loop handles fee refinement: CreateTransaction may discover
-        // that the actual fee (based on transaction size) exceeds the initial
-        // estimate. When that happens, it updates nFeeRequired and fails because
-        // SelectCoins can't cover the higher total. We detect the fee increase,
-        // rebuild outputs with the new fee, and retry. This converges quickly
-        // since fees are monotonically non-decreasing and bounded by tx size.
+        // The loop refines the subtracted fee against the fee the wallet
+        // actually charges. A single retry is not enough because the
+        // wallet's own internal fee-bumping — primarily byte-tier
+        // crossing where nPayFee = nTransactionFee * (1 + nBytes/1000)
+        // jumps when the signed tx crosses each 1 KB boundary
+        // (wallet.cpp:3191) — can return an nFeeRequired that exceeds
+        // what we subtracted. Committing at that point under-debits the
+        // recipient and silently absorbs the surplus into the sender's
+        // change (issue #2981). Sub-CENT change handling
+        // (wallet.cpp:3064-3078) is a second potential fee-bumper but
+        // is dormant under default fee parameters because its trigger
+        // `nFeeRet < GetBaseFee` is false when nFeeRet is seeded from
+        // the default nTransactionFee.
+        //
+        // We require strict equality (subtracted == returned) for
+        // convergence. The earlier `<=` form let the inverse case
+        // (returned < subtracted) commit silently, over-debiting the
+        // recipient and "saving" the difference back to the sender's
+        // change.
+        //
+        // In a uniform-UTXO wallet, the loop can enter a 2-cycle: when
+        // the higher fee is subtracted, the target shrinks and the wallet
+        // picks fewer inputs (size drops below 1 KB → tier-1 fee, e.g.
+        // 0.001); when the lower fee is subtracted, the target grows and
+        // the wallet picks more inputs (size crosses 1 KB → tier-2 fee,
+        // 0.002). The two states map to each other and strict equality
+        // never fires. Constructable: ten 400.000-GRC UTXOs, send 2400.001
+        // with subtract-fee — the loop alternates 0.001 / 0.002
+        // indefinitely.
+        //
+        // To force a deterministic, convergent commit in such a case,
+        // track the largest fee observed during the loop and the input
+        // set that produced it. If the loop exits without strict
+        // convergence — whether from oscillation or from a slower
+        // non-converging case hitting the 10-attempt cap — pin coin
+        // selection to that input set via CCoinControl and re-create
+        // the transaction with the larger fee subtracted. With inputs
+        // pinned, SelectCoins returns exactly those outpoints
+        // (wallet.cpp:2750-2758), the transaction size is fixed, the
+        // wallet's computed fee matches our subtraction, and the commit
+        // converges. The sender pays exactly the entered amount; the
+        // recipient receives (entered − higher fee).
         if (fAnySubtractFeeFromAmount)
         {
             int nSubtractRecipients = 0;
@@ -339,11 +378,13 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                 if (rcp.fSubtractFeeFromAmount) ++nSubtractRecipients;
             }
 
-            // Retry limit prevents infinite loops in pathological cases
-            for (int nAttempt = 0; nAttempt < 10; ++nAttempt)
-            {
+            // Rebuild vecSend with the given fee distributed across the
+            // subtract-fee recipients. Returns false if any opted-in
+            // recipient's amount would drop to zero or negative; the
+            // caller should respond with FeeExceedsSubtractedAmount.
+            auto BuildSubtractedVecSend = [&](int64_t nFee) -> bool {
                 vecSend.clear();
-                int64_t nFeeRemainder = nFeeRequired % nSubtractRecipients;
+                int64_t nFeeRemainder = nFee % nSubtractRecipients;
                 bool fFirst = true;
                 for (const SendCoinsRecipient& rcp : recipients)
                 {
@@ -353,7 +394,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
 
                     if (rcp.fSubtractFeeFromAmount)
                     {
-                        nAmount -= nFeeRequired / nSubtractRecipients;
+                        nAmount -= nFee / nSubtractRecipients;
                         // First opted-in recipient absorbs the truncation remainder
                         if (fFirst)
                         {
@@ -361,22 +402,130 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
                             fFirst = false;
                         }
                         if (nAmount <= 0)
-                        {
-                            return SendCoinsReturn(FeeExceedsSubtractedAmount, nFeeRequired);
-                        }
+                            return false;
                     }
 
                     vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
                 }
+                return true;
+            };
+
+            // Track the largest fee returned and the input set that
+            // produced it. Seed from pass 1 only if it succeeded —
+            // seeding nMaxFeeSeen from a *failed* pass-1 call would
+            // leave a phantom high fee with no corresponding snapshot
+            // (the wallet sets nFeeRet = nTransactionFee on entry and
+            // can bump it before returning false), which would then
+            // block subsequent successful iterations with lower fees
+            // from populating vinsAtMaxFee via the `>` comparison.
+            // Inside the loop, snapshot on the first success regardless
+            // of fee value (vinsAtMaxFee.empty()) so we always have a
+            // valid input set to pin if the rescue is needed.
+            int64_t nMaxFeeSeen = 0;
+            std::vector<COutPoint> vinsAtMaxFee;
+            if (fCreated)
+            {
+                nMaxFeeSeen = nFeeRequired;
+                for (const CTxIn& in : wtx.vin)
+                    vinsAtMaxFee.push_back(in.prevout);
+            }
+            bool fConverged = false;
+
+            for (int nAttempt = 0; nAttempt < 10; ++nAttempt)
+            {
+                if (!BuildSubtractedVecSend(nFeeRequired))
+                    return SendCoinsReturn(FeeExceedsSubtractedAmount, nFeeRequired);
 
                 int64_t nFeePrev = nFeeRequired;
                 fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
 
-                if (fCreated || nFeeRequired <= nFeePrev)
+                if (fCreated && nFeeRequired == nFeePrev)
+                {
+                    fConverged = true;
                     break;
+                }
 
-                // Fee increased (tx was larger than estimated) — retry with
-                // the updated fee subtracted from recipient amounts.
+                if (fCreated && (vinsAtMaxFee.empty() || nFeeRequired > nMaxFeeSeen))
+                {
+                    nMaxFeeSeen = nFeeRequired;
+                    vinsAtMaxFee.clear();
+                    for (const CTxIn& in : wtx.vin)
+                        vinsAtMaxFee.push_back(in.prevout);
+                }
+            }
+
+            // Rescue pass for oscillation or cap-without-convergence.
+            // Requires a non-empty snapshot — if every prior pass failed
+            // we have no input set to pin and we fall through to the
+            // TransactionCreationFailed return below.
+            //
+            // Pinning the inputs locks transaction size against
+            // SelectCoins-driven input-count flipping. Under default
+            // Gridcoin fee parameters and reasonable UTXO shapes the
+            // wallet returns the same fee on the rescue call that
+            // produced the snapshot — fee-tier transitions happen at
+            // the 1 KB byte boundary, and the only remaining structural
+            // variation (change-vout present/absent, ±34 bytes) plus
+            // per-signature DER length variation (1-2 bytes per input)
+            // are not enough to cross 1 KB at typical input counts:
+            // 6 pinned inputs span 936-970 bytes (tier 1×), 7 pinned
+            // span 1084-1118 bytes (tier 2×). So in practice the rescue
+            // converges in iter 0.
+            //
+            // The bounded loop is defensive against pathologies I can
+            // describe but cannot construct concretely: keypool
+            // exhaustion mid-rescue (CreateTransaction returns false on
+            // reservekey.GetReservedKey), an unusually low custom
+            // -paytxfee combined with an adversarial UTXO sum that
+            // re-activates the sub-CENT change handler at
+            // wallet.cpp:3064-3078 (which is dormant under defaults
+            // because the trigger nFeeRet < GetBaseFee is false once
+            // nFeeRet equals the default nTransactionFee), or a future
+            // change to wallet internals that introduces new
+            // fee-determining factors. The strict-equality convergence
+            // check matches the outer loop; on non-convergence we set
+            // fCreated = false so the caller returns
+            // TransactionCreationFailed rather than commit a tx whose
+            // subtract-fee accounting doesn't match the wallet's actual
+            // charge.
+            if (!fConverged && !vinsAtMaxFee.empty())
+            {
+                // Copy any caller-supplied options (destChange,
+                // fAllowWatchOnly) and add the pinned outpoints. CCoinControl
+                // uses default copy semantics; setSelected, destChange, and
+                // fAllowWatchOnly are all carried over.
+                CCoinControl pinControl;
+                if (coinControl) pinControl = *coinControl;
+                for (const COutPoint& op : vinsAtMaxFee)
+                    pinControl.Select(op);
+
+                int64_t nRescueFee = nMaxFeeSeen;
+                bool fRescueConverged = false;
+                for (int nRescueAttempt = 0; nRescueAttempt < 5; ++nRescueAttempt)
+                {
+                    if (!BuildSubtractedVecSend(nRescueFee))
+                        return SendCoinsReturn(FeeExceedsSubtractedAmount, nRescueFee);
+
+                    int64_t nRescuePrev = nRescueFee;
+                    nFeeRequired = 0;
+                    fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, &pinControl);
+                    if (!fCreated)
+                        break;
+
+                    if (nFeeRequired == nRescuePrev)
+                    {
+                        fRescueConverged = true;
+                        break;
+                    }
+                    nRescueFee = nFeeRequired;
+                }
+
+                // Non-converging rescue: fall through to the
+                // TransactionCreationFailed return below rather than
+                // commit a tx whose subtract-fee accounting doesn't
+                // match the wallet's actual charge.
+                if (!fRescueConverged)
+                    fCreated = false;
             }
         }
 
