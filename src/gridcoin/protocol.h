@@ -370,6 +370,30 @@ public:
 //!
 //! \brief Stores and manages protocol entries.
 //!
+//! Locking model: pattern (b), leaf-lock via cs_lock. No current consumer reaches
+//! the registry without holding cs_main, but the leaf-lock scaffold is retained
+//! for consistency with the sibling (b)-pattern registries (SideStakeRegistry,
+//! ScraperRegistry, Whitelist) and to future-proof against a contributor adding
+//! e.g. a Qt-driven protocol-parameter inspector or an out-of-band RPC that
+//! needs to read the registry without taking cs_main. The cost is one
+//! uncontended atomic op per call.
+//!
+//! Locking discipline:
+//!   - Members are GUARDED_BY(cs_lock).
+//!   - Chain-handler entry points (Reset, Validate, BlockValidate, Add, Delete,
+//!     Revert, plus the private AddDelete helper) carry
+//!     EXCLUSIVE_LOCKS_REQUIRED(cs_main) and acquire cs_lock internally.
+//!     Canonical lock order is cs_main -> cs_lock.
+//!   - Non-chain entry points (GetProtocolEntriesLegacy, GetProtocolEntriesLegacyExt,
+//!     ProtocolEntries, TryActive, TryLastBeforeTimestamp, Initialize, GetDBHeight,
+//!     SetDBHeight, ResetInMemoryOnly, PassivateDB) acquire only cs_lock.
+//!   - Read methods acquire cs_lock internally and return copies (AppCacheSection,
+//!     AppCacheSectionExt, or value-copied ProtocolEntryMap). They provide Read
+//!     Committed isolation.
+//!
+//! cs_lock is a LEAF lock — see doc/contract_registry_locking_design.md for
+//! the invariant.
+//!
 class ProtocolRegistry : public IContractHandler
 {
 public:
@@ -432,7 +456,7 @@ public:
     //! \return \c AppCacheEntrySection consisting of key (address string) and
     //! { value, timestamp }.
     //!
-    const AppCacheSection GetProtocolEntriesLegacy() const;
+    const AppCacheSection GetProtocolEntriesLegacy() const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -445,7 +469,7 @@ public:
     //! \return \c AppCacheEntrySectionExt consisting of key string and
     //! { value, timestamp, deleted }.
     //!
-    const AppCacheSectionExt GetProtocolEntriesLegacyExt(const bool& active_only = false) const;
+    const AppCacheSectionExt GetProtocolEntriesLegacyExt(const bool& active_only = false) const LOCKS_EXCLUDED(cs_lock);
 
     const AppCacheEntry GetProtocolEntryByKeyLegacy(std::string key) const;
 
@@ -457,6 +481,9 @@ public:
     //! \return An object that either contains a reference to some protocol entry if it exists
     //! for the key or does not.
     //!
+    //! Note: called recursively from TryActive() under its cs_lock, so this method
+    //! does not carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally (the
+    //! recursive_mutex makes the inner acquisition harmless when already held).
     ProtocolEntryOption Try(const std::string& key) const;
 
     //!
@@ -467,7 +494,7 @@ public:
     //! \return An object that either contains a reference to some protocol entry if it exists
     //! for the key and is in the required status or does not.
     //!
-    ProtocolEntryOption TryActive(const std::string& key) const;
+    ProtocolEntryOption TryActive(const std::string& key) const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Get the last protocol entry for the specified key string at or before the specified timestamp
@@ -478,7 +505,7 @@ public:
     //! \return An object that either contains a reference to some protocol entry if it exists
     //! for the key at or before the provided timestamp or does not.
     //!
-    ProtocolEntryOption TryLastBeforeTimestamp(const std::string& key, const int64_t& timestamp);
+    ProtocolEntryOption TryLastBeforeTimestamp(const std::string& key, const int64_t& timestamp) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -487,7 +514,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for protocol entries.
     //!
-    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid.
@@ -498,7 +525,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid protocol entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid including block context. This is used
@@ -510,7 +537,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Add a protocol entry to the registry from contract data. For the protocol registry
@@ -518,7 +545,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Mark a protocol entry deleted in the registry from contract data. For the protocol registry
@@ -526,7 +553,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Revert the registry state for the protocol entry to the state prior
@@ -535,7 +562,7 @@ public:
     //!
     //! \param ctx References the protocol entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Initialize the ProtocolRegistry, which now includes restoring the state of the ProtocolRegistry from
@@ -545,14 +572,14 @@ public:
     //! there is some issue in LevelDB protocol entry retrieval. (This will cause the contract replay to change scope
     //! and initialize the ProtocolRegistry from contract replay and store in LevelDB.)
     //!
-    int Initialize() override;
+    int Initialize() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Gets the block height through which is stored in the protocol entry registry database.
     //!
     //! \return block height.
     //!
-    int GetDBHeight() override;
+    int GetDBHeight() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -563,13 +590,13 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height) override;
+    void SetDBHeight(int& height) override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Resets the maps in the ProtocolRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetInMemoryOnly();
+    void ResetInMemoryOnly() LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Passivates the elements in the protocol db, which means remove from memory elements in the
@@ -579,7 +606,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB() override;
+    uint64_t PassivateDB() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Specializes the template RegistryDB for the ProtocolEntry class. Note that std::set<ProtocolEntry>
@@ -595,7 +622,12 @@ public:
 
 private:
     //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //! \brief Leaf lock protecting the registry's internal state.
+    //!
+    //! See the class-level comment above and doc/contract_registry_locking_design.md
+    //! for the leaf-lock invariant. cs_lock provides Read Committed isolation;
+    //! callers needing Repeatable Read or Serializable must hold cs_main
+    //! separately. Lock order if both held: cs_main -> cs_lock.
     //!
     mutable CCriticalSection cs_lock;
 
@@ -605,20 +637,23 @@ private:
     //!
     //! \param ctx The contract context for the add or delete.
     //!
-    void AddDelete(const ContractContext& ctx);
+    void AddDelete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
-    ProtocolEntryMap m_protocol_entries;                   //!< Contains the current protocol entries including entries marked DELETED.
-    PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_entries           GUARDED_BY(cs_lock); //!< Contains the current protocol entries including entries marked DELETED.
+    PendingProtocolEntryMap m_pending_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    std::set<ProtocolEntry> m_expired_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryMap m_protocol_first_entries {};          //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_first_entries     GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryDB m_protocol_db;
+    ProtocolEntryDB m_protocol_db                 GUARDED_BY(cs_lock);
 
 public:
 
-    ProtocolEntryDB& GetProtocolEntryDB();
+    //! Returns a reference to the (cs_lock-guarded) backing DB. Caller must hold
+    //! cs_lock both to call and to use the returned reference. Currently used only
+    //! via tests.
+    ProtocolEntryDB& GetProtocolEntryDB() EXCLUSIVE_LOCKS_REQUIRED(cs_lock);
 }; // ProtocolRegistry
 
 //!
