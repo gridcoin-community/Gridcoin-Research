@@ -187,8 +187,14 @@ ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const s
 // -----------------------------------------------------------------------------
 // Class: ProtocolRegistry
 // -----------------------------------------------------------------------------
-const ProtocolRegistry::ProtocolEntryMap& ProtocolRegistry::ProtocolEntries() const
+ProtocolRegistry::ProtocolEntryMap ProtocolRegistry::ProtocolEntries() const
 {
+    LOCK(cs_lock);
+
+    // Returns a by-value snapshot. The map is copied under the lock; its
+    // ProtocolEntry_ptr (shared_ptr) elements are shared, not deep-copied.
+    // Entries are immutable once published (mutations swap the pointer, never
+    // mutate a live entry), so the snapshot is safe to use after the lock drops.
     return m_protocol_entries;
 }
 
@@ -569,11 +575,6 @@ uint64_t ProtocolRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_protocol_db.passivate_db();
-}
-
-ProtocolRegistry::ProtocolEntryDB &ProtocolRegistry::GetProtocolEntryDB()
-{
-    return m_protocol_db;
 }
 
 template<> const std::string ProtocolRegistry::ProtocolEntryDB::KeyType()

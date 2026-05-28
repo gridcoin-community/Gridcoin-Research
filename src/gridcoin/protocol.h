@@ -410,9 +410,12 @@ public:
     //! \brief Get the collection of current protocol entries. Note that this INCLUDES deleted
     //! protocol entries.
     //!
-    //! \return \c A reference to the current protocol entries stored in the registry.
+    //! \return A by-value snapshot of the current protocol entries, taken under cs_lock.
+    //! The map is copied; its ProtocolEntry_ptr (shared_ptr) elements are shared, not
+    //! deep-copied. Entries are immutable once published, so the snapshot is safe to use
+    //! without holding any lock. See doc/contract_registry_locking_design.md.
     //!
-    const ProtocolEntryMap& ProtocolEntries() const;
+    ProtocolEntryMap ProtocolEntries() const;
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -598,18 +601,14 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ProtocolEntryMap m_protocol_entries;                   //!< Contains the current protocol entries including entries marked DELETED.
-    PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_entries GUARDED_BY(cs_lock);                   //!< Contains the current protocol entries including entries marked DELETED.
+    PendingProtocolEntryMap m_pending_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    std::set<ProtocolEntry> m_expired_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryMap m_protocol_first_entries {};          //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_first_entries GUARDED_BY(cs_lock) {};          //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryDB m_protocol_db;
-
-public:
-
-    ProtocolEntryDB& GetProtocolEntryDB();
+    ProtocolEntryDB m_protocol_db GUARDED_BY(cs_lock);
 }; // ProtocolRegistry
 
 //!
