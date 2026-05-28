@@ -235,8 +235,14 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
 // -----------------------------------------------------------------------------
 // Class: ScraperRegistry
 // -----------------------------------------------------------------------------
-const ScraperRegistry::ScraperMap& ScraperRegistry::Scrapers() const
+ScraperRegistry::ScraperMap ScraperRegistry::Scrapers() const
 {
+    LOCK(cs_lock);
+
+    // Returns a by-value snapshot. The map is copied under the lock; its
+    // ScraperEntry_ptr (shared_ptr) elements are shared, not deep-copied.
+    // Entries are immutable once published (mutations swap the pointer, never
+    // mutate a live entry), so the snapshot is safe to use after the lock drops.
     return m_scrapers;
 }
 
@@ -560,11 +566,6 @@ uint64_t ScraperRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_scraper_db.passivate_db();
-}
-
-ScraperRegistry::ScraperEntryDB &ScraperRegistry::GetScraperDB()
-{
-    return m_scraper_db;
 }
 
 template<> const std::string ScraperRegistry::ScraperEntryDB::KeyType()
