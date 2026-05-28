@@ -410,9 +410,15 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
                 "If true, return an object instead of a hex string. Numeric values are also accepted "
                 "(any non-zero number is treated as true). Default: false."},
         },
-        RPCResult{RPCResult::Type::STR_HEX, "",
-            "Hex-encoded serialized transaction when verbose is false. When verbose is true, returns a JSON "
-            "object instead (containing 'hex' plus decoded transaction fields)."},
+        RPCResults{
+            RPCResult{RPCResult::Type::STR_HEX, "",
+                "Hex-encoded serialized transaction (verbose=false)."},
+            RPCResult{RPCResult::Type::OBJ, "", "Decoded transaction (verbose=true).",
+                {
+                    {RPCResult::Type::STR_HEX, "hex", "Serialized hex of the transaction."},
+                    {RPCResult::Type::ELISION, "", "Remaining fields match TxToJSON's shape."},
+                }},
+        },
         RPCExamples{
             HelpExampleCli("getrawtransaction", "\"<txid>\"") +
             HelpExampleCli("getrawtransaction", "\"<txid>\" true") +
@@ -474,6 +480,12 @@ UniValue listunspent(const UniValue& params, bool fHelp)
                     {
                         {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
                         {RPCResult::Type::NUM, "vout", "Output index."},
+                        {RPCResult::Type::STR, "address", /*optional=*/true,
+                            "Destination address, when the output script is decodable to a single address."},
+                        {RPCResult::Type::STR, "label", /*optional=*/true,
+                            "Wallet-local label for the address (only present when the address is in the wallet's address book)."},
+                        {RPCResult::Type::STR, "account", /*optional=*/true,
+                            "Account label for the address (only present when -enableaccounts is set and the address is in the address book)."},
                         {RPCResult::Type::STR_HEX, "scriptPubKey", "Output script (hex)."},
                         {RPCResult::Type::STR_AMOUNT, "amount", "Output amount."},
                         {RPCResult::Type::NUM, "confirmations", "Confirmation count."},
@@ -585,8 +597,8 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
             {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
                 "Target consolidation output size."},
             {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
-                "transaction failures."},
+                "Maximum number of inputs to include in the consolidation transaction. "
+                "Defaults to 600 and is clamped to 600 to prevent transaction failures."},
             {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
                 "If true, source inputs from all wallet addresses (output still goes to <address>). "
                 "Otherwise only the source address contributes inputs."},
@@ -1563,12 +1575,14 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
                             {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
                         }},
                 }},
-            {"outputs", RPCArg::Type::OBJ, RPCArg::Optional::NO,
-                "A JSON object whose keys are Gridcoin addresses (values: GRC amount) or the special key \"data\" "
-                "with a hex-encoded value.",
+            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+                "A JSON object whose keys are user-supplied Gridcoin addresses (with GRC-amount values), "
+                "plus the optional special key \"data\" carrying a hex-encoded value for an OP_RETURN output.",
                 {
-                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "GRC amount to send to this address."},
-                    {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "Hex-encoded data for an OP_RETURN output."},
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "Any Gridcoin address. The value is the GRC amount to send to it. Repeat with different keys for multiple outputs."},
+                    {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+                        "Hex-encoded data for an OP_RETURN output. Special key (not a Gridcoin address)."},
                 }},
         },
         RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
