@@ -906,7 +906,7 @@ void Whitelist::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_m
     if (entry_to_revert == m_project_entries.end()) {
         error("%s: The project entry for key %s to revert was not found in the project entry map.",
               __func__,
-              entry_to_revert->second->m_name);
+              payload->m_name);
 
         // If there is no record in the current m_project_entries map, then there is nothing to do here. This
         // should not occur.

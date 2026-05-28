@@ -448,7 +448,7 @@ void ProtocolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIR
     if (entry_to_revert == m_protocol_entries.end()) {
         error("%s: The protocol entry for key %s to revert was not found in the protocol entry map.",
               __func__,
-              entry_to_revert->second->m_key);
+              payload->m_entry.m_key);
 
         // If there is no record in the current m_protocol_entries map, then there is nothing to do here. This
         // should not occur.
