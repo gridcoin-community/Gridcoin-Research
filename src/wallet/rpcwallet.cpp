@@ -3234,14 +3234,14 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
 {
     static const RPCHelpMan help{
         "sethdseed",
-        "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. "
+        "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being an HD wallet. "
         "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
         "will be derived from this new seed. "
         "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
         "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
         {
-            {"newkeypool", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it (default: true). "
+            {"newkeypool", RPCArg::Type::BOOL, RPCArg::Default{true},
+                "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it. "
                 "If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed. "
                 "If false, addresses from the existing keypool will be used until it has been depleted."},
             {"seed", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
