@@ -338,6 +338,15 @@ public:
     //! Return list of arguments and whether they are named-only.
     std::vector<std::pair<std::string, bool>> GetArgNames() const;
 
+    //! Mark this command as accepting any number of trailing args beyond the declared
+    //! signature (i.e. the dispatcher should NOT enforce IsValidNumArgs as an upper bound).
+    //! Use for commands whose semantics are variadic but whose RPCHelpMan declaration can
+    //! only enumerate the typical-shape positional args. The body remains responsible for
+    //! validating the actual arity it accepts. Chainable off a temporary so
+    //! `static const RPCHelpMan x = RPCHelpMan{...}.MarkVariadic();` works.
+    RPCHelpMan& MarkVariadic() { m_variadic = true; return *this; }
+    bool IsVariadic() const { return m_variadic; }
+
     const std::string m_name;
 
 private:
@@ -345,6 +354,7 @@ private:
     const std::vector<RPCArg> m_args;
     const RPCResults m_results;
     const RPCExamples m_examples;
+    bool m_variadic{false};
 };
 
 #endif // GRIDCOIN_RPC_UTIL_H

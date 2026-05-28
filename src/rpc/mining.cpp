@@ -215,7 +215,10 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
 static const RPCHelpMan getlaststake_help{
     "getlaststake",
     "Fetch information about this wallet's last staked block.",
-    {},
+    {
+        {"ignored", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Accepted for compatibility with the legacy 0-1 arg surface; value is unused."},
+    },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
             {RPCResult::Type::STR_HEX, "block", "Hash of the block in which the stake was mined."},

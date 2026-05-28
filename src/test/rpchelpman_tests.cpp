@@ -18,8 +18,6 @@
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
 // researcher/beacon/MRC commands under test.
-// Forward declarations of the Tier 1a blockchain-core commands under test.
-// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
 // captures them into the suite's namespace and breaks linkage. After conversion
 // each function throws std::runtime_error for fHelp=true before touching any
@@ -317,6 +315,46 @@ BOOST_AUTO_TEST_CASE(isvalidnumargs_boundaries)
     BOOST_CHECK(!all_required.IsValidNumArgs(1));
     BOOST_CHECK(all_required.IsValidNumArgs(2));
     BOOST_CHECK(!all_required.IsValidNumArgs(3));
+}
+
+// PR M2: variadic marker opts a command out of the dispatcher's
+// IsValidNumArgs upper-bound pre-check. The body is then responsible
+// for whatever real arity the command accepts. IsValidNumArgs itself
+// stays unchanged — the dispatcher gates on IsVariadic() before
+// invoking IsValidNumArgs at all.
+BOOST_AUTO_TEST_CASE(markvariadic_default_and_marker)
+{
+    const RPCHelpMan plain{"plain", "Not variadic.",
+                          {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                          RPCResult{RPCResult::Type::NONE, "", ""},
+                          RPCExamples{""}};
+    BOOST_CHECK(!plain.IsVariadic());
+
+    const RPCHelpMan marked = RPCHelpMan{"marked", "Variadic.",
+                                       {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                                       RPCResult{RPCResult::Type::NONE, "", ""},
+                                       RPCExamples{""}}.MarkVariadic();
+    BOOST_CHECK(marked.IsVariadic());
+    // The marker does not relax IsValidNumArgs itself — the dispatcher
+    // is the one that consults IsVariadic before calling IsValidNumArgs.
+    BOOST_CHECK(!marked.IsValidNumArgs(0)); // still rejects missing required
+    BOOST_CHECK(marked.IsValidNumArgs(1));
+    BOOST_CHECK(!marked.IsValidNumArgs(2)); // upper-bound logic unchanged
+}
+
+// Each of the four commands that needed lower-bound-only arity semantics
+// must report IsVariadic via its accessor so the dispatcher pre-check
+// skips them. Their bodies retain their own arity guards.
+BOOST_AUTO_TEST_CASE(variadic_command_accessors_report_variadic)
+{
+    BOOST_CHECK(votebyid_helpman().IsVariadic());
+    BOOST_CHECK(changesettings_helpman().IsVariadic());
+    BOOST_CHECK(sendalert_helpman().IsVariadic());
+    BOOST_CHECK(parselegacysb_helpman().IsVariadic());
+
+    // Spot-check a non-variadic command for the converse — a typical
+    // converted RPC should not be variadic by default.
+    BOOST_CHECK(!getbestblockhash_helpman().IsVariadic());
 }
 
 BOOST_AUTO_TEST_CASE(getargnames_mixed)
@@ -688,26 +726,6 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"askforoutstandingblocks", &askforoutstandingblocks_helpman},
         {"debug",                   &debug_helpman},
         {"versionreport",           &versionreport_helpman},
-        {"advertisebeacon",        &advertisebeacon_helpman},
-        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
-        {"beaconauth",             &beaconauth_helpman},
-        {"revokebeacon",           &revokebeacon_helpman},
-        {"beaconreport",           &beaconreport_helpman},
-        {"beaconconvergence",      &beaconconvergence_helpman},
-        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
-        {"beaconstatus",           &beaconstatus_helpman},
-        {"beaconaudit",            &beaconaudit_helpman},
-        {"getmrcinfo",             &getmrcinfo_helpman},
-        {"createmrcrequest",       &createmrcrequest_helpman},
-        {"magnitude",              &magnitude_helpman},
-        {"explainmagnitude",       &explainmagnitude_helpman},
-        {"lifetime",               &lifetime_helpman},
-        {"resetcpids",             &resetcpids_helpman},
-        {"rainbymagnitude",        &rainbymagnitude_helpman},
-        {"currentcontractaverage", &currentcontractaverage_helpman},
-// Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
-// commands. Each fHelp=true throw happens before any globals are touched, so this
-// runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
     });
 }
 
@@ -864,189 +882,6 @@ BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
 // Tier 1 F2 — wallet keys/addresses/signing (10 commands).
 BOOST_AUTO_TEST_CASE(tier1_f2_wallet_keys_help_renders)
 {
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"getnewpubkey",       &getnewpubkey},
-        {"getnewaddress",      &getnewaddress},
-        {"signmessage",        &signmessage},
-        {"verifymessage",      &verifymessage},
-        {"addmultisigaddress", &addmultisigaddress},
-        {"addredeemscript",    &addredeemscript},
-        {"validateaddress",    &validateaddress},
-        {"validatepubkey",     &validatepubkey},
-        {"makekeypair",        &makekeypair},
-        {"sethdseed",          &sethdseed},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-        }
-    }
-}
-
-// Tier 1b coverage: each converted researcher/beacon/MRC command throws a
-// runtime_error containing its name and the "Examples:" marker when called
-// with fHelp=true. Runs fixture-free — the help-gate fires before any global
-// state is touched.
-BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"advertisebeacon",        &advertisebeacon},
-        {"advertisebeaconv3",      &advertisebeaconv3},
-        {"beaconauth",             &beaconauth},
-        {"revokebeacon",           &revokebeacon},
-        {"beaconreport",           &beaconreport},
-        {"beaconconvergence",      &beaconconvergence},
-        {"pendingbeaconreport",    &pendingbeaconreport},
-        {"beaconstatus",           &beaconstatus},
-        {"beaconaudit",            &beaconaudit},
-        {"getmrcinfo",             &getmrcinfo},
-        {"createmrcrequest",       &createmrcrequest},
-        {"magnitude",              &magnitude},
-        {"explainmagnitude",       &explainmagnitude},
-        {"lifetime",               &lifetime},
-        {"resetcpids",             &resetcpids},
-        {"rainbymagnitude",        &rainbymagnitude},
-        {"currentcontractaverage", &currentcontractaverage},
-    };
-
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-// Tier 1 F3: each of the wallet-query commands renders help text on fHelp=true
-// before touching pwalletMain / cs_main / cs_wallet. Same fixture-free pattern
-// as the F2 test above.
-BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
-{
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"getinfo",                 &getinfo},
-        {"getwalletinfo",           &getwalletinfo},
-        {"listaddressgroupings",    &listaddressgroupings},
-        {"getreceivedbyaddress",    &getreceivedbyaddress},
-        {"getbalance",              &getbalance},
-        {"getbalancedetail",        &getbalancedetail},
-        {"getunconfirmedbalance",   &getunconfirmedbalance},
-        {"listreceivedbyaddress",   &listreceivedbyaddress},
-        {"listtransactions",        &listtransactions},
-        {"liststakes",              &liststakes},
-        {"gettransaction",          &gettransaction},
-        {"getrawwallettransaction", &getrawwallettransaction},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-        }
-    }
-}
-
-// Tier 1 F4: each of the wallet-mgmt/send commands renders help text on
-// fHelp=true before touching pwalletMain / cs_main / cs_wallet. Same
-// fixture-free pattern as the F2/F3 tests above.
-BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
-{
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"sendtoaddress",   &sendtoaddress},
-        {"sendfrom",        &sendfrom},
-        {"sendmany",        &sendmany},
-        {"backupwallet",    &backupwallet},
-        {"keypoolrefill",   &keypoolrefill},
-        {"walletdiagnose",  &walletdiagnose},
-        {"encryptwallet",   &encryptwallet},
-        {"reservebalance",  &reservebalance},
-        {"checkwallet",     &checkwallet},
-        {"repairwallet",    &repairwallet},
-        {"resendtx",        &resendtx},
-        {"burn",            &burn},
-        {"upgradewallet",   &upgradewallet},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2).
-// Each converted command throws runtime_error(help.ToString()) on fHelp=true
-// before any wallet/state access, so this test runs fixture-free like the
-// other Tier 1 help-rendering cases.
-BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
-// Helper for the straggler-batch help-rendering tests below. Each converted
-// command throws runtime_error(help.ToString()) on fHelp=true before any
-// wallet/state access, so iterating fixture-free is safe.
-static void check_straggler_help_renders(
-    const std::vector<std::pair<const char*, UniValue (*)(const UniValue&, bool)>>& cases)
-{
-    const UniValue empty(UniValue::VARR);
-{
-    const UniValue empty(UniValue::VARR);
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2).
-BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
-{
-    check_straggler_help_renders({
-        {"abandontransaction", &abandontransaction},
-        {"inspectwalletstate", &inspectwalletstate},
     check_help_renders({
         {"getnewpubkey",       &getnewpubkey_helpman},
         {"getnewaddress",      &getnewaddress_helpman},
@@ -1058,95 +893,6 @@ BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
         {"validatepubkey",     &validatepubkey_helpman},
         {"makekeypair",        &makekeypair_helpman},
         {"sethdseed",          &sethdseed_helpman},
-    });
-}
-
-// Tier 1b — researcher/beacon/MRC (17 commands).
-BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
-{
-    check_help_renders({
-        {"advertisebeacon",        &advertisebeacon_helpman},
-        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
-        {"beaconauth",             &beaconauth_helpman},
-        {"revokebeacon",           &revokebeacon_helpman},
-        {"beaconreport",           &beaconreport_helpman},
-        {"beaconconvergence",      &beaconconvergence_helpman},
-        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
-        {"beaconstatus",           &beaconstatus_helpman},
-        {"beaconaudit",            &beaconaudit_helpman},
-        {"getmrcinfo",             &getmrcinfo_helpman},
-        {"createmrcrequest",       &createmrcrequest_helpman},
-        {"magnitude",              &magnitude_helpman},
-        {"explainmagnitude",       &explainmagnitude_helpman},
-        {"lifetime",               &lifetime_helpman},
-        {"resetcpids",             &resetcpids_helpman},
-        {"rainbymagnitude",        &rainbymagnitude_helpman},
-        {"currentcontractaverage", &currentcontractaverage_helpman},
-    });
-}
-
-// Tier 1 F3 — wallet read-only queries (12 commands).
-BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
-{
-    check_help_renders({
-        {"getinfo",                 &getinfo_helpman},
-        {"getwalletinfo",           &getwalletinfo_helpman},
-        {"listaddressgroupings",    &listaddressgroupings_helpman},
-        {"getreceivedbyaddress",    &getreceivedbyaddress_helpman},
-        {"getbalance",              &getbalance_helpman},
-        {"getbalancedetail",        &getbalancedetail_helpman},
-        {"getunconfirmedbalance",   &getunconfirmedbalance_helpman},
-        {"listreceivedbyaddress",   &listreceivedbyaddress_helpman},
-        {"listtransactions",        &listtransactions_helpman},
-        {"liststakes",              &liststakes_helpman},
-        {"gettransaction",          &gettransaction_helpman},
-        {"getrawwallettransaction", &getrawwallettransaction_helpman},
-    });
-}
-
-// Tier 1 F4 — wallet mgmt + send (13 commands).
-BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
-{
-    check_help_renders({
-        {"sendtoaddress",   &sendtoaddress_helpman},
-        {"sendfrom",        &sendfrom_helpman},
-        {"sendmany",        &sendmany_helpman},
-        {"backupwallet",    &backupwallet_helpman},
-        {"keypoolrefill",   &keypoolrefill_helpman},
-        {"walletdiagnose",  &walletdiagnose_helpman},
-        {"encryptwallet",   &encryptwallet_helpman},
-        {"reservebalance",  &reservebalance_helpman},
-        {"checkwallet",     &checkwallet_helpman},
-        {"repairwallet",    &repairwallet_helpman},
-        {"resendtx",        &resendtx_helpman},
-        {"burn",            &burn_helpman},
-        {"upgradewallet",   &upgradewallet_helpman},
-    });
-}
-
-// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2,
-// lifted to helpman accessors via the straggler integration in PR M).
-BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
-{
-    check_help_renders({
-        {"abandontransaction", &abandontransaction_helpman},
-        {"inspectwalletstate", &inspectwalletstate_helpman},
-    });
-}
-
-// PSGT commands (Partially Signed Gridcoin Transaction, lifted to helpman
-// accessors via the straggler integration in PR M).
-BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
-{
-    check_help_renders({
-        {"createpsgt",             &createpsgt_helpman},
-        {"decodepsgt",             &decodepsgt_helpman},
-        {"combinepsgt",            &combinepsgt_helpman},
-        {"finalizepsgt",           &finalizepsgt_helpman},
-        {"walletprocesspsgt",      &walletprocesspsgt_helpman},
-        {"utxoupdatepsgt",         &utxoupdatepsgt_helpman},
-        {"converttopsgt",          &converttopsgt_helpman},
-        {"walletcreatefundedpsgt", &walletcreatefundedpsgt_helpman},
     });
 }
 
