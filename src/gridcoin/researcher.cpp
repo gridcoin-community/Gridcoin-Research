@@ -572,7 +572,16 @@ public:
     }
 
 private:
-    std::map<Cpid, PendingBeacon> m_pending; //!< Known set of pending beacons.
+    //!
+    //! \brief Known set of pending beacons.
+    //!
+    //! Protected by cs_main (the class-level THREAD SAFETY comment above).
+    //! All three public methods (ImportRegistry, Try, Remember) carry
+    //! EXCLUSIVE_LOCKS_REQUIRED(cs_main) and AssertLockHeld(cs_main) at the
+    //! top of each body; the GUARDED_BY annotation makes member-level access
+    //! enforced by the Clang thread-safety analyzer.
+    //!
+    std::map<Cpid, PendingBeacon> m_pending GUARDED_BY(cs_main);
 }; // RecentBeacons
 
 //!
