@@ -1096,8 +1096,17 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
 
             if (iter == vLocalSideStakes.end()) {
                 // Entry in map is no longer found in config files, so mark map entry inactive.
-
-                entry.second->m_status = LocalSideStake::LocalSideStakeStatus::INACTIVE;
+                //
+                // Copy-on-write: reseat the slot to a new INACTIVE entry rather than mutating the
+                // published object in place. A by-value snapshot (SideStakeEntries/Try/etc.) shares
+                // the LocalSideStake_ptr, so mutating in place would race a lock-free snapshot reader;
+                // reseating leaves the captured object untouched. Done under cs_lock (safe). The
+                // reader may then observe slightly stale data (the "safe != correct" boundary), which
+                // is acceptable here — local sidestakes are non-consensus and self-correct next
+                // iteration. See doc/contract_registry_locking_design.md.
+                auto inactive_entry = std::make_shared<LocalSideStake>(*entry.second);
+                inactive_entry->m_status = LocalSideStake::LocalSideStakeStatus::INACTIVE;
+                entry.second = inactive_entry;
             }
         }
     }
