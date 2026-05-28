@@ -28,6 +28,7 @@ from .authproxy import JSONRPCException
 from .util import (
     MAX_NODES,
     append_config,
+    chain_subdir,
     delete_cookie_file,
     get_auth_cookie,
     get_rpc_proxy,
@@ -306,34 +307,66 @@ class TestNode():
         return self.version is None or self.version >= ver
 
     def stop_node(self, expected_stderr='', wait=0):
-        """Stop the node."""
+        """Stop the node.
+
+        Cleanup is performed in a finally block so a failure on the stop RPC,
+        an unexpected stderr, or perf-subprocess shutdown does not leak open
+        file descriptors / temp files. The `stop()` call is wrapped in a
+        broader except than the legacy `http.client.CannotSendRequest`-only
+        catch, since the RPC layer can raise `JSONRPCException`,
+        `ConnectionError`, `socket.timeout`, etc., when the daemon is mid-
+        shutdown. The original error is logged and re-raised at the end so
+        the caller still sees the failure.
+        """
         if not self.running:
             return
         self.log.debug("Stopping node")
+        stop_exc = None
         try:
-            # Gridcoin's stop RPC takes no arguments. Bitcoin Core accepted
-            # an optional `wait` parameter, but Gridcoin's RPC parser rejects
-            # named-arg dicts ({"wait": 0}) with "Params must be an array".
-            # The `wait` kwarg is preserved on stop_node()'s signature for
-            # caller compatibility but not forwarded to the RPC.
-            self.stop()
-        except http.client.CannotSendRequest:
-            self.log.exception("Unable to stop node.")
+            try:
+                # Gridcoin's stop RPC takes no arguments. Bitcoin Core accepted
+                # an optional `wait` parameter, but Gridcoin's RPC parser rejects
+                # named-arg dicts ({"wait": 0}) with "Params must be an array".
+                # The `wait` kwarg is preserved on stop_node()'s signature for
+                # caller compatibility but not forwarded to the RPC.
+                self.stop()
+            except (http.client.CannotSendRequest,
+                    JSONRPCException,
+                    ConnectionError,
+                    OSError) as e:
+                self.log.exception("Unable to stop node cleanly: %s", e)
+                stop_exc = e
 
-        # If there are any running perf processes, stop them.
-        for profile_name in tuple(self.perf_subprocesses.keys()):
-            self._stop_perf(profile_name)
+            # If there are any running perf processes, stop them. Per-process
+            # try/except so one perf failure doesn't strand the rest.
+            for profile_name in tuple(self.perf_subprocesses.keys()):
+                try:
+                    self._stop_perf(profile_name)
+                except Exception as e:
+                    self.log.exception("Failed to stop perf process %s: %s",
+                                       profile_name, e)
 
-        # Check that stderr is as expected
-        self.stderr.seek(0)
-        stderr = self.stderr.read().decode('utf-8').strip()
-        if stderr != expected_stderr:
-            raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
+            # Check that stderr is as expected. This can raise; the file
+            # closes below still run.
+            self.stderr.seek(0)
+            stderr = self.stderr.read().decode('utf-8').strip()
+            if stderr != expected_stderr:
+                raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
+        finally:
+            # Guarantee tempfiles close even when the stderr check above
+            # raises. Each close is itself best-effort so a closed/broken
+            # handle doesn't mask the original failure.
+            for fh in (self.stdout, self.stderr):
+                try:
+                    fh.close()
+                except Exception:
+                    pass
+            del self.p2ps[:]
 
-        self.stdout.close()
-        self.stderr.close()
-
-        del self.p2ps[:]
+        if stop_exc is not None:
+            # Re-raise the original RPC failure once cleanup is complete so
+            # callers don't silently believe the node stopped cleanly.
+            raise stop_exc
 
     def is_node_stopped(self):
         """Checks whether the node has stopped.
@@ -364,7 +397,7 @@ class TestNode():
         if unexpected_msgs is None:
             unexpected_msgs = []
         time_end = time.time() + timeout * self.timeout_factor
-        debug_log = os.path.join(self.datadir, self.chain, 'debug.log')
+        debug_log = os.path.join(self.datadir, chain_subdir(self.chain), 'debug.log')
         with open(debug_log, encoding='utf-8') as dl:
             dl.seek(0, 2)
             prev_size = dl.tell()

@@ -26,6 +26,7 @@ from .util import (
     MAX_NODES,
     PortSeed,
     assert_equal,
+    chain_subdir,
     check_json_precision,
     get_datadir_path,
     initialize_datadir,
@@ -284,7 +285,18 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             pdb.set_trace()
 
         self.log.debug('Closing down network thread')
-        self.network_thread.close()
+        # Guard against early-setup failures: setup() initializes
+        # network_thread on the success path only. If setup raised before
+        # the assignment (e.g. log-init failure), the attribute is still
+        # None and the unconditional .close() would AttributeError, masking
+        # the original failure.
+        if self.network_thread is not None:
+            try:
+                self.network_thread.close()
+            except Exception:
+                # Best-effort: log the cleanup failure but don't mask the
+                # original error that led us here.
+                self.log.exception("network_thread.close() failed during shutdown")
         if not self.options.noshutdown:
             self.log.info("Stopping nodes")
             if self.nodes:
@@ -319,7 +331,14 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         else:
             self.log.error("Test failed. Test logging available at %s/test_framework.log", self.options.tmpdir)
             self.log.error("")
-            self.log.error("Hint: Call {} '{}' to consolidate all logs".format(os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../combine_logs.py"), self.options.tmpdir))
+            combine_logs_path = os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../combine_logs.py")
+            if os.path.isfile(combine_logs_path):
+                self.log.error("Hint: Call {} '{}' to consolidate all logs".format(combine_logs_path, self.options.tmpdir))
+            else:
+                # combine_logs.py hasn't been ported to this PR. Point users
+                # at the per-node log directory until Phase 3 lands the
+                # script.
+                self.log.error("Hint: Per-node logs are under '{}/node*/<chain>/debug.log' (combine_logs.py not present in this build).".format(self.options.tmpdir))
             self.log.error("")
             self.log.error("If this failure happened unexpectedly or intermittently, please file a bug and provide a link or upload of the combined log.")
             self.log.error(self.config['environment']['PACKAGE_BUGREPORT'])
@@ -537,14 +556,37 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         self.nodes[i].wait_until_stopped()
 
     def stop_nodes(self, wait=0):
-        """Stop multiple gridcoinresearchd test nodes"""
+        """Stop multiple gridcoinresearchd test nodes.
+
+        A failure on one node's stop RPC or wait_until_stopped() must not
+        abort the loop — the remaining nodes would be left running and
+        their resources would leak. Per-node try/except guards each call;
+        the first error is recorded and re-raised after the sweep so
+        callers still see a failure indication.
+        """
+        first_exc = None
         for node in self.nodes:
-            # Issue RPC to stop nodes
-            node.stop_node(wait=wait)
+            try:
+                # Issue RPC to stop nodes
+                node.stop_node(wait=wait)
+            except Exception as e:
+                self.log.exception("stop_node raised for node %s: %s",
+                                   getattr(node, 'index', '?'), e)
+                if first_exc is None:
+                    first_exc = e
 
         for node in self.nodes:
-            # Wait for nodes to stop
-            node.wait_until_stopped()
+            try:
+                # Wait for nodes to stop
+                node.wait_until_stopped()
+            except Exception as e:
+                self.log.exception("wait_until_stopped raised for node %s: %s",
+                                   getattr(node, 'index', '?'), e)
+                if first_exc is None:
+                    first_exc = e
+
+        if first_exc is not None:
+            raise first_exc
 
     def restart_node(self, i, extra_args=None):
         """Stop and start a test node"""
@@ -753,7 +795,7 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             self.nodes = []
 
             def cache_path(*paths):
-                return os.path.join(cache_node_dir, self.chain, *paths)
+                return os.path.join(cache_node_dir, chain_subdir(self.chain), *paths)
 
             os.rmdir(cache_path('wallets'))  # Remove empty wallets dir
             for entry in os.listdir(cache_path()):

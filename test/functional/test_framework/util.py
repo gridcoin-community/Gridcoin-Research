@@ -71,10 +71,17 @@ def assert_raises_message(exc, message, fun, *args, **kwds):
     except JSONRPCException:
         raise AssertionError("Use assert_raises_rpc_error() to test RPC failures")
     except exc as e:
-        if message is not None and message not in e.error['message']:
+        # The caller passed `exc` as the expected exception type. The matching
+        # branch needs to inspect the actual exception's message, but only
+        # JSONRPCException has the `e.error['message']` shape — other
+        # exceptions (RuntimeError, ValueError, etc.) carry their text on
+        # str(e). The JSONRPCException case is handled by the earlier branch
+        # (above), so if we land here `e` is a non-JSONRPC exception and the
+        # message lives on str(e).
+        if message is not None and message not in str(e):
             raise AssertionError(
                 "Expected substring not found in error message:\nsubstring: '{}'\nerror message: '{}'.".format(
-                    message, e.error['message']))
+                    message, str(e)))
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " + type(e).__name__)
     else:
@@ -342,6 +349,23 @@ def rpc_url(datadir, i, chain, rpchost):
 ################
 
 
+def chain_subdir(chain):
+    """Map a Bitcoin-style chain name ('main', 'test', 'regtest') to Gridcoin's
+    datadir subdirectory layout.
+
+    Bitcoin Core uses `chain='test'` for testnet and the subdirectory matches
+    the chain name. Gridcoin's testnet datadir subdirectory is `testnet`, not
+    `test`, so any code that builds `<datadir>/<chain>/...` paths needs to
+    translate `'test'` -> `'testnet'`. Mainnet has no subdirectory
+    (everything lives directly under datadir); regtest matches the chain name.
+    """
+    if chain == 'test':
+        return 'testnet'
+    if chain == 'regtest':
+        return 'regtest'
+    return ''
+
+
 def initialize_datadir(dirname, n, chain):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
@@ -351,15 +375,13 @@ def initialize_datadir(dirname, n, chain):
     if chain == 'test':
         chain_name_conf_arg = 'testnet'
         chain_name_conf_section = 'test'
-        chain_subdir = 'testnet'
     elif chain == 'regtest':
         chain_name_conf_arg = chain
         chain_name_conf_section = chain
-        chain_subdir = 'regtest'
     else:
         chain_name_conf_arg = chain
         chain_name_conf_section = chain
-        chain_subdir = ''
+    chain_subdir_name = chain_subdir(chain)
     # Gridcoin requires explicit rpcuser/rpcpassword in the chain-specific
     # conf when -server is set -- there's no cookie-auth fallback like
     # Bitcoin Core's, and Gridcoin loads chain-specific settings from
@@ -370,9 +392,9 @@ def initialize_datadir(dirname, n, chain):
     # can read them from a single known path.
     rpc_user = "gctest_" + secrets.token_hex(8)
     rpc_pass = secrets.token_hex(32)
-    if chain_subdir:
-        os.makedirs(os.path.join(datadir, chain_subdir), exist_ok=True)
-        with open(os.path.join(datadir, chain_subdir, "gridcoinresearch.conf"), 'w', encoding='utf8') as f:
+    if chain_subdir_name:
+        os.makedirs(os.path.join(datadir, chain_subdir_name), exist_ok=True)
+        with open(os.path.join(datadir, chain_subdir_name, "gridcoinresearch.conf"), 'w', encoding='utf8') as f:
             f.write("rpcuser=" + rpc_user + "\n")
             f.write("rpcpassword=" + rpc_pass + "\n")
             f.write("port=" + str(p2p_port(n)) + "\n")
@@ -427,7 +449,7 @@ def get_auth_cookie(datadir, chain):
                     assert password is None  # Ensure that there is only one rpcpassword line
                     password = line.split("=")[1].strip("\n")
     try:
-        with open(os.path.join(datadir, chain, ".cookie"), 'r', encoding="ascii") as f:
+        with open(os.path.join(datadir, chain_subdir(chain), ".cookie"), 'r', encoding="ascii") as f:
             userpass = f.read()
             split_userpass = userpass.split(':')
             user = split_userpass[0]
@@ -441,9 +463,10 @@ def get_auth_cookie(datadir, chain):
 
 # If a cookie file exists in the given datadir, delete it.
 def delete_cookie_file(datadir, chain):
-    if os.path.isfile(os.path.join(datadir, chain, ".cookie")):
+    cookie_path = os.path.join(datadir, chain_subdir(chain), ".cookie")
+    if os.path.isfile(cookie_path):
         logger.debug("Deleting leftover cookie file")
-        os.remove(os.path.join(datadir, chain, ".cookie"))
+        os.remove(cookie_path)
 
 
 def softfork_active(node, key):

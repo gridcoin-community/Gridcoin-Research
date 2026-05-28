@@ -119,6 +119,12 @@ HELPMAN_MARKERS = ("Result", "Examples")
 #     of `chain: str`, no bestblockhash, no softforks. The fields below are
 #     all unconditional pushKVs in src/rpc/blockchain.cpp:getblockchaininfo
 #     -- stable enough to assert on without flapping.
+#
+# Note: the PR description's "spot-check {chain, blocks, bestblockhash}"
+# wording was inherited from upstream Bitcoin Core's schema and predates
+# the audit above; the actual assertion set is the divergent-Gridcoin one
+# below. Update the PR description (or this comment, if the divergence is
+# narrowed later) to match before merging.
 OBJ_SHAPE_CHECKS = {
     "getblockchaininfo": {
         "blocks", "in_sync", "moneysupply", "difficulty", "testnet", "errors",

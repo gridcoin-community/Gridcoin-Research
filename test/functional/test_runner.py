@@ -258,7 +258,10 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
     result = unittest.TextTestRunner(verbosity=1, failfast=True).run(test_framework_tests)
     if not result.wasSuccessful():
         logging.debug("Early exiting after failure in TestFramework unit tests")
-        sys.exit(False)
+        # `sys.exit(False)` exits with code 0 (False == 0). Use 1 so CI
+        # actually reports the framework unit-test failure rather than
+        # swallowing it as a success.
+        sys.exit(1)
 
     tests_dir = src_dir + '/test/functional/'
 
@@ -272,12 +275,20 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
         coverage = None
 
     if len(test_list) > 1 and jobs > 1:
-        # Populate cache
-        try:
-            subprocess.check_output([sys.executable, tests_dir + 'create_cache.py'] + flags + ["--tmpdir=%s/cache" % tmpdir])
-        except subprocess.CalledProcessError as e:
-            sys.stdout.buffer.write(e.output)
-            raise
+        create_cache_path = tests_dir + 'create_cache.py'
+        if os.path.isfile(create_cache_path):
+            # Populate cache
+            try:
+                subprocess.check_output([sys.executable, create_cache_path] + flags + ["--tmpdir=%s/cache" % tmpdir])
+            except subprocess.CalledProcessError as e:
+                sys.stdout.buffer.write(e.output)
+                raise
+        else:
+            # create_cache.py hasn't been ported to this PR. Force
+            # sequential execution so tests don't race on a missing
+            # shared cache.
+            logging.warning("create_cache.py not present; forcing jobs=1 (no shared cache available).")
+            jobs = 1
 
     #Run Tests
     job_queue = TestHandler(
@@ -306,16 +317,23 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
             print(BOLD[1] + 'stdout:\n' + BOLD[0] + stdout + '\n')
             print(BOLD[1] + 'stderr:\n' + BOLD[0] + stderr + '\n')
             if combined_logs_len and os.path.isdir(testdir):
-                # Print the final `combinedlogslen` lines of the combined logs
-                print('{}Combine the logs and print the last {} lines ...{}'.format(BOLD[1], combined_logs_len, BOLD[0]))
-                print('\n============')
-                print('{}Combined log for {}:{}'.format(BOLD[1], testdir, BOLD[0]))
-                print('============\n')
-                combined_logs_args = [sys.executable, os.path.join(tests_dir, 'combine_logs.py'), testdir]
-                if BOLD[0]:
-                    combined_logs_args += ['--color']
-                combined_logs, _ = subprocess.Popen(combined_logs_args, universal_newlines=True, stdout=subprocess.PIPE).communicate()
-                print("\n".join(deque(combined_logs.splitlines(), combined_logs_len)))
+                combine_logs_path = os.path.join(tests_dir, 'combine_logs.py')
+                if os.path.isfile(combine_logs_path):
+                    # Print the final `combinedlogslen` lines of the combined logs
+                    print('{}Combine the logs and print the last {} lines ...{}'.format(BOLD[1], combined_logs_len, BOLD[0]))
+                    print('\n============')
+                    print('{}Combined log for {}:{}'.format(BOLD[1], testdir, BOLD[0]))
+                    print('============\n')
+                    combined_logs_args = [sys.executable, combine_logs_path, testdir]
+                    if BOLD[0]:
+                        combined_logs_args += ['--color']
+                    combined_logs, _ = subprocess.Popen(combined_logs_args, universal_newlines=True, stdout=subprocess.PIPE).communicate()
+                    print("\n".join(deque(combined_logs.splitlines(), combined_logs_len)))
+                else:
+                    # combine_logs.py hasn't been ported. Fall back to the
+                    # captured stdout/stderr already printed above, so the
+                    # caller still sees actionable failure context.
+                    print("(combine_logs.py not present; printing per-process stdout/stderr only)")
 
             if failfast:
                 logging.debug("Early exiting after test failure")
