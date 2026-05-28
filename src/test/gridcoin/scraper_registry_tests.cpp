@@ -102,7 +102,6 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -123,6 +122,10 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
                                 false);
     }
 
+    // Scrapers() now returns a value snapshot under cs_lock (not a reference to the
+    // live map), so we take it after the additions complete and re-take on each
+    // subsequent check group if state may have changed.
+    auto scraper_map = registry.Scrapers();
     BOOST_CHECK(scraper_map.size() == 7);
 
     // Native format from legacy adds.
@@ -139,7 +142,7 @@ BOOST_AUTO_TEST_CASE(scraper_entries_added_to_scraper_work_correctly_legacy)
 
     // Legacy format from legacy adds.
     for (const auto& entry : scraper_entries) {
-        auto& legacy_scraper_entries = registry.GetScrapersLegacy();
+        auto legacy_scraper_entries = registry.GetScrapersLegacy();
 
         auto legacy_appcache_entry = legacy_scraper_entries.find(entry);
 
@@ -155,7 +158,6 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -176,6 +178,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
                                 false);
     }
 
+    auto scraper_map = registry.Scrapers();
     BOOST_CHECK(scraper_map.size() == 7);
 
     // Deauthorize a scraper
@@ -186,6 +189,9 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
                             time++,
                             false);
 
+    // Re-snapshot after the mutation (Scrapers() returns a value snapshot,
+    // not a reference to the live map — see registry.h).
+    scraper_map = registry.Scrapers();
     // Still should be 7 current elements.
     BOOST_CHECK(scraper_map.size() == 7);
 
@@ -247,6 +253,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     registry.Add(ctx);
 
+    // Re-snapshot after the mutation.
+    scraper_map = registry.Scrapers();
     // Native map should still be 7 elements
     BOOST_CHECK(scraper_map.size() == 7);
 
@@ -323,6 +331,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
     int post_revert_height = 8;
     registry.SetDBHeight(post_revert_height);
 
+    // Re-snapshot after the mutation.
+    scraper_map = registry.Scrapers();
     // After reversion...
     // Native map should be back to 7 elements.
     BOOST_CHECK(scraper_map.size() == 7);
@@ -352,7 +362,6 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     uint64_t time = 0;
 
     auto& registry = GRC::GetScraperRegistry();
-    const auto& scraper_map = registry.Scrapers();
 
     std::vector<std::string> scraper_entries { {"RxKVQ1SGpgyUfMv1zdygmiLi24mxG34k6f",
                                                "S2wGoFavFzTnpaxn6XqLmJDE9FppHiMrCn",
@@ -373,6 +382,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
                                 false);
     }
 
+    // Scrapers() now returns a value snapshot under cs_lock. Re-snapshot before each check group.
+    auto scraper_map = registry.Scrapers();
     BOOST_CHECK(scraper_map.size() == 7);
 
     // Deauthorize a scraper
@@ -383,6 +394,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
                             time++,
                             false);
 
+    // Re-snapshot after the mutation.
+    scraper_map = registry.Scrapers();
     // Still should be 7 current elements.
     BOOST_CHECK(scraper_map.size() == 7);
 
@@ -449,6 +462,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     registry.Add(ctx);
 
+    // Re-snapshot after the mutation.
+    scraper_map = registry.Scrapers();
     // Native map should still be 7 elements
     BOOST_CHECK(scraper_map.size() == 7);
 
@@ -524,6 +539,8 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
     int post_revert_height = 8;
     registry.SetDBHeight(post_revert_height);
 
+    // Re-snapshot after the mutation.
+    scraper_map = registry.Scrapers();
     // After reversion...
     // Native map should be back to 7 elements.
     BOOST_CHECK(scraper_map.size() == 7);

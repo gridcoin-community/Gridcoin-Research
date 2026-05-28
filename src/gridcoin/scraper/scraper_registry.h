@@ -477,7 +477,15 @@ public:
     //!
     //! \return \c A reference to the current scraper entries stored in the registry.
     //!
-    const ScraperMap& Scrapers() const;
+    //! Returns a snapshot copy under cs_lock. The map stores ScraperEntry_ptr
+    //! (shared_ptr) so the copy bumps refcounts on the (small) set of scraper
+    //! entries; the entries themselves are not deep-copied. Read Committed
+    //! isolation — see class-level locking model.
+    //!
+    //! Previously returned 'const ScraperMap&', exposing raw access to the
+    //! cs_lock-guarded m_scrapers without lock acquisition; the caller could
+    //! iterate while chain-handler mutators were modifying the map. Fixed.
+    ScraperMap Scrapers() const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -659,12 +667,7 @@ private:
     //!
     void AddDelete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
-    //! GUARDED_BY(cs_lock) annotation is deferred to the next commit, which
-    //! also fixes the Scrapers() getter to return a snapshot under cs_lock
-    //! instead of a raw reference to m_scrapers. Adding GUARDED_BY here
-    //! together with the unfixed reference-returning Scrapers() would put
-    //! the build into the very state we're cleaning up.
-    ScraperMap m_scrapers; //!< Contains the current scraper entries, including entries marked DELETED.
+    ScraperMap m_scrapers                    GUARDED_BY(cs_lock); //!< Contains the current scraper entries, including entries marked DELETED.
     PendingScraperMap m_pending_scrapers     GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
     std::set<ScraperEntry> m_expired_scraper_entries GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.

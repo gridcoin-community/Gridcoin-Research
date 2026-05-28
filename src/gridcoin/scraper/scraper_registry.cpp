@@ -235,9 +235,11 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
 // -----------------------------------------------------------------------------
 // Class: ScraperRegistry
 // -----------------------------------------------------------------------------
-const ScraperRegistry::ScraperMap& ScraperRegistry::Scrapers() const
+ScraperRegistry::ScraperMap ScraperRegistry::Scrapers() const
 {
-    return m_scrapers;
+    LOCK(cs_lock);
+
+    return m_scrapers; // value copy; map of shared_ptr — refcounts bumped, entries not deep-copied
 }
 
 const AppCacheSection ScraperRegistry::GetScrapersLegacy() const
