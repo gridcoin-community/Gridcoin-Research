@@ -262,7 +262,7 @@ UniValue help(const UniValue& params, bool fHelp)
     // and yield "help: unknown command:" — a regression vs. the pre-RPCHelpMan
     // behavior where `help` (no args) printed the category overview.
     if (strCommand.empty())
-        return help_rpc.ToString();
+        return help_helpman().ToString();
 
     // Subcategory help area
     // Blockchain related commands
