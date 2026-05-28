@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
 
     BOOST_CHECK(resurrected_scraper->first == "SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
     BOOST_CHECK(resurrected_scraper->second.value == "true");
-    BOOST_CHECK(resurrected_scraper->second.timestamp = 6);
+    BOOST_CHECK(resurrected_scraper->second.timestamp == 6);
 }
 
 
@@ -561,7 +561,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_native
 
     BOOST_CHECK(resurrected_scraper->first == "SLbdvKZHmtu49VUWm88rbcCo9DaC8Z2urV");
     BOOST_CHECK(resurrected_scraper->second.value == "true");
-    BOOST_CHECK(resurrected_scraper->second.timestamp = 6);
+    BOOST_CHECK(resurrected_scraper->second.timestamp == 6);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
