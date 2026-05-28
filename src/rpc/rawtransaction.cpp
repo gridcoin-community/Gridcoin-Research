@@ -408,9 +408,15 @@ static const RPCHelpMan getrawtransaction_help{
             "If true, return an object instead of a hex string. Numeric values are also accepted "
             "(any non-zero number is treated as true). Default: false."},
     },
-    RPCResult{RPCResult::Type::STR_HEX, "",
-        "Hex-encoded serialized transaction when verbose is false. When verbose is true, returns a JSON "
-        "object instead (containing 'hex' plus decoded transaction fields)."},
+    RPCResults{
+        RPCResult{RPCResult::Type::STR_HEX, "",
+            "Hex-encoded serialized transaction (verbose=false)."},
+        RPCResult{RPCResult::Type::OBJ, "", "Decoded transaction (verbose=true).",
+            {
+                {RPCResult::Type::STR_HEX, "hex", "Serialized hex of the transaction."},
+                {RPCResult::Type::ELISION, "", "Remaining fields match TxToJSON's shape."},
+            }},
+    },
     RPCExamples{
         HelpExampleCli("getrawtransaction", "\"<txid>\"") +
         HelpExampleCli("getrawtransaction", "\"<txid>\" true") +

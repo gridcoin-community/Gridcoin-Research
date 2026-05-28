@@ -583,8 +583,11 @@ static const RPCHelpMan rpc_getrecentblocks_help{
     {
         {"detail", RPCArg::Type::NUM, RPCArg::Optional::NO,
             "Detail level (0, 1, 2, 20, 21, 100, or 120). See description."},
-        {"count", RPCArg::Type::NUM, RPCArg::Optional::NO,
-            "Maximum number of recent blocks to return."},
+        {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum number of recent blocks to return (legacy default: 0). Optional to preserve "
+            "the legacy 1-arg form."},
+        {"requested_message_filter", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Ignored; accepted for compatibility with the legacy 3-arg form."},
     },
     RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of block height (as string) to per-block detail",
         {
