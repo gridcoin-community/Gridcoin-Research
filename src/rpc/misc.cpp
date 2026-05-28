@@ -124,7 +124,11 @@ UniValue listsettings(const UniValue& params, bool fHelp)
     return gArgs.OutputArgs();
 }
 
-static const RPCHelpMan changesettings_help{
+// Variadic: declared signature is a single setting=value pair but
+// callers may pass additional name=value pairs as trailing positionals.
+// The body iterates over all params; MarkVariadic() opts out of the
+// dispatcher's IsValidNumArgs pre-check.
+static const RPCHelpMan changesettings_help = RPCHelpMan{
     "changesettings",
     "Store or change one or more configuration settings.\n"
     "\n"
@@ -155,7 +159,7 @@ static const RPCHelpMan changesettings_help{
     RPCExamples{
         HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
         HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
-};
+}.MarkVariadic();
 const RPCHelpMan& changesettings_helpman() { return changesettings_help; }
 
 UniValue changesettings(const UniValue& params, bool fHelp)

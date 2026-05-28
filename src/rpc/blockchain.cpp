@@ -3782,7 +3782,10 @@ UniValue network(const UniValue& params, bool fHelp)
     return res;
 }
 
-static const RPCHelpMan parselegacysb_help{
+// Variadic: legacy body guarded only against params.size() < 1, so extra
+// trailing args were accepted and silently ignored. MarkVariadic() keeps
+// that lenience under M2's dispatcher pre-check.
+static const RPCHelpMan parselegacysb_help = RPCHelpMan{
     "parselegacysb",
     "Convert a legacy superblock contract to JSON.",
     {
@@ -3800,7 +3803,7 @@ static const RPCHelpMan parselegacysb_help{
     RPCExamples{
         HelpExampleCli("parselegacysb", "\"<serialized_contract>\"") +
         HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
-};
+}.MarkVariadic();
 const RPCHelpMan& parselegacysb_helpman() { return parselegacysb_help; }
 
 UniValue parselegacysb(const UniValue& params, bool fHelp)

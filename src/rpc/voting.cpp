@@ -792,7 +792,12 @@ UniValue vote(const UniValue& params, bool fHelp)
     return SubmitVote(*poll, std::move(builder));
 }
 
-static const RPCHelpMan votebyid_help{
+// Variadic: the declared signature is the typical two-arg shape, but
+// multi-choice polls accept additional positional choice_id values. The
+// body validates the actual arity; MarkVariadic() opts the command out
+// of the dispatcher's IsValidNumArgs pre-check so the trailing choices
+// are accepted.
+static const RPCHelpMan votebyid_help = RPCHelpMan{
     "votebyid",
     "Cast a vote for a poll.",
     {
@@ -807,7 +812,7 @@ static const RPCHelpMan votebyid_help{
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
         HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
-};
+}.MarkVariadic();
 const RPCHelpMan& votebyid_helpman() { return votebyid_help; }
 
 UniValue votebyid(const UniValue& params, bool fHelp)

@@ -18,8 +18,6 @@
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
 // researcher/beacon/MRC commands under test.
-// Forward declarations of the Tier 1a blockchain-core commands under test.
-// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
 // captures them into the suite's namespace and breaks linkage. After conversion
 // each function throws std::runtime_error for fHelp=true before touching any
@@ -317,6 +315,46 @@ BOOST_AUTO_TEST_CASE(isvalidnumargs_boundaries)
     BOOST_CHECK(!all_required.IsValidNumArgs(1));
     BOOST_CHECK(all_required.IsValidNumArgs(2));
     BOOST_CHECK(!all_required.IsValidNumArgs(3));
+}
+
+// PR M2: variadic marker opts a command out of the dispatcher's
+// IsValidNumArgs upper-bound pre-check. The body is then responsible
+// for whatever real arity the command accepts. IsValidNumArgs itself
+// stays unchanged — the dispatcher gates on IsVariadic() before
+// invoking IsValidNumArgs at all.
+BOOST_AUTO_TEST_CASE(markvariadic_default_and_marker)
+{
+    const RPCHelpMan plain{"plain", "Not variadic.",
+                          {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                          RPCResult{RPCResult::Type::NONE, "", ""},
+                          RPCExamples{""}};
+    BOOST_CHECK(!plain.IsVariadic());
+
+    const RPCHelpMan marked = RPCHelpMan{"marked", "Variadic.",
+                                       {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                                       RPCResult{RPCResult::Type::NONE, "", ""},
+                                       RPCExamples{""}}.MarkVariadic();
+    BOOST_CHECK(marked.IsVariadic());
+    // The marker does not relax IsValidNumArgs itself — the dispatcher
+    // is the one that consults IsVariadic before calling IsValidNumArgs.
+    BOOST_CHECK(!marked.IsValidNumArgs(0)); // still rejects missing required
+    BOOST_CHECK(marked.IsValidNumArgs(1));
+    BOOST_CHECK(!marked.IsValidNumArgs(2)); // upper-bound logic unchanged
+}
+
+// Each of the four commands that needed lower-bound-only arity semantics
+// must report IsVariadic via its accessor so the dispatcher pre-check
+// skips them. Their bodies retain their own arity guards.
+BOOST_AUTO_TEST_CASE(variadic_command_accessors_report_variadic)
+{
+    BOOST_CHECK(votebyid_helpman().IsVariadic());
+    BOOST_CHECK(changesettings_helpman().IsVariadic());
+    BOOST_CHECK(sendalert_helpman().IsVariadic());
+    BOOST_CHECK(parselegacysb_helpman().IsVariadic());
+
+    // Spot-check a non-variadic command for the converse — a typical
+    // converted RPC should not be variadic by default.
+    BOOST_CHECK(!getbestblockhash_helpman().IsVariadic());
 }
 
 BOOST_AUTO_TEST_CASE(getargnames_mixed)
@@ -688,26 +726,6 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"askforoutstandingblocks", &askforoutstandingblocks_helpman},
         {"debug",                   &debug_helpman},
         {"versionreport",           &versionreport_helpman},
-        {"advertisebeacon",        &advertisebeacon_helpman},
-        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
-        {"beaconauth",             &beaconauth_helpman},
-        {"revokebeacon",           &revokebeacon_helpman},
-        {"beaconreport",           &beaconreport_helpman},
-        {"beaconconvergence",      &beaconconvergence_helpman},
-        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
-        {"beaconstatus",           &beaconstatus_helpman},
-        {"beaconaudit",            &beaconaudit_helpman},
-        {"getmrcinfo",             &getmrcinfo_helpman},
-        {"createmrcrequest",       &createmrcrequest_helpman},
-        {"magnitude",              &magnitude_helpman},
-        {"explainmagnitude",       &explainmagnitude_helpman},
-        {"lifetime",               &lifetime_helpman},
-        {"resetcpids",             &resetcpids_helpman},
-        {"rainbymagnitude",        &rainbymagnitude_helpman},
-        {"currentcontractaverage", &currentcontractaverage_helpman},
-// Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
-// commands. Each fHelp=true throw happens before any globals are touched, so this
-// runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
     });
 }
 

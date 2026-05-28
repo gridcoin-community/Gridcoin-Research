@@ -204,6 +204,10 @@ string CRPCTable::help(string strCommand, rpccategory category) const
             try {
                 UniValue params(UniValue::VARR);
                 (*pcmd->actor)(params, true);
+                // Actor returned normally instead of throwing help text via
+                // runtime_error. Without a placeholder strHelp stays empty and
+                // the rendered help list shows a blank line for this command.
+                strHelp = strprintf("%s: (no help text)", strMethod);
             } catch (std::exception& e) {
                 strHelp = string(e.what());
             }
@@ -247,10 +251,6 @@ const RPCHelpMan& help_helpman() { return help_help; }
 
 UniValue help(const UniValue& params, bool fHelp)
 {
-    const RPCHelpMan& help_rpc = help_helpman();
-    if (fHelp || !help_rpc.IsValidNumArgs(params.size()))
-        throw runtime_error(help_rpc.ToString());
-
     string strCommand;
 
     if (params.size() > 0)
@@ -969,10 +969,13 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     // longer carries a redundant `if (fHelp || !help.IsValidNumArgs(...))`
     // gate, so the dispatcher is now the authoritative arity-enforcement
     // site for converted commands. Legacy commands (nullptr helpman) keep
-    // their body-level checks.
+    // their body-level checks. Commands marked variadic via RPCHelpMan's
+    // MarkVariadic() opt out of the pre-check (their helpman declaration
+    // captures the typical shape but the body accepts an open-ended count);
+    // their body retains the arity gate appropriate to the actual semantics.
     if (pcmd->helpman != nullptr) {
         const RPCHelpMan& help = pcmd->helpman();
-        if (!help.IsValidNumArgs(params.size())) {
+        if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
             throw runtime_error(help.ToString());
         }
     }

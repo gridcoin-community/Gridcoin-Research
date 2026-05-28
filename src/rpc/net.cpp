@@ -648,7 +648,11 @@ UniValue listalerts(const UniValue& params, bool fHelp)
 // There is a known deadlock situation with ThreadMessageHandler
 // ThreadMessageHandler: holds cs_vSend and acquiring cs_main in SendMessages()
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
-static const RPCHelpMan sendalert_help{
+// Variadic: legacy behavior accepted any params.size() >= 6, with the
+// 7th positional (cancelupto) optionally consumed. MarkVariadic() keeps
+// the dispatcher off the upper-bound check so trailing-ignored args keep
+// working; the body still requires the 6 mandatory positions.
+static const RPCHelpMan sendalert_help = RPCHelpMan{
     "sendalert",
     "Sign and broadcast a network alert. Requires the WIF-encoded alert master private key.",
     {
@@ -678,7 +682,7 @@ static const RPCHelpMan sendalert_help{
     RPCExamples{
         HelpExampleCli("sendalert", "\"network outage\" \"<wif>\" 1000000 2000000 100 1") +
         HelpExampleRpc("sendalert", "\"network outage\", \"<wif>\", 1000000, 2000000, 100, 1")},
-};
+}.MarkVariadic();
 const RPCHelpMan& sendalert_helpman() { return sendalert_help; }
 
 UniValue sendalert(const UniValue& params, bool fHelp)
