@@ -177,7 +177,8 @@ UniValue importwallet(const UniValue& params, bool fHelp)
     static const RPCHelpMan help{
         "importwallet",
         "Imports keys from a wallet dump file (see dumpwallet).\n"
-        "If a path is not specified in the filename, the data directory is used.",
+        "If a path is not specified in the filename, the data directory is used.\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
         {
             {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename of the wallet dump to import."},
         },
@@ -289,16 +290,23 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
 {
     static const RPCHelpMan help{
         "dumpprivkey",
-        "Reveals the private key corresponding to <gridcoinaddress>.",
+        "Reveals the private key corresponding to <gridcoinaddress>.\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
         {
             {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the requested key."},
-            {"dump_hex", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, also include the private and public keys as hex strings in the JSON output. "
-                "Default: false (only the base58 WIF is returned)."},
+            {"dump_hex", RPCArg::Type::BOOL, RPCArg::Default{false},
+                "If true, also include the private and public keys as hex strings in the JSON output."},
         },
-        RPCResult{RPCResult::Type::ANY, "",
-            "When dump_hex is false (default), returns the base58 WIF private key as a string. "
-            "When dump_hex is true, returns a JSON object with base58 and hex representations."},
+        RPCResults{
+            RPCResult{RPCResult::Type::STR, "",
+                "Base58 WIF private key (dump_hex=false)."},
+            RPCResult{RPCResult::Type::OBJ, "", "Multiple key encodings (dump_hex=true).",
+                {
+                    {RPCResult::Type::STR, "private_key", "Base58 WIF private key."},
+                    {RPCResult::Type::STR_HEX, "private_key_hex", "Hex-encoded private key."},
+                    {RPCResult::Type::STR_HEX, "public_key_hex", "Hex-encoded public key."},
+                }},
+        },
         RPCExamples{
             HelpExampleCli("dumpprivkey", "\"S1Example\"") +
             HelpExampleCli("dumpprivkey", "\"S1Example\" true") +
@@ -346,7 +354,8 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
     static const RPCHelpMan help{
         "dumpwallet",
         "Dumps all wallet keys in a human-readable format into the specified file.\n"
-        "If a path is not specified in the filename, the data directory is used.",
+        "If a path is not specified in the filename, the data directory is used.\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
         {
             {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "Filename to dump the wallet to."},
         },
