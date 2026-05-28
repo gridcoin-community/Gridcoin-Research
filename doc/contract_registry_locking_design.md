@@ -275,11 +275,19 @@ job (`.github/workflows/cmake_quality.yml`) sets this and is the enforcement
 point — note this is distinct from the "Sanitizers (Clang)" job, which
 builds with `ENABLE_GUI=OFF` and does not exercise the Qt wallet code.
 For local development on thread-safety changes, configure your build dir
-the same way the CI job does:
+the same way the CI job does. **The analysis is Clang-only** — under GCC
+(and MSVC) the `GUARDED_BY` / `EXCLUSIVE_LOCKS_REQUIRED` attributes parse
+but are silent no-ops, so a GCC build can pass `WERROR_THREAD_SAFETY=ON`
+while checking nothing. Select Clang explicitly:
 
 ```sh
-cmake -B build -DWERROR_THREAD_SAFETY=ON
+cmake -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DWERROR_THREAD_SAFETY=ON
 ```
+
+Confirm the analysis is actually active before relying on a clean build:
+`grep HAVE_CLANG_THREAD_SAFETY build/CMakeCache.txt` should show `=1`. A
+plain `cmake -B build` reconfigure does not switch the compiler of an
+existing build dir — wipe `build/` when changing compilers.
 
 A missing `EXCLUSIVE_LOCKS_REQUIRED` annotation, a member access without
 the corresponding `GUARDED_BY` lock held, or a lock-order violation will

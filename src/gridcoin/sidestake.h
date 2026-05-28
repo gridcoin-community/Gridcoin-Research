@@ -975,7 +975,8 @@ private:
 public:
 
     //! Returns a reference to the (cs_lock-guarded) backing DB. Caller must hold cs_lock
-    //! both to call and to use the returned reference. Currently used only via tests.
+    //! both to call and to use the returned reference. No call sites in the tree
+    //! currently (all three registries expose this accessor for symmetry).
     SideStakeDB& GetSideStakeDB() EXCLUSIVE_LOCKS_REQUIRED(cs_lock);
 }; // sidestakeRegistry
 
