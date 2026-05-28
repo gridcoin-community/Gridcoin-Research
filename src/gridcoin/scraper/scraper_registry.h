@@ -446,9 +446,12 @@ public:
     //! \brief Get the collection of current scraper entries. Note that this INCLUDES deleted
     //! scraper entries.
     //!
-    //! \return \c A reference to the current scraper entries stored in the registry.
+    //! \return A by-value snapshot of the current scraper entries, taken under cs_lock.
+    //! The map is copied; its ScraperEntry_ptr (shared_ptr) elements are shared, not
+    //! deep-copied. Entries are immutable once published, so the snapshot is safe to use
+    //! without holding any lock. See doc/contract_registry_locking_design.md.
     //!
-    const ScraperMap& Scrapers() const;
+    ScraperMap Scrapers() const;
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -622,18 +625,14 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ScraperMap m_scrapers;                   //!< Contains the current scraper entries, including entries marked DELETED.
-    PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
+    ScraperMap m_scrapers GUARDED_BY(cs_lock);                   //!< Contains the current scraper entries, including entries marked DELETED.
+    PendingScraperMap m_pending_scrapers GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
+    std::set<ScraperEntry> m_expired_scraper_entries GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    ScraperMap m_first_scraper_entries {};   //!< Not used here. To satisfy the template only.
+    ScraperMap m_first_scraper_entries GUARDED_BY(cs_lock) {};   //!< Not used here. To satisfy the template only.
 
-    ScraperEntryDB m_scraper_db;
-
-public:
-
-    ScraperEntryDB& GetScraperDB();
+    ScraperEntryDB m_scraper_db GUARDED_BY(cs_lock);
 }; // ScraperRegistry
 
 //!
