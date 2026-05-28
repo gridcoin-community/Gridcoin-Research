@@ -403,8 +403,8 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
         {
             {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
         },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {{RPCResult::Type::STR, "address", "An address in the account."}}},
+        RPCResult{RPCResult::Type::ARR, "", "Addresses associated with the given account.",
+            {{RPCResult::Type::STR, "", "An address in the account."}}},
         RPCExamples{
             HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
             HelpExampleRpc("getaddressesbyaccount", "\"myaccount\"")},

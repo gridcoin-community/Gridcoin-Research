@@ -755,8 +755,19 @@ UniValue vote(const UniValue& params, bool fHelp)
                 "Labels of the choices to vote for, separated by semicolons (;)."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses."}}},
+            {
+                {RPCResult::Type::STR, "poll", "Poll title."},
+                {RPCResult::Type::STR_HEX, "vote_txid", "Transaction id of the vote contract submission."},
+                {RPCResult::Type::ARR, "responses", "Vote responses submitted (one entry per choice voted).",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "choice", "Choice label that was selected."},
+                                {RPCResult::Type::NUM, "id", "Choice index."},
+                                {RPCResult::Type::STR_AMOUNT, "weight", "Weight of this vote response."},
+                            }},
+                    }},
+            }},
         RPCExamples{
             HelpExampleCli("vote", "\"Example Poll\" \"yes\"") +
             HelpExampleRpc("vote", "\"Example Poll\", \"yes\"")},
