@@ -405,6 +405,35 @@ public:
 //! \brief Stores and manages scraper entries. These represent scrapers known to the
 //! network and their status.
 //!
+//! Locking model: pattern (b), leaf-lock via cs_lock. ScraperRegistry has a real
+//! non-cs_main reader path: the dedicated scraper thread (ThreadScraper, see
+//! scraper.cpp) consumes the registry via GetScrapersLegacy() / GetScrapersLegacyExt()
+//! to validate manifests, without holding cs_main. Holding cs_main from the
+//! scraper thread would block chain activation during convergence and is the
+//! wrong dependency direction.
+//!
+//! Locking discipline:
+//!   - Members are GUARDED_BY(cs_lock).
+//!   - Chain-handler entry points (Reset, Validate, BlockValidate, Add, Delete,
+//!     Revert, plus the private AddDelete helper) carry
+//!     EXCLUSIVE_LOCKS_REQUIRED(cs_main) and acquire cs_lock internally.
+//!     Canonical lock order is cs_main -> cs_lock.
+//!   - Non-chain entry points (GetScrapersLegacy, GetScrapersLegacyExt,
+//!     TryAuthorized, Initialize, GetDBHeight, SetDBHeight, ResetInMemoryOnly,
+//!     PassivateDB) acquire only cs_lock.
+//!   - Read methods acquire cs_lock internally and return copies (the legacy
+//!     variants return by-value AppCacheSection / AppCacheSectionExt
+//!     containers). They provide Read Committed isolation.
+//!
+//! cs_lock is a LEAF lock — see doc/contract_registry_locking_design.md for
+//! the invariant. While cs_lock is held: do not acquire any other lock, do
+//! not call into another subsystem, do not emit uiInterface notifications,
+//! avoid LogPrintf with non-trivial formatters.
+//!
+//! Read Committed (cs_lock alone) is what the scraper thread needs to safely
+//! iterate authorisation state. Callers that need Repeatable Read or
+//! Serializable must hold cs_main separately.
+//!
 class ScraperRegistry : public IContractHandler
 {
 public:
@@ -459,7 +488,7 @@ public:
     //! \return \c AppCacheEntrySection consisting of key (address string) and
     //! { value, timestamp }.
     //!
-    const AppCacheSection GetScrapersLegacy() const;
+    const AppCacheSection GetScrapersLegacy() const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -472,7 +501,7 @@ public:
     //! \return \c AppCacheEntrySectionExt consisting of key (address string) and
     //! { value, timestamp, deleted }.
     //!
-    const AppCacheSectionExt GetScrapersLegacyExt(const bool& authorized_only = false) const;
+    const AppCacheSectionExt GetScrapersLegacyExt(const bool& authorized_only = false) const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Get the current scraper entry for the specified CKeyID key_id.
@@ -482,6 +511,9 @@ public:
     //! \return An object that either contains a reference to some scraper entry if it exists
     //! for the key_id or does not.
     //!
+    //! Note: called recursively from TryAuthorized() under its cs_lock, so this method
+    //! does not carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally (the
+    //! recursive_mutex makes the inner acquisition harmless when already held).
     ScraperEntryOption Try(const CKeyID& key_id) const;
 
     //!
@@ -493,7 +525,7 @@ public:
     //! \return An object that either contains a reference to some scraper entry if it exists
     //! for the key_id and is in the required status or does not.
     //!
-    ScraperEntryOption TryAuthorized(const CKeyID& key_id) const;
+    ScraperEntryOption TryAuthorized(const CKeyID& key_id) const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -502,7 +534,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for scraper entries.
     //!
-    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a scraper entry contract is valid.
@@ -513,7 +545,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid scraper entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a scraper entry contract is valid including block context. This is used
@@ -525,7 +557,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Add a scraper entry to the registry from contract data. For the scraper registry
@@ -533,7 +565,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Mark a scraper entry deleted in the registry from contract data. For the scraper registry
@@ -541,7 +573,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Revert the registry state for the scraper entry to the state prior
@@ -550,7 +582,7 @@ public:
     //!
     //! \param ctx References the scraper entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Initialize the ScraperRegistry, which now includes restoring the state of the ScraperRegistry from
@@ -560,14 +592,14 @@ public:
     //! there is some issue in LevelDB scraper entry retrieval. (This will cause the contract replay to change scope
     //! and initialize the ScraperRegistry from contract replay and store in LevelDB.)
     //!
-    int Initialize() override;
+    int Initialize() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Gets the block height through which is stored in the scraper entry registry database.
     //!
     //! \return block height.
     //!
-    int GetDBHeight() override;
+    int GetDBHeight() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -578,13 +610,13 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height) override;
+    void SetDBHeight(int& height) override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Resets the maps in the ScraperRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetInMemoryOnly();
+    void ResetInMemoryOnly() LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Passivates the elements in the scraper db, which means remove from memory elements in the
@@ -594,7 +626,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB() override;
+    uint64_t PassivateDB() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class. Note that std::set<ScraperEntry> is
@@ -610,7 +642,12 @@ public:
 
 private:
     //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //! \brief Leaf lock protecting the registry's internal state.
+    //!
+    //! See the class-level comment above and doc/contract_registry_locking_design.md
+    //! for the leaf-lock invariant. cs_lock provides Read Committed isolation;
+    //! callers needing Repeatable Read or Serializable must hold cs_main
+    //! separately. Lock order if both held: cs_main -> cs_lock.
     //!
     mutable CCriticalSection cs_lock;
 
@@ -620,20 +657,28 @@ private:
     //!
     //! \param ctx The contract context for the add or delete.
     //!
-    void AddDelete(const ContractContext& ctx);
+    void AddDelete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
-    ScraperMap m_scrapers;                   //!< Contains the current scraper entries, including entries marked DELETED.
-    PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
+    //! GUARDED_BY(cs_lock) annotation is deferred to the next commit, which
+    //! also fixes the Scrapers() getter to return a snapshot under cs_lock
+    //! instead of a raw reference to m_scrapers. Adding GUARDED_BY here
+    //! together with the unfixed reference-returning Scrapers() would put
+    //! the build into the very state we're cleaning up.
+    ScraperMap m_scrapers; //!< Contains the current scraper entries, including entries marked DELETED.
+    PendingScraperMap m_pending_scrapers     GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
+    std::set<ScraperEntry> m_expired_scraper_entries GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    ScraperMap m_first_scraper_entries {};   //!< Not used here. To satisfy the template only.
+    ScraperMap m_first_scraper_entries       GUARDED_BY(cs_lock) {}; //!< Not used here. To satisfy the template only.
 
-    ScraperEntryDB m_scraper_db;
+    ScraperEntryDB m_scraper_db              GUARDED_BY(cs_lock);
 
 public:
 
-    ScraperEntryDB& GetScraperDB();
+    //! Returns a reference to the (cs_lock-guarded) backing DB. Caller must hold
+    //! cs_lock both to call and to use the returned reference. Currently used only
+    //! via tests.
+    ScraperEntryDB& GetScraperDB() EXCLUSIVE_LOCKS_REQUIRED(cs_lock);
 }; // ScraperRegistry
 
 //!
