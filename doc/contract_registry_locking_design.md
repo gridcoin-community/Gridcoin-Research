@@ -54,30 +54,39 @@ another subsystem that could itself acquire any lock.
 
 Concretely, while holding `cs_lock`:
 
-  - **Do not acquire any other lock** — not `cs_main`, not `cs_wallet`, not
-    another registry's `cs_lock`, not any unrelated `CCriticalSection`.
-    Acquiring a second lock while `cs_lock` is held breaks the leaf-lock
-    property and re-introduces lock-order obligations.
+  - **Do not acquire any other lock that participates in the canonical
+    cs_main → cs_wallet → registry-cs_lock order**, and do not acquire any
+    other registry's `cs_lock`. Acquiring such a lock while `cs_lock` is
+    held breaks the leaf-lock property and re-introduces lock-order
+    obligations. (Internal recursive re-acquisition of the same `cs_lock`
+    via `LOCK(cs_lock)` in a method called from within an existing
+    `LOCK(cs_lock)` scope is safe and used in practice — `cs_lock` is a
+    `std::recursive_mutex`.)
 
-  - **Do not call into another subsystem.** Methods on other registries,
-    wallet operations, networking, the scheduler — all are off-limits. Each
-    of those could acquire its own lock; even if it doesn't today, a future
-    contributor could add one without realising the constraint.
+  - **Do not call into another subsystem** that participates in the
+    lock-order graph above. Methods on other registries, wallet
+    operations, networking, the scheduler — these are off-limits because
+    each could re-acquire its own structural lock.
 
   - **Do not emit `uiInterface` notifications.** Those re-enter the GUI
-    thread and acquire Qt-side locks.
+    thread and acquire Qt-side locks. Defer notifications to after the
+    `LOCK(cs_lock)` scope ends.
 
-  - **Avoid `LogPrintf` with non-trivial formatters** that allocate or touch
-    global state. `LogPrintf` on plain string literals is fine; format
-    specifiers that call into `FormatMoney` or similar should be moved
-    outside the critical section.
+  - `LogPrint` / `LogPrintf` are permitted. The logging subsystem uses
+    its own leaf-level mutex (`g_logger->m_cs`) which is bounded and never
+    acquires anything else — calling it from within `cs_lock` does not
+    invert any structural lock order. Avoid format arguments that
+    themselves call into other subsystems (e.g. `FormatMoney` on values
+    derived from wallet state); cache those before the lock if needed.
+    `LogPrint` of plain registry-local state is fine.
 
 The pattern is: gather what you need before `LOCK(cs_lock)`, mutate or read
 the registry's own members inside, defer notifications and cross-subsystem
 work to after the scope ends.
 
-Violating any of these makes `cs_lock` no longer a leaf lock and the
-canonical `cs_main → cs_lock` order is no longer guaranteed acyclic.
+Violating these rules in a way that causes a structural lock to be
+acquired while `cs_lock` is held makes `cs_lock` no longer a leaf lock and
+the canonical `cs_main → cs_lock` order is no longer guaranteed acyclic.
 
 ## Isolation levels
 
@@ -195,10 +204,15 @@ consumers. Conversely, dropping the `cs_main` annotation requires moving
 the AutoGreylist refresh out of `Snapshot()` to chain-handler trigger
 points so the consensus mechanism remains explicit and deterministic.
 
-That work is a focused follow-on PR. The design and migration plan is at
-`~/GridcoinDev/autogreylist_refresh_redesign/README.md` in the
-project-local working tree. Once it lands, Whitelist's annotations follow
-the same pattern (b) shape as the other registries.
+That work is a focused follow-on PR. The redesign moves
+`AutoGreylist::Refresh()` to chain-handler trigger points
+(`Quorum::CommitSuperblock`, `PopSuperblock`, `LoadSuperblockIndex`),
+drops the `refresh_greylist` parameter from `Snapshot()`, and then
+annotates Whitelist's members `GUARDED_BY(cs_lock)` and `Snapshot()`
+as `LOCKS_EXCLUDED(cs_lock)`. Once that PR lands, Whitelist's
+annotations follow the same pattern (b) shape as the other
+registries. This document should be updated with the follow-on PR's
+number when it is opened.
 
 ## Lock ordering
 
@@ -229,8 +243,12 @@ already taking `cs_main` "obviously."
 ## CI gate
 
 The `WERROR_THREAD_SAFETY=ON` CMake option (added in #2947) makes Clang's
-thread-safety analysis a hard build error. The CI sanitizers job sets this.
-For local development on thread-safety changes, set it in your build dir:
+thread-safety analysis a hard build error. The CI **"Thread Safety (Clang)"**
+job (`.github/workflows/cmake_quality.yml`) sets this and is the enforcement
+point — note this is distinct from the "Sanitizers (Clang)" job, which
+builds with `ENABLE_GUI=OFF` and does not exercise the Qt wallet code.
+For local development on thread-safety changes, configure your build dir
+the same way the CI job does:
 
 ```sh
 cmake -B build -DWERROR_THREAD_SAFETY=ON

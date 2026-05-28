@@ -5,6 +5,8 @@
 #ifndef GRIDCOIN_SIDESTAKE_H
 #define GRIDCOIN_SIDESTAKE_H
 
+#include <atomic>
+
 #include <key_io.h>
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
@@ -949,12 +951,12 @@ private:
 
     //! \brief Flag to prevent reload on signal if individual entry saved already.
     //!
-    //! Accessed without cs_lock at the top of LoadLocalSideStakesFromConfig (a Qt-signal callback),
-    //! while it's also written under cs_lock by SaveLocalSideStakesToConfig. This is a pre-existing
-    //! debounce pattern with a benign data race on a bool — not annotated GUARDED_BY here to avoid
-    //! flagging the existing access; a follow-up PR can convert to std::atomic<bool> if the
-    //! Clang-thread-safety pass surfaces this on a future change to the load path.
-    bool m_local_entry_already_saved_to_config = false;
+    //! Read at the top of LoadLocalSideStakesFromConfig() (a Qt-signal callback)
+    //! without cs_lock, written by SaveLocalSideStakesToConfig() under cs_lock.
+    //! Unsynchronised read/write of a non-atomic bool is undefined behaviour
+    //! in C++, so use std::atomic<bool> with relaxed ordering — this is a
+    //! pure debounce flag, no other state synchronises with it.
+    std::atomic<bool> m_local_entry_already_saved_to_config{false};
 
 public:
 
