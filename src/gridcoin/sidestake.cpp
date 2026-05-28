@@ -1171,8 +1171,9 @@ void SideStakeRegistry::UnsubscribeFromCoreSignals()
 
 SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
 {
-    LOCK(cs_lock);
-
+    // Caller must hold cs_lock (enforced by EXCLUSIVE_LOCKS_REQUIRED on the declaration).
+    // The internal LOCK was removed because acquiring + releasing here would leave the
+    // caller with a reference to a cs_lock-guarded member while cs_lock is no longer held.
     return m_sidestake_db;
 }
 

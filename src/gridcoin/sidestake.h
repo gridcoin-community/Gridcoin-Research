@@ -628,6 +628,45 @@ public:
 //! \brief Stores and manages sidestake entries. Note that the mandatory sidestakes are stored in leveldb using
 //! the registry db template. The local sidestakes are maintained in sync with the read-write gridcoinsettings.json file.
 //!
+//! Locking model: pattern (b), leaf-lock via cs_lock. Holds two distinct
+//! categories of state:
+//!
+//!   - m_mandatory_sidestake_entries: chain-state, mutated by contract-handler
+//!     entry points (AddDelete) called from chain activation under cs_main.
+//!     Read by miner reward computation and RPC.
+//!
+//!   - m_local_sidestake_entries: user-local config, mutated by the Qt GUI
+//!     sidestake editor (SideStakeTableModel::setData/addRow/removeRows) and
+//!     by config-file load/save paths, none of which hold cs_main. Read by
+//!     the same paths plus the miner.
+//!
+//! The two categories share the same registry object, so concurrent mutation
+//! from a chain-handler (cs_main-held) and the Qt thread (no cs_main) would
+//! race on adjacent unordered_map operations. cs_lock serialises those
+//! mutations.
+//!
+//! Locking discipline:
+//!   - Members are GUARDED_BY(cs_lock).
+//!   - Chain-handler entry points carry EXCLUSIVE_LOCKS_REQUIRED(cs_main) and
+//!     acquire cs_lock internally. Canonical lock order is cs_main -> cs_lock.
+//!   - Non-chain entry points (NonContractAdd, NonContractDelete,
+//!     LoadLocalSideStakesFromConfig) acquire only cs_lock.
+//!   - Read methods (Try, TryActive, ActiveSideStakeEntries) acquire cs_lock
+//!     internally and return copies (vector of shared_ptr); they provide
+//!     Read Committed isolation.
+//!
+//! cs_lock is a LEAF lock — see doc/contract_registry_locking_design.md for
+//! the invariant. While cs_lock is held: do not acquire any other lock, do
+//! not call into another subsystem, do not emit uiInterface notifications,
+//! avoid LogPrintf with non-trivial formatters. Cache anything you need
+//! before LOCK(cs_lock), mutate/read inside, defer cross-subsystem work to
+//! after the scope ends.
+//!
+//! Read Committed (cs_lock alone) is sufficient for the Qt-thread editing
+//! flow and for RPC reporting. Callers that need Repeatable Read (multiple
+//! correlated registry reads) or Serializable (decision-then-action that
+//! depends on chain state not advancing) must hold cs_main separately.
+//!
 class SideStakeRegistry : public IContractHandler
 {
 public:
@@ -688,7 +727,8 @@ public:
     //!
     //! \return A vector of smart pointers to sidestake entries.
     //!
-    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const SideStake::FilterFlag& filter, const bool& include_zero_alloc) const;
+    const std::vector<SideStake_ptr> ActiveSideStakeEntries(const SideStake::FilterFlag& filter, const bool& include_zero_alloc) const
+        LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Get the current sidestake entry for the specified destination.
@@ -699,6 +739,9 @@ public:
     //! \return A vector of smart pointers to entries matching the provided destination. Up to two elements
     //! are returned, mandatory entry first, depending on the filter set.
     //!
+    //! Note: called recursively from TryActive() under its cs_lock, so this method
+    //! does not carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally (the
+    //! recursive_mutex makes the inner acquisition harmless when already held).
     std::vector<SideStake_ptr> Try(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
 
     //!
@@ -710,7 +753,8 @@ public:
     //! \return A vector of smart pointers to entries matching the provided destination that are in status of
     //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first,, depending on the filter set.
     //!
-    std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const;
+    std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const
+        LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -719,7 +763,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for sidestake entries.
     //!
-    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid.
@@ -730,7 +774,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid sidestake entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Determine whether a sidestake entry contract is valid including block context. This is used
@@ -742,7 +786,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Add a sidestake entry to the registry from contract data. For the sidestake registry
@@ -751,7 +795,7 @@ public:
     //!
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Mark a sidestake entry deleted in the registry from contract data. For the sidestake registry
@@ -759,7 +803,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Allows local (voluntary) sidestakes to be added to the in-memory local map and not persisted to
@@ -768,6 +812,8 @@ public:
     //! \param SideStake object to add
     //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
     //!
+    //! Note: also called from LoadLocalSideStakesFromConfig under its cs_lock, so this method
+    //! does not carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally.
     void NonContractAdd(const LocalSideStake& sidestake, const bool& save_to_file = true);
 
     //!
@@ -777,6 +823,7 @@ public:
     //! \param destination
     //! \param bool save_to_file if true causes SaveLocalSideStakesToConfig() to be called.
     //!
+    //! Symmetric with NonContractAdd; same recursive-call pattern. Acquires cs_lock internally.
     void NonContractDelete(const CTxDestination& destination, const bool& save_to_file = true);
 
     //!
@@ -786,7 +833,7 @@ public:
     //!
     //! \param ctx References the sidestake entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Initialize the sidestakeRegistry, which now includes restoring the state of the sidestakeRegistry from
@@ -796,14 +843,14 @@ public:
     //! there is some issue in LevelDB sidestake entry retrieval. (This will cause the contract replay to change scope
     //! and initialize the sidestakeRegistry from contract replay and store in LevelDB.)
     //!
-    int Initialize() override;
+    int Initialize() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Gets the block height through which is stored in the sidestake entry registry database.
     //!
     //! \return block height.
     //!
-    int GetDBHeight() override;
+    int GetDBHeight() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -814,13 +861,13 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height) override;
+    void SetDBHeight(int& height) override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Resets the maps in the sidestakeRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetInMemoryOnly();
+    void ResetInMemoryOnly() LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Passivates the elements in the sidestake db, which means remove from memory elements in the
@@ -830,12 +877,16 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB() override;
+    uint64_t PassivateDB() override LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief This method parses the config file for local sidestakes. It is based on the original GetSideStakingStatusAndAlloc()
     //! that was in miner.cpp prior to the implementation of the SideStake class.
     //!
+    //! Note: also called from Initialize() under its cs_lock, so this method does not
+    //! carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally for the body that
+    //! mutates registry state. The pre-LOCK read of m_local_entry_already_saved_to_config
+    //! is documented as a deliberate debounce race on a bool — see member comment.
     void LoadLocalSideStakesFromConfig();
 
     //!
@@ -852,7 +903,12 @@ public:
 
 private:
     //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //! \brief Leaf lock protecting the registry's internal state.
+    //!
+    //! See the class-level comment above and doc/contract_registry_locking_design.md
+    //! for the leaf-lock invariant. cs_lock provides Read Committed isolation;
+    //! callers needing Repeatable Read or Serializable must hold cs_main
+    //! separately. Lock order if both held: cs_main -> cs_lock.
     //!
     mutable CCriticalSection cs_lock;
 
@@ -862,7 +918,7 @@ private:
     //!
     //! \param ctx The contract context for the add or delete.
     //!
-    void AddDelete(const ContractContext& ctx);
+    void AddDelete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Private helper function for non-contract add and delete to align the config r-w file with
@@ -876,26 +932,35 @@ private:
     //! \brief Provides the total allocation for all active mandatory sidestakes as a Fraction.
     //! \return total active mandatory sidestake allocation as a Fraction.
     //!
-    Allocation GetMandatoryAllocationsTotal() const;
+    Allocation GetMandatoryAllocationsTotal() const LOCKS_EXCLUDED(cs_lock);
 
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
 
-    LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
-    MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
-    PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    LocalSideStakeMap m_local_sidestake_entries        GUARDED_BY(cs_lock); //!< Contains the local (non-contract) sidestake entries.
+    MandatorySideStakeMap m_mandatory_sidestake_entries GUARDED_BY(cs_lock); //!< Contains the mandatory sidestake entries, including DELETED.
+    PendingSideStakeMap m_pending_sidestake_entries     GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    std::set<SideStake> m_expired_sidestake_entries     GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    MandatorySideStakeMap m_sidestake_first_entries {};   //!< Not used. Only to satisfy the template.
+    MandatorySideStakeMap m_sidestake_first_entries     GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
+    SideStakeDB m_sidestake_db                          GUARDED_BY(cs_lock); //!< The internal sidestake db object for leveldb persistence.
 
-    bool m_local_entry_already_saved_to_config = false;   //!< Flag to prevent reload on signal if individual entry saved already.
+    //! \brief Flag to prevent reload on signal if individual entry saved already.
+    //!
+    //! Accessed without cs_lock at the top of LoadLocalSideStakesFromConfig (a Qt-signal callback),
+    //! while it's also written under cs_lock by SaveLocalSideStakesToConfig. This is a pre-existing
+    //! debounce pattern with a benign data race on a bool — not annotated GUARDED_BY here to avoid
+    //! flagging the existing access; a follow-up PR can convert to std::atomic<bool> if the
+    //! Clang-thread-safety pass surfaces this on a future change to the load path.
+    bool m_local_entry_already_saved_to_config = false;
 
 public:
 
-    SideStakeDB& GetSideStakeDB();
+    //! Returns a reference to the (cs_lock-guarded) backing DB. Caller must hold cs_lock
+    //! both to call and to use the returned reference. Currently used only via tests.
+    SideStakeDB& GetSideStakeDB() EXCLUSIVE_LOCKS_REQUIRED(cs_lock);
 }; // sidestakeRegistry
 
 //!
