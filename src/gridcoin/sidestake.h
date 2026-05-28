@@ -653,16 +653,27 @@ public:
 //!     acquire cs_lock internally. Canonical lock order is cs_main -> cs_lock.
 //!   - Non-chain entry points (NonContractAdd, NonContractDelete,
 //!     LoadLocalSideStakesFromConfig) acquire only cs_lock.
-//!   - Read methods (Try, TryActive, ActiveSideStakeEntries) acquire cs_lock
-//!     internally and return copies (vector of shared_ptr); they provide
-//!     Read Committed isolation.
+//!   - Read methods (Try, TryActive, SideStakeEntries, ActiveSideStakeEntries)
+//!     acquire cs_lock internally and return copies (vector of shared_ptr);
+//!     they provide Read Committed isolation.
 //!
-//! cs_lock is a LEAF lock — see doc/contract_registry_locking_design.md for
-//! the invariant. While cs_lock is held: do not acquire any other lock, do
-//! not call into another subsystem, do not emit uiInterface notifications,
-//! avoid LogPrintf with non-trivial formatters. Cache anything you need
-//! before LOCK(cs_lock), mutate/read inside, defer cross-subsystem work to
-//! after the scope ends.
+//! cs_lock is a LEAF lock in the canonical order
+//! cs_main → cs_wallet → registry cs_lock. While cs_lock is held, code
+//! must NOT acquire any structural lock in that order (cs_main, cs_wallet,
+//! another registry's cs_lock) or call into another registry's public API
+//! — that inverts the canonical order. Recursive re-acquisition of this
+//! same cs_lock is fine (std::recursive_mutex); so are bounded leaf
+//! mutexes outside the canonical order (logger m_cs via LogPrint*, gArgs
+//! via updateRwSettings) and file I/O.
+//!
+//! uiInterface signal emission under cs_lock is safe iff every connected
+//! slot is written to avoid taking a structural lock — Boost.Signals2
+//! invokes slots synchronously on the emitting thread, not via a Qt
+//! queue. Qt model slots hop to the GUI thread themselves
+//! (QMetaObject::invokeMethod ... Qt::QueuedConnection); the non-Qt slot
+//! re-enters the registry recursively and is debounced by
+//! m_local_entry_already_saved_to_config. See
+//! doc/contract_registry_locking_design.md for the full invariant.
 //!
 //! Read Committed (cs_lock alone) is sufficient for the Qt-thread editing
 //! flow and for RPC reporting. Callers that need Repeatable Read (multiple
@@ -713,9 +724,9 @@ public:
     //! \brief Get the collection of current sidestake entries. Note that this INCLUDES deleted
     //! sidestake entries.
     //!
-    //! \return \c A reference to the current sidestake entries stored in the registry.
+    //! \return A snapshot copy (by value) of the current sidestake entries, built under cs_lock.
     //!
-    const std::vector<SideStake_ptr> SideStakeEntries() const;
+    const std::vector<SideStake_ptr> SideStakeEntries() const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief Get the collection of active sidestake entries. This is presented as a vector of
@@ -753,7 +764,7 @@ public:
     //! \param bitmask filter to try mandatory only, local only, or all
     //!
     //! \return A vector of smart pointers to entries matching the provided destination that are in status of
-    //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first,, depending on the filter set.
+    //! MANDATORY or ACTIVE. Up to two elements are returned, mandatory entry first, depending on the filter set.
     //!
     std::vector<SideStake_ptr> TryActive(const CTxDestination& key, const SideStake::FilterFlag& filter) const
         LOCKS_EXCLUDED(cs_lock);
@@ -888,7 +899,7 @@ public:
     //! Note: also called from Initialize() under its cs_lock, so this method does not
     //! carry LOCKS_EXCLUDED(cs_lock); it acquires cs_lock internally for the body that
     //! mutates registry state. The pre-LOCK read of m_local_entry_already_saved_to_config
-    //! is documented as a deliberate debounce race on a bool — see member comment.
+    //! is a deliberate unsynchronised (relaxed-atomic) debounce check — see member comment.
     void LoadLocalSideStakesFromConfig();
 
     //!
@@ -951,11 +962,14 @@ private:
 
     //! \brief Flag to prevent reload on signal if individual entry saved already.
     //!
-    //! Read at the top of LoadLocalSideStakesFromConfig() (a Qt-signal callback)
-    //! without cs_lock, written by SaveLocalSideStakesToConfig() under cs_lock.
-    //! Unsynchronised read/write of a non-atomic bool is undefined behaviour
-    //! in C++, so use std::atomic<bool> with relaxed ordering — this is a
-    //! pure debounce flag, no other state synchronises with it.
+    //! Read at the top of LoadLocalSideStakesFromConfig() (a core-signal
+    //! callback) without cs_lock, written by SaveLocalSideStakesToConfig()
+    //! under cs_lock. Unsynchronised read/write of a non-atomic bool across
+    //! threads is undefined behaviour in C++, so this is std::atomic<bool>.
+    //! All accesses use std::memory_order_relaxed: it is a pure debounce
+    //! flag, no other state is published through it, so no happens-before
+    //! relationship needs to be established — only the eventual visibility
+    //! of the flag itself matters.
     std::atomic<bool> m_local_entry_already_saved_to_config{false};
 
 public:

@@ -376,7 +376,7 @@ public:
 //! ScraperRegistry, Whitelist) and to future-proof against a contributor adding
 //! e.g. a Qt-driven protocol-parameter inspector or an out-of-band RPC that
 //! needs to read the registry without taking cs_main. The cost is one
-//! uncontended atomic op per call.
+//! uncontended recursive_mutex lock/unlock per call.
 //!
 //! Locking discipline:
 //!   - Members are GUARDED_BY(cs_lock).
@@ -391,8 +391,16 @@ public:
 //!     AppCacheSectionExt, or value-copied ProtocolEntryMap). They provide Read
 //!     Committed isolation.
 //!
-//! cs_lock is a LEAF lock — see doc/contract_registry_locking_design.md for
-//! the invariant.
+//! cs_lock is a LEAF lock in the canonical order
+//! cs_main → cs_wallet → registry cs_lock. While cs_lock is held, code must
+//! NOT acquire a structural lock in that order (cs_main, cs_wallet, another
+//! registry's cs_lock) or call into another registry's public API — that
+//! inverts the canonical order. Recursive re-acquisition of this same
+//! cs_lock is fine (std::recursive_mutex); bounded leaf mutexes outside the
+//! canonical order (logger m_cs via LogPrint*) and file I/O are fine. Avoid
+//! LogPrintf format arguments that themselves call into other subsystems.
+//! See doc/contract_registry_locking_design.md for the full invariant,
+//! including the uiInterface-signal rules.
 //!
 class ProtocolRegistry : public IContractHandler
 {
@@ -434,7 +442,7 @@ public:
     //! \brief Get the collection of current protocol entries. Note that this INCLUDES deleted
     //! protocol entries.
     //!
-    //! \return \c A reference to the current protocol entries stored in the registry.
+    //! \return A snapshot copy of the current protocol entries stored in the registry.
     //!
     //! Returns a snapshot copy under cs_lock. The map stores ProtocolEntry_ptr
     //! (shared_ptr) so the copy bumps refcounts on the (small) set of protocol

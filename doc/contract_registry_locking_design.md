@@ -48,41 +48,67 @@ For those cases, the registry provides its own `cs_lock`. This is pattern
 
 ## The leaf-lock invariant
 
-When a registry uses pattern (b), `cs_lock` is a **leaf lock**. While the
-lock is held, no other lock may be acquired, and no call may be made into
-another subsystem that could itself acquire any lock.
+When a registry uses pattern (b), `cs_lock` is a **leaf lock** in the
+canonical Gridcoin lock order:
 
-Concretely, while holding `cs_lock`:
+```
+cs_main → cs_wallet → registry cs_lock
+```
 
-  - **Do not acquire any other lock that participates in the canonical
-    cs_main → cs_wallet → registry-cs_lock order**, and do not acquire any
-    other registry's `cs_lock`. Acquiring such a lock while `cs_lock` is
-    held breaks the leaf-lock property and re-introduces lock-order
-    obligations. (Internal recursive re-acquisition of the same `cs_lock`
-    via `LOCK(cs_lock)` in a method called from within an existing
-    `LOCK(cs_lock)` scope is safe and used in practice — `cs_lock` is a
-    `std::recursive_mutex`.)
+The invariant that must hold is: **no inversion of this order.** While
+`cs_lock` is held, code must NOT acquire any **structural** lock that
+participates in the order — `cs_main`, `cs_wallet`, or another Pattern (b)
+registry's `cs_lock`. Calling into another registry's public API is
+therefore also out, because the callee takes its own `cs_lock` and that
+layers registries against each other.
 
-  - **Do not call into another subsystem** that participates in the
-    lock-order graph above. Methods on other registries, wallet
-    operations, networking, the scheduler — these are off-limits because
-    each could re-acquire its own structural lock.
+The following ARE permitted while `cs_lock` is held:
 
-  - **Do not emit `uiInterface` notifications.** Those re-enter the GUI
-    thread and acquire Qt-side locks. Defer notifications to after the
-    `LOCK(cs_lock)` scope ends.
+  - **Recursive re-acquisition of the same `cs_lock`.** `CCriticalSection`
+    is `std::recursive_mutex`, so internal methods that themselves take
+    `cs_lock` (e.g. `SideStakeRegistry::Try` called from `TryActive`,
+    `ScraperRegistry::Add`/`Delete` called from `AddDelete`) are safe.
 
-  - `LogPrint` / `LogPrintf` are permitted. The logging subsystem uses
-    its own leaf-level mutex (`g_logger->m_cs`) which is bounded and never
-    acquires anything else — calling it from within `cs_lock` does not
-    invert any structural lock order. Avoid format arguments that
+  - **Bounded leaf mutexes outside the canonical order.** The logging
+    subsystem's `g_logger->m_cs` and `gArgs`'s settings mutex via
+    `LockSettings` are leaves — their critical sections do not, transitively,
+    reach back into any structural lock. So `LogPrint*` and helpers like
+    `updateRwSettings` are fine under `cs_lock`. Avoid format arguments that
     themselves call into other subsystems (e.g. `FormatMoney` on values
-    derived from wallet state); cache those before the lock if needed.
-    `LogPrint` of plain registry-local state is fine.
+    derived from wallet state); cache those before the lock.
 
-The pattern is: gather what you need before `LOCK(cs_lock)`, mutate or read
-the registry's own members inside, defer notifications and cross-subsystem
-work to after the scope ends.
+  - **`uiInterface.*` signal emission.** `uiInterface` signals are
+    Boost.Signals2 signals, and Boost.Signals2 invokes connected slots
+    **synchronously on the emitting thread** — there is no automatic
+    queuing. The leaf-lock invariant is preserved iff each individual
+    slot is written to avoid taking a structural lock under the signal.
+    Current patterns in this tree:
+      * Qt model slots hop to the GUI thread themselves via
+        `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`, so the
+        actual model update runs after `cs_lock` releases (see
+        `src/qt/sidestaketablemodel.cpp:RwSettingsUpdated`).
+      * Non-Qt slots that re-enter the emitter's own registry (e.g.
+        `src/gridcoin/sidestake.cpp:RwSettingsUpdated` calling
+        `LoadLocalSideStakesFromConfig`) rely on `std::recursive_mutex`
+        for `cs_lock` re-entry, plus a debounce flag to avoid an
+        infinite save→signal→reload→save cycle.
+    The contract therefore lives on the slot side, not the emitter side:
+    connecting a new slot that acquires `cs_main`, `cs_wallet`, or
+    another registry's `cs_lock` would re-introduce the order
+    obligation. Verify the slot bodies before adding a new connection
+    point.
+
+  - **File I/O.** A latency concern if held under a hot lock, not a
+    correctness one.
+
+The shorthand: **structural locks no; leaf locks, signal emission, and
+I/O yes.**
+
+The pattern is still: gather what you need before `LOCK(cs_lock)`, mutate
+or read the registry's own members inside, defer cross-registry work and
+direct-connected notifications to after the scope ends. The relaxations
+above acknowledge what the code already does safely; they are not
+invitations to widen the lock's footprint.
 
 Violating these rules in a way that causes a structural lock to be
 acquired while `cs_lock` is held makes `cs_lock` no longer a leaf lock and
@@ -180,8 +206,9 @@ as SideStakeRegistry.
 
 Currently has no confirmed non-`cs_main` consumer, but is kept consistent
 with the other (b) registries to provide future-proofing. The leaf-lock
-scaffold is cheap (one uncontended atomic op per call) and the consistency
-across registries reduces cognitive load for future contributors.
+scaffold is cheap (one uncontended `recursive_mutex` lock/unlock per call)
+and the consistency across registries reduces cognitive load for future
+contributors.
 
 ### Whitelist — pattern (b), but the rollout is deferred
 
