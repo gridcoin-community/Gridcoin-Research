@@ -441,7 +441,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRE
     if (entry_to_revert == m_scrapers.end()) {
         error("%s: The scraper entry for address %s to revert was not found in the scraper entry map.",
               __func__,
-              EncodeDestination(entry_to_revert->second->GetAddress()));
+              EncodeDestination(CTxDestination(payload->m_scraper_entry.m_key)));
 
         // If there is no record in the current m_scrapers map, then there is nothing to do here. This
         // should not occur.

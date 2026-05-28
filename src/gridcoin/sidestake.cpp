@@ -804,7 +804,7 @@ void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUI
     if (entry_to_revert == m_mandatory_sidestake_entries.end()) {
         error("%s: The SideStake entry for key %s to revert was not found in the SideStake entry map.",
               __func__,
-              EncodeDestination(entry_to_revert->second->m_destination));
+              EncodeDestination(payload->m_entry.m_destination));
 
         // If there is no record in the current m_sidestake_entries map, then there is nothing to do here. This
         // should not occur.
