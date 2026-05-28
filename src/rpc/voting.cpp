@@ -376,99 +376,100 @@ struct AddPollBuild {
 namespace {
 AddPollBuild make_addpoll_build(uint32_t payload_version)
 {
-    AddPollBuild build;
-    build.payload_version = payload_version;
-    build.valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
+    std::vector<PollType> valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
 
     std::stringstream types_ss;
-    for (const auto& type : build.valid_poll_types) {
+    for (const auto& type : valid_poll_types) {
         if (types_ss.str() != std::string{}) {
             types_ss << ", ";
         }
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
-    build.types_ss_str = types_ss.str();
+    std::string types_ss_str = types_ss.str();
 
-    build.help = RPCHelpMan{
-        "addpoll",
-        "Add a poll to the network.\n"
-        "Requires 100K GRC balance. Costs 50 GRC.\n"
-        "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
-        "Certain poll types require additional fields. Call `addpoll <type>` with no other "
-        "parameters to see the required fields for a specific type.",
-        std::vector<RPCArg>{
-            {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
-             strprintf("Type of poll. Valid types for the active protocol version: %s.",
-                       build.types_ss_str)},
-            {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
-            {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
-            {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
-            {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
-             "Semicolon-separated answer list (whitespace is not trimmed). "
-             "Pass an empty string for yes/no/abstain response type."},
-            {"weighttype", RPCArg::Type::NUM, RPCArg::Optional::NO,
-             "Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance."},
-            {"responsetype", RPCArg::Type::NUM, RPCArg::Optional::NO,
-             "1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice."},
-            {"url", RPCArg::Type::STR, RPCArg::Optional::NO, "Discussion web page URL for the poll."},
-            {"required_fields", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-             "Semicolon-separated name=value pairs for poll types that require additional fields "
-             "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
-             "to discover the required fields for a given poll type."},
-            {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-             "Optional explicit UTXO to use for the 50 GRC poll-creation fee, in "
-             "\"<txid>:<vout>\" form. When omitted, the wallet picks the smallest set of "
-             "largest UTXOs that covers the fee. Use this for coin-control over the fee-paying "
-             "input on a wallet where the default largest-first selection picks something you'd "
-             "rather keep, or when you want a specific UTXO to be the one consumed."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "title", "Poll title."},
-                {RPCResult::Type::STR_HEX, "id", "Poll transaction id (hex)."},
-                {RPCResult::Type::STR, "question", "Poll question."},
-                {RPCResult::Type::STR, "url", "Discussion URL."},
-                {RPCResult::Type::ARR, "additional_fields", "Additional name/value pairs.",
-                    {
-                        {RPCResult::Type::OBJ, "", "",
-                            {
-                                {RPCResult::Type::STR, "name", "Field name."},
-                                {RPCResult::Type::STR, "value", "Field value."},
-                                {RPCResult::Type::BOOL, "required", "Whether the field is required for this poll type."},
-                            }},
-                    }},
-                {RPCResult::Type::STR, "poll_type", "Poll type (string form)."},
-                {RPCResult::Type::NUM, "poll_type_id", "Poll type (numeric enum)."},
-                {RPCResult::Type::STR, "weight_type", "Weight type (string form)."},
-                {RPCResult::Type::NUM, "weight_type_id", "Weight type (numeric enum)."},
-                {RPCResult::Type::STR, "response_type", "Response type (string form)."},
-                {RPCResult::Type::NUM, "response_type_id", "Response type (numeric enum)."},
-                {RPCResult::Type::NUM, "duration_days", "Poll duration in days."},
-                {RPCResult::Type::STR, "expiration", "Human-readable expiration timestamp."},
-                {RPCResult::Type::STR, "timestamp", "Human-readable creation timestamp."},
-                {RPCResult::Type::ARR, "choices", "Answer choices.",
-                    {
-                        {RPCResult::Type::OBJ, "", "",
-                            {
-                                {RPCResult::Type::NUM, "id", "Choice index."},
-                                {RPCResult::Type::STR, "label", "Choice label."},
-                            }},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("addpoll",
-                "survey \"Example poll\" 7 \"What do you think?\" \"yes;no;maybe\" 1 2 "
-                "\"https://example.org/discussion\"")
-            + HelpExampleCli("addpoll",
-                "project \"Add XYZ\" 14 \"Add project XYZ?\" \"\" 1 1 "
-                "\"https://example.org\" \"project_url=https://xyz.example\"")
-            + HelpExampleRpc("addpoll",
-                "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
-                "\"https://example.org/discussion\"")
-        }
-    }.MarkVariadic();
-
-    return build;
+    return AddPollBuild{
+        /*help=*/RPCHelpMan{
+            "addpoll",
+            "Add a poll to the network.\n"
+            "Requires 100K GRC balance. Costs 50 GRC.\n"
+            "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
+            "Certain poll types require additional fields. Call `addpoll <type>` with no other "
+            "parameters to see the required fields for a specific type.",
+            std::vector<RPCArg>{
+                {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
+                 strprintf("Type of poll. Valid types for the active protocol version: %s.",
+                           types_ss_str)},
+                {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
+                {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
+                {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
+                {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
+                 "Semicolon-separated answer list (whitespace is not trimmed). "
+                 "Pass an empty string for yes/no/abstain response type."},
+                {"weighttype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                 "Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance."},
+                {"responsetype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                 "1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice."},
+                {"url", RPCArg::Type::STR, RPCArg::Optional::NO, "Discussion web page URL for the poll."},
+                {"required_fields", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                 "Semicolon-separated name=value pairs for poll types that require additional fields "
+                 "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
+                 "to discover the required fields for a given poll type."},
+                {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                 "Optional explicit UTXO to use for the 50 GRC poll-creation fee, in "
+                 "\"<txid>:<vout>\" form. When omitted, the wallet picks the smallest set of "
+                 "largest UTXOs that covers the fee. Use this for coin-control over the fee-paying "
+                 "input on a wallet where the default largest-first selection picks something you'd "
+                 "rather keep, or when you want a specific UTXO to be the one consumed."},
+            },
+            RPCResult{RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "title", "Poll title."},
+                    {RPCResult::Type::STR_HEX, "id", "Poll transaction id (hex)."},
+                    {RPCResult::Type::STR, "question", "Poll question."},
+                    {RPCResult::Type::STR, "url", "Discussion URL."},
+                    {RPCResult::Type::ARR, "additional_fields", "Additional name/value pairs.",
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                                {
+                                    {RPCResult::Type::STR, "name", "Field name."},
+                                    {RPCResult::Type::STR, "value", "Field value."},
+                                    {RPCResult::Type::BOOL, "required", "Whether the field is required for this poll type."},
+                                }},
+                        }},
+                    {RPCResult::Type::STR, "poll_type", "Poll type (string form)."},
+                    {RPCResult::Type::NUM, "poll_type_id", "Poll type (numeric enum)."},
+                    {RPCResult::Type::STR, "weight_type", "Weight type (string form)."},
+                    {RPCResult::Type::NUM, "weight_type_id", "Weight type (numeric enum)."},
+                    {RPCResult::Type::STR, "response_type", "Response type (string form)."},
+                    {RPCResult::Type::NUM, "response_type_id", "Response type (numeric enum)."},
+                    {RPCResult::Type::NUM, "duration_days", "Poll duration in days."},
+                    {RPCResult::Type::STR, "expiration", "Human-readable expiration timestamp."},
+                    {RPCResult::Type::STR, "timestamp", "Human-readable creation timestamp."},
+                    {RPCResult::Type::ARR, "choices", "Answer choices.",
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                                {
+                                    {RPCResult::Type::NUM, "id", "Choice index."},
+                                    {RPCResult::Type::STR, "label", "Choice label."},
+                                }},
+                        }},
+                }},
+            RPCExamples{
+                HelpExampleCli("addpoll",
+                    "survey \"Example poll\" 7 \"What do you think?\" \"yes;no;maybe\" 1 2 "
+                    "\"https://example.org/discussion\"")
+                + HelpExampleCli("addpoll",
+                    "project \"Add XYZ\" 14 \"Add project XYZ?\" \"\" 1 1 "
+                    "\"https://example.org\" \"project_url=https://xyz.example\"")
+                + HelpExampleRpc("addpoll",
+                    "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
+                    "\"https://example.org/discussion\"")
+            }
+        }.MarkVariadic(),
+        /*payload_version=*/payload_version,
+        /*valid_poll_types=*/std::move(valid_poll_types),
+        /*types_ss_str=*/std::move(types_ss_str),
+    };
 }
 } // namespace
 
