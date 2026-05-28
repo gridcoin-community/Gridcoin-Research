@@ -3782,7 +3782,13 @@ UniValue parselegacysb(const UniValue& params, bool fHelp)
             HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
     };
 
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
+    // Lower-bound-only arity guard: legacy behavior accepted 1+ args and
+    // silently ignored extras. Using IsValidNumArgs here would reject N>1,
+    // tightening the API. Once PR M2 merges and the dispatcher pre-check
+    // lands, the corresponding lift is `static const RPCHelpMan x =
+    // RPCHelpMan{...}.MarkVariadic();`, but MarkVariadic isn't on this
+    // branch yet so we keep the lower-bound guard.
+    if (fHelp || params.size() < 1) {
         throw std::runtime_error(help.ToString());
     }
 
