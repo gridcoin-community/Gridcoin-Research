@@ -359,14 +359,19 @@ UniValue rpc_exportstats(const UniValue& params, bool fHelp)
 {
     static const RPCHelpMan help{
         "exportstats1",
-        "Export aggregated block statistics to a file under the reports directory.",
+        "Export aggregated block statistics to a file under the reports directory.\n"
+        "\n"
+        "Note: maxblocks and aggregate are consumed as a pair (the body requires "
+        "params.size() >= 2 before applying either); passing only maxblocks falls "
+        "through to the defaults below as if no positional args were given. endblock "
+        "is an independent third optional argument that is only consumed when present.",
         {
             {"maxblocks", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Maximum number of blocks to scan (default: 805)."},
+                "Maximum number of blocks to scan (default: 805). Must be paired with aggregate."},
             {"aggregate", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Smoothing window size; must be a positive even number (default: 23)."},
+                "Smoothing window size; must be a positive even number (default: 23). Paired with maxblocks."},
             {"endblock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Ending block height (default: chain head)."},
+                "Ending block height (default: chain head). Independent of the maxblocks/aggregate pair."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "",
             {
