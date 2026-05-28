@@ -612,6 +612,21 @@ public:
 //!
 //! \brief Stores and manages researcher beacons.
 //!
+//! Locking model: pattern (a), cs_main-protected. All access to the registry's
+//! internal state goes through callers that already hold cs_main — chain
+//! validation, accrual, mining, contract dispatch, RPC handlers, and the GUI's
+//! beacon status display. There is no non-cs_main path that mutates or reads
+//! the registry's data. Members are GUARDED_BY(cs_main); public methods are
+//! EXCLUSIVE_LOCKS_REQUIRED(cs_main). The registry has no internal mutex
+//! because cs_main provides all the protection needed.
+//!
+//! See doc/contract_registry_locking_design.md for the locking model framework
+//! across the GRC contract registries. If a future contributor adds a path
+//! that needs to mutate or read this registry without holding cs_main, the
+//! right move is to introduce a cs_lock here (pattern b in the design doc)
+//! and convert the annotations accordingly — do not take cs_main from the
+//! new path as a shortcut.
+//!
 class BeaconRegistry : public IContractHandler
 {
 public:
@@ -836,7 +851,7 @@ public:
     //!
     //! \return block height.
     //!
-    int GetDBHeight() override;
+    int GetDBHeight() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -847,13 +862,13 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height) override;
+    void SetDBHeight(int& height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetInMemoryOnly();
+    void ResetInMemoryOnly() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Passivates the elements in the beacon db, which means remove from memory elements in the
@@ -863,7 +878,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB() override;
+    uint64_t PassivateDB() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief This function walks the linked beacon entries back (using the m_previous_hash member) from a provided
@@ -881,14 +896,14 @@ public:
     //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
     //! \return
     //!
-    bool NeedsIsContractCorrection();
+    bool NeedsIsContractCorrection() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Sets the state of the IsContract needs correction flag in memory and LevelDB
     //! \param flag The state to set
     //! \return
     //!
-    bool SetNeedsIsContractCorrection(bool flag);
+    bool SetNeedsIsContractCorrection(bool flag) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class
@@ -903,12 +918,16 @@ public:
 
 private:
     //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
+    //! \brief All registry state is protected by cs_main.
     //!
-    mutable CCriticalSection cs_lock;
-
-    BeaconMap m_beacons;        //!< Contains the active registered beacons.
-    PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+    //! No internal mutex — pattern (a) per doc/contract_registry_locking_design.md.
+    //! Every mutator and reader of these members holds cs_main by the time the
+    //! access happens; this is enforced by the EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    //! annotations on the public methods above and the GUARDED_BY(cs_main)
+    //! annotations on the members below.
+    //!
+    BeaconMap m_beacons        GUARDED_BY(cs_main); //!< Contains the active registered beacons.
+    PendingBeaconMap m_pending GUARDED_BY(cs_main); //!< Contains beacons awaiting verification.
 
     //!
     //! \brief In-memory side map of ownership proofs for pending beacons.
@@ -916,7 +935,7 @@ private:
     //! Keyed by the pending beacon's CKeyID. Rebuilt from contract replay on
     //! restart (same lifecycle as m_pending itself). Not persisted to LevelDB.
     //!
-    std::map<CKeyID, OwnershipProof> m_pending_ownership_proofs;
+    std::map<CKeyID, OwnershipProof> m_pending_ownership_proofs GUARDED_BY(cs_main);
 
     //!
     //! \brief Contains pending beacons that have expired.
@@ -932,15 +951,15 @@ private:
     //!
     //! This set is cleared and repopulated at each SB accepted by the node with the current expired pending beacons.
     //!
-    std::set<Beacon_ptr> m_expired_pending;
+    std::set<Beacon_ptr> m_expired_pending GUARDED_BY(cs_main);
 
-    BeaconMap m_beacon_first_entries {}; //!< Not used here. Only to satisfy the template.
+    BeaconMap m_beacon_first_entries GUARDED_BY(cs_main) {}; //!< Not used here. Only to satisfy the template.
 
     //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
     //! beacon registry and is only accessible by beacon registry functions.
     //!
-    BeaconDB m_beacon_db;
+    BeaconDB m_beacon_db GUARDED_BY(cs_main);
 
     //!
     //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's
@@ -953,7 +972,7 @@ private:
     //!
     //! \return Success or failure of renewal attempt.
     //!
-    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload);
+    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 public:
     //!
@@ -961,7 +980,7 @@ public:
     //!
     //! \return Current beacon database instance.
     //!
-    BeaconDB& GetBeaconDB();
+    BeaconDB& GetBeaconDB() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 }; // BeaconRegistry
 
