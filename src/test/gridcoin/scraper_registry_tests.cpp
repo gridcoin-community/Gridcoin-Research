@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(scraper_entry_deauthorize_and_delete_works_correctly_legacy
                             false);
 
     // Re-snapshot after the mutation (Scrapers() returns a value snapshot,
-    // not a reference to the live map — see registry.h).
+    // not a reference to the live map — see scraper_registry.h).
     scraper_map = registry.Scrapers();
     // Still should be 7 current elements.
     BOOST_CHECK(scraper_map.size() == 7);
