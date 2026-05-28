@@ -638,11 +638,6 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
         }
     }
 }
