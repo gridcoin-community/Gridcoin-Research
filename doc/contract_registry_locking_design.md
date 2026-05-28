@@ -213,3 +213,31 @@ Confirm the analysis is active before trusting a clean build:
 `grep HAVE_CLANG_THREAD_SAFETY build/CMakeCache.txt` should show `=1`. Wipe
 `build/` when switching compilers — a reconfigure does not switch the compiler
 of an existing build directory.
+
+## Enforcement limitation: polymorphic calls through `IContractHandler`
+
+The registries are reached two ways. Most consumers use the concrete global
+accessor (`GetBeaconRegistry()`, `GetProtocolRegistry()`, …) — there the analyzer
+sees the concrete method's annotations and enforces them. But the contract
+machinery also reaches them **polymorphically** through the `IContractHandler`
+base interface: `RegistryBookmarks::GetRegistryWithDB()` returns
+`IContractHandler&`, and the contract-replay, block-connect/disconnect, startup
+coherence, and passivation paths call `Initialize` / `GetDBHeight` /
+`SetDBHeight` / `PassivateDB` through that base reference.
+
+At those base-type call sites the analyzer **cannot** enforce a lock, and the
+base virtual declarations are intentionally left unannotated. The reason is
+structural: the same virtual has *different* locking contracts across the
+registries — pattern (a) (BeaconRegistry) requires `cs_main`, while pattern (b)
+takes `cs_lock` internally and requires nothing of the caller. A single
+annotation on the base would be wrong for one pattern or the other, so the base
+stays unannotated and these polymorphic call sites are statically unchecked.
+
+This is safe in practice: every such call site is a chain-processing path that
+already holds `cs_main` (contract replay, block connect/disconnect, startup
+coherence recovery, DB passivation) — which satisfies pattern (a) and is
+harmless for pattern (b). The gap is purely in *static enforcement*: a future
+caller invoking these through the base reference without `cs_main` would not be
+flagged by the analyzer. New consumers should therefore either go through the
+concrete registry accessor (where annotations are enforced) or hold `cs_main`
+explicitly on the chain-processing path.
