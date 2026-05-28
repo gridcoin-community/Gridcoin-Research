@@ -33,8 +33,14 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
         RPCResult{RPCResult::Type::OBJ, "", "",
             {
                 {RPCResult::Type::NUM, "blocks", "Current best block height."},
-                {RPCResult::Type::OBJ, "stakeweight", "",
-                    {{RPCResult::Type::ELISION, "", "Stake-weight detail (minimum/maximum/combined/valuesum/legacy)."}}},
+                {RPCResult::Type::OBJ, "stakeweight", "Stake-weight detail derived from MinerStatus::SearchReport.",
+                    {
+                        {RPCResult::Type::NUM, "minimum", "Minimum weight observed in the recent search window."},
+                        {RPCResult::Type::NUM, "maximum", "Maximum weight observed in the recent search window."},
+                        {RPCResult::Type::NUM, "combined", "Sum of weights observed in the recent search window."},
+                        {RPCResult::Type::NUM, "valuesum", "Sum of UTXO values participating in the recent search window."},
+                        {RPCResult::Type::NUM, "legacy", "Legacy wallet stake weight (GRC::GetStakeWeight / COIN)."},
+                    }},
                 {RPCResult::Type::NUM, "netstakeweight", "Estimated network stake weight."},
                 {RPCResult::Type::NUM, "netstakingGRCvalue", "Network stake value in GRC."},
                 {RPCResult::Type::BOOL, "staking", "Whether the miner is actively staking."},
@@ -51,15 +57,34 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
                 {RPCResult::Type::NUM, "actual_cumulative_weight", "Cumulative effective weight observed."},
                 {RPCResult::Type::NUM, "ideal_cumulative_weight", "Cumulative ideal weight."},
                 {RPCResult::Type::NUM, "staking_efficiency", "Overall staking efficiency."},
-                {RPCResult::Type::OBJ, "stake-splitting", "",
-                    {{RPCResult::Type::ELISION, "", "Stake-splitting enabled flag and (when enabled) parameters."}}},
-                {RPCResult::Type::OBJ, "side_staking", "",
-                    {{RPCResult::Type::ELISION, "", "Local side-staking enabled flag and active side-stake allocations."}}},
+                {RPCResult::Type::OBJ, "stake-splitting", "Stake-splitting enabled flag and (when enabled) parameters.",
+                    {
+                        {RPCResult::Type::BOOL, "stake-splitting-enabled", "Whether stake splitting is enabled."},
+                        {RPCResult::Type::OBJ, "stake-splitting-params", /*optional=*/true, "Present only when stake-splitting-enabled is true.",
+                            {
+                                {RPCResult::Type::NUM, "min-stake-split-value", "Minimum UTXO value (in GRC) eligible for splitting."},
+                                {RPCResult::Type::NUM, "efficiency", "Configured target efficiency."},
+                                {RPCResult::Type::NUM, "stake-split-UTXO-size-for-target-efficiency", "Computed target UTXO size (in GRC)."},
+                            }},
+                    }},
+                {RPCResult::Type::OBJ, "side_staking", "Local side-staking enabled flag and active side-stake allocations.",
+                    {
+                        {RPCResult::Type::BOOL, "local_side_staking_enabled", "Whether local side-staking is enabled. Mandatory side-stakes are always shown."},
+                        {RPCResult::Type::ARR, "side_staking_allocations", "Active side-stake allocations applied by the miner.",
+                            {
+                                {RPCResult::Type::OBJ, "", "",
+                                    {
+                                        {RPCResult::Type::STR, "address", "Destination address for the side-stake."},
+                                        {RPCResult::Type::NUM, "allocation_pct", "Allocation as a percentage."},
+                                        {RPCResult::Type::STR, "status", "Side-stake status (e.g. \"active\", \"mandatory\")."},
+                                    }},
+                            }},
+                    }},
                 {RPCResult::Type::OBJ, "difficulty", "",
                     {
                         {RPCResult::Type::NUM, "current", "Current difficulty."},
                         {RPCResult::Type::NUM, "target", "Target difficulty."},
-                        {RPCResult::Type::NUM, "last-search-interval", "Timestamp of last search."},
+                        {RPCResult::Type::NUM_TIME, "last-search-interval", "Masked UNIX epoch timestamp of last miner search (MinerStatus::SearchReport::m_timestamp)."},
                     }},
                 {RPCResult::Type::STR, "errors", "Any warnings or errors."},
                 {RPCResult::Type::NUM, "pooledtx", "Number of pooled transactions."},
@@ -841,7 +866,7 @@ UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp)
                 {RPCResult::Type::NUM, "version", "Snapshot version."},
                 {RPCResult::Type::NUM, "height", "Snapshot block height."},
                 {RPCResult::Type::OBJ_DYN, "records", "Mapping of CPID to accrual amount",
-                    {{RPCResult::Type::NUM, "cpid", "Accrual value at the snapshot for this CPID."}}},
+                    {{RPCResult::Type::STR_AMOUNT, "cpid", "Accrual value (in GRC) at the snapshot for this CPID."}}},
             }},
         RPCExamples{
             HelpExampleCli("inspectaccrualsnapshot", "5000000") +
