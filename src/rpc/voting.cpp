@@ -1,3 +1,5 @@
+#include <map>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 
@@ -352,30 +354,42 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 }
 } // Anonymous namespace
 
-// addpoll's helpman is rebuilt per call because the "type" argument description
-// embeds the runtime-resolved valid-poll-type list (depends on IsPollV3Enabled at
-// nBestHeight, which flips at fork height). thread_local storage with std::optional
-// keeps the returned reference valid until the next call on the same thread.
-const RPCHelpMan& addpoll_helpman()
-{
-    uint32_t payload_version = 0;
+// addpoll's help text and validation data depend on the active poll-payload
+// version (v2 vs v3), which is a pure function of whether IsPollV3Enabled has
+// activated at nBestHeight. The cache keys an AddPollBuild by payload_version
+// so each version is constructed at most once per process lifetime; reorgs
+// across the V3 boundary don't invalidate cached entries because the cached
+// values (valid_poll_types, types_ss_str, the rendered help) depend only on
+// payload_version, not on chain state. Dispatcher's arity pre-check is opted
+// out via MarkVariadic() so the `addpoll <type>` 1-arg wizard form reaches
+// the body. The body reads addpoll_build() directly to get the same
+// destructured values used to construct the help, so no second cs_main
+// acquisition and no recomputation of valid_poll_types or types_ss_str is
+// needed.
+struct AddPollBuild {
+    RPCHelpMan help;
+    uint32_t payload_version{0};
     std::vector<PollType> valid_poll_types;
-    {
-        LOCK(cs_main);
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
-    }
+    std::string types_ss_str;
+};
+
+namespace {
+AddPollBuild make_addpoll_build(uint32_t payload_version)
+{
+    AddPollBuild build;
+    build.payload_version = payload_version;
+    build.valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
 
     std::stringstream types_ss;
-    for (const auto& type : valid_poll_types) {
+    for (const auto& type : build.valid_poll_types) {
         if (types_ss.str() != std::string{}) {
             types_ss << ", ";
         }
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
+    build.types_ss_str = types_ss.str();
 
-    thread_local std::optional<RPCHelpMan> help;
-    help.emplace(
+    build.help = RPCHelpMan{
         "addpoll",
         "Add a poll to the network.\n"
         "Requires 100K GRC balance. Costs 50 GRC.\n"
@@ -385,7 +399,7 @@ const RPCHelpMan& addpoll_helpman()
         std::vector<RPCArg>{
             {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
              strprintf("Type of poll. Valid types for the active protocol version: %s.",
-                       types_ss.str())},
+                       build.types_ss_str)},
             {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
             {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
             {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
@@ -452,35 +466,54 @@ const RPCHelpMan& addpoll_helpman()
                 "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
                 "\"https://example.org/discussion\"")
         }
-    );
-    return *help;
+    }.MarkVariadic();
+
+    return build;
+}
+} // namespace
+
+const AddPollBuild& addpoll_build()
+{
+    static std::map<uint32_t, AddPollBuild> cache;
+    static std::mutex cache_mutex;
+
+    uint32_t payload_version = 0;
+    {
+        LOCK(cs_main);
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+    }
+
+    std::lock_guard<std::mutex> guard(cache_mutex);
+    auto it = cache.find(payload_version);
+    if (it == cache.end()) {
+        it = cache.emplace(payload_version, make_addpoll_build(payload_version)).first;
+    }
+    return it->second;
+}
+
+const RPCHelpMan& addpoll_helpman()
+{
+    return addpoll_build().help;
 }
 
 UniValue addpoll(const UniValue& params)
 {
-    const RPCHelpMan& help = addpoll_helpman();
+    // The accessor returns a cached AddPollBuild whose payload_version /
+    // valid_poll_types / types_ss_str were derived from a single cs_main
+    // acquisition at construction time. The body destructures those rather
+    // than re-acquiring the lock or recomputing — eliminates the prior
+    // accessor-vs-body TOCTOU window across a V3-activation boundary.
+    const AddPollBuild& build = addpoll_build();
+    const RPCHelpMan& help = build.help;
+    const uint32_t payload_version = build.payload_version;
+    const std::vector<PollType>& valid_poll_types = build.valid_poll_types;
+    const std::string& types_ss_str = build.types_ss_str;
 
-    // Body still needs valid_poll_types (and the dynamic types_ss for error messages)
-    // for parameter validation below.
-    uint32_t payload_version = 0;
-    std::vector<PollType> valid_poll_types;
-    {
-        LOCK(cs_main);
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
-    }
-
-    std::stringstream types_ss;
-    for (const auto& type : valid_poll_types) {
-        if (types_ss.str() != std::string{}) {
-            types_ss << ", ";
-        }
-        types_ss << ToLower(Poll::PollTypeToString(type, false));
-    }
-
-    // The dispatcher's arity pre-check skips addpoll (because of the wizard interaction
-    // — `addpoll <type>` with one arg). Enforce arity here for non-wizard calls: allow
-    // 1 arg (wizard path below) or whatever the helpman declares (8 or 9 args).
+    // The dispatcher's arity pre-check skips addpoll because its helpman is
+    // marked variadic (see make_addpoll_build) — the wizard interaction
+    // `addpoll <type>` with one arg has to reach this body. Enforce arity
+    // here for non-wizard calls: allow 1 arg (wizard path below) or whatever
+    // the helpman declares (8 or 9 args).
     if (params.size() != 1 && !help.IsValidNumArgs(params.size())) {
         throw std::runtime_error(help.ToString());
     }
@@ -498,7 +531,7 @@ UniValue addpoll(const UniValue& params)
 
     if (!valid_type_parameter) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-            strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str()));
+            strprintf("Invalid poll type specified. Valid types are %s.", types_ss_str));
     }
 
     const std::vector<std::string>& required_fields = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
