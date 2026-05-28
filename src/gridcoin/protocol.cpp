@@ -187,9 +187,11 @@ ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const s
 // -----------------------------------------------------------------------------
 // Class: ProtocolRegistry
 // -----------------------------------------------------------------------------
-const ProtocolRegistry::ProtocolEntryMap& ProtocolRegistry::ProtocolEntries() const
+ProtocolRegistry::ProtocolEntryMap ProtocolRegistry::ProtocolEntries() const
 {
-    return m_protocol_entries;
+    LOCK(cs_lock);
+
+    return m_protocol_entries; // value copy; map of shared_ptr — refcounts bumped, entries not deep-copied
 }
 
 const AppCacheSection ProtocolRegistry::GetProtocolEntriesLegacy() const

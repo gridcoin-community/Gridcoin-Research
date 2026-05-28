@@ -412,7 +412,16 @@ public:
     //!
     //! \return \c A reference to the current protocol entries stored in the registry.
     //!
-    const ProtocolEntryMap& ProtocolEntries() const;
+    //! Returns a snapshot copy under cs_lock. The map stores ProtocolEntry_ptr
+    //! (shared_ptr) so the copy bumps refcounts on the (small) set of protocol
+    //! entries; the entries themselves are not deep-copied. Read Committed
+    //! isolation — see class-level locking model.
+    //!
+    //! Previously returned 'const ProtocolEntryMap&', exposing raw access to
+    //! the cs_lock-guarded m_protocol_entries without lock acquisition; the
+    //! caller could iterate while chain-handler mutators were modifying the
+    //! map. Fixed.
+    ProtocolEntryMap ProtocolEntries() const LOCKS_EXCLUDED(cs_lock);
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
