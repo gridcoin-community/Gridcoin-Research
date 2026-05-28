@@ -194,6 +194,43 @@ BOOST_AUTO_TEST_CASE(protocol_DeletingEntryShouldSuppressReversionShouldRestore)
                 && resurrected_entry->m_status == GRC::ProtocolEntryStatus::ACTIVE);
 }
 
+// ProtocolEntries() returns a by-value snapshot under cs_lock (not a reference to
+// the live m_protocol_entries map — see doc/contract_registry_locking_design.md).
+// This test pins that contract: a snapshot taken before a mutation must not observe
+// the mutation, a fresh snapshot must, and the snapshot includes DELETED entries.
+BOOST_AUTO_TEST_CASE(protocol_ProtocolEntriesReturnsIndependentSnapshot)
+{
+    AddProtocolEntry(2, "key1", "hello", 1, 123456789, true);
+    AddProtocolEntry(2, "key2", "world", 2, 123456790, false);
+
+    GRC::ProtocolRegistry::ProtocolEntryMap snapshot1 = GRC::GetProtocolRegistry().ProtocolEntries();
+    BOOST_CHECK(snapshot1.size() == 2);
+    BOOST_CHECK(snapshot1.at("key1")->m_value == "hello");
+    BOOST_CHECK(snapshot1.at("key1")->m_status == GRC::ProtocolEntryStatus::ACTIVE);
+
+    // Mutate the registry after snapshot1 is taken.
+    AddProtocolEntry(2, "key3", "again", 3, 123456791, false);
+
+    // snapshot1 is a value copy: it must not have grown.
+    BOOST_CHECK(snapshot1.size() == 2);
+    BOOST_CHECK(snapshot1.find("key3") == snapshot1.end());
+
+    // A fresh snapshot reflects the mutation.
+    GRC::ProtocolRegistry::ProtocolEntryMap snapshot2 = GRC::GetProtocolRegistry().ProtocolEntries();
+    BOOST_CHECK(snapshot2.size() == 3);
+    BOOST_CHECK(snapshot2.at("key3")->m_value == "again");
+
+    // Delete an entry; the snapshot INCLUDES deleted entries, and the prior snapshot
+    // still observes the pre-deletion status (object-level independence — AddDelete
+    // swaps in a new entry pointer rather than mutating the published one in place).
+    DeleteProtocolEntry(2, "key1", "hello", 4, 123456792, false);
+
+    GRC::ProtocolRegistry::ProtocolEntryMap snapshot3 = GRC::GetProtocolRegistry().ProtocolEntries();
+    BOOST_CHECK(snapshot3.size() == 3);
+    BOOST_CHECK(snapshot3.at("key1")->m_status == GRC::ProtocolEntryStatus::DELETED);
+    BOOST_CHECK(snapshot2.at("key1")->m_status == GRC::ProtocolEntryStatus::ACTIVE);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)
