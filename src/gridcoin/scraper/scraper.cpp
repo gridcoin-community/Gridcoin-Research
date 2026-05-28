@@ -6498,8 +6498,8 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
         "convergencereport",
         "Display the local node's report of scraper convergence.",
         {
-            {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, include detailed output from the convergence cache. Default: false."},
+            {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Default{false},
+                "If true, include detailed output from the convergence cache."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "",
             {{RPCResult::Type::ELISION, "",
@@ -6623,9 +6623,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         "testnewsb",
         "Tests superblock formation.",
         {
-            {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            {"hint_bits", RPCArg::Type::NUM, RPCArg::Default{32},
                 "Number of bits for the reduced hash hint for the uncached test. "
-                "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
+                "Clamped to a range of 4 to 32 (32 = the normal hint bits)."},
         },
         RPCResult{RPCResult::Type::OBJ, "", "",
             {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},

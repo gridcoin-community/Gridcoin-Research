@@ -945,8 +945,8 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
         "listmanifests",
         "Show list of known ScraperManifest objects.",
         {
-            {"details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, show full details of each manifest. Default: false."},
+            {"details", RPCArg::Type::BOOL, RPCArg::Default{false},
+                "If true, show full details of each manifest."},
             {"manifest_hash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
                 "Hash of a specific manifest. If omitted, all are returned."},
         },
