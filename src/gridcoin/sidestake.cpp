@@ -909,7 +909,7 @@ int SideStakeRegistry::Initialize()
     // Add the local sidestakes specified in the config file(s) to the local sidestakes map.
     LoadLocalSideStakesFromConfig();
 
-    m_local_entry_already_saved_to_config = false;
+    m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
     return height;
 }
@@ -954,8 +954,8 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     // and we want to then ignore the update signal from the r-w file change that calls this function for
     // that action (only) and then reset the flag to be responsive to any changes on the core r-w file side
     // through changesettings, for example.
-    if (m_local_entry_already_saved_to_config) {
-        m_local_entry_already_saved_to_config = false;
+    if (m_local_entry_already_saved_to_config.load(std::memory_order_relaxed)) {
+        m_local_entry_already_saved_to_config.store(false, std::memory_order_relaxed);
 
         return;
     }
@@ -1142,7 +1142,7 @@ bool SideStakeRegistry::SaveLocalSideStakesToConfig()
 
     status = updateRwSettings(settings);
 
-    m_local_entry_already_saved_to_config = true;
+    m_local_entry_already_saved_to_config.store(true, std::memory_order_relaxed);
 
     return status;
 }
@@ -1167,13 +1167,6 @@ void SideStakeRegistry::SubscribeToCoreSignals()
 void SideStakeRegistry::UnsubscribeFromCoreSignals()
 {
   // Disconnect signals from client (no-op currently)
-}
-
-SideStakeRegistry::SideStakeDB &SideStakeRegistry::GetSideStakeDB()
-{
-    LOCK(cs_lock);
-
-    return m_sidestake_db;
 }
 
 template<> const std::string SideStakeRegistry::SideStakeDB::KeyType()

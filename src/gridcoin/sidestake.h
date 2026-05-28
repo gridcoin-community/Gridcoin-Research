@@ -6,6 +6,7 @@
 #define GRIDCOIN_SIDESTAKE_H
 
 #include <key_io.h>
+#include <atomic>
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/contract/registry_db.h"
@@ -881,21 +882,25 @@ private:
     void SubscribeToCoreSignals();
     void UnsubscribeFromCoreSignals();
 
-    LocalSideStakeMap m_local_sidestake_entries;          //!< Contains the local (non-contract) sidestake entries.
-    MandatorySideStakeMap m_mandatory_sidestake_entries;  //!< Contains the mandatory sidestake entries, including DELETED.
-    PendingSideStakeMap m_pending_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    LocalSideStakeMap m_local_sidestake_entries GUARDED_BY(cs_lock);          //!< Contains the local (non-contract) sidestake entries.
+    MandatorySideStakeMap m_mandatory_sidestake_entries GUARDED_BY(cs_lock);  //!< Contains the mandatory sidestake entries, including DELETED.
+    PendingSideStakeMap m_pending_sidestake_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    std::set<SideStake> m_expired_sidestake_entries {};   //!< Not used. Only to satisfy the template.
+    std::set<SideStake> m_expired_sidestake_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    MandatorySideStakeMap m_sidestake_first_entries {};   //!< Not used. Only to satisfy the template.
+    MandatorySideStakeMap m_sidestake_first_entries GUARDED_BY(cs_lock) {};   //!< Not used. Only to satisfy the template.
 
-    SideStakeDB m_sidestake_db;                           //!< The internal sidestake db object for leveldb persistence.
+    SideStakeDB m_sidestake_db GUARDED_BY(cs_lock);                           //!< The internal sidestake db object for leveldb persistence.
 
-    bool m_local_entry_already_saved_to_config = false;   //!< Flag to prevent reload on signal if individual entry saved already.
-
-public:
-
-    SideStakeDB& GetSideStakeDB();
+    //! \brief Flag to prevent reload on signal if an individual entry was saved already.
+    //!
+    //! Read at the top of LoadLocalSideStakesFromConfig() (a core-signal callback)
+    //! without cs_lock, and written by SaveLocalSideStakesToConfig() / Initialize().
+    //! A cross-thread read/write of a plain bool is undefined behaviour, so this is
+    //! std::atomic<bool>. All accesses use memory_order_relaxed: it is a pure debounce
+    //! flag, no other state is published through it. It is deliberately NOT
+    //! GUARDED_BY(cs_lock) — it is accessed outside the registry lock by design.
+    std::atomic<bool> m_local_entry_already_saved_to_config{false};
 }; // sidestakeRegistry
 
 //!
