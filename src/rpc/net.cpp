@@ -175,8 +175,10 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
         RPCResult{RPCResult::Type::OBJ, "", "",
             {
                 {RPCResult::Type::ELISION, "",
-                    "Shape depends on the 'dns' argument: a map of \"addednode\" -> node string when dns=false, "
-                    "or nested per-node connection detail when dns=true."},
+                    "Shape depends on the 'dns' argument: an OBJ with one or more repeated "
+                    "\"addednode\" keys (one per node) when dns=false, or nested per-node "
+                    "connection detail when dns=true. The implementation uses pushKV(\"addednode\", ...) "
+                    "in a loop, which produces repeated keys rather than a single map."},
             }},
         RPCExamples{
             HelpExampleCli("getaddednodeinfo", "true") +
@@ -550,7 +552,7 @@ UniValue getnettotals(const UniValue& params, bool fHelp)
             {
                 {RPCResult::Type::NUM, "totalbytesrecv", "Total cumulative bytes received"},
                 {RPCResult::Type::NUM, "totalbytessent", "Total cumulative bytes sent"},
-                {RPCResult::Type::NUM_TIME, "timemillis", "Current system time in milliseconds since epoch"},
+                {RPCResult::Type::NUM, "timemillis", "Current system time in MILLISECONDS since the UNIX epoch (GetTimeMillis())"},
             }},
         RPCExamples{
             HelpExampleCli("getnettotals", "") +
@@ -583,12 +585,12 @@ UniValue listalerts(const UniValue& params, bool fHelp)
                                 {RPCResult::Type::STR, "expiration", "Timestamp at which the alert expires"},
                                 {RPCResult::Type::NUM, "id", "Alert ID"},
                                 {RPCResult::Type::NUM, "cancel_upto", "Cancels all alert IDs up to this number"},
-                                {RPCResult::Type::ARR, "cancels", "",
-                                    {{RPCResult::Type::NUM, "id", "An alert ID this alert cancels"}}},
+                                {RPCResult::Type::ARR, "cancels", "Alert IDs this alert cancels",
+                                    {{RPCResult::Type::NUM, "", "Cancelled alert ID"}}},
                                 {RPCResult::Type::NUM, "minimum_version", "Minimum applicable client version"},
                                 {RPCResult::Type::NUM, "maximum_version", "Maximum applicable client version"},
-                                {RPCResult::Type::ARR, "subversions", "",
-                                    {{RPCResult::Type::STR, "subversion", "A peer subversion string this alert targets"}}},
+                                {RPCResult::Type::ARR, "subversions", "Peer subversion strings this alert targets",
+                                    {{RPCResult::Type::STR, "", "Targeted peer subversion string"}}},
                                 {RPCResult::Type::NUM, "priority", "Alert priority"},
                                 {RPCResult::Type::STR, "comment", "Comment text"},
                                 {RPCResult::Type::STR, "status_bar", "Status bar text"},
@@ -692,9 +694,11 @@ UniValue sendalert(const UniValue& params, bool fHelp)
             HelpExampleCli("sendalert", "\"network outage\" \"<wif>\" 1000000 2000000 100 1") +
             HelpExampleRpc("sendalert", "\"network outage\", \"<wif>\", 1000000, 2000000, 100, 1")},
     };
-    // Variadic-tail-by-min: legacy accepted any number of args >= 6, with params[6] used when present.
-    // Keep the same lower bound and let RPCHelpMan's IsValidNumArgs enforce the upper bound (7 declared).
-    if (fHelp || !help.IsValidNumArgs(params.size()))
+    // Variadic-tail-by-min: legacy accepted any number of args >= 6, with
+    // params[6] used when present. Keep lower-bound-only here; once PR M2
+    // merges and the dispatcher pre-check lands, replace with `MarkVariadic()`
+    // on the helpman (the body lower-bound guard then becomes redundant).
+    if (fHelp || params.size() < 6)
         throw runtime_error(help.ToString());
 
     CAlert alert;
@@ -715,7 +719,11 @@ UniValue sendalert(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    key = DecodeSecret(params[0].get_str());
+    // The help declares `privatekey` as params[1] (after `message`). Decode
+    // the WIF key from params[1] to match — the prior body read params[0]
+    // (the message) as a WIF, which made the command structurally
+    // un-callable: no valid WIF is also a meaningful alert message.
+    key = DecodeSecret(params[1].get_str());
 
     if (!key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");

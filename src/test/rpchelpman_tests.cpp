@@ -59,8 +59,6 @@ UniValue lifetime(const UniValue& params, bool fHelp);
 UniValue resetcpids(const UniValue& params, bool fHelp);
 UniValue rainbymagnitude(const UniValue& params, bool fHelp);
 UniValue currentcontractaverage(const UniValue& params, bool fHelp);
-#include <utility>
-#include <vector>
 
 // Forward declarations of the Tier 2 commands under test. These must live in
 // the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
@@ -596,24 +594,6 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"versionreport",           &versionreport},
     };
 
-BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getconnectioncount", &getconnectioncount},
-        {"getnodeaddresses", &getnodeaddresses},
-        {"getaddednodeinfo", &getaddednodeinfo},
-        {"listbanned", &listbanned},
-        {"clearbanned", &clearbanned},
-        {"ping", &ping},
-        {"getpeerinfo", &getpeerinfo},
-        {"getnettotals", &getnettotals},
-        {"listalerts", &listalerts},
-        {"sendalert", &sendalert},
-        {"sendalert2", &sendalert2},
-        {"getnetworkinfo", &getnetworkinfo},
-    };
     for (const auto& [rpc_name, fn] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
             bool threw = false;
@@ -675,6 +655,38 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
+
+BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"getconnectioncount", &getconnectioncount},
+        {"getnodeaddresses", &getnodeaddresses},
+        {"getaddednodeinfo", &getaddednodeinfo},
+        {"listbanned", &listbanned},
+        {"clearbanned", &clearbanned},
+        {"ping", &ping},
+        {"getpeerinfo", &getpeerinfo},
+        {"getnettotals", &getnettotals},
+        {"listalerts", &listalerts},
+        {"sendalert", &sendalert},
+        {"sendalert2", &sendalert2},
+        {"getnetworkinfo", &getnetworkinfo},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
                                     "help text missing command name: " << what);
                 BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
                                     "help text missing Examples section: " << what);
