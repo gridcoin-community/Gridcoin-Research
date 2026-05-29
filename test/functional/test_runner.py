@@ -86,7 +86,16 @@ BASE_SCRIPTS = [
     #   - rpc_help.py: RPCHelpMan rollout coverage (the motivating use case
     #     from #2922 — exercises `help`, structured help format, and
     #     IsValidNumArgs() arity validation on converted commands)
+    # Phase 2A adds:
+    #   - feature_regtest_staking.py: regtest premine discovery, deterministic
+    #     PoS block production (generatetoaddress), and the stakelimit RPC
+    # Phase 3 adds (P2P wire protocol):
+    #   - p2p_version_handshake.py: version/verack + ping/pong against a node
+    #   - p2p_block_tx_relay.py: relay a node-produced tx and block over P2P
     'feature_hello.py',
+    'feature_regtest_staking.py',
+    'p2p_version_handshake.py',
+    'p2p_block_tx_relay.py',
     'rpc_help.py',
 ]
 
