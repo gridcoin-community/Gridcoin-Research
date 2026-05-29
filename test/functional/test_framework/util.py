@@ -400,7 +400,11 @@ def initialize_datadir(dirname, n, chain):
             f.write("port=" + str(p2p_port(n)) + "\n")
             f.write("rpcport=" + str(rpc_port(n)) + "\n")
             f.write("server=1\n")
-            f.write("listen=0\n")
+            # listen=1 so the node accepts inbound P2P connections from the
+            # framework (add_p2p_connection / connect_nodes). Tests that want an
+            # isolated node pass -listen=0 / -connect=0 on the command line,
+            # which overrides this conf value.
+            f.write("listen=1\n")
             f.write("discover=0\n")
             f.write("dnsseed=0\n")
             f.write("listenonion=0\n")

@@ -337,6 +337,16 @@ class TestNode():
                 self.log.exception("Unable to stop node cleanly: %s", e)
                 stop_exc = e
 
+            # Close the persistent RPC connection. Gridcoin's boost::asio RPC
+            # server blocks shutdown (StopRPCThreads -> join_all) on an open
+            # keep-alive client socket, so without this the daemon never exits
+            # and wait_until_stopped() times out. See AuthServiceProxy._close_conn.
+            if self.rpc is not None:
+                try:
+                    self.rpc._close_conn()
+                except Exception:
+                    pass
+
             # If there are any running perf processes, stop them. Per-process
             # try/except so one perf failure doesn't strand the rest.
             for profile_name in tuple(self.perf_subprocesses.keys()):

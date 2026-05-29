@@ -218,3 +218,16 @@ class AuthServiceProxy():
             self.__conn = http.client.HTTPSConnection(self.__url.hostname, port, timeout=self.timeout)
         else:
             self.__conn = http.client.HTTPConnection(self.__url.hostname, port, timeout=self.timeout)
+
+    def _close_conn(self):
+        """Close the underlying persistent HTTP connection.
+
+        Gridcoin's boost::asio JSON-RPC server blocks shutdown -- its
+        StopRPCThreads() does rpc_io_service->stop() then
+        rpc_worker_group->join_all(), and a worker bound to a still-open
+        keep-alive client socket never returns, so the daemon hangs after
+        "Stop RPC IO service" and never reaches "Gridcoin exited". After
+        issuing `stop` the framework must close this socket (curl exits
+        cleanly for exactly this reason). Best-effort; safe to call twice."""
+        if self.__conn is not None:
+            self.__conn.close()
