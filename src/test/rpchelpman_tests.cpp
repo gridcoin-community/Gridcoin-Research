@@ -175,6 +175,43 @@ BOOST_AUTO_TEST_CASE(variadic_dispatcher_precheck_skips_overmax_args)
     BOOST_CHECK(dispatcher_rejects(nonvariadic, overmax));
 }
 
+// PR M3 (O-3): addpoll's help text and its body's poll-type validation both
+// derive from make_addpoll_build(payload_version), reached through the cached
+// addpoll_build() under a single cs_main acquisition. The old code computed
+// the version in the accessor AND again in the body across two separate locks,
+// so a V3 fork-activation landing between them could render help for one
+// version while the body validated against another. Manually straddling the
+// fork height on testnet is impractical, so pin the load-bearing property
+// directly: the per-version build is a pure, deterministic function of the
+// version. v2 polls allow only SURVEY; v3 enumerates the full type set
+// (see GRC::PollPayload::GetValidPollTypes).
+BOOST_AUTO_TEST_CASE(addpoll_help_is_pure_function_of_payload_version)
+{
+    const std::string help_v2 = addpoll_help_for_version(2);
+    const std::string help_v3 = addpoll_help_for_version(3);
+
+    // Both versions render a real addpoll help block that advertises the
+    // version-specific valid type list.
+    BOOST_CHECK(help_v2.find("addpoll") != std::string::npos);
+    BOOST_CHECK(help_v3.find("addpoll") != std::string::npos);
+    BOOST_CHECK(help_v2.find("Valid types for the active protocol version")
+                != std::string::npos);
+    BOOST_CHECK(help_v3.find("Valid types for the active protocol version")
+                != std::string::npos);
+
+    // v2 advertises only the survey type; v3 advertises strictly more, so the
+    // flip is observable in the rendered shape (no accessor-vs-body mixing).
+    BOOST_CHECK(help_v2.find("survey") != std::string::npos);
+    BOOST_CHECK(help_v2 != help_v3);
+    BOOST_CHECK(help_v3.size() > help_v2.size());
+
+    // Pure function: repeated builds for the same version are identical, so the
+    // shape can never drift between the accessor call and the body call for a
+    // given chain state.
+    BOOST_CHECK_EQUAL(addpoll_help_for_version(2), help_v2);
+    BOOST_CHECK_EQUAL(addpoll_help_for_version(3), help_v3);
+}
+
 BOOST_AUTO_TEST_CASE(getargnames_mixed)
 {
     const RPCHelpMan help{

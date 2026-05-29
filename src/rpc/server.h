@@ -7,6 +7,7 @@
 #ifndef BITCOIN_RPC_SERVER_H
 #define BITCOIN_RPC_SERVER_H
 
+#include <cstdint>
 #include <string>
 #include <list>
 #include <map>
@@ -321,6 +322,11 @@ extern const RPCHelpMan& addkey_helpman();
 extern const RPCHelpMan& addmultisigaddress_helpman();
 extern const RPCHelpMan& addnode_helpman();
 extern const RPCHelpMan& addpoll_helpman();
+//! Render addpoll's help for an explicit poll-payload version, bypassing chain
+//! state. addpoll_helpman() and the addpoll body both derive their shape from
+//! the same per-version build, so this exposes that pure derivation for tests
+//! that need to exercise the v2/v3 fork flip deterministically (no live chain).
+extern std::string addpoll_help_for_version(uint32_t payload_version);
 extern const RPCHelpMan& addredeemscript_helpman();
 extern const RPCHelpMan& advertisebeacon_helpman();
 extern const RPCHelpMan& advertisebeaconv3_helpman();

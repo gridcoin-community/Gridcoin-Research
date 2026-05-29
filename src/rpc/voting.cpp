@@ -497,6 +497,16 @@ const RPCHelpMan& addpoll_helpman()
     return addpoll_build().help;
 }
 
+// Test/inspection accessor: render addpoll's help for an explicit payload
+// version. Routes through the same make_addpoll_build() that addpoll_build()
+// (and therefore both addpoll_helpman() and the addpoll body) consume, but
+// without touching cs_main/nBestHeight — letting tests exercise the v2/v3
+// fork flip deterministically. See declaration in rpc/server.h.
+std::string addpoll_help_for_version(uint32_t payload_version)
+{
+    return make_addpoll_build(payload_version).help.ToString();
+}
+
 UniValue addpoll(const UniValue& params)
 {
     // The accessor returns a cached AddPollBuild whose payload_version /
