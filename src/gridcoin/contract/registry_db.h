@@ -10,6 +10,8 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 
+#include <type_traits>
+
 using LogFlags = BCLog::LogFlags;
 
 namespace GRC {
@@ -194,6 +196,54 @@ public:
         m_needs_passivation = true;
 
         return height;
+    }
+
+    //!
+    //! \brief Reads the CURRENT (HEAD) entry for each key DIRECTLY from LevelDB, bypassing the in-memory entry map.
+    //!
+    //! The in-memory entries can be mutated in place by callers -- in particular the AutoGreylist overlay rewrites a
+    //! project entry's status to AUTO_GREYLISTED while building a whitelist snapshot -- so the in-memory status is not a
+    //! reliable witness of what the administrative contracts actually set. This returns the persisted, contract-applied
+    //! state, which is the ground truth, by replaying the LevelDB records (the same source Initialize() uses) without
+    //! touching any in-memory state.
+    //!
+    //! Read-only: it opens its own CTxDB("r") and mutates nothing, so it requires no registry lock (callers may still
+    //! take the registry lock to serialize against concurrent contract application).
+    //!
+    //! \return Map of current entries keyed by Key(), carrying the raw contract status.
+    //!
+    M GetCurrentEntriesFromDisk()
+    {
+        // This straight replay (latest record per key = HEAD) is only correct for registries whose storage entry type
+        // equals the entry type. Beacons (SE != E) require the specialized HandleCurrentHistoricalEntries (pending /
+        // renewal / expiry handling), so reject that misuse at compile time rather than silently slice/mis-replay.
+        static_assert(std::is_same<E, SE>::value,
+                      "GetCurrentEntriesFromDisk supports only straight-replay registries (SE == E), not beacons");
+
+        M current;
+
+        // Keyed by record number so the replay below proceeds in contract-application order, exactly as Initialize().
+        StorageMapByRecordNum storage_by_record_num;
+
+        {
+            CTxDB txdb("r");
+
+            std::string key_type = KeyType();
+            uint256 hash_hint = uint256();
+
+            txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint);
+        }
+
+        // storage_by_record_num is ordered ascending by record number, and the latest record for a key is its current
+        // HEAD (cf. "GRC will only memorize the last value it finds for a key"). Overwriting as we ascend therefore
+        // leaves the HEAD entry -- with its raw contract status -- for each key.
+        for (const auto& iter : storage_by_record_num) {
+            const SE& entry = iter.second;
+
+            current[entry.Key()] = std::make_shared<E>(entry);
+        }
+
+        return current;
     }
 
     //!

@@ -1007,6 +1007,18 @@ public:
     const ProjectEntryMap GetProjectsFirstActive() const;
 
     //!
+    //! \brief Returns the CURRENT project entries read DIRECTLY from LevelDB -- the persisted, contract-applied status --
+    //! bypassing the in-memory entry map. The AutoGreylist overlay rewrites in-memory project status in place while
+    //! building whitelist snapshots, so once a project meets greylisting criteria, Snapshot() (and therefore listprojects)
+    //! reports AUTO_GREYLISTED regardless of whether the underlying contract status is ACTIVE, MAN_GREYLISTED, or
+    //! AUTO_GREYLIST_OVERRIDE. This accessor exposes the raw contract status for diagnostics and verification (see the
+    //! getrawprojectstatus RPC). Takes cs_lock internally and returns a by-value snapshot.
+    //!
+    //! \return Map of current project entries carrying their raw contract status.
+    //!
+    ProjectEntryMap GetProjectsFromDisk();
+
+    //!
     //! \brief Method to provide the shared pointer to the global auto greylist cache object.
     //!
     //! \return shared pointer to the auto greylist global cache object.

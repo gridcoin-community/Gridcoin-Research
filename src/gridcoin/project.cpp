@@ -1068,6 +1068,16 @@ const Whitelist::ProjectEntryMap Whitelist::GetProjectsFirstActive() const EXCLU
     return m_project_first_actives;
 }
 
+Whitelist::ProjectEntryMap Whitelist::GetProjectsFromDisk()
+{
+    // Take cs_lock to serialize against concurrent contract application (Add/Delete -> Store), then read the
+    // persisted (contract-applied) current entries straight from LevelDB. This deliberately bypasses the
+    // in-memory m_project_entries, whose status field is rewritten in place by the AutoGreylist overlay.
+    LOCK(cs_lock);
+
+    return m_project_db.GetCurrentEntriesFromDisk();
+}
+
 std::shared_ptr<AutoGreylist> Whitelist::GetAutoGreylist()
 {
     return m_auto_greylist;

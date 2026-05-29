@@ -111,6 +111,45 @@ void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name
     registry.Add({contract, ctx_tx, &dummy_index});
 }
 
+//!
+//! \brief Applies a v4 project ADD contract carrying an EXPLICIT status through the registry contract handler,
+//! persisting it to LevelDB (a real CBlockIndex height is supplied so RegistryDB::Store runs and
+//! GetProjectsFromDisk can read it back).
+//!
+//! This is a reusable building block for tests that need the registry/contract/LevelDB layer actually populated --
+//! e.g. verifying the raw contract status read by getrawprojectstatus, and (when the autogreylist "bad project" run
+//! is extended through this same path) asserting that the in-memory Snapshot overlay can diverge from the persisted
+//! contract status. Pass status = ProjectEntryStatus::UNKNOWN for a plain ACTIVE add (the handler maps
+//! ADD + UNKNOWN -> ACTIVE, exactly as the addkey client does).
+//!
+void AddProjectEntryWithStatus(const std::string& name, const std::string& url,
+                               const GRC::ProjectEntryStatus& status, const int& height, const uint64_t time,
+                               const bool& gdpr_status = false, const bool& requires_ext_adapter = false)
+{
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    CMutableTransaction dummy_tx;
+    CBlockIndex dummy_index = CBlockIndex {};
+    dummy_index.nHeight = height;
+    dummy_tx.nTime = time;
+    dummy_index.nTime = time;
+
+    GRC::Contract contract = GRC::MakeContract<GRC::Project>(
+                uint32_t {3},   // Contract version (post v13)
+                GRC::ContractAction::ADD,
+                uint32_t {4},   // Payload version (v4)
+                name,
+                url,
+                gdpr_status,
+                requires_ext_adapter,
+                status);
+
+    dummy_tx.vContracts.push_back(contract);
+
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
+}
+
 struct AutoGreylistEntryState
 {
     AutoGreylistEntryState(uint8_t zcd_20_SB_count,
@@ -600,6 +639,59 @@ BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
     for (const auto& project : snapshot) {
         BOOST_CHECK(project.m_url == "http://new.enigma.test");
     }
+}
+
+BOOST_AUTO_TEST_CASE(it_reads_raw_contract_status_from_leveldb)
+{
+    using Status = GRC::ProjectEntryStatus;
+
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    // Reset clears the in-memory maps AND the (in-memory test) LevelDB storage, so the disk reads below see only the
+    // entries this test applies.
+    registry.Reset();
+
+    const std::string name = "RawStatusTest";
+    const std::string url = "https://rawstatustest.example/@";
+
+    // Plain ACTIVE add (handler maps ADD + UNKNOWN -> ACTIVE), persisted to LevelDB.
+    AddProjectEntryWithStatus(name, url, Status::UNKNOWN, 100, 100);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::ACTIVE);
+    }
+
+    // A later contract for the same key becomes the HEAD that GetProjectsFromDisk reports.
+    AddProjectEntryWithStatus(name, url, Status::MAN_GREYLISTED, 101, 101);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::MAN_GREYLISTED);
+    }
+
+    AddProjectEntryWithStatus(name, url, Status::AUTO_GREYLIST_OVERRIDE, 102, 102);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::AUTO_GREYLIST_OVERRIDE);
+    }
+
+    // A delete persists a DELETED HEAD, which the raw read reports as-is.
+    DeleteProjectEntry(3, name, 103, 103);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::DELETED);
+    }
+
+    // This locks in that getrawprojectstatus (via GetProjectsFromDisk) reports the raw, contract-applied status read
+    // from LevelDB, and that HEAD selection follows the latest record per key. The complementary assertion -- that the
+    // AutoGreylist Snapshot overlay can rewrite the in-memory status to AUTO_GREYLISTED while the persisted status read
+    // here stays ACTIVE/MAN/OVERRIDE -- belongs with the bad-project autogreylist run once it is extended through this
+    // same contract-application facility to the registry/LevelDB layer.
+
+    registry.Reset();
 }
 
 BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)

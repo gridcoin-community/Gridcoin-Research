@@ -406,6 +406,7 @@ static const CRPCCommand vRPCCommands[] =
     { "inspectaccrualsnapshot",  &inspectaccrualsnapshot,  cat_developer     },
     { "listalerts",              &listalerts,              cat_developer     },
     { "listprojects",            &listprojects,            cat_developer     },
+    { "getrawprojectstatus",     &getrawprojectstatus,     cat_developer     },
     { "getautogreylist",         &getautogreylist,         cat_developer     },
     { "listprotocolentries",     &listprotocolentries,     cat_developer     },
     { "listresearcheraccounts",  &listresearcheraccounts,  cat_developer     },
