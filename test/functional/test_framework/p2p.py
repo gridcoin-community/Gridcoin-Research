@@ -482,7 +482,7 @@ class P2PDataStore(P2PInterface):
         if response is not None:
             self.send_message(response)
 
-    def send_blocks_and_test(self, blocks, node, *, success=True, force_send=False, reject_reason=None, timeout=60):
+    def send_blocks_and_test(self, blocks, node, *, success=True, force_send=False, timeout=60):
         """Send blocks to the node and check that the node's tip reflects acceptance.
 
         - add all blocks to our block_store
@@ -512,7 +512,7 @@ class P2PDataStore(P2PInterface):
         else:
             assert node.getbestblockhash() != blocks[-1].hash
 
-    def send_txs_and_test(self, txs, node, *, success=True, expect_disconnect=False, reject_reason=None, timeout=60):
+    def send_txs_and_test(self, txs, node, *, success=True, timeout=60):
         """Send txs to the node and check that they are accepted into the mempool (or not)."""
         with p2p_lock:
             for tx in txs:
