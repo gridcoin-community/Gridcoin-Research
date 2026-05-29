@@ -357,6 +357,43 @@ BOOST_AUTO_TEST_CASE(variadic_command_accessors_report_variadic)
     BOOST_CHECK(!getbestblockhash_helpman().IsVariadic());
 }
 
+// Pin the dispatcher's arity gate. CRPCTable::execute (src/rpc/server.cpp)
+// rejects a converted command when `!IsVariadic() && !IsValidNumArgs(n)`.
+// The accessor-reports-variadic test above proves the flag is set; this test
+// proves the flag is *load-bearing* — i.e. that a variadic command's
+// over-the-declared-max arg count is NOT rejected before the body runs,
+// while the same over-count on a non-variadic command IS. We assert the gate
+// predicate directly rather than calling CRPCTable::execute, which would
+// require a live node/wallet to invoke the command body.
+BOOST_AUTO_TEST_CASE(variadic_dispatcher_precheck_skips_overmax_args)
+{
+    // Mirror of the dispatcher gate in CRPCTable::execute.
+    const auto dispatcher_rejects = [](const RPCHelpMan& help, size_t n) {
+        return !help.IsVariadic() && !help.IsValidNumArgs(n);
+    };
+
+    // votebyid declares 2 fixed args; the multichoice form passes 3+.
+    const RPCHelpMan& votebyid = votebyid_helpman();
+    BOOST_CHECK(votebyid.IsValidNumArgs(2));         // the declared shape
+    BOOST_CHECK(!votebyid.IsValidNumArgs(3));        // over the declared max...
+    BOOST_CHECK(!dispatcher_rejects(votebyid, 3));   // ...but the gate lets it through
+    BOOST_CHECK(!dispatcher_rejects(votebyid, 9));   // arbitrarily many choices
+
+    // changesettings declares 1 fixed arg; the multi-setting form passes 2+.
+    const RPCHelpMan& changesettings = changesettings_helpman();
+    BOOST_CHECK(changesettings.IsValidNumArgs(1));
+    BOOST_CHECK(!changesettings.IsValidNumArgs(2));
+    BOOST_CHECK(!dispatcher_rejects(changesettings, 2));
+    BOOST_CHECK(!dispatcher_rejects(changesettings, 5));
+
+    // Converse: a non-variadic converted command IS rejected by the gate once
+    // it exceeds its declared arity — proving the marker is what spares the
+    // variadic commands above.
+    const RPCHelpMan& nonvariadic = getbestblockhash_helpman();
+    const size_t overmax = nonvariadic.GetArgNames().size() + 1;
+    BOOST_CHECK(dispatcher_rejects(nonvariadic, overmax));
+}
+
 BOOST_AUTO_TEST_CASE(getargnames_mixed)
 {
     const RPCHelpMan help{
