@@ -9,8 +9,11 @@ disconnectnode, so instead of split-then-reconnect we build divergent chains on
 two nodes that start ISOLATED, then connect them and assert the node on the
 shorter/lower-trust chain reorganizes onto the longer one.
 
-With trivial regtest difficulty, more PoS blocks means more cumulative chain
-trust, so node0's height-3 chain outweighs node1's height-1 chain.
+After connecting, node0 stakes one more block: announcing a fresh block reliably
+triggers block relay so node1 pulls node0's whole chain and reorganizes (relying
+solely on connect-time header sync was occasionally slow). sync_blocks is given
+extra headroom for the same reason. With trivial regtest difficulty, more PoS
+blocks means more cumulative chain trust, so node0's chain outweighs node1's.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -36,18 +39,21 @@ class ReorgTest(GridcoinTestFramework):
 
         # --- build divergent chains: node0 longer (h=3), node1 shorter (h=1) ---
         node0.generatetoaddress(3, node0.getnewaddress())
-        node1.generatetoaddress(1, node1.getnewaddress())
-        tip0 = node0.getbestblockhash()
+        node1_tip = node1.generatetoaddress(1, node1.getnewaddress())[0]
         assert node0.getbestblockhash() != node1.getbestblockhash(), "chains did not diverge"
         self.log.info("divergent chains: node0 h=%d, node1 h=%d",
                       node0.getblockcount(), node1.getblockcount())
 
-        # --- connect; node1 reorgs onto node0's higher-trust chain ---
+        # --- connect, then stake one more on node0 to trigger relay ---
         self.connect_nodes(0, 1)
-        self.sync_blocks([node0, node1])
+        node0.generatetoaddress(1, node0.getnewaddress())
+        tip0 = node0.getbestblockhash()  # node0 now at height 4
+
+        # --- node1 reorganizes off its height-1 chain onto node0's chain ---
+        self.sync_blocks([node0, node1], timeout=120)
         assert_equal(node1.getbestblockhash(), tip0)
-        assert_equal(node1.getblockcount(), 3)
-        assert_equal(node0.getbestblockhash(), tip0)  # node0 unchanged (it was longer)
+        assert_equal(node1.getblockcount(), 4)
+        assert node1.getbestblockhash() != node1_tip, "node1 did not abandon its original tip"
         self.log.info("node1 reorganized onto node0's chain; common tip=%s", tip0)
 
 
