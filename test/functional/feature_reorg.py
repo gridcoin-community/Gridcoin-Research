@@ -9,11 +9,13 @@ disconnectnode, so instead of split-then-reconnect we build divergent chains on
 two nodes that start ISOLATED, then connect them and assert the node on the
 shorter/lower-trust chain reorganizes onto the longer one.
 
-After connecting, node0 stakes one more block: announcing a fresh block reliably
-triggers block relay so node1 pulls node0's whole chain and reorganizes (relying
-solely on connect-time header sync was occasionally slow). sync_blocks is given
-extra headroom for the same reason. With trivial regtest difficulty, more PoS
-blocks means more cumulative chain trust, so node0's chain outweighs node1's.
+Both chains are built to completion BEFORE connecting, so node0's tip is stable
+when node1 starts syncing and there is no post-connect block-announcement race to
+miss. node1 (the downloader) dials node0 (the block source) via connect_nodes(1,
+0), matching the framework's default fPreferredDownload topology, so node1
+actively header-syncs from node0 and reorganizes rather than passively waiting
+for a push. With trivial regtest difficulty, more PoS blocks means more
+cumulative chain trust, so node0's chain outweighs node1's.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -37,19 +39,22 @@ class ReorgTest(GridcoinTestFramework):
         assert_equal(node0.getblockcount(), 0)
         assert_equal(node1.getblockcount(), 0)
 
-        # --- build divergent chains: node0 longer (h=3), node1 shorter (h=1) ---
-        node0.generatetoaddress(3, node0.getnewaddress())
+        # --- build divergent chains in isolation, fully, before connecting ---
+        # node0 longer (h=4), node1 shorter (h=1). Building both chains before
+        # connecting means node0's tip is stable when node1 starts syncing, so
+        # there is no post-connect block-announcement race to miss.
+        node0.generatetoaddress(4, node0.getnewaddress())
         node1_tip = node1.generatetoaddress(1, node1.getnewaddress())[0]
-        assert node0.getbestblockhash() != node1.getbestblockhash(), "chains did not diverge"
+        tip0 = node0.getbestblockhash()  # node0 at height 4
+        assert tip0 != node1_tip, "chains did not diverge"
         self.log.info("divergent chains: node0 h=%d, node1 h=%d",
                       node0.getblockcount(), node1.getblockcount())
 
-        # --- connect, then stake one more on node0 to trigger relay ---
-        self.connect_nodes(0, 1)
-        node0.generatetoaddress(1, node0.getnewaddress())
-        tip0 = node0.getbestblockhash()  # node0 now at height 4
-
-        # --- node1 reorganizes off its height-1 chain onto node0's chain ---
+        # --- connect downloader -> source so node1 actively header-syncs ---
+        # connect_nodes(a, b) dials from a to b; the framework's default topology
+        # connects each downloader toward the block source (fPreferredDownload).
+        # node1 (shorter) therefore dials node0 (longer) and reorganizes onto it.
+        self.connect_nodes(1, 0)
         self.sync_blocks([node0, node1], timeout=120)
         assert_equal(node1.getbestblockhash(), tip0)
         assert_equal(node1.getblockcount(), 4)
