@@ -455,6 +455,64 @@ if(ENABLE_DOCS)
     add_subdirectory(doc)
 endif()
 
+# Python functional test suite (test/functional). Phase 4 — refs #2932.
+# ====================================================================
+# Generates test/config.ini from config.ini.in, then registers:
+#   * a CTest case `functional_tests` (run via `ctest -R functional_tests`)
+#   * a convenience target `check-functional` (run via `cmake --build . --target check-functional`)
+# both of which drive test/functional/test_runner.py.
+if(ENABLE_TESTS AND ENABLE_DAEMON)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        set(PACKAGE_NAME "${PROJECT_NAME}")
+        set(PACKAGE_BUGREPORT "https://github.com/gridcoin-community/Gridcoin-Research/issues")
+        set(ENABLE_GRIDCOIND_CONF "true")
+        set(ENABLE_CLI_CONF "false")     # no separate gridcoin-cli; daemon answers RPC
+        set(ENABLE_WALLET_CONF "true")   # Gridcoin always builds the BDB wallet
+        set(ENABLE_ZMQ_CONF "false")     # Gridcoin has no ZMQ support
+
+        configure_file(
+            "${CMAKE_SOURCE_DIR}/test/config.ini.in"
+            "${CMAKE_BINARY_DIR}/test/config.ini"
+            @ONLY
+        )
+
+        # gridcoinresearchd is emitted to ${CMAKE_BINARY_DIR}/bin (see
+        # src/CMakeLists.txt RUNTIME_OUTPUT_DIRECTORY), not the src/ path the
+        # ported framework defaults to, so point it there via the framework's
+        # supported GRIDCOIND/GRIDCOINCLI overrides. (The daemon doubles as CLI.)
+        set(_functional_env
+            "GRIDCOIND=${CMAKE_BINARY_DIR}/bin/gridcoinresearchd${CMAKE_EXECUTABLE_SUFFIX}"
+            "GRIDCOINCLI=${CMAKE_BINARY_DIR}/bin/gridcoinresearchd${CMAKE_EXECUTABLE_SUFFIX}"
+        )
+
+        add_test(
+            NAME functional_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
+                    "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
+                    --ci --quiet --combinedlogslen=4000
+        )
+        set_tests_properties(functional_tests PROPERTIES
+            ENVIRONMENT "${_functional_env}"
+            RUN_SERIAL TRUE   # tests spin up daemons; don't overlap with other ctest cases
+            TIMEOUT 1800
+        )
+
+        add_custom_target(check-functional
+            COMMAND ${CMAKE_COMMAND} -E env ${_functional_env}
+                    ${Python3_EXECUTABLE}
+                    "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
+                    "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
+            USES_TERMINAL
+            VERBATIM
+            COMMENT "Running Gridcoin functional test suite"
+        )
+    else()
+        message(WARNING "Python3 interpreter not found; the `functional_tests` CTest case will not be registered. Install Python 3 and reconfigure to enable it.")
+    endif()
+endif()
+
 # CPack packaging
 # ===============
 

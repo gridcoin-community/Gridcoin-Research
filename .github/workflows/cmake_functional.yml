@@ -1,0 +1,67 @@
+name: CMake Functional Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ----------------------------------------------------------------------
+  # Build gridcoinresearchd (daemon only, no GUI) and run the Python
+  # functional test suite (test/functional) against a -regtest node.
+  # Phase 4 — refs #2932.
+  # ----------------------------------------------------------------------
+  functional-tests:
+    name: Functional Tests (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Dependencies
+        run: |
+          source ./install_dependencies.sh
+          install_deps native true true
+
+      - name: Setup Concurrency
+        run: |
+          if [ -z "$CMAKE_BUILD_PARALLEL_LEVEL" ]; then
+            echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> $GITHUB_ENV
+            echo "Concurrency: Auto-detected $(nproc) cores."
+          else
+            echo "Concurrency: Limit set externally to $CMAKE_BUILD_PARALLEL_LEVEL."
+          fi
+
+      - name: Configure Ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-functional-${{ github.sha }}
+          restore-keys: ccache-functional-
+
+      # GUI off keeps the build daemon-only and Qt-free (find_package(Qt) is
+      # gated on ENABLE_GUI). ENABLE_TESTS=ON registers the functional_tests
+      # CTest case; ENABLE_DAEMON=ON builds gridcoinresearchd.
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DENABLE_GUI=OFF \
+            -DENABLE_TESTS=ON \
+            -DENABLE_DAEMON=ON \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build gridcoinresearchd
+        run: cmake --build build --target gridcoinresearchd
+
+      # The functional_tests case carries GRIDCOIND/GRIDCOINCLI env overrides
+      # (set in the top-level CMakeLists) pointing at build/bin/gridcoinresearchd.
+      - name: Run functional tests
+        run: ctest --test-dir build -R functional_tests --output-on-failure

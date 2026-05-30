@@ -1,0 +1,28 @@
+# Copyright (c) 2013-2021 The Bitcoin Core developers
+# Copyright (c) 2024-2026 The Gridcoin developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+# These variables are substituted by CMake (configure_file of
+# test/config.ini.in -> ${CMAKE_BINARY_DIR}/test/config.ini, @ONLY) and read by
+# test/functional/test_runner.py and test/functional/test_framework/.
+# Pass it to the runner with: test_runner.py --configfile=<builddir>/test/config.ini
+
+[environment]
+PACKAGE_NAME=@PACKAGE_NAME@
+PACKAGE_BUGREPORT=@PACKAGE_BUGREPORT@
+SRCDIR=@CMAKE_SOURCE_DIR@
+BUILDDIR=@CMAKE_BINARY_DIR@
+EXEEXT=@CMAKE_EXECUTABLE_SUFFIX@
+
+[components]
+# ENABLE_GRIDCOIND gates whether functional tests run at all — test_runner.py
+# exits early (rc 0, "No functional tests to run") when it is false.
+ENABLE_GRIDCOIND=@ENABLE_GRIDCOIND_CONF@
+# Gridcoin ships no separate gridcoin-cli; the daemon answers RPC directly, and
+# the functional suite drives nodes over JSON-RPC, so the CLI path is unused.
+ENABLE_CLI=@ENABLE_CLI_CONF@
+# Gridcoin always builds the BDB wallet.
+ENABLE_WALLET=@ENABLE_WALLET_CONF@
+# Gridcoin has no ZMQ notification support.
+ENABLE_ZMQ=@ENABLE_ZMQ_CONF@
