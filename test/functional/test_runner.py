@@ -99,13 +99,28 @@ BASE_SCRIPTS = [
     #   - rpc_net.py: two-node getpeerinfo/addnode + block propagation
     #   - feature_sidestake.py: local sidestaking config + reward split
     #   - feature_reorg.py: two-node divergent chains + reorg on connect
+    # Phase 4A.2 adds RPCHelpMan-surface tests (investor-mode, no beacon/CPID):
+    #   - rpc_signmessage.py: signmessage/verifymessage/validateaddress
+    #   - rpc_rawtransaction.py: createrawtransaction/decode/decodescript/sign
+    #   - rpc_psgt.py: PSGT create/decode/convert/combine/process/finalize
+    #   - rpc_htlc.py: createhtlc + decodescript of the redeem script
+    #   - wallet_keypool.py: keypoolrefill/getnewaddress/dumpprivkey
+    #   - rpc_blockchain.py: getblock*/getblockchaininfo/getdifficulty
+    #   - p2p_ping.py: ping/pong keepalive over the P2P wire protocol
     'feature_hello.py',
     'feature_regtest_staking.py',
     'p2p_version_handshake.py',
     'p2p_block_tx_relay.py',
+    'p2p_ping.py',
     'rpc_help.py',
+    'rpc_signmessage.py',
+    'rpc_rawtransaction.py',
+    'rpc_psgt.py',
+    'rpc_htlc.py',
+    'rpc_blockchain.py',
     'wallet_basic.py',
     'wallet_backup.py',
+    'wallet_keypool.py',
     'mempool_accept.py',
     'rpc_net.py',
     'feature_sidestake.py',
