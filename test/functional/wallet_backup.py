@@ -18,9 +18,8 @@ wallet. A full backup -> wipe -> restore cycle additionally needs multiwallet
 (createwallet/loadwallet), which Gridcoin does not have.
 """
 
-from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_raises
+from test_framework.util import assert_raises_rpc_error
 
 
 class WalletBackupTest(GridcoinTestFramework):
@@ -43,8 +42,8 @@ class WalletBackupTest(GridcoinTestFramework):
         assert isinstance(wif, str) and len(wif) > 0, "dumpprivkey returned no WIF"
         self.log.info("dumpprivkey returned a WIF for %s", addr)
 
-        # --- error path: dumpprivkey on a bogus address raises ---
-        assert_raises(JSONRPCException, node.dumpprivkey, "not_a_real_address")
+        # --- error path: dumpprivkey on a bogus address raises (any code) ---
+        assert_raises_rpc_error(None, None, node.dumpprivkey, "not_a_real_address")
         self.log.info("dumpprivkey invalid-address error path OK")
 
 

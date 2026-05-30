@@ -20,9 +20,8 @@ transactions are not included), so a mempool tx never confirms. Re-add a
 confirm-and-clear step once regtest block assembly includes mempool transactions.
 """
 
-from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_raises
+from test_framework.util import assert_equal, assert_raises_rpc_error
 
 
 class MempoolAcceptTest(GridcoinTestFramework):
@@ -60,9 +59,9 @@ class MempoolAcceptTest(GridcoinTestFramework):
         assert txid in node.getrawmempool(), "valid tx not accepted into mempool"
         self.log.info("valid tx accepted into mempool: %s", txid)
 
-        # 2. a double-spend of the same UTXO is rejected
+        # 2. a double-spend of the same UTXO is rejected (any RPC error code)
         second = self._signed_spend(node, u, node.getnewaddress(), amt)
-        assert_raises(JSONRPCException, node.sendrawtransaction, second)
+        assert_raises_rpc_error(None, None, node.sendrawtransaction, second)
         self.log.info("double-spend correctly rejected")
 
 

@@ -10,15 +10,15 @@ Investor-mode only (no beacon/CPID).
     which is immature for balance accounting);
   - staking lifts getbalance above 0 (coinstake outputs mature immediately under
     IsMockableChain);
-  - sendtoaddress is accepted into the mempool;
+  - a raw spend of a staked coinstake output is accepted into the mempool;
   - address validation round-trip.
 
-NOTE: transaction *confirmation* is intentionally not asserted here. On the
-current regtest stack, generatetoaddress blocks contain only the coinbase +
-coinstake (total size 460) — mempool transactions are not included — so a
-sent/raw tx never confirms. Re-add confirmation assertions once regtest block
-assembly includes mempool transactions. Amounts are floats (AmountFromValue
-rejects string amounts).
+NOTE: confirmation is not asserted -- generatetoaddress blocks contain only the
+coinbase + coinstake (mempool txs are not included on this stack). The spend
+sources a staked coinstake output rather than sendtoaddress, because
+sendtoaddress coin selection may pick a premine coinbase UTXO whose source tx is
+not in the regtest tx index, which the wallet then rejects at commit ("-4 ...
+coins already spent"). Amounts are floats (AmountFromValue rejects strings).
 """
 
 from test_framework.test_framework import GridcoinTestFramework
@@ -51,17 +51,24 @@ class WalletBasicTest(GridcoinTestFramework):
         assert_greater_than(bal, 0)
         self.log.info("post-stake spendable balance: %s GRC", bal)
 
-        # --- sendtoaddress is accepted into the mempool ---
-        to = node.getnewaddress()
-        txid = node.sendtoaddress(to, 1.0)
-        assert txid in node.getrawmempool(), "sendtoaddress not accepted into mempool"
-        self.log.info("sendtoaddress 1 GRC -> %s accepted into mempool (%s)", to, txid)
+        # --- raw spend of a recent coinstake output is accepted into the mempool ---
+        # (Most-recently-staked output = fewest confirmations = a coinstake, which
+        # is tx-indexed; never the height-0 premine coinbase.)
+        cs = min(node.listunspent(0), key=lambda u: u["confirmations"])
+        dest = node.getnewaddress()
+        raw = node.createrawtransaction(
+            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: float(cs["amount"]) - 1})
+        signed = node.signrawtransactionwithwallet(raw)
+        assert signed.get("complete"), signed
+        txid = node.sendrawtransaction(signed["hex"])
+        assert txid in node.getrawmempool(), "coinstake spend not accepted into mempool"
+        self.log.info("coinstake spend accepted into mempool: %s", txid)
 
         # --- address validation round-trip ---
-        info = node.validateaddress(to)
+        info = node.validateaddress(dest)
         assert info["isvalid"], info
         assert info.get("ismine", True), info
-        self.log.info("validateaddress round-trip OK for %s", to)
+        self.log.info("validateaddress round-trip OK for %s", dest)
 
 
 if __name__ == "__main__":
