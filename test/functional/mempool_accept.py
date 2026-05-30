@@ -5,19 +5,23 @@
 """Phase 4A mempool acceptance / rejection on regtest.
 
 Investor-mode only. Gridcoin's merged RPC surface has no testmempoolaccept, so
-this drives sendrawtransaction + getrawmempool directly against premine UTXOs:
+this drives sendrawtransaction + getrawmempool directly:
 
-  - a valid raw tx is accepted into the mempool and cleared once mined;
+  - a valid raw tx (spending a staked coinstake output) is accepted into the
+    mempool and cleared once mined;
   - resubmitting an already-mined tx is rejected;
   - a double-spend of an in-mempool UTXO is rejected.
 
-NOTE: the rejection error codes (-27 already-in-chain, -26 rejected/conflict)
-follow long-standing Bitcoin conventions; verify against Gridcoin's actual codes
-in WSL and adjust if they differ.
+Coins are sourced from staked coinstake outputs (written to the tx index by
+block connection), not the raw genesis premine coinbase (which is not tx-indexed
+on this stack, so a spend of it would be accepted to the mempool but silently
+dropped from blocks). assert_raises is used (not assert_raises_rpc_error) so the
+rejection checks do not depend on Gridcoin's specific RPC error codes.
 """
 
+from test_framework.authproxy import JSONRPCException
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_raises
 
 
 class MempoolAcceptTest(GridcoinTestFramework):
@@ -38,13 +42,21 @@ class MempoolAcceptTest(GridcoinTestFramework):
         assert signed.get("complete"), signed
         return signed["hex"]
 
+    def _recent_coinstake(self, node):
+        # Most-recently-staked output: a coinstake (tx-indexed -> mineable),
+        # never the height-0 premine coinbase (most confirmations).
+        return min(node.listunspent(0), key=lambda u: u["confirmations"])
+
     def run_test(self):
         node = self.nodes[0]
-        utxos = node.listunspent(0)
-        assert_equal(len(utxos), 10)
+        assert_equal(len(node.listunspent(0)), 10)
+
+        # stake so we have mature, tx-indexed coinstake outputs to spend
+        node.generatetoaddress(10, node.getnewaddress())
 
         # 1. a valid tx is accepted, then cleared from the mempool once mined
-        rawhex = self._signed_spend(node, utxos[0], node.getnewaddress(), 99999.0)
+        u = self._recent_coinstake(node)
+        rawhex = self._signed_spend(node, u, node.getnewaddress(), float(u["amount"]) - 1)
         txid = node.sendrawtransaction(rawhex)
         assert txid in node.getrawmempool(), "valid tx not accepted into mempool"
         node.generatetoaddress(1, node.getnewaddress())
@@ -53,17 +65,17 @@ class MempoolAcceptTest(GridcoinTestFramework):
         self.log.info("valid tx accepted then confirmed: %s", txid)
 
         # 2. resubmitting the now-mined tx is rejected (already in chain)
-        assert_raises_rpc_error(-27, None, node.sendrawtransaction, rawhex)
+        assert_raises(JSONRPCException, node.sendrawtransaction, rawhex)
         self.log.info("resubmit-of-mined-tx correctly rejected")
 
-        # 3. double-spend: two txs spending the same fresh premine UTXO; the
+        # 3. double-spend: two txs spending the same fresh coinstake UTXO; the
         # first is accepted, the second conflicts and is rejected.
-        u2 = node.listunspent(0)[0]
-        amt = float(u2["amount"]) - 1  # ~1 GRC fee
+        u2 = self._recent_coinstake(node)
+        amt = float(u2["amount"]) - 1
         first = self._signed_spend(node, u2, node.getnewaddress(), amt)
         second = self._signed_spend(node, u2, node.getnewaddress(), amt)
         node.sendrawtransaction(first)
-        assert_raises_rpc_error(-26, None, node.sendrawtransaction, second)
+        assert_raises(JSONRPCException, node.sendrawtransaction, second)
         self.log.info("double-spend correctly rejected")
 
 
