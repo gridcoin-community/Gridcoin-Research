@@ -2,7 +2,7 @@
 # Copyright (c) 2017-2019 The Bitcoin Core developers
 # Copyright (c) 2024-2026 The Gridcoin developers
 # Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+# file COPYING or https://opensource.org/licenses/mit-license.php.
 """Combine logs from multiple Gridcoin nodes as well as the test_framework log.
 
 This streams the combined log output to stdout. Use combine_logs.py > outputfile
