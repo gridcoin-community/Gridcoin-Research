@@ -92,11 +92,24 @@ BASE_SCRIPTS = [
     # Phase 3 adds (P2P wire protocol):
     #   - p2p_version_handshake.py: version/verack + ping/pong against a node
     #   - p2p_block_tx_relay.py: relay a node-produced tx and block over P2P
+    # Phase 4A adds the investor-mode starter suite (no beacon/CPID required):
+    #   - wallet_basic.py: raw-tx + sendtoaddress spend, balance, confirmations
+    #   - wallet_backup.py: backupwallet + dumpprivkey/importprivkey round-trip
+    #   - mempool_accept.py: sendrawtransaction accept + double-spend rejection
+    #   - rpc_net.py: two-node getpeerinfo/addnode + block propagation
+    #   - feature_sidestake.py: local sidestaking config + reward split
+    #   - feature_reorg.py: two-node divergent chains + reorg on connect
     'feature_hello.py',
     'feature_regtest_staking.py',
     'p2p_version_handshake.py',
     'p2p_block_tx_relay.py',
     'rpc_help.py',
+    'wallet_basic.py',
+    'wallet_backup.py',
+    'mempool_accept.py',
+    'rpc_net.py',
+    'feature_sidestake.py',
+    'feature_reorg.py',
 ]
 
 # Place EXTENDED_SCRIPTS first since longer tests benefit from being scheduled
