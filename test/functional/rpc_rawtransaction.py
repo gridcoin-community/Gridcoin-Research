@@ -67,6 +67,17 @@ class RpcRawTransactionTest(GridcoinTestFramework):
         assert_equal(signed["complete"], True)
         self.log.info("signrawtransactionwithwallet completed the signature")
 
+        # --- signrawtransactionwithkey: offline sign with an explicit key ---
+        # listunspent exposes the UTXO's address + scriptPubKey, so the input can
+        # be signed with just its private key and prevout metadata (no wallet
+        # context). This is the offline-signing path.
+        priv = node.dumpprivkey(utxo["address"])
+        prevtxs = [{"txid": utxo["txid"], "vout": utxo["vout"],
+                    "scriptPubKey": utxo["scriptPubKey"]}]
+        signed_key = node.signrawtransactionwithkey(raw, [priv], prevtxs)
+        assert_equal(signed_key["complete"], True)
+        self.log.info("signrawtransactionwithkey completed with an explicit key")
+
 
 if __name__ == "__main__":
     RpcRawTransactionTest().main()

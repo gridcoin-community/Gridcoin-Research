@@ -121,6 +121,9 @@ BASE_SCRIPTS = [
     #   - wallet_keypool.py: keypoolrefill/getnewaddress/dumpprivkey
     #   - rpc_blockchain.py: getblock*/getblockchaininfo/getdifficulty
     #   - p2p_ping.py: ping/pong keepalive over the P2P wire protocol
+    #   - rpc_netinfo.py: getnetworkinfo/getnettotals/getconnectioncount/getpeerinfo
+    #   - rpc_multisig.py: addmultisigaddress -> validateaddress
+    #   - wallet_listtransactions.py: listtransactions/gettransaction/listsinceblock
     'feature_hello.py',
     'feature_regtest_staking.py',
     'p2p_version_handshake.py',
@@ -132,9 +135,12 @@ BASE_SCRIPTS = [
     'rpc_psgt.py',
     'rpc_htlc.py',
     'rpc_blockchain.py',
+    'rpc_netinfo.py',
+    'rpc_multisig.py',
     'wallet_basic.py',
     'wallet_backup.py',
     'wallet_keypool.py',
+    'wallet_listtransactions.py',
     'mempool_accept.py',
     'rpc_net.py',
     'feature_sidestake.py',
