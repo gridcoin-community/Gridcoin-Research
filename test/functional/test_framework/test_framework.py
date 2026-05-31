@@ -223,12 +223,12 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         self.config = config
         fname_gridcoind = os.path.join(
             config["environment"]["BUILDDIR"],
-            "src",
+            "bin",
             "gridcoinresearchd" + config["environment"]["EXEEXT"],
         )
         fname_gridcoincli = os.path.join(
             config["environment"]["BUILDDIR"],
-            "src",
+            "bin",
             "gridcoin-cli" + config["environment"]["EXEEXT"],
         )
         self.options.gridcoind = os.getenv("GRIDCOIND", default=fname_gridcoind)
@@ -600,13 +600,15 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         def connect_nodes_helper(from_connection, node_num):
             ip_port = "127.0.0.1:" + str(p2p_port(node_num))
             from_connection.addnode(ip_port, "onetry")
-            # poll until version handshake complete to avoid race conditions
-            # with transaction relaying
-            # See comments in net_processing:
-            # * Must have a version message before anything else
-            # * Must have a verack message before anything else
-            wait_until_helper(lambda: all(peer['version'] != 0 for peer in from_connection.getpeerinfo()))
-            wait_until_helper(lambda: all(peer['bytesrecv_per_msg'].pop('verack', 0) == 24 for peer in from_connection.getpeerinfo()))
+            # Poll until the version handshake has produced a peer with a
+            # negotiated protocol version. Gridcoin's getpeerinfo does not
+            # expose Bitcoin Core's per-message byte counters (bytesrecv_per_msg),
+            # so we cannot key on the verack byte count; requiring a non-empty
+            # peer list with version != 0 avoids the vacuous-true on an empty
+            # list and is sufficient before sync_blocks (which polls with its
+            # own timeout).
+            wait_until_helper(lambda: len(from_connection.getpeerinfo()) > 0
+                              and all(peer['version'] != 0 for peer in from_connection.getpeerinfo()))
 
         connect_nodes_helper(self.nodes[a], b)
 
