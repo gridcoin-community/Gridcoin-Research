@@ -27,6 +27,7 @@ add_library(gridcoinqt STATIC
     addressbookpage.cpp
     addresstablemodel.cpp
     askpassphrasedialog.cpp
+    balancecopyfilter.cpp
     bantablemodel.cpp
     bitcoinaddressvalidator.cpp
     bitcoinamountfield.cpp
