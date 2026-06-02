@@ -20,9 +20,10 @@ class QLabel;
  *    formatted balance to the clipboard, with U+2009 (THIN SPACE) thousands
  *    separators stripped so the value pastes cleanly into consumers that
  *    don't normalize whitespace.
- *  - QKeySequence::Copy (Ctrl-C / Ctrl-Ins / Shift-Ins) with an active text
- *    selection on the label -> writes the selected substring to the clipboard,
- *    also with thin spaces stripped.
+ *  - QKeySequence::Copy (Ctrl-C on most platforms; the exact bindings are
+ *    Qt's responsibility, not ours) with an active text selection on the
+ *    label -> writes the selected substring to the clipboard, also with
+ *    thin spaces stripped.
  *
  * Background (issue #2994): the earlier per-label
  * setContextMenuPolicy(Qt::CustomContextMenu) wiring (PR #2849) suppressed
