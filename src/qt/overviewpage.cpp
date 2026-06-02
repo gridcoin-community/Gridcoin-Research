@@ -11,6 +11,7 @@
 #include "researcher/researchermodel.h"
 #include "mrcmodel.h"
 #include "walletmodel.h"
+#include "balancecopyfilter.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
 #include "transactiontablemodel.h"
@@ -22,10 +23,7 @@
 #include <functional>
 
 #include <QAbstractItemDelegate>
-#include <QApplication>
-#include <QClipboard>
 #include <QLabel>
-#include <QMenu>
 #include <QPainter>
 
 #define DECORATION_SIZE 40
@@ -181,20 +179,20 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
     showHideMRCToolButton();
 
-    // Set up right-click "Copy amount" context menus on balance labels
+    // Install copy-behavior handlers on the balance labels. See
+    // src/qt/balancecopyfilter.h for the rationale (issue #2994):
+    // right-click "Copy amount" copies the full formatted balance, and
+    // Ctrl-C copies the user's selection -- both with thin-space thousands
+    // separators stripped so the clipboard value is portable.
     auto setupCopyMenu = [this](QLabel* label, std::function<qint64()> getAmount) {
-        label->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(label, &QWidget::customContextMenuRequested, this, [this, label, getAmount](const QPoint& pos) {
-            if (m_privacy) return;
-            QMenu menu;
-            menu.addAction(tr("Copy amount"), this, [this, getAmount]() {
+        new BalanceCopyFilter(
+            label,
+            [this, getAmount]() {
                 int unit = walletModel->getOptionsModel()->getDisplayUnit();
-                QString text = BitcoinUnits::format(unit, getAmount());
-                text.remove(BitcoinUnits::THIN_SPACE);
-                QApplication::clipboard()->setText(text);
-            });
-            menu.exec(label->mapToGlobal(pos));
-        });
+                return BitcoinUnits::format(unit, getAmount());
+            },
+            tr("Copy amount"),
+            [this]() { return !m_privacy; });
     };
 
     setupCopyMenu(ui->headerBalanceLabel, [this]() { return currentBalance; });
