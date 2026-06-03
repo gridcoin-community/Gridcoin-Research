@@ -679,6 +679,7 @@ void SetupServerArgs()
     // registered" startup warning when an isolated-testnet node sets the
     // height via the override.
     hidden_args.emplace_back("-pollmultiaddressheight");
+    hidden_args.emplace_back("-autogreylistdeepcopyheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
     // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting

@@ -231,7 +231,11 @@ public:
             std::string key_type = KeyType();
             uint256 hash_hint = uint256();
 
-            txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint);
+            if (!txdb.ReadGenericSerializablesToMapWithForeignKey(key_type, storage_by_record_num, hash_hint)) {
+                LogPrintf("WARN: %s: ReadGenericSerializablesToMapWithForeignKey failed for key_type=%s; "
+                          "returning empty map.", __func__, key_type);
+                return M{};
+            }
         }
 
         // storage_by_record_num is ordered ascending by record number, and the latest record for a key is its current

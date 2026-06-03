@@ -807,6 +807,16 @@ public:
     bool Contains(const std::string& name, const bool& only_auto_greylisted = true) const;
 
     //!
+    //! \brief Whether the non-mutating deep-copy overlay is active at the height of the superblock
+    //! the greylist was last refreshed against. Whitelist::Snapshot gates its overlay path on this:
+    //! pre-gate it applies the legacy in-place overlay; post-gate it deep-copies each entry first so
+    //! the registry is never mutated. Driven by AutoGreylistDeepCopyHeight (with -autogreylistdeepcopyheight override).
+    //!
+    //! \return \c true if the deep-copy overlay is active.
+    //!
+    bool IsDeepCopyActive() const;
+
+    //!
     //! \brief This refreshes the AutoGreylist object from the last superblock in the chain.
     //!
     void Refresh();
@@ -849,6 +859,10 @@ private:
 
     GreylistPtr m_greylist_ptr;
     QuorumHash m_superblock_hash;
+    //! Set from the refresh superblock's height; gates Whitelist::Snapshot's overlay (deep copy vs legacy in-place).
+    //! All reads/writes go through methods that hold autogreylist_lock (IsDeepCopyActive,
+    //! RefreshWithSuperblock, Reset); annotated GUARDED_BY so Clang thread-safety enforces it.
+    bool m_deep_copy_active GUARDED_BY(autogreylist_lock);
 };
 
 //!
@@ -897,11 +911,19 @@ public:
 
     //!
     //! \brief Get a read-only view of the projects in the whitelist. The default filter is ACTIVE, which
-    //! provides the original ACTIVE project only view. The refresh_greylist filter is used to refresh
-    //! the AutoGreylist as part of taking the snapshot.
+    //! provides the original ACTIVE project only view. The auto-greylist overlay (toggled by include_override)
+    //! is computed from the current AutoGreylist cache; the cache is refreshed explicitly at the chain handler
+    //! points (Quorum::PushSuperblock for v2+ activation, Quorum::PopSuperblock on reorg,
+    //! Quorum::LoadSuperblockIndex on startup) and additionally via Superblock::FromConvergence's
+    //! RefreshWithAndUpdateSuperblock when scrapers/subscribers build a candidate superblock (only for
+    //! superblock version > 2; the call is gated at superblock.cpp). Snapshot() itself does NOT trigger
+    //! a refresh -- it is a cs_lock leaf in lock ordering. NOTE: pre-gate (m_deep_copy_active=false)
+    //! the override loop still mutates m_project_entries via shallow-copied shared_ptrs; that is the
+    //! legacy behavior the deep-copy gate is designed to neutralize, not a contract Snapshot() honors
+    //! pre-gate.
     //!
     WhitelistSnapshot Snapshot(const ProjectEntry::ProjectFilterFlag& filter = ProjectEntry::ProjectFilterFlag::ACTIVE,
-                               const bool& refresh_greylist = true, const bool &include_override = true) const;
+                               const bool &include_override = true) const;
 
     //!
     //! \brief Destroy the contract handler state to prepare for historical
@@ -989,6 +1011,13 @@ public:
     void ResetInMemoryOnly();
 
     //!
+    //! \brief Rebuild the in-memory registry cache from LevelDB (the ground truth), preserving the
+    //! LevelDB store. Used at the AutoGreylistDeepCopyHeight gate crossing to discard any pre-gate
+    //! in-place overlay corruption before the post-gate non-mutating overlay takes over. NOT a Reset().
+    //!
+    void ReinitFromDisk() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Passivates the elements in the project db, which means remove from memory elements in the
     //! historical map that are not referenced by m_projects. The backing store of the element removed
     //! from memory is retained and will be transparently restored if find() is called on the hash key
@@ -999,10 +1028,10 @@ public:
     uint64_t PassivateDB() override;
 
     //!
-    //! \brief This returns m_project_first_actives. Note that unlike other methods here, this does not take the cs_lock
-    //! internally but rather requires it. The reason for this is that this function is used by the AutoGreylist class update
-    //! where the cs_lock is already taken before, and the AutoGreylist class has its own lock. If cs_lock is then taken again,
-    //! a potential deadlock can result.
+    //! \brief Returns a by-value snapshot of m_project_first_actives. Takes cs_lock internally; safe to call from any
+    //! thread holding only cs_main (or no lock). cs_lock is recursive, so a caller that already holds it re-enters
+    //! harmlessly. The post-PR-2997 chain-handler refresh path runs without cs_lock, so internal locking is required
+    //! here for thread-safety against contract-handler writes (AddDelete -> Store under cs_lock).
     //!
     const ProjectEntryMap GetProjectsFirstActive() const;
 
@@ -1056,16 +1085,20 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ProjectEntryMap m_project_entries;                   //!< The set of whitelisted projects.
+    ProjectEntryMap m_project_entries GUARDED_BY(cs_lock);                   //!< The set of whitelisted projects.
 
-    PendingProjectEntryMap m_pending_project_entries;    //!< Not actually used. Only to satisfy the template.
+    PendingProjectEntryMap m_pending_project_entries GUARDED_BY(cs_lock);    //!< Not actually used. Only to satisfy the template.
 
-    std::set<ProjectEntry> m_expired_project_entries;    //!< Not actually used. Only to satisfy the template.
+    std::set<ProjectEntry> m_expired_project_entries GUARDED_BY(cs_lock);    //!< Not actually used. Only to satisfy the template.
 
-    ProjectEntryMap m_project_first_actives;             //!< Tracks when projects were first activated for auto greylisting purposes.
+    ProjectEntryMap m_project_first_actives GUARDED_BY(cs_lock);             //!< Tracks when projects were first activated for auto greylisting purposes.
 
+    //! \note No GUARDED_BY: m_project_db is set once in the ctor and never reassigned; only its internal state
+    //! is modified, by member functions that are themselves invoked under cs_lock in the Whitelist methods.
     ProjectEntryDB m_project_db;                         //!< The project db member
 
+    //! \note No GUARDED_BY: m_auto_greylist (the shared_ptr) is set once in the ctor and never replaced;
+    //! only the pointed-to AutoGreylist's internal state changes, guarded by its own autogreylist_lock.
     std::shared_ptr<AutoGreylist> m_auto_greylist;       //!< Smart shared pointer to the AutoGreylist cache object
 public:
 

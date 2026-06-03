@@ -3348,11 +3348,11 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("display_url", project.DisplayUrl());
         entry.pushKV("stats_url", project.StatsUrl());
 
-        if (project.HasGDPRControls()) {
+        if (project.HasGDPRControls().has_value()) {
             entry.pushKV("gdpr_controls", *project.HasGDPRControls());
         }
 
-        if (project.RequiresExtAdapter()) {
+        if (project.RequiresExtAdapter().has_value()) {
             entry.pushKV("requires_external_adapter", *project.RequiresExtAdapter());
         }
 
@@ -3420,11 +3420,11 @@ UniValue getrawprojectstatus(const UniValue& params, bool fHelp)
         // value must be stable across GUI locales (the no-arg StatusToString() defaults to the translated form).
         entry.pushKV("status", project->StatusToString(project->m_status.Value(), false));
 
-        if (project->HasGDPRControls()) {
+        if (project->HasGDPRControls().has_value()) {
             entry.pushKV("gdpr_controls", *project->HasGDPRControls());
         }
 
-        if (project->RequiresExtAdapter()) {
+        if (project->RequiresExtAdapter().has_value()) {
             entry.pushKV("requires_external_adapter", *project->RequiresExtAdapter());
         }
 
