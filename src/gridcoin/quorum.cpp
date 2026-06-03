@@ -688,13 +688,25 @@ private: // SuperblockValidator classes
         uint256 m_source_manifest_hash; //!< Manifest that contains this part.
         int64_t m_source_manifest_time; //!< For selecting the beacon list.
 
+        //! Shared pointer to the CScraperManifest that contains this part. Pins the source manifest for the
+        //! lifetime of this ResolvedPart, which in turn pins the CPart at m_part_hash in CSplitBlob::mapParts
+        //! (CSplitBlob::vParts is append-only after addPart/addPartData -- never shrinks during a manifest's
+        //! lifetime -- so as long as the manifest is alive its parts stay alive via their refs[] entries).
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h) at the validator-side
+        //! ConvergenceCandidate consumer, which does NOT set ConvergedManifest::CScraperConvergedManifest_ptr
+        //! -- closes a latent fragility that previously relied solely on the global mapManifest /
+        //! mapPendingDeletedManifest scraper-sleep-bounded housekeeping holding pen.
+        CScraperManifest_shared_ptr m_source_manifest;
+
         ResolvedPart(
             uint256 part_hash,
             uint256 source_manifest_hash,
-            int64_t source_manifest_time)
+            int64_t source_manifest_time,
+            CScraperManifest_shared_ptr source_manifest)
             : m_part_hash(part_hash)
             , m_source_manifest_hash(source_manifest_hash)
             , m_source_manifest_time(source_manifest_time)
+            , m_source_manifest(std::move(source_manifest))
         {
         }
     };
@@ -798,7 +810,9 @@ private: // SuperblockValidator classes
         {
             m_candidate_hashes.erase(part.m_part_hash);
 
-            m_resolved_parts.emplace_back(part);
+            // std::move so the new m_source_manifest shared_ptr in ResolvedPart is moved (refcount-neutral)
+            // rather than copied (refcount inc on emplace_back + dec on `part`'s destruction).
+            m_resolved_parts.emplace_back(std::move(part));
         }
     };
 
@@ -810,16 +824,54 @@ private: // SuperblockValidator classes
     {
     public:
         //!
-        //! \brief Add the provided manifest part to the convergence.
+        //! \brief Add the provided manifest part to the convergence and pin its source CScraperManifest.
         //!
-        //! \param project_name      Identifies the project to add.
-        //! \param project_part_data Serialized project stats of the part.
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h). The validator builds m_convergence
+        //! piecemeal via this AddPart rather than from a single source manifest, so m_convergence's own
+        //! CScraperConvergedManifest_ptr is never set. Without external pinning, the raw CPart* values in
+        //! m_convergence.ConvergedManifestPartPtrsMap would depend on global mapManifest +
+        //! mapPendingDeletedManifest scraper-sleep-bounded housekeeping for their lifetime -- a latent
+        //! fragility against any change to housekeeping cadence. Holding the source_manifest shared_ptr
+        //! in m_source_manifests closes the type-level hole.
         //!
-        void AddPart(std::string project_name, CSplitBlob::CPart* project_part_ptr)
+        //! \param project_name    Identifies the project to add.
+        //! \param project_part_ptr Pointer to the CPart in CSplitBlob::mapParts. If null (e.g. the part
+        //!                         disappeared from mapParts between resolution and combination), the
+        //!                         add is dropped and logged -- preventing a later crash in
+        //!                         GetScraperStatsByConvergedManifest, which dereferences this pointer
+        //!                         without a null check.
+        //! \param source_manifest  Shared pointer to a CScraperManifest whose vParts contains this part.
+        //!                         May be the empty shared_ptr only if the caller has its own external
+        //!                         guarantee that the part outlives this candidate (no current call site
+        //!                         passes a null shared_ptr).
+        //!
+        void AddPart(std::string project_name,
+                     CSplitBlob::CPart* project_part_ptr,
+                     CScraperManifest_shared_ptr source_manifest)
         {
+            // GetResolvedPartPtr returns nullptr if the resolved part disappeared from CSplitBlob::mapParts
+            // between resolution and the combination iteration ("the most recent project part should
+            // always exist" per the comment there, but defensive). Inserting a nullptr would leave a
+            // (name, nullptr) entry that ComputeQuorumHash -> GetScraperStatsByConvergedManifest later
+            // dereferences without a null check (scraper.cpp:4179 etc.) -- crash. Drop the part instead;
+            // the resulting candidate will produce a different quorum hash than the validated superblock
+            // and validation will simply fail for this combination, which is the correct behavior.
+            if (project_part_ptr == nullptr) {
+                LogPrintf("ValidateSuperblock(): AddPart: null CPart for project %s; dropping.",
+                          project_name);
+                return;
+            }
+
             m_convergence.ConvergedManifestPartPtrsMap.emplace(
                 std::move(project_name),
                 std::move(project_part_ptr));
+
+            if (source_manifest) {
+                // Set dedups by stored-pointer address (shared_ptr::get() via std::less<shared_ptr>
+                // per [util.smartptr.shared.cmp]): a manifest contributing N parts pins exactly one
+                // shared_ptr ref. Cheap (one atomic increment per distinct contributing manifest).
+                m_source_manifests.insert(std::move(source_manifest));
+            }
         }
 
         //!
@@ -838,6 +890,13 @@ private: // SuperblockValidator classes
 
     private:
         ConvergedManifest m_convergence; //!< Used to compute a superblock hash
+
+        //! Shared pointers to every source CScraperManifest that contributed a part to m_convergence.
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h) -- the raw CPart* values in
+        //! m_convergence.ConvergedManifestPartPtrsMap are valid as long as at least one of these
+        //! shared_ptrs is alive (CSplitBlob::vParts is append-only, so a manifest never loses a part
+        //! during its lifetime). Set dedups across multiple parts from the same manifest.
+        std::set<CScraperManifest_shared_ptr> m_source_manifests;
     };
 
     //!
@@ -959,7 +1018,7 @@ private: // SuperblockValidator classes
 
             ConvergenceCandidate convergence;
             size_t remainder = m_current_combination;
-            uint256 latest_manifest;
+            CScraperManifest_shared_ptr latest_manifest_ptr;
             int64_t latest_manifest_time = 0;
 
             for (const auto& project_pair : m_projects) {
@@ -978,20 +1037,24 @@ private: // SuperblockValidator classes
 
                 convergence.AddPart(
                     project_pair.first, // project name
-                    GetResolvedPartPtr(resolved_part.m_part_hash));
+                    GetResolvedPartPtr(resolved_part.m_part_hash),
+                    resolved_part.m_source_manifest); // pin source manifest (pair invariant)
 
                 remainder -= part_index * project.m_combiner_mask;
 
                 // Find the most recent manifest that provided one of the parts
-                // to fetch the beacon list from:
-                //
+                // to fetch the beacon list from. Capture the pinned shared_ptr
+                // rather than the hash so AddBeaconPartsData below can use it
+                // directly -- no separate mapManifest lookup needed (and no
+                // dependence on mapManifest housekeeping cadence between here
+                // and the deref).
                 if (resolved_part.m_source_manifest_time > latest_manifest_time) {
-                    latest_manifest = resolved_part.m_source_manifest_hash;
+                    latest_manifest_ptr = resolved_part.m_source_manifest;
                     latest_manifest_time = resolved_part.m_source_manifest_time;
                 }
             }
 
-            AddBeaconPartsData(convergence, latest_manifest, m_height);
+            AddBeaconPartsData(convergence, latest_manifest_ptr, m_height);
 
             ++m_current_combination;
 
@@ -1061,34 +1124,35 @@ private: // SuperblockValidator classes
         //! regular project, so its side-channel parts are trusted for this
         //! convergence candidate, matching the scraper-side security model.
         //!
-        //! \param convergence   Convergence to add the parts to.
-        //! \param manifest_hash Identifies the source manifest.
-        //! \param height        Height of the block whose superblock is
-        //!                      being validated. PACTC and PPK are only
-        //!                      included in the reconstructed convergence
-        //!                      at or after BlockV13Height — before that
-        //!                      the fallback did not handle these parts at
-        //!                      all (and scrapers did not emit them), so
-        //!                      preserving pre-v13 convergence contents
-        //!                      keeps the hard-fork story clean.
+        //! \param convergence Convergence to add the parts to.
+        //! \param manifest    Pinned shared pointer to the source manifest. Selected in
+        //!                    GetNextConvergence as the latest-timestamped of the convergence's
+        //!                    pinned source manifests (already in resolved_part.m_source_manifest),
+        //!                    so no mapManifest lookup is needed here and the BeaconList resolution
+        //!                    does not depend on global housekeeping cadence.
+        //! \param height      Height of the block whose superblock is
+        //!                    being validated. PACTC and PPK are only
+        //!                    included in the reconstructed convergence
+        //!                    at or after BlockV13Height — before that
+        //!                    the fallback did not handle these parts at
+        //!                    all (and scrapers did not emit them), so
+        //!                    preserving pre-v13 convergence contents
+        //!                    keeps the hard-fork story clean.
         //!
         static void AddBeaconPartsData(
             ConvergenceCandidate& convergence,
-            const uint256& manifest_hash,
+            const CScraperManifest_shared_ptr& manifest,
             const int height)
         {
-            LOCK(CScraperManifest::cs_mapManifest);
-
-            const auto iter = CScraperManifest::mapManifest.find(manifest_hash);
-
-            // If the manifest for the beacon list disappeared, we cannot
-            // proceed, but the most recent manifest should always exist:
-            if (iter == CScraperManifest::mapManifest.end()) {
-                LogPrintf("ValidateSuperblock(): beacon manifest disappeared.");
+            // Empty shared_ptr would only happen on a candidate with zero resolved parts (no
+            // m_source_manifest ever captured into latest_manifest_ptr). The combiner enforces
+            // non-empty m_resolved_parts before constructing a ProjectCombiner (quorum.cpp
+            // ResolveProjectParts returns ProjectCombiner() on empty), so reaching here with
+            // an empty shared_ptr would indicate a logic regression upstream.
+            if (!manifest) {
+                LogPrintf("ValidateSuperblock(): beacon manifest pin is empty.");
                 return;
             }
-
-            const CScraperManifest_shared_ptr manifest = iter->second;
 
             const bool include_extra_side_channel_parts = IsV13Enabled(height);
 
@@ -1106,7 +1170,7 @@ private: // SuperblockValidator classes
                     return;
                 }
 
-                convergence.AddPart("BeaconList", manifest->vParts[0]);
+                convergence.AddPart("BeaconList", manifest->vParts[0], manifest); // pin source manifest
 
                 // Inlined the previous find_entry lambda so the analyzer can
                 // see that cs_manifest (the lock guarding manifest->projects)
@@ -1145,7 +1209,11 @@ private: // SuperblockValidator classes
             // capturing manifest by reference) so the analyzer can see that
             // the values consumed are the ones the enclosing LOCK2 protects;
             // lambda captures don't propagate hold-state in the same way.
-            const auto add_optional_part = [&convergence](
+            //
+            // manifest IS captured (by value) for the AddPart pair-invariant pin -- shared_ptr copy is
+            // cheap (one atomic increment) and the value capture has no thread-safety analyzer implication
+            // because the shared_ptr's lifetime, not its pointee's, is what AddPart relies on.
+            const auto add_optional_part = [&convergence, manifest](
                                                const std::vector<CScraperManifest::dentry>& projects,
                                                const std::vector<CSplitBlob::CPart*>& vParts,
                                                const std::string& name,
@@ -1158,7 +1226,7 @@ private: // SuperblockValidator classes
                     LogPrintf("ValidateSuperblock(): out-of-range part offset for %s.", name);
                     return;
                 }
-                convergence.AddPart(name, vParts[part_offset]);
+                convergence.AddPart(name, vParts[part_offset], manifest); // pin source manifest
             };
 
             add_optional_part(manifest->projects, manifest->vParts,
@@ -1377,7 +1445,9 @@ private: // SuperblockValidator classes
                     project_option->LinkPart(ResolvedPart(
                         manifest->vParts[entry.part1]->hash,
                         manifest_hash,
-                        entry.LastModified));
+                        entry.LastModified,
+                        manifest)); // pin source manifest -- preserves ConvergedManifest pair invariant
+                                    // when the ResolvedPart is later consumed by ConvergenceCandidate::AddPart.
                 }
             }
         }
