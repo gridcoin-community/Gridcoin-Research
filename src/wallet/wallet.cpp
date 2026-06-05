@@ -924,10 +924,13 @@ bool CWallet::EraseFromWallet(uint256 hash)
     return erased;
 }
 
+// cs_main is required because the producer-side NotifyTransactionChanged handler
+// (walletmodel.cpp) reads mapBlockIndex / pindexBest under this lock.
 bool CWallet::SyncTransaction(const CTransactionRef& ptx,
                              const TxState& state,
                              bool update_tx,
                              bool rescanning_old_block)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Note: cs_wallet may already be held by blockConnected/blockDisconnected.
     // CCriticalSection supports recursive locking, so the LOCK here is safe

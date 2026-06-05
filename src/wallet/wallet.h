@@ -275,6 +275,10 @@ public:
     /** Central entry point for updating wallet transaction state.
      *  Called by validation callbacks; handles mapWallet, mapTxSpends,
      *  balance updates, UI notifications, and persistence.
+     *
+     *  cs_main is required because the producer-side NotifyTransactionChanged
+     *  handler (walletmodel.cpp) reads mapBlockIndex / pindexBest under this
+     *  lock for coinstake/coinbase visibility decisions.
      */
     bool SyncTransaction(const CTransactionRef& ptx,
                         const TxState& state,
