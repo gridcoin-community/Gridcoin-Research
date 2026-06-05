@@ -613,13 +613,24 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
 UniValue listpolls(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "listpolls ( showfinished )\n"
-                "\n"
-                "[showfinished] -> If true, show finished polls as well.\n"
-                "\n"
-                "Lists poll details\n");
+    static const RPCHelpMan help{
+        "listpolls",
+        "Lists poll details for all currently active polls (or for all polls if showfinished is true).",
+        {
+            {"showfinished", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, show finished polls as well. Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "Poll detail object; see 'getpollresults' / 'addpoll' for shape."},
+            }},
+        RPCExamples{
+            HelpExampleCli("listpolls", "") +
+            HelpExampleCli("listpolls", "true") +
+            HelpExampleRpc("listpolls", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     UniValue json(UniValue::VARR);
 
@@ -638,17 +649,23 @@ UniValue listpolls(const UniValue& params, bool fHelp)
 
 UniValue getpollresults(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "getpollresults <poll_title_or_id>\n"
-                "\n"
-                "<poll_title_or_id> --> Title or ID of the poll.\n"
-                "\n"
-                "Display the results for the specified poll.\n"
-                "\n"
-                "Note that in the small chance that a blockchain reorg occurs during\n"
-                "the tally for the poll, this call will return an error. Retrying\n"
-                "should succeed.");
+    static const RPCHelpMan help{
+        "getpollresults",
+        "Display the results for the specified poll.\n"
+        "\n"
+        "Note that in the small chance that a blockchain reorg occurs during the tally for the poll,\n"
+        "this call will return an error. Retrying should succeed.",
+        {
+            {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Poll result object; see source (PollResultToJson) for the exact shape."}}},
+        RPCExamples{
+            HelpExampleCli("getpollresults", "\"Example Poll\"") +
+            HelpExampleRpc("getpollresults", "\"Example Poll\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     const std::string title_or_id = params[0].get_str();
 
@@ -671,13 +688,22 @@ UniValue getpollresults(const UniValue& params, bool fHelp)
 
 UniValue getvotingclaim(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "getvotingclaim <poll_or_vote_id>\n"
-                "\n"
-                "<poll_or_vote_id> --> Transaction hash of the poll or vote.\n"
-                "\n"
-                "Display the claim for the specified poll or vote.\n");
+    static const RPCHelpMan help{
+        "getvotingclaim",
+        "Display the claim for the specified poll or vote.",
+        {
+            {"poll_or_vote_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Transaction hash of the poll or vote."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Claim object; shape depends on whether the transaction is a poll (PollClaimToJson) or vote (VoteClaimToJson)."}}},
+        RPCExamples{
+            HelpExampleCli("getvotingclaim", "\"<txid>\"") +
+            HelpExampleRpc("getvotingclaim", "\"<txid>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     const uint256 id = uint256S(params[0].get_str());
 
@@ -764,14 +790,27 @@ UniValue vote(const UniValue& params, bool fHelp)
 
 UniValue votebyid(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "votebyid",
+        "Cast a vote for a poll.",
+        {
+            {"poll_id", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "ID (transaction hash) of the poll to vote for."},
+            {"choice_id", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Numeric ID of a choice to vote for. Pass additional positional choice IDs for multi-choice polls."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Vote submission detail; see source (SubmitVote) — includes poll, vote_txid, and responses fields."}}},
+        RPCExamples{
+            HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
+            HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
+            HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
+    };
+    // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
+    // RPCHelpMan does not model unbounded variadic, so keep the original lower-bound check and
+    // render help via the manifest above.
     if (fHelp || params.size() < 2)
-        throw std::runtime_error(
-            "votebyid <poll_id> <choice_id_1> ( choice_id_2... )\n"
-            "\n"
-            "<poll_id> --------> ID of the poll to vote for.\n"
-            "<choice_ids...> --> Numeric IDs of the choices to vote for.\n"
-            "\n"
-            "Cast a vote for a poll.\n");
+        throw std::runtime_error(help.ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
@@ -807,17 +846,23 @@ UniValue votebyid(const UniValue& params, bool fHelp)
 
 UniValue votedetails(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw std::runtime_error(
-                "votedetails <poll_title_or_id>\n"
-                "\n"
-                "<poll_title_or_id> --> Title or ID of the poll.\n"
-                "\n"
-                "Display the vote details for the specified poll.\n"
-                "\n"
-                "Note that in the small chance that a blockchain reorg occurs during\n"
-                "the tally for the vote details, this call will return an error. Retrying\n"
-                "should succeed.");
+    static const RPCHelpMan help{
+        "votedetails",
+        "Display the vote details for the specified poll.\n"
+        "\n"
+        "Note that in the small chance that a blockchain reorg occurs during the tally for the vote details,\n"
+        "this call will return an error. Retrying should succeed.",
+        {
+            {"poll_title_or_id", RPCArg::Type::STR, RPCArg::Optional::NO, "Title or ID of the poll."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Vote details object; see source (VoteDetailsToJson) for shape."}}},
+        RPCExamples{
+            HelpExampleCli("votedetails", "\"Example Poll\"") +
+            HelpExampleRpc("votedetails", "\"Example Poll\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     const std::string title_or_id = params[0].get_str();
 
@@ -839,13 +884,19 @@ UniValue votedetails(const UniValue& params, bool fHelp)
 
 UniValue testpollnotification(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1) {
-        throw std::runtime_error(
-                "testpollnotification <poll txid>\n"
-                "\n"
-                "<poll txid> --> Transaction id of the poll to test notification.\n"
-                "\n"
-                "Test the poll notification system.\n");
+    static const RPCHelpMan help{
+        "testpollnotification",
+        "Test the poll notification system for the specified poll.",
+        {
+            {"poll_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the poll to test notification."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("testpollnotification", "\"<txid>\"") +
+            HelpExampleRpc("testpollnotification", "\"<txid>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     const uint256 txid = uint256S(params[0].get_str());
