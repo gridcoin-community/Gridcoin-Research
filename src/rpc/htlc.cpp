@@ -9,6 +9,7 @@
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
@@ -23,22 +24,29 @@ extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsig
 
 UniValue createhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 4 || params.size() > 5)
-        throw runtime_error(
-            "createhtlc <receiver_addr> <sender_addr> <hash_hex> <timeout> [amount]\n"
-            "\n"
-            "Create a Hash Time-Locked Contract.\n"
-            "\n"
-            "Arguments:\n"
-            "1. receiver_addr   (string, required) Address of the receiver (claim path)\n"
-            "2. sender_addr     (string, required) Address of the sender (refund path)\n"
-            "3. hash_hex        (string, required) SHA256 hash of the preimage (64 hex chars)\n"
-            "4. timeout         (numeric, required) Absolute locktime for refund path\n"
-            "5. amount          (numeric, optional) Amount in GRC to fund the HTLC\n"
-            "\n"
-            "Returns a JSON object with the P2SH address and redeem script.\n"
-            "If amount is provided, funds the HTLC with a transaction.\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "createhtlc",
+        "Create a Hash Time-Locked Contract.\n"
+        "\n"
+        "Returns a JSON object with the P2SH address and redeem script. "
+        "If amount is provided, funds the HTLC with a transaction.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
+            {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
+            {"hash_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "SHA256 hash of the preimage (64 hex chars)."},
+            {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Absolute locktime for the refund path."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "Amount in GRC to fund the HTLC."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "HTLC detail object including p2sh address, redeem_script, and optional fund tx."}}},
+        RPCExamples{
+            HelpExampleCli("createhtlc", "\"recv_addr\" \"send_addr\" \"<64-hex-hash>\" 500000 100") +
+            HelpExampleRpc("createhtlc", "\"recv_addr\", \"send_addr\", \"<64-hex-hash>\", 500000, 100")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -125,18 +133,25 @@ UniValue createhtlc(const UniValue& params, bool fHelp)
 
 UniValue claimhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 4)
-        throw runtime_error(
-            "claimhtlc <htlc_txid> <vout> <preimage_hex> <destination_addr>\n"
-            "\n"
-            "Claim an HTLC output using the preimage.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. preimage_hex      (string, required) The preimage (hex encoded)\n"
-            "4. destination_addr  (string, required) Address to send claimed funds to\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "claimhtlc",
+        "Claim an HTLC output using the preimage.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+            {"preimage_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The preimage (hex encoded)."},
+            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send claimed funds to."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Claim result object including the spending txid."}}},
+        RPCExamples{
+            HelpExampleCli("claimhtlc", "\"<htlc_txid>\" 0 \"<preimage_hex>\" \"<dest_addr>\"") +
+            HelpExampleRpc("claimhtlc", "\"<htlc_txid>\", 0, \"<preimage_hex>\", \"<dest_addr>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
@@ -264,17 +279,24 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
 
 UniValue refundhtlc(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-            "refundhtlc <htlc_txid> <vout> <destination_addr>\n"
-            "\n"
-            "Refund an HTLC output after the timeout has passed.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. destination_addr  (string, required) Address to send refunded funds to\n"
-            + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "refundhtlc",
+        "Refund an HTLC output after the timeout has passed.\n"
+        "\n"
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+            {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send refunded funds to."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Refund result object including the spending txid."}}},
+        RPCExamples{
+            HelpExampleCli("refundhtlc", "\"<htlc_txid>\" 0 \"<dest_addr>\"") +
+            HelpExampleRpc("refundhtlc", "\"<htlc_txid>\", 0, \"<dest_addr>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
