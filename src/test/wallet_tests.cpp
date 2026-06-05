@@ -541,7 +541,7 @@ BOOST_AUTO_TEST_CASE(abandon_then_reconfirm_workflow)
     uint256 hash = tx.GetHash();
 
     {
-        LOCK(test_wallet.cs_wallet);
+        LOCK2(cs_main, test_wallet.cs_wallet);
 
         // 1. Transaction starts in mempool
         CWalletTx wtx(&test_wallet, tx);
@@ -1267,7 +1267,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_unconfirmed_tx)
     }
 
     // Should be able to abandon unconfirmed transaction not in mempool
-    BOOST_CHECK(test_wallet.AbandonTransaction(hash));
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(test_wallet.AbandonTransaction(hash));
+    }
 
     // Should now be marked as abandoned
     {
@@ -1307,7 +1310,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_confirmed_tx_fails)
     }
 
     // Should NOT be able to abandon confirmed transaction
-    BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    }
 
     // Should still be confirmed, not abandoned
     {
@@ -1328,7 +1334,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_nonexistent_tx_fails)
     uint256 nonexistent_hash = uint256S("6666666666666666666666666666666666666666666666666666666666666666");
 
     // Should fail gracefully
-    BOOST_CHECK(!test_wallet.AbandonTransaction(nonexistent_hash));
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(nonexistent_hash));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(maptxspends_cleanup_on_erase)
@@ -1765,7 +1774,7 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_cascades_to_children)
     uint256 child_hash = child_tx.GetHash();
 
     {
-        LOCK(test_wallet.cs_wallet);
+        LOCK2(cs_main, test_wallet.cs_wallet);
 
         // Add parent (inactive/unconfirmed, not in mempool)
         CWalletTx parent_wtx(&test_wallet, parent_tx);
@@ -1809,7 +1818,7 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_sets_sentinel_hash)
     uint256 hash = tx.GetHash();
 
     {
-        LOCK(test_wallet.cs_wallet);
+        LOCK2(cs_main, test_wallet.cs_wallet);
 
         CWalletTx wtx(&test_wallet, tx);
         wtx.SetTxState(TxStateInactive{false});  // Not yet abandoned
@@ -1894,7 +1903,10 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_mempool_tx_fails)
     }
 
     // Should NOT be able to abandon a mempool transaction
-    BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    {
+        LOCK(cs_main);
+        BOOST_CHECK(!test_wallet.AbandonTransaction(hash));
+    }
 
     // Should still be in mempool, not abandoned
     {
@@ -1915,7 +1927,7 @@ BOOST_AUTO_TEST_CASE(abandon_transaction_double_abandon_is_idempotent)
     uint256 hash = tx.GetHash();
 
     {
-        LOCK(test_wallet.cs_wallet);
+        LOCK2(cs_main, test_wallet.cs_wallet);
 
         CWalletTx wtx(&test_wallet, tx);
         wtx.SetTxState(TxStateUnrecognized{});  // Can be abandoned
