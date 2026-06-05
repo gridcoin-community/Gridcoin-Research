@@ -130,6 +130,18 @@ UniValue votebyid(const UniValue& params, bool fHelp);
 UniValue votedetails(const UniValue& params, bool fHelp);
 UniValue testpollnotification(const UniValue& params, bool fHelp);
 
+// Tier 1 PR E1: src/rpc/mining.cpp commands. Each function's converted body
+// throws via help.ToString() before touching globals (g_miner_status,
+// cs_main, pwalletMain, snapshot files), so calling these with fHelp=true
+// and an empty params array is safe in unit tests.
+UniValue getstakinginfo(const UniValue& params, bool fHelp);
+UniValue getlaststake(const UniValue& params, bool fHelp);
+UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
+UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
+UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
+UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
+UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -736,6 +748,42 @@ BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
         }
     }
 }
+
+// Help-rendering coverage for the 7 Tier 1 E1 mining.cpp commands. Each
+// converted body throws via help.ToString() before touching globals
+// (g_miner_status, cs_main, pwalletMain), so calling these with fHelp=true
+// and an empty params array is safe in unit tests.
+BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"getstakinginfo", &getstakinginfo},
+        {"getlaststake", &getlaststake},
+        {"auditsnapshotaccrual", &auditsnapshotaccrual},
+        {"auditsnapshotaccruals", &auditsnapshotaccruals},
+        {"listresearcheraccounts", &listresearcheraccounts},
+        {"inspectaccrualsnapshot", &inspectaccrualsnapshot},
+        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
+        }
+    }
+}
+
 
 
 // Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
