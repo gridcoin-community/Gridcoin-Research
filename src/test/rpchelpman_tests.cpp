@@ -119,6 +119,17 @@ UniValue sendalert(const UniValue& params, bool fHelp);
 UniValue sendalert2(const UniValue& params, bool fHelp);
 UniValue getnetworkinfo(const UniValue& params, bool fHelp);
 
+// Tier 1 PR D3: src/rpc/voting.cpp non-deprecated commands. Each function's
+// converted body throws via help.ToString() before touching globals (the
+// poll registry, cs_main, pwalletMain), so calling these with fHelp=true
+// and an empty params array is safe in unit tests.
+UniValue listpolls(const UniValue& params, bool fHelp);
+UniValue getpollresults(const UniValue& params, bool fHelp);
+UniValue getvotingclaim(const UniValue& params, bool fHelp);
+UniValue votebyid(const UniValue& params, bool fHelp);
+UniValue votedetails(const UniValue& params, bool fHelp);
+UniValue testpollnotification(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -695,6 +706,37 @@ BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"listpolls", &listpolls},
+        {"getpollresults", &getpollresults},
+        {"getvotingclaim", &getvotingclaim},
+        {"votebyid", &votebyid},
+        {"votedetails", &votedetails},
+        {"testpollnotification", &testpollnotification},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    rpc_name << ": help text missing command name; got: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    rpc_name << ": help text missing 'Examples:' section");
+            }
+            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
 
 // Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
 // commands. Each fHelp=true throw happens before any globals are touched, so this
