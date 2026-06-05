@@ -153,6 +153,26 @@ UniValue scraperreport(const UniValue& params, bool fHelp);
 UniValue listmanifests(const UniValue& params, bool fHelp);
 UniValue getmpart(const UniValue& params, bool fHelp);
 
+// Tier 1 PR E3: src/rpc/rawtransaction.cpp + src/rpc/htlc.cpp commands.
+// Each function's converted body throws via help.ToString() before touching
+// any globals (cs_main, pwalletMain, mempool).
+UniValue getrawtransaction(const UniValue& params, bool fHelp);
+UniValue listunspent(const UniValue& params, bool fHelp);
+UniValue consolidateunspent(const UniValue& params, bool fHelp);
+UniValue consolidatemsunspent(const UniValue& params, bool fHelp);
+UniValue scanforunspent(const UniValue& params, bool fHelp);
+UniValue createrawtransaction(const UniValue& params, bool fHelp);
+UniValue fundrawtransaction(const UniValue& params, bool fHelp);
+UniValue decoderawtransaction(const UniValue& params, bool fHelp);
+UniValue decodescript(const UniValue& params, bool fHelp);
+UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp);
+UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp);
+UniValue signrawtransaction(const UniValue& params, bool fHelp);
+UniValue sendrawtransaction(const UniValue& params, bool fHelp);
+UniValue createhtlc(const UniValue& params, bool fHelp);
+UniValue claimhtlc(const UniValue& params, bool fHelp);
+UniValue refundhtlc(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -827,6 +847,47 @@ BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"getrawtransaction", &getrawtransaction},
+        {"listunspent", &listunspent},
+        {"consolidateunspent", &consolidateunspent},
+        {"consolidatemsunspent", &consolidatemsunspent},
+        {"scanforunspent", &scanforunspent},
+        {"createrawtransaction", &createrawtransaction},
+        {"fundrawtransaction", &fundrawtransaction},
+        {"decoderawtransaction", &decoderawtransaction},
+        {"decodescript", &decodescript},
+        {"signrawtransactionwithkey", &signrawtransactionwithkey},
+        {"signrawtransactionwithwallet", &signrawtransactionwithwallet},
+        {"signrawtransaction", &signrawtransaction},
+        {"sendrawtransaction", &sendrawtransaction},
+        {"createhtlc", &createhtlc},
+        {"claimhtlc", &claimhtlc},
+        {"refundhtlc", &refundhtlc},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
+        }
+    }
+}
+
 
 
 
