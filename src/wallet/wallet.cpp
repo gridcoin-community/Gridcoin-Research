@@ -4235,6 +4235,7 @@ bool CWallet::IsAbandoned(const uint256& txid) const
 
 bool CWallet::AbandonTransaction(const uint256& txid)
 {
+    AssertLockHeld(cs_main);
     LOCK(cs_wallet);
 
     auto it = mapWallet.find(txid);

@@ -310,8 +310,10 @@ public:
     /** Mark an unconfirmed transaction (and its descendants) as abandoned.
      *  Acquires cs_wallet internally (unlike GetConflicts/IsAbandoned, which
      *  require the caller to hold it); cs_wallet is recursive so a caller that
-     *  already holds it may still call this. */
-    bool AbandonTransaction(const uint256& txid);
+     *  already holds it may still call this.
+     *  Requires cs_main because the NotifyTransactionChanged signal handler
+     *  reads mapBlockIndex / pindexBest via decomposeTransaction. */
+    bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     /** @deprecated Use SyncTransaction or blockConnected/transactionAddedToMempool instead.
      *  Public compatibility wrapper with the legacy signature. */
