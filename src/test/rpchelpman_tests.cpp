@@ -102,6 +102,23 @@ UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
 
+// Tier 1 PR D2: remaining src/rpc/net.cpp commands. Each function's converted
+// body throws via help.ToString() before touching any globals (vNodes,
+// g_banman, mapAlerts, addrman, cs_main, cs_vNodes), so calling these with
+// fHelp=true and an empty params array is safe in unit tests.
+UniValue getconnectioncount(const UniValue& params, bool fHelp);
+UniValue getnodeaddresses(const UniValue& params, bool fHelp);
+UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
+UniValue listbanned(const UniValue& params, bool fHelp);
+UniValue clearbanned(const UniValue& params, bool fHelp);
+UniValue ping(const UniValue& params, bool fHelp);
+UniValue getpeerinfo(const UniValue& params, bool fHelp);
+UniValue getnettotals(const UniValue& params, bool fHelp);
+UniValue listalerts(const UniValue& params, bool fHelp);
+UniValue sendalert(const UniValue& params, bool fHelp);
+UniValue sendalert2(const UniValue& params, bool fHelp);
+UniValue getnetworkinfo(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -638,6 +655,43 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
+
+BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"getconnectioncount", &getconnectioncount},
+        {"getnodeaddresses", &getnodeaddresses},
+        {"getaddednodeinfo", &getaddednodeinfo},
+        {"listbanned", &listbanned},
+        {"clearbanned", &clearbanned},
+        {"ping", &ping},
+        {"getpeerinfo", &getpeerinfo},
+        {"getnettotals", &getnettotals},
+        {"listalerts", &listalerts},
+        {"sendalert", &sendalert},
+        {"sendalert2", &sendalert2},
+        {"getnetworkinfo", &getnetworkinfo},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
         }
     }
 }

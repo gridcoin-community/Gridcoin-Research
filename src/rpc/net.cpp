@@ -23,11 +23,17 @@ extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 UniValue getconnectioncount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "getconnectioncount\n"
-            "\n"
-            "Returns the number of connections to other node\n.");
+    static const RPCHelpMan help{
+        "getconnectioncount",
+        "Returns the number of connections to other nodes.",
+        {},
+        RPCResult{RPCResult::Type::NUM, "", "The connection count."},
+        RPCExamples{
+            HelpExampleCli("getconnectioncount", "") +
+            HelpExampleRpc("getconnectioncount", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_vNodes);
 
@@ -102,14 +108,34 @@ UniValue addnode(const UniValue& params, bool fHelp)
 
 UniValue getnodeaddresses(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnodeaddresses [count]\n"
-                "\nReturn known addresses which can potentially be used to find new nodes in the network\n"
-                "count: How many addresses to return. Limited to the smaller of " + std::to_string(ADDRMAN_GETADDR_MAX) +
-                " or " + std::to_string(ADDRMAN_GETADDR_MAX_PCT) + "% of all known addresses. (default = 1)\n");
+    static const RPCHelpMan help{
+        "getnodeaddresses",
+        "Return known addresses, which can potentially be used to find new nodes in the network.",
+        {
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                strprintf("How many addresses to return. Limited to the smaller of %d or %d%% "
+                          "of all known addresses (default: 1).",
+                          ADDRMAN_GETADDR_MAX, ADDRMAN_GETADDR_MAX_PCT)},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM_TIME, "time", "The address timestamp (seconds since epoch)"},
+                        {RPCResult::Type::NUM, "services", "Service flags advertised by the address"},
+                        {RPCResult::Type::STR, "address", "The IP address"},
+                        {RPCResult::Type::NUM, "port", "The port"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnodeaddresses", "8") +
+            HelpExampleRpc("getnodeaddresses", "8")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
     int count = 1;
-    if(!params[0].isNull())
+    if (params.size() > 0 && !params[0].isNull())
         count = params[0].get_int();
 
     if (count <= 0)
@@ -134,14 +160,33 @@ UniValue getnodeaddresses(const UniValue& params, bool fHelp)
 
 UniValue getaddednodeinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getaddednodeinfo <dns> [node]\n"
-                "\n"
-                "Returns information about the given added node, or all added nodes\n"
-                "(note that onetry addnodes are not listed here)\n"
-                "If dns is false, only a list of added nodes will be provided,\n"
-                "otherwise connected information will also be available\n");
+    static const RPCHelpMan help{
+        "getaddednodeinfo",
+        "Returns information about the given added node, or all added nodes\n"
+        "(note that onetry addnodes are not listed here).\n"
+        "If dns is false, only a list of added nodes will be provided,\n"
+        "otherwise connected information will also be available.",
+        {
+            {"dns", RPCArg::Type::BOOL, RPCArg::Optional::NO,
+                "If false, only a list of added nodes will be provided, otherwise connection info too."},
+            {"node", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "If provided, return information about this specific added node, otherwise all are returned."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ELISION, "",
+                    "Shape depends on the 'dns' argument: an OBJ with one or more repeated "
+                    "\"addednode\" keys (one per node) when dns=false, or nested per-node "
+                    "connection detail when dns=true. The implementation uses pushKV(\"addednode\", ...) "
+                    "in a loop, which produces repeated keys rather than a single map."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getaddednodeinfo", "true") +
+            HelpExampleCli("getaddednodeinfo", "true \"192.168.0.6:32749\"") +
+            HelpExampleRpc("getaddednodeinfo", "true, \"192.168.0.6:32749\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     bool fDns = params[0].get_bool();
 
@@ -315,14 +360,28 @@ UniValue setban(const UniValue& params, bool fHelp)
 
 UniValue listbanned(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-    {
-        throw runtime_error(
-            "listbanned\n"
-            "\n"
-            "List all banned IPs/subnets.\n"
-            );
-    }
+    static const RPCHelpMan help{
+        "listbanned",
+        "List all banned IPs/subnets.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "address", "The banned IP or subnet"},
+                        {RPCResult::Type::NUM_TIME, "ban_created", "Timestamp when the ban was created"},
+                        {RPCResult::Type::NUM_TIME, "banned_until", "Timestamp when the ban expires"},
+                        {RPCResult::Type::NUM, "ban_duration", "Configured duration in seconds"},
+                        {RPCResult::Type::NUM, "time_remaining", "Seconds remaining until the ban expires"},
+                        {RPCResult::Type::STR, "ban_reason", "Reason text for the ban"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listbanned", "") +
+            HelpExampleRpc("listbanned", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if(!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
@@ -352,12 +411,17 @@ UniValue listbanned(const UniValue& params, bool fHelp)
 
 UniValue clearbanned(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "clearbanned\n"
-            "\n"
-            "Clear all banned IPs.\n"
-            );
+    static const RPCHelpMan help{
+        "clearbanned",
+        "Clear all banned IPs.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("clearbanned", "") +
+            HelpExampleRpc("clearbanned", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (!g_banman) {
         throw JSONRPCError(RPC_DATABASE_ERROR, "Error: Ban database not loaded");
@@ -370,13 +434,20 @@ UniValue clearbanned(const UniValue& params, bool fHelp)
 
 UniValue ping(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "ping\n"
-                "\n"
-                "Requests that a ping be sent to all other nodes, to measure ping time.\n"
-                "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
-                "Ping command is handled in queue with all other commands, so it measures processing backlog, not just network ping\n");
+    static const RPCHelpMan help{
+        "ping",
+        "Requests that a ping be sent to all other nodes, to measure ping time.\n"
+        "Results provided in getpeerinfo, pingtime and pingwait fields are decimal seconds.\n"
+        "Ping command is handled in queue with all other commands, so it measures processing backlog,\n"
+        "not just network ping.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("ping", "") +
+            HelpExampleRpc("ping", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Request that each node send a ping during next message processing pass
     LOCK(cs_vNodes);
@@ -389,11 +460,44 @@ UniValue ping(const UniValue& params, bool fHelp)
 
 UniValue getpeerinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getpeerinfo\n"
-                "\n"
-                "Returns data about each connected network node.");
+    static const RPCHelpMan help{
+        "getpeerinfo",
+        "Returns data about each connected network node.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM, "id", "Peer index"},
+                        {RPCResult::Type::STR, "addr", "The IP address and port of the peer"},
+                        {RPCResult::Type::STR, "addrlocal", /*optional=*/true,
+                            "Local address as reported by the peer (if any)"},
+                        {RPCResult::Type::STR_HEX, "services", "Hex-encoded service flags"},
+                        {RPCResult::Type::NUM_TIME, "lastsend", "Timestamp of the last send"},
+                        {RPCResult::Type::NUM_TIME, "lastrecv", "Timestamp of the last receive"},
+                        {RPCResult::Type::NUM, "bytessent", "Total bytes sent"},
+                        {RPCResult::Type::NUM, "bytesrecv", "Total bytes received"},
+                        {RPCResult::Type::NUM_TIME, "conntime", "Connection time as a UNIX epoch"},
+                        {RPCResult::Type::NUM, "timeoffset", "The time offset in seconds"},
+                        {RPCResult::Type::NUM, "pingtime", "Ping time in seconds"},
+                        {RPCResult::Type::NUM, "minping", /*optional=*/true,
+                            "Minimum observed ping time in seconds (if measured)"},
+                        {RPCResult::Type::NUM, "pingwait", /*optional=*/true,
+                            "Seconds spent waiting for a ping response (if a ping is in flight)"},
+                        {RPCResult::Type::NUM, "version", "Peer protocol version"},
+                        {RPCResult::Type::STR, "subver", "Peer subversion string"},
+                        {RPCResult::Type::BOOL, "inbound", "True if connection is inbound"},
+                        {RPCResult::Type::NUM, "startingheight", "Starting block height reported by the peer"},
+                        {RPCResult::Type::NUM, "nTrust", "Peer trust score"},
+                        {RPCResult::Type::NUM, "banscore", "Misbehavior score; nodes are banned once this hits the threshold"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getpeerinfo", "") +
+            HelpExampleRpc("getpeerinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
@@ -440,12 +544,22 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
 
 UniValue getnettotals(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "getnettotals\n"
-                "\n"
-                "Returns information about network traffic, including bytes in, bytes out,\n"
-                "and current time\n");
+    static const RPCHelpMan help{
+        "getnettotals",
+        "Returns information about network traffic, including bytes in, bytes out, and current time.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "totalbytesrecv", "Total cumulative bytes received"},
+                {RPCResult::Type::NUM, "totalbytessent", "Total cumulative bytes sent"},
+                {RPCResult::Type::NUM, "timemillis", "Current system time in MILLISECONDS since the UNIX epoch (GetTimeMillis())"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnettotals", "") +
+            HelpExampleRpc("getnettotals", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("totalbytesrecv", CNode::GetTotalBytesRecv());
@@ -456,11 +570,43 @@ UniValue getnettotals(const UniValue& params, bool fHelp)
 
 UniValue listalerts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "listalerts\n"
-                "\n"
-                "Returns information about alerts.\n");
+    static const RPCHelpMan help{
+        "listalerts",
+        "Returns information about alerts.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "alerts", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::NUM, "version", "Alert version"},
+                                {RPCResult::Type::STR, "relay_until", "Timestamp until which the alert is relayed"},
+                                {RPCResult::Type::STR, "expiration", "Timestamp at which the alert expires"},
+                                {RPCResult::Type::NUM, "id", "Alert ID"},
+                                {RPCResult::Type::NUM, "cancel_upto", "Cancels all alert IDs up to this number"},
+                                {RPCResult::Type::ARR, "cancels", "Alert IDs this alert cancels",
+                                    {{RPCResult::Type::NUM, "", "Cancelled alert ID"}}},
+                                {RPCResult::Type::NUM, "minimum_version", "Minimum applicable client version"},
+                                {RPCResult::Type::NUM, "maximum_version", "Maximum applicable client version"},
+                                {RPCResult::Type::ARR, "subversions", "Peer subversion strings this alert targets",
+                                    {{RPCResult::Type::STR, "", "Targeted peer subversion string"}}},
+                                {RPCResult::Type::NUM, "priority", "Alert priority"},
+                                {RPCResult::Type::STR, "comment", "Comment text"},
+                                {RPCResult::Type::STR, "status_bar", "Status bar text"},
+                                {RPCResult::Type::STR, "reserved", "Reserved field"},
+                                {RPCResult::Type::STR_HEX, "hash", "Hex-encoded alert hash"},
+                                {RPCResult::Type::BOOL, "in_effect", "Whether the alert is currently in effect"},
+                                {RPCResult::Type::BOOL, "applies_to_me", "Whether the alert applies to this node"},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listalerts", "") +
+            HelpExampleRpc("listalerts", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK(cs_mapAlerts);
 
@@ -517,19 +663,43 @@ UniValue listalerts(const UniValue& params, bool fHelp)
 // ThreadRPCServer: holds cs_main and acquiring cs_vSend in alert.RelayTo()/PushMessage()/BeginMessage()
 UniValue sendalert(const UniValue& params, bool fHelp)
 {
+    static const RPCHelpMan help{
+        "sendalert",
+        "Sign and broadcast a network alert. Requires the WIF-encoded alert master private key.",
+        {
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO, "Alert text message."},
+            {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "WIF-encoded alert master private key."},
+            {"minver", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Minimum applicable internal client version."},
+            {"maxver", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Maximum applicable internal client version."},
+            {"priority", RPCArg::Type::NUM, RPCArg::Optional::NO, "Integer priority number."},
+            {"id", RPCArg::Type::NUM, RPCArg::Optional::NO, "Alert ID."},
+            {"cancelupto", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Cancels all alert IDs up to this number."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "strStatusBar", "Status bar text relayed"},
+                {RPCResult::Type::NUM, "nVersion", "Alert protocol version"},
+                {RPCResult::Type::NUM, "nMinVer", "Minimum applicable client version"},
+                {RPCResult::Type::NUM, "nMaxVer", "Maximum applicable client version"},
+                {RPCResult::Type::NUM, "nPriority", "Alert priority"},
+                {RPCResult::Type::NUM, "nID", "Alert ID"},
+                {RPCResult::Type::NUM, "nCancel", /*optional=*/true,
+                    "Cancel-upto value (only present when nonzero)"},
+            }},
+        RPCExamples{
+            HelpExampleCli("sendalert", "\"network outage\" \"<wif>\" 1000000 2000000 100 1") +
+            HelpExampleRpc("sendalert", "\"network outage\", \"<wif>\", 1000000, 2000000, 100, 1")},
+    };
+    // Variadic-tail-by-min: legacy accepted any number of args >= 6, with
+    // params[6] used when present. Keep lower-bound-only here; once PR M2
+    // merges and the dispatcher pre-check lands, replace with `MarkVariadic()`
+    // on the helpman (the body lower-bound guard then becomes redundant).
     if (fHelp || params.size() < 6)
-        throw runtime_error(
-            "sendalert <message> <privatekey> <minver> <maxver> <priority> <id> [cancelupto]\n"
-            "\n"
-            "<message> ----> is the alert text message\n"
-            "<privatekey> -> is WIF encoded alert master private key\n"
-            "<minver> -----> is the minimum applicable internal client version\n"
-            "<maxver> -----> is the maximum applicable internal client version\n"
-            "<priority> ---> is integer priority number\n"
-            "<id> ---------> is the alert id\n"
-            "[cancelupto] -> cancels all alert ids up to this number\n"
-            "\n"
-            "Returns true or false\n");
+        throw runtime_error(help.ToString());
 
     CAlert alert;
     CKey key;
@@ -549,7 +719,11 @@ UniValue sendalert(const UniValue& params, bool fHelp)
     sMsg << (CUnsignedAlert)alert;
     alert.vchMsg = vector<unsigned char>((unsigned char*)&sMsg.begin()[0], (unsigned char*)&sMsg.end()[0]);
 
-    key = DecodeSecret(params[0].get_str());
+    // The help declares `privatekey` as params[1] (after `message`). Decode
+    // the WIF key from params[1] to match — the prior body read params[0]
+    // (the message) as a WIF, which made the command structurally
+    // un-callable: no valid WIF is also a meaningful alert message.
+    key = DecodeSecret(params[1].get_str());
 
     if (!key.IsValid()) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key");
@@ -582,20 +756,30 @@ UniValue sendalert(const UniValue& params, bool fHelp)
 
 UniValue sendalert2(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 7)
-        throw runtime_error(
-            //          0            1    2            3            4        5          6
-            "sendalert2 <privatekey> <id> <subverlist> <cancellist> <expire> <priority> <message>\n"
-            "\n"
-            "<privatekey> -> is WIF encoded alert master private key\n"
-            "<id> ---------> is the unique alert number\n"
-            "<subverlist> -> comma separated list of versions warning applies to\n"
-            "<cancellist> -> comma separated ids of alerts to cancel\n"
-            "<expire> -----> alert expiration in days\n"
-            "<priority> ---> integer, >1000->visible\n"
-            "<message> ---->is the alert text message\n"
-            "\n"
-            "Returns summary of what was done.");
+    static const RPCHelpMan help{
+        "sendalert2",
+        "Sign and broadcast a network alert with subversion/cancel list targeting.",
+        {
+            {"privatekey", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "WIF-encoded alert master private key."},
+            {"id", RPCArg::Type::NUM, RPCArg::Optional::NO, "Unique alert number."},
+            {"subverlist", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Comma-separated list of subversion strings the alert applies to (empty for all)."},
+            {"cancellist", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Comma-separated alert IDs to cancel (empty for none)."},
+            {"expire", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Alert expiration window in days."},
+            {"priority", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "Integer priority; values >1000 are user-visible."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO, "Alert text message."},
+        },
+        RPCResult{RPCResult::Type::ANY, "", "Summary of what was done; see source for the exact shape."},
+        RPCExamples{
+            HelpExampleCli("sendalert2", "\"<wif>\" 1 \"\" \"\" 7 1500 \"network upgrade required\"") +
+            HelpExampleRpc("sendalert2", "\"<wif>\", 1, \"\", \"\", 7, 1500, \"network upgrade required\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     CAlert alert;
     CKey key;
@@ -654,11 +838,38 @@ UniValue sendalert2(const UniValue& params, bool fHelp)
 
 UniValue getnetworkinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getnetworkinfo\n"
-                "\n"
-                "Displays network related information\n");
+    static const RPCHelpMan help{
+        "getnetworkinfo",
+        "Displays network related information.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "version", "The full Gridcoin version string"},
+                {RPCResult::Type::NUM, "minor_version", "Client minor version"},
+                {RPCResult::Type::NUM, "protocolversion", "P2P protocol version"},
+                {RPCResult::Type::NUM, "timeoffset", "Time offset against the network (seconds)"},
+                {RPCResult::Type::NUM, "connections", "Number of connections to other nodes"},
+                {RPCResult::Type::STR_AMOUNT, "paytxfee", "The fee paid per transaction"},
+                {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value"},
+                {RPCResult::Type::STR, "proxy", "host:port of any active SOCKS proxy, or empty string if none"},
+                {RPCResult::Type::STR, "ip", "Best-effort guess at this node's external IP"},
+                {RPCResult::Type::ARR, "localaddresses", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "address", "A locally bound or advertised address"},
+                                {RPCResult::Type::NUM, "port", "The port number"},
+                                {RPCResult::Type::NUM, "score", "Local-address selection score"},
+                            }},
+                    }},
+                {RPCResult::Type::STR, "errors", "Any current warnings"},
+            }},
+        RPCExamples{
+            HelpExampleCli("getnetworkinfo", "") +
+            HelpExampleRpc("getnetworkinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
