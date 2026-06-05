@@ -142,6 +142,17 @@ UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
 
+// Tier 1 PR E2: src/gridcoin/scraper/scraper.cpp + scraper_net.cpp commands.
+UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
+UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
+UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
+UniValue archivelog(const UniValue& params, bool fHelp);
+UniValue convergencereport(const UniValue& params, bool fHelp);
+UniValue testnewsb(const UniValue& params, bool fHelp);
+UniValue scraperreport(const UniValue& params, bool fHelp);
+UniValue listmanifests(const UniValue& params, bool fHelp);
+UniValue getmpart(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -783,6 +794,40 @@ BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"sendscraperfilemanifest", &sendscraperfilemanifest},
+        {"savescraperfilemanifest", &savescraperfilemanifest},
+        {"deletecscrapermanifest", &deletecscrapermanifest},
+        {"archivelog", &archivelog},
+        {"convergencereport", &convergencereport},
+        {"testnewsb", &testnewsb},
+        {"scraperreport", &scraperreport},
+        {"listmanifests", &listmanifests},
+        {"getmpart", &getmpart},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
+        }
+    }
+}
+
 
 
 
