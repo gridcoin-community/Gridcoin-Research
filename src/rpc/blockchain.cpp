@@ -278,30 +278,42 @@ UniValue blockToJSON(const CBlock& block, CBlockIndex* blockindex, bool fPrintTr
 
 UniValue dumpcontracts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 5) {
-        std::stringstream help;
+    static const RPCHelpMan help{
+        "dumpcontracts",
+        "Dump serialized or minimal textual contract data gathered from the chain to a specified file.",
+        {
+            {"contract_type", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Contract type to gather data from. Use \"*\" for all. Valid contract types: "
+                "beacon, claim, message, poll, project, protocol, scraper, vote, mrc, sidestake."},
+            {"file", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Output file. A bare filename is written under the data directory; an absolute or relative path with a parent is written verbatim."},
+            {"txids_only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "If true, output txids and other minimal info in text. Default: false."},
+            {"low_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Low height. Default: genesis."},
+            {"high_height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "High height. Default: current head."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM_TIME, "timestamp", "Block time of the high-height block."},
+                {RPCResult::Type::NUM, "low_height", "Lower bound of the scanned range."},
+                {RPCResult::Type::NUM, "high_height", "Upper bound of the scanned range."},
+                {RPCResult::Type::STR, "contract_type", "Contract type filter that was applied."},
+                {RPCResult::Type::NUM, "number_of_blocks_processed_containing_contract_type", "Count of blocks that contained at least one matching contract."},
+                {RPCResult::Type::NUM, "number_of_contracts_exported", "Count of contracts written to the output file."},
+                {RPCResult::Type::NUM, "number_of_beacons_verified", /*optional=*/true,
+                    "Verified-beacon count; present only when contract_type == \"beacon\"."},
+                {RPCResult::Type::STR, "exported_to_file", "Resolved path of the output file."},
+            }},
+        RPCExamples{
+            HelpExampleCli("dumpcontracts", "\"beacon\" \"beacons.txt\"") +
+            HelpExampleCli("dumpcontracts", "\"*\" \"all_contracts.txt\" true") +
+            HelpExampleRpc("dumpcontracts", "\"beacon\", \"beacons.txt\"")},
+    };
 
-        help << "dumpcontracts <contract_type> <file> [txids only] [low height] [high height]\n"
-                "\n"
-                "<contract_type> Contract type to gather data from. Use \"*\" for all.\n"
-                "Valid contract types: ";
-
-        // Skip UNKNOWN here.
-        for (int type = static_cast<int>(GRC::ContractType::UNKNOWN) + 1;
-             type < static_cast<int>(GRC::ContractType::OUT_OF_BOUND); ++type) {
-            if (type > 1) help << ", ";
-            help << GRC::Contract::Type(static_cast<GRC::ContractType>(type)).ToString();
-        }
-
-        help << ".\n\n"
-                "<file>          Output file.\n"
-                "<txids only>    Optional txids only. (If specified just output txids and other minimal info in text.)\n"
-                "<low height>    Optional low height. (If not specified then from genesis.)\n"
-                "<high height>   Optional high height. (If not specified then current head.)\n "
-                "\n"
-                "Dump serialized or minimal textual contract data gathered from the chain to a specified file.\n";
-
-        throw runtime_error(help.str());
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     std::string contract_type_string = params[0].get_str();
@@ -2667,11 +2679,25 @@ UniValue resetcpids(const UniValue& params, bool fHelp)
 
 UniValue superblockage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockage\n"
-                "\n"
-                "Display information regarding superblock age\n");
+    static const RPCHelpMan help{
+        "superblockage",
+        "Display information regarding superblock age.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+                {RPCResult::Type::STR, "Superblock Timestamp", "Human-readable timestamp of the current superblock."},
+                {RPCResult::Type::NUM, "Superblock Block Number", "Block height at which the current superblock was committed."},
+                {RPCResult::Type::NUM, "Pending Superblock Height", "Block height of the pending superblock, if any."},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblockage", "") +
+            HelpExampleRpc("superblockage", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
@@ -2696,15 +2722,30 @@ UniValue superblockage(const UniValue& params, bool fHelp)
 
 UniValue superblocks(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "superblocks [lookback [displaycontract [cpid]]]\n"
-                "\n"
-                "[lookback] -> Optional: # of SB's to show (default 14)\n"
-                "[displaycontract] -> Optional true/false: display SB contract (default false)\n"
-                "[cpid] -> Optional: Shows magnitude for a cpid for recent superblocks\n"
-                "\n"
-                "Display data on recent superblocks\n");
+    static const RPCHelpMan help{
+        "superblocks",
+        "Display data on recent superblocks.",
+        {
+            {"lookback", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Number of superblocks to show. Default: 14."},
+            {"displaycontract", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Display the superblock contract. Default: false."},
+            {"cpid", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Show magnitude for a CPID across recent superblocks."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "superblock entry; shape depends on options"},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblocks", "") +
+            HelpExampleCli("superblocks", "5 true") +
+            HelpExampleRpc("superblocks", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VARR);
 
@@ -3322,13 +3363,29 @@ UniValue debug(const UniValue& params, bool fHelp)
 
 UniValue listprojects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "listprojects <bool>\n"
-                "\n"
-                "<bool> -> true to show all projects, including greylisted and deleted. Defaults to false.\n"
-                "\n"
-                "Displays information about whitelisted projects.\n");
+    static const RPCHelpMan help{
+        "listprojects",
+        "Displays information about whitelisted projects.",
+        {
+            {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show all projects, including greylisted and deleted. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+            {
+                {RPCResult::Type::OBJ, "project_name", "Per-project metadata.",
+                    {
+                        {RPCResult::Type::ELISION, "", "version, display_name, url, base_url, display_url, stats_url, [gdpr_controls], [requires_external_adapter], time, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listprojects", "") +
+            HelpExampleCli("listprojects", "true") +
+            HelpExampleRpc("listprojects", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
@@ -3367,15 +3424,30 @@ UniValue listprojects(const UniValue& params, bool fHelp)
 
 UniValue getautogreylist(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2) {
-        throw runtime_error(
-            "getautogreylist <bool> <bool> \n"
-            "\n"
-            "<bool> -> true to show all projects, including those that do not meet greylisting criteria. Defaults to false. \n"
-            "\n"
-            "<bool> -> true to show greylist history for each project. Defaults to false. \n"
-            "\n"
-            "Displays information about projects that meet auto greylisting criteria.");
+    static const RPCHelpMan help{
+        "getautogreylist",
+        "Displays information about projects that meet auto greylisting criteria.",
+        {
+            {"show_all", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show all projects, including those that do not meet greylisting criteria. Default: false."},
+            {"show_history", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "True to show greylist history for each project. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "auto_greylist_projects", "Projects considered for auto-greylisting.",
+                    {
+                        {RPCResult::Type::ELISION, "", "project entry; zero-credit-days, whitelist-activity-score, criteria flag, optional history"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getautogreylist", "") +
+            HelpExampleCli("getautogreylist", "true true") +
+            HelpExampleRpc("getautogreylist", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     bool show_all_projects = false;
@@ -3439,11 +3511,25 @@ UniValue getautogreylist(const UniValue& params, bool fHelp)
 
 UniValue listscrapers(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listscrapers\n"
-                "\n"
-                "Displays information about scrapers recognized by the network.\n");
+    static const RPCHelpMan help{
+        "listscrapers",
+        "Displays information about scrapers recognized by the network.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "current_scraper_entries", "Scraper registry entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "scraper entry; address, transaction hashes, timestamp, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listscrapers", "") +
+            HelpExampleRpc("listscrapers", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
@@ -3475,11 +3561,25 @@ UniValue listscrapers(const UniValue& params, bool fHelp)
 
 UniValue listprotocolentries(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "listprotocolentries\n"
-                "\n"
-                "Displays the protocol entries on the network.\n");
+    static const RPCHelpMan help{
+        "listprotocolentries",
+        "Displays the protocol entries on the network.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "current_protocol_entries", "Active protocol entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "protocol entry; key, value, transaction hashes, timestamp, status"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listprotocolentries", "") +
+            HelpExampleRpc("listprotocolentries", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
@@ -3510,14 +3610,29 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp)
 
 UniValue listsidestakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-            "listsidestakes [type]\n"
-            "\n"
-            "Displays all active sidestakes (mandatory and local/voluntary).\n"
-            "\n"
-            "Arguments:\n"
-            "  type    (string, optional) Filter by type: \"mandatory\", \"local\", or \"all\" (default: \"all\")\n");
+    static const RPCHelpMan help{
+        "listsidestakes",
+        "Displays all active sidestakes (mandatory and local/voluntary).",
+        {
+            {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Filter by type: \"mandatory\", \"local\", or \"all\". Default: \"all\"."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "sidestake_entries", "Active sidestake entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "sidestake entry; address, allocation, type, status, and contract metadata if mandatory"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listsidestakes", "") +
+            HelpExampleCli("listsidestakes", "\"mandatory\"") +
+            HelpExampleRpc("listsidestakes", "\"local\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     std::string type_filter = "all";
     if (params.size() == 1) {
@@ -3567,13 +3682,25 @@ UniValue listsidestakes(const UniValue& params, bool fHelp)
 
 UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "listmandatorysidestakes\n"
-            "\n"
-            "Displays the mandatory sidestakes on the network.\n"
-            "\n"
-            "This is equivalent to listsidestakes \"mandatory\".\n");
+    static const RPCHelpMan help{
+        "listmandatorysidestakes",
+        "Displays the mandatory sidestakes on the network. Equivalent to listsidestakes \"mandatory\".",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ARR, "sidestake_entries", "Mandatory sidestake entries.",
+                    {
+                        {RPCResult::Type::ELISION, "", "see listsidestakes for entry shape"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listmandatorysidestakes", "") +
+            HelpExampleRpc("listmandatorysidestakes", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue filter_params(UniValue::VARR);
     filter_params.push_back("mandatory");
@@ -3635,11 +3762,35 @@ UniValue network(const UniValue& params, bool fHelp)
 
 UniValue parselegacysb(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1)
-        throw runtime_error(
-                "parselegacysb\n"
-                "\n"
-                "Convert a legacy superblock contract to JSON.\n");
+    static const RPCHelpMan help{
+        "parselegacysb",
+        "Convert a legacy superblock contract to JSON.",
+        {
+            {"contract", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Serialized legacy superblock contract string."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::OBJ, "contract", "Parsed superblock contract.",
+                    {
+                        {RPCResult::Type::ELISION, "", "see SuperblockToJson output"},
+                    }},
+                {RPCResult::Type::STR_HEX, "legacy_hash", "Hash of the legacy superblock contract."},
+            }},
+        RPCExamples{
+            HelpExampleCli("parselegacysb", "\"<serialized_contract>\"") +
+            HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
+    };
+
+    // Lower-bound-only arity guard: legacy behavior accepted 1+ args and
+    // silently ignored extras. Using IsValidNumArgs here would reject N>1,
+    // tightening the API. Once PR M2 merges and the dispatcher pre-check
+    // lands, the corresponding lift is `static const RPCHelpMan x =
+    // RPCHelpMan{...}.MarkVariadic();`, but MarkVariadic isn't on this
+    // branch yet so we keep the lower-bound guard.
+    if (fHelp || params.size() < 1) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue json(UniValue::VOBJ);
 
@@ -3653,11 +3804,31 @@ UniValue parselegacysb(const UniValue& params, bool fHelp)
 
 UniValue projects(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "projects\n"
-                "\n"
-                "Show the status of locally attached BOINC projects.\n");
+    static const RPCHelpMan help{
+        "projects",
+        "Show the status of locally attached BOINC projects.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "name", "Project name."},
+                        {RPCResult::Type::STR, "url", "Project URL."},
+                        {RPCResult::Type::STR, "cpid", "External CPID for the project."},
+                        {RPCResult::Type::STR, "team", "BOINC team name."},
+                        {RPCResult::Type::BOOL, "eligible", "True if the project is eligible for research rewards."},
+                        {RPCResult::Type::BOOL, "whitelisted", "True if the project is on the whitelist."},
+                        {RPCResult::Type::STR, "error", /*optional=*/true, "Reason the project is ineligible, when applicable."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("projects", "") +
+            HelpExampleRpc("projects", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
@@ -3688,13 +3859,27 @@ UniValue projects(const UniValue& params, bool fHelp)
 
 UniValue readdata(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "readdata <key>\n"
-                "\n"
-                "<key> -> generic key\n"
-                "\n"
-                "Reads generic data from disk from a specified key\n");
+    static const RPCHelpMan help{
+        "readdata",
+        "Reads generic data from disk from a specified key.",
+        {
+            {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Generic key to read."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Error", /*optional=*/true, "Error detail if the read failed."},
+                {RPCResult::Type::STR, "Key", "Key that was read."},
+                {RPCResult::Type::STR, "Result", "Stored value, or \"Failed to read from disk.\" on error."},
+            }},
+        RPCExamples{
+            HelpExampleCli("readdata", "\"mykey\"") +
+            HelpExampleRpc("readdata", "\"mykey\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
@@ -3750,11 +3935,27 @@ UniValue sendblock(const UniValue& params, bool fHelp)
 
 UniValue superblockaverage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "superblockaverage\n"
-                "\n"
-                "Displays average information for current superblock\n");
+    static const RPCHelpMan help{
+        "superblockaverage",
+        "Displays average information for the current superblock.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "beacon_count", "Total beacons in the current superblock."},
+                {RPCResult::Type::NUM, "beacon_participant_count", "Number of beacons in the current superblock with research credit."},
+                {RPCResult::Type::NUM, "average_magnitude", "Average magnitude per participant."},
+                {RPCResult::Type::BOOL, "superblock_valid", "True if the current superblock is well-formed."},
+                {RPCResult::Type::NUM, "Superblock Age", "Age in seconds of the current superblock."},
+                {RPCResult::Type::BOOL, "Dire Need of Superblock", "True if a new superblock is overdue."},
+            }},
+        RPCExamples{
+            HelpExampleCli("superblockaverage", "") +
+            HelpExampleRpc("superblockaverage", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 
@@ -3808,14 +4009,27 @@ UniValue versionreport(const UniValue& params, bool fHelp)
 
 UniValue writedata(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "writedata <key> <value>\n"
-                "\n"
-                "<key> ---> Key where value will be written\n"
-                "<value> -> Value to be written to specified key\n"
-                "\n"
-                "Writes a value to specified key\n");
+    static const RPCHelpMan help{
+        "writedata",
+        "Writes a value to the specified generic-data key on disk.",
+        {
+            {"key", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Key where the value will be written."},
+            {"value", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Value to be written at the specified key."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "Result", "\"Success.\", \"Unable to write.\", or \"Unable to Commit.\""},
+            }},
+        RPCExamples{
+            HelpExampleCli("writedata", "\"mykey\" \"myvalue\"") +
+            HelpExampleRpc("writedata", "\"mykey\", \"myvalue\"")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
+    }
 
     UniValue res(UniValue::VOBJ);
 

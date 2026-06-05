@@ -71,6 +71,23 @@ UniValue addnode(const UniValue& params, bool fHelp);
 UniValue setban(const UniValue& params, bool fHelp);
 UniValue listsinceblock(const UniValue& params, bool fHelp);
 
+// Tier 1c forward declarations (snapshots, registries, generic-data, dumpcontracts).
+// Same global-namespace placement requirement as the Tier 2 block above.
+UniValue superblocks(const UniValue& params, bool fHelp);
+UniValue superblockage(const UniValue& params, bool fHelp);
+UniValue superblockaverage(const UniValue& params, bool fHelp);
+UniValue parselegacysb(const UniValue& params, bool fHelp);
+UniValue listscrapers(const UniValue& params, bool fHelp);
+UniValue listprojects(const UniValue& params, bool fHelp);
+UniValue projects(const UniValue& params, bool fHelp);
+UniValue getautogreylist(const UniValue& params, bool fHelp);
+UniValue listsidestakes(const UniValue& params, bool fHelp);
+UniValue listmandatorysidestakes(const UniValue& params, bool fHelp);
+UniValue listprotocolentries(const UniValue& params, bool fHelp);
+UniValue readdata(const UniValue& params, bool fHelp);
+UniValue writedata(const UniValue& params, bool fHelp);
+UniValue dumpcontracts(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -574,6 +591,48 @@ BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
                     rpc_name << ": help text missing 'Examples:' section");
             }
             BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
+        }
+    }
+}
+
+// Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
+// commands. Each fHelp=true throw happens before any globals are touched, so this
+// runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
+BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"superblocks", superblocks},
+        {"superblockage", superblockage},
+        {"superblockaverage", superblockaverage},
+        {"parselegacysb", parselegacysb},
+        {"listscrapers", listscrapers},
+        {"listprojects", listprojects},
+        {"projects", projects},
+        {"getautogreylist", getautogreylist},
+        {"listsidestakes", listsidestakes},
+        {"listmandatorysidestakes", listmandatorysidestakes},
+        {"listprotocolentries", listprotocolentries},
+        {"readdata", readdata},
+        {"writedata", writedata},
+        {"dumpcontracts", dumpcontracts},
+    };
+
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                    "help message missing command name");
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                    "help message missing Examples section");
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected std::runtime_error to be thrown");
         }
     }
 }
