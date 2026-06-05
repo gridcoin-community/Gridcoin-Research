@@ -114,6 +114,20 @@ struct ConvergedManifest
 
     /** A map to the pointers of the parts used to form the convergence. This will be essentially the same as the vParts
      * vector in the CScraperManifest pointed to by the CScraperConvergedManifest_ptr.
+     *
+     * PAIR INVARIANT with CScraperConvergedManifest_ptr above. The shared_ptr keeps the source CScraperManifest
+     * alive, which in turn keeps every CPart in CSplitBlob::mapParts alive via the part's refs[] entries (a
+     * CPart is destroyed by ~CSplitBlob only when its refs set becomes empty after the last referencing
+     * manifest is destroyed). The raw CPart* values stored here are therefore guaranteed valid IFF the
+     * shared_ptr above is non-null AND points at a manifest whose vParts contain the same parts. This map is
+     * a convenience name-keyed view of those parts; it adds no lifetime obligation of its own.
+     *
+     * Any code path that populates this map WITHOUT also setting CScraperConvergedManifest_ptr is responsible
+     * for keeping shared_ptrs to the contributing CScraperManifests alive for the lifetime of the map. See
+     * SuperblockValidator::ConvergenceCandidate in quorum.cpp for the validator-side consumer that builds
+     * this struct piecemeal via AddPart -- it carries an out-of-band std::set<CScraperManifest_shared_ptr>
+     * (m_source_manifests) so the invariant is preserved by construction rather than by relying on global
+     * mapManifest / mapPendingDeletedManifest housekeeping cadence.
      */
     mConvergedManifestPart_ptrs ConvergedManifestPartPtrsMap;
 
