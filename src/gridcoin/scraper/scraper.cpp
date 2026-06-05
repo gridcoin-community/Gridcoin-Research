@@ -5,6 +5,7 @@
 #include "main.h"
 #include "node/ui_interface.h"
 #include "random.h"
+#include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -6299,11 +6300,17 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
  */
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "sendscraperfilemanifest\n"
-                "Send a CScraperManifest object from the current ScraperFileManifest.\n"
-                );
+    static const RPCHelpMan help{
+        "sendscraperfilemanifest",
+        "Send a CScraperManifest object from the current ScraperFileManifest.",
+        {},
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
+        RPCExamples{
+            HelpExampleCli("sendscraperfilemanifest", "") +
+            HelpExampleRpc("sendscraperfilemanifest", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     CTxDestination AddressOut;
     CKey KeyOut;
@@ -6329,11 +6336,20 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
  */
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "savescraperfilemanifest <hash>\n"
-                "Saves a CScraperManifest object to disk.\n"
-                );
+    static const RPCHelpMan help{
+        "savescraperfilemanifest",
+        "Save a CScraperManifest object to disk.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Hash of the manifest to save to disk."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
+        RPCExamples{
+            HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
+            HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
@@ -6350,11 +6366,23 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  */
 UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "deletecscrapermanifest <hash>\n"
-                "delete manifest object.\n"
-                );
+    static const RPCHelpMan help{
+        "deletecscrapermanifest",
+        "Delete a CScraperManifest entry from the global mapManifest map.\n"
+        "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
+        "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
+        "global convergence cache.",
+        {
+            {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "Hash of the manifest to delete."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
+        RPCExamples{
+            HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
+            HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     LOCK(CScraperManifest::cs_mapManifest);
 
@@ -6371,11 +6399,20 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
  */
 UniValue archivelog(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
-                );
+    static const RPCHelpMan help{
+        "archivelog",
+        "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
+        {
+            {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Which log to archive: either \"debug\" or \"scraper\"."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
+        RPCExamples{
+            HelpExampleCli("archivelog", "debug") +
+            HelpExampleRpc("archivelog", "\"scraper\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     std::string sLogger = params[0].get_str();
 
@@ -6457,15 +6494,23 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
  */
 UniValue convergencereport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "convergencereport [convergence_cache_details]\n"
-                "\n"
-                "convergence_cache_details: optional boolean to provide detailed output\n"
-                "from convergence cache\n"
-                "\n"
-                "Display local node report of scraper convergence.\n"
-                );
+    static const RPCHelpMan help{
+        "convergencereport",
+        "Display the local node's report of scraper convergence.",
+        {
+            {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Default{false},
+                "If true, include detailed output from the convergence cache."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
+        RPCExamples{
+            HelpExampleCli("convergencereport", "") +
+            HelpExampleCli("convergencereport", "true") +
+            HelpExampleRpc("convergencereport", "true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
@@ -6574,13 +6619,23 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  */
 UniValue testnewsb(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1 )
-        throw std::runtime_error(
-                "testnewsb [hint bits]\n"
-                "Tests superblock formation. Optional parameter of the number of bits for the reduced hash hint for"
-                " uncached test.\n"
-                "This is limited to a range of 4 to 32, with 32 as the default (which is the normal hint bits).\n"
-                );
+    static const RPCHelpMan help{
+        "testnewsb",
+        "Tests superblock formation.",
+        {
+            {"hint_bits", RPCArg::Type::NUM, RPCArg::Default{32},
+                "Number of bits for the reduced hash hint for the uncached test. "
+                "Clamped to a range of 4 to 32 (32 = the normal hint bits)."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
+        RPCExamples{
+            HelpExampleCli("testnewsb", "") +
+            HelpExampleCli("testnewsb", "16") +
+            HelpExampleRpc("testnewsb", "16")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     unsigned int nReducedCacheBits = 32;
 
@@ -6800,11 +6855,19 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  */
 UniValue scraperreport(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "scraperreport\n"
-                "Report containing various statistics about the scraper.\n"
-                );
+    static const RPCHelpMan help{
+        "scraperreport",
+        "Report containing various statistics about the scraper.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {{RPCResult::Type::ELISION, "",
+                "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
+        RPCExamples{
+            HelpExampleCli("scraperreport", "") +
+            HelpExampleRpc("scraperreport", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw std::runtime_error(help.ToString());
 
     UniValue ret(UniValue::VOBJ);
 
