@@ -173,6 +173,13 @@ UniValue createhtlc(const UniValue& params, bool fHelp);
 UniValue claimhtlc(const UniValue& params, bool fHelp);
 UniValue refundhtlc(const UniValue& params, bool fHelp);
 
+// Tier 1 PR F1: src/wallet/rpcdump.cpp commands. Each function's converted
+// body throws via help.ToString() before touching pwalletMain or file IO.
+UniValue importprivkey(const UniValue& params, bool fHelp);
+UniValue importwallet(const UniValue& params, bool fHelp);
+UniValue dumpprivkey(const UniValue& params, bool fHelp);
+UniValue dumpwallet(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -887,6 +894,35 @@ BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
+{
+    const UniValue empty(UniValue::VARR);
+    using HelpFn = UniValue (*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> cases{
+        {"importprivkey", &importprivkey},
+        {"importwallet", &importwallet},
+        {"dumpprivkey", &dumpprivkey},
+        {"dumpwallet", &dumpwallet},
+    };
+    for (const auto& [rpc_name, fn] : cases) {
+        BOOST_TEST_CONTEXT(rpc_name) {
+            bool threw = false;
+            try {
+                fn(empty, /*fHelp=*/true);
+            } catch (const std::runtime_error& e) {
+                threw = true;
+                const std::string what{e.what()};
+                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                                    "help text missing command name: " << what);
+                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                    "help text missing Examples section: " << what);
+            }
+            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
+        }
+    }
+}
+
 
 
 
