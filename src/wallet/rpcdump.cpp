@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/algorithm/string.hpp>
+#include <util/string.h>
 
 using namespace std;
 
@@ -218,7 +219,7 @@ UniValue importwallet(const UniValue& params, bool fHelp)
             continue;
 
         std::vector<std::string> vstr;
-        boost::split(vstr, line, boost::is_any_of(" "));
+        vstr = SplitString(line, ' ');
         if (vstr.size() < 2)
             continue;
 
