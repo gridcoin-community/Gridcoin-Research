@@ -205,6 +205,20 @@ UniValue validatepubkey(const UniValue& params, bool fHelp);
 UniValue makekeypair(const UniValue& params, bool fHelp);
 UniValue sethdseed(const UniValue& params, bool fHelp);
 
+// Forward declarations of the Tier 1 F3 wallet-query commands under test.
+UniValue getinfo(const UniValue& params, bool fHelp);
+UniValue getwalletinfo(const UniValue& params, bool fHelp);
+UniValue listaddressgroupings(const UniValue& params, bool fHelp);
+UniValue getreceivedbyaddress(const UniValue& params, bool fHelp);
+UniValue getbalance(const UniValue& params, bool fHelp);
+UniValue getbalancedetail(const UniValue& params, bool fHelp);
+UniValue getunconfirmedbalance(const UniValue& params, bool fHelp);
+UniValue listreceivedbyaddress(const UniValue& params, bool fHelp);
+UniValue listtransactions(const UniValue& params, bool fHelp);
+UniValue liststakes(const UniValue& params, bool fHelp);
+UniValue gettransaction(const UniValue& params, bool fHelp);
+UniValue getrawwallettransaction(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -1060,6 +1074,42 @@ BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
                     "help message missing Examples section");
             }
             BOOST_CHECK_MESSAGE(threw, "expected std::runtime_error to be thrown");
+        }
+    }
+}
+
+// Tier 1 F3: each of the wallet-query commands renders help text on fHelp=true
+// before touching pwalletMain / cs_main / cs_wallet. Same fixture-free pattern
+// as the F2 test above.
+BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
+{
+    using HelpFn = UniValue(*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> commands{
+        {"getinfo",                 &getinfo},
+        {"getwalletinfo",           &getwalletinfo},
+        {"listaddressgroupings",    &listaddressgroupings},
+        {"getreceivedbyaddress",    &getreceivedbyaddress},
+        {"getbalance",              &getbalance},
+        {"getbalancedetail",        &getbalancedetail},
+        {"getunconfirmedbalance",   &getunconfirmedbalance},
+        {"listreceivedbyaddress",   &listreceivedbyaddress},
+        {"listtransactions",        &listtransactions},
+        {"liststakes",              &liststakes},
+        {"gettransaction",          &gettransaction},
+        {"getrawwallettransaction", &getrawwallettransaction},
+    };
+
+    const UniValue params(UniValue::VARR);
+    for (const auto& [name, fn] : commands) {
+        try {
+            fn(params, /*fHelp=*/true);
+            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
+        } catch (const std::runtime_error& e) {
+            const std::string what{e.what()};
+            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
+                                std::string{"help text missing command name: "} + name);
+            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                std::string{"help text missing Examples marker: "} + name);
         }
     }
 }
