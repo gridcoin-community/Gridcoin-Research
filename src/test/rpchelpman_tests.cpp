@@ -193,6 +193,18 @@ UniValue listaccounts(const UniValue& params, bool fHelp);
 UniValue movecmd(const UniValue& params, bool fHelp);  // dispatched as "move"
 UniValue vote(const UniValue& params, bool fHelp);
 
+// Forward declarations of the Tier 1 F2 wallet-keys commands under test.
+UniValue getnewpubkey(const UniValue& params, bool fHelp);
+UniValue getnewaddress(const UniValue& params, bool fHelp);
+UniValue signmessage(const UniValue& params, bool fHelp);
+UniValue verifymessage(const UniValue& params, bool fHelp);
+UniValue addmultisigaddress(const UniValue& params, bool fHelp);
+UniValue addredeemscript(const UniValue& params, bool fHelp);
+UniValue validateaddress(const UniValue& params, bool fHelp);
+UniValue validatepubkey(const UniValue& params, bool fHelp);
+UniValue makekeypair(const UniValue& params, bool fHelp);
+UniValue sethdseed(const UniValue& params, bool fHelp);
+
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
 // Helper: build a minimal RPCHelpMan with one required string arg and one result.
@@ -971,6 +983,38 @@ BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(tier1_f2_wallet_keys_help_renders)
+{
+    using HelpFn = UniValue(*)(const UniValue&, bool);
+    const std::vector<std::pair<const char*, HelpFn>> commands{
+        {"getnewpubkey",       &getnewpubkey},
+        {"getnewaddress",      &getnewaddress},
+        {"signmessage",        &signmessage},
+        {"verifymessage",      &verifymessage},
+        {"addmultisigaddress", &addmultisigaddress},
+        {"addredeemscript",    &addredeemscript},
+        {"validateaddress",    &validateaddress},
+        {"validatepubkey",     &validatepubkey},
+        {"makekeypair",        &makekeypair},
+        {"sethdseed",          &sethdseed},
+    };
+
+    const UniValue params(UniValue::VARR);
+    for (const auto& [name, fn] : commands) {
+        try {
+            fn(params, /*fHelp=*/true);
+            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
+        } catch (const std::runtime_error& e) {
+            const std::string what{e.what()};
+            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
+                                std::string{"help text missing command name: "} + name);
+            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                                std::string{"help text missing Examples marker: "} + name);
+        }
+    }
+}
+
 
 
 
