@@ -75,6 +75,9 @@ public:
         consensus.ProjectV2Height = 2671700;
         consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3989800;
+        // TBD: set coincident with BlockV15Height when v15 is scheduled. numeric_limits max keeps
+        // the deep-copy overlay fix inactive on mainnet until then (mirrors PollMultiAddressHeight).
+        consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;
@@ -200,6 +203,9 @@ public:
         consensus.ProjectV2Height = 1944820;
         consensus.PollMultiAddressHeight = std::numeric_limits<int>::max();
         consensus.AutoGreylistAuditHeight = 3111000;
+        // Inactive by default; activated on the isolated mesh / public testnet via the
+        // -autogreylistdeepcopyheight override ahead of v15.
+        consensus.AutoGreylistDeepCopyHeight = std::numeric_limits<int>::max();
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;
         consensus.ConstantBlockRewardCeiling = 500 * COIN;

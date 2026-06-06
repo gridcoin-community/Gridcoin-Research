@@ -3405,11 +3405,11 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("display_url", project.DisplayUrl());
         entry.pushKV("stats_url", project.StatsUrl());
 
-        if (project.HasGDPRControls()) {
+        if (project.HasGDPRControls().has_value()) {
             entry.pushKV("gdpr_controls", *project.HasGDPRControls());
         }
 
-        if (project.RequiresExtAdapter()) {
+        if (project.RequiresExtAdapter().has_value()) {
             entry.pushKV("requires_external_adapter", *project.RequiresExtAdapter());
         }
 
@@ -3417,6 +3417,84 @@ UniValue listprojects(const UniValue& params, bool fHelp)
         entry.pushKV("status", project.StatusToString());
 
         res.pushKV(project.m_name, entry);
+    }
+
+    return res;
+}
+
+UniValue getrawprojectstatus(const UniValue& params, bool fHelp)
+{
+    static const RPCHelpMan help{
+        "getrawprojectstatus",
+        "Displays the RAW, contract-applied status of each project, read directly from the registry's LevelDB "
+        "storage and bypassing the in-memory AutoGreylist overlay.\n"
+        "\n"
+        "listprojects reports the OVERLAID status: a project that meets auto-greylisting criteria displays as "
+        "\"Automatically Greylisted\" regardless of the status its administrative contract actually set. This "
+        "command instead reports the true contract status, the ground truth for verifying what addkey set. The raw "
+        "status is therefore never \"Automatically Greylisted\" -- that is an in-memory overlay status only.",
+        {},
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Project short name -> raw contract state.",
+            {
+                {RPCResult::Type::OBJ, "project_name", "",
+                    {
+                        {RPCResult::Type::NUM, "version", "Contract payload version of the project entry."},
+                        {RPCResult::Type::STR, "display_name", "Human-readable project name."},
+                        {RPCResult::Type::STR, "url", "Project statistics URL as stored in the contract."},
+                        {RPCResult::Type::STR, "status", "Raw contract status, one of the locale-independent strings "
+                            "\"Active\", \"Manually Greylisted\", \"Active by Greylist Override\", or \"Deleted\"."},
+                        {RPCResult::Type::BOOL, "gdpr_controls", /*optional=*/true,
+                            "Whether GDPR stats-export protection is enforced (omitted for pre-v2 entries)."},
+                        {RPCResult::Type::BOOL, "requires_external_adapter", /*optional=*/true,
+                            "Whether the project requires an external adapter to collect stats (omitted for pre-v4 "
+                            "entries)."},
+                        {RPCResult::Type::STR, "time", "Timestamp of the contract that set this entry."},
+                        {RPCResult::Type::STR_HEX, "current_project_entry_tx_hash",
+                            "Transaction hash of the current (HEAD) project contract."},
+                        {RPCResult::Type::STR, "previous_project_entry_tx_hash",
+                            "Transaction hash of the previous entry in the chainlet, or \"null\" if this is the first."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getrawprojectstatus", "")
+          + HelpExampleRpc("getrawprojectstatus", "")},
+    };
+
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
+
+    UniValue res(UniValue::VOBJ);
+
+    for (const auto& iter : GRC::GetWhitelist().GetProjectsFromDisk()) {
+        const auto& project = iter.second;
+
+        UniValue entry(UniValue::VOBJ);
+
+        entry.pushKV("version", (int)project->m_version);
+        entry.pushKV("display_name", project->DisplayName());
+        entry.pushKV("url", project->m_url);
+        // Emit the untranslated (locale-independent) status string: this is a machine-readable diagnostic, so the
+        // value must be stable across GUI locales (the no-arg StatusToString() defaults to the translated form).
+        entry.pushKV("status", project->StatusToString(project->m_status.Value(), false));
+
+        if (project->HasGDPRControls().has_value()) {
+            entry.pushKV("gdpr_controls", *project->HasGDPRControls());
+        }
+
+        if (project->RequiresExtAdapter().has_value()) {
+            entry.pushKV("requires_external_adapter", *project->RequiresExtAdapter());
+        }
+
+        entry.pushKV("time", DateTimeStrFormat(project->m_timestamp));
+        entry.pushKV("current_project_entry_tx_hash", project->m_hash.ToString());
+
+        if (project->m_previous_hash.IsNull()) {
+            entry.pushKV("previous_project_entry_tx_hash", "null");
+        } else {
+            entry.pushKV("previous_project_entry_tx_hash", project->m_previous_hash.ToString());
+        }
+
+        res.pushKV(iter.first, entry);
     }
 
     return res;

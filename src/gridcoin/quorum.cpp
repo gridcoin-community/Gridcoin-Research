@@ -1842,8 +1842,8 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // TODO: unwrap this from ScraperGetSuperblockContract()
     CreateSuperblock();
 
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, false, true);
+    // Get a read-only view of the current project greylist.
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, true);
 
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};
@@ -1920,6 +1920,11 @@ void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_
     }
 
     g_superblock_index.Reload(pindexLast);
+
+    // Refresh the AutoGreylist cache against the reloaded superblock index (startup path). Moved out
+    // of Whitelist::Snapshot() (stage 3a) so the cache is populated explicitly here rather than
+    // lazily on the first Snapshot read.
+    GetAutoGreylistCache()->Refresh();
 }
 
 Superblock Quorum::CreateSuperblock()
@@ -1931,7 +1936,48 @@ void Quorum::PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(c
 {
     LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", superblock.m_height);
 
+    // Capture the deep-copy gate status of the currently-active (prior) superblock BEFORE the inner
+    // SuperblockIndex::PushSuperblock installs the new one. For v2+ superblocks the inner routine
+    // emplaces the new SB at the front of m_cache, so after the call CurrentSuperblock() returns the
+    // newly-pushed one and the gate-crossing detection below sees the transition.
+    //
+    // V1 superblocks ALSO reach this function (it's the single public Quorum entry for any SB version),
+    // but the inner SuperblockIndex routes them to m_pending instead of m_cache (legacy v1 deferred-
+    // commit path; see SuperblockIndex::PushSuperblock for the version branch). m_cache.front() is
+    // therefore unchanged for v1 input, current == prev, and the gate-crossing condition naturally
+    // never fires for them -- no separate special case needed.
+    SuperblockPtr prev = CurrentSuperblock();
+    const bool prev_deep_copy = !prev.IsEmpty() && IsAutoGreylistDeepCopyEnabled(prev.m_height);
+
     g_superblock_index.PushSuperblock(std::move(superblock));
+
+    SuperblockPtr current = CurrentSuperblock();
+
+    // Deep-copy gate CROSSING: the just-pushed superblock is post-gate but the prior one was pre-gate.
+    // On that transition, rebuild the project registry from LevelDB so a node that ran the legacy
+    // in-place overlay across the gate discards its corrupted in-memory m_project_entries state (the
+    // overlay only promotes ACTIVE/MAN -> AUTO_GREYLISTED and never demotes, so it cannot self-heal).
+    //
+    // A node already running on this binary post-gate has a post-gate prior here and the rebuild is
+    // skipped. A node doing fresh initial-block-download from genesis with this binary will hit the
+    // crossing once at the historical gate height during sync -- the rebuild then fires but is
+    // effectively idempotent because Initialize() at startup already loaded m_project_entries clean
+    // from LevelDB and nothing has corrupted it since. Cost is one extra LevelDB load during IBD.
+    if (!current.IsEmpty() && IsAutoGreylistDeepCopyEnabled(current.m_height) && !prev_deep_copy) {
+        LogPrintf("Quorum::PushSuperblock: deep-copy gate crossing detected "
+                  "(prev_height=%" PRId64 ", current_height=%" PRId64 "); invoking ReinitFromDisk",
+                  prev.IsEmpty() ? -1 : (int64_t) prev.m_height, (int64_t) current.m_height);
+        GetWhitelist().ReinitFromDisk();
+    }
+
+    // Refresh the AutoGreylist cache against the newly-activated superblock. Fires deterministically at
+    // this chain-handler point rather than relying on whichever thread happens to read first. Every
+    // PushSuperblock changes the current SB's hash, so the early-bail in AutoGreylist::Refresh()
+    // (which fires only when superblock_ptr->GetHash() == m_superblock_hash) does NOT short-circuit
+    // here -- this call pays the full Snapshot + 40-SB walk-back cost on each push. That cost is
+    // intrinsic to the explicit-trigger redesign; it's paid here on the validation thread rather than
+    // lazily on whichever consumer reads first.
+    GetAutoGreylistCache()->Refresh();
 }
 
 void Quorum::PopSuperblock(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1939,9 +1985,39 @@ void Quorum::PopSuperblock(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQU
     LogPrintf("Quorum::PopSuperblock(%" PRId64 ")", pindex->nHeight);
 
     g_superblock_index.PopSuperblock();
+
+    // Refresh the AutoGreylist cache against the new current superblock (the one that becomes active
+    // after the pop). Moved out of Whitelist::Snapshot() (stage 3a) so the refresh fires explicitly
+    // at the chain handler points rather than on-snapshot.
+    //
+    // NO backward-crossing ReinitFromDisk here, intentionally. A deep reorg that walks the chain tip
+    // back across AutoGreylistDeepCopyHeight reverts m_deep_copy_active to false (via the Refresh
+    // call below) and re-exposes the legacy in-place overlay path on subsequent Snapshot() calls.
+    // That's by definition of the pre-gate regime; there is nothing to "heal" at the moment of the
+    // backward cross (m_project_entries is currently clean, because the post-gate deep-copy path
+    // doesn't mutate it). Any corruption that accumulates DURING the subsequent pre-gate run is
+    // healed atomically by the next forward Push that re-crosses the gate (ReinitFromDisk in
+    // Quorum::PushSuperblock). The pre-gate window after a backward cross has the same in-place
+    // overlay vulnerability the pre-PR-2997 code did, with one subtle difference: pre-PR-2997 the
+    // AutoGreylist cache was refreshed on demand from every Snapshot reader, whereas post-PR-2997
+    // refresh fires only at chain-handler boundaries. So the corruption window opens identically,
+    // but cache freshness DURING the pre-gate window is slightly staler in the new model -- a
+    // documented limitation of the gate (the fix is mandatory at v15; sub-v15 chain reorgs across
+    // the gate are extraordinarily unlikely on mainnet and only happen by operator intent on
+    // testnet).
+    GetAutoGreylistCache()->Refresh();
 }
 
 bool Quorum::CommitSuperblock(const uint32_t height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // SuperblockIndex::PushSuperblock routes v2+ superblocks directly to m_cache and skips m_pending,
+    // so g_superblock_index.Commit() can only return true for v1 superblocks committed via m_pending --
+    // a path that exists today only during initial-sync replay of pre-v11 history. The AutoGreylist cache
+    // refresh and project-registry deep-copy gate-crossing rebuild live at Quorum::PushSuperblock (the
+    // v2+ activation point), Quorum::PopSuperblock (reorg) and Quorum::LoadSuperblockIndex (startup);
+    // neither is needed here because RefreshWithSuperblock bails on m_version < 3 and
+    // IsAutoGreylistDeepCopyEnabled is false at any v1-superblock height under default consensus params.
+    // Keeping this function as a thin wrapper preserves the pre-v11 priming callers
+    // (Tally::ActivateSnapshotAccrual / Tally::LegacyRecount).
     return g_superblock_index.Commit(height);
 }
