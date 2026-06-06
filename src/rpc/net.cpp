@@ -687,6 +687,12 @@ const RPCHelpMan& sendalert_helpman() { return sendalert_help; }
 
 UniValue sendalert(const UniValue& params)
 {
+    // Variadic positional: legacy minimum was 6 args (7th cancelupto optional, extras ignored).
+    // The dispatcher pre-check is skipped via MarkVariadic(), so retain a body-level lower-bound
+    // check here for the underflow case.
+    if (params.size() < 6)
+        throw runtime_error(sendalert_helpman().ToString());
+
     CAlert alert;
     CKey key;
 
