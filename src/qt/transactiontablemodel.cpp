@@ -314,6 +314,13 @@ public:
         // (e.g. switching the comparator to (time, idx, hash), or a
         // post-decomposition mutation of `time`), these asserts surface
         // it before the erase silently drops unrelated rows.
+        //
+        // Bounds checks come first so a corrupted hashIndex (positions
+        // past the end of cachedWallet) trips an assert rather than
+        // running the cachedWallet[minPos] / cachedWallet[maxPos]
+        // subscripts below into undefined behavior.
+        assert(minPos < cachedWallet.size());
+        assert(maxPos < cachedWallet.size());
         assert(removeCount == static_cast<std::size_t>(std::distance(range.first, range.second)));
         assert(cachedWallet[minPos].hash == payload.hash);
         assert(cachedWallet[maxPos].hash == payload.hash);
@@ -948,10 +955,14 @@ QModelIndex TransactionTableModel::index(int row, int column, const QModelIndex 
     if (row < 0 || row >= priv->size()) {
         return QModelIndex();
     }
-    // Pass no internalPointer / internalId — data() resolves the row each
-    // call (see comment there). Storing a TransactionRecord* would dangle
-    // across any vector insert/erase that shifts the row's storage.
-    return createIndex(row, column);
+    // Pass an explicit nullptr internalPointer — data() resolves the row
+    // each call (see comment there). Storing a TransactionRecord* would
+    // dangle across any vector insert/erase that shifts the row's
+    // storage. The nullptr is explicit (rather than relying on the
+    // default-arg overload of createIndex) to match the third-arg
+    // convention used by the sibling table models and avoid any
+    // Qt-version-specific overload-resolution drift.
+    return createIndex(row, column, nullptr);
 }
 
 void TransactionTableModel::updateDisplayUnit()
