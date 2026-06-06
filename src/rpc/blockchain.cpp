@@ -3727,6 +3727,13 @@ const RPCHelpMan& parselegacysb_helpman() { return parselegacysb_help; }
 
 UniValue parselegacysb(const UniValue& params, bool fHelp)
 {
+    // Variadic positional: at least one arg (the contract) is required; the legacy body
+    // guarded only params.size() < 1, accepting and ignoring extra trailing args. The
+    // dispatcher pre-check is skipped via MarkVariadic(), so retain a body-level lower-bound
+    // check here for the underflow case.
+    if (params.size() < 1)
+        throw runtime_error(parselegacysb_helpman().ToString());
+
     UniValue json(UniValue::VOBJ);
 
     GRC::Superblock superblock = GRC::Superblock::UnpackLegacy(params[0].get_str());
