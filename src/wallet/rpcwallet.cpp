@@ -93,11 +93,46 @@ string AccountFromValue(const UniValue& value)
 
 UniValue getinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getinfo\n"
-                "\n"
-                "Returns an object containing various state info.");
+    static const RPCHelpMan help{
+        "getinfo",
+        "Returns an object containing various state info about the running node, network, and wallet.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR, "version", "Node version string."},
+                {RPCResult::Type::NUM, "minor_version", "Client minor version number."},
+                {RPCResult::Type::NUM, "protocolversion", "P2P protocol version."},
+                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+                {RPCResult::Type::NUM, "blocks", "Current best block height."},
+                {RPCResult::Type::BOOL, "in_sync", "Whether the node is in sync with the network."},
+                {RPCResult::Type::NUM, "timeoffset", "Network time offset in seconds."},
+                {RPCResult::Type::NUM, "uptime", "Process uptime in seconds."},
+                {RPCResult::Type::STR_AMOUNT, "moneysupply", "Current network money supply."},
+                {RPCResult::Type::NUM, "connections", "Number of active P2P connections."},
+                {RPCResult::Type::STR, "proxy", "Configured proxy (empty when unset)."},
+                {RPCResult::Type::STR, "ip", "External IP as seen by peers."},
+                {RPCResult::Type::OBJ, "difficulty", "",
+                    {
+                        {RPCResult::Type::NUM, "current", "Current network difficulty."},
+                        {RPCResult::Type::NUM, "target", "Target network difficulty."},
+                    }},
+                {RPCResult::Type::BOOL, "testnet", "Whether the node is running on testnet."},
+                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+                {RPCResult::Type::STR_AMOUNT, "paytxfee", "Configured per-kB transaction fee."},
+                {RPCResult::Type::STR_AMOUNT, "mininput", "Minimum input value to consider for spending."},
+                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+                {RPCResult::Type::STR, "errors", "Any current error/warning text from the node."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getinfo", "") +
+            HelpExampleRpc("getinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
@@ -158,11 +193,29 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "getwalletinfo\n"
-                "\n"
-                "Displays information about the wallet\n");
+    static const RPCHelpMan help{
+        "getwalletinfo",
+        "Displays information about the wallet.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::NUM, "walletversion", "Wallet version."},
+                {RPCResult::Type::STR_AMOUNT, "balance", "Current confirmed wallet balance."},
+                {RPCResult::Type::STR_AMOUNT, "newmint", "Pending new minted coins (research rewards)."},
+                {RPCResult::Type::STR_AMOUNT, "stake", "Current pending stake reward."},
+                {RPCResult::Type::NUM_TIME, "keypoololdest", "Oldest key in the wallet keypool (unix epoch)."},
+                {RPCResult::Type::NUM, "keypoolsize", "Number of keys in the wallet keypool."},
+                {RPCResult::Type::NUM_TIME, "unlocked_until", /*optional=*/true, "Time until wallet auto-locks (encrypted wallets only)."},
+                {RPCResult::Type::STR_HEX, "masterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+                {RPCResult::Type::BOOL, "staking", "Whether the staking miner is currently active."},
+                {RPCResult::Type::STR, "mining-error", "Most recent staking miner error, if any."},
+            }},
+        RPCExamples{
+            HelpExampleCli("getwalletinfo", "") +
+            HelpExampleRpc("getwalletinfo", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     UniValue res(UniValue::VOBJ);
 
@@ -496,13 +549,29 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
 
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
-    if (fHelp)
-        throw runtime_error(
-                "listaddressgroupings\n"
-                "\n"
-                "Lists groups of addresses which have had their common ownership\n"
-                "made public by common use as inputs or as the resulting change\n"
-                "in past transactions\n");
+    static const RPCHelpMan help{
+        "listaddressgroupings",
+        "Lists groups of addresses which have had their common ownership made public by "
+        "common use as inputs or as the resulting change in past transactions.",
+        {},
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ARR, "", "A grouping of addresses",
+                    {
+                        {RPCResult::Type::ARR_FIXED, "", "address/balance/account triple",
+                            {
+                                {RPCResult::Type::STR, "address", "The Gridcoin address."},
+                                {RPCResult::Type::STR_AMOUNT, "balance", "The balance attributed to the address."},
+                                {RPCResult::Type::STR, "account", /*optional=*/true, "Account name (deprecated; present when set)."},
+                            }},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listaddressgroupings", "") +
+            HelpExampleRpc("listaddressgroupings", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -632,11 +701,24 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
 
 UniValue getreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getreceivedbyaddress <Gridcoinaddress> [minconf=1]\n"
-                "\n"
-                "Returns the total amount received by <Gridcoinaddress> in transactions with at least [minconf] confirmations.\n");
+    static const RPCHelpMan help{
+        "getreceivedbyaddress",
+        "Returns the total amount received by the given Gridcoin address in transactions "
+        "with at least [minconf] confirmations.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to total received-by."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum number of confirmations for transactions to be counted (default: 1)."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount",
+            "The total amount received by the address."},
+        RPCExamples{
+            HelpExampleCli("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 6") +
+            HelpExampleRpc("getreceivedbyaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -782,27 +864,29 @@ int64_t GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
 
 UniValue getbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-         throw runtime_error(
-                "getbalance ( \"account\" minconf includeWatchonly )\n"
-                "\n"
-                "\nIf account is not specified, returns the server's total available balance.\n"
-                "If account is specified, returns the balance in the account.\n"
-                "Note that the account \"\" is not the same as leaving the parameter out.\n"
-                "The server total may be different to the balance in the default \"\" account.\n"
-                "\nArguments:\n"
-                "1. \"account\"      (string, optional) The selected account, or \"*\" for entire wallet. It may be the default account using \"\".\n"
-                "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
-                "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "amount              (numeric) The total amount in GRC received for this account.\n"
-                "\nExamples:\n"
-                "\nThe total amount in the server across all accounts\n"
-                "\nThe total amount in the server across all accounts, with at least 5 confirmations\n"
-                "\nThe total amount in the default account with at least 1 confirmation\n"
-                "\nThe total amount in the account named tabby with at least 6 confirmations\n"
-                "\nAs a json rpc call\n"
-                );
+    static const RPCHelpMan help{
+        "getbalance",
+        "If account is not specified, returns the server's total available balance. "
+        "If account is specified, returns the balance in the account. "
+        "Note that the account \"\" is not the same as leaving the parameter out. "
+        "The server total may be different to the balance in the default \"\" account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The selected account, or \"*\" for the entire wallet (default account is \"\"). "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions confirmed at least this many times (default: 1)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC for this account/wallet."},
+        RPCExamples{
+            HelpExampleCli("getbalance", "") +
+            HelpExampleCli("getbalance", "\"*\" 5") +
+            HelpExampleRpc("getbalance", "\"*\", 5")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -870,16 +954,32 @@ UniValue getbalance(const UniValue& params, bool fHelp)
 
 UniValue getbalancedetail(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-         throw runtime_error(
-                "getbalancedetail ( minconf includeWatchonly )\n"
-                "\n"
-                "\nArguments:\n"
-                "1. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
-                "2. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "detailed list       (JSON) A list of outputs similar to listtransactions that compose the entire balance.\n"
-                );
+    static const RPCHelpMan help{
+        "getbalancedetail",
+        "Returns the wallet balance broken down by the outputs that compose it. "
+        "The output list is similar to listtransactions and totals to the wallet's spendable balance.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions confirmed at least this many times (default: 1)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Also include balance in watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_AMOUNT, "balance", "Sum of received minus sent, in GRC."},
+                {RPCResult::Type::STR_AMOUNT, "fees", "Sum of fees attributed to this wallet's transactions."},
+                {RPCResult::Type::ARR, "list", "",
+                    {
+                        {RPCResult::Type::ELISION, "", "output detail (see listtransactions)"},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("getbalancedetail", "") +
+            HelpExampleCli("getbalancedetail", "6 true") +
+            HelpExampleRpc("getbalancedetail", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -983,10 +1083,17 @@ UniValue getbalancedetail(const UniValue& params, bool fHelp)
 
 UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error("getunconfirmedbalance\n"
-                            "\n"
-                            "returns the unconfirmed balance in the wallet\n");
+    static const RPCHelpMan help{
+        "getunconfirmedbalance",
+        "Returns the unconfirmed balance in the wallet.",
+        {},
+        RPCResult{RPCResult::Type::STR_AMOUNT, "amount", "Total unconfirmed balance in GRC."},
+        RPCExamples{
+            HelpExampleCli("getunconfirmedbalance", "") +
+            HelpExampleRpc("getunconfirmedbalance", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
 }
@@ -1507,23 +1614,36 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
 
 UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listreceivedbyaddress ( minconf includeempty includeWatchonly)\n"
-                "\nList balances by receiving address.\n"
-                "\nArguments:\n"
-                "1. minconf       (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty  (bool, optional, default=false) Whether to include addresses that haven't received any payments.\n"
-                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-                "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
-                "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
-                "    \"amount\" : x.xxx,                  (numeric) The total amount in GRC received by the address\n"
-                "\nExamples:\n"
-                );
+    static const RPCHelpMan help{
+        "listreceivedbyaddress",
+        "List balances by receiving address.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The minimum number of confirmations before payments are included (default: 1)."},
+            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include addresses that haven't received any payments (default: false)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                            "Only returned if imported addresses were involved in transaction."},
+                        {RPCResult::Type::STR, "address", "The receiving Gridcoin address."},
+                        {RPCResult::Type::STR, "account", "The account of the receiving address (deprecated; default account is \"\")."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "The total amount in GRC received by the address."},
+                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction included."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listreceivedbyaddress", "") +
+            HelpExampleCli("listreceivedbyaddress", "6 true") +
+            HelpExampleRpc("listreceivedbyaddress", "6, true, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1724,62 +1844,31 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
 
 UniValue listtransactions(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 4)
-        throw runtime_error(
-                "listtransactions ( \"account\" count from includeWatchonly)\n"
-                "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
-                "\nArguments:\n"
-                "1. \"account\"    (string, optional) The account name. If not included, it will list all transactions for all accounts.\n"
-                "                                     If \"\" is set, it will list transactions for the default account.\n"
-                "2. count          (numeric, optional, default=10) The number of transactions to return\n"
-                "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
-                "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"
-                "                                     If \"\" is set true, it will list sent transactions as well\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"account\":\"accountname\",       (string) The account name associated with the transaction. \n"
-                "                                                It will be \"\" for the default account.\n"
-                "    \"address\":\"bitcoinaddress\",    (string) The bitcoin address of the transaction. Not present for \n"
-                "                                                move transactions (category = move).\n"
-                "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
-                "                                                transaction between accounts, and not associated with an address,\n"
-                "                                                transaction id or block. 'send' and 'receive' transactions are \n"
-                "                                                associated with an address, transaction id and block details\n"
-                "    \"amount\": x.xxx,          (numeric) The amount in GRC. This is negative for the 'send' category, and for the\n"
-                "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
-                "                                         and for the 'move' category for inbound funds.\n"
-                "    \"fee\": x.xxx,             (numeric) The amount of the fee in GRC. This is negative and only available for the \n"
-                "                                         'send' category of transactions.\n"
-                "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
-                "                                         'receive' category of transactions.\n"
-                "    \"blockhash\": \"hashvalue\", (string) The block hash containing the transaction. Available for 'send' and 'receive'\n"
-                "                                          category of transactions.\n"
-                "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive'\n"
-                "                                          category of transactions.\n"
-                "    \"txid\": \"transactionid\", (string) The transaction id. Available for 'send' and 'receive' category of transactions.\n"
-                "    \"walletconflicts\" : [\n"
-                "        \"conflictid\",  (string) Ids of transactions, including equivalent clones, that re-spend a txid input.\n"
-                "    ],\n"
-                "    \"respendsobserved\" : [\n"
-                "        \"respendid\",  (string) Ids of transactions, NOT equivalent clones, that re-spend a txid input. \"Double-spends.\"\n"
-                "    ],\n"
-                "    \"time\": xxx,              (numeric) The transaction time in seconds since epoch (midnight Jan 1 1970 GMT).\n"
-                "    \"timereceived\": xxx,      (numeric) The time received in seconds since epoch (midnight Jan 1 1970 GMT). Available \n"
-                "                                          for 'send' and 'receive' category of transactions.\n"
-                "    \"comment\": \"...\",       (string) If a comment is associated with the transaction.\n"
-                "    \"otheraccount\": \"accountname\",  (string) For the 'move' category of transactions, the account the funds came \n"
-                "                                          from (for receiving funds, positive amounts), or went to (for sending funds,\n"
-                "                                          negative amounts).\n"
-                "  }\n"
-                "]\n"
-
-                "\nExamples:\n"
-                "\nList the most recent 10 transactions in the systems\n"
-                "\nList the most recent 10 transactions for the tabby account\n"
-                "\nList transactions 100 to 120 from the tabby account\n"
-                "\nAs a json rpc call\n"
-                );
+    static const RPCHelpMan help{
+        "listtransactions",
+        "Returns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name; if omitted, list transactions for all accounts. "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The number of transactions to return (default: 10)."},
+            {"from", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The number of transactions to skip (default: 0)."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include transactions to watchonly addresses (see 'importaddress'). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "transaction object; see 'gettransaction' for the full schema"},
+            }},
+        RPCExamples{
+            HelpExampleCli("listtransactions", "") +
+            HelpExampleCli("listtransactions", "\"*\" 20 100") +
+            HelpExampleRpc("listtransactions", "\"*\", 20, 100")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = "*";
     int nCount = 10;
@@ -1864,12 +1953,24 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
 UniValue liststakes(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "liststakes ( count )\n"
-                "\n"
-                "Returns count most recent stakes."
-                );
+    static const RPCHelpMan help{
+        "liststakes",
+        "Returns the count most recent stake transactions.",
+        {
+            {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Maximum number of stake transactions to return (default: 10)."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "stake transaction object; see 'listtransactions'"},
+            }},
+        RPCExamples{
+            HelpExampleCli("liststakes", "") +
+            HelpExampleCli("liststakes", "25") +
+            HelpExampleRpc("liststakes", "25")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = "*";
     int nCount = 10;
@@ -2090,17 +2191,25 @@ UniValue listsinceblock(const UniValue& params, bool fHelp)
 
 UniValue gettransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "gettransaction \"txid\" ( includeWatchonly )\n"
-                "\nGet detailed information about in-wallet transaction <txid>\n"
-                "\nArguments:\n"
-                "1. \"txid\"    (string, required) The transaction id\n"
-                "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
-                "\nResult:\n"
-                "{\n"
-                "  \"amount\" : x.xxx,        (numeric) The transaction amount in grc\n"
-                );
+    static const RPCHelpMan help{
+        "gettransaction",
+        "Get detailed information about an in-wallet transaction.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The transaction id."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Whether to include watchonly addresses in balance calculation and details[]. Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "transaction detail; see WalletTxToJSON for full keys"},
+            }},
+        RPCExamples{
+            HelpExampleCli("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+            HelpExampleRpc("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -2203,12 +2312,21 @@ UniValue abandontransaction(const UniValue& params, bool fHelp)
 
 UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getrawwallettransaction <txid>\n"
-                "\n"
-                "Get a string that is serialized, hex-encoded data for <txid> "
-                "from the wallet.\n");
+    static const RPCHelpMan help{
+        "getrawwallettransaction",
+        "Get a string that is serialized, hex-encoded data for the given txid from the wallet.",
+        {
+            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The transaction id (must be in the wallet)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "data",
+            "Serialized, hex-encoded data for the transaction."},
+        RPCExamples{
+            HelpExampleCli("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") +
+            HelpExampleRpc("getrawwallettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     const uint256 hash = uint256S(params[0].get_str());
 
