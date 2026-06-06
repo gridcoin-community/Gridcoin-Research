@@ -7,6 +7,7 @@
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
+#include "main.h"
 #include "wallet/wallet.h"
 #include "node/ui_interface.h"
 #include "util.h"
@@ -16,10 +17,11 @@
 #include <QColor>
 #include <QIcon>
 #include <QDateTime>
-#include <QtAlgorithms>
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
+#include <iterator>
 #include <limits>
 #include <unordered_map>
 #include <vector>
@@ -90,7 +92,9 @@ public:
     void rebuildHashIndex()
     {
         hashIndex.clear();
-        hashIndex.reserve(cachedWallet.size());
+        // Reserve with headroom so the default max_load_factor=1.0 doesn't
+        // trigger an immediate rehash on the first emplace.
+        hashIndex.reserve(cachedWallet.size() * 2 + 1);
         for (std::size_t i = 0; i < cachedWallet.size(); ++i) {
             hashIndex.emplace(cachedWallet[i].hash, i);
         }
@@ -119,12 +123,18 @@ public:
     void loadWallet()
     {
         cachedWallet.clear();
-        hashIndex.clear();
+        // hashIndex is reset by rebuildHashIndex() below.
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
             bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
             int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
+
+            // Reserve a reasonable upper bound up front to avoid the
+            // ~18 reallocations a 300k-tx wallet would otherwise pay.
+            // Each wtx typically decomposes to 1-3 records; double the
+            // wtx count as a safe lower estimate.
+            cachedWallet.reserve(wallet->mapWallet.size() * 2);
 
             for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
             {
@@ -132,9 +142,7 @@ public:
                 {
                     const QList<TransactionRecord> decomposed =
                         TransactionRecord::decomposeTransaction(wallet, it->second);
-                    for (const TransactionRecord& rec : decomposed) {
-                        cachedWallet.push_back(rec);
-                    }
+                    cachedWallet.insert(cachedWallet.end(), decomposed.begin(), decomposed.end());
                 }
             }
         }
@@ -289,6 +297,15 @@ public:
             if (it->second > maxPos) maxPos = it->second;
         }
         const std::size_t removeCount = maxPos - minPos + 1;
+
+        // Defensive checks for the contiguity invariant the erase relies
+        // on. If a future change ever lets same-hash records de-cluster
+        // (e.g. switching the comparator to (time, idx, hash), or a
+        // post-decomposition mutation of `time`), these asserts surface
+        // it before the erase silently drops unrelated rows.
+        assert(removeCount == static_cast<std::size_t>(std::distance(range.first, range.second)));
+        assert(cachedWallet[minPos].hash == payload.hash);
+        assert(cachedWallet[maxPos].hash == payload.hash);
 
         parent->beginRemoveRows(QModelIndex(),
                                 static_cast<int>(minPos),
@@ -765,7 +782,14 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
 {
     if(!index.isValid())
         return QVariant();
-    TransactionRecord *rec = static_cast<TransactionRecord*>(index.internalPointer());
+
+    // Resolve the row each call rather than trusting index.internalPointer().
+    // The pointer stored at createIndex() time can dangle: std::vector
+    // reallocation on insert (and element shifts on insert/erase past the
+    // held row) invalidate every TransactionRecord*. QSortFilterProxyModel
+    // and selection state hold persistent QModelIndexes across mutations.
+    TransactionRecord *rec = priv->index(index.row());
+    if (!rec) return QVariant();
 
     const auto column = static_cast<ColumnIndex>(index.column());
     switch (role) {
@@ -910,15 +934,13 @@ QVariant TransactionTableModel::headerData(int section, Qt::Orientation orientat
 QModelIndex TransactionTableModel::index(int row, int column, const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    TransactionRecord *data = priv->index(row);
-    if(data)
-    {
-        return createIndex(row, column, priv->index(row));
-    }
-    else
-    {
+    if (row < 0 || row >= priv->size()) {
         return QModelIndex();
     }
+    // Pass no internalPointer / internalId — data() resolves the row each
+    // call (see comment there). Storing a TransactionRecord* would dangle
+    // across any vector insert/erase that shifts the row's storage.
+    return createIndex(row, column);
 }
 
 void TransactionTableModel::updateDisplayUnit()
