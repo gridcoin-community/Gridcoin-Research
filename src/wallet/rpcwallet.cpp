@@ -292,11 +292,20 @@ CTxDestination GetAccountAddress(string strAccount, bool bForceNew=false) EXCLUS
 
 UniValue getaccountaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaccountaddress <account>\n"
-                "\n"
-                "Returns the current Gridcoin address for receiving payments to this account.\n");
+    static const RPCHelpMan help{
+        "getaccountaddress",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the current Gridcoin address for receiving payments to this account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name (use \"\" for the default account)."},
+        },
+        RPCResult{RPCResult::Type::STR, "", "The address associated with this account."},
+        RPCExamples{
+            HelpExampleCli("getaccountaddress", "\"\"") +
+            HelpExampleRpc("getaccountaddress", "\"myaccount\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -312,11 +321,21 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp)
 
 UniValue setaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "setaccount <gridcoinaddress> <account>\n"
-                "\n"
-                "Sets the account associated with the given address.\n");
+    static const RPCHelpMan help{
+        "setaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Sets the account associated with the given address.",
+        {
+            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "The account name. Default: empty string."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("setaccount", "\"S1Example\" \"myaccount\"") +
+            HelpExampleRpc("setaccount", "\"S1Example\", \"myaccount\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -344,11 +363,20 @@ UniValue setaccount(const UniValue& params, bool fHelp)
 
 UniValue getaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaccount <gridcoinaddress>\n"
-                "\n"
-                "Returns the account associated with the given address.\n");
+    static const RPCHelpMan help{
+        "getaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the account associated with the given address.",
+        {
+            {"gridcoinaddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The address."},
+        },
+        RPCResult{RPCResult::Type::STR, "", "The account name (empty string for the default account)."},
+        RPCExamples{
+            HelpExampleCli("getaccount", "\"S1Example\"") +
+            HelpExampleRpc("getaccount", "\"S1Example\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -368,11 +396,21 @@ UniValue getaccount(const UniValue& params, bool fHelp)
 
 UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "getaddressesbyaccount <account>\n"
-                "\n"
-                "Returns the list of addresses for the given account.\n");
+    static const RPCHelpMan help{
+        "getaddressesbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns the list of addresses for the given account.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "Addresses associated with the given account.",
+            {{RPCResult::Type::STR, "", "An address in the account."}}},
+        RPCExamples{
+            HelpExampleCli("getaddressesbyaccount", "\"myaccount\"") +
+            HelpExampleRpc("getaddressesbyaccount", "\"myaccount\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = AccountFromValue(params[0]);
 
@@ -608,11 +646,26 @@ void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXC
 
 UniValue getreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "getreceivedbyaccount <account> [minconf=1]\n"
-                "\n"
-                "Returns the total amount received by addresses with <account> in transactions with at least [minconf] confirmations.\n");
+    static const RPCHelpMan help{
+        "getreceivedbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Use getreceivedbyaddress instead.\n"
+        "\n"
+        "Returns the total amount received by addresses with <account> in transactions with at least\n"
+        "[minconf] confirmations.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO, "The account name."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum confirmations. Default: 1."},
+        },
+        RPCResult{RPCResult::Type::STR_AMOUNT, "", "Total amount received by addresses in the account."},
+        RPCExamples{
+            HelpExampleCli("getreceivedbyaccount", "\"myaccount\"") +
+            HelpExampleCli("getreceivedbyaccount", "\"myaccount\" 6") +
+            HelpExampleRpc("getreceivedbyaccount", "\"myaccount\", 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
@@ -899,11 +952,28 @@ UniValue getunconfirmedbalance(const UniValue& params, bool fHelp)
 
 UniValue movecmd(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 5)
-        throw runtime_error(
-                "move <fromaccount> <toaccount> <amount> [minconf=1] [comment]\n"
-                "\n"
-                "Move from one account in your wallet to another.\n");
+    static const RPCHelpMan help{
+        "move",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Move funds from one account in your wallet to another.\n"
+        "\n"
+        "Note: the C++ function name is `movecmd` (because `move` is a C++ keyword); the dispatch entry\n"
+        "registers it as `move`.",
+        {
+            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Source account name."},
+            {"toaccount", RPCArg::Type::STR, RPCArg::Optional::NO, "Destination account name."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "Amount in GRC to move."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Unused parameter retained for backwards compatibility. Default: 1."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Optional comment string."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "", "True on success."},
+        RPCExamples{
+            HelpExampleCli("move", "\"acct1\" \"acct2\" 0.01") +
+            HelpExampleRpc("move", "\"acct1\", \"acct2\", 0.01")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
@@ -1393,22 +1463,37 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp)
 
 UniValue listreceivedbyaccount(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 3)
-        throw runtime_error(
-                "listreceivedbyaccount ( minconf includeempty includeWatchonly)\n"
-                "\nList balances by account.\n"
-                "\nArguments:\n"
-                "1. minconf      (numeric, optional, default=1) The minimum number of confirmations before payments are included.\n"
-                "2. includeempty (bool, optional, default=false) Whether to include accounts that haven't received any payments.\n"
-                "3. includeWatchonly (bool, optional, default=false) Whether to include watchonly addresses (see 'importaddress').\n"
-                "\nResult:\n"
-                "[\n"
-                "  {\n"
-                "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
-                "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
-                "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
-                "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
-                );
+    static const RPCHelpMan help{
+        "listreceivedbyaccount",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Use listreceivedbyaddress instead.\n"
+        "\n"
+        "List balances by account.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Minimum confirmations before payments are included. Default: 1."},
+            {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include accounts that haven't received any payments. Default: false."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include watch-only addresses (see importaddress). Default: false."},
+        },
+        RPCResult{RPCResult::Type::ARR, "", "",
+            {
+                {RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                            "Only returned if imported addresses were involved in transactions."},
+                        {RPCResult::Type::STR, "account", "Account name of the receiving account."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "Total amount received by addresses in this account."},
+                        {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("listreceivedbyaccount", "") +
+            HelpExampleRpc("listreceivedbyaccount", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1772,17 +1857,24 @@ UniValue liststakes(const UniValue& params, bool fHelp)
 
 UniValue listaccounts(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "listaccounts ( minconf includeWatchonly)\n"
-                "\n"
-                "Returns UniValue that has account names as keys, account balances as values."
-                "1. minconf          (numeric, optional, default=1) Only include transactions with at least this many confirmations\n"
-                "2. includeWatchonly (bool, optional, default=false) Include balances in watchonly addresses (see 'importaddress')\n"
-                "\nResult:\n"
-                "{                      (json object where keys are account names, and values are numeric balances\n"
-                "  \"account\": x.xxx,  (numeric) The property name is the account name, and the value is the total balance for the account.\n"
-                );
+    static const RPCHelpMan help{
+        "listaccounts",
+        "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
+        "Returns a JSON object where keys are account names and values are account balances.",
+        {
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only include transactions with at least this many confirmations. Default: 1."},
+            {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "Include balances in watch-only addresses (see importaddress). Default: false."},
+        },
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of account name to balance",
+            {{RPCResult::Type::STR_AMOUNT, "account", "Total balance for the account."}}},
+        RPCExamples{
+            HelpExampleCli("listaccounts", "") +
+            HelpExampleRpc("listaccounts", "6, true")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     accountingDeprecationCheck();
 
