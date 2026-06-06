@@ -192,11 +192,20 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp)
 
 UniValue getnewpubkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnewpubkey [account]\n"
-                "\n"
-                "Returns new public key for coinbase generation.\n");
+    static const RPCHelpMan help{
+        "getnewpubkey",
+        "Returns new public key for coinbase generation.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "pubkey", "The new public key, hex-encoded."},
+        RPCExamples{
+            HelpExampleCli("getnewpubkey", "") +
+            HelpExampleRpc("getnewpubkey", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -222,13 +231,22 @@ UniValue getnewpubkey(const UniValue& params, bool fHelp)
 
 UniValue getnewaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "getnewaddress [account]\n"
-                "\n"
-                "Returns a new Gridcoin address for receiving payments.  "
-                "If [account] is specified, it is added to the address book "
-                "so payments received with the address will be credited to [account].\n");
+    static const RPCHelpMan help{
+        "getnewaddress",
+        "Returns a new Gridcoin address for receiving payments. "
+        "If [account] is specified, it is added to the address book so payments received "
+        "with the address will be credited to [account].",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The new Gridcoin address."},
+        RPCExamples{
+            HelpExampleCli("getnewaddress", "") +
+            HelpExampleRpc("getnewaddress", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -511,11 +529,23 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 
 UniValue signmessage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-                "signmessage <Gridcoinaddress> <message>\n"
-                "\n"
-                "Sign a message with the private key of an address\n");
+    static const RPCHelpMan help{
+        "signmessage",
+        "Sign a message with the private key of an address. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address that owns the private key to sign with."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The message to sign."},
+        },
+        RPCResult{RPCResult::Type::STR, "signature", "The base64-encoded compact signature."},
+        RPCExamples{
+            HelpExampleCli("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"hello world\"") +
+            HelpExampleRpc("signmessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"hello world\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -549,11 +579,24 @@ UniValue signmessage(const UniValue& params, bool fHelp)
 
 UniValue verifymessage(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-                "verifymessage <Gridcoinaddress> <signature> <message>\n"
-                "\n"
-                "Verify a signed message\n");
+    static const RPCHelpMan help{
+        "verifymessage",
+        "Verify a signed message.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address that signed the message."},
+            {"signature", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The base64-encoded compact signature produced by signmessage."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The message that was signed."},
+        },
+        RPCResult{RPCResult::Type::BOOL, "verified", "true if the signature verifies the message for the address."},
+        RPCExamples{
+            HelpExampleCli("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" \"signature\" \"hello world\"") +
+            HelpExampleRpc("verifymessage", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", \"signature\", \"hello world\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();
@@ -1194,15 +1237,32 @@ UniValue sendmany(const UniValue& params, bool fHelp)
 
 UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 3)
-    {
-        string msg = "addmultisigaddress <nrequired> <'[\"key\",\"key\"]'> [account]\n"
-                     "\n"
-                     "Add a nrequired-to-sign multisignature address to the wallet\n"
-                     "each key is a Gridcoin address or hex-encoded public key\n"
-                     "If [account] is specified, assign address to [account].\n";
-        throw runtime_error(msg);
-    }
+    static const RPCHelpMan help{
+        "addmultisigaddress",
+        "Add a nrequired-to-sign multisignature address to the wallet. "
+        "Each key is a Gridcoin address or hex-encoded public key. "
+        "If [account] is specified, assign address to [account].",
+        {
+            {"nrequired", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                "The number of required signatures out of the n keys."},
+            {"keys", RPCArg::Type::ARR, RPCArg::Optional::NO,
+                "A JSON array of Gridcoin addresses or hex-encoded public keys.",
+                {
+                    {"key", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                        "A Gridcoin address or hex-encoded public key."},
+                }},
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The P2SH multisig address."},
+        RPCExamples{
+            HelpExampleCli("addmultisigaddress",
+                "2 \"[\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\",\\\"SkNNd1234567890abcdefghijklmnopqr\\\"]\"") +
+            HelpExampleRpc("addmultisigaddress",
+                "2, [\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\",\"SkNNd1234567890abcdefghijklmnopqr\"]")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nRequired = params[0].get_int();
     const UniValue& keys = params[1].get_array();
@@ -1273,14 +1333,23 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp)
 
 UniValue addredeemscript(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-    {
-        string msg = "addredeemscript <redeemScript> [account]\n"
-                     "\n"
-                     "Add a P2SH address with a specified redeemScript to the wallet.\n"
-                     "If [account] is specified, assign address to [account].\n";
-        throw runtime_error(msg);
-    }
+    static const RPCHelpMan help{
+        "addredeemscript",
+        "Add a P2SH address with a specified redeemScript to the wallet. "
+        "If [account] is specified, assign address to [account].",
+        {
+            {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The hex-encoded redeem script."},
+            {"account", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The account name (deprecated; accounts subsystem is deprecated and may be removed in a future release)."},
+        },
+        RPCResult{RPCResult::Type::STR, "address", "The P2SH address corresponding to the redeem script."},
+        RPCExamples{
+            HelpExampleCli("addredeemscript", "\"512103...ae\"") +
+            HelpExampleRpc("addredeemscript", "\"512103...ae\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount;
     if (params.size() > 1)
@@ -2865,11 +2934,38 @@ public:
 
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "validateaddress <gridcoinaddress>\n"
-                "\n"
-                "Return information about <gridcoinaddress>.\n");
+    static const RPCHelpMan help{
+        "validateaddress",
+        "Return information about the given Gridcoin address.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to validate."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "isvalid", "Whether the address is valid."},
+                {RPCResult::Type::STR, "address", /*optional=*/true, "The decoded address (only when valid)."},
+                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the address."},
+                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the address is a P2SH script address."},
+                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+                {RPCResult::Type::STR, "script", /*optional=*/true, "Script type (only when ismine and isscript)."},
+                {RPCResult::Type::STR_HEX, "hex", /*optional=*/true, "Hex-encoded redeem script (script address only)."},
+                {RPCResult::Type::ARR, "addresses", /*optional=*/true, "Embedded addresses (script address only).",
+                    {
+                        {RPCResult::Type::STR, "", "An embedded Gridcoin address."},
+                    }},
+                {RPCResult::Type::NUM, "sigsrequired", /*optional=*/true, "Required signatures (multisig script address only)."},
+                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+                {RPCResult::Type::STR, "hdkeypath", /*optional=*/true, "HD key derivation path (HD wallets only)."},
+                {RPCResult::Type::STR_HEX, "hdmasterkeyid", /*optional=*/true, "HD master key id (HD wallets only)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"") +
+            HelpExampleRpc("validateaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2902,11 +2998,31 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
 
 UniValue validatepubkey(const UniValue& params, bool fHelp)
 {
-    if (fHelp || !params.size() || params.size() > 2)
-        throw runtime_error(
-                "validatepubkey <gridcoinpubkey>\n"
-                "\n"
-                "Return information about <gridcoinpubkey>.\n");
+    static const RPCHelpMan help{
+        "validatepubkey",
+        "Return information about the given Gridcoin public key.",
+        {
+            {"pubkey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+                "The hex-encoded Gridcoin public key to validate."},
+            {"unused", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Unused; preserved for backward compatibility."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "isvalid", "Whether the public key is valid."},
+                {RPCResult::Type::STR, "address", /*optional=*/true, "The derived Gridcoin address (only when valid)."},
+                {RPCResult::Type::BOOL, "ismine", /*optional=*/true, "Whether the wallet owns the derived address."},
+                {RPCResult::Type::BOOL, "iscompressed", /*optional=*/true, "Whether the public key is compressed."},
+                {RPCResult::Type::BOOL, "isscript", /*optional=*/true, "Whether the derived address is a P2SH script (only when ismine)."},
+                {RPCResult::Type::STR_HEX, "pubkey", /*optional=*/true, "Hex-encoded public key (only when ismine and not script)."},
+                {RPCResult::Type::STR, "account", /*optional=*/true, "The associated account name (deprecated)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("validatepubkey", "\"03b1c2...\"") +
+            HelpExampleRpc("validatepubkey", "\"03b1c2...\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -3049,12 +3165,24 @@ UniValue resendtx(const UniValue& params, bool fHelp)
 // ppcoin: make a public-private key pair
 UniValue makekeypair(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "makekeypair [prefix]\n"
-                "\n"
-                "Make a public/private key pair.\n"
-                "[prefix] is optional preferred prefix for the public key.\n");
+    static const RPCHelpMan help{
+        "makekeypair",
+        "Make a public/private key pair.",
+        {
+            {"prefix", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Optional preferred prefix for the public key."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::STR_HEX, "PrivateKey", "Hex-encoded private key."},
+                {RPCResult::Type::STR_HEX, "PublicKey", "Hex-encoded public key."},
+            }},
+        RPCExamples{
+            HelpExampleCli("makekeypair", "") +
+            HelpExampleRpc("makekeypair", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strPrefix = "";
     if (params.size() > 0)
@@ -3104,21 +3232,31 @@ UniValue burn(const UniValue& params, bool fHelp)
 
 UniValue sethdseed(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2) {
-        throw std::runtime_error(
-            "sethdseed ( \"newkeypool\" \"seed\" )\n"
-            "\nSet or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being a HD wallet. Wallets that are already\n"
-            "HD will have a new HD seed set so that new keys added to the keypool will be derived from this new seed.\n"
-            "\nNote that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed.\n"
-            "\nArguments:\n"
-            "1. \"newkeypool\"         (boolean, optional, default=true) Whether to flush old unused addresses, including change addresses, from the keypool and regenerate it.\n"
-            "                             If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed.\n"
-            "                             If false, addresses (including change addresses if the wallet already had HD Chain Split enabled) from the existing\n"
-            "                             keypool will be used until it has been depleted.\n"
-            "2. \"seed\"               (string, optional) The WIF private key to use as the new HD seed; if not provided a random seed will be used.\n"
-            "                             The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1\n"
-        );
-    }
+    static const RPCHelpMan help{
+        "sethdseed",
+        "Set or generate a new HD wallet seed. Non-HD wallets will not be upgraded to being an HD wallet. "
+        "Wallets that are already HD will have a new HD seed set so that new keys added to the keypool "
+        "will be derived from this new seed. "
+        "Note that you will need to MAKE A NEW BACKUP of your wallet after setting the HD wallet seed. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"newkeypool", RPCArg::Type::BOOL, RPCArg::Default{true},
+                "Whether to flush old unused addresses (including change addresses) from the keypool and regenerate it. "
+                "If true, the next address from getnewaddress and change address from getrawchangeaddress will be from this new seed. "
+                "If false, addresses from the existing keypool will be used until it has been depleted."},
+            {"seed", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "The WIF private key to use as the new HD seed; if not provided a random seed will be used. "
+                "The seed value can be retrieved using the dumpwallet command. It is the private key marked hdmaster=1."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("sethdseed", "") +
+            HelpExampleCli("sethdseed", "false") +
+            HelpExampleCli("sethdseed", "true \"wifkey\"") +
+            HelpExampleRpc("sethdseed", "true, \"wifkey\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (IsInitialBlockDownload()) {
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Cannot set a new HD seed while still in Initial Block Download");
