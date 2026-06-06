@@ -127,8 +127,8 @@ public:
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
-            bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
-            int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
+            const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
+            const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
 
             // Reserve a reasonable upper bound up front to avoid the
             // ~18 reallocations a 300k-tx wallet would otherwise pay.
@@ -138,11 +138,22 @@ public:
 
             for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
             {
-                if (TransactionRecord::showTransaction(it->second, fLimitTxnDisplay, limitTxnDateTime))
-                {
-                    const QList<TransactionRecord> decomposed =
-                        TransactionRecord::decomposeTransaction(wallet, it->second);
-                    cachedWallet.insert(cachedWallet.end(), decomposed.begin(), decomposed.end());
+                if (!TransactionRecord::showTransaction(it->second)) continue;
+
+                const QList<TransactionRecord> decomposed =
+                    TransactionRecord::decomposeTransaction(wallet, it->second);
+
+                // Apply the datetime-limit filter at the RECORD level on
+                // rec.time (= CWalletTx::GetTxTime), matching the Date
+                // column shown in the GUI and the cutoff applied in
+                // applyTxAdded. showTransaction's wtx-level cutoff
+                // compares wtx.nTime (signing time), which can drift
+                // from GetTxTime for confirmed txs and produces a
+                // visibly inconsistent filter on initial load vs
+                // incremental adds.
+                for (const TransactionRecord& rec : decomposed) {
+                    if (fLimitTxnDisplay && rec.time < limitTxnDateTime) continue;
+                    cachedWallet.push_back(rec);
                 }
             }
         }
