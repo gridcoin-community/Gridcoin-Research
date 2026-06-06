@@ -44,11 +44,11 @@
 #include "random.h"
 #include "validation.h"
 
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <ctime>
 #include <math.h>
+#include <util/string.h>
 
 extern bool AskForOutstandingBlocks(uint256 hashStart);
 extern bool GridcoinServices();
@@ -1396,7 +1396,7 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     std::string strCmd = gArgs.GetArg("-blocknotify", "");
     if (!fIsInitialDownload && !strCmd.empty())
     {
-        boost::replace_all(strCmd, "%s", hashBestChain.GetHex());
+        ReplaceAll(strCmd, "%s", hashBestChain.GetHex());
         boost::thread t(runCommand, strCmd); // thread runs free
     }
     #endif

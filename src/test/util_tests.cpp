@@ -12,6 +12,7 @@
 #include <util.h>
 //#include <util/system.h>
 #include <util/settings.h>
+#include <util/string.h>
 
 #include <cstdint>
 
@@ -1806,6 +1807,22 @@ BOOST_AUTO_TEST_CASE(util_Fraction_FromString)
     }
 
     BOOST_CHECK_EQUAL(err, valid_err_message);
+}
+
+BOOST_AUTO_TEST_CASE(util_ReplaceAll)
+{
+    const std::string original("A test \"%s\" string '%s'.");
+    auto test_replaceall = [&original](const std::string& search, const std::string& substitute, const std::string& expected) {
+        auto test = original;
+        ReplaceAll(test, search, substitute);
+        BOOST_CHECK_EQUAL(test, expected);
+    };
+
+    test_replaceall("", "foo", original);                  // empty search is a no-op
+    test_replaceall(original, "", "");                     // whole-string search, empty substitute
+    test_replaceall("%s", "foo", "A test \"foo\" string 'foo'.");
+    test_replaceall("\"", "foo", "A test foo%sfoo string '%s'.");
+    test_replaceall("'", "foo", "A test \"%s\" string foo%sfoo.");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
