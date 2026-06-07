@@ -396,34 +396,37 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry) 
     }
 }
 
+static const RPCHelpMan getrawtransaction_help{
+    "getrawtransaction",
+    "Return raw transaction data.\n"
+    "\n"
+    "If verbose is false, returns a serialized, hex-encoded string for <txid>.\n"
+    "If verbose is true, returns an object with information about <txid>.",
+    {
+        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+        {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, return an object instead of a hex string. Numeric values are also accepted "
+            "(any non-zero number is treated as true). Default: false."},
+    },
+    RPCResults{
+        RPCResult{RPCResult::Type::STR_HEX, "",
+            "Hex-encoded serialized transaction (verbose=false)."},
+        RPCResult{RPCResult::Type::OBJ, "", "Decoded transaction (verbose=true).",
+            {
+                {RPCResult::Type::STR_HEX, "hex", "Serialized hex of the transaction."},
+                {RPCResult::Type::ELISION, "", "Remaining fields match TxToJSON's shape."},
+            }},
+    },
+    RPCExamples{
+        HelpExampleCli("getrawtransaction", "\"<txid>\"") +
+        HelpExampleCli("getrawtransaction", "\"<txid>\" true") +
+        HelpExampleRpc("getrawtransaction", "\"<txid>\", true")},
+};
+const RPCHelpMan& getrawtransaction_helpman() { return getrawtransaction_help; }
+
 UniValue getrawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "getrawtransaction",
-        "Return raw transaction data.\n"
-        "\n"
-        "If verbose is false, returns a serialized, hex-encoded string for <txid>.\n"
-        "If verbose is true, returns an object with information about <txid>.",
-        {
-            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
-            {"verbose", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, return an object instead of a hex string. Numeric values are also accepted "
-                "(any non-zero number is treated as true). Default: false."},
-        },
-        RPCResults{
-            RPCResult{RPCResult::Type::STR_HEX, "",
-                "Hex-encoded serialized transaction (verbose=false)."},
-            RPCResult{RPCResult::Type::OBJ, "", "Decoded transaction (verbose=true).",
-                {
-                    {RPCResult::Type::STR_HEX, "hex", "Serialized hex of the transaction."},
-                    {RPCResult::Type::ELISION, "", "Remaining fields match TxToJSON's shape."},
-                }},
-        },
-        RPCExamples{
-            HelpExampleCli("getrawtransaction", "\"<txid>\"") +
-            HelpExampleCli("getrawtransaction", "\"<txid>\" true") +
-            HelpExampleRpc("getrawtransaction", "\"<txid>\", true")},
-    };
+    const RPCHelpMan& help = getrawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -457,45 +460,42 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan listunspent_help{
+    "listunspent",
+    "Returns array of unspent transaction outputs with between minconf and maxconf (inclusive) confirmations.\n"
+    "Optionally filtered to only include txouts paid to specified addresses.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The minimum confirmations to filter (default: 1)."},
+        {"maxconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "The maximum confirmations to filter (default: 9999999)."},
+        {"addresses", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "Filter to only include UTXOs paid to these addresses.",
+            {
+                {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "An address."},
+            }},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
+                    {RPCResult::Type::NUM, "vout", "Output index."},
+                    {RPCResult::Type::STR_HEX, "scriptPubKey", "Output script (hex)."},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Output amount."},
+                    {RPCResult::Type::NUM, "confirmations", "Confirmation count."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listunspent", "") +
+        HelpExampleCli("listunspent", "6 9999999 \"[\\\"S1Example\\\"]\"") +
+        HelpExampleRpc("listunspent", "6, 9999999, [\"S1Example\"]")},
+};
+const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
+
 UniValue listunspent(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "listunspent",
-        "Returns array of unspent transaction outputs with between minconf and maxconf (inclusive) confirmations.\n"
-        "Optionally filtered to only include txouts paid to specified addresses.",
-        {
-            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The minimum confirmations to filter (default: 1)."},
-            {"maxconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "The maximum confirmations to filter (default: 9999999)."},
-            {"addresses", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "Filter to only include UTXOs paid to these addresses.",
-                {
-                    {"address", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "An address."},
-                }},
-        },
-        RPCResult{RPCResult::Type::ARR, "", "",
-            {
-                {RPCResult::Type::OBJ, "", "",
-                    {
-                        {RPCResult::Type::STR_HEX, "txid", "Transaction id."},
-                        {RPCResult::Type::NUM, "vout", "Output index."},
-                        {RPCResult::Type::STR, "address", /*optional=*/true,
-                            "Destination address, when the output script is decodable to a single address."},
-                        {RPCResult::Type::STR, "label", /*optional=*/true,
-                            "Wallet-local label for the address (only present when the address is in the wallet's address book)."},
-                        {RPCResult::Type::STR, "account", /*optional=*/true,
-                            "Account label for the address (only present when -enableaccounts is set and the address is in the address book)."},
-                        {RPCResult::Type::STR_HEX, "scriptPubKey", "Output script (hex)."},
-                        {RPCResult::Type::STR_AMOUNT, "amount", "Output amount."},
-                        {RPCResult::Type::NUM, "confirmations", "Confirmation count."},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("listunspent", "") +
-            HelpExampleCli("listunspent", "6 9999999 \"[\\\"S1Example\\\"]\"") +
-            HelpExampleRpc("listunspent", "6, 9999999, [\"S1Example\"]")},
-    };
+    const RPCHelpMan& help = listunspent_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -577,40 +577,43 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 }
 
 
+static const RPCHelpMan consolidateunspent_help{
+    "consolidateunspent",
+    "Performs a single transaction to consolidate UTXOs to/on a given address.\n"
+    "\n"
+    "The optional UTXO-size parameter results in consolidating UTXOs to generate the largest output possible\n"
+    "less than that size, or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
+    "\n"
+    "The script is designed to be run repeatedly and will become a no-op once no UTXOs meet the criteria, making\n"
+    "it ideal for automated periodic scripting.\n"
+    "\n"
+    "The address MUST exist in your wallet beforehand. To consolidate the entire wallet to one address, run\n"
+    "consolidateunspent <addr> <amount-equal-or-larger-than-balance> 200 true repeatedly.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "The Gridcoin address target for consolidation. Must exist in the wallet."},
+        {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+            "Target consolidation output size."},
+        {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Defaults and is clamped to the value returned by GetMaxInputsForConsolidationTxn() to prevent "
+            "transaction failures."},
+        {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, source inputs from all wallet addresses (output still goes to <address>). "
+            "Otherwise only the source address contributes inputs."},
+        {"sweep_change", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, consolidate change associated with the address. Forced true when sweep_all_addresses is true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Consolidation result detail; see source for the exact shape."}}},
+    RPCExamples{
+        HelpExampleCli("consolidateunspent", "\"<address>\" 10000 200 false false") +
+        HelpExampleRpc("consolidateunspent", "\"<address>\", 10000, 200, false, false")},
+};
+const RPCHelpMan& consolidateunspent_helpman() { return consolidateunspent_help; }
+
 UniValue consolidateunspent(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "consolidateunspent",
-        "Performs a single transaction to consolidate UTXOs to/on a given address.\n"
-        "\n"
-        "The optional UTXO-size parameter results in consolidating UTXOs to generate the largest output possible\n"
-        "less than that size, or the total value of the specified maximum number of smallest inputs, whichever is less.\n"
-        "\n"
-        "The script is designed to be run repeatedly and will become a no-op once no UTXOs meet the criteria, making\n"
-        "it ideal for automated periodic scripting.\n"
-        "\n"
-        "The address MUST exist in your wallet beforehand. To consolidate the entire wallet to one address, run\n"
-        "consolidateunspent <addr> <amount-equal-or-larger-than-balance> 200 true repeatedly.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
-                "The Gridcoin address target for consolidation. Must exist in the wallet."},
-            {"utxo_size", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                "Target consolidation output size."},
-            {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Maximum number of inputs to include in the consolidation transaction. "
-                "Defaults to 600 and is clamped to 600 to prevent transaction failures."},
-            {"sweep_all_addresses", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, source inputs from all wallet addresses (output still goes to <address>). "
-                "Otherwise only the source address contributes inputs."},
-            {"sweep_change", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, consolidate change associated with the address. Forced true when sweep_all_addresses is true."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Consolidation result detail; see source for the exact shape."}}},
-        RPCExamples{
-            HelpExampleCli("consolidateunspent", "\"<address>\" 10000 200 false false") +
-            HelpExampleRpc("consolidateunspent", "\"<address>\", 10000, 200, false, false")},
-    };
+    const RPCHelpMan& help = consolidateunspent_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -999,29 +1002,32 @@ UniValue consolidateunspent(const UniValue& params, bool fHelp)
  * We will round up since we will be within the 32766 comfortably
  * 51 = X = max inputs
 */
+static const RPCHelpMan consolidatemsunspent_help{
+    "consolidatemsunspent",
+    "Search a block range for a multisig address with unspent UTXOs and consolidate them into a transaction\n"
+    "ready for signing, returning to the same address in a consolidated amount. The command determines the\n"
+    "multisig type and ensures the transaction does not exceed any size limits due to inputs.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+        {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+        {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+        {"max_grc", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Highest UTXO value to include in search results, in halfords (default: 0 = unlimited)."},
+        {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Consolidation result detail including the unsigned transaction; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("consolidatemsunspent", "\"<ms_address>\" 1000000 1100000 0 50") +
+        HelpExampleRpc("consolidatemsunspent", "\"<ms_address>\", 1000000, 1100000, 0, 50")},
+};
+const RPCHelpMan& consolidatemsunspent_helpman() { return consolidatemsunspent_help; }
+
 UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "consolidatemsunspent",
-        "Search a block range for a multisig address with unspent UTXOs and consolidate them into a transaction\n"
-        "ready for signing, returning to the same address in a consolidated amount. The command determines the\n"
-        "multisig type and ensures the transaction does not exceed any size limits due to inputs.",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
-            {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
-            {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
-            {"max_grc", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Highest UTXO value to include in search results, in halfords (default: 0 = unlimited)."},
-            {"max_inputs", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-                "Maximum inputs desired. If the calculated max inputs is less than this argument, it is overridden."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "",
-                "Consolidation result detail including the unsigned transaction; see source for shape."}}},
-        RPCExamples{
-            HelpExampleCli("consolidatemsunspent", "\"<ms_address>\" 1000000 1100000 0 50") +
-            HelpExampleRpc("consolidatemsunspent", "\"<ms_address>\", 1000000, 1100000, 0, 50")},
-    };
+    const RPCHelpMan& help = consolidatemsunspent_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1300,30 +1306,33 @@ UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan scanforunspent_help{
+    "scanforunspent",
+    "Search a block range for a specified address with unspent UTXOs and display them as JSON,\n"
+    "with the option of exporting to a file.\n"
+    "\n"
+    "The export and type arguments must be supplied together (4-argument form is rejected).",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
+        {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
+        {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
+        {"export", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, export results to a file in backup-dir/rpc as multisigaddress-datetime.<type>."},
+        {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Export file type: \"xml\", \"txt\", or \"json\". Required when export is true."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Scan result detail; see source for the exact shape."}}},
+    RPCExamples{
+        HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000") +
+        HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000 true json") +
+        HelpExampleRpc("scanforunspent", "\"<ms_address>\", 1000000, 1100000, true, \"json\"")},
+};
+const RPCHelpMan& scanforunspent_helpman() { return scanforunspent_help; }
+
 UniValue scanforunspent(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "scanforunspent",
-        "Search a block range for a specified address with unspent UTXOs and display them as JSON,\n"
-        "with the option of exporting to a file.\n"
-        "\n"
-        "The export and type arguments must be supplied together (4-argument form is rejected).",
-        {
-            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "Multi-signature address."},
-            {"block_start", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to start search from."},
-            {"block_end", RPCArg::Type::NUM, RPCArg::Optional::NO, "Block number to end search on."},
-            {"export", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                "If true, export results to a file in backup-dir/rpc as multisigaddress-datetime.<type>."},
-            {"type", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Export file type: \"xml\", \"txt\", or \"json\". Required when export is true."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Scan result detail; see source for the exact shape."}}},
-        RPCExamples{
-            HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000") +
-            HelpExampleCli("scanforunspent", "\"<ms_address>\" 1000000 1100000 true json") +
-            HelpExampleRpc("scanforunspent", "\"<ms_address>\", 1000000, 1100000, true, \"json\"")},
-    };
+    const RPCHelpMan& help = scanforunspent_helpman();
     // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: IsValidNumArgs allows 3..5,
     // and a manual check rejects size==4 since params[4] is read whenever params.size() > 3.
     if (fHelp || !help.IsValidNumArgs(params.size()) || params.size() == 4)
@@ -1557,41 +1566,42 @@ UniValue scanforunspent(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan createrawtransaction_help{
+    "createrawtransaction",
+    "Create a transaction spending the given inputs and creating new outputs.\n"
+    "Outputs can be addresses or data. Returns hex-encoded raw transaction.\n"
+    "Note that the transaction's inputs are not signed, and it is not stored in the wallet\n"
+    "or transmitted to the network.",
+    {
+        {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of input objects.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "An input",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
+                    }},
+            }},
+        {"outputs", RPCArg::Type::OBJ, RPCArg::Optional::NO,
+            "A JSON object whose keys are Gridcoin addresses (values: GRC amount) or the special key \"data\" "
+            "with a hex-encoded value.",
+            {
+                {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "GRC amount to send to this address."},
+                {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "Hex-encoded data for an OP_RETURN output."},
+            }},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
+    RPCExamples{
+        HelpExampleCli("createrawtransaction",
+            "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"S1Example\\\":0.01}\"") +
+        HelpExampleRpc("createrawtransaction",
+            "[{\"txid\":\"<txid>\",\"vout\":0}], {\"S1Example\":0.01}")},
+};
+const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
+
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "createrawtransaction",
-        "Create a transaction spending the given inputs and creating new outputs.\n"
-        "Outputs can be addresses or data. Returns hex-encoded raw transaction.\n"
-        "Note that the transaction's inputs are not signed, and it is not stored in the wallet\n"
-        "or transmitted to the network.",
-        {
-            {"inputs", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of input objects.",
-                {
-                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "An input",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number."},
-                        }},
-                }},
-            {"outputs", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
-                "A JSON object whose keys are user-supplied Gridcoin addresses (with GRC-amount values), "
-                "plus the optional special key \"data\" carrying a hex-encoded value for an OP_RETURN output.",
-                {
-                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
-                        "Any Gridcoin address. The value is the GRC amount to send to it. Repeat with different keys for multiple outputs."},
-                    {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
-                        "Hex-encoded data for an OP_RETURN output. Special key (not a Gridcoin address)."},
-                }},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded serialized raw transaction."},
-        RPCExamples{
-            HelpExampleCli("createrawtransaction",
-                "\"[{\\\"txid\\\":\\\"<txid>\\\",\\\"vout\\\":0}]\" \"{\\\"S1Example\\\":0.01}\"") +
-            HelpExampleRpc("createrawtransaction",
-                "[{\"txid\":\"<txid>\",\"vout\":0}], {\"S1Example\":0.01}")},
-    };
+    const RPCHelpMan& help = createrawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1660,38 +1670,41 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     return HexStr(ss);
 }
 
+static const RPCHelpMan fundrawtransaction_help{
+    "fundrawtransaction",
+    "Add inputs to a transaction until it has enough in value to meet its out value.\n"
+    "This will not modify existing inputs, and will add one change output to the outputs.\n"
+    "The inputs added will not be signed; use signrawtransaction for that.\n"
+    "\n"
+    "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
+    "this command does not yet support adding funds to a transaction that already has inputs.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
+        {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+            {
+                {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Address to receive the change."},
+                {"changePosition", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "Index of the change output."},
+                {"includeWatching", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                    "Also select inputs which are watch-only. Default: false."},
+            }},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "The resulting raw transaction."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Fee in GRC the resulting transaction pays."},
+            {RPCResult::Type::NUM, "changepos", "Position of the added change output, or -1."},
+        }},
+    RPCExamples{
+        HelpExampleCli("fundrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("fundrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& fundrawtransaction_helpman() { return fundrawtransaction_help; }
+
 UniValue fundrawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "fundrawtransaction",
-        "Add inputs to a transaction until it has enough in value to meet its out value.\n"
-        "This will not modify existing inputs, and will add one change output to the outputs.\n"
-        "The inputs added will not be signed; use signrawtransaction for that.\n"
-        "\n"
-        "Note: The transaction must have no existing inputs. Unlike Bitcoin Core's fundrawtransaction,\n"
-        "this command does not yet support adding funds to a transaction that already has inputs.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex string of the raw transaction."},
-            {"options", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                {
-                    {"changeAddress", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Address to receive the change."},
-                    {"changePosition", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "Index of the change output."},
-                    {"includeWatching", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
-                        "Also select inputs which are watch-only. Default: false."},
-                }},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "hex", "The resulting raw transaction."},
-                {RPCResult::Type::STR_AMOUNT, "fee", "Fee in GRC the resulting transaction pays."},
-                {RPCResult::Type::NUM, "changepos", "Position of the added change output, or -1."},
-            }},
-        RPCExamples{
-            HelpExampleCli("fundrawtransaction", "\"<hex>\"") +
-            HelpExampleRpc("fundrawtransaction", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = fundrawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1792,20 +1805,23 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan decoderawtransaction_help{
+    "decoderawtransaction",
+    "Return a JSON object representing the serialized, hex-encoded transaction.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Decoded transaction detail; same shape as TxToJSON."}}},
+    RPCExamples{
+        HelpExampleCli("decoderawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("decoderawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& decoderawtransaction_helpman() { return decoderawtransaction_help; }
+
 UniValue decoderawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "decoderawtransaction",
-        "Return a JSON object representing the serialized, hex-encoded transaction.",
-        {
-            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Decoded transaction detail; same shape as TxToJSON."}}},
-        RPCExamples{
-            HelpExampleCli("decoderawtransaction", "\"<hex>\"") +
-            HelpExampleRpc("decoderawtransaction", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = decoderawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -1830,20 +1846,23 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
+static const RPCHelpMan decodescript_help{
+    "decodescript",
+    "Decode a hex-encoded script.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script data (empty is allowed)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Script detail and (when applicable) HTLC analysis; see source."}}},
+    RPCExamples{
+        HelpExampleCli("decodescript", "\"<hex>\"") +
+        HelpExampleRpc("decodescript", "\"<hex>\"")},
+};
+const RPCHelpMan& decodescript_helpman() { return decodescript_help; }
+
 UniValue decodescript(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "decodescript",
-        "Decode a hex-encoded script.",
-        {
-            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script data (empty is allowed)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {{RPCResult::Type::ELISION, "", "Script detail and (when applicable) HTLC analysis; see source."}}},
-        RPCExamples{
-            HelpExampleCli("decodescript", "\"<hex>\"") +
-            HelpExampleRpc("decodescript", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = decodescript_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2042,40 +2061,43 @@ static UniValue SignRawTransactionHelper(const string& hexTx,
     return result;
 }
 
+static const RPCHelpMan signrawtransactionwithkey_help{
+    "signrawtransactionwithkey",
+    "Sign inputs for a raw (serialized, hex-encoded) transaction using the provided private keys.\n"
+    "The second argument is an array of base58-encoded private keys that will be the only keys used to sign.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::NO,
+            "A JSON array of base58-encoded private keys for signing.",
+            {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransactionwithkey", "\"<hex>\" \"[\\\"<wif>\\\"]\"") +
+        HelpExampleRpc("signrawtransactionwithkey", "\"<hex>\", [\"<wif>\"]")},
+};
+const RPCHelpMan& signrawtransactionwithkey_helpman() { return signrawtransactionwithkey_help; }
+
 UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "signrawtransactionwithkey",
-        "Sign inputs for a raw (serialized, hex-encoded) transaction using the provided private keys.\n"
-        "The second argument is an array of base58-encoded private keys that will be the only keys used to sign.",
-        {
-            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
-            {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::NO,
-                "A JSON array of base58-encoded private keys for signing.",
-                {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
-            {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of previous dependent transaction outputs.",
-                {
-                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
-                            {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
-                        }},
-                }},
-            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
-                "SINGLE|ANYONECANPAY (default: ALL)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
-                {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
-            }},
-        RPCExamples{
-            HelpExampleCli("signrawtransactionwithkey", "\"<hex>\" \"[\\\"<wif>\\\"]\"") +
-            HelpExampleRpc("signrawtransactionwithkey", "\"<hex>\", [\"<wif>\"]")},
-    };
+    const RPCHelpMan& help = signrawtransactionwithkey_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2102,38 +2124,41 @@ UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
     return SignRawTransactionHelper(params[0].get_str(), prevTxs, tempKeystore, strHashType);
 }
 
+static const RPCHelpMan signrawtransactionwithwallet_help{
+    "signrawtransactionwithwallet",
+    "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs.",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransactionwithwallet", "\"<hex>\"") +
+        HelpExampleRpc("signrawtransactionwithwallet", "\"<hex>\"")},
+};
+const RPCHelpMan& signrawtransactionwithwallet_helpman() { return signrawtransactionwithwallet_help; }
+
 UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "signrawtransactionwithwallet",
-        "Sign inputs for a raw (serialized, hex-encoded) transaction using wallet keys.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
-            {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of previous dependent transaction outputs.",
-                {
-                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
-                            {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
-                        }},
-                }},
-            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
-                "SINGLE|ANYONECANPAY (default: ALL)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
-                {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
-            }},
-        RPCExamples{
-            HelpExampleCli("signrawtransactionwithwallet", "\"<hex>\"") +
-            HelpExampleRpc("signrawtransactionwithwallet", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = signrawtransactionwithwallet_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2148,45 +2173,48 @@ UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
     return SignRawTransactionHelper(params[0].get_str(), prevTxs, *pwalletMain, strHashType);
 }
 
+static const RPCHelpMan signrawtransaction_help{
+    "signrawtransaction",
+    "DEPRECATED. Sign inputs for a raw (serialized, hex-encoded) transaction.\n"
+    "Use signrawtransactionwithkey or signrawtransactionwithwallet instead.\n"
+    "\n"
+    "If the optional private-keys array is provided, those are the only keys used to sign;\n"
+    "otherwise the wallet's keys are used.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
+        {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of previous dependent transaction outputs (may be null).",
+            {
+                {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
+                    {
+                        {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
+                        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
+                        {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
+                    }},
+            }},
+        {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
+            "JSON array of base58-encoded private keys for signing (may be null).",
+            {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
+        {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
+            "SINGLE|ANYONECANPAY (default: ALL)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
+            {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("signrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& signrawtransaction_helpman() { return signrawtransaction_help; }
+
 UniValue signrawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "signrawtransaction",
-        "DEPRECATED. Sign inputs for a raw (serialized, hex-encoded) transaction.\n"
-        "Use signrawtransactionwithkey or signrawtransactionwithwallet instead.\n"
-        "\n"
-        "If the optional private-keys array is provided, those are the only keys used to sign;\n"
-        "otherwise the wallet's keys are used.\n"
-        "\n"
-        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
-        {
-            {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction hex string."},
-            {"prevtxs", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of previous dependent transaction outputs (may be null).",
-                {
-                    {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "",
-                        {
-                            {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction id."},
-                            {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output number."},
-                            {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded script."},
-                        }},
-                }},
-            {"privkeys", RPCArg::Type::ARR, RPCArg::Optional::OMITTED,
-                "JSON array of base58-encoded private keys for signing (may be null).",
-                {{"privatekey", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "A private key."}}},
-            {"sighashtype", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-                "Signature hash type. One of: ALL, NONE, SINGLE, ALL|ANYONECANPAY, NONE|ANYONECANPAY, "
-                "SINGLE|ANYONECANPAY (default: ALL)."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR_HEX, "hex", "Hex-encoded raw transaction with signature(s)."},
-                {RPCResult::Type::BOOL, "complete", "True if the transaction has a complete set of signatures."},
-            }},
-        RPCExamples{
-            HelpExampleCli("signrawtransaction", "\"<hex>\"") +
-            HelpExampleRpc("signrawtransaction", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = signrawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 
@@ -2220,19 +2248,22 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     }
 }
 
+static const RPCHelpMan sendrawtransaction_help{
+    "sendrawtransaction",
+    "Submit a raw (serialized, hex-encoded) transaction to the local node and network.",
+    {
+        {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "The transaction id."},
+    RPCExamples{
+        HelpExampleCli("sendrawtransaction", "\"<hex>\"") +
+        HelpExampleRpc("sendrawtransaction", "\"<hex>\"")},
+};
+const RPCHelpMan& sendrawtransaction_helpman() { return sendrawtransaction_help; }
+
 UniValue sendrawtransaction(const UniValue& params, bool fHelp)
 {
-    static const RPCHelpMan help{
-        "sendrawtransaction",
-        "Submit a raw (serialized, hex-encoded) transaction to the local node and network.",
-        {
-            {"hex_string", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hex-encoded transaction data."},
-        },
-        RPCResult{RPCResult::Type::STR_HEX, "", "The transaction id."},
-        RPCExamples{
-            HelpExampleCli("sendrawtransaction", "\"<hex>\"") +
-            HelpExampleRpc("sendrawtransaction", "\"<hex>\"")},
-    };
+    const RPCHelpMan& help = sendrawtransaction_helpman();
     if (fHelp || !help.IsValidNumArgs(params.size()))
         throw runtime_error(help.ToString());
 

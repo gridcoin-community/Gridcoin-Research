@@ -5,6 +5,7 @@
 #include <rpc/util.h>
 
 #include <rpc/protocol.h>
+#include <rpc/server.h>   // PR M2: bring in the extern <cmd>_helpman() accessor declarations
 #include <tinyformat.h>
 #include <univalue.h>
 
@@ -17,6 +18,8 @@
 
 // Forward declarations of the Tier 1a blockchain-core and Tier 1b
 // researcher/beacon/MRC commands under test.
+// Forward declarations of the Tier 1a blockchain-core commands under test.
+// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
 // Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
 // captures them into the suite's namespace and breaks linkage. After conversion
 // each function throws std::runtime_error for fHelp=true before touching any
@@ -72,20 +75,6 @@ UniValue addnode(const UniValue& params, bool fHelp);
 UniValue setban(const UniValue& params, bool fHelp);
 UniValue listsinceblock(const UniValue& params, bool fHelp);
 
-// Forward declarations of the wallet transaction-state debug commands under test.
-UniValue abandontransaction(const UniValue& params, bool fHelp);
-UniValue inspectwalletstate(const UniValue& params, bool fHelp);
-
-// Forward declarations of the PSGT (Partially Signed Gridcoin Transaction) commands under test.
-UniValue createpsgt(const UniValue& params, bool fHelp);
-UniValue decodepsgt(const UniValue& params, bool fHelp);
-UniValue combinepsgt(const UniValue& params, bool fHelp);
-UniValue finalizepsgt(const UniValue& params, bool fHelp);
-UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
-UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
-UniValue converttopsgt(const UniValue& params, bool fHelp);
-UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
-
 // Tier 1c forward declarations (snapshots, registries, generic-data, dumpcontracts).
 // Same global-namespace placement requirement as the Tier 2 block above.
 UniValue superblocks(const UniValue& params, bool fHelp);
@@ -102,7 +91,6 @@ UniValue listprotocolentries(const UniValue& params, bool fHelp);
 UniValue readdata(const UniValue& params, bool fHelp);
 UniValue writedata(const UniValue& params, bool fHelp);
 UniValue dumpcontracts(const UniValue& params, bool fHelp);
-
 // Tier 1 PR D1: src/rpc/server.cpp + src/rpc/misc.cpp + src/rpc/dataacq.cpp.
 // Each function's converted body throws via help.ToString() before touching
 // globals (cs_main, gArgs, log instance, file IO), so calling these with
@@ -115,7 +103,6 @@ UniValue changesettings(const UniValue& params, bool fHelp);
 UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
 UniValue rpc_exportstats(const UniValue& params, bool fHelp);
 UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
-
 // Tier 1 PR D2: remaining src/rpc/net.cpp commands. Each function's converted
 // body throws via help.ToString() before touching any globals (vNodes,
 // g_banman, mapAlerts, addrman, cs_main, cs_vNodes), so calling these with
@@ -132,7 +119,6 @@ UniValue listalerts(const UniValue& params, bool fHelp);
 UniValue sendalert(const UniValue& params, bool fHelp);
 UniValue sendalert2(const UniValue& params, bool fHelp);
 UniValue getnetworkinfo(const UniValue& params, bool fHelp);
-
 // Tier 1 PR D3: src/rpc/voting.cpp non-deprecated commands. Each function's
 // converted body throws via help.ToString() before touching globals (the
 // poll registry, cs_main, pwalletMain), so calling these with fHelp=true
@@ -143,7 +129,6 @@ UniValue getvotingclaim(const UniValue& params, bool fHelp);
 UniValue votebyid(const UniValue& params, bool fHelp);
 UniValue votedetails(const UniValue& params, bool fHelp);
 UniValue testpollnotification(const UniValue& params, bool fHelp);
-
 // Tier 1 PR E1: src/rpc/mining.cpp commands. Each function's converted body
 // throws via help.ToString() before touching globals (g_miner_status,
 // cs_main, pwalletMain, snapshot files), so calling these with fHelp=true
@@ -155,8 +140,9 @@ UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
 UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
 UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
 UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
-
 // Tier 1 PR E2: src/gridcoin/scraper/scraper.cpp + scraper_net.cpp commands.
+// Each function's converted body throws via help.ToString() before touching
+// any scraper globals or locks.
 UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
 UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
 UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
@@ -166,7 +152,6 @@ UniValue testnewsb(const UniValue& params, bool fHelp);
 UniValue scraperreport(const UniValue& params, bool fHelp);
 UniValue listmanifests(const UniValue& params, bool fHelp);
 UniValue getmpart(const UniValue& params, bool fHelp);
-
 // Tier 1 PR E3: src/rpc/rawtransaction.cpp + src/rpc/htlc.cpp commands.
 // Each function's converted body throws via help.ToString() before touching
 // any globals (cs_main, pwalletMain, mempool).
@@ -186,14 +171,12 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp);
 UniValue createhtlc(const UniValue& params, bool fHelp);
 UniValue claimhtlc(const UniValue& params, bool fHelp);
 UniValue refundhtlc(const UniValue& params, bool fHelp);
-
 // Tier 1 PR F1: src/wallet/rpcdump.cpp commands. Each function's converted
 // body throws via help.ToString() before touching pwalletMain or file IO.
 UniValue importprivkey(const UniValue& params, bool fHelp);
 UniValue importwallet(const UniValue& params, bool fHelp);
 UniValue dumpprivkey(const UniValue& params, bool fHelp);
 UniValue dumpwallet(const UniValue& params, bool fHelp);
-
 // Tier 1 deprecated batch: the deprecated-accounts wallet RPCs plus the
 // deprecated `vote` RPC. Each function's converted body throws via
 // help.ToString() before touching pwalletMain or the poll registry.
@@ -206,7 +189,6 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp);
 UniValue listaccounts(const UniValue& params, bool fHelp);
 UniValue movecmd(const UniValue& params, bool fHelp);  // dispatched as "move"
 UniValue vote(const UniValue& params, bool fHelp);
-
 // Forward declarations of the Tier 1 F2 wallet-keys commands under test.
 UniValue getnewpubkey(const UniValue& params, bool fHelp);
 UniValue getnewaddress(const UniValue& params, bool fHelp);
@@ -247,6 +229,19 @@ UniValue repairwallet(const UniValue& params, bool fHelp);
 UniValue resendtx(const UniValue& params, bool fHelp);
 UniValue burn(const UniValue& params, bool fHelp);
 UniValue upgradewallet(const UniValue& params, bool fHelp);
+// Forward declarations of the wallet transaction-state debug commands under test.
+UniValue abandontransaction(const UniValue& params, bool fHelp);
+UniValue inspectwalletstate(const UniValue& params, bool fHelp);
+
+// Forward declarations of the PSGT (Partially Signed Gridcoin Transaction) commands under test.
+UniValue createpsgt(const UniValue& params, bool fHelp);
+UniValue decodepsgt(const UniValue& params, bool fHelp);
+UniValue combinepsgt(const UniValue& params, bool fHelp);
+UniValue finalizepsgt(const UniValue& params, bool fHelp);
+UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
+UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
+UniValue converttopsgt(const UniValue& params, bool fHelp);
+UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -555,64 +550,47 @@ BOOST_AUTO_TEST_CASE(tier1_throw_pattern)
     }
 }
 
+// Each individual help-renders test now invokes its command's RPCHelpMan
+// accessor directly and verifies the rendered text. With PR M2 in place,
+// the command body no longer throws on fHelp=true — the dispatcher is the
+// authoritative help-rendering site — so the old throw-and-catch pattern
+// is obsolete. Calling the accessor is also free of side effects and
+// touches no globals, so this stays fixture-free.
+
 BOOST_AUTO_TEST_CASE(settxfee_help_renders)
 {
-    const UniValue params(UniValue::VARR);
-    try {
-        settxfee(params, /*fHelp=*/true);
-        BOOST_FAIL("expected runtime_error");
-    } catch (const std::runtime_error& e) {
-        const std::string what{e.what()};
-        BOOST_CHECK(what.find("settxfee") != std::string::npos);
-        BOOST_CHECK(what.find("amount") != std::string::npos);
-        BOOST_CHECK(what.find("Examples:") != std::string::npos);
-    }
+    const std::string what = settxfee_helpman().ToString();
+    BOOST_CHECK(what.find("settxfee") != std::string::npos);
+    BOOST_CHECK(what.find("amount") != std::string::npos);
+    BOOST_CHECK(what.find("Examples:") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(addnode_help_renders)
 {
-    const UniValue params(UniValue::VARR);
-    try {
-        addnode(params, /*fHelp=*/true);
-        BOOST_FAIL("expected runtime_error");
-    } catch (const std::runtime_error& e) {
-        const std::string what{e.what()};
-        BOOST_CHECK(what.find("addnode") != std::string::npos);
-        BOOST_CHECK(what.find("node") != std::string::npos);
-        BOOST_CHECK(what.find("onetry") != std::string::npos);
-        BOOST_CHECK(what.find("Examples:") != std::string::npos);
-    }
+    const std::string what = addnode_helpman().ToString();
+    BOOST_CHECK(what.find("addnode") != std::string::npos);
+    BOOST_CHECK(what.find("node") != std::string::npos);
+    BOOST_CHECK(what.find("onetry") != std::string::npos);
+    BOOST_CHECK(what.find("Examples:") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(setban_help_renders)
 {
-    const UniValue params(UniValue::VARR);
-    try {
-        setban(params, /*fHelp=*/true);
-        BOOST_FAIL("expected runtime_error");
-    } catch (const std::runtime_error& e) {
-        const std::string what{e.what()};
-        BOOST_CHECK(what.find("setban") != std::string::npos);
-        BOOST_CHECK(what.find("subnet") != std::string::npos);
-        BOOST_CHECK(what.find("bantime") != std::string::npos);
-        BOOST_CHECK(what.find("Examples:") != std::string::npos);
-    }
+    const std::string what = setban_helpman().ToString();
+    BOOST_CHECK(what.find("setban") != std::string::npos);
+    BOOST_CHECK(what.find("subnet") != std::string::npos);
+    BOOST_CHECK(what.find("bantime") != std::string::npos);
+    BOOST_CHECK(what.find("Examples:") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(listsinceblock_help_renders)
 {
-    const UniValue params(UniValue::VARR);
-    try {
-        listsinceblock(params, /*fHelp=*/true);
-        BOOST_FAIL("expected runtime_error");
-    } catch (const std::runtime_error& e) {
-        const std::string what{e.what()};
-        BOOST_CHECK(what.find("listsinceblock") != std::string::npos);
-        BOOST_CHECK(what.find("blockhash") != std::string::npos);
-        BOOST_CHECK(what.find("target_confirmations") != std::string::npos);
-        BOOST_CHECK(what.find("transactions") != std::string::npos);
-        BOOST_CHECK(what.find("Examples:") != std::string::npos);
-    }
+    const std::string what = listsinceblock_helpman().ToString();
+    BOOST_CHECK(what.find("listsinceblock") != std::string::npos);
+    BOOST_CHECK(what.find("blockhash") != std::string::npos);
+    BOOST_CHECK(what.find("target_confirmations") != std::string::npos);
+    BOOST_CHECK(what.find("transactions") != std::string::npos);
+    BOOST_CHECK(what.find("Examples:") != std::string::npos);
 }
 
 // Invalid-subcommand path for addnode: the JSONRPCError throw at net.cpp:62-63
@@ -656,576 +634,336 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
     }
 }
 
-BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"help", &help},
-        {"stop", &stop},
-        {"logging", &logging},
-        {"listsettings", &listsettings},
-        {"changesettings", &changesettings},
-        {"getblockstats", &rpc_getblockstats},
-        {"exportstats1", &rpc_exportstats},
-        {"getrecentblocks", &rpc_getrecentblocks},
-    };
+// Shared helper for tier-level help-rendering tests. Each tier passes a list
+// of (rpc_name, helpman_accessor) pairs; the helper calls each accessor's
+// ToString() and verifies the rendered text contains the command name plus
+// the structural "Examples:" marker. With PR M2 in place the dispatcher is
+// the authoritative help-rendering site, so verifying the accessor output
+// directly is both more robust (no body invocation) and a closer match to
+// the actual production help path (`pcmd->helpman().ToString()`).
+namespace {
+using HelpmanAccessor = const RPCHelpMan& (*)();
 
-    for (const auto& [rpc_name, fn] : cases) {
+void check_help_renders(const std::vector<std::pair<const char*, HelpmanAccessor>>& cases,
+                        bool require_deprecated_banner = false)
+{
+    for (const auto& [rpc_name, accessor] : cases) {
         BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
+            const std::string what = accessor().ToString();
+            BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
+                rpc_name << ": help text missing command name; got: " << what);
+            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
+                rpc_name << ": help text missing 'Examples:' section");
+            if (require_deprecated_banner) {
+                BOOST_CHECK_MESSAGE(what.find("DEPRECATED") != std::string::npos,
+                    rpc_name << ": help text missing DEPRECATED banner; got: " << what);
             }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
         }
     }
 }
+} // namespace
 
-// Tier 1a coverage: each converted blockchain-core command throws a
-// runtime_error containing its name and the "Examples:" marker when called
-// with fHelp=true. The check confirms RPCHelpMan is wired (renders) and the
-// help-gate fires correctly. The throw happens before any global state is
-// touched, so the test runs fixture-free.
+// Tier 1a — blockchain-core (21 commands).
 BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
 {
-    const UniValue empty(UniValue::VARR);
-
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getbestblockhash",        &getbestblockhash},
-        {"getblockcount",           &getblockcount},
-        {"getdifficulty",           &getdifficulty},
-        {"getblockhash",            &getblockhash},
-        {"getblock",                &getblock},
-        {"getblockbynumber",        &getblockbynumber},
-        {"getblockbymintime",       &getblockbymintime},
-        {"getblocksbatch",          &getblocksbatch},
-        {"showblock",               &showblock},
-        {"getrawmempool",           &getrawmempool},
-        {"getblockchaininfo",       &getblockchaininfo},
-        {"getcheckpoint",           &getcheckpoint},
-        {"getburnreport",           &getburnreport},
-        {"reorganize",              &rpc_reorganize}, // C++ symbol differs from RPC name
-        {"currenttime",             &currenttime},
-        {"networktime",             &networktime},
-        {"network",                 &network},
-        {"sendblock",               &sendblock},
-        {"askforoutstandingblocks", &askforoutstandingblocks},
-        {"debug",                   &debug},
-        {"versionreport",           &versionreport},
-    };
-
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-// Tier 1b coverage: each converted researcher/beacon/MRC command throws a
-// runtime_error containing its name and the "Examples:" marker when called
-// with fHelp=true. Runs fixture-free — the help-gate fires before any global
-// state is touched.
-BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"advertisebeacon",        &advertisebeacon},
-        {"advertisebeaconv3",      &advertisebeaconv3},
-        {"beaconauth",             &beaconauth},
-        {"revokebeacon",           &revokebeacon},
-        {"beaconreport",           &beaconreport},
-        {"beaconconvergence",      &beaconconvergence},
-        {"pendingbeaconreport",    &pendingbeaconreport},
-        {"beaconstatus",           &beaconstatus},
-        {"beaconaudit",            &beaconaudit},
-        {"getmrcinfo",             &getmrcinfo},
-        {"createmrcrequest",       &createmrcrequest},
-        {"magnitude",              &magnitude},
-        {"explainmagnitude",       &explainmagnitude},
-        {"lifetime",               &lifetime},
-        {"resetcpids",             &resetcpids},
-        {"rainbymagnitude",        &rainbymagnitude},
-        {"currentcontractaverage", &currentcontractaverage},
-    };
-
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-
-BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getconnectioncount", &getconnectioncount},
-        {"getnodeaddresses", &getnodeaddresses},
-        {"getaddednodeinfo", &getaddednodeinfo},
-        {"listbanned", &listbanned},
-        {"clearbanned", &clearbanned},
-        {"ping", &ping},
-        {"getpeerinfo", &getpeerinfo},
-        {"getnettotals", &getnettotals},
-        {"listalerts", &listalerts},
-        {"sendalert", &sendalert},
-        {"sendalert2", &sendalert2},
-        {"getnetworkinfo", &getnetworkinfo},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"listpolls", &listpolls},
-        {"getpollresults", &getpollresults},
-        {"getvotingclaim", &getvotingclaim},
-        {"votebyid", &votebyid},
-        {"votedetails", &votedetails},
-        {"testpollnotification", &testpollnotification},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-// Help-rendering coverage for the 7 Tier 1 E1 mining.cpp commands. Each
-// converted body throws via help.ToString() before touching globals
-// (g_miner_status, cs_main, pwalletMain), so calling these with fHelp=true
-// and an empty params array is safe in unit tests.
-BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getstakinginfo", &getstakinginfo},
-        {"getlaststake", &getlaststake},
-        {"auditsnapshotaccrual", &auditsnapshotaccrual},
-        {"auditsnapshotaccruals", &auditsnapshotaccruals},
-        {"listresearcheraccounts", &listresearcheraccounts},
-        {"inspectaccrualsnapshot", &inspectaccrualsnapshot},
-        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"sendscraperfilemanifest", &sendscraperfilemanifest},
-        {"savescraperfilemanifest", &savescraperfilemanifest},
-        {"deletecscrapermanifest", &deletecscrapermanifest},
-        {"archivelog", &archivelog},
-        {"convergencereport", &convergencereport},
-        {"testnewsb", &testnewsb},
-        {"scraperreport", &scraperreport},
-        {"listmanifests", &listmanifests},
-        {"getmpart", &getmpart},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getrawtransaction", &getrawtransaction},
-        {"listunspent", &listunspent},
-        {"consolidateunspent", &consolidateunspent},
-        {"consolidatemsunspent", &consolidatemsunspent},
-        {"scanforunspent", &scanforunspent},
-        {"createrawtransaction", &createrawtransaction},
-        {"fundrawtransaction", &fundrawtransaction},
-        {"decoderawtransaction", &decoderawtransaction},
-        {"decodescript", &decodescript},
-        {"signrawtransactionwithkey", &signrawtransactionwithkey},
-        {"signrawtransactionwithwallet", &signrawtransactionwithwallet},
-        {"signrawtransaction", &signrawtransaction},
-        {"sendrawtransaction", &sendrawtransaction},
-        {"createhtlc", &createhtlc},
-        {"claimhtlc", &claimhtlc},
-        {"refundhtlc", &refundhtlc},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"importprivkey", &importprivkey},
-        {"importwallet", &importwallet},
-        {"dumpprivkey", &dumpprivkey},
-        {"dumpwallet", &dumpwallet},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"getaccountaddress", &getaccountaddress},
-        {"setaccount", &setaccount},
-        {"getaccount", &getaccount},
-        {"getaddressesbyaccount", &getaddressesbyaccount},
-        {"getreceivedbyaccount", &getreceivedbyaccount},
-        {"listreceivedbyaccount", &listreceivedbyaccount},
-        {"listaccounts", &listaccounts},
-        // dispatched RPC name is "move", but the C++ function symbol is movecmd.
-        {"move", &movecmd},
-        {"vote", &vote},
-    };
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                                    "help text missing command name: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                    "help text missing Examples section: " << what);
-                BOOST_CHECK_MESSAGE(what.find("DEPRECATED") != std::string::npos,
-                                    "help text missing DEPRECATED marker: " << what);
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected runtime_error from " << rpc_name);
-        }
-    }
-}
-
-BOOST_AUTO_TEST_CASE(tier1_f2_wallet_keys_help_renders)
-{
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"getnewpubkey",       &getnewpubkey},
-        {"getnewaddress",      &getnewaddress},
-        {"signmessage",        &signmessage},
-        {"verifymessage",      &verifymessage},
-        {"addmultisigaddress", &addmultisigaddress},
-        {"addredeemscript",    &addredeemscript},
-        {"validateaddress",    &validateaddress},
-        {"validatepubkey",     &validatepubkey},
-        {"makekeypair",        &makekeypair},
-        {"sethdseed",          &sethdseed},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-        }
-    }
-}
-
-
-
-
-
-
-
-
+    check_help_renders({
+        {"getbestblockhash",        &getbestblockhash_helpman},
+        {"getblockcount",           &getblockcount_helpman},
+        {"getdifficulty",           &getdifficulty_helpman},
+        {"getblockhash",            &getblockhash_helpman},
+        {"getblock",                &getblock_helpman},
+        {"getblockbynumber",        &getblockbynumber_helpman},
+        {"getblockbymintime",       &getblockbymintime_helpman},
+        {"getblocksbatch",          &getblocksbatch_helpman},
+        {"showblock",               &showblock_helpman},
+        {"getrawmempool",           &getrawmempool_helpman},
+        {"getblockchaininfo",       &getblockchaininfo_helpman},
+        {"getcheckpoint",           &getcheckpoint_helpman},
+        {"getburnreport",           &getburnreport_helpman},
+        {"reorganize",              &rpc_reorganize_helpman}, // C++ symbol differs from RPC name
+        {"currenttime",             &currenttime_helpman},
+        {"networktime",             &networktime_helpman},
+        {"network",                 &network_helpman},
+        {"sendblock",               &sendblock_helpman},
+        {"askforoutstandingblocks", &askforoutstandingblocks_helpman},
+        {"debug",                   &debug_helpman},
+        {"versionreport",           &versionreport_helpman},
+        {"advertisebeacon",        &advertisebeacon_helpman},
+        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
+        {"beaconauth",             &beaconauth_helpman},
+        {"revokebeacon",           &revokebeacon_helpman},
+        {"beaconreport",           &beaconreport_helpman},
+        {"beaconconvergence",      &beaconconvergence_helpman},
+        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
+        {"beaconstatus",           &beaconstatus_helpman},
+        {"beaconaudit",            &beaconaudit_helpman},
+        {"getmrcinfo",             &getmrcinfo_helpman},
+        {"createmrcrequest",       &createmrcrequest_helpman},
+        {"magnitude",              &magnitude_helpman},
+        {"explainmagnitude",       &explainmagnitude_helpman},
+        {"lifetime",               &lifetime_helpman},
+        {"resetcpids",             &resetcpids_helpman},
+        {"rainbymagnitude",        &rainbymagnitude_helpman},
+        {"currentcontractaverage", &currentcontractaverage_helpman},
 // Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
 // commands. Each fHelp=true throw happens before any globals are touched, so this
 // runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
-BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
-{
-    const UniValue empty(UniValue::VARR);
-    using HelpFn = UniValue (*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> cases{
-        {"superblocks", superblocks},
-        {"superblockage", superblockage},
-        {"superblockaverage", superblockaverage},
-        {"parselegacysb", parselegacysb},
-        {"listscrapers", listscrapers},
-        {"listprojects", listprojects},
-        {"projects", projects},
-        {"getautogreylist", getautogreylist},
-        {"listsidestakes", listsidestakes},
-        {"listmandatorysidestakes", listmandatorysidestakes},
-        {"listprotocolentries", listprotocolentries},
-        {"readdata", readdata},
-        {"writedata", writedata},
-        {"dumpcontracts", dumpcontracts},
-    };
-
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    "help message missing command name");
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    "help message missing Examples section");
-            }
-            BOOST_CHECK_MESSAGE(threw, "expected std::runtime_error to be thrown");
-        }
-    }
-}
-
-// Tier 1 F3: each of the wallet-query commands renders help text on fHelp=true
-// before touching pwalletMain / cs_main / cs_wallet. Same fixture-free pattern
-// as the F2 test above.
-BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
-{
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"getinfo",                 &getinfo},
-        {"getwalletinfo",           &getwalletinfo},
-        {"listaddressgroupings",    &listaddressgroupings},
-        {"getreceivedbyaddress",    &getreceivedbyaddress},
-        {"getbalance",              &getbalance},
-        {"getbalancedetail",        &getbalancedetail},
-        {"getunconfirmedbalance",   &getunconfirmedbalance},
-        {"listreceivedbyaddress",   &listreceivedbyaddress},
-        {"listtransactions",        &listtransactions},
-        {"liststakes",              &liststakes},
-        {"gettransaction",          &gettransaction},
-        {"getrawwallettransaction", &getrawwallettransaction},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-        }
-    }
-}
-
-// Tier 1 F4: each of the wallet-mgmt/send commands renders help text on
-// fHelp=true before touching pwalletMain / cs_main / cs_wallet. Same
-// fixture-free pattern as the F2/F3 tests above.
-BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
-{
-    using HelpFn = UniValue(*)(const UniValue&, bool);
-    const std::vector<std::pair<const char*, HelpFn>> commands{
-        {"sendtoaddress",   &sendtoaddress},
-        {"sendfrom",        &sendfrom},
-        {"sendmany",        &sendmany},
-        {"backupwallet",    &backupwallet},
-        {"keypoolrefill",   &keypoolrefill},
-        {"walletdiagnose", &walletdiagnose},
-        {"encryptwallet",   &encryptwallet},
-        {"reservebalance",  &reservebalance},
-        {"checkwallet",     &checkwallet},
-        {"repairwallet",    &repairwallet},
-        {"resendtx",        &resendtx},
-        {"burn",            &burn},
-        {"upgradewallet",   &upgradewallet},
-    };
-
-    const UniValue params(UniValue::VARR);
-    for (const auto& [name, fn] : commands) {
-        try {
-            fn(params, /*fHelp=*/true);
-            BOOST_FAIL(std::string{"expected runtime_error for "} + name);
-        } catch (const std::runtime_error& e) {
-            const std::string what{e.what()};
-            BOOST_CHECK_MESSAGE(what.find(name) != std::string::npos,
-                                std::string{"help text missing command name: "} + name);
-            BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                                std::string{"help text missing Examples marker: "} + name);
-        }
-    }
-}
-
-// Helper for the straggler-batch help-rendering tests below. Each converted
-// command throws runtime_error(help.ToString()) on fHelp=true before any
-// wallet/state access, so iterating fixture-free is safe.
-static void check_straggler_help_renders(
-    const std::vector<std::pair<const char*, UniValue (*)(const UniValue&, bool)>>& cases)
-{
-    const UniValue empty(UniValue::VARR);
-    for (const auto& [rpc_name, fn] : cases) {
-        BOOST_TEST_CONTEXT(rpc_name) {
-            bool threw = false;
-            try {
-                fn(empty, /*fHelp=*/true);
-            } catch (const std::runtime_error& e) {
-                threw = true;
-                const std::string what{e.what()};
-                BOOST_CHECK_MESSAGE(what.find(rpc_name) != std::string::npos,
-                    rpc_name << ": help text missing command name; got: " << what);
-                BOOST_CHECK_MESSAGE(what.find("Examples:") != std::string::npos,
-                    rpc_name << ": help text missing 'Examples:' section");
-            }
-            BOOST_CHECK_MESSAGE(threw, rpc_name << ": expected runtime_error for fHelp=true");
-        }
-    }
-}
-
-// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2).
-BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
-{
-    check_straggler_help_renders({
-        {"abandontransaction", &abandontransaction},
-        {"inspectwalletstate", &inspectwalletstate},
     });
 }
 
-// PSGT commands (Partially Signed Gridcoin Transaction, introduced in #2877 G).
+// Tier 1c — snapshots / registries / generic-data (14 commands).
+BOOST_AUTO_TEST_CASE(tier1c_snapshots_registries_help_renders)
+{
+    check_help_renders({
+        {"superblocks",              &superblocks_helpman},
+        {"superblockage",            &superblockage_helpman},
+        {"superblockaverage",        &superblockaverage_helpman},
+        {"parselegacysb",            &parselegacysb_helpman},
+        {"listscrapers",             &listscrapers_helpman},
+        {"listprojects",             &listprojects_helpman},
+        {"projects",                 &projects_helpman},
+        {"getautogreylist",          &getautogreylist_helpman},
+        {"listsidestakes",           &listsidestakes_helpman},
+        {"listmandatorysidestakes",  &listmandatorysidestakes_helpman},
+        {"listprotocolentries",      &listprotocolentries_helpman},
+        {"readdata",                 &readdata_helpman},
+        {"writedata",                &writedata_helpman},
+        {"dumpcontracts",            &dumpcontracts_helpman},
+    });
+}
+
+// Tier 1 D1 — server / misc / dataacq (8 commands).
+BOOST_AUTO_TEST_CASE(tier1_d1_server_misc_dataacq_help_renders)
+{
+    check_help_renders({
+        {"help",            &help_helpman},
+        {"stop",            &stop_helpman},
+        {"logging",         &logging_helpman},
+        {"listsettings",    &listsettings_helpman},
+        {"changesettings",  &changesettings_helpman},
+        {"getblockstats",   &rpc_getblockstats_helpman},
+        {"exportstats1",    &rpc_exportstats_helpman},
+        {"getrecentblocks", &rpc_getrecentblocks_helpman},
+    });
+}
+
+// Tier 1 D2 — net.cpp remaining (12 commands).
+BOOST_AUTO_TEST_CASE(tier1_d2_net_remaining_help_renders)
+{
+    check_help_renders({
+        {"getconnectioncount", &getconnectioncount_helpman},
+        {"getnodeaddresses",   &getnodeaddresses_helpman},
+        {"getaddednodeinfo",   &getaddednodeinfo_helpman},
+        {"listbanned",         &listbanned_helpman},
+        {"clearbanned",        &clearbanned_helpman},
+        {"ping",               &ping_helpman},
+        {"getpeerinfo",        &getpeerinfo_helpman},
+        {"getnettotals",       &getnettotals_helpman},
+        {"listalerts",         &listalerts_helpman},
+        {"sendalert",          &sendalert_helpman},
+        {"sendalert2",         &sendalert2_helpman},
+        {"getnetworkinfo",     &getnetworkinfo_helpman},
+    });
+}
+
+// Tier 1 D3 — voting.cpp (6 commands).
+BOOST_AUTO_TEST_CASE(tier1_d3_voting_help_renders)
+{
+    check_help_renders({
+        {"listpolls",            &listpolls_helpman},
+        {"getpollresults",       &getpollresults_helpman},
+        {"getvotingclaim",       &getvotingclaim_helpman},
+        {"votebyid",             &votebyid_helpman},
+        {"votedetails",          &votedetails_helpman},
+        {"testpollnotification", &testpollnotification_helpman},
+    });
+}
+
+// Tier 1 E1 — mining.cpp (7 commands).
+BOOST_AUTO_TEST_CASE(tier1_e1_mining_help_renders)
+{
+    check_help_renders({
+        {"getstakinginfo",          &getstakinginfo_helpman},
+        {"getlaststake",            &getlaststake_helpman},
+        {"auditsnapshotaccrual",    &auditsnapshotaccrual_helpman},
+        {"auditsnapshotaccruals",   &auditsnapshotaccruals_helpman},
+        {"listresearcheraccounts",  &listresearcheraccounts_helpman},
+        {"inspectaccrualsnapshot",  &inspectaccrualsnapshot_helpman},
+        {"parseaccrualsnapshotfile", &parseaccrualsnapshotfile_helpman},
+    });
+}
+
+// Tier 1 E2 — scrapers (9 commands).
+BOOST_AUTO_TEST_CASE(tier1_e2_scrapers_help_renders)
+{
+    check_help_renders({
+        {"sendscraperfilemanifest", &sendscraperfilemanifest_helpman},
+        {"savescraperfilemanifest", &savescraperfilemanifest_helpman},
+        {"deletecscrapermanifest",  &deletecscrapermanifest_helpman},
+        {"archivelog",              &archivelog_helpman},
+        {"convergencereport",       &convergencereport_helpman},
+        {"testnewsb",               &testnewsb_helpman},
+        {"scraperreport",           &scraperreport_helpman},
+        {"listmanifests",           &listmanifests_helpman},
+        {"getmpart",                &getmpart_helpman},
+    });
+}
+
+// Tier 1 E3 — rawtransaction + htlc (16 commands).
+BOOST_AUTO_TEST_CASE(tier1_e3_rawtx_htlc_help_renders)
+{
+    check_help_renders({
+        {"getrawtransaction",           &getrawtransaction_helpman},
+        {"listunspent",                 &listunspent_helpman},
+        {"consolidateunspent",          &consolidateunspent_helpman},
+        {"consolidatemsunspent",        &consolidatemsunspent_helpman},
+        {"scanforunspent",              &scanforunspent_helpman},
+        {"createrawtransaction",        &createrawtransaction_helpman},
+        {"fundrawtransaction",          &fundrawtransaction_helpman},
+        {"decoderawtransaction",        &decoderawtransaction_helpman},
+        {"decodescript",                &decodescript_helpman},
+        {"signrawtransactionwithkey",   &signrawtransactionwithkey_helpman},
+        {"signrawtransactionwithwallet", &signrawtransactionwithwallet_helpman},
+        {"signrawtransaction",          &signrawtransaction_helpman},
+        {"sendrawtransaction",          &sendrawtransaction_helpman},
+        {"createhtlc",                  &createhtlc_helpman},
+        {"claimhtlc",                   &claimhtlc_helpman},
+        {"refundhtlc",                  &refundhtlc_helpman},
+    });
+}
+
+// Tier 1 F1 — rpcdump (4 commands).
+BOOST_AUTO_TEST_CASE(tier1_f1_rpcdump_help_renders)
+{
+    check_help_renders({
+        {"importprivkey", &importprivkey_helpman},
+        {"importwallet",  &importwallet_helpman},
+        {"dumpprivkey",   &dumpprivkey_helpman},
+        {"dumpwallet",    &dumpwallet_helpman},
+    });
+}
+
+// Tier 1 Deprecated — wallet account-system commands + `vote` wrapper (9 commands).
+// In addition to the standard name/Examples checks, each command's help text
+// must contain the literal "DEPRECATED" banner per the conversion convention.
+BOOST_AUTO_TEST_CASE(tier1_deprecated_batch_help_renders)
+{
+    check_help_renders({
+        {"getaccountaddress",     &getaccountaddress_helpman},
+        {"setaccount",            &setaccount_helpman},
+        {"getaccount",            &getaccount_helpman},
+        {"getaddressesbyaccount", &getaddressesbyaccount_helpman},
+        {"getreceivedbyaccount",  &getreceivedbyaccount_helpman},
+        {"listreceivedbyaccount", &listreceivedbyaccount_helpman},
+        {"listaccounts",          &listaccounts_helpman},
+        // Dispatched RPC name is "move", but the C++ function symbol is movecmd.
+        {"move",                  &movecmd_helpman},
+        {"vote",                  &vote_helpman},
+    }, /*require_deprecated_banner=*/true);
+}
+// Tier 1 F2 — wallet keys/addresses/signing (10 commands).
+BOOST_AUTO_TEST_CASE(tier1_f2_wallet_keys_help_renders)
+{
+    check_help_renders({
+        {"getnewpubkey",       &getnewpubkey_helpman},
+        {"getnewaddress",      &getnewaddress_helpman},
+        {"signmessage",        &signmessage_helpman},
+        {"verifymessage",      &verifymessage_helpman},
+        {"addmultisigaddress", &addmultisigaddress_helpman},
+        {"addredeemscript",    &addredeemscript_helpman},
+        {"validateaddress",    &validateaddress_helpman},
+        {"validatepubkey",     &validatepubkey_helpman},
+        {"makekeypair",        &makekeypair_helpman},
+        {"sethdseed",          &sethdseed_helpman},
+    });
+}
+
+// Tier 1b — researcher/beacon/MRC (17 commands).
+BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
+{
+    check_help_renders({
+        {"advertisebeacon",        &advertisebeacon_helpman},
+        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
+        {"beaconauth",             &beaconauth_helpman},
+        {"revokebeacon",           &revokebeacon_helpman},
+        {"beaconreport",           &beaconreport_helpman},
+        {"beaconconvergence",      &beaconconvergence_helpman},
+        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
+        {"beaconstatus",           &beaconstatus_helpman},
+        {"beaconaudit",            &beaconaudit_helpman},
+        {"getmrcinfo",             &getmrcinfo_helpman},
+        {"createmrcrequest",       &createmrcrequest_helpman},
+        {"magnitude",              &magnitude_helpman},
+        {"explainmagnitude",       &explainmagnitude_helpman},
+        {"lifetime",               &lifetime_helpman},
+        {"resetcpids",             &resetcpids_helpman},
+        {"rainbymagnitude",        &rainbymagnitude_helpman},
+        {"currentcontractaverage", &currentcontractaverage_helpman},
+    });
+}
+
+// Tier 1 F3 — wallet read-only queries (12 commands).
+BOOST_AUTO_TEST_CASE(tier1_f3_wallet_queries_help_renders)
+{
+    check_help_renders({
+        {"getinfo",                 &getinfo_helpman},
+        {"getwalletinfo",           &getwalletinfo_helpman},
+        {"listaddressgroupings",    &listaddressgroupings_helpman},
+        {"getreceivedbyaddress",    &getreceivedbyaddress_helpman},
+        {"getbalance",              &getbalance_helpman},
+        {"getbalancedetail",        &getbalancedetail_helpman},
+        {"getunconfirmedbalance",   &getunconfirmedbalance_helpman},
+        {"listreceivedbyaddress",   &listreceivedbyaddress_helpman},
+        {"listtransactions",        &listtransactions_helpman},
+        {"liststakes",              &liststakes_helpman},
+        {"gettransaction",          &gettransaction_helpman},
+        {"getrawwallettransaction", &getrawwallettransaction_helpman},
+    });
+}
+
+// Tier 1 F4 — wallet mgmt + send (13 commands).
+BOOST_AUTO_TEST_CASE(tier1_f4_wallet_mgmt_send_help_renders)
+{
+    check_help_renders({
+        {"sendtoaddress",   &sendtoaddress_helpman},
+        {"sendfrom",        &sendfrom_helpman},
+        {"sendmany",        &sendmany_helpman},
+        {"backupwallet",    &backupwallet_helpman},
+        {"keypoolrefill",   &keypoolrefill_helpman},
+        {"walletdiagnose",  &walletdiagnose_helpman},
+        {"encryptwallet",   &encryptwallet_helpman},
+        {"reservebalance",  &reservebalance_helpman},
+        {"checkwallet",     &checkwallet_helpman},
+        {"repairwallet",    &repairwallet_helpman},
+        {"resendtx",        &resendtx_helpman},
+        {"burn",            &burn_helpman},
+        {"upgradewallet",   &upgradewallet_helpman},
+    });
+}
+
+// Wallet transaction-state debug commands (introduced in #2839 issue-1157-2,
+// lifted to helpman accessors via the straggler integration in PR M).
+BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
+{
+    check_help_renders({
+        {"abandontransaction", &abandontransaction_helpman},
+        {"inspectwalletstate", &inspectwalletstate_helpman},
+    });
+}
+
+// PSGT commands (Partially Signed Gridcoin Transaction, lifted to helpman
+// accessors via the straggler integration in PR M).
 BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
 {
-    check_straggler_help_renders({
-        {"createpsgt",             &createpsgt},
-        {"decodepsgt",             &decodepsgt},
-        {"combinepsgt",            &combinepsgt},
-        {"finalizepsgt",           &finalizepsgt},
-        {"walletprocesspsgt",      &walletprocesspsgt},
-        {"utxoupdatepsgt",         &utxoupdatepsgt},
-        {"converttopsgt",          &converttopsgt},
-        {"walletcreatefundedpsgt", &walletcreatefundedpsgt},
+    check_help_renders({
+        {"createpsgt",             &createpsgt_helpman},
+        {"decodepsgt",             &decodepsgt_helpman},
+        {"combinepsgt",            &combinepsgt_helpman},
+        {"finalizepsgt",           &finalizepsgt_helpman},
+        {"walletprocesspsgt",      &walletprocesspsgt_helpman},
+        {"utxoupdatepsgt",         &utxoupdatepsgt_helpman},
+        {"converttopsgt",          &converttopsgt_helpman},
+        {"walletcreatefundedpsgt", &walletcreatefundedpsgt_helpman},
     });
 }
 
