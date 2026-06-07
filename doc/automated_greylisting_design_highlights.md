@@ -254,7 +254,7 @@ The researcher and project table models were extended to deal appropriately with
 
 This helper function that provides JSON superblock outputs to several different RPC functions has been modified to include the project greylist status and the project all CPID total credits.
 
-### UniValue addkey(const UniValue& params, bool fHelp)
+### UniValue addkey(const UniValue& params)
 
 This administrative function has been extended to handle manual greylisting and the automatic greylisting override.
 
