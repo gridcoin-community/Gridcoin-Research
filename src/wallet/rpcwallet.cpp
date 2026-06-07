@@ -502,18 +502,30 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp)
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 5)
-        throw runtime_error(
-                "sendtoaddress <gridcoinaddress> <amount> [comment] [comment-to] [message]\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.000001\n"
-                "[comment] a comment used to store what the transaction is for.\n"
-                "         This is not part of the transaction, just kept in your wallet.\n"
-                "[comment_to] a comment to store the name of the person or organization\n"
-                "             to which you're sending the transaction. This is not part of the \n"
-                "             transaction, just kept in your wallet.\n"
-                "[message] Optional message to add to the receiver.\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "sendtoaddress",
+        "Send an amount of GRC to the given Gridcoin address. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to send to."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "The amount in GRC to send (rounded to the nearest 0.000001)."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Comment used to store what the transaction is for. Not part of the transaction, just kept in your wallet."},
+            {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Comment to store the name of the person or organization to which you're sending the transaction. Not part of the transaction."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Optional message to add to the receiver (TxMessage contract)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100") +
+            HelpExampleCli("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 \"donation\" \"charity\"") +
+            HelpExampleRpc("sendtoaddress", "\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, \"donation\", \"charity\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1175,21 +1187,34 @@ UniValue movecmd(const UniValue& params, bool fHelp)
 
 UniValue sendfrom(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 3 || params.size() > 7)
-        throw runtime_error(
-                "sendfrom <account> <gridcoinaddress> <amount> [minconf=1] [comment] [comment-to] [message]\n"
-                "\n"
-                "<account> account to send from.\n"
-                "<gridcoinaddress> address to send to.\n"
-                "<amount> is a real and is rounded to the nearest 0.000001\n"
-                "[minconf] only use the balance confirmed at least this many times."
-                "[comment] a comment used to store what the transaction is for.\n"
-                "         This is not part of the transaction, just kept in your wallet.\n"
-                "[comment_to] a comment to store the name of the person or organization\n"
-                "             to which you're sending the transaction. This is not part of the \n"
-                "             transaction, just kept in your wallet.\n"
-                "[message] Optional message to add to the receiver.\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "sendfrom",
+        "Send GRC from an account to a Gridcoin address. "
+        "Accounts subsystem is deprecated and may be removed in a future release. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"account", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Account to send from."},
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The Gridcoin address to send to."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "The amount in GRC (rounded to the nearest 0.000001)."},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only use the balance confirmed at least this many times (default: 1)."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Wallet-local comment describing what the transaction is for."},
+            {"comment_to", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Wallet-local comment naming the recipient."},
+            {"message", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Optional message to add to the receiver (TxMessage contract)."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendfrom", "\"tabby\" \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\" 100 6") +
+            HelpExampleRpc("sendfrom", "\"tabby\", \"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\", 100, 6")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = AccountFromValue(params[0]);
 
@@ -1234,14 +1259,34 @@ UniValue sendfrom(const UniValue& params, bool fHelp)
 
 UniValue sendmany(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 4)
-        throw runtime_error(
-                "sendmany <fromaccount> {address:amount,...} [minconf=1] [comment]\n"
-                "\n"
-                "<fromaccount> Specify account name to use or use '' to use all addresses in wallet\n"
-                "\n"
-                "amounts are double-precision floating point numbers\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "sendmany",
+        "Send GRC to multiple addresses in a single transaction. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"fromaccount", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "Specify account name to use; use \"\" to use all addresses in the wallet. "
+                "Accounts subsystem is deprecated and may be removed in a future release."},
+            {"amounts", RPCArg::Type::OBJ_USER_KEYS, RPCArg::Optional::NO,
+                "A JSON object with addresses as keys and GRC amounts as values.",
+                {
+                    {"address", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                        "GRC amount to send to this address (rounded to the nearest 0.000001)."},
+                }},
+            {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "Only use balance confirmed at least this many times (default: 1)."},
+            {"comment", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                "Wallet-local comment describing what the transaction is for."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("sendmany",
+                "\"\" \"{\\\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\\\":1.5,\\\"SkNNd1234567890abcdefghijklmnopqr\\\":0.5}\"") +
+            HelpExampleRpc("sendmany",
+                "\"\", {\"SD1qpYx1mAdLPZJyTrL4S4n7B2y4VLBLnJ\":1.5,\"SkNNd1234567890abcdefghijklmnopqr\":0.5}")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     string strAccount = AccountFromValue(params[0]);
     bool bFromAccount = false;
@@ -2347,11 +2392,28 @@ UniValue getrawwallettransaction(const UniValue& params, bool fHelp)
 
 UniValue backupwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "backupwallet\n"
-                "\n"
-                "Backup your wallet, config, and settings files.\n");
+    static const RPCHelpMan help{
+        "backupwallet",
+        "Backup the wallet, config, and settings files. Old retained backups are pruned.",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "Backup wallet success", "Whether wallet.dat was backed up successfully."},
+                {RPCResult::Type::BOOL, "Backup config success", "Whether gridcoinresearch.conf was backed up successfully."},
+                {RPCResult::Type::BOOL, "Backup settings success", "Whether gridcoinsettings.json was backed up successfully."},
+                {RPCResult::Type::BOOL, "Maintain backup file retention success", "Whether retention pruning succeeded."},
+                {RPCResult::Type::NUM, "Number of files removed", "Number of old backup files pruned."},
+                {RPCResult::Type::ARR, "Files removed", "Names of pruned backup files.",
+                    {
+                        {RPCResult::Type::STR, "", "Name of a removed backup file."},
+                    }},
+            }},
+        RPCExamples{
+            HelpExampleCli("backupwallet", "") +
+            HelpExampleRpc("backupwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2481,11 +2543,22 @@ UniValue maintainbackups(const UniValue& params, bool fHelp)
 
 UniValue keypoolrefill(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "keypoolrefill [new-size]\n"
-                "Fills the keypool.\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "keypoolrefill",
+        "Fills the keypool. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"newsize", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The new keypool size (default: from -keypool option)."},
+        },
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("keypoolrefill", "") +
+            HelpExampleCli("keypoolrefill", "1000") +
+            HelpExampleRpc("keypoolrefill", "1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -2870,11 +2943,21 @@ UniValue inspectwalletstate(const UniValue& params, bool fHelp)
  */
 UniValue walletdiagnose(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-                "walletdiagnose\n"
-                "\n"
-                "Runs several tests to diagnose issues in the wallet.");
+    static const RPCHelpMan help{
+        "walletdiagnose",
+        "Runs several diagnostic tests on the wallet (connection counts, sync state, "
+        "client version, BOINC path, CPID, clock, TCP port, difficulty, ETTS).",
+        {},
+        RPCResult{RPCResult::Type::OBJ_DYN, "", "",
+            {
+                {RPCResult::Type::ELISION, "", "diagnostic key/result entry"},
+            }},
+        RPCExamples{
+            HelpExampleCli("walletdiagnose", "") +
+            HelpExampleRpc("walletdiagnose", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     std::set<std::pair<std::string , unique_ptr<DiagnoseLib::Diagnose>>> testSet;
     //Construct the tests needed.
@@ -2984,11 +3067,22 @@ UniValue walletlock(const UniValue& params, bool fHelp)
 
 UniValue encryptwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-                "encryptwallet <passphrase>\n"
-                "\n"
-                "Encrypts the wallet with <passphrase>.\n");
+    static const RPCHelpMan help{
+        "encryptwallet",
+        "Encrypts the wallet with the given passphrase. "
+        "After encryption, the node will shut down and must be restarted.",
+        {
+            {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO,
+                "The passphrase used to encrypt the wallet. Must be non-empty."},
+        },
+        RPCResult{RPCResult::Type::STR, "message",
+            "Confirmation message; the daemon stops after returning."},
+        RPCExamples{
+            HelpExampleCli("encryptwallet", "\"mypassphrase\"") +
+            HelpExampleRpc("encryptwallet", "\"mypassphrase\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (pwalletMain->IsCrypted())
         throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
@@ -3177,15 +3271,30 @@ UniValue validatepubkey(const UniValue& params, bool fHelp)
 // ppcoin: reserve balance from being staked for network protection
 UniValue reservebalance(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
-        throw runtime_error(
-                "reservebalance [<reserve> [amount]]\n"
-                "\n"
-                "<reserve> is true or false to turn balance reserve on or off.\n"
-                "<amount> is a real and rounded to cent.\n"
-                "Reserved amount secures a balance in wallet that can be spendable at anytime.\n"
-                "However reserve will secure utxo(s) of any size to respect this setting.\n"
-                "If no parameters provided current setting is printed.\n");
+    static const RPCHelpMan help{
+        "reservebalance",
+        "Reserve a balance in the wallet that will not be used for staking, leaving it "
+        "spendable at any time. The reserve will protect UTXOs of any size to honor this "
+        "setting. If no parameters are provided, the current setting is printed.",
+        {
+            {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+                "true to turn balance reserve on, false to turn it off."},
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED,
+                "The amount in GRC to reserve (rounded to cent). Required when reserve=true; forbidden when reserve=false."},
+        },
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "reserve", "Whether a reserve amount is currently set."},
+                {RPCResult::Type::STR_AMOUNT, "amount", "The current reserve amount in GRC."},
+            }},
+        RPCExamples{
+            HelpExampleCli("reservebalance", "") +
+            HelpExampleCli("reservebalance", "true 1000") +
+            HelpExampleCli("reservebalance", "false") +
+            HelpExampleRpc("reservebalance", "true, 1000")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (params.size() > 0)
     {
@@ -3218,11 +3327,25 @@ UniValue reservebalance(const UniValue& params, bool fHelp)
 // ppcoin: check wallet integrity
 UniValue checkwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "checkwallet\n"
-                "\n"
-                "Check wallet for integrity.\n");
+    static const RPCHelpMan help{
+        "checkwallet",
+        "Check the wallet for integrity (mismatched spent coins).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                    "Present and true when no mismatches were found."},
+                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                    "Number of mismatched spent coins detected (only present when nonzero)."},
+                {RPCResult::Type::STR_AMOUNT, "amount in question", /*optional=*/true,
+                    "Total balance involved in the mismatches (only present when nonzero)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("checkwallet", "") +
+            HelpExampleRpc("checkwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -3242,11 +3365,25 @@ UniValue checkwallet(const UniValue& params, bool fHelp)
 // ppcoin: repair wallet
 UniValue repairwallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-                "repairwallet\n"
-                "\n"
-                "Repair wallet if checkwallet reports any problem.\n");
+    static const RPCHelpMan help{
+        "repairwallet",
+        "Repair the wallet if checkwallet reports any problem (fixes mismatched spent coins).",
+        {},
+        RPCResult{RPCResult::Type::OBJ, "", "",
+            {
+                {RPCResult::Type::BOOL, "wallet check passed", /*optional=*/true,
+                    "Present and true when no mismatches were found."},
+                {RPCResult::Type::NUM, "mismatched spent coins", /*optional=*/true,
+                    "Number of mismatches that were corrected (only present when nonzero)."},
+                {RPCResult::Type::STR_AMOUNT, "amount affected by repair", /*optional=*/true,
+                    "Total balance involved in the corrections (only present when nonzero)."},
+            }},
+        RPCExamples{
+            HelpExampleCli("repairwallet", "") +
+            HelpExampleRpc("repairwallet", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
@@ -3265,12 +3402,17 @@ UniValue repairwallet(const UniValue& params, bool fHelp)
 // NovaCoin: resend unconfirmed wallet transactions
 UniValue resendtx(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
-        throw runtime_error(
-                "resendtx\n"
-                "\n"
-                "Re-send unconfirmed transactions.\n"
-                );
+    static const RPCHelpMan help{
+        "resendtx",
+        "Re-send unconfirmed transactions in the wallet.",
+        {},
+        RPCResult{RPCResult::Type::NONE, "", ""},
+        RPCExamples{
+            HelpExampleCli("resendtx", "") +
+            HelpExampleRpc("resendtx", "")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     {
         LOCK2(cs_main, cs_setpwalletRegistered);
@@ -3317,12 +3459,24 @@ UniValue makekeypair(const UniValue& params, bool fHelp)
 
 UniValue burn(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() < 1 || params.size() > 2)
-        throw runtime_error(
-                "burn <amount> [hex string]\n"
-                "\n"
-                "<amount> is a real and is rounded to the nearest 0.00000001\n"
-                + HelpRequiringPassphrase());
+    static const RPCHelpMan help{
+        "burn",
+        "Send an amount to an unspendable OP_RETURN output, optionally with a hex data payload. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO,
+                "Amount to burn in GRC (rounded to the nearest 0.00000001)."},
+            {"data", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+                "Optional hex-encoded payload to attach to the OP_RETURN output."},
+        },
+        RPCResult{RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+        RPCExamples{
+            HelpExampleCli("burn", "1.0") +
+            HelpExampleCli("burn", "1.0 \"deadbeef\"") +
+            HelpExampleRpc("burn", "1.0, \"deadbeef\"")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     if (pwalletMain->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
@@ -3419,16 +3573,24 @@ UniValue sethdseed(const UniValue& params, bool fHelp)
 
 UniValue upgradewallet(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1) {
-        throw std::runtime_error(
-                "upgradewallet [version]\n"
-                "\n"
-                "Upgrade the wallet. Upgrades to the latest version if no version number is specified\n"
-                "New keys may be generated and a new wallet backup will need to be made.\n"
-                "\n"
-                "[version] - The version number to upgrade to. Default is the latest wallet version."
-        );
-    }
+    static const RPCHelpMan help{
+        "upgradewallet",
+        "Upgrade the wallet to a newer version. Upgrades to the latest version if no version "
+        "number is specified. New keys may be generated and a new wallet backup may be required. "
+        "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+        {
+            {"version", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+                "The version number to upgrade to. Default is the latest wallet version."},
+        },
+        RPCResult{RPCResult::Type::STR, "error",
+            "Empty string on success; otherwise an error message describing why the upgrade failed."},
+        RPCExamples{
+            HelpExampleCli("upgradewallet", "") +
+            HelpExampleCli("upgradewallet", "169900") +
+            HelpExampleRpc("upgradewallet", "169900")},
+    };
+    if (fHelp || !help.IsValidNumArgs(params.size()))
+        throw runtime_error(help.ToString());
 
     EnsureWalletIsUnlocked();
 
