@@ -16,232 +16,11 @@
 #include <utility>
 #include <vector>
 
-// Forward declarations of the Tier 1a blockchain-core and Tier 1b
-// researcher/beacon/MRC commands under test.
-// Forward declarations of the Tier 1a blockchain-core commands under test.
-// Forward declarations of the Tier 1b researcher/beacon/MRC commands under test.
-// Must live in the global namespace; placing them inside BOOST_AUTO_TEST_SUITE
-// captures them into the suite's namespace and breaks linkage. After conversion
-// each function throws std::runtime_error for fHelp=true before touching any
-// node globals or acquiring locks, so calling them with empty params is safe.
-UniValue getbestblockhash(const UniValue& params, bool fHelp);
-UniValue getblockcount(const UniValue& params, bool fHelp);
-UniValue getdifficulty(const UniValue& params, bool fHelp);
-UniValue getblockhash(const UniValue& params, bool fHelp);
-UniValue getblock(const UniValue& params, bool fHelp);
-UniValue getblockbynumber(const UniValue& params, bool fHelp);
-UniValue getblockbymintime(const UniValue& params, bool fHelp);
-UniValue getblocksbatch(const UniValue& params, bool fHelp);
-UniValue showblock(const UniValue& params, bool fHelp);
-UniValue getrawmempool(const UniValue& params, bool fHelp);
-UniValue getblockchaininfo(const UniValue& params, bool fHelp);
-UniValue getcheckpoint(const UniValue& params, bool fHelp);
-UniValue getburnreport(const UniValue& params, bool fHelp);
-UniValue rpc_reorganize(const UniValue& params, bool fHelp);
-UniValue currenttime(const UniValue& params, bool fHelp);
-UniValue networktime(const UniValue& params, bool fHelp);
-UniValue network(const UniValue& params, bool fHelp);
-UniValue sendblock(const UniValue& params, bool fHelp);
-UniValue askforoutstandingblocks(const UniValue& params, bool fHelp);
-UniValue debug(const UniValue& params, bool fHelp);
-UniValue versionreport(const UniValue& params, bool fHelp);
-UniValue advertisebeacon(const UniValue& params, bool fHelp);
-UniValue advertisebeaconv3(const UniValue& params, bool fHelp);
-UniValue beaconauth(const UniValue& params, bool fHelp);
-UniValue revokebeacon(const UniValue& params, bool fHelp);
-UniValue beaconreport(const UniValue& params, bool fHelp);
-UniValue beaconconvergence(const UniValue& params, bool fHelp);
-UniValue pendingbeaconreport(const UniValue& params, bool fHelp);
-UniValue beaconstatus(const UniValue& params, bool fHelp);
-UniValue beaconaudit(const UniValue& params, bool fHelp);
-UniValue getmrcinfo(const UniValue& params, bool fHelp);
-UniValue createmrcrequest(const UniValue& params, const bool fHelp);
-UniValue magnitude(const UniValue& params, bool fHelp);
-UniValue explainmagnitude(const UniValue& params, bool fHelp);
-UniValue lifetime(const UniValue& params, bool fHelp);
-UniValue resetcpids(const UniValue& params, bool fHelp);
-UniValue rainbymagnitude(const UniValue& params, bool fHelp);
-UniValue currentcontractaverage(const UniValue& params, bool fHelp);
-
-// Forward declarations of the Tier 2 commands under test. These must live in
-// the global namespace; if placed inside BOOST_AUTO_TEST_SUITE(...) they get
-// captured into the suite's namespace and fail to link against the
-// definitions in src/rpc/blockchain.cpp, src/rpc/net.cpp, src/wallet/rpcwallet.cpp.
-// Each command's converted body throws for fHelp=true before touching any
-// globals (vNodes, g_banman, pwalletMain, mapBlockIndex, locks), so calling
-// these with fHelp=true and an empty params array is safe in unit tests.
-UniValue settxfee(const UniValue& params, bool fHelp);
-UniValue addnode(const UniValue& params, bool fHelp);
-UniValue setban(const UniValue& params, bool fHelp);
-UniValue listsinceblock(const UniValue& params, bool fHelp);
-
-// Tier 1c forward declarations (snapshots, registries, generic-data, dumpcontracts).
-// Same global-namespace placement requirement as the Tier 2 block above.
-UniValue superblocks(const UniValue& params, bool fHelp);
-UniValue superblockage(const UniValue& params, bool fHelp);
-UniValue superblockaverage(const UniValue& params, bool fHelp);
-UniValue parselegacysb(const UniValue& params, bool fHelp);
-UniValue listscrapers(const UniValue& params, bool fHelp);
-UniValue listprojects(const UniValue& params, bool fHelp);
-UniValue projects(const UniValue& params, bool fHelp);
-UniValue getautogreylist(const UniValue& params, bool fHelp);
-UniValue listsidestakes(const UniValue& params, bool fHelp);
-UniValue listmandatorysidestakes(const UniValue& params, bool fHelp);
-UniValue listprotocolentries(const UniValue& params, bool fHelp);
-UniValue readdata(const UniValue& params, bool fHelp);
-UniValue writedata(const UniValue& params, bool fHelp);
-UniValue dumpcontracts(const UniValue& params, bool fHelp);
-// Tier 1 PR D1: src/rpc/server.cpp + src/rpc/misc.cpp + src/rpc/dataacq.cpp.
-// Each function's converted body throws via help.ToString() before touching
-// globals (cs_main, gArgs, log instance, file IO), so calling these with
-// fHelp=true and an empty params array is safe in unit tests.
-UniValue help(const UniValue& params, bool fHelp);
-UniValue stop(const UniValue& params, bool fHelp);
-UniValue logging(const UniValue& params, bool fHelp);
-UniValue listsettings(const UniValue& params, bool fHelp);
-UniValue changesettings(const UniValue& params, bool fHelp);
-UniValue rpc_getblockstats(const UniValue& params, bool fHelp);
-UniValue rpc_exportstats(const UniValue& params, bool fHelp);
-UniValue rpc_getrecentblocks(const UniValue& params, bool fHelp);
-// Tier 1 PR D2: remaining src/rpc/net.cpp commands. Each function's converted
-// body throws via help.ToString() before touching any globals (vNodes,
-// g_banman, mapAlerts, addrman, cs_main, cs_vNodes), so calling these with
-// fHelp=true and an empty params array is safe in unit tests.
-UniValue getconnectioncount(const UniValue& params, bool fHelp);
-UniValue getnodeaddresses(const UniValue& params, bool fHelp);
-UniValue getaddednodeinfo(const UniValue& params, bool fHelp);
-UniValue listbanned(const UniValue& params, bool fHelp);
-UniValue clearbanned(const UniValue& params, bool fHelp);
-UniValue ping(const UniValue& params, bool fHelp);
-UniValue getpeerinfo(const UniValue& params, bool fHelp);
-UniValue getnettotals(const UniValue& params, bool fHelp);
-UniValue listalerts(const UniValue& params, bool fHelp);
-UniValue sendalert(const UniValue& params, bool fHelp);
-UniValue sendalert2(const UniValue& params, bool fHelp);
-UniValue getnetworkinfo(const UniValue& params, bool fHelp);
-// Tier 1 PR D3: src/rpc/voting.cpp non-deprecated commands. Each function's
-// converted body throws via help.ToString() before touching globals (the
-// poll registry, cs_main, pwalletMain), so calling these with fHelp=true
-// and an empty params array is safe in unit tests.
-UniValue listpolls(const UniValue& params, bool fHelp);
-UniValue getpollresults(const UniValue& params, bool fHelp);
-UniValue getvotingclaim(const UniValue& params, bool fHelp);
-UniValue votebyid(const UniValue& params, bool fHelp);
-UniValue votedetails(const UniValue& params, bool fHelp);
-UniValue testpollnotification(const UniValue& params, bool fHelp);
-// Tier 1 PR E1: src/rpc/mining.cpp commands. Each function's converted body
-// throws via help.ToString() before touching globals (g_miner_status,
-// cs_main, pwalletMain, snapshot files), so calling these with fHelp=true
-// and an empty params array is safe in unit tests.
-UniValue getstakinginfo(const UniValue& params, bool fHelp);
-UniValue getlaststake(const UniValue& params, bool fHelp);
-UniValue auditsnapshotaccrual(const UniValue& params, bool fHelp);
-UniValue auditsnapshotaccruals(const UniValue& params, bool fHelp);
-UniValue listresearcheraccounts(const UniValue& params, bool fHelp);
-UniValue inspectaccrualsnapshot(const UniValue& params, bool fHelp);
-UniValue parseaccrualsnapshotfile(const UniValue& params, bool fHelp);
-// Tier 1 PR E2: src/gridcoin/scraper/scraper.cpp + scraper_net.cpp commands.
-// Each function's converted body throws via help.ToString() before touching
-// any scraper globals or locks.
-UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp);
-UniValue savescraperfilemanifest(const UniValue& params, bool fHelp);
-UniValue deletecscrapermanifest(const UniValue& params, bool fHelp);
-UniValue archivelog(const UniValue& params, bool fHelp);
-UniValue convergencereport(const UniValue& params, bool fHelp);
-UniValue testnewsb(const UniValue& params, bool fHelp);
-UniValue scraperreport(const UniValue& params, bool fHelp);
-UniValue listmanifests(const UniValue& params, bool fHelp);
-UniValue getmpart(const UniValue& params, bool fHelp);
-// Tier 1 PR E3: src/rpc/rawtransaction.cpp + src/rpc/htlc.cpp commands.
-// Each function's converted body throws via help.ToString() before touching
-// any globals (cs_main, pwalletMain, mempool).
-UniValue getrawtransaction(const UniValue& params, bool fHelp);
-UniValue listunspent(const UniValue& params, bool fHelp);
-UniValue consolidateunspent(const UniValue& params, bool fHelp);
-UniValue consolidatemsunspent(const UniValue& params, bool fHelp);
-UniValue scanforunspent(const UniValue& params, bool fHelp);
-UniValue createrawtransaction(const UniValue& params, bool fHelp);
-UniValue fundrawtransaction(const UniValue& params, bool fHelp);
-UniValue decoderawtransaction(const UniValue& params, bool fHelp);
-UniValue decodescript(const UniValue& params, bool fHelp);
-UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp);
-UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp);
-UniValue signrawtransaction(const UniValue& params, bool fHelp);
-UniValue sendrawtransaction(const UniValue& params, bool fHelp);
-UniValue createhtlc(const UniValue& params, bool fHelp);
-UniValue claimhtlc(const UniValue& params, bool fHelp);
-UniValue refundhtlc(const UniValue& params, bool fHelp);
-// Tier 1 PR F1: src/wallet/rpcdump.cpp commands. Each function's converted
-// body throws via help.ToString() before touching pwalletMain or file IO.
-UniValue importprivkey(const UniValue& params, bool fHelp);
-UniValue importwallet(const UniValue& params, bool fHelp);
-UniValue dumpprivkey(const UniValue& params, bool fHelp);
-UniValue dumpwallet(const UniValue& params, bool fHelp);
-// Tier 1 deprecated batch: the deprecated-accounts wallet RPCs plus the
-// deprecated `vote` RPC. Each function's converted body throws via
-// help.ToString() before touching pwalletMain or the poll registry.
-UniValue getaccountaddress(const UniValue& params, bool fHelp);
-UniValue setaccount(const UniValue& params, bool fHelp);
-UniValue getaccount(const UniValue& params, bool fHelp);
-UniValue getaddressesbyaccount(const UniValue& params, bool fHelp);
-UniValue getreceivedbyaccount(const UniValue& params, bool fHelp);
-UniValue listreceivedbyaccount(const UniValue& params, bool fHelp);
-UniValue listaccounts(const UniValue& params, bool fHelp);
-UniValue movecmd(const UniValue& params, bool fHelp);  // dispatched as "move"
-UniValue vote(const UniValue& params, bool fHelp);
-// Forward declarations of the Tier 1 F2 wallet-keys commands under test.
-UniValue getnewpubkey(const UniValue& params, bool fHelp);
-UniValue getnewaddress(const UniValue& params, bool fHelp);
-UniValue signmessage(const UniValue& params, bool fHelp);
-UniValue verifymessage(const UniValue& params, bool fHelp);
-UniValue addmultisigaddress(const UniValue& params, bool fHelp);
-UniValue addredeemscript(const UniValue& params, bool fHelp);
-UniValue validateaddress(const UniValue& params, bool fHelp);
-UniValue validatepubkey(const UniValue& params, bool fHelp);
-UniValue makekeypair(const UniValue& params, bool fHelp);
-UniValue sethdseed(const UniValue& params, bool fHelp);
-
-// Forward declarations of the Tier 1 F3 wallet-query commands under test.
-UniValue getinfo(const UniValue& params, bool fHelp);
-UniValue getwalletinfo(const UniValue& params, bool fHelp);
-UniValue listaddressgroupings(const UniValue& params, bool fHelp);
-UniValue getreceivedbyaddress(const UniValue& params, bool fHelp);
-UniValue getbalance(const UniValue& params, bool fHelp);
-UniValue getbalancedetail(const UniValue& params, bool fHelp);
-UniValue getunconfirmedbalance(const UniValue& params, bool fHelp);
-UniValue listreceivedbyaddress(const UniValue& params, bool fHelp);
-UniValue listtransactions(const UniValue& params, bool fHelp);
-UniValue liststakes(const UniValue& params, bool fHelp);
-UniValue gettransaction(const UniValue& params, bool fHelp);
-UniValue getrawwallettransaction(const UniValue& params, bool fHelp);
-
-// Forward declarations of the Tier 1 F4 wallet management/send commands under test.
-UniValue sendtoaddress(const UniValue& params, bool fHelp);
-UniValue sendfrom(const UniValue& params, bool fHelp);
-UniValue sendmany(const UniValue& params, bool fHelp);
-UniValue backupwallet(const UniValue& params, bool fHelp);
-UniValue keypoolrefill(const UniValue& params, bool fHelp);
-UniValue walletdiagnose(const UniValue& params, bool fHelp);
-UniValue encryptwallet(const UniValue& params, bool fHelp);
-UniValue reservebalance(const UniValue& params, bool fHelp);
-UniValue checkwallet(const UniValue& params, bool fHelp);
-UniValue repairwallet(const UniValue& params, bool fHelp);
-UniValue resendtx(const UniValue& params, bool fHelp);
-UniValue burn(const UniValue& params, bool fHelp);
-UniValue upgradewallet(const UniValue& params, bool fHelp);
-// Forward declarations of the wallet transaction-state debug commands under test.
-UniValue abandontransaction(const UniValue& params, bool fHelp);
-UniValue inspectwalletstate(const UniValue& params, bool fHelp);
-
-// Forward declarations of the PSGT (Partially Signed Gridcoin Transaction) commands under test.
-UniValue createpsgt(const UniValue& params, bool fHelp);
-UniValue decodepsgt(const UniValue& params, bool fHelp);
-UniValue combinepsgt(const UniValue& params, bool fHelp);
-UniValue finalizepsgt(const UniValue& params, bool fHelp);
-UniValue walletprocesspsgt(const UniValue& params, bool fHelp);
-UniValue utxoupdatepsgt(const UniValue& params, bool fHelp);
-UniValue converttopsgt(const UniValue& params, bool fHelp);
-UniValue walletcreatefundedpsgt(const UniValue& params, bool fHelp);
+// All RPC actor and helpman-accessor forward declarations live in
+// <rpc/server.h> (included above). Each accessor returns a file-scope
+// `static const RPCHelpMan` instance and is consumed by `check_help_renders`
+// below; direct actor invocation (without fHelp on the post-M3 signature) is
+// used only by the two invalid-subcommand tests for addnode/setban.
 
 BOOST_AUTO_TEST_SUITE(rpchelpman_tests)
 
@@ -317,6 +96,120 @@ BOOST_AUTO_TEST_CASE(isvalidnumargs_boundaries)
     BOOST_CHECK(!all_required.IsValidNumArgs(1));
     BOOST_CHECK(all_required.IsValidNumArgs(2));
     BOOST_CHECK(!all_required.IsValidNumArgs(3));
+}
+
+// PR M2: variadic marker opts a command out of the dispatcher's
+// IsValidNumArgs upper-bound pre-check. The body is then responsible
+// for whatever real arity the command accepts. IsValidNumArgs itself
+// stays unchanged — the dispatcher gates on IsVariadic() before
+// invoking IsValidNumArgs at all.
+BOOST_AUTO_TEST_CASE(markvariadic_default_and_marker)
+{
+    const RPCHelpMan plain{"plain", "Not variadic.",
+                          {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                          RPCResult{RPCResult::Type::NONE, "", ""},
+                          RPCExamples{""}};
+    BOOST_CHECK(!plain.IsVariadic());
+
+    const RPCHelpMan marked = RPCHelpMan{"marked", "Variadic.",
+                                       {{"a", RPCArg::Type::STR, RPCArg::Optional::NO, "required"}},
+                                       RPCResult{RPCResult::Type::NONE, "", ""},
+                                       RPCExamples{""}}.MarkVariadic();
+    BOOST_CHECK(marked.IsVariadic());
+    // The marker does not relax IsValidNumArgs itself — the dispatcher
+    // is the one that consults IsVariadic before calling IsValidNumArgs.
+    BOOST_CHECK(!marked.IsValidNumArgs(0)); // still rejects missing required
+    BOOST_CHECK(marked.IsValidNumArgs(1));
+    BOOST_CHECK(!marked.IsValidNumArgs(2)); // upper-bound logic unchanged
+}
+
+// Each of the four commands that needed lower-bound-only arity semantics
+// must report IsVariadic via its accessor so the dispatcher pre-check
+// skips them. Their bodies retain their own arity guards.
+BOOST_AUTO_TEST_CASE(variadic_command_accessors_report_variadic)
+{
+    BOOST_CHECK(votebyid_helpman().IsVariadic());
+    BOOST_CHECK(changesettings_helpman().IsVariadic());
+    BOOST_CHECK(sendalert_helpman().IsVariadic());
+    BOOST_CHECK(parselegacysb_helpman().IsVariadic());
+
+    // Spot-check a non-variadic command for the converse — a typical
+    // converted RPC should not be variadic by default.
+    BOOST_CHECK(!getbestblockhash_helpman().IsVariadic());
+}
+
+// Pin the dispatcher's arity gate. CRPCTable::execute (src/rpc/server.cpp)
+// rejects a converted command when `!IsVariadic() && !IsValidNumArgs(n)`.
+// The accessor-reports-variadic test above proves the flag is set; this test
+// proves the flag is *load-bearing* — i.e. that a variadic command's
+// over-the-declared-max arg count is NOT rejected before the body runs,
+// while the same over-count on a non-variadic command IS. We assert the gate
+// predicate directly rather than calling CRPCTable::execute, which would
+// require a live node/wallet to invoke the command body.
+BOOST_AUTO_TEST_CASE(variadic_dispatcher_precheck_skips_overmax_args)
+{
+    // Mirror of the dispatcher gate in CRPCTable::execute.
+    const auto dispatcher_rejects = [](const RPCHelpMan& help, size_t n) {
+        return !help.IsVariadic() && !help.IsValidNumArgs(n);
+    };
+
+    // votebyid declares 2 fixed args; the multichoice form passes 3+.
+    const RPCHelpMan& votebyid = votebyid_helpman();
+    BOOST_CHECK(votebyid.IsValidNumArgs(2));         // the declared shape
+    BOOST_CHECK(!votebyid.IsValidNumArgs(3));        // over the declared max...
+    BOOST_CHECK(!dispatcher_rejects(votebyid, 3));   // ...but the gate lets it through
+    BOOST_CHECK(!dispatcher_rejects(votebyid, 9));   // arbitrarily many choices
+
+    // changesettings declares 1 fixed arg; the multi-setting form passes 2+.
+    const RPCHelpMan& changesettings = changesettings_helpman();
+    BOOST_CHECK(changesettings.IsValidNumArgs(1));
+    BOOST_CHECK(!changesettings.IsValidNumArgs(2));
+    BOOST_CHECK(!dispatcher_rejects(changesettings, 2));
+    BOOST_CHECK(!dispatcher_rejects(changesettings, 5));
+
+    // Converse: a non-variadic converted command IS rejected by the gate once
+    // it exceeds its declared arity — proving the marker is what spares the
+    // variadic commands above.
+    const RPCHelpMan& nonvariadic = getbestblockhash_helpman();
+    const size_t overmax = nonvariadic.GetArgNames().size() + 1;
+    BOOST_CHECK(dispatcher_rejects(nonvariadic, overmax));
+}
+
+// PR M3 (O-3): addpoll's help text and its body's poll-type validation both
+// derive from make_addpoll_build(payload_version), reached through the cached
+// addpoll_build() under a single cs_main acquisition. The old code computed
+// the version in the accessor AND again in the body across two separate locks,
+// so a V3 fork-activation landing between them could render help for one
+// version while the body validated against another. Manually straddling the
+// fork height on testnet is impractical, so pin the load-bearing property
+// directly: the per-version build is a pure, deterministic function of the
+// version. v2 polls allow only SURVEY; v3 enumerates the full type set
+// (see GRC::PollPayload::GetValidPollTypes).
+BOOST_AUTO_TEST_CASE(addpoll_help_is_pure_function_of_payload_version)
+{
+    const std::string help_v2 = addpoll_help_for_version(2);
+    const std::string help_v3 = addpoll_help_for_version(3);
+
+    // Both versions render a real addpoll help block that advertises the
+    // version-specific valid type list.
+    BOOST_CHECK(help_v2.find("addpoll") != std::string::npos);
+    BOOST_CHECK(help_v3.find("addpoll") != std::string::npos);
+    BOOST_CHECK(help_v2.find("Valid types for the active protocol version")
+                != std::string::npos);
+    BOOST_CHECK(help_v3.find("Valid types for the active protocol version")
+                != std::string::npos);
+
+    // v2 advertises only the survey type; v3 advertises strictly more, so the
+    // flip is observable in the rendered shape (no accessor-vs-body mixing).
+    BOOST_CHECK(help_v2.find("survey") != std::string::npos);
+    BOOST_CHECK(help_v2 != help_v3);
+    BOOST_CHECK(help_v3.size() > help_v2.size());
+
+    // Pure function: repeated builds for the same version are identical, so the
+    // shape can never drift between the accessor call and the body call for a
+    // given chain state.
+    BOOST_CHECK_EQUAL(addpoll_help_for_version(2), help_v2);
+    BOOST_CHECK_EQUAL(addpoll_help_for_version(3), help_v3);
 }
 
 BOOST_AUTO_TEST_CASE(getargnames_mixed)
@@ -602,7 +495,7 @@ BOOST_AUTO_TEST_CASE(addnode_invalid_subcommand_throws_structured_error)
     params.push_back("x");
     params.push_back("bogus");
     try {
-        addnode(params, /*fHelp=*/false);
+        addnode(params);
         BOOST_FAIL("expected UniValue JSON-RPC error");
     } catch (const UniValue& e) {
         BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
@@ -623,7 +516,7 @@ BOOST_AUTO_TEST_CASE(setban_invalid_subcommand_throws_structured_error)
     params.push_back("1.2.3.4");
     params.push_back("bogus");
     try {
-        setban(params, /*fHelp=*/false);
+        setban(params);
         BOOST_FAIL("expected UniValue JSON-RPC error");
     } catch (const UniValue& e) {
         BOOST_CHECK_EQUAL(e["code"].get_int(), RPC_INVALID_PARAMETER);
@@ -688,26 +581,6 @@ BOOST_AUTO_TEST_CASE(tier1a_blockchain_core_help_renders)
         {"askforoutstandingblocks", &askforoutstandingblocks_helpman},
         {"debug",                   &debug_helpman},
         {"versionreport",           &versionreport_helpman},
-        {"advertisebeacon",        &advertisebeacon_helpman},
-        {"advertisebeaconv3",      &advertisebeaconv3_helpman},
-        {"beaconauth",             &beaconauth_helpman},
-        {"revokebeacon",           &revokebeacon_helpman},
-        {"beaconreport",           &beaconreport_helpman},
-        {"beaconconvergence",      &beaconconvergence_helpman},
-        {"pendingbeaconreport",    &pendingbeaconreport_helpman},
-        {"beaconstatus",           &beaconstatus_helpman},
-        {"beaconaudit",            &beaconaudit_helpman},
-        {"getmrcinfo",             &getmrcinfo_helpman},
-        {"createmrcrequest",       &createmrcrequest_helpman},
-        {"magnitude",              &magnitude_helpman},
-        {"explainmagnitude",       &explainmagnitude_helpman},
-        {"lifetime",               &lifetime_helpman},
-        {"resetcpids",             &resetcpids_helpman},
-        {"rainbymagnitude",        &rainbymagnitude_helpman},
-        {"currentcontractaverage", &currentcontractaverage_helpman},
-// Help-rendering coverage for the 14 Tier 1c snapshots / registries / generic-data
-// commands. Each fHelp=true throw happens before any globals are touched, so this
-// runs fixture-free like the other Tier 1 / Tier 2 help-rendering cases.
     });
 }
 

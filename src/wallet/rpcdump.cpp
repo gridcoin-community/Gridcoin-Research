@@ -120,12 +120,8 @@ static const RPCHelpMan importprivkey_help{
 };
 const RPCHelpMan& importprivkey_helpman() { return importprivkey_help; }
 
-UniValue importprivkey(const UniValue& params, bool fHelp)
+UniValue importprivkey(const UniValue& params)
 {
-    const RPCHelpMan& help = importprivkey_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     string strSecret = params[0].get_str();
     string strLabel = "";
     if (params.size() > 1)
@@ -189,12 +185,8 @@ static const RPCHelpMan importwallet_help{
 };
 const RPCHelpMan& importwallet_helpman() { return importwallet_help; }
 
-UniValue importwallet(const UniValue& params, bool fHelp)
+UniValue importwallet(const UniValue& params)
 {
-    const RPCHelpMan& help = importwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     fs::path PathForImport = fs::path(params[0].get_str());
     fs::path DefaultPathDataDir = GetDataDir();
 
@@ -310,12 +302,8 @@ static const RPCHelpMan dumpprivkey_help{
 };
 const RPCHelpMan& dumpprivkey_helpman() { return dumpprivkey_help; }
 
-UniValue dumpprivkey(const UniValue& params, bool fHelp)
+UniValue dumpprivkey(const UniValue& params)
 {
-    const RPCHelpMan& help = dumpprivkey_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     EnsureWalletIsUnlocked();
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -364,12 +352,8 @@ static const RPCHelpMan dumpwallet_help{
 };
 const RPCHelpMan& dumpwallet_helpman() { return dumpwallet_help; }
 
-UniValue dumpwallet(const UniValue& params, bool fHelp)
+UniValue dumpwallet(const UniValue& params)
 {
-    const RPCHelpMan& help = dumpwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     EnsureWalletIsUnlocked();
 
     fs::path PathForDump = fs::path(params[0].get_str());

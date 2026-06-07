@@ -311,14 +311,8 @@ static const RPCHelpMan dumpcontracts_help{
 };
 const RPCHelpMan& dumpcontracts_helpman() { return dumpcontracts_help; }
 
-UniValue dumpcontracts(const UniValue& params, bool fHelp)
+UniValue dumpcontracts(const UniValue& params)
 {
-    const RPCHelpMan& help = dumpcontracts_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     std::string contract_type_string = params[0].get_str();
     std::optional<GRC::Contract::Type> contract_type;
 
@@ -536,12 +530,8 @@ static const RPCHelpMan getmrcinfo_help{
 };
 const RPCHelpMan& getmrcinfo_helpman() { return getmrcinfo_help; }
 
-UniValue getmrcinfo(const UniValue& params, bool fHelp)
+UniValue getmrcinfo(const UniValue& params)
 {
-    const RPCHelpMan& help = getmrcinfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool output_mrc_details = false;
     bool output_all_cpids = false;
 
@@ -815,12 +805,8 @@ static const RPCHelpMan showblock_help{
 };
 const RPCHelpMan& showblock_helpman() { return showblock_help; }
 
-UniValue showblock(const UniValue& params, bool fHelp)
+UniValue showblock(const UniValue& params)
 {
-    const RPCHelpMan& help = showblock_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nHeight = params[0].get_int();
 
     LOCK(cs_main);
@@ -848,12 +834,8 @@ static const RPCHelpMan getbestblockhash_help{
 };
 const RPCHelpMan& getbestblockhash_helpman() { return getbestblockhash_help; }
 
-UniValue getbestblockhash(const UniValue& params, bool fHelp)
+UniValue getbestblockhash(const UniValue& params)
 {
-    const RPCHelpMan& help = getbestblockhash_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_main);
 
     return hashBestChain.GetHex();
@@ -870,12 +852,8 @@ static const RPCHelpMan getblockcount_help{
 };
 const RPCHelpMan& getblockcount_helpman() { return getblockcount_help; }
 
-UniValue getblockcount(const UniValue& params, bool fHelp)
+UniValue getblockcount(const UniValue& params)
 {
-    const RPCHelpMan& help = getblockcount_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_main);
 
     return nBestHeight;
@@ -896,12 +874,8 @@ static const RPCHelpMan getdifficulty_help{
 };
 const RPCHelpMan& getdifficulty_helpman() { return getdifficulty_help; }
 
-UniValue getdifficulty(const UniValue& params, bool fHelp)
+UniValue getdifficulty(const UniValue& params)
 {
-    const RPCHelpMan& help = getdifficulty_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_main);
 
     UniValue obj(UniValue::VOBJ);
@@ -926,12 +900,8 @@ static const RPCHelpMan settxfee_help{
 };
 const RPCHelpMan& settxfee_helpman() { return settxfee_help; }
 
-UniValue settxfee(const UniValue& params, bool fHelp)
+UniValue settxfee(const UniValue& params)
 {
-    const RPCHelpMan& help = settxfee_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_main);
 
     CTransaction txDummy;
@@ -961,12 +931,8 @@ static const RPCHelpMan getrawmempool_help{
 };
 const RPCHelpMan& getrawmempool_helpman() { return getrawmempool_help; }
 
-UniValue getrawmempool(const UniValue& params, bool fHelp)
+UniValue getrawmempool(const UniValue& params)
 {
-    const RPCHelpMan& help = getrawmempool_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     vector<uint256> vtxid;
 
     {
@@ -995,12 +961,8 @@ static const RPCHelpMan getblockhash_help{
 };
 const RPCHelpMan& getblockhash_helpman() { return getblockhash_help; }
 
-UniValue getblockhash(const UniValue& params, bool fHelp)
+UniValue getblockhash(const UniValue& params)
 {
-    const RPCHelpMan& help = getblockhash_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nHeight = params[0].get_int();
 
     LOCK(cs_main);
@@ -1032,12 +994,8 @@ static const RPCHelpMan getblock_help{
 };
 const RPCHelpMan& getblock_helpman() { return getblock_help; }
 
-UniValue getblock(const UniValue& params, bool fHelp)
+UniValue getblock(const UniValue& params)
 {
-    const RPCHelpMan& help = getblock_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     std::string strHash = params[0].get_str();
     uint256 hash = uint256S(strHash);
 
@@ -1070,12 +1028,8 @@ static const RPCHelpMan getblockbynumber_help{
 };
 const RPCHelpMan& getblockbynumber_helpman() { return getblockbynumber_help; }
 
-UniValue getblockbynumber(const UniValue& params, bool fHelp)
+UniValue getblockbynumber(const UniValue& params)
 {
-    const RPCHelpMan& help = getblockbynumber_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int nHeight = params[0].get_int();
 
     LOCK(cs_main);
@@ -1108,12 +1062,8 @@ static const RPCHelpMan getblockbymintime_help{
 };
 const RPCHelpMan& getblockbymintime_helpman() { return getblockbymintime_help; }
 
-UniValue getblockbymintime(const UniValue& params, bool fHelp)
+UniValue getblockbymintime(const UniValue& params)
 {
-    const RPCHelpMan& help = getblockbymintime_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     int64_t nTimestamp = params[0].get_int64();
 
     LOCK(cs_main);
@@ -1155,15 +1105,9 @@ static const RPCHelpMan getblocksbatch_help{
 };
 const RPCHelpMan& getblocksbatch_helpman() { return getblocksbatch_help; }
 
-UniValue getblocksbatch(const UniValue& params, bool fHelp)
+UniValue getblocksbatch(const UniValue& params)
 {
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::RPC));
-
-    const RPCHelpMan& help = getblocksbatch_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-    {
-        throw runtime_error(help.ToString());
-    }
 
     UniValue result(UniValue::VOBJ);
     UniValue blocks(UniValue::VARR);
@@ -1305,12 +1249,8 @@ static const RPCHelpMan rainbymagnitude_help{
 };
 const RPCHelpMan& rainbymagnitude_helpman() { return rainbymagnitude_help; }
 
-UniValue rainbymagnitude(const UniValue& params, bool fHelp)
+UniValue rainbymagnitude(const UniValue& params)
     {
-    const RPCHelpMan& help = rainbymagnitude_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
     UniValue details(UniValue::VARR);
 
@@ -1601,12 +1541,8 @@ static const RPCHelpMan advertisebeacon_help{
 };
 const RPCHelpMan& advertisebeacon_helpman() { return advertisebeacon_help; }
 
-UniValue advertisebeacon(const UniValue& params, bool fHelp)
+UniValue advertisebeacon(const UniValue& params)
 {
-    const RPCHelpMan& help = advertisebeacon_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
@@ -1696,12 +1632,8 @@ static const RPCHelpMan beaconauth_help{
 };
 const RPCHelpMan& beaconauth_helpman() { return beaconauth_help; }
 
-UniValue beaconauth(const UniValue& params, bool fHelp)
+UniValue beaconauth(const UniValue& params)
 {
-    const RPCHelpMan& help = beaconauth_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     EnsureWalletIsUnlocked();
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1771,12 +1703,8 @@ static const RPCHelpMan advertisebeaconv3_help{
 };
 const RPCHelpMan& advertisebeaconv3_helpman() { return advertisebeaconv3_help; }
 
-UniValue advertisebeaconv3(const UniValue& params, bool fHelp)
+UniValue advertisebeaconv3(const UniValue& params)
 {
-    const RPCHelpMan& help = advertisebeaconv3_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to advertise a beacon.");
     }
@@ -1931,12 +1859,8 @@ static const RPCHelpMan revokebeacon_help{
 };
 const RPCHelpMan& revokebeacon_helpman() { return revokebeacon_help; }
 
-UniValue revokebeacon(const UniValue& params, bool fHelp)
+UniValue revokebeacon(const UniValue& params)
 {
-    const RPCHelpMan& help = revokebeacon_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to revoke a beacon.");
     }
@@ -2031,12 +1955,8 @@ static const RPCHelpMan beaconreport_help{
 };
 const RPCHelpMan& beaconreport_helpman() { return beaconreport_help; }
 
-UniValue beaconreport(const UniValue& params, bool fHelp)
+UniValue beaconreport(const UniValue& params)
 {
-    const RPCHelpMan& help = beaconreport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool active_only = false;
 
     if (params.size() == 1)
@@ -2126,12 +2046,8 @@ static const RPCHelpMan beaconconvergence_help{
 };
 const RPCHelpMan& beaconconvergence_helpman() { return beaconconvergence_help; }
 
-UniValue beaconconvergence(const UniValue& params, bool fHelp)
+UniValue beaconconvergence(const UniValue& params)
 {
-    const RPCHelpMan& help = beaconconvergence_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue results(UniValue::VOBJ);
 
     UniValue verified_from_global(UniValue::VARR);
@@ -2205,12 +2121,8 @@ static const RPCHelpMan pendingbeaconreport_help{
 };
 const RPCHelpMan& pendingbeaconreport_helpman() { return pendingbeaconreport_help; }
 
-UniValue pendingbeaconreport(const UniValue& params, bool fHelp)
+UniValue pendingbeaconreport(const UniValue& params)
 {
-    const RPCHelpMan& help = pendingbeaconreport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue results(UniValue::VARR);
 
     std::vector<std::pair<CKeyID, GRC::Beacon_ptr>> pending_beacons;
@@ -2267,12 +2179,8 @@ static const RPCHelpMan beaconstatus_help{
 };
 const RPCHelpMan& beaconstatus_helpman() { return beaconstatus_help; }
 
-UniValue beaconstatus(const UniValue& params, bool fHelp)
+UniValue beaconstatus(const UniValue& params)
 {
-    const RPCHelpMan& help = beaconstatus_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2363,12 +2271,8 @@ static const RPCHelpMan beaconaudit_help{
 };
 const RPCHelpMan& beaconaudit_helpman() { return beaconaudit_help; }
 
-UniValue beaconaudit(const UniValue& params, bool fHelp)
+UniValue beaconaudit(const UniValue& params)
 {
-    const RPCHelpMan& help = beaconaudit_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     bool errors_only = true;
     bool global = false;
 
@@ -2577,12 +2481,8 @@ static const RPCHelpMan explainmagnitude_help{
 };
 const RPCHelpMan& explainmagnitude_helpman() { return explainmagnitude_help; }
 
-UniValue explainmagnitude(const UniValue& params, bool fHelp)
+UniValue explainmagnitude(const UniValue& params)
 {
-    const RPCHelpMan& help = explainmagnitude_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2642,12 +2542,8 @@ static const RPCHelpMan lifetime_help{
 };
 const RPCHelpMan& lifetime_helpman() { return lifetime_help; }
 
-UniValue lifetime(const UniValue& params, bool fHelp)
+UniValue lifetime(const UniValue& params)
 {
-    const RPCHelpMan& help = lifetime_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2697,12 +2593,8 @@ static const RPCHelpMan magnitude_help{
 };
 const RPCHelpMan& magnitude_helpman() { return magnitude_help; }
 
-UniValue magnitude(const UniValue& params, bool fHelp)
+UniValue magnitude(const UniValue& params)
 {
-    const RPCHelpMan& help = magnitude_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const GRC::MiningId mining_id = params.size() > 0
         ? GRC::MiningId::Parse(params[0].get_str())
         : GRC::Researcher::Get()->Id();
@@ -2734,12 +2626,8 @@ static const RPCHelpMan resetcpids_help{
 };
 const RPCHelpMan& resetcpids_helpman() { return resetcpids_help; }
 
-UniValue resetcpids(const UniValue& params, bool fHelp)
+UniValue resetcpids(const UniValue& params)
 {
-    const RPCHelpMan& help = resetcpids_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -2775,14 +2663,8 @@ static const RPCHelpMan superblockage_help{
 };
 const RPCHelpMan& superblockage_helpman() { return superblockage_help; }
 
-UniValue superblockage(const UniValue& params, bool fHelp)
+UniValue superblockage(const UniValue& params)
 {
-    const RPCHelpMan& help = superblockage_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
 
     // Hold cs_main only long enough to read the current and pending
@@ -2826,14 +2708,8 @@ static const RPCHelpMan superblocks_help{
 };
 const RPCHelpMan& superblocks_helpman() { return superblocks_help; }
 
-UniValue superblocks(const UniValue& params, bool fHelp)
+UniValue superblocks(const UniValue& params)
 {
-    const RPCHelpMan& help = superblocks_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VARR);
 
     int lookback = 14;
@@ -2970,17 +2846,13 @@ static const RPCHelpMan addkey_help{
 };
 const RPCHelpMan& addkey_helpman() { return addkey_help; }
 
-UniValue addkey(const UniValue& params, bool fHelp)
+UniValue addkey(const UniValue& params)
 {
-    const RPCHelpMan& help = addkey_helpman();
-
-    // Absolute min/max across all (action, keytype, protocol-version) shapes.
-    // Shape-specific enforcement happens below, once we've read the action and
-    // key type and can consult the live protocol flags.
-    if (fHelp || params.size() < 3 || params.size() > 7) {
-        throw std::runtime_error(help.ToString());
-    }
-
+    // Absolute min/max across all (action, keytype, protocol-version) shapes
+    // are enforced by `CRPCTable::execute`'s pre-dispatch IsValidNumArgs check
+    // (the helpman declares 3..7). Shape-specific enforcement happens below,
+    // once we've read the action and key type and can consult the live
+    // protocol flags.
     bool project_v2_enabled = false;
     bool project_v4_enabled = false;
     bool block_v13_enabled = false;
@@ -3397,12 +3269,8 @@ static const RPCHelpMan currentcontractaverage_help{
 };
 const RPCHelpMan& currentcontractaverage_helpman() { return currentcontractaverage_help; }
 
-UniValue currentcontractaverage(const UniValue& params, bool fHelp)
+UniValue currentcontractaverage(const UniValue& params)
 {
-    const RPCHelpMan& help = currentcontractaverage_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     const GRC::Superblock superblock = GRC::Quorum::CreateSuperblock();
@@ -3435,12 +3303,8 @@ static const RPCHelpMan debug_help{
 };
 const RPCHelpMan& debug_helpman() { return debug_help; }
 
-UniValue debug(const UniValue& params, bool fHelp)
+UniValue debug(const UniValue& params)
 {
-    const RPCHelpMan& help = debug_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     if(params[0].get_bool())
@@ -3478,14 +3342,8 @@ static const RPCHelpMan listprojects_help{
 };
 const RPCHelpMan& listprojects_helpman() { return listprojects_help; }
 
-UniValue listprojects(const UniValue& params, bool fHelp)
+UniValue listprojects(const UniValue& params)
 {
-    const RPCHelpMan& help = listprojects_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
 
     GRC::Project::ProjectFilterFlag filter = GRC::Project::ProjectFilterFlag::ACTIVE;
@@ -3558,13 +3416,8 @@ static const RPCHelpMan getrawprojectstatus_help{
 };
 const RPCHelpMan& getrawprojectstatus_helpman() { return getrawprojectstatus_help; }
 
-UniValue getrawprojectstatus(const UniValue& params, bool fHelp)
+UniValue getrawprojectstatus(const UniValue& params)
 {
-    const RPCHelpMan& help = getrawprojectstatus_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     for (const auto& iter : GRC::GetWhitelist().GetProjectsFromDisk()) {
@@ -3625,14 +3478,8 @@ static const RPCHelpMan getautogreylist_help{
 };
 const RPCHelpMan& getautogreylist_helpman() { return getautogreylist_help; }
 
-UniValue getautogreylist(const UniValue& params, bool fHelp)
+UniValue getautogreylist(const UniValue& params)
 {
-    const RPCHelpMan& help = getautogreylist_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     bool show_all_projects = false;
     bool show_history = false;
 
@@ -3709,14 +3556,8 @@ static const RPCHelpMan listscrapers_help{
 };
 const RPCHelpMan& listscrapers_helpman() { return listscrapers_help; }
 
-UniValue listscrapers(const UniValue& params, bool fHelp)
+UniValue listscrapers(const UniValue& params)
 {
-    const RPCHelpMan& help = listscrapers_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
 
@@ -3762,14 +3603,8 @@ static const RPCHelpMan listprotocolentries_help{
 };
 const RPCHelpMan& listprotocolentries_helpman() { return listprotocolentries_help; }
 
-UniValue listprotocolentries(const UniValue& params, bool fHelp)
+UniValue listprotocolentries(const UniValue& params)
 {
-    const RPCHelpMan& help = listprotocolentries_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
     UniValue scraper_entries(UniValue::VARR);
 
@@ -3818,14 +3653,8 @@ static const RPCHelpMan listsidestakes_help{
 };
 const RPCHelpMan& listsidestakes_helpman() { return listsidestakes_help; }
 
-UniValue listsidestakes(const UniValue& params, bool fHelp)
+UniValue listsidestakes(const UniValue& params)
 {
-    const RPCHelpMan& help = listsidestakes_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     std::string type_filter = "all";
     if (params.size() == 1) {
         type_filter = params[0].get_str();
@@ -3889,18 +3718,12 @@ static const RPCHelpMan listmandatorysidestakes_help{
 };
 const RPCHelpMan& listmandatorysidestakes_helpman() { return listmandatorysidestakes_help; }
 
-UniValue listmandatorysidestakes(const UniValue& params, bool fHelp)
+UniValue listmandatorysidestakes(const UniValue& params)
 {
-    const RPCHelpMan& help = listmandatorysidestakes_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue filter_params(UniValue::VARR);
     filter_params.push_back("mandatory");
 
-    return listsidestakes(filter_params, false);
+    return listsidestakes(filter_params);
 }
 
 static const RPCHelpMan network_help{
@@ -3923,12 +3746,8 @@ static const RPCHelpMan network_help{
 };
 const RPCHelpMan& network_helpman() { return network_help; }
 
-UniValue network(const UniValue& params, bool fHelp)
+UniValue network(const UniValue& params)
 {
-    const RPCHelpMan& help = network_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -3958,7 +3777,10 @@ UniValue network(const UniValue& params, bool fHelp)
     return res;
 }
 
-static const RPCHelpMan parselegacysb_help{
+// Variadic: legacy body guarded only against params.size() < 1, so extra
+// trailing args were accepted and silently ignored. MarkVariadic() keeps
+// that lenience under M2's dispatcher pre-check.
+static const RPCHelpMan parselegacysb_help = RPCHelpMan{
     "parselegacysb",
     "Convert a legacy superblock contract to JSON.",
     {
@@ -3976,16 +3798,17 @@ static const RPCHelpMan parselegacysb_help{
     RPCExamples{
         HelpExampleCli("parselegacysb", "\"<serialized_contract>\"") +
         HelpExampleRpc("parselegacysb", "\"<serialized_contract>\"")},
-};
+}.MarkVariadic();
 const RPCHelpMan& parselegacysb_helpman() { return parselegacysb_help; }
 
-UniValue parselegacysb(const UniValue& params, bool fHelp)
+UniValue parselegacysb(const UniValue& params)
 {
-    const RPCHelpMan& help = parselegacysb_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
+    // Variadic positional: at least one arg (the contract) is required; the legacy body
+    // guarded only params.size() < 1, accepting and ignoring extra trailing args. The
+    // dispatcher pre-check is skipped via MarkVariadic(), so retain a body-level lower-bound
+    // check here for the underflow case.
+    if (params.size() < 1)
+        throw runtime_error(parselegacysb_helpman().ToString());
 
     UniValue json(UniValue::VOBJ);
 
@@ -4020,14 +3843,8 @@ static const RPCHelpMan projects_help{
 };
 const RPCHelpMan& projects_helpman() { return projects_help; }
 
-UniValue projects(const UniValue& params, bool fHelp)
+UniValue projects(const UniValue& params)
 {
-    const RPCHelpMan& help = projects_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VARR);
     const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
     const GRC::WhitelistSnapshot whitelist = GRC::GetWhitelist().Snapshot();
@@ -4074,14 +3891,8 @@ static const RPCHelpMan readdata_help{
 };
 const RPCHelpMan& readdata_helpman() { return readdata_help; }
 
-UniValue readdata(const UniValue& params, bool fHelp)
+UniValue readdata(const UniValue& params)
 {
-    const RPCHelpMan& help = readdata_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
@@ -4120,12 +3931,8 @@ static const RPCHelpMan sendblock_help{
 };
 const RPCHelpMan& sendblock_helpman() { return sendblock_help; }
 
-UniValue sendblock(const UniValue& params, bool fHelp)
+UniValue sendblock(const UniValue& params)
 {
-    const RPCHelpMan& help = sendblock_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     uint256 hash = uint256S(params[0].get_str());
@@ -4156,14 +3963,8 @@ static const RPCHelpMan superblockaverage_help{
 };
 const RPCHelpMan& superblockaverage_helpman() { return superblockaverage_help; }
 
-UniValue superblockaverage(const UniValue& params, bool fHelp)
+UniValue superblockaverage(const UniValue& params)
 {
-    const RPCHelpMan& help = superblockaverage_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -4198,12 +3999,8 @@ static const RPCHelpMan versionreport_help{
 };
 const RPCHelpMan& versionreport_helpman() { return versionreport_help; }
 
-UniValue versionreport(const UniValue& params, bool fHelp)
+UniValue versionreport(const UniValue& params)
 {
-    const RPCHelpMan& help = versionreport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     const int64_t lookback = params.size() > 0
         ? std::max(params[0].get_int(), 1)
         : BLOCKS_PER_DAY;
@@ -4236,14 +4033,8 @@ static const RPCHelpMan writedata_help{
 };
 const RPCHelpMan& writedata_helpman() { return writedata_help; }
 
-UniValue writedata(const UniValue& params, bool fHelp)
+UniValue writedata(const UniValue& params)
 {
-    const RPCHelpMan& help = writedata_helpman();
-
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     UniValue res(UniValue::VOBJ);
 
     std::string sKey = params[0].get_str();
@@ -4280,12 +4071,8 @@ static const RPCHelpMan askforoutstandingblocks_help{
 };
 const RPCHelpMan& askforoutstandingblocks_helpman() { return askforoutstandingblocks_help; }
 
-UniValue askforoutstandingblocks(const UniValue& params, bool fHelp)
+UniValue askforoutstandingblocks(const UniValue& params)
         {
-    const RPCHelpMan& help = askforoutstandingblocks_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     bool fResult = AskForOutstandingBlocks(uint256());
@@ -4318,12 +4105,8 @@ static const RPCHelpMan getblockchaininfo_help{
 };
 const RPCHelpMan& getblockchaininfo_helpman() { return getblockchaininfo_help; }
 
-UniValue getblockchaininfo(const UniValue& params, bool fHelp)
+UniValue getblockchaininfo(const UniValue& params)
 {
-    const RPCHelpMan& help = getblockchaininfo_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK(cs_main);
 
     UniValue res(UniValue::VOBJ), diff(UniValue::VOBJ);
@@ -4356,12 +4139,8 @@ static const RPCHelpMan currenttime_help{
 };
 const RPCHelpMan& currenttime_helpman() { return currenttime_help; }
 
-UniValue currenttime(const UniValue& params, bool fHelp)
+UniValue currenttime(const UniValue& params)
 {
-    const RPCHelpMan& help = currenttime_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     res.pushKV("Unix", GetAdjustedTime());
@@ -4384,12 +4163,8 @@ static const RPCHelpMan networktime_help{
 };
 const RPCHelpMan& networktime_helpman() { return networktime_help; }
 
-UniValue networktime(const UniValue& params, bool fHelp)
+UniValue networktime(const UniValue& params)
 {
-    const RPCHelpMan& help = networktime_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue res(UniValue::VOBJ);
 
     res.pushKV("Network Time", GetAdjustedTime());
@@ -4563,12 +4338,8 @@ static const RPCHelpMan getcheckpoint_help{
 };
 const RPCHelpMan& getcheckpoint_helpman() { return getcheckpoint_help; }
 
-UniValue getcheckpoint(const UniValue& params, bool fHelp)
+UniValue getcheckpoint(const UniValue& params)
 {
-    const RPCHelpMan& help = getcheckpoint_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue result(UniValue::VOBJ);
 
     LOCK(cs_main);
@@ -4601,12 +4372,9 @@ static const RPCHelpMan rpc_reorganize_help{
 };
 const RPCHelpMan& rpc_reorganize_helpman() { return rpc_reorganize_help; }
 
-UniValue rpc_reorganize(const UniValue& params, bool fHelp)
+UniValue rpc_reorganize(const UniValue& params)
 {
-    const RPCHelpMan& help = rpc_reorganize_helpman();
     UniValue results(UniValue::VOBJ);
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
 
     uint256 NewHash;
     NewHash.SetHex(params[0].get_str());
@@ -4635,12 +4403,8 @@ static const RPCHelpMan getburnreport_help{
 };
 const RPCHelpMan& getburnreport_helpman() { return getburnreport_help; }
 
-UniValue getburnreport(const UniValue& params, bool fHelp)
+UniValue getburnreport(const UniValue& params)
 {
-    const RPCHelpMan& help = getburnreport_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     CBlock block;
     CAmount total_amount = 0;
     CAmount voluntary_amount = 0;
@@ -4721,12 +4485,7 @@ static const RPCHelpMan createmrcrequest_help{
 };
 const RPCHelpMan& createmrcrequest_helpman() { return createmrcrequest_help; }
 
-UniValue createmrcrequest(const UniValue& params, const bool fHelp) {
-    const RPCHelpMan& help = createmrcrequest_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw runtime_error(help.ToString());
-    }
-
+UniValue createmrcrequest(const UniValue& params) {
     bool dry_run{false};
     bool force{false};
     CAmount provided_fee{0};

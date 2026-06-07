@@ -45,12 +45,8 @@ static const RPCHelpMan createhtlc_help{
 };
 const RPCHelpMan& createhtlc_helpman() { return createhtlc_help; }
 
-UniValue createhtlc(const UniValue& params, bool fHelp)
+UniValue createhtlc(const UniValue& params)
 {
-    const RPCHelpMan& help = createhtlc_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Parse receiver address
@@ -153,12 +149,8 @@ static const RPCHelpMan claimhtlc_help{
 };
 const RPCHelpMan& claimhtlc_helpman() { return claimhtlc_help; }
 
-UniValue claimhtlc(const UniValue& params, bool fHelp)
+UniValue claimhtlc(const UniValue& params)
 {
-    const RPCHelpMan& help = claimhtlc_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
     // dispatch after AcceptToMemoryPool below.
@@ -301,12 +293,8 @@ static const RPCHelpMan refundhtlc_help{
 };
 const RPCHelpMan& refundhtlc_helpman() { return refundhtlc_help; }
 
-UniValue refundhtlc(const UniValue& params, bool fHelp)
+UniValue refundhtlc(const UniValue& params)
 {
-    const RPCHelpMan& help = refundhtlc_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
     // The wallet-registry lock is needed for the transactionAddedToMempool
     // dispatch after AcceptToMemoryPool below.

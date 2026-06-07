@@ -1,3 +1,6 @@
+#include <map>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 
 #include "init.h"
@@ -351,18 +354,29 @@ UniValue SubmitVote(const Poll& poll, VoteBuilder builder)
 }
 } // Anonymous namespace
 
-UniValue addpoll(const UniValue& params, bool fHelp)
-{
-    // The set of valid poll types depends on whether PollV3 is active, so the help
-    // text must be constructed per-call from the runtime-resolved list.
-    uint32_t payload_version = 0;
+// addpoll's help text and validation data depend on the active poll-payload
+// version (v2 vs v3), which is a pure function of whether IsPollV3Enabled has
+// activated at nBestHeight. The cache keys an AddPollBuild by payload_version
+// so each version is constructed at most once per process lifetime; reorgs
+// across the V3 boundary don't invalidate cached entries because the cached
+// values (valid_poll_types, types_ss_str, the rendered help) depend only on
+// payload_version, not on chain state. Dispatcher's arity pre-check is opted
+// out via MarkVariadic() so the `addpoll <type>` 1-arg wizard form reaches
+// the body. The body reads addpoll_build() directly to get the same
+// destructured values used to construct the help, so no second cs_main
+// acquisition and no recomputation of valid_poll_types or types_ss_str is
+// needed.
+struct AddPollBuild {
+    RPCHelpMan help;
+    uint32_t payload_version{0};
     std::vector<PollType> valid_poll_types;
-    {
-        LOCK(cs_main);
+    std::string types_ss_str;
+};
 
-        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
-        valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
-    }
+namespace {
+AddPollBuild make_addpoll_build(uint32_t payload_version)
+{
+    std::vector<PollType> valid_poll_types = GRC::PollPayload::GetValidPollTypes(payload_version);
 
     std::stringstream types_ss;
     for (const auto& type : valid_poll_types) {
@@ -371,92 +385,148 @@ UniValue addpoll(const UniValue& params, bool fHelp)
         }
         types_ss << ToLower(Poll::PollTypeToString(type, false));
     }
+    std::string types_ss_str = types_ss.str();
 
-    const RPCHelpMan help{
-        "addpoll",
-        "Add a poll to the network.\n"
-        "Requires 100K GRC balance. Costs 50 GRC.\n"
-        "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
-        "Certain poll types require additional fields. Call `addpoll <type>` with no other "
-        "parameters to see the required fields for a specific type.",
-        {
-            {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
-             strprintf("Type of poll. Valid types for the active protocol version: %s.",
-                       types_ss.str())},
-            {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
-            {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
-            {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
-            {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
-             "Semicolon-separated answer list (whitespace is not trimmed). "
-             "Pass an empty string for yes/no/abstain response type."},
-            {"weighttype", RPCArg::Type::NUM, RPCArg::Optional::NO,
-             "Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance."},
-            {"responsetype", RPCArg::Type::NUM, RPCArg::Optional::NO,
-             "1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice."},
-            {"url", RPCArg::Type::STR, RPCArg::Optional::NO, "Discussion web page URL for the poll."},
-            {"required_fields", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-             "Semicolon-separated name=value pairs for poll types that require additional fields "
-             "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
-             "to discover the required fields for a given poll type."},
-            {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
-             "Optional explicit UTXO to use for the 50 GRC poll-creation fee, in "
-             "\"<txid>:<vout>\" form. When omitted, the wallet picks the smallest set of "
-             "largest UTXOs that covers the fee. Use this for coin-control over the fee-paying "
-             "input on a wallet where the default largest-first selection picks something you'd "
-             "rather keep, or when you want a specific UTXO to be the one consumed."},
-        },
-        RPCResult{RPCResult::Type::OBJ, "", "",
-            {
-                {RPCResult::Type::STR, "title", "Poll title."},
-                {RPCResult::Type::STR_HEX, "id", "Poll transaction id (hex)."},
-                {RPCResult::Type::STR, "question", "Poll question."},
-                {RPCResult::Type::STR, "url", "Discussion URL."},
-                {RPCResult::Type::ARR, "additional_fields", "Additional name/value pairs.",
-                    {
-                        {RPCResult::Type::OBJ, "", "",
-                            {
-                                {RPCResult::Type::STR, "name", "Field name."},
-                                {RPCResult::Type::STR, "value", "Field value."},
-                                {RPCResult::Type::BOOL, "required", "Whether the field is required for this poll type."},
-                            }},
-                    }},
-                {RPCResult::Type::STR, "poll_type", "Poll type (string form)."},
-                {RPCResult::Type::NUM, "poll_type_id", "Poll type (numeric enum)."},
-                {RPCResult::Type::STR, "weight_type", "Weight type (string form)."},
-                {RPCResult::Type::NUM, "weight_type_id", "Weight type (numeric enum)."},
-                {RPCResult::Type::STR, "response_type", "Response type (string form)."},
-                {RPCResult::Type::NUM, "response_type_id", "Response type (numeric enum)."},
-                {RPCResult::Type::NUM, "duration_days", "Poll duration in days."},
-                {RPCResult::Type::STR, "expiration", "Human-readable expiration timestamp."},
-                {RPCResult::Type::STR, "timestamp", "Human-readable creation timestamp."},
-                {RPCResult::Type::ARR, "choices", "Answer choices.",
-                    {
-                        {RPCResult::Type::OBJ, "", "",
-                            {
-                                {RPCResult::Type::NUM, "id", "Choice index."},
-                                {RPCResult::Type::STR, "label", "Choice label."},
-                            }},
-                    }},
-            }},
-        RPCExamples{
-            HelpExampleCli("addpoll",
-                "survey \"Example poll\" 7 \"What do you think?\" \"yes;no;maybe\" 1 2 "
-                "\"https://example.org/discussion\"")
-            + HelpExampleCli("addpoll",
-                "project \"Add XYZ\" 14 \"Add project XYZ?\" \"\" 1 1 "
-                "\"https://example.org\" \"project_url=https://xyz.example\"")
-            + HelpExampleRpc("addpoll",
-                "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
-                "\"https://example.org/discussion\"")
-        },
+    return AddPollBuild{
+        /*help=*/RPCHelpMan{
+            "addpoll",
+            "Add a poll to the network.\n"
+            "Requires 100K GRC balance. Costs 50 GRC.\n"
+            "Provide an empty string for <answers> when choosing \"yes/no/abstain\" for <responsetype>.\n"
+            "Certain poll types require additional fields. Call `addpoll <type>` with no other "
+            "parameters to see the required fields for a specific type.",
+            std::vector<RPCArg>{
+                {"type", RPCArg::Type::STR, RPCArg::Optional::NO,
+                 strprintf("Type of poll. Valid types for the active protocol version: %s.",
+                           types_ss_str)},
+                {"title", RPCArg::Type::STR, RPCArg::Optional::NO, "Title for the poll."},
+                {"days", RPCArg::Type::NUM, RPCArg::Optional::NO, "Number of days the poll will run."},
+                {"question", RPCArg::Type::STR, RPCArg::Optional::NO, "Prompt that voters shall answer."},
+                {"answers", RPCArg::Type::STR, RPCArg::Optional::NO,
+                 "Semicolon-separated answer list (whitespace is not trimmed). "
+                 "Pass an empty string for yes/no/abstain response type."},
+                {"weighttype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                 "Weighing method for the poll: 1 = Balance, 2 = Magnitude + Balance."},
+                {"responsetype", RPCArg::Type::NUM, RPCArg::Optional::NO,
+                 "1 = yes/no/abstain, 2 = single-choice, 3 = multiple-choice."},
+                {"url", RPCArg::Type::STR, RPCArg::Optional::NO, "Discussion web page URL for the poll."},
+                {"required_fields", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                 "Semicolon-separated name=value pairs for poll types that require additional fields "
+                 "(e.g. project requires project_url). Call `addpoll <type>` with no other parameters "
+                 "to discover the required fields for a given poll type."},
+                {"fee_outpoint", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+                 "Optional explicit UTXO to use for the 50 GRC poll-creation fee, in "
+                 "\"<txid>:<vout>\" form. When omitted, the wallet picks the smallest set of "
+                 "largest UTXOs that covers the fee. Use this for coin-control over the fee-paying "
+                 "input on a wallet where the default largest-first selection picks something you'd "
+                 "rather keep, or when you want a specific UTXO to be the one consumed."},
+            },
+            RPCResult{RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR, "title", "Poll title."},
+                    {RPCResult::Type::STR_HEX, "id", "Poll transaction id (hex)."},
+                    {RPCResult::Type::STR, "question", "Poll question."},
+                    {RPCResult::Type::STR, "url", "Discussion URL."},
+                    {RPCResult::Type::ARR, "additional_fields", "Additional name/value pairs.",
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                                {
+                                    {RPCResult::Type::STR, "name", "Field name."},
+                                    {RPCResult::Type::STR, "value", "Field value."},
+                                    {RPCResult::Type::BOOL, "required", "Whether the field is required for this poll type."},
+                                }},
+                        }},
+                    {RPCResult::Type::STR, "poll_type", "Poll type (string form)."},
+                    {RPCResult::Type::NUM, "poll_type_id", "Poll type (numeric enum)."},
+                    {RPCResult::Type::STR, "weight_type", "Weight type (string form)."},
+                    {RPCResult::Type::NUM, "weight_type_id", "Weight type (numeric enum)."},
+                    {RPCResult::Type::STR, "response_type", "Response type (string form)."},
+                    {RPCResult::Type::NUM, "response_type_id", "Response type (numeric enum)."},
+                    {RPCResult::Type::NUM, "duration_days", "Poll duration in days."},
+                    {RPCResult::Type::STR, "expiration", "Human-readable expiration timestamp."},
+                    {RPCResult::Type::STR, "timestamp", "Human-readable creation timestamp."},
+                    {RPCResult::Type::ARR, "choices", "Answer choices.",
+                        {
+                            {RPCResult::Type::OBJ, "", "",
+                                {
+                                    {RPCResult::Type::NUM, "id", "Choice index."},
+                                    {RPCResult::Type::STR, "label", "Choice label."},
+                                }},
+                        }},
+                }},
+            RPCExamples{
+                HelpExampleCli("addpoll",
+                    "survey \"Example poll\" 7 \"What do you think?\" \"yes;no;maybe\" 1 2 "
+                    "\"https://example.org/discussion\"")
+                + HelpExampleCli("addpoll",
+                    "project \"Add XYZ\" 14 \"Add project XYZ?\" \"\" 1 1 "
+                    "\"https://example.org\" \"project_url=https://xyz.example\"")
+                + HelpExampleRpc("addpoll",
+                    "\"survey\", \"Example poll\", 7, \"What do you think?\", \"yes;no;maybe\", 1, 2, "
+                    "\"https://example.org/discussion\"")
+            }
+        }.MarkVariadic(),
+        /*payload_version=*/payload_version,
+        /*valid_poll_types=*/std::move(valid_poll_types),
+        /*types_ss_str=*/std::move(types_ss_str),
     };
+}
+} // namespace
 
-    // Preserve the interactive wizard: `addpoll <type>` (one arg) shows the required-fields
-    // hint for that type. Fall through past the help gate and intercept after type resolution.
-    if (params.size() != 1) {
-        if (fHelp || !help.IsValidNumArgs(params.size())) {
-            throw std::runtime_error(help.ToString());
-        }
+const AddPollBuild& addpoll_build()
+{
+    static std::map<uint32_t, AddPollBuild> cache;
+    static std::mutex cache_mutex;
+
+    uint32_t payload_version = 0;
+    {
+        LOCK(cs_main);
+        payload_version = IsPollV3Enabled(nBestHeight) ? 3 : 2;
+    }
+
+    std::lock_guard<std::mutex> guard(cache_mutex);
+    auto it = cache.find(payload_version);
+    if (it == cache.end()) {
+        it = cache.emplace(payload_version, make_addpoll_build(payload_version)).first;
+    }
+    return it->second;
+}
+
+const RPCHelpMan& addpoll_helpman()
+{
+    return addpoll_build().help;
+}
+
+// Test/inspection accessor: render addpoll's help for an explicit payload
+// version. Routes through the same make_addpoll_build() that addpoll_build()
+// (and therefore both addpoll_helpman() and the addpoll body) consume, but
+// without touching cs_main/nBestHeight — letting tests exercise the v2/v3
+// fork flip deterministically. See declaration in rpc/server.h.
+std::string addpoll_help_for_version(uint32_t payload_version)
+{
+    return make_addpoll_build(payload_version).help.ToString();
+}
+
+UniValue addpoll(const UniValue& params)
+{
+    // The accessor returns a cached AddPollBuild whose payload_version /
+    // valid_poll_types / types_ss_str were derived from a single cs_main
+    // acquisition at construction time. The body destructures those rather
+    // than re-acquiring the lock or recomputing — eliminates the prior
+    // accessor-vs-body TOCTOU window across a V3-activation boundary.
+    const AddPollBuild& build = addpoll_build();
+    const RPCHelpMan& help = build.help;
+    const uint32_t payload_version = build.payload_version;
+    const std::vector<PollType>& valid_poll_types = build.valid_poll_types;
+    const std::string& types_ss_str = build.types_ss_str;
+
+    // The dispatcher's arity pre-check skips addpoll because its helpman is
+    // marked variadic (see make_addpoll_build) — the wizard interaction
+    // `addpoll <type>` with one arg has to reach this body. Enforce arity
+    // here for non-wizard calls: allow 1 arg (wizard path below) or whatever
+    // the helpman declares (8 or 9 args).
+    if (params.size() != 1 && !help.IsValidNumArgs(params.size())) {
+        throw std::runtime_error(help.ToString());
     }
 
     std::string type_string = ToLower(params[0].get_str());
@@ -472,7 +542,7 @@ UniValue addpoll(const UniValue& params, bool fHelp)
 
     if (!valid_type_parameter) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
-            strprintf("Invalid poll type specified. Valid types are %s.", types_ss.str()));
+            strprintf("Invalid poll type specified. Valid types are %s.", types_ss_str));
     }
 
     const std::vector<std::string>& required_fields = Poll::POLL_TYPE_RULES[(int) poll_type].m_required_fields;
@@ -629,12 +699,8 @@ static const RPCHelpMan listpolls_help{
 };
 const RPCHelpMan& listpolls_helpman() { return listpolls_help; }
 
-UniValue listpolls(const UniValue& params, bool fHelp)
+UniValue listpolls(const UniValue& params)
 {
-    const RPCHelpMan& help = listpolls_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     UniValue json(UniValue::VARR);
 
     const bool active = params.size() > 0 ? !params[0].get_bool() : true;
@@ -667,12 +733,8 @@ static const RPCHelpMan getpollresults_help{
 };
 const RPCHelpMan& getpollresults_helpman() { return getpollresults_help; }
 
-UniValue getpollresults(const UniValue& params, bool fHelp)
+UniValue getpollresults(const UniValue& params)
 {
-    const RPCHelpMan& help = getpollresults_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const std::string title_or_id = params[0].get_str();
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
@@ -708,12 +770,8 @@ static const RPCHelpMan getvotingclaim_help{
 };
 const RPCHelpMan& getvotingclaim_helpman() { return getvotingclaim_help; }
 
-UniValue getvotingclaim(const UniValue& params, bool fHelp)
+UniValue getvotingclaim(const UniValue& params)
 {
-    const RPCHelpMan& help = getvotingclaim_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const uint256 id = uint256S(params[0].get_str());
 
     CTransaction tx;
@@ -770,12 +828,8 @@ static const RPCHelpMan vote_help{
 };
 const RPCHelpMan& vote_helpman() { return vote_help; }
 
-UniValue vote(const UniValue& params, bool fHelp)
+UniValue vote(const UniValue& params)
 {
-    const RPCHelpMan& help = vote_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
     }
@@ -808,7 +862,12 @@ UniValue vote(const UniValue& params, bool fHelp)
     return SubmitVote(*poll, std::move(builder));
 }
 
-static const RPCHelpMan votebyid_help{
+// Variadic: the declared signature is the typical two-arg shape, but
+// multi-choice polls accept additional positional choice_id values. The
+// body validates the actual arity; MarkVariadic() opts the command out
+// of the dispatcher's IsValidNumArgs pre-check so the trailing choices
+// are accepted.
+static const RPCHelpMan votebyid_help = RPCHelpMan{
     "votebyid",
     "Cast a vote for a poll.",
     {
@@ -823,17 +882,16 @@ static const RPCHelpMan votebyid_help{
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0") +
         HelpExampleCli("votebyid", "\"<poll_txid>\" 0 1") +
         HelpExampleRpc("votebyid", "\"<poll_txid>\", 0, 1")},
-};
+}.MarkVariadic();
 const RPCHelpMan& votebyid_helpman() { return votebyid_help; }
 
-UniValue votebyid(const UniValue& params, bool fHelp)
+UniValue votebyid(const UniValue& params)
 {
-    const RPCHelpMan& help = votebyid_helpman();
     // Variadic positional: at least one choice_id is required (legacy minimum was 2 args total).
-    // RPCHelpMan does not model unbounded variadic, so keep the original lower-bound check and
-    // render help via the manifest above.
-    if (fHelp || params.size() < 2)
-        throw std::runtime_error(help.ToString());
+    // RPCHelpMan does not model unbounded variadic, so retain a body-level lower-bound check
+    // after the dispatcher has handled the help-rendering and arity-upper-bound paths.
+    if (params.size() < 2)
+        throw std::runtime_error(votebyid_helpman().ToString());
 
     if (OutOfSyncByAge()) {
         throw JSONRPCError(RPC_MISC_ERROR, "The wallet must be in sync to vote.");
@@ -884,12 +942,8 @@ static const RPCHelpMan votedetails_help{
 };
 const RPCHelpMan& votedetails_helpman() { return votedetails_help; }
 
-UniValue votedetails(const UniValue& params, bool fHelp)
+UniValue votedetails(const UniValue& params)
 {
-    const RPCHelpMan& help = votedetails_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw std::runtime_error(help.ToString());
-
     const std::string title_or_id = params[0].get_str();
 
     // We only need to lock the registry to retrieve the reference. If there is a reorg during the PollResultToJson, it will
@@ -921,13 +975,8 @@ static const RPCHelpMan testpollnotification_help{
 };
 const RPCHelpMan& testpollnotification_helpman() { return testpollnotification_help; }
 
-UniValue testpollnotification(const UniValue& params, bool fHelp)
+UniValue testpollnotification(const UniValue& params)
 {
-    const RPCHelpMan& help = testpollnotification_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size())) {
-        throw std::runtime_error(help.ToString());
-    }
-
     const uint256 txid = uint256S(params[0].get_str());
 
     const PollReference* ref = GetPollRegistry().TryByTxid(txid);

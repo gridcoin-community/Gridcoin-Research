@@ -32,18 +32,19 @@
  * without breaking the API surface defined here: everything declared below is a
  * strict subset of the v26.0 public surface.
  *
- * Usage in a command body (current (params, fHelp) signature):
+ * Usage in a command body (post-M3 signature; dispatcher pre-checks arity):
  *
- *   UniValue getbestblockhash(const UniValue& params, bool fHelp)
+ *   static const RPCHelpMan getbestblockhash_help{
+ *       "getbestblockhash", "Returns the hash of the best block in the longest block chain.",
+ *       {},
+ *       RPCResult{RPCResult::Type::STR_HEX, "", "the block hash, hex-encoded"},
+ *       RPCExamples{HelpExampleCli("getbestblockhash", "") + HelpExampleRpc("getbestblockhash", "")}
+ *   };
+ *   const RPCHelpMan& getbestblockhash_helpman() { return getbestblockhash_help; }
+ *
+ *   UniValue getbestblockhash(const UniValue& params)
  *   {
- *       static const RPCHelpMan help{
- *           "getbestblockhash", "Returns the hash of the best block in the longest block chain.",
- *           {},
- *           RPCResult{RPCResult::Type::STR_HEX, "", "the block hash, hex-encoded"},
- *           RPCExamples{HelpExampleCli("getbestblockhash", "") + HelpExampleRpc("getbestblockhash", "")}
- *       };
- *       if (fHelp || !help.IsValidNumArgs(params.size()))
- *           throw std::runtime_error(help.ToString());
+ *       // dispatcher already verified params.size() against the helpman.
  *       // ... command logic ...
  *   }
  *
@@ -338,6 +339,15 @@ public:
     //! Return list of arguments and whether they are named-only.
     std::vector<std::pair<std::string, bool>> GetArgNames() const;
 
+    //! Mark this command as accepting any number of trailing args beyond the declared
+    //! signature (i.e. the dispatcher should NOT enforce IsValidNumArgs as an upper bound).
+    //! Use for commands whose semantics are variadic but whose RPCHelpMan declaration can
+    //! only enumerate the typical-shape positional args. The body remains responsible for
+    //! validating the actual arity it accepts. Chainable off a temporary so
+    //! `static const RPCHelpMan x = RPCHelpMan{...}.MarkVariadic();` works.
+    RPCHelpMan& MarkVariadic() { m_variadic = true; return *this; }
+    bool IsVariadic() const { return m_variadic; }
+
     const std::string m_name;
 
 private:
@@ -345,6 +355,7 @@ private:
     const std::vector<RPCArg> m_args;
     const RPCResults m_results;
     const RPCExamples m_examples;
+    bool m_variadic{false};
 };
 
 #endif // GRIDCOIN_RPC_UTIL_H

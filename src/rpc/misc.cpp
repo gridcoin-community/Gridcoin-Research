@@ -89,12 +89,8 @@ static const RPCHelpMan logging_help{
 };
 const RPCHelpMan& logging_helpman() { return logging_help; }
 
-UniValue logging(const UniValue& params, bool fHelp)
+UniValue logging(const UniValue& params)
 {
-    const RPCHelpMan& help = logging_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     if (params.size() >= 1) EnableOrDisableLogCategories(params[0], true);
 
     if (params.size() == 2) EnableOrDisableLogCategories(params[1], false);
@@ -123,16 +119,16 @@ static const RPCHelpMan listsettings_help{
 };
 const RPCHelpMan& listsettings_helpman() { return listsettings_help; }
 
-UniValue listsettings(const UniValue& params, bool fHelp)
+UniValue listsettings(const UniValue& params)
 {
-    const RPCHelpMan& help = listsettings_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     return gArgs.OutputArgs();
 }
 
-static const RPCHelpMan changesettings_help{
+// Variadic: declared signature is a single setting=value pair but
+// callers may pass additional name=value pairs as trailing positionals.
+// The body iterates over all params; MarkVariadic() opts out of the
+// dispatcher's IsValidNumArgs pre-check.
+static const RPCHelpMan changesettings_help = RPCHelpMan{
     "changesettings",
     "Store or change one or more configuration settings.\n"
     "\n"
@@ -163,16 +159,16 @@ static const RPCHelpMan changesettings_help{
     RPCExamples{
         HelpExampleCli("changesettings", "enablestakesplit=1 stakingefficiency=98 minstakesplitvalue=800") +
         HelpExampleRpc("changesettings", "\"enablestakesplit=1\"")},
-};
+}.MarkVariadic();
 const RPCHelpMan& changesettings_helpman() { return changesettings_help; }
 
-UniValue changesettings(const UniValue& params, bool fHelp)
+UniValue changesettings(const UniValue& params)
 {
-    const RPCHelpMan& help = changesettings_helpman();
-    // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does not model
-    // unbounded variadic, so keep the original lower-bound check and render help via the manifest above.
-    if (fHelp || params.size() < 1)
-        throw runtime_error(help.ToString());
+    // Variadic positional args: at least one setting required, no upper bound. RPCHelpMan does
+    // not model unbounded variadic, so retain a body-level lower-bound check after the dispatcher
+    // has handled the help-rendering and (best-effort) arity-upper-bound paths.
+    if (params.size() < 1)
+        throw runtime_error(changesettings_helpman().ToString());
 
     // -------- name ------------ value - value_changed - immediate_effect
     std::map<std::string, std::tuple<std::string, bool, bool>> valid_settings;

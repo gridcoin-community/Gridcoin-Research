@@ -424,12 +424,8 @@ static const RPCHelpMan getrawtransaction_help{
 };
 const RPCHelpMan& getrawtransaction_helpman() { return getrawtransaction_help; }
 
-UniValue getrawtransaction(const UniValue& params, bool fHelp)
+UniValue getrawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = getrawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
@@ -493,12 +489,8 @@ static const RPCHelpMan listunspent_help{
 };
 const RPCHelpMan& listunspent_helpman() { return listunspent_help; }
 
-UniValue listunspent(const UniValue& params, bool fHelp)
+UniValue listunspent(const UniValue& params)
 {
-    const RPCHelpMan& help = listunspent_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VNUM, UniValue::VNUM, UniValue::VARR });
 
     int nMinDepth = 1;
@@ -611,12 +603,8 @@ static const RPCHelpMan consolidateunspent_help{
 };
 const RPCHelpMan& consolidateunspent_helpman() { return consolidateunspent_help; }
 
-UniValue consolidateunspent(const UniValue& params, bool fHelp)
+UniValue consolidateunspent(const UniValue& params)
 {
-    const RPCHelpMan& help = consolidateunspent_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue result(UniValue::VOBJ);
 
     std::string sAddress = params[0].get_str();
@@ -1025,12 +1013,8 @@ static const RPCHelpMan consolidatemsunspent_help{
 };
 const RPCHelpMan& consolidatemsunspent_helpman() { return consolidatemsunspent_help; }
 
-UniValue consolidatemsunspent(const UniValue& params, bool fHelp)
+UniValue consolidatemsunspent(const UniValue& params)
 {
-    const RPCHelpMan& help = consolidatemsunspent_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     UniValue result(UniValue::VOBJ);
 
     // Variables & Parameters
@@ -1330,13 +1314,13 @@ static const RPCHelpMan scanforunspent_help{
 };
 const RPCHelpMan& scanforunspent_helpman() { return scanforunspent_help; }
 
-UniValue scanforunspent(const UniValue& params, bool fHelp)
+UniValue scanforunspent(const UniValue& params)
 {
-    const RPCHelpMan& help = scanforunspent_helpman();
-    // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: IsValidNumArgs allows 3..5,
-    // and a manual check rejects size==4 since params[4] is read whenever params.size() > 3.
-    if (fHelp || !help.IsValidNumArgs(params.size()) || params.size() == 4)
-        throw runtime_error(help.ToString());
+    // Preserve the legacy "either 3 or 5 args (4 rejected)" pattern: the dispatcher's
+    // IsValidNumArgs check allows 3..5 (declared in the helpman), and a body-level check
+    // rejects size==4 since params[4] is read whenever params.size() > 3.
+    if (params.size() == 4)
+        throw runtime_error(scanforunspent_helpman().ToString());
 
     // Parameters
     bool fExport = false;
@@ -1599,12 +1583,8 @@ static const RPCHelpMan createrawtransaction_help{
 };
 const RPCHelpMan& createrawtransaction_helpman() { return createrawtransaction_help; }
 
-UniValue createrawtransaction(const UniValue& params, bool fHelp)
+UniValue createrawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = createrawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VARR, UniValue::VOBJ });
 
     UniValue inputs = params[0].get_array();
@@ -1702,12 +1682,8 @@ static const RPCHelpMan fundrawtransaction_help{
 };
 const RPCHelpMan& fundrawtransaction_helpman() { return fundrawtransaction_help; }
 
-UniValue fundrawtransaction(const UniValue& params, bool fHelp)
+UniValue fundrawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = fundrawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR });
 
     // parse hex string from parameter
@@ -1819,12 +1795,8 @@ static const RPCHelpMan decoderawtransaction_help{
 };
 const RPCHelpMan& decoderawtransaction_helpman() { return decoderawtransaction_help; }
 
-UniValue decoderawtransaction(const UniValue& params, bool fHelp)
+UniValue decoderawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = decoderawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR });
 
     vector<unsigned char> txData(ParseHex(params[0].get_str()));
@@ -1860,12 +1832,8 @@ static const RPCHelpMan decodescript_help{
 };
 const RPCHelpMan& decodescript_helpman() { return decodescript_help; }
 
-UniValue decodescript(const UniValue& params, bool fHelp)
+UniValue decodescript(const UniValue& params)
 {
-    const RPCHelpMan& help = decodescript_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR });
 
     UniValue r(UniValue::VOBJ);
@@ -2095,12 +2063,8 @@ static const RPCHelpMan signrawtransactionwithkey_help{
 };
 const RPCHelpMan& signrawtransactionwithkey_helpman() { return signrawtransactionwithkey_help; }
 
-UniValue signrawtransactionwithkey(const UniValue& params, bool fHelp)
+UniValue signrawtransactionwithkey(const UniValue& params)
 {
-    const RPCHelpMan& help = signrawtransactionwithkey_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK(cs_main);
@@ -2156,12 +2120,8 @@ static const RPCHelpMan signrawtransactionwithwallet_help{
 };
 const RPCHelpMan& signrawtransactionwithwallet_helpman() { return signrawtransactionwithwallet_help; }
 
-UniValue signrawtransactionwithwallet(const UniValue& params, bool fHelp)
+UniValue signrawtransactionwithwallet(const UniValue& params)
 {
-    const RPCHelpMan& help = signrawtransactionwithwallet_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2212,12 +2172,8 @@ static const RPCHelpMan signrawtransaction_help{
 };
 const RPCHelpMan& signrawtransaction_helpman() { return signrawtransaction_help; }
 
-UniValue signrawtransaction(const UniValue& params, bool fHelp)
+UniValue signrawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = signrawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR, UniValue::VARR, UniValue::VARR, UniValue::VSTR }, true);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2261,12 +2217,8 @@ static const RPCHelpMan sendrawtransaction_help{
 };
 const RPCHelpMan& sendrawtransaction_helpman() { return sendrawtransaction_help; }
 
-UniValue sendrawtransaction(const UniValue& params, bool fHelp)
+UniValue sendrawtransaction(const UniValue& params)
 {
-    const RPCHelpMan& help = sendrawtransaction_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     RPCTypeCheck(params, { UniValue::VSTR });
 
     // Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.

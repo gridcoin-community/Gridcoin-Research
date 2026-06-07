@@ -190,24 +190,10 @@ string CRPCTable::help(string strCommand, rpccategory category) const
         if (!setDone.insert(pcmd->actor).second)
             continue;
 
-        string strHelp;
-        if (pcmd->helpman != nullptr) {
-            // Modern path: pull help text directly from the RPCHelpMan
-            // accessor without invoking the command body or using
-            // throw-as-control-flow.
-            strHelp = pcmd->helpman().ToString();
-        } else {
-            // Legacy fallback: call the actor with fHelp=true and capture the
-            // help text from the thrown runtime_error. Retained for commands
-            // that have not yet been converted to the RPCHelpMan pattern
-            // (PSGT and a handful of stragglers).
-            try {
-                UniValue params(UniValue::VARR);
-                (*pcmd->actor)(params, true);
-            } catch (std::exception& e) {
-                strHelp = string(e.what());
-            }
-        }
+        // Every command now has a helpman accessor (addpoll's was lifted in PR M3);
+        // pull help text directly from it without invoking the command body or
+        // using throw-as-control-flow.
+        string strHelp = pcmd->helpman().ToString();
         if (strCommand.empty())
             if (strHelp.find('\n') != string::npos)
                 strHelp = strHelp.substr(0, strHelp.find('\n'));
@@ -245,12 +231,10 @@ static const RPCHelpMan help_help{
 };
 const RPCHelpMan& help_helpman() { return help_help; }
 
-UniValue help(const UniValue& params, bool fHelp)
+UniValue help(const UniValue& params)
 {
-    const RPCHelpMan& help_rpc = help_helpman();
-    if (fHelp || !help_rpc.IsValidNumArgs(params.size()))
-        throw runtime_error(help_rpc.ToString());
-
+    // Arity is pre-checked by the dispatcher via help_helpman()->IsValidNumArgs;
+    // by the time we get here, params.size() is in range.
     string strCommand;
 
     if (params.size() > 0)
@@ -262,7 +246,7 @@ UniValue help(const UniValue& params, bool fHelp)
     // and yield "help: unknown command:" — a regression vs. the pre-RPCHelpMan
     // behavior where `help` (no args) printed the category overview.
     if (strCommand.empty())
-        return help_rpc.ToString();
+        return help_helpman().ToString();
 
     // Subcategory help area
     // Blockchain related commands
@@ -303,12 +287,8 @@ static const RPCHelpMan stop_help{
 };
 const RPCHelpMan& stop_helpman() { return stop_help; }
 
-UniValue stop(const UniValue& params, bool fHelp)
+UniValue stop(const UniValue& params)
 {
-    const RPCHelpMan& help = stop_helpman();
-    if (fHelp || !help.IsValidNumArgs(params.size()))
-        throw runtime_error(help.ToString());
-
     // Shutdown will take long enough that the response should get back
     LogPrintf("Stopping...");
     StartShutdown();
@@ -513,7 +493,7 @@ static const CRPCCommand vRPCCommands[] =
     { "stop",                    &stop,                    cat_network, &stop_helpman       },
 
   // Voting commands
-    { "addpoll",                 &addpoll,                 cat_voting, nullptr        },
+    { "addpoll",                 &addpoll,                 cat_voting, &addpoll_helpman        },
     { "getpollresults",          &getpollresults,          cat_voting, &getpollresults_helpman        },
     { "getvotingclaim",          &getvotingclaim,          cat_voting, &getvotingclaim_helpman        },
     { "listpolls",               &listpolls,               cat_voting, &listpolls_helpman        },
@@ -968,6 +948,22 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
+    // arity here and throw the help text on mismatch. PR M3 dropped the
+    // `bool fHelp` parameter entirely, so the dispatcher is now the sole
+    // arity-enforcement site for converted commands. Commands marked
+    // variadic via RPCHelpMan's MarkVariadic() opt out of the pre-check
+    // (their helpman declaration captures the typical shape but the body
+    // accepts an open-ended count); their body retains the arity gate
+    // appropriate to the actual semantics. addpoll's helpman is itself
+    // marked variadic so the `addpoll <type>` 1-arg wizard form reaches
+    // its body's hint logic.
+    if (pcmd->helpman != nullptr) {
+        const RPCHelpMan& help = pcmd->helpman();
+        if (!help.IsVariadic() && !help.IsValidNumArgs(params.size())) {
+            throw runtime_error(help.ToString());
+        }
+    }
+
     // Let's add an optional display if BCLog::LogFlags::RPC is set to show how long it takes
     // the rpc commands to be performed in milliseconds. We will do this only on successful
     // calls not exceptions.
@@ -980,12 +976,12 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
             int64_t nRPCtimebegin;
             int64_t nRPCtimetotal;
             nRPCtimebegin = GetTimeMillis();
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
             nRPCtimetotal = GetTimeMillis() - nRPCtimebegin;
             LogPrintf("RPCTime : Command %s -> Totaltime %" PRId64 "ms", strMethod, nRPCtimetotal);
         }
         else
-            result = pcmd->actor(params, false);
+            result = pcmd->actor(params);
 
         return result;
     }
