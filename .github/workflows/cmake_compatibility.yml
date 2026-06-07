@@ -18,6 +18,11 @@ env:
   # Global settings for all jobs
   BUILD_TYPE: RelWithDebInfo
   USE_CCACHE: true
+  # Match the `path: ~/.ccache` declared by each job's actions/cache step.
+  # ccache 4.x defaults to ~/.cache/ccache, so without this override the
+  # builds write to a directory the cache action never sees and no caching
+  # actually happens.
+  CCACHE_DIR: /home/runner/.ccache
 
 jobs:
   # ----------------------------------------------------------------------
