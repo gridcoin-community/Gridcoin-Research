@@ -840,4 +840,21 @@ BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
     });
 }
 
+// Pre-#2922 commands that were converted to RPCHelpMan before the tier-coverage
+// push started and therefore weren't included in any of the tier-N test cases
+// above, plus `getrawprojectstatus` (added to dev between PR M and PR M3, and
+// missed during the M3 rebase). All are in the dispatch table with a non-null
+// helpman accessor, so this is a pure test-coverage gap, not a wiring gap.
+BOOST_AUTO_TEST_CASE(pre_2922_and_late_adds_help_renders)
+{
+    check_help_renders({
+        {"addkey",                 &addkey_helpman},
+        {"getrawprojectstatus",    &getrawprojectstatus_helpman},
+        {"maintainbackups",        &maintainbackups_helpman},
+        {"walletlock",             &walletlock_helpman},
+        {"walletpassphrase",       &walletpassphrase_helpman},
+        {"walletpassphrasechange", &walletpassphrasechange_helpman},
+    });
+}
+
 BOOST_AUTO_TEST_SUITE_END()
