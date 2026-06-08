@@ -53,6 +53,11 @@ add_executable(test_gridcoin
     # one configuration CI exercises.
     ${CMAKE_SOURCE_DIR}/src/qt/txfilter.cpp
     qt_txfilter_tests.cpp
+    # Qt-free transaction ordering core (src/qt/txorder.cpp) + its unit suite:
+    # the position/clustering logic the producer-side WalletTxStore relies on,
+    # tested in the GUI-OFF configuration CI exercises.
+    ${CMAKE_SOURCE_DIR}/src/qt/txorder.cpp
+    qt_txorder_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

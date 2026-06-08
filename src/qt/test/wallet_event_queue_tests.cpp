@@ -11,8 +11,8 @@
 #include <vector>
 
 using GRC::ChainTipChangedPayload;
-using GRC::TxAddedPayload;
-using GRC::TxRemovedPayload;
+using GRC::RowsInsertedPayload;
+using GRC::RowsRemovedPayload;
 using GRC::WalletEvent;
 using GRC::WalletEventPayload;
 using GRC::WalletEventQueue;
@@ -31,13 +31,13 @@ void WalletEventQueueTests::singlePushDrainsOne()
 {
     WalletEventQueue q;
 
-    q.push(TxRemovedPayload{uint256()});
+    q.push(RowsRemovedPayload{0, 1});
     QCOMPARE(q.size(), static_cast<std::size_t>(1));
 
     auto batch = q.drain();
     QCOMPARE(batch.size(), static_cast<std::size_t>(1));
     QCOMPARE(batch[0].seqno, static_cast<uint64_t>(0));
-    QVERIFY(std::holds_alternative<TxRemovedPayload>(batch[0].payload));
+    QVERIFY(std::holds_alternative<RowsRemovedPayload>(batch[0].payload));
 
     // Queue is now empty.
     QCOMPARE(q.size(), static_cast<std::size_t>(0));
@@ -49,7 +49,7 @@ void WalletEventQueueTests::seqnoMonotonicWithinSingleProducer()
 
     constexpr int N = 100;
     for (int i = 0; i < N; ++i) {
-        q.push(TxRemovedPayload{uint256()});
+        q.push(RowsRemovedPayload{0, 1});
     }
 
     auto batch = q.drain();
@@ -63,15 +63,15 @@ void WalletEventQueueTests::allPayloadVariantsRoundTrip()
 {
     WalletEventQueue q;
 
-    q.push(TxAddedPayload{}); // empty record list is enough — testing the variant lane.
-    q.push(TxRemovedPayload{uint256()});
+    q.push(RowsInsertedPayload{}); // empty record list is enough — testing the variant lane.
+    q.push(RowsRemovedPayload{0, 1});
     q.push(ChainTipChangedPayload{2771000, 1779000000});
 
     auto batch = q.drain();
     QCOMPARE(batch.size(), static_cast<std::size_t>(3));
 
-    QVERIFY(std::holds_alternative<TxAddedPayload>(batch[0].payload));
-    QVERIFY(std::holds_alternative<TxRemovedPayload>(batch[1].payload));
+    QVERIFY(std::holds_alternative<RowsInsertedPayload>(batch[0].payload));
+    QVERIFY(std::holds_alternative<RowsRemovedPayload>(batch[1].payload));
     QVERIFY(std::holds_alternative<ChainTipChangedPayload>(batch[2].payload));
 
     const auto& tip = std::get<ChainTipChangedPayload>(batch[2].payload);
@@ -84,7 +84,7 @@ void WalletEventQueueTests::drainPartialBatch()
     WalletEventQueue q;
 
     for (int i = 0; i < 10; ++i) {
-        q.push(TxRemovedPayload{uint256()});
+        q.push(RowsRemovedPayload{0, 1});
     }
     QCOMPARE(q.size(), static_cast<std::size_t>(10));
 
@@ -119,7 +119,7 @@ void WalletEventQueueTests::multiProducerSeqnosAreUniqueAndDense()
     for (int p = 0; p < kProducers; ++p) {
         producers.emplace_back([&q]() {
             for (int i = 0; i < kPerProducer; ++i) {
-                q.push(TxRemovedPayload{uint256()});
+                q.push(RowsRemovedPayload{0, 1});
             }
         });
     }

@@ -31,8 +31,13 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
          , cachedNumTransactions(0)
          , cachedEncryptionStatus(Unencrypted)
          , cachedNumBlocks(0)
+         , m_txStore(wallet, m_event_queue)
 {
     addressTableModel = new AddressTableModel(wallet, this);
+    // TransactionTableModel's ctor performs the initial load via
+    // m_txStore.reloadAndSnapshot(); m_txStore is already constructed (init
+    // list) and no producer can run yet — subscribeToCoreSignals() is called
+    // below, after the model exists.
     transactionTableModel = new TransactionTableModel(wallet, this);
 
     // Drain the producer→GUI event queue at a steady cadence. 500ms is
@@ -721,9 +726,9 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
             // in sync.
             LogPrint(BCLog::LogFlags::VERBOSE,
                      "NotifyTransactionChanged: %s status=%d but tx not in mapWallet "
-                     "— pushing TxRemoved",
+                     "— removing from store",
                      hash.GetHex(), status);
-            walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
+            walletmodel->getTxStore().removeTransaction(hash);
             break;
         }
         const CWalletTx& wtx = it->second;
@@ -759,22 +764,25 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
         }
 
         if (visible) {
-            GRC::TxAddedPayload payload;
-            payload.records = TransactionRecord::decomposeTransaction(wallet, wtx);
-            if (!payload.records.isEmpty()) {
-                walletmodel->getEventQueue().push(std::move(payload));
+            // Decompose under the locks already held, then hand the records to
+            // the producer-side store, which applies the datetime cutoff,
+            // de-dupes, computes the insert position, and emits RowsInserted.
+            const QList<TransactionRecord> decomposed =
+                TransactionRecord::decomposeTransaction(wallet, wtx);
+            if (!decomposed.isEmpty()) {
+                walletmodel->getTxStore().insertTransaction(
+                    std::vector<TransactionRecord>(decomposed.begin(), decomposed.end()));
             }
         } else {
             // Tx is genuinely filtered out (a real orphan coinstake, or a
-            // legacy non-IsFromMe OP_RETURN). Ensure the consumer removes the
-            // row if it was previously visible — TxRemoved is a no-op if the
-            // tx isn't in cachedWallet.
-            walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
+            // legacy non-IsFromMe OP_RETURN). Ensure the store removes the rows
+            // if they were previously visible — a no-op if absent.
+            walletmodel->getTxStore().removeTransaction(hash);
         }
         break;
     }
     case CT_DELETED:
-        walletmodel->getEventQueue().push(GRC::TxRemovedPayload{hash});
+        walletmodel->getTxStore().removeTransaction(hash);
         break;
     }
 }
