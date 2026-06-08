@@ -38,11 +38,14 @@ and pre-checks `IsValidNumArgs(n)` before invoking the body, so bodies do not
 contain `if (fHelp || …) throw runtime_error(…)` gates. The actor signature is
 `UniValue <name>(const UniValue& params)` — no `bool fHelp` parameter.
 
-A handful of variadic / dynamic-helpman commands (`addkey`, `changesettings`,
-`scanforunspent`, `votebyid`, `sendalert`, `parselegacysb`, `addpoll`) have
-narrow exceptions documented in `src/rpc/util.h` (`MarkVariadic()` / dynamic
-helpman accessor). New commands should not need these unless they truly take
-variable arity.
+A few commands opt out of the dispatcher's upper-bound arity pre-check via
+`RPCHelpMan::MarkVariadic()` because they accept a variable number of arguments
+(`changesettings`, `votebyid`, `sendalert`, `parselegacysb`); `addpoll`
+additionally uses a *dynamic* helpman accessor whose `RPCHelpMan` varies by
+poll-payload version. Both mechanisms live in `src/rpc/util.h`. New commands
+should not need either unless they truly take variable arity. (Commands that
+take a fixed arity but want a custom error — e.g. `scanforunspent`'s body-side
+`params.size()` check — are ordinary non-variadic helpmans, not exceptions.)
 
 ### Steps
 
@@ -162,10 +165,13 @@ cmake --build build -j $(nproc)
 # Run the help-render test
 ./build/src/test/test_gridcoin --run_test=rpchelpman_tests/mycommand_help_renders
 
-# Or smoke test against a live testnet daemon
-./build/src/gridcoinresearchd -testnet -daemon
-./build/bin/gridcoinresearch -testnet help mycommand
-./build/bin/gridcoinresearch -testnet mycommand "test_value"
+# Or smoke test against a live testnet daemon. The daemon (built to build/bin/)
+# doubles as the RPC client when given a command — there is no separate -cli
+# binary, and the Qt GUI binary (build/bin/gridcoinresearch, built only with
+# -DENABLE_GUI=ON) is not a CLI.
+./build/bin/gridcoinresearchd -testnet -daemon
+./build/bin/gridcoinresearchd -testnet help mycommand
+./build/bin/gridcoinresearchd -testnet mycommand "test_value"
 
 # Check debug.log for errors
 tail -f ~/.GridcoinResearch/testnet/debug.log
