@@ -92,6 +92,16 @@ install_deps() {
             ;;
 
         debian|ubuntu|linuxmint)
+            # Refresh the apt package index BEFORE we probe for renamed
+            # Qt6 packages below. On a fresh debian:sid / ubuntu:noble
+            # container the baseline image may ship with stale or empty
+            # /var/lib/apt/lists; without an update here the apt-cache
+            # probes would miss the new package names and fall back to
+            # the legacy names that no longer exist, reintroducing the
+            # original Sid CI failure. The subsequent `apt-get install`
+            # at the bottom of this case relies on the same fresh index.
+            sudo apt-get update
+
             # Base Build Tools
             append_base build-essential libtool autotools-dev automake pkg-config bsdmainutils python3 cmake git curl ccache doxygen graphviz bison xxd libxkbcommon-dev
 
@@ -99,7 +109,38 @@ install_deps() {
             append_base libssl-dev libevent-dev libboost-all-dev libminiupnpc-dev libqrencode-dev libzip-dev libcurl4-openssl-dev zipcmp zipmerge ziptool
 
             # Qt6 Packages (Qt5 names are not defined here as most are EOL)
-            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools libqt6charts6-dev libqt6svg6-dev libqt6core5compat6-dev
+            append_qt qt6-base-dev qt6-tools-dev qt6-l10n-tools qt6-tools-dev-tools
+
+            # Several Qt6 module -dev packages were renamed across the
+            # Debian/Ubuntu family between 2024 and 2026, moving from the
+            # legacy `libqt6<module>6-dev` naming to the upstream-aligned
+            # `qt6-<module>-dev` naming. The transitional metapackages have
+            # been dropped at different points per distro:
+            #
+            #   - Debian Sid / forky / trixie:    new names only
+            #   - Debian Bookworm (12):           new names only
+            #   - Ubuntu Noble (24.04):           new names only
+            #   - Ubuntu Jammy (22.04):           old names only
+            #
+            # `prefer_new_qt_package` picks the new name when apt-cache
+            # knows about it, otherwise falls back to the old name. The
+            # apt index was refreshed just above so the probe sees the
+            # current package set on any environment (CI image, bare-
+            # metal dev, fresh container). `-q -q` keeps the detection
+            # quiet on the success path. Future renames of other modules
+            # in this family only need another one-line call to this
+            # helper.
+            prefer_new_qt_package() {
+                local new=$1 old=$2
+                if apt-cache -q -q show "$new" >/dev/null 2>&1; then
+                    append_qt "$new"
+                else
+                    append_qt "$old"
+                fi
+            }
+            prefer_new_qt_package qt6-charts-dev   libqt6charts6-dev
+            prefer_new_qt_package qt6-svg-dev      libqt6svg6-dev
+            prefer_new_qt_package qt6-5compat-dev  libqt6core5compat6-dev
 
             # Windows Cross-Compile Tools
             # NOTE: We only append NSIS here. The MinGW compiler (g++-mingw-w64-x86-64)
@@ -187,7 +228,12 @@ install_deps() {
                 DISTRO_PATH="openSUSE_Tumbleweed"
                 IS_TUMBLEWEED="true"
             elif [[ "$PRETTY_NAME" == *"Leap"* ]]; then
-                DISTRO_PATH="15.6"
+                # The openSUSE Build Service distribution directory for Leap is
+                # openSUSE_Leap_<version> (e.g. openSUSE_Leap_16.0). VERSION_ID
+                # is sourced from /etc/os-release during OS detection above.
+                # Hardcoding a fixed version here produced dead repo URLs on
+                # every Leap release other than the hardcoded one.
+                DISTRO_PATH="openSUSE_Leap_${VERSION_ID}"
             else
                  echo "Error: Unknown openSUSE version."
                  return 1
@@ -204,15 +250,39 @@ install_deps() {
                     local url="$1"
                     local name="$2"
                     local desc="$3"
-                    if sudo zypper lr -u | grep -Fq "$url"; then
-                        echo "Repository for $desc already exists (URL match)."
+                    # Detection is done on the OBS project base path
+                    # (.../windows:/mingw:/winNN/) rather than the full URL or
+                    # our own alias, because the openSUSE-shipped Cross-toolchain
+                    # repos provide exactly these MinGW packages but carry a
+                    # human-readable alias and a URL whose trailing distro
+                    # segment may differ from ours (e.g. no trailing slash).
+                    #
+                    # A repo only actually satisfies the dependency if its URL
+                    # carries BOTH the base path AND the current distro segment
+                    # ($DISTRO_PATH). A repo with the base path but a different
+                    # distro segment — a stale dead-URL duplicate from the
+                    # pre-fix script, or a Leap/Tumbleweed mismatch — does NOT
+                    # satisfy it and must not be silently treated as if it did.
+                    local base="${url%"$DISTRO_PATH"/}"
+                    if sudo zypper lr -u | grep -F "$base" | grep -Fq "$DISTRO_PATH"; then
+                        echo "Repository for $desc already provided by an existing repo - skipping."
+                    elif sudo zypper lr -u | grep -Fq "$base"; then
+                        # Base path present but wrong distro segment: a stale or
+                        # mismatched MinGW repo is in the way. It will not
+                        # provide $desc packages for this system and will fail
+                        # to refresh. Warn with cleanup instructions rather than
+                        # adding a second repo for the same OBS project.
+                        echo "Warning: a MinGW cross-toolchain repo for a different distribution"
+                        echo "         is present under ${base} (expected distro segment"
+                        echo "         '$DISTRO_PATH'). It will not provide $desc packages for"
+                        echo "         this system and will fail on refresh. Remove the stale"
+                        echo "         repo — 'sudo zypper lr' to find its alias, then"
+                        echo "         'sudo zypper rr <alias>' — and re-run."
+                    elif sudo zypper lr | grep -Fq "$name"; then
+                        echo "Warning: Repository alias '$name' exists but URL mismatch - leaving as-is."
                     else
-                        if sudo zypper lr | grep -q "$name"; then
-                            echo "Warning: Repository alias '$name' exists but URL mismatch."
-                        else
-                            echo "Adding $desc repository: $url"
-                            sudo zypper ar -f "$url" "$name"
-                        fi
+                        echo "Adding $desc repository: $url"
+                        sudo zypper ar -f "$url" "$name"
                     fi
                 }
                 add_repo_if_missing "$REPO_64_URL" "$REPO_64_NAME" "MinGW Win64"
@@ -221,6 +291,37 @@ install_deps() {
             fi
 
             # Pattern Install
+            #
+            # On Tumbleweed (rolling release), the base image as of
+            # snapshot ~20260523 ships busybox-gawk (and busybox-less),
+            # both of which `provide` the generic `gawk` / `less` capability.
+            # `patterns-devel-base-devel_basis` requires the canonical GNU
+            # gawk; zypper refuses the install with "not installable
+            # providers" because busybox-gawk already owns the `gawk`
+            # provider slot. Remove the busybox shims first so the devel
+            # pattern can pull in the real GNU tools.
+            #
+            # Safe for non-CI / bare-metal developer use too: on a system
+            # that's about to install patterns-devel-base-devel_basis, the
+            # canonical GNU gawk/less are what's actually wanted -- the
+            # busybox-* variants are minimal alternates the pattern will
+            # replace anyway.
+            #
+            # Leap and other openSUSE flavours don't hit this in their
+            # current snapshots, so the workaround is gated on Tumbleweed.
+            # The `rpm -q --quiet` guard skips the rm entirely on systems
+            # where neither shim is installed (e.g. an already-provisioned
+            # dev box) -- no zypper noise and no exit-code dance. When the
+            # rm does run, stderr stays visible so a real removal failure
+            # (repo lock, network, solver problem) surfaces in the CI /
+            # shell log rather than masquerading as the downstream
+            # devel_basis install failure.
+            if [[ "$IS_TUMBLEWEED" == "true" ]] \
+                && { rpm -q --quiet busybox-gawk || rpm -q --quiet busybox-less; }; then
+                echo "Removing busybox shims that conflict with devel_basis (busybox-gawk, busybox-less)..."
+                sudo zypper rm -y busybox-gawk busybox-less
+            fi
+
             echo "Installing devel_basis pattern..."
             sudo zypper install -y -t pattern devel_basis
 
@@ -358,7 +459,9 @@ install_deps() {
             brew install $PKGS_TO_INSTALL
             ;;
         debian|ubuntu|linuxmint)
-            sudo apt-get update
+            # apt-get update was run earlier in the debian/ubuntu/linuxmint
+            # branch above (before the Qt6 rename-detection probes), so the
+            # index is already fresh here.
             sudo apt-get install -y --no-install-recommends $PKGS_TO_INSTALL
 
             # MinGW Threading Fix (Linux Only)
