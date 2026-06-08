@@ -1,6 +1,8 @@
 #ifndef BITCOIN_QT_TRANSACTIONFILTERPROXY_H
 #define BITCOIN_QT_TRANSACTIONFILTERPROXY_H
 
+#include <qt/txfilter.h>
+
 #include <QSortFilterProxyModel>
 #include <QDateTime>
 
@@ -42,13 +44,14 @@ protected:
     bool filterAcceptsRow(int source_row, const QModelIndex & source_parent) const;
 
 private:
-    QDateTime dateFrom;
-    QDateTime dateTo;
-    QString addrPrefix;
-    quint32 typeFilter;
-    qint64 minAmount;
-    int limitRows;
-    bool showInactive;
+    // The scattered date/address/type/amount/limit/show-inactive members were
+    // collapsed into one value-typed GRC::FilterSpec, which is the parameter
+    // the view will push to the producer-side cursor in the windowed model.
+    // The setters below translate their Qt arguments into this spec; the
+    // per-row predicate is evaluated by the Qt-free GRC::Accepts(). show_orphans
+    // is read once from gArgs at construction (it is a launch arg, so this is
+    // equivalent to the original per-row read).
+    GRC::FilterSpec m_spec;
 
 signals:
 

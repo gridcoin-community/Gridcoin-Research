@@ -2,11 +2,24 @@
 
 #include "transactiontablemodel.h"
 #include "transactionrecord.h"
+#include "txfilter.h"
 #include "util/system.h"
 
 #include <QDateTime>
 
-#include <cstdlib>
+#include <algorithm>
+
+// Guard the standalone (Qt-free) mirrors in txfilter.h against the authoritative
+// Qt-side enums so they can never silently drift.
+static_assert(GRC::TXSTATUS_CONFLICTED  == TransactionStatus::Conflicted,
+              "TXSTATUS_CONFLICTED mirror out of sync with TransactionStatus::Conflicted");
+static_assert(GRC::TXSTATUS_NOTACCEPTED == TransactionStatus::NotAccepted,
+              "TXSTATUS_NOTACCEPTED mirror out of sync with TransactionStatus::NotAccepted");
+static_assert(static_cast<int>(GRC::TXCOL_STATUS)  == static_cast<int>(TransactionTableModel::Status),    "TXCOL_STATUS mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_DATE)    == static_cast<int>(TransactionTableModel::Date),      "TXCOL_DATE mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_TYPE)    == static_cast<int>(TransactionTableModel::Type),      "TXCOL_TYPE mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_ADDRESS) == static_cast<int>(TransactionTableModel::ToAddress), "TXCOL_ADDRESS mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_AMOUNT)  == static_cast<int>(TransactionTableModel::Amount),    "TXCOL_AMOUNT mirror drift");
 
 // Earliest date that can be represented (far in the past)
 const QDateTime TransactionFilterProxy::MIN_DATE = QDateTime::fromSecsSinceEpoch(0);
@@ -16,43 +29,35 @@ const QDateTime TransactionFilterProxy::MAX_DATE = QDateTime::fromSecsSinceEpoch
 //Halford 1-2-2015
 TransactionFilterProxy::TransactionFilterProxy(QObject *parent) :
     QSortFilterProxyModel(parent),
-    dateFrom(MIN_DATE),
-    dateTo(MAX_DATE),
-    addrPrefix(),
-    typeFilter(ALL_TYPES),
-    minAmount(0),
-    limitRows(-1),
-    showInactive(true)
+    m_spec()
 {
+    // The spec defaults already reproduce the prior initial state (all dates,
+    // ALL_TYPES, no address filter, min_amount 0, unlimited, show_inactive
+    // true). The one runtime input is -showorphans, read once here. The
+    // original read it via gArgs on every filterAcceptsRow call; reading it
+    // once at construction is behavior-identical because -showorphans is a
+    // launch-time argument with no runtime mutation path (no GUI/RPC code
+    // calls ForceSetArg/SoftSetArg on it), so its value is fixed for the
+    // process lifetime.
+    m_spec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
 }
 
 bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
 
-    int type = index.data(TransactionTableModel::TypeRole).toInt();
-    QDateTime datetime = index.data(TransactionTableModel::DateRole).toDateTime();
-    QString address = index.data(TransactionTableModel::AddressRole).toString();
-    QString label = index.data(TransactionTableModel::LabelRole).toString();
-    qint64 amount = llabs(index.data(TransactionTableModel::AmountRole).toLongLong());
-    int status = index.data(TransactionTableModel::StatusRole).toInt();
+    // Project the model roles into the Qt-free field set, then evaluate the
+    // shared predicate. AmountRole is the SIGNED net amount; Accepts() takes
+    // the absolute value itself.
+    GRC::TxFilterFields fields;
+    fields.type       = index.data(TransactionTableModel::TypeRole).toInt();
+    fields.time       = index.data(TransactionTableModel::DateRole).toDateTime().toSecsSinceEpoch();
+    fields.address    = index.data(TransactionTableModel::AddressRole).toString().toStdString();
+    fields.label      = index.data(TransactionTableModel::LabelRole).toString().toStdString();
+    fields.net_amount = index.data(TransactionTableModel::AmountRole).toLongLong();
+    fields.status     = index.data(TransactionTableModel::StatusRole).toInt();
 
-    if(!showInactive && (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted))
-        return false;
-    //1-2-2015 Halford - Mask Orphans from User View so they do not complain
-    if (!gArgs.GetBoolArg("-showorphans", false))
-        if (status == TransactionStatus::Conflicted || status == TransactionStatus::NotAccepted)
-            return false;
-    if(!(TYPE(type) & typeFilter))
-        return false;
-    if(datetime < dateFrom || datetime > dateTo)
-        return false;
-    if (!address.contains(addrPrefix, Qt::CaseInsensitive) && !label.contains(addrPrefix, Qt::CaseInsensitive))
-        return false;
-    if(amount < minAmount)
-        return false;
-
-    return true;
+    return GRC::Accepts(fields, m_spec);
 }
 
 // Note that invalidateFilter() is just a deprecated alias for invalidate(), so these have been changed to invalidate()
@@ -61,51 +66,51 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
 
 void TransactionFilterProxy::setDateRange(const QDateTime &from, const QDateTime &to)
 {
-    this->dateFrom = from;
-    this->dateTo = to;
+    m_spec.date_from = from.toSecsSinceEpoch();
+    m_spec.date_to = to.toSecsSinceEpoch();
     invalidate();
 }
 
 void TransactionFilterProxy::setAddressPrefix(const QString &addrPrefix)
 {
-    this->addrPrefix = addrPrefix;
+    m_spec.address_substr = addrPrefix.toStdString();
     invalidate();
 }
 
 void TransactionFilterProxy::setTypeFilter(quint32 modes)
 {
-    this->typeFilter = modes;
+    m_spec.type_mask = modes;
     invalidate();
 }
 
 void TransactionFilterProxy::setMinAmount(qint64 minimum)
 {
-    this->minAmount = minimum;
+    m_spec.min_amount = minimum;
     invalidate();
 }
 
 void TransactionFilterProxy::setLimit(int limit)
 {
-    this->limitRows = limit;
+    m_spec.limit_rows = limit;
     invalidate();
 }
 
 int TransactionFilterProxy::getLimit()
 {
-    return this->limitRows;
+    return m_spec.limit_rows;
 }
 
 void TransactionFilterProxy::setShowInactive(bool showInactive)
 {
-    this->showInactive = showInactive;
+    m_spec.show_inactive = showInactive;
     invalidate();
 }
 
 int TransactionFilterProxy::rowCount(const QModelIndex &parent) const
 {
-    if(limitRows != -1)
+    if(m_spec.limit_rows != -1)
     {
-        return std::min(QSortFilterProxyModel::rowCount(parent), limitRows);
+        return std::min(QSortFilterProxyModel::rowCount(parent), static_cast<int>(m_spec.limit_rows));
     }
     else
     {

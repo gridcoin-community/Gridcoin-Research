@@ -47,6 +47,12 @@ add_executable(test_gridcoin
     net_tests.cpp
     orphan_block_tests.cpp
     psgt_tests.cpp
+    # Qt-free transaction filter/sort core (src/qt/txfilter.cpp) + its unit
+    # suite. The core has zero Qt dependencies, so it compiles into the
+    # GUI-OFF test binary directly — landing the GUI predicate logic in the
+    # one configuration CI exercises.
+    ${CMAKE_SOURCE_DIR}/src/qt/txfilter.cpp
+    qt_txfilter_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
