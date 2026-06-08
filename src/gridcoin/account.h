@@ -36,7 +36,7 @@ class ResearchAccount
 public:
     CAmount m_accrual;                    //!< Research accrued last superblock.
     CAmount m_total_research_subsidy;     //!< Total lifetime research paid.
-    uint32_t m_total_magnitude;           //!< Total lifetime magnitude sum.
+    uint64_t m_total_magnitude;           //!< Total lifetime magnitude sum.
     uint32_t m_accuracy;                  //!< Non-zero magnitude payment count.
 
     const CBlockIndex* m_first_block_ptr; //!< First block with research reward.

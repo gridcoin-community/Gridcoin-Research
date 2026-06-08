@@ -42,8 +42,8 @@ print_help() {
     echo "  DEBUG_LOCKORDER=<bool> Enable run-time lock-order checking. Options: true, false."
     echo "                      Default: false"
     echo "  EXTRA_CMAKE_ARGS    Pass additional arguments to CMake (e.g. '-DBoost_USE_STATIC_LIBS=ON')"
-    echo "  CC=<path>           Override C compiler."
-    echo "  CXX=<path>          Override C++ compiler."
+    echo "  CC=<path>           Override C compiler (also read from the CC environment variable)."
+    echo "  CXX=<path>          Override C++ compiler (also read from the CXX environment variable)."
     echo "  --help, -h          Show this help message."
     echo ""
 }
@@ -114,8 +114,10 @@ USE_CCACHE="false"
 WITH_GUI="true"
 WITH_DOCS="false"
 USE_QT6="true"
-CC_OVERRIDE=""
-CXX_OVERRIDE=""
+# Seed from the conventional CC/CXX environment variables; a positional
+# CC=/CXX= argument (parsed below) still overrides them.
+CC_OVERRIDE="${CC:-}"
+CXX_OVERRIDE="${CXX:-}"
 MANUAL_QT_PATH=""
 DEBUG_LOCKORDER="false"
 EXTRA_ARGS=""

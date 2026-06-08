@@ -19,7 +19,7 @@
 
 using namespace std;
 
-unsigned int nWalletDBUpdated;
+std::atomic<unsigned int> nWalletDBUpdated{0};
 
 //
 // CDB

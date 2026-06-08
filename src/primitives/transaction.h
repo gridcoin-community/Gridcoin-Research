@@ -7,11 +7,14 @@
 #define BITCOIN_PRIMITIVES_TRANSACTION_H
 
 #include "amount.h"
+#include "fwd.h"
 #include "gridcoin/contract/contract.h"
-#include "script.h"
+#include "script/script.h"
 #include "serialize.h"
 
 #include <stdexcept>
+
+struct CMutableTransaction;
 
 /** An inpoint - a combination of a transaction and an index n into its vin */
 class CInPoint
@@ -63,7 +66,7 @@ public:
     {
         return !(a == b);
     }
-    
+
     std::string ToString() const;
 };
 
@@ -233,67 +236,87 @@ public:
 
 /** The basic transaction that is broadcasted on the network and contained in
  * blocks.  A transaction can contain multiple inputs and outputs.
+ *
+ * All serialized fields are const to enable reliable hash caching. Use
+ * CMutableTransaction to build a transaction, then convert to CTransaction.
  */
 class CTransaction
 {
 public:
     static const int CURRENT_VERSION = 2;
-    int nVersion;
-    unsigned int nTime;
-    std::vector<CTxIn> vin;
-    std::vector<CTxOut> vout;
-    unsigned int nLockTime;
+    const int nVersion;
+    const unsigned int nTime;
+    const std::vector<CTxIn> vin;
+    const std::vector<CTxOut> vout;
+    const unsigned int nLockTime;
+    const std::string hashBoinc;
+    const std::vector<GRC::Contract> vContracts;
 
-    // Denial-of-service detection:
-    mutable int nDoS;
-    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
-    std::string hashBoinc;
-    std::vector<GRC::Contract> vContracts;
+private:
+    /** Lazy cache for parsed legacy v1 contracts (from hashBoinc). */
+    mutable std::vector<GRC::Contract> m_legacy_parsed_contracts;
 
-    CTransaction()
+    /** Cached transaction hash, computed once at construction.
+     * Declared after serialized fields to ensure correct initialization order.
+     */
+    const uint256 hash;
+
+    /** Compute the hash from serialized data. */
+    uint256 ComputeHash() const;
+
+public:
+
+    /** Default constructor: empty transaction with current version/time. */
+    CTransaction();
+
+    /** Copy and move constructors. */
+    CTransaction(const CTransaction& tx);
+    CTransaction(CTransaction&& tx) noexcept;
+
+    /** Convert from a CMutableTransaction. */
+    CTransaction(const CMutableTransaction& tx);
+    CTransaction(CMutableTransaction&& tx);
+
+    /** Assignment via placement-new (needed for vector/map element assignment). */
+    CTransaction& operator=(const CTransaction& other)
     {
-        SetNull();
+        this->~CTransaction();
+        ::new (this) CTransaction(other);
+        return *this;
     }
 
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
+    CTransaction& operator=(CTransaction&& other) noexcept
     {
-        READWRITE(nVersion);
-        READWRITE(nTime);
-        READWRITE(vin);
-        READWRITE(vout);
-        READWRITE(nLockTime);
+        this->~CTransaction();
+        ::new (this) CTransaction(std::move(other));
+        return *this;
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const
+    {
+        ::Serialize(s, nVersion);
+        ::Serialize(s, nTime);
+        ::Serialize(s, vin);
+        ::Serialize(s, vout);
+        ::Serialize(s, nLockTime);
 
         if (nVersion >= 2) {
-            READWRITE(vContracts);
+            ::Serialize(s, vContracts);
         } else {
-            READWRITE(hashBoinc);
+            ::Serialize(s, hashBoinc);
         }
     }
 
-    void SetNull()
-    {
-        nVersion = CTransaction::CURRENT_VERSION;
-        nTime = GetAdjustedTime();
-        vin.clear();
-        vout.clear();
-        nLockTime = 0;
-        nDoS = 0;  // Denial-of-service prevention
-        hashBoinc = "";
-        vContracts.clear();
-    }
+    template<typename Stream>
+    void Unserialize(Stream& s);
 
     bool IsNull() const
     {
         return (vin.empty() && vout.empty());
     }
 
-    uint256 GetHash() const
-    {
-        return SerializeHash(*this);
-    }
+    const uint256& GetHash() const { return hash; }
 
     bool IsCoinBase() const
     {
@@ -330,7 +353,7 @@ public:
     {
         return !(a == b);
     }
-    
+
     bool IsNewerThan(const CTransaction& old) const;
 
     std::string ToStringShort() const;
@@ -346,24 +369,88 @@ public:
     const std::vector<GRC::Contract>& GetContracts() const
     {
         if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
-            REF(vContracts).emplace_back(GRC::Contract::Parse(hashBoinc));
+            if (m_legacy_parsed_contracts.empty()) {
+                m_legacy_parsed_contracts.emplace_back(GRC::Contract::Parse(hashBoinc));
+            }
+            return m_legacy_parsed_contracts;
         }
 
         return vContracts;
     }
 
     //!
-    //! \brief Move the contracts contained in the transaction.
+    //! \brief Get the contracts contained in the transaction (by copy).
     //!
     //! \return The set of contracts contained in the transaction.
     //!
-    std::vector<GRC::Contract> PullContracts()
+    std::vector<GRC::Contract> PullContracts() const
     {
-        GetContracts(); // Populate vContracts for legacy transactions.
+        if (nVersion == 1 && vContracts.empty() && GRC::Contract::Detect(hashBoinc)) {
+            return {GRC::Contract::Parse(hashBoinc)};
+        }
 
-        return std::move(vContracts);
+        return vContracts;
     }
 
 };
+
+/** A mutable version of CTransaction.
+ *
+ * Use CMutableTransaction to build a transaction, then convert to an immutable
+ * CTransaction when done. CTransaction fields are const, so all mutation must
+ * happen through CMutableTransaction.
+ */
+struct CMutableTransaction
+{
+    static const int CURRENT_VERSION = 2;
+    int nVersion;
+    unsigned int nTime;
+    std::vector<CTxIn> vin;
+    std::vector<CTxOut> vout;
+    unsigned int nLockTime;
+    std::string hashBoinc;
+    std::vector<GRC::Contract> vContracts;
+
+    CMutableTransaction();
+    explicit CMutableTransaction(const CTransaction& tx);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nVersion);
+        READWRITE(nTime);
+        READWRITE(vin);
+        READWRITE(vout);
+        READWRITE(nLockTime);
+
+        if (nVersion >= 2) {
+            READWRITE(vContracts);
+        } else {
+            READWRITE(hashBoinc);
+        }
+    }
+
+    /** Compute the hash of this CMutableTransaction. This is computed on the
+     * fly, as opposed to GetHash() in CTransaction, which will use a cached
+     * result once CTransaction fields become const.
+     */
+    uint256 GetHash() const;
+};
+
+template<typename Stream>
+void CTransaction::Unserialize(Stream& s)
+{
+    CMutableTransaction mtx;
+    s >> mtx;
+    *this = CTransaction(std::move(mtx));
+}
+
+/** Helper function to create a shared transaction reference */
+inline CTransactionRef MakeTransactionRef(const CTransaction& tx)
+{
+    return std::make_shared<const CTransaction>(tx);
+}
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

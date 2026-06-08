@@ -164,9 +164,23 @@ inline bool IsProjectV2Enabled(int nHeight)
     return nHeight >= Params().GetConsensus().ProjectV2Height;
 }
 
+inline bool IsPollMultiAddressEnabled(int nHeight)
+{
+    // The argument-driven override is temporary, to facilitate testing on the
+    // isolated testnet before the activation height is set in chainparams.
+    return nHeight >= gArgs.GetArg("-pollmultiaddressheight", Params().GetConsensus().PollMultiAddressHeight);
+}
+
 inline bool IsAutoGreylistAuditEnabled(int nHeight)
 {
     return nHeight >= Params().GetConsensus().AutoGreylistAuditHeight;
+}
+
+inline bool IsAutoGreylistDeepCopyEnabled(int nHeight)
+{
+    // The argument driven override temporarily here to facilitate isolated/public testnet testing
+    // ahead of the v15 activation height.
+    return nHeight >= gArgs.GetArg("-autogreylistdeepcopyheight", Params().GetConsensus().AutoGreylistDeepCopyHeight);
 }
 
 inline bool IsSuperblockV3Enabled(int nHeight)

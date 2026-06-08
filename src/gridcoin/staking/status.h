@@ -264,19 +264,19 @@ private:
     //! \brief The hash of the last coinstake transaction for a block mined
     //! successfully by this node.
     //!
-    uint256 m_last_pos_tx_hash;
+    uint256 m_last_pos_tx_hash GUARDED_BY(m_cs);
 
     //!
     //! \brief Contains the miner status information related to the last kernel
     //! search cycle performed by the miner thread.
     //!
-    SearchReport m_search;
+    SearchReport m_search GUARDED_BY(m_cs);
 
     //!
     //! \brief Contains the miner status information needed to calculate the
     //! efficiency of the miner thread.
     //!
-    EfficiencyReport m_efficiency;
+    EfficiencyReport m_efficiency GUARDED_BY(m_cs);
 }; // MinerStatus
 } // namespace GRC
 

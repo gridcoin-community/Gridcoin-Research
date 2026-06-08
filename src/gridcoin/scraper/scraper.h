@@ -38,29 +38,34 @@ extern CCriticalSection cs_VerifiedBeacons;
 * Global Defaults (externs for header file) *
 *********************************************/
 
-extern unsigned int nScraperSleep;
-extern unsigned int nActiveBeforeSB;
+// The definitions in scraper.cpp carry GUARDED_BY(cs_ScraperGlobals);
+// mirror the annotation onto the extern decls so cross-TU readers see
+// the requirement. The atomics (MAG_ROUND / NETWORK_MAGNITUDE /
+// CPID_MAG_LIMIT) are naturally synchronized and intentionally
+// unguarded.
+extern unsigned int nScraperSleep GUARDED_BY(cs_ScraperGlobals);
+extern unsigned int nActiveBeforeSB GUARDED_BY(cs_ScraperGlobals);
 
-extern bool fExplorer;
+extern bool fExplorer GUARDED_BY(cs_ScraperGlobals);
 
-extern bool SCRAPER_RETAIN_NONCURRENT_FILES;
-extern int64_t SCRAPER_FILE_RETENTION_TIME;
-extern int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME;
-extern bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT;
-extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME;
-extern bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES;
+extern bool SCRAPER_RETAIN_NONCURRENT_FILES GUARDED_BY(cs_ScraperGlobals);
+extern int64_t SCRAPER_FILE_RETENTION_TIME GUARDED_BY(cs_ScraperGlobals);
+extern int64_t EXPLORER_EXTENDED_FILE_RETENTION_TIME GUARDED_BY(cs_ScraperGlobals);
+extern bool SCRAPER_CMANIFEST_RETAIN_NONCURRENT GUARDED_BY(cs_ScraperGlobals);
+extern int64_t SCRAPER_CMANIFEST_RETENTION_TIME GUARDED_BY(cs_ScraperGlobals);
+extern bool SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES GUARDED_BY(cs_ScraperGlobals);
 extern std::atomic<double> MAG_ROUND;
 extern std::atomic<double> NETWORK_MAGNITUDE;
 extern std::atomic<double> CPID_MAG_LIMIT;
-extern unsigned int SCRAPER_CONVERGENCE_MINIMUM;
-extern double SCRAPER_CONVERGENCE_RATIO;
-extern double CONVERGENCE_BY_PROJECT_RATIO;
-extern bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD;
-extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE;
-extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP;
-extern std::string TEAM_WHITELIST;
-extern std::string EXTERNAL_ADAPTER_PROJECTS;
-extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD;
+extern unsigned int SCRAPER_CONVERGENCE_MINIMUM GUARDED_BY(cs_ScraperGlobals);
+extern double SCRAPER_CONVERGENCE_RATIO GUARDED_BY(cs_ScraperGlobals);
+extern double CONVERGENCE_BY_PROJECT_RATIO GUARDED_BY(cs_ScraperGlobals);
+extern bool ALLOW_NONSCRAPER_NODE_STATS_DOWNLOAD GUARDED_BY(cs_ScraperGlobals);
+extern unsigned int SCRAPER_MISBEHAVING_NODE_BANSCORE GUARDED_BY(cs_ScraperGlobals);
+extern bool REQUIRE_TEAM_WHITELIST_MEMBERSHIP GUARDED_BY(cs_ScraperGlobals);
+extern std::string TEAM_WHITELIST GUARDED_BY(cs_ScraperGlobals);
+extern std::string EXTERNAL_ADAPTER_PROJECTS GUARDED_BY(cs_ScraperGlobals);
+extern int64_t SCRAPER_DEAUTHORIZED_BANSCORE_GRACE_PERIOD GUARDED_BY(cs_ScraperGlobals);
 
 /** Enum for scraper log attributes */
 enum class logattribute
@@ -180,7 +185,7 @@ bool IsScraperAuthorizedToBroadcastManifests(CTxDestination& AddressOut, CKey& K
  * of the scraper is deemed too high. This is actually used in CScraperManifest::IsManifestAuthorized to ban
  * a scraper that is abusing the network by sending too many manifests over a very short period of time.
  */
-bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey);
+bool IsScraperMaximumManifestPublishingRateExceeded(int64_t& nTime, CPubKey& PubKey) EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 /**
  * @brief Generates a superblock (contract) from the current convergence. It will construct/update the convergence if needed.
  * @param bStoreConvergedStats

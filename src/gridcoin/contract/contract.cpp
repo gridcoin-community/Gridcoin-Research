@@ -163,7 +163,7 @@ public:
     //! projects), or the objects are independent and unique by key and admit to
     //! simple reversion, such as polls/votes.
     //!
-    void ResetHandlers()
+    void ResetHandlers() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Nothing to do.
     }
@@ -174,7 +174,7 @@ public:
     //!
     //! \param ctx References the contract and associated context.
     //!
-    void Apply(const ContractContext& ctx)
+    void Apply(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (ctx->m_action == ContractAction::ADD) {
             ctx.Log("INFO: Add contract");
@@ -200,7 +200,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS)
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return GetHandler(contract.m_type.Value()).Validate(contract, tx, DoS);
     }
@@ -214,7 +214,7 @@ public:
     //!
     //! \return \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS)
+    bool BlockValidate(const ContractContext& ctx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (!GetHandler(ctx.m_contract.m_type.Value()).BlockValidate(ctx, DoS)) {
             error("%s: Contract of type %s failed validation.",
@@ -233,7 +233,7 @@ public:
     //!
     //! \param ctx References the contract and associated context.
     //!
-    void Revert(const ContractContext& ctx)
+    void Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         ctx.Log("INFO: Revert contract");
 
@@ -362,7 +362,7 @@ Contract GRC::MakeLegacyContract(
     return contract;
 }
 
-void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
+void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CBlockIndex*& pindex = pindex_start;
 
@@ -501,7 +501,7 @@ void GRC::ReplayContracts(CBlockIndex* pindex_end, CBlockIndex* pindex_start)
 void GRC::ApplyContracts(
     const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract)
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     out_found_contract = false;
 
@@ -517,7 +517,7 @@ void GRC::ApplyContracts(
 void GRC::ApplyContracts(
     const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract)
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
         // Do not (re)apply contracts that have already been stored/loaded into
@@ -576,7 +576,7 @@ void GRC::ApplyContracts(
     }
 }
 
-bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
+bool GRC::ValidateContracts(const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract : tx.GetContracts()) {
         if (!g_dispatcher.Validate(contract, tx, DoS)) {
@@ -587,7 +587,7 @@ bool GRC::ValidateContracts(const CTransaction& tx, int& DoS)
     return true;
 }
 
-bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS)
+bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     for (const auto& contract: tx.GetContracts()) {
         if (!g_dispatcher.BlockValidate({ contract, tx, pindex }, DoS)) {
@@ -598,7 +598,7 @@ bool GRC::BlockValidateContracts(const CBlockIndex* const pindex, const CTransac
     return true;
 }
 
-void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex)
+void GRC::RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Reverse the contracts. Reorganize will load any previous versions:
     for (const auto& contract : tx.GetContracts()) {
@@ -935,7 +935,13 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
     return ContractPayload::Make<EmptyPayload>();
 }
 
-void Contract::Body::ResetType(const ContractType type)
+// The in-body comments below note that cs_main is expected to be held when
+// the POLL/PROJECT/PROTOCOL/SCRAPER branches read nBestHeight. Annotated as
+// EXCLUSIVE_LOCKS_REQUIRED here; the cascade reaches into serializer paths
+// (Contract::Body::ResetType is called from Unserialize implementations of
+// CTransaction's body). Tx-deserialize call sites are tightened in this
+// same Phase 2 commit batch.
+void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (type) {
         case ContractType::UNKNOWN:
@@ -996,7 +1002,7 @@ void Contract::Body::ResetType(const ContractType type)
 // Abstract Class: IContractHandler
 // -----------------------------------------------------------------------------
 
-void IContractHandler::Revert(const ContractContext& ctx)
+void IContractHandler::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (ctx->m_action == ContractAction::ADD) {
         Delete(ctx);

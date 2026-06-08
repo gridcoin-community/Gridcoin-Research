@@ -410,9 +410,12 @@ public:
     //! \brief Get the collection of current protocol entries. Note that this INCLUDES deleted
     //! protocol entries.
     //!
-    //! \return \c A reference to the current protocol entries stored in the registry.
+    //! \return A by-value snapshot of the current protocol entries, taken under cs_lock.
+    //! The map is copied; its ProtocolEntry_ptr (shared_ptr) elements are shared, not
+    //! deep-copied. Entries are immutable once published, so the snapshot is safe to use
+    //! without holding any lock. See doc/contract_registry_locking_design.md.
     //!
-    const ProtocolEntryMap& ProtocolEntries() const;
+    ProtocolEntryMap ProtocolEntries() const;
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -478,7 +481,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for protocol entries.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid.
@@ -489,7 +492,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid protocol entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a protocol entry contract is valid including block context. This is used
@@ -501,7 +504,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a protocol entry to the registry from contract data. For the protocol registry
@@ -509,7 +512,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Mark a protocol entry deleted in the registry from contract data. For the protocol registry
@@ -517,7 +520,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the protocol entry to the state prior
@@ -526,7 +529,7 @@ public:
     //!
     //! \param ctx References the protocol entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the ProtocolRegistry, which now includes restoring the state of the ProtocolRegistry from
@@ -598,18 +601,14 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ProtocolEntryMap m_protocol_entries;                   //!< Contains the current protocol entries including entries marked DELETED.
-    PendingProtocolEntryMap m_pending_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_entries GUARDED_BY(cs_lock);                   //!< Contains the current protocol entries including entries marked DELETED.
+    PendingProtocolEntryMap m_pending_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    std::set<ProtocolEntry> m_expired_protocol_entries {}; //!< Not used. Only to satisfy the template.
+    std::set<ProtocolEntry> m_expired_protocol_entries GUARDED_BY(cs_lock) {}; //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryMap m_protocol_first_entries {};          //!< Not used. Only to satisfy the template.
+    ProtocolEntryMap m_protocol_first_entries GUARDED_BY(cs_lock) {};          //!< Not used. Only to satisfy the template.
 
-    ProtocolEntryDB m_protocol_db;
-
-public:
-
-    ProtocolEntryDB& GetProtocolEntryDB();
+    ProtocolEntryDB m_protocol_db GUARDED_BY(cs_lock);
 }; // ProtocolRegistry
 
 //!

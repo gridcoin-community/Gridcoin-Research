@@ -31,7 +31,8 @@ using namespace GRC;
 
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_ScraperGlobals;
-extern std::string msMiningErrors;
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 extern unsigned int nActiveBeforeSB;
 
 std::vector<MiningPool> MiningPools::GetMiningPools()
@@ -457,22 +458,26 @@ bool DetectSplitCpid(const MiningProjectMap& projects)
 void StoreResearcher(Researcher context)
 {
     // TODO: this belongs in presentation layer code:
-    switch (context.Status()) {
-        case ResearcherStatus::ACTIVE:
-            msMiningErrors = _("Eligible for Research Rewards");
-            break;
-        case ResearcherStatus::POOL:
-            msMiningErrors = _("Staking Only - Pool Detected");
-            break;
-        case ResearcherStatus::NO_PROJECTS:
-            msMiningErrors = _("Staking Only - No Eligible Research Projects");
-            break;
-        case ResearcherStatus::NO_BEACON:
-            msMiningErrors = _("Staking Only - No active beacon");
-            break;
-        case ResearcherStatus::NONCRUNCHER:
-            msMiningErrors = _("Staking Only - Non-cruncher Mode");
-            break;
+    {
+        LOCK(cs_msMiningErrors);
+
+        switch (context.Status()) {
+            case ResearcherStatus::ACTIVE:
+                msMiningErrors = _("Eligible for Research Rewards");
+                break;
+            case ResearcherStatus::POOL:
+                msMiningErrors = _("Staking Only - Pool Detected");
+                break;
+            case ResearcherStatus::NO_PROJECTS:
+                msMiningErrors = _("Staking Only - No Eligible Research Projects");
+                break;
+            case ResearcherStatus::NO_BEACON:
+                msMiningErrors = _("Staking Only - No active beacon");
+                break;
+            case ResearcherStatus::NONCRUNCHER:
+                msMiningErrors = _("Staking Only - Non-cruncher Mode");
+                break;
+        }
     }
 
     std::atomic_store(
@@ -606,7 +611,7 @@ bool CheckBeaconPrivateKey(const CWallet* const wallet, const CPubKey& public_ke
 
 } // anonymous namespace
 
-AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid)
+AdvertiseBeaconResult GRC::GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("%s: Generating new keys for %s...", __func__, cpid.ToString());
 
@@ -673,7 +678,7 @@ bool SignBeaconPayload(BeaconPayload& payload)
 //! \return An error that describes why the wallet cannot send a beacon if
 //! a transaction will not succeed.
 //!
-BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
+BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (wallet->IsLocked()) {
         LogPrintf("WARNING: %s: Wallet locked.", __func__);
@@ -721,7 +726,7 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid)
 AdvertiseBeaconResult SendBeaconContract(
     const Cpid& cpid,
     Beacon beacon,
-    ContractAction action = ContractAction::ADD)
+    ContractAction action = ContractAction::ADD) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const BeaconError error = CheckBeaconTransactionViable(pwalletMain, cpid);
 
@@ -753,7 +758,7 @@ AdvertiseBeaconResult GRC::SendBeaconContractV3(
     const Cpid& cpid,
     Beacon beacon,
     OwnershipProof proof,
-    const bool force)
+    const bool force) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     if (!IsV14Enabled(nBestHeight)) {
         LogPrintf("WARNING: %s: v3 beacons not yet active (requires v14).", __func__);
@@ -813,7 +818,7 @@ namespace {
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
+AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // First, determine whether we can successfully send a beacon contract. The
     // wallet must be unlocked and hold a balance great enough to send a beacon
@@ -844,7 +849,7 @@ AdvertiseBeaconResult SendNewBeacon(const Cpid& cpid)
 //! \return A variant that contains the public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon)
+AdvertiseBeaconResult RenewBeacon(const Cpid& cpid, const Beacon& beacon) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!beacon.Renewable(GetAdjustedTime())) {
         LogPrintf("%s: Beacon renewal not needed", __func__);
@@ -1151,11 +1156,8 @@ Researcher::Researcher(
 
 void Researcher::Initialize()
 {
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        g_recent_beacons.ImportRegistry(GetBeaconRegistry());
-    }
-
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    g_recent_beacons.ImportRegistry(GetBeaconRegistry());
     Reload();
 }
 
@@ -1399,13 +1401,17 @@ CAmount Researcher::Accrual() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
 
-    if (!cpid || !pindexBest) {
+    if (!cpid) {
+        return 0;
+    }
+
+    LOCK(cs_main);
+
+    if (!pindexBest) {
         return 0;
     }
 
     const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
-
-    LOCK(cs_main);
 
     return Tally::GetAccrual(*cpid, now, pindexBest);
 }
@@ -1413,19 +1419,20 @@ CAmount Researcher::Accrual() const
 std::optional<CAmount> Researcher::AccrualNearLimit() const
 {
     const CpidOption cpid = m_mining_id.TryCpid();
-    std::optional<CAmount> near_limit_accrual;
 
-    if (!cpid || !pindexBest) {
+    if (!cpid) {
+        return std::nullopt;
+    }
+
+    LOCK(cs_main);
+
+    if (!pindexBest) {
         return std::nullopt;
     }
 
     const int64_t now = OutOfSyncByAge() ? pindexBest->nTime : GetAdjustedTime();
 
-    LOCK(cs_main);
-
-    near_limit_accrual = Tally::AccrualNearLimit(*cpid, now, pindexBest);
-
-    return near_limit_accrual;
+    return Tally::AccrualNearLimit(*cpid, now, pindexBest);
 }
 
 ResearcherStatus Researcher::Status() const
@@ -1514,7 +1521,10 @@ bool Researcher::ChangeMode(const ResearcherMode mode, std::string email)
     gArgs.ForceSetArg("-email", email);
     gArgs.ForceSetArg("-noncruncher", mode == ResearcherMode::NONCRUNCHER ? "1" : "0");
 
-    Reload();
+    {
+        LOCK(cs_main);
+        Reload();
+    }
 
     return true;
 }

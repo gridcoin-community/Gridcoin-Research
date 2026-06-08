@@ -235,8 +235,14 @@ ScraperEntryPayload ScraperEntryPayload::Parse(const std::string& key, const std
 // -----------------------------------------------------------------------------
 // Class: ScraperRegistry
 // -----------------------------------------------------------------------------
-const ScraperRegistry::ScraperMap& ScraperRegistry::Scrapers() const
+ScraperRegistry::ScraperMap ScraperRegistry::Scrapers() const
 {
+    LOCK(cs_lock);
+
+    // Returns a by-value snapshot. The map is copied under the lock; its
+    // ScraperEntry_ptr (shared_ptr) elements are shared, not deep-copied.
+    // Entries are immutable once published (mutations swap the pointer, never
+    // mutate a live entry), so the snapshot is safe to use after the lock drops.
     return m_scrapers;
 }
 
@@ -325,7 +331,7 @@ ScraperEntryOption ScraperRegistry::TryAuthorized(const CKeyID& key_id) const
     return nullptr;
 }
 
-void ScraperRegistry::Reset()
+void ScraperRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -411,17 +417,17 @@ void ScraperRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void ScraperRegistry::Add(const ContractContext& ctx)
+void ScraperRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ScraperRegistry::Delete(const ContractContext& ctx)
+void ScraperRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ScraperRegistry::Revert(const ContractContext& ctx)
+void ScraperRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<ScraperEntryPayload>();
 
@@ -435,7 +441,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_scrapers.end()) {
         error("%s: The scraper entry for address %s to revert was not found in the scraper entry map.",
               __func__,
-              EncodeDestination(entry_to_revert->second->GetAddress()));
+              EncodeDestination(CTxDestination(payload->m_scraper_entry.m_key)));
 
         // If there is no record in the current m_scrapers map, then there is nothing to do here. This
         // should not occur.
@@ -488,7 +494,7 @@ void ScraperRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (contract.m_version < 1) {
         return true;
@@ -512,7 +518,7 @@ bool ScraperRegistry::Validate(const Contract& contract, const CTransaction& tx,
     return true;
 }
 
-bool ScraperRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool ScraperRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
@@ -560,11 +566,6 @@ uint64_t ScraperRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_scraper_db.passivate_db();
-}
-
-ScraperRegistry::ScraperEntryDB &ScraperRegistry::GetScraperDB()
-{
-    return m_scraper_db;
 }
 
 template<> const std::string ScraperRegistry::ScraperEntryDB::KeyType()

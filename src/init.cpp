@@ -6,6 +6,7 @@
 
 
 #include "chainparams.h"
+#include "dbwrapper.h"
 #include "gridcoin/support/block_finder.h"
 #include "util.h"
 #include "util/threadnames.h"
@@ -22,6 +23,7 @@
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "node/blockstorage.h"
+#include "node/coherence.h"
 #include <util/syserror.h>
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -42,7 +44,7 @@ extern void ThreadAppInit2(void* parg);
 using namespace std;
 CWallet* pwalletMain;
 extern bool fQtActive;
-extern bool bGridcoinCoreInitComplete;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 extern bool fConfChange;
 extern bool fEnforceCanonical;
 extern unsigned int nNodeLifespan;
@@ -166,6 +168,45 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // Coordinate block-file and block-index DB state before exit so a
+        // clean shutdown never leaves the LevelDB index referencing flat-file
+        // data that hasn't been fsynced. The fsync on the active blk*.dat
+        // covers the IBD case where the last block was written between
+        // 5000-block fsync boundaries; the CTxDB::Sync() barrier then forces
+        // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
+        // durable. See issue #2865.
+        //
+        // This must run after StopNode() so that every thread that can write
+        // a block (ThreadMessageHandler, ThreadStakeMiner, ThreadScraper, and
+        // the rest of the net/peer thread group) has been joined. Running it
+        // earlier leaves a small race window where a block accepted during
+        // shutdown could land after our flush and bypass the coordination
+        // guarantee Phase 2's startup recovery relies on.
+        LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
+        {
+            LOCK(cs_main);
+            unsigned int nFile = 0;
+            bool block_file_synced = false;
+            if (FILE* fp = AppendBlockFile(nFile)) {
+                block_file_synced = FileCommit(fp);
+                fclose(fp);
+                if (!block_file_synced) {
+                    LogPrintf("WARN: %s: FileCommit failed for blk%05u.dat during shutdown; "
+                              "skipping LevelDB sync barrier so the block-index DB does not "
+                              "become durable referencing unflushed flat-file data.",
+                              __func__, nFile);
+                }
+            } else {
+                LogPrintf("WARN: %s: AppendBlockFile failed during shutdown; "
+                          "skipping LevelDB sync barrier.", __func__);
+            }
+            if (block_file_synced) {
+                if (!CTxDB().Sync()) {
+                    LogPrintf("WARN: %s: CTxDB::Sync failed during shutdown.", __func__);
+                }
+            }
+        }
+
         LogPrintf("INFO: %s: Final flush of wallet database and closing wallet database file.", __func__);
         bitdb.Flush(true);
 
@@ -271,13 +312,8 @@ void AddLoggingArgs(ArgsManager& argsman)
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-logtimestamps", strprintf("Prepend debug output with timestamp (default: %u)", DEFAULT_LOGTIMESTAMPS),
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
-#ifdef HAVE_THREAD_LOCAL
-    argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (only available on"
-                                                " platforms supporting thread_local) (default: %u)", DEFAULT_LOGTHREADNAMES),
+    argsman.AddArg("-logthreadnames", strprintf("Prepend debug output with name of the originating thread (default: %u)", DEFAULT_LOGTHREADNAMES),
                    ArgsManager::ALLOW_ANY, OptionsCategory::DEBUG_TEST);
-#else
-    argsman.AddHiddenArgs({"-logthreadnames"});
-#endif
     argsman.AddArg("-logtimemicros", strprintf("Add microsecond precision to debug timestamps (default: %u)",
                                                DEFAULT_LOGTIMEMICROS),
                    ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
@@ -499,6 +535,11 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
     argsman.AddArg("-checklevel=<n>", "How thorough the block verification is (0-6, default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
+    argsman.AddArg("-coherencewalkmax=<n>",
+                   strprintf("Cap on how far backward the Phase 2 startup chain-coherence walk will go "
+                             "before giving up and requiring -reindex (default: %d). See issue #2865.",
+                             GRC::DEFAULT_COHERENCE_WALK_MAX),
+                   ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::DEBUG_TEST);
     argsman.AddArg("-walletbackupinterval=<n>", "DEPRECATED: Optional: Create a wallet backup every <n> blocks. Zero"
                                                 " disables backups",
                    ArgsManager::ALLOW_ANY, OptionsCategory::WALLET);
@@ -631,6 +672,14 @@ void SetupServerArgs()
     hidden_args.emplace_back("-devbuild");
     hidden_args.emplace_back("-scrapersleep");
     hidden_args.emplace_back("-activebeforesb");
+
+    // Feature-specific consensus-height test overrides. Each entry pairs with a
+    // gArgs.GetArg(...) call in the corresponding IsXxxEnabled helper in
+    // chainparams.h. Registering them here suppresses the "argument not
+    // registered" startup warning when an isolated-testnet node sets the
+    // height via the override.
+    hidden_args.emplace_back("-pollmultiaddressheight");
+    hidden_args.emplace_back("-autogreylistdeepcopyheight");
 
     // This puts hidden options in the form of -clear<type>history, where <type> is the contract types that have a
     // registry with a backing db. This is currently beacon, project, protocol, and scraper, with sidestakes starting
@@ -1266,8 +1315,19 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (gArgs.GetBoolArg("-loadblockindextest"))
     {
         CTxDB txdb("r");
-        txdb.LoadBlockIndex();
-        PrintBlockTree();
+        {
+            // CTxDB::LoadBlockIndex is EXCLUSIVE_LOCKS_REQUIRED(cs_main) because
+            // it populates mapBlockIndex / pindexBest / hashBestChain. At
+            // init-time the lock is uncontended, but acquiring it documents
+            // the contract and satisfies the analyzer. The free LoadBlockIndex()
+            // below takes cs_main internally and does not need this wrapper.
+            LOCK(cs_main);
+            txdb.LoadBlockIndex();
+        }
+        {
+            LOCK(cs_main);
+            PrintBlockTree();
+        }
         return false;
     }
 
@@ -1303,12 +1363,15 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (gArgs.GetBoolArg("-printblockindex") || gArgs.GetBoolArg("-printblocktree"))
     {
+        LOCK(cs_main);
         PrintBlockTree();
         return false;
     }
 
     if (gArgs.IsArgSet("-printblock"))
     {
+        LOCK(cs_main); // init-time iteration of mapBlockIndex; lock uncontended here but
+                       // required by Phase 1 thread-safety annotations.
         string strMatch = gArgs.GetArg("-printblock", "");
         int nFound = 0;
         for (BlockMap::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
@@ -1327,6 +1390,35 @@ bool AppInit2(ThreadHandlerPtr threads)
         if (nFound == 0)
             LogPrintf("No blocks matching %s were found", strMatch);
         return false;
+    }
+
+    // ********************************************************* Step 7.5: Phase 2 chain-coherence recovery
+    //
+    // Phase 1 of #2865 (PR #2939) established the invariant that the on-disk
+    // LevelDB block index never references blk*.dat data that has not been
+    // fsynced. Phase 2 is the recovery code that consumes that invariant on
+    // startup: walk the chain backward from pindexBest, hash-verify each
+    // block's on-disk data against its index hash, and if a mismatch is
+    // found (Scenario C from #2865), abandon-rewind to the last consistent
+    // block, reset the beacon registry if the rewind crossed an SB boundary
+    // (otherwise clamp the four non-beacon registry bookmarks), and let
+    // P2P sync re-supply the missing blocks normally.
+    //
+    // Hook position is deliberate: AFTER LoadBlockIndex (pindexBest is
+    // populated and we can walk the chain), AFTER the -printblock* early
+    // exits (those debug-introspection paths should see the as-is state),
+    // BEFORE Step 8 wallet load and the subsequent wallet rescan (which
+    // would otherwise rescan to a tip that's about to change), and BEFORE
+    // Step 9 GRC::Initialize / InitializeContracts (so the registries
+    // have not yet loaded their LevelDB state -- this is what lets us
+    // safely Reset() the beacon registry without invalidating any in-memory
+    // state). See doc/block_corruption_recovery_design.md.
+    {
+        LOCK(cs_main);
+        if (!GRC::RunStartupCoherenceRecovery()) {
+            return InitError(_("Block file corruption detected and automatic recovery failed. "
+                               "Please restart with -reindex to rebuild the chain state."));
+        }
     }
 
     // ********************************************************* Step 8: load wallet
@@ -1401,6 +1493,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     }
 
     RegisterWallet(pwalletMain);
+
+    // Init-time wallet rescan + GRC::Initialize reads pindexBest /
+    // pindexGenesisBlock / mapBlockIndex; take cs_main for the whole block
+    // (uncontended at init, required by Phase 1 thread-safety annotations).
+    LOCK(cs_main);
 
     CBlockIndex *pindexRescan = pindexBest;
     bool mrc_request_correction_scan_complete = false;
@@ -1573,11 +1670,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     //// debug print
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE))
     {
+        // cs_main is still held from the wallet-rescan block above; here we
+        // only need cs_wallet for the wallet-side prints. Single-threaded
+        // init context regardless.
+        LOCK(pwalletMain->cs_wallet);
+
         LogPrintf("mapBlockIndex.size() = %" PRIszu,   mapBlockIndex.size());
         LogPrintf("nBestHeight = %d",            nBestHeight);
-
-        // So Clang doesn't complain, even though we are essentially single-threaded here.
-        LOCK(pwalletMain->cs_wallet);
 
         LogPrintf("setKeyPool.size() = %" PRIszu,      pwalletMain->setKeyPool.size());
         LogPrintf("mapWallet.size() = %" PRIszu,       pwalletMain->mapWallet.size());

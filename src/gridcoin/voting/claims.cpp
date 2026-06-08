@@ -94,7 +94,9 @@ bool MagnitudeClaim::VerifySignature(
 
 void PollEligibilityClaim::ExpandDummySignatures()
 {
-    m_address_claim.m_signature.resize(SIGNATURE_BYTES_ESTIMATE);
+    for (auto& claim : m_balance_claim.m_address_claims) {
+        claim.m_signature.resize(SIGNATURE_BYTES_ESTIMATE);
+    }
 }
 
 // -----------------------------------------------------------------------------

@@ -12,7 +12,7 @@
 #include "client.h"
 #include "server.h"
 #include "wallet/db.h"
-#include "util.h"
+#include <util.h>
 
 // #undef printf
 #include <set>
@@ -184,8 +184,19 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendtoaddress"          , 1 },
     { "settxfee"               , 0 },
     { "sethdseed"              , 0 },
-    { "signrawtransaction"     , 1 },
-    { "signrawtransaction"     , 2 },
+    { "signrawtransaction"              , 1 },
+    { "signrawtransaction"              , 2 },
+    { "signrawtransactionwithkey"       , 1 },
+    { "signrawtransactionwithkey"       , 2 },
+    { "signrawtransactionwithwallet"    , 1 },
+    { "createpsgt"                      , 0 },
+    { "createpsgt"                      , 1 },
+    { "createpsgt"                      , 2 },
+    { "combinepsgt"                     , 0 },
+    { "walletcreatefundedpsgt"          , 0 },
+    { "walletcreatefundedpsgt"          , 1 },
+    { "walletcreatefundedpsgt"          , 2 },
+    { "walletcreatefundedpsgt"          , 3 },
     { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },

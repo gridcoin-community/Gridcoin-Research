@@ -11,6 +11,7 @@
 #include "streams.h"
 #include "sync.h"
 
+#include <atomic>
 #include <map>
 #include <string>
 #include <vector>
@@ -28,7 +29,15 @@ class CTxIndex;
 class CWallet;
 class CWalletTx;
 
-extern unsigned int nWalletDBUpdated;
+// Dirty-write counter incremented by every wallet write and polled by
+// ThreadFlushWalletDB to decide when to flush. Touched by every wallet-update
+// thread and read by the flush thread; making it atomic closes a TSan data
+// race covering all increment sites (walletdb.h Write* helpers + walletdb.cpp
+// WriteName/EraseName/WriteBestBlock) and the read sites in
+// ThreadFlushWalletDB. The default seq_cst operator++ / operator T() keep the
+// existing call sites unchanged (Bitcoin Core handles the same counter the
+// same way).
+extern std::atomic<unsigned int> nWalletDBUpdated;
 
 void ThreadFlushWalletDB(void* parg);
 

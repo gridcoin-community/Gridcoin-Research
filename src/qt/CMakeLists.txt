@@ -27,6 +27,7 @@ add_library(gridcoinqt STATIC
     addressbookpage.cpp
     addresstablemodel.cpp
     askpassphrasedialog.cpp
+    balancecopyfilter.cpp
     bantablemodel.cpp
     bitcoinaddressvalidator.cpp
     bitcoinamountfield.cpp
@@ -86,9 +87,11 @@ add_library(gridcoinqt STATIC
     transactiondesc.cpp
     transactiondescdialog.cpp
     transactionfilterproxy.cpp
+    txfilter.cpp
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
+    wallet_event_queue.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp
@@ -129,6 +132,11 @@ elseif(APPLE)
         macnotificationhandler.mm
         macos_appnap.mm
     )
+endif()
+
+if(ENABLE_QRENCODE)
+    target_sources(gridcoinqt PRIVATE qrcodedialog.cpp)
+    target_compile_definitions(gridcoinqt PRIVATE ENABLE_QRENCODE)
 endif()
 
 set_target_properties(gridcoinqt PROPERTIES
@@ -173,6 +181,9 @@ if(USE_QT6)
 endif()
 if(USE_DBUS)
     target_link_libraries(gridcoinqt PUBLIC ${QT}::DBus)
+endif()
+if(ENABLE_QRENCODE)
+    target_link_libraries(gridcoinqt PUBLIC PkgConfig::QRENCODE)
 endif()
 
 if(APPLE)
@@ -221,6 +232,9 @@ add_executable(gridcoinresearch bitcoin.cpp ${GRIDCOIN_RC})
 set(MACOSX_BUNDLE_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/icons/gridcoin.icns")
 if(APPLE)
     target_sources(gridcoinresearch PRIVATE ${MACOSX_BUNDLE_RESOURCE_FILES})
+    set_target_properties(gridcoinresearch PROPERTIES
+        RESOURCE ${MACOSX_BUNDLE_RESOURCE_FILES}
+    )
 endif()
 
 target_link_libraries(gridcoinresearch PRIVATE
@@ -281,7 +295,6 @@ set_target_properties(gridcoinresearch PROPERTIES
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/share/qt/Info.plist.cmake.in"
-    RESOURCE ${MACOSX_BUNDLE_RESOURCE_FILES}
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
@@ -302,7 +315,7 @@ endif()
 if(UNIX AND NOT APPLE)
     include(GNUInstallDirs)
     install(TARGETS gridcoinresearch COMPONENT gui
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/share/icons" COMPONENT gui
         DESTINATION "${CMAKE_INSTALL_DATADIR}"

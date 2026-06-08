@@ -70,6 +70,24 @@ public:
             case AdditionalFieldsTableModel::Required:
                 return row->m_required;
             } // no default case, so the compiler can warn about missing cases
+            assert(false);
+
+        case Qt::AccessibleTextRole:
+            // For screen readers (issue #2604). Name column returns a one-shot
+            // row summary so the row is intelligible at first focus; other columns
+            // prepend the header for per-cell context.
+            switch (index.column()) {
+            case AdditionalFieldsTableModel::Name:
+                return tr("Field \"%1\", value \"%2\", %3")
+                    .arg(row->m_name,
+                         row->m_value,
+                         row->m_required ? tr("required") : tr("optional"));
+            case AdditionalFieldsTableModel::Value:
+                return tr("Value: %1").arg(row->m_value);
+            case AdditionalFieldsTableModel::Required:
+                return tr("Required: %1").arg(row->m_required ? tr("yes") : tr("no"));
+            } // no default case, so the compiler can warn about missing cases
+            assert(false);
         }
 
         return QVariant();

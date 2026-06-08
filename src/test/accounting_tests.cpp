@@ -2,6 +2,7 @@
 
 
 #include "init.h"
+#include "primitives/transaction.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 
@@ -39,7 +40,7 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
 
     wtx.mapValue["comment"] = "z";
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
 
     pwalletMain->AddToWallet(wtx, &walletdb);
     vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
@@ -77,16 +78,20 @@ BOOST_AUTO_TEST_CASE(acc_orderupgrade)
     BOOST_CHECK(results[3].strComment.empty());
 
 
-    wtx.mapValue["comment"] = "y";
-    ++wtx.nLockTime;  // Just to change the hash :)
-    pwalletMain->AddToWallet(wtx, &walletdb);
-    vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
+    CMutableTransaction mtx1;
+    mtx1.nLockTime = 1;  // Just to change the hash :)
+    CWalletTx wtx1(nullptr, CTransaction(mtx1));
+    wtx1.mapValue["comment"] = "y";
+    pwalletMain->AddToWallet(wtx1, &walletdb);
+    vpwtx.push_back(&pwalletMain->mapWallet[wtx1.GetHash()]);
     vpwtx[1]->nTimeReceived = (unsigned int)1333333336;
 
-    wtx.mapValue["comment"] = "x";
-    ++wtx.nLockTime;  // Just to change the hash :)
-    pwalletMain->AddToWallet(wtx, &walletdb);
-    vpwtx.push_back(&pwalletMain->mapWallet[wtx.GetHash()]);
+    CMutableTransaction mtx2;
+    mtx2.nLockTime = 2;  // Just to change the hash :)
+    CWalletTx wtx2(nullptr, CTransaction(mtx2));
+    wtx2.mapValue["comment"] = "x";
+    pwalletMain->AddToWallet(wtx2, &walletdb);
+    vpwtx.push_back(&pwalletMain->mapWallet[wtx2.GetHash()]);
     vpwtx[2]->nTimeReceived = (unsigned int)1333333329;
     vpwtx[2]->nOrderPos = -1;
 

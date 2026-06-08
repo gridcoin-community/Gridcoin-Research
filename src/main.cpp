@@ -18,6 +18,7 @@
 #include "node/ui_interface.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
+#include "gridcoin/gridcoin.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/registry.h"
@@ -36,6 +37,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "node/blockstorage.h"
+#include "node/coherence.h"
 #include "node/orphan_blocks.h"
 #include "policy/fees.h"
 #include "policy/policy.h"
@@ -85,23 +87,25 @@ unsigned int nStakeMaxAge = -1; // unlimited
 
 // Gridcoin:
 int nCoinbaseMaturity = 100;
-CBlockIndex* pindexGenesisBlock = nullptr;
-int nBestHeight = -1;
+CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main) = nullptr;
+int nBestHeight GUARDED_BY(cs_main) = -1;
 
-uint256 hashBestChain;
-CBlockIndex* pindexBest = nullptr;
+uint256 hashBestChain GUARDED_BY(cs_main);
+CBlockIndex* pindexBest GUARDED_BY(cs_main) = nullptr;
 std::atomic<int64_t> g_previous_block_time;
 std::atomic<int64_t> g_nTimeBestReceived;
 std::atomic<bool> g_reorg_in_progress = false;
-CMedianFilter<int> cPeerBlockCounts(5, 0); // Amount of blocks that other nodes claim to have
+CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main) {5, 0}; // Amount of blocks that other nodes claim to have
 
 
 
 
 // Orphan block storage managed by g_orphan_blocks (node/orphan_blocks.h)
 
-map<uint256, CTransaction> mapOrphanTransactions;
-map<uint256, set<uint256> > mapOrphanTransactionsByPrev;
+// Orphan transaction storage. All accesses occur under cs_main from
+// ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
+map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
+map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);
 
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
@@ -119,10 +123,11 @@ int64_t nMinimumInputValue = 0;
 // Gridcoin - Rob Halford
 
 bool fQtActive = false;
-bool bGridcoinCoreInitComplete = false;
+std::atomic<bool> bGridcoinCoreInitComplete{false};
 
 // Mining status variables
-std::string    msMiningErrors;
+CCriticalSection cs_msMiningErrors;
+std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 //When syncing, we grandfather block rejection rules up to this block, as rules became stricter over time and fields changed
 int nGrandfather = 1034700;
@@ -135,13 +140,13 @@ int64_t g_v11_timestamp = 0;
 
 // End of Gridcoin Global vars
 
-GRC::SeenStakes g_seen_stakes;
-GRC::ChainTrustCache g_chain_trust;
+GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
 
 //!
 //! \brief Re-exports chain trust values for reporting.
 //!
-arith_uint256 GetChainTrust(const CBlockIndex* pindex)
+arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_chain_trust.GetTrust(pindex);
 }
@@ -162,17 +167,19 @@ void UnregisterWallet(CWallet* pwalletIn)
     }
 }
 
-// check whether the passed transaction is from us
-bool static IsFromMe(CTransaction& tx)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        if (pwallet->IsFromMe(tx))
-            return true;
-    return false;
-}
+// Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+// Each wrapper iterates setpwalletRegistered (GUARDED_BY cs_setpwalletRegistered)
+// and dispatches into pwallet methods that take pwallet->cs_wallet. Callers
+// MUST hold cs_setpwalletRegistered before invoking these wrappers; this is
+// enforced by EXCLUSIVE_LOCKS_REQUIRED. Holding the lock at the call site
+// (rather than taking it inside the wrapper) lets callers that also hold
+// cs_wallet establish the canonical order at acquisition time and avoids
+// the cs_setpwalletRegistered <-> cs_wallet inversion the inside-lock
+// pattern would otherwise create.
 
 // get the wallet transaction with the given hash (if it exists)
 bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         if (pwallet->GetTransaction(hashTx,wtx))
@@ -182,37 +189,15 @@ bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
 
 // erases transaction with the given hash from all wallets
 void static EraseFromWallets(uint256 hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->EraseFromWallet(hash);
 }
 
-// make sure all wallets know about the given transaction, in the given block
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fConnect)
-{
-    if (!fConnect)
-    {
-        // ppcoin: wallets need to refund inputs when disconnecting coinstake
-        if (tx.IsCoinStake())
-        {
-            for (auto const& pwallet : setpwalletRegistered)
-            {
-                if (pwallet->IsFromMe(tx))
-                {
-                    pwallet->DisableTransaction(tx);
-                    g_miner_status.ClearLastStake();
-                }
-            }
-        }
-        return;
-    }
-
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->AddToWalletIfInvolvingMe(tx, pblock, fUpdate);
-}
-
 // notify wallets about a new best chain
 void static SetBestChain(const CBlockLocator& loc)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->SetBestChain(loc);
@@ -220,6 +205,7 @@ void static SetBestChain(const CBlockLocator& loc)
 
 // notify wallets about an updated transaction
 void UpdatedTransaction(const uint256& hashTx)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->UpdatedTransaction(hashTx);
@@ -227,6 +213,7 @@ void UpdatedTransaction(const uint256& hashTx)
 
 // dump all wallets
 void static PrintWallets(const CBlock& block)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->PrintWallet(block);
@@ -234,6 +221,7 @@ void static PrintWallets(const CBlock& block)
 
 // notify wallets about an incoming inventory (for request counts)
 void static Inventory(const uint256& hash)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->Inventory(hash);
@@ -241,6 +229,7 @@ void static Inventory(const uint256& hash)
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
 {
     for (auto const& pwallet : setpwalletRegistered)
         pwallet->ResendWalletTransactions(fForce);
@@ -259,7 +248,7 @@ double CoinToDouble(double surrogate)
 // mapOrphanTransactions
 //
 
-bool AddOrphanTx(const CTransaction& tx)
+bool AddOrphanTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     uint256 hash = tx.GetHash();
     if (mapOrphanTransactions.count(hash))
@@ -289,7 +278,7 @@ bool AddOrphanTx(const CTransaction& tx)
     return true;
 }
 
-void static EraseOrphanTx(uint256 hash)
+void static EraseOrphanTx(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!mapOrphanTransactions.count(hash))
         return;
@@ -303,7 +292,7 @@ void static EraseOrphanTx(uint256 hash)
     mapOrphanTransactions.erase(hash);
 }
 
-unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans)
+unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     unsigned int nEvicted = 0;
     while (mapOrphanTransactions.size() > nMaxOrphans)
@@ -366,7 +355,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs
 }
 
 
-bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
@@ -374,19 +363,19 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     // Mandatory switch to binary contracts (tx version 2):
     if (tx.nVersion < 2) {
-        return tx.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
+        return state.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
     }
 
-    if (!CheckTransaction(tx))
+    if (!CheckTransaction(tx, state))
         return error("AcceptToMemoryPool : CheckTransaction failed");
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
 
     // ppcoin: coinstake is also only valid in a block, not as a loose transaction
     if (tx.IsCoinStake())
-        return tx.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
 
     // Rather not work on nonstandard transactions
     if (!IsStandardTx(tx))
@@ -396,7 +385,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
     int DoS = 0;
     if (!tx.GetContracts().empty() && !GRC::ValidateContracts(tx, DoS)) {
-        return tx.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
+        return state.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
                                  __func__,
                                  tx.GetHash().ToString(),
                                  DoS));
@@ -452,7 +441,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                         // Reject and put a stiff DoS...
                         if (!found && cpid == other_cpid) {
                             found = true;
-                            tx.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                            state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
                                              "in the memory pool, %s.",
                                              __func__,
                                              tx.GetHash().ToString(),
@@ -512,7 +501,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         MapPrevTx mapInputs;
         map<uint256, CTxIndex> mapUnused;
         bool fInvalid = false;
-        if (!FetchInputs(tx, txdb, mapUnused, false, false, mapInputs, fInvalid))
+        if (!FetchInputs(tx, state, txdb, mapUnused, false, false, mapInputs, fInvalid))
         {
             if (fInvalid)
                 return error("AcceptToMemoryPool : FetchInputs found invalid tx %s", hash.ToString().substr(0,10).c_str());
@@ -540,7 +529,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
                          nFees, txMinFee, nSize);
 
         // Validate any contracts published in the transaction:
-        if (!tx.GetContracts().empty() && !CheckContracts(tx, mapInputs, pindexBest->nHeight)) {
+        if (!tx.GetContracts().empty() && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight)) {
             return false;
         }
 
@@ -554,7 +543,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
 
         // Check against previous transactions
         // This is done last to help prevent CPU exhaustion denial-of-service attacks.
-        if (!ConnectInputs(tx, txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
+        if (!ConnectInputs(tx, state, txdb, mapInputs, mapUnused, CDiskTxPos(1,1,1), pindexBest, false, false))
         {
             LogPrint(BCLog::LogFlags::MEMPOOL, "WARNING: %s: Unable to Connect Inputs %s.",
                      __func__,
@@ -580,10 +569,24 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, bool* pfMissingInput
         pool.addUnchecked(hash, tx);
     }
 
+    // Notify registered wallets that transaction was added to mempool
+    // This enables incoming transactions to appear immediately with 0 confirmations
+    {
+        LOCK(cs_setpwalletRegistered);
+        CTransactionRef ptx = MakeTransactionRef(tx);
+        for (auto const& pwallet : setpwalletRegistered)
+        {
+            pwallet->transactionAddedToMempool(ptx);
+        }
+    }
+
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
     if (ptxOld)
+    {
+        LOCK(cs_setpwalletRegistered);
         EraseFromWallets(ptxOld->GetHash());
+    }
 
     LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());
 
@@ -663,14 +666,15 @@ void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
 
 int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    if (hashBlock.IsNull() || nIndex == -1)
-        return 0;
     AssertLockHeld(cs_main);
 
-    // Find the block it claims to be in
+    if (hashBlock.IsNull() || nIndex == -1)
+        return 0;
+
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi == mapBlockIndex.end())
         return 0;
+
     CBlockIndex* pindex = mi->second;
     if (!pindex || !pindex->IsInMainChain())
         return 0;
@@ -699,7 +703,8 @@ int CMerkleTx::GetBlocksToMaturity() const
 
 bool CMerkleTx::AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    return ::AcceptToMemoryPool(mempool, *this, nullptr);
+    CValidationState state;
+    return ::AcceptToMemoryPool(mempool, *this, state, nullptr);
 }
 
 
@@ -785,7 +790,7 @@ bool IsInitialBlockDownload()
             pindexBest->GetBlockTime() <  GetAdjustedTime() - 8 * 60 * 60);
 }
 
-void static InvalidChainFound(CBlockIndex* pindexNew)
+void static InvalidChainFound(CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     arith_uint256 nBestInvalidBlockTrust = pindexNew->GetBlockTrust();
     arith_uint256 nBestBlockTrust = pindexBest->GetBlockTrust();
@@ -836,19 +841,23 @@ const GRC::Claim& CBlock::GetClaim() const
 
     // Before block version 11, the Gridcoin reward claim context is stored
     // in the hashBoinc field of the first transaction. We cache the parsed
-    // representation here to speed up subsequent access:
+    // representation in the block to speed up subsequent access:
     //
-    REF(vtx[0]).vContracts.emplace_back(GRC::MakeContract<GRC::Claim>(
-        GRC::ContractAction::ADD,
-        GRC::Claim::Parse(vtx[0].hashBoinc, nVersion)));
+    if (m_claim_contract_cache.m_type == GRC::ContractType::UNKNOWN) {
+        m_claim_contract_cache = GRC::MakeContract<GRC::Claim>(
+            GRC::ContractAction::ADD,
+            GRC::Claim::Parse(vtx[0].hashBoinc, nVersion));
+    }
 
-    return *vtx[0].vContracts[0].SharePayloadAs<GRC::Claim>();
+    return *m_claim_contract_cache.SharePayloadAs<GRC::Claim>();
 }
 
 GRC::Claim CBlock::PullClaim()
 {
     if (nVersion >= 11 || !vtx[0].vContracts.empty()) {
-        return vtx[0].vContracts[0].PullPayloadAs<GRC::Claim>();
+        // PullPayloadAs operates on the shared_ptr within the Contract,
+        // not on the vector element itself, so const vContracts is fine.
+        return vtx[0].vContracts[0].CopyPayloadAs<GRC::Claim>();
     }
 
     // Before block version 11, the Gridcoin reward claim context is stored
@@ -931,6 +940,16 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
 
     GRC::RegistryBookmarks registries;
 
+    // Count superblocks crossed during this disconnect. BeaconRegistry::Deactivate
+    // is called per-SB below and is fidelity-correct for the SINGLE most recent SB
+    // (it uses m_expired_pending which only carries the latest SB's expired set --
+    // see beacon.cpp:1265-1273). When the disconnect crosses 2+ SBs, expired-pending
+    // beacons from the prior SBs are lost; the recovery is an in-line beacon
+    // registry rebuild after the disconnect loop completes (call site below at the
+    // sb_cross_count >= 2 check). The full rationale for in-line vs deferred
+    // rebuild and why single-SB reorgs are NOT rebuilt lives at that call site.
+    int sb_cross_count = 0;
+
     while(pindexBest != pcommon)
     {
         if(!pindexBest->pprev)
@@ -970,6 +989,11 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
             // for a superblock. We call GetBeaconRegistry directly here, because the IHandler class does not have
             // a virtual method that corresponds to this call, as it is only relevant to beacons.
             GRC::GetBeaconRegistry().Deactivate(pindexBest->GetBlockHash());
+
+            // Count it so we can decide after the loop whether to flag a beacon-registry rebuild
+            // for the next startup (the Deactivate-via-m_expired_pending path is only correct
+            // for one SB at a time; see the comment above the loop).
+            ++sb_cross_count;
 
             GRC::Quorum::PopSuperblock(pindexBest);
             GRC::Quorum::LoadSuperblockIndex(pindexBest->pprev);
@@ -1023,8 +1047,10 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
     if (cnt_dis > 0)
     {
         // Resurrect memory transactions that were in the disconnected branch
-        for( CTransaction& tx : vResurrect)
-            AcceptToMemoryPool(mempool, tx, nullptr);
+        for( CTransaction& tx : vResurrect) {
+            CValidationState resurrect_state;
+            AcceptToMemoryPool(mempool, tx, resurrect_state, nullptr);
+        }
 
         if (!txdb.TxnCommit())
             return error("DisconnectBlocksBatch: TxnCommit failed"); /*fatal*/
@@ -1042,6 +1068,35 @@ bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, unsigned
         if(IsV9Enabled_Tally(nBestHeight) && !IsV11Enabled(nBestHeight)) {
             assert(GRC::Tally::IsLegacyTrigger(nBestHeight));
             GRC::Tally::LegacyRecount(pindexBest);
+        }
+
+        // If the reorg crossed two or more superblock boundaries, the per-SB Deactivate calls
+        // above could not fully resurrect expired-pending beacons from the prior SBs
+        // (m_expired_pending only carries the most recent SB's set -- the limitation
+        // acknowledged at beacon.cpp:1265-1273). Rebuild the beacon registry in-line
+        // BEFORE returning to the reconnect side of ReorganizeChain: the rebuild walks
+        // from V11_height to the current (common-ancestor) tip, leaving the registry
+        // correctly reflecting that ancestor's state, and the subsequent per-block
+        // Activate() calls on the reconnect side then bring the registry up to the
+        // new tip.
+        //
+        // Doing this in-line (rather than deferring to a flag picked up on next
+        // startup) trades a few seconds of frozen-wallet time for closing the fork
+        // window: with the deferred approach, any block validated between this reorg
+        // and the next restart could consult the broken registry and diverge from
+        // healthy peers. In-line rebuild is bounded by the chain walk from V11 to
+        // tip, which is dominated by block-index iteration -- on SSD typically
+        // single-digit seconds. See doc/block_corruption_recovery_design.md.
+        //
+        // Single-SB reorgs are NOT rebuilt: the existing Deactivate path is
+        // fidelity-correct for that case and the rebuild would be wasted work on
+        // the most common case.
+        if (sb_cross_count >= 2) {
+            LogPrintf("WARN: %s: reorg disconnected %d superblock(s); beacon registry expired-pending "
+                      "fidelity is degraded for the prior SB(s). Rebuilding beacon registry in-line "
+                      "to maintain consensus.",
+                      __func__, sb_cross_count);
+            GRC::RebuildBeaconRegistry();
         }
     }
 
@@ -1176,7 +1231,8 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 assert(pindex->GetBlockHash()==block.GetHash(true));
                 assert(pindex->pprev == pindexBest);
 
-                if (!ConnectBlock(block, txdb, pindex, false)) {
+                CValidationState connect_state;
+                if (!ConnectBlock(block, connect_state, txdb, pindex, false)) {
                     txdb.TxnAbort();
                     error("%s: ConnectBlock %s failed, Previous block %s",
                           __func__,
@@ -1318,6 +1374,8 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 
     if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
+        // Canonical order: cs_main (held by SetBestChain) -> cs_setpwalletRegistered -> cs_wallet.
+        LOCK(cs_setpwalletRegistered);
         ::SetBestChain(locator);
     }
 
@@ -1367,7 +1425,7 @@ arith_uint256 CBlockIndex::GetBlockTrust() const
     return (~bnTarget / (bnTarget + 1)) + 1;
 }
 
-bool GridcoinServices()
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Block version 9 tally transition:
     //
@@ -1429,7 +1487,7 @@ bool GridcoinServices()
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
     int iAsked = 0;
-    LOCK(cs_vNodes);
+    LOCK2(cs_main, cs_vNodes);
     for (auto const& pNode : vNodes)
     {
                 if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)))
@@ -1458,7 +1516,7 @@ bool AskForOutstandingBlocks(uint256 hashStart)
     return true;
 }
 
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
 
@@ -1485,7 +1543,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Preliminary checks
-    if (!CheckBlock(*pblock, pindexBest->nHeight + 1))
+    if (!CheckBlock(*pblock, state, pindexBest->nHeight + 1))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     // If don't already have its previous block, shunt it off to holding area until we get it
@@ -1535,7 +1593,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
                 // request time first to guarantee that the node does not postpone
                 // the message:
                 //
-                mapAlreadyAskedFor[ancestor_request] = 0;
+                {
+                    LOCK(cs_mapAlreadyAskedFor);
+                    mapAlreadyAskedFor[ancestor_request] = 0;
+                }
                 pfrom->AskFor(ancestor_request);
             }
         }
@@ -1544,13 +1605,18 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me) EXCLUSIVE_
     }
 
     // Store to disk
-    if (!AcceptBlock(*pblock, generated_by_me))
+    if (!AcceptBlock(*pblock, state, generated_by_me))
         return error("ProcessBlock() : AcceptBlock FAILED");
 
     // Recursively process any orphan blocks that depended on this one.
     // ProcessQueue handles BFS traversal and SeenStakes cleanup internally.
-    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) -> bool {
-        return AcceptBlock(orphan, generated_by_me);
+    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main) so the lambda runs
+    // with cs_main held, but TSA cannot propagate that into the lambda
+    // body — suppress the analyzer here rather than tag every chain-state
+    // access AcceptBlock makes downstream.
+    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
+        CValidationState orphan_state;
+        return AcceptBlock(orphan, orphan_state, generated_by_me);
     });
 
     return true;
@@ -1596,6 +1662,161 @@ FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszM
         }
     }
     return file;
+}
+
+bool AbandonChainTo(CBlockIndex* pindex_target, CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    assert(pindex_target != nullptr);
+
+    // No early return when pindex_target == pindexBest. In the ghost-only
+    // case (a prior Phase 2 rewound the chain in memory and on hashBestChain
+    // but failed to persist pindex_target's hashNext=null), pindexBest is
+    // already the target but pindex_target->pnext still points at the first
+    // ghost (because LoadBlockIndex rebuilt that linkage from the stale
+    // on-disk CDiskBlockIndex.hashNext). We still need to (a) clear pnext
+    // in memory and (b) persist the new CDiskBlockIndex with hashNext=null
+    // so the next restart doesn't reconstruct the same ghost chain.
+
+    if (pindex_target == pindexBest) {
+        LogPrintf("INFO: %s: in-memory tip already at target %s @ %d; persisting "
+                  "hashNext=null to clear ghost linkage.", __func__,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    } else {
+        LogPrintf("INFO: %s: abandoning chain tip %s @ %d down to %s @ %d.", __func__,
+                  pindexBest->GetBlockHash().GetHex(), nBestHeight,
+                  pindex_target->GetBlockHash().GetHex(), pindex_target->nHeight);
+    }
+
+    // Sever the abandoned range from the in-memory tree by clearing the new tip's pnext.
+    // The abandoned CBlockIndex entries are removed from mapBlockIndex separately by
+    // PurgeOrphanedBlockIndexEntries (called from the Phase 2 recovery hook after this
+    // function returns and CTxDB::CleanAbandonedRange has completed the chainstate
+    // rollback). We do not erase them here because the caller still needs the abandoned
+    // CBlockIndex* values for the surgical cleanup pass.
+    //
+    // Asymmetric linkage note: we null pindex_target->pnext (forward linkage from the
+    // new tip into the abandoned range), but we deliberately do NOT walk the abandoned
+    // range and null each entry's pprev. The abandoned blocks still point pprev back
+    // toward pindex_target until PurgeOrphanedBlockIndexEntries removes them entirely
+    // a few steps later. This is benign because:
+    //   - The Phase 2 recovery hook holds cs_main and runs at init-time, before
+    //     wallet/Quorum/Tally/mempool/net start, so no live consumer is walking pprev
+    //     from an abandoned CBlockIndex* during the in-between window.
+    //   - The caller (RunStartupCoherenceRecovery) needs those abandoned entries'
+    //     pprev intact briefly for any diagnostic code that might iterate them (e.g.
+    //     a debug LogPrintf could call IsSuperblock() which uses pprev).
+    // If a future code path adds runtime use of this rewind primitive (outside the
+    // init-time hook), it must either null pprev on each abandoned entry here OR
+    // ensure no consumer walks pprev from the abandoned range.
+    pindex_target->pnext = nullptr;
+
+    pindexBest = pindex_target;
+    nBestHeight = pindex_target->nHeight;
+    hashBestChain = pindex_target->GetBlockHash();
+    g_chain_trust.SetBest(pindex_target);
+    UpdateSyncTime(pindex_target);
+
+    if (!txdb.WriteHashBestChain(pindex_target->GetBlockHash())) {
+        return error("%s: WriteHashBestChain failed for %s", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+
+    // Persist the new tip's CDiskBlockIndex so its on-disk hashNext is null.
+    // Without this, the next LoadBlockIndex would rebuild pindex_target->pnext
+    // from the stale CDiskBlockIndex.hashNext stored when the chain was longer,
+    // and the ghost chain would resurrect on every restart. The serialized
+    // CDiskBlockIndex captures pnext via GetBlockHash on the in-memory pnext
+    // (block.h CDiskBlockIndex.hashNext init) -- which we just nulled above,
+    // so this write captures the severed state.
+    if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex_target))) {
+        return error("%s: WriteBlockIndex failed for %s (could not persist severed "
+                     "hashNext; ghost chain would resurrect on next restart)", __func__,
+                     pindex_target->GetBlockHash().GetHex());
+    }
+
+    if (!txdb.Sync()) {
+        return error("%s: CTxDB::Sync failed after abandonment", __func__);
+    }
+
+    return true;
+}
+
+void PurgeOrphanedBlockIndexEntries(CTxDB& txdb, std::vector<CBlockIndex*>& abandoned)
+{
+    AssertLockHeld(cs_main);
+
+    // The abandoned vector is what VerifyChainCoherence collected: every block
+    // past the last consistent one. After the chainstate cleanup, none of these
+    // are reachable from pindexBest's ancestry. We need to:
+    //
+    //   (1) erase each entry from mapBlockIndex so AddToBlockIndex can re-add
+    //       the same hashes when P2P delivers the canonical-chain blocks back
+    //       (otherwise the "already exists" guard at validation.cpp:1109 would
+    //       silently reject every re-supplied block forever);
+    //
+    //   (2) erase each entry's CDiskBlockIndex record from LevelDB so the next
+    //       LoadBlockIndex doesn't rebuild the ghost forward linkage from the
+    //       stale hashNext fields stored when the chain was longer. (Without
+    //       this, Phase 2 looks successful in this run but the recovered tip
+    //       resurrects the ghost chain on every subsequent boot -- the
+    //       backward walk in VerifyChainCoherence finds the tip coherent,
+    //       early-returns, and DisconnectBlocksBatch then trips
+    //       `assert(!pindexBest->pnext)` on the first P2P-delivered block.
+    //       Hit 2026-05-16 on isolated testnet slot 10.)
+    //
+    // DO NOT call `delete` on these pointers. CBlockIndex objects are allocated
+    // from GRC::BlockIndexPool (see src/gridcoin/block_index.h), which is
+    // backed by std::array<CBlockIndex, CHUNK_SIZE> in a forward_list of
+    // chunks. The pool's explicit design (per the class comment at
+    // block_index.h:54-55) is that "the application never removes or destroys
+    // block index entries"; it has no recycling path. Calling `delete` on a
+    // pointer into the middle of a std::array invokes undefined behavior:
+    // operator delete tries to free a heap-managed chunk at that address, but
+    // the address is not a heap allocation -- in practice it corrupts the C++
+    // runtime's free list, manifesting much later as bad_alloc or assertion
+    // failures in unrelated code.
+    //
+    // (We learned this the hard way during the 2026-05-16 isolated-testnet
+    // Tier 3 run: Phase 2 reported clean completion, but the very first
+    // P2P-delivered block tripped `assert(!pindexBest->pnext)` in
+    // DisconnectBlocksBatch because heap corruption from the bogus `delete`
+    // calls had overwritten pindex_target's pnext slot with garbage that
+    // happened to dereference as a valid-looking CBlockIndex pointer. See
+    // .claude/memory/reference_block_index_pool.md.)
+    //
+    // The cost of not freeing is that the abandoned pool slots remain
+    // allocated forever -- a small permanent leak per recovery event, at most
+    // a few hundred bytes per abandoned block (well under 1 MB even at the
+    // -coherencewalkmax cap). The pool is designed for this. The alternative
+    // would be a much larger redesign of BlockIndexPool to support per-object
+    // recycling, which is not justified for a rare recovery path.
+    unsigned int leveldb_erased = 0;
+    unsigned int map_erased = 0;
+    for (CBlockIndex*& p : abandoned) {
+        if (!p) continue;
+        const uint256 hash = p->GetBlockHash();
+        if (txdb.EraseBlockIndex(hash)) {
+            ++leveldb_erased;
+        } else {
+            LogPrintf("WARN: %s: EraseBlockIndex failed for %s; on-disk record may persist.",
+                      __func__, hash.GetHex());
+        }
+        mapBlockIndex.erase(hash);
+        ++map_erased;
+        // No `delete p` -- see comment above.
+        p = nullptr;
+    }
+
+    if (!txdb.Sync()) {
+        LogPrintf("WARN: %s: CTxDB::Sync failed after CDiskBlockIndex erase; will be retried "
+                  "on the next durable write.", __func__);
+    }
+
+    LogPrintf("INFO: %s: purged %u orphaned block index entries (%u from mapBlockIndex, "
+              "%u CDiskBlockIndex records from LevelDB; pool slots remain allocated, "
+              "see block_index.h).",
+              __func__, (unsigned) abandoned.size(), map_erased, leveldb_erased);
 }
 
 static unsigned int nCurrentBlockFile = 1;
@@ -1671,7 +1892,7 @@ bool LoadBlockIndex(bool fAllowNew)
 
         const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
 
-        CTransaction txNew;
+        CMutableTransaction txNew;
         //GENESIS TIME
         txNew.nVersion = 1;
         txNew.nTime = 1413033777;
@@ -1680,7 +1901,7 @@ bool LoadBlockIndex(bool fAllowNew)
         txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
         txNew.vout[0].SetEmpty();
         CBlock block;
-        block.vtx.push_back(txNew);
+        block.vtx.push_back(CTransaction(txNew));
         block.hashPrevBlock.SetNull();
         block.hashMerkleRoot = BlockMerkleRoot(block);
         block.nVersion = 1;
@@ -1728,7 +1949,7 @@ bool LoadBlockIndex(bool fAllowNew)
         uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
         assert(block.hashMerkleRoot == merkle_root);
         assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
-        assert(CheckBlock(block, 1));
+        { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
 
         // Start new block file
         unsigned int nFile;
@@ -1811,7 +2032,12 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                   DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
                   block.vtx.size());
 
-        PrintWallets(block);
+        {
+            // PrintBlockTree is EXCLUSIVE_LOCKS_REQUIRED(cs_main); add the
+            // wallet-registry lock here in the canonical order before dispatch.
+            LOCK(cs_setpwalletRegistered);
+            PrintWallets(block);
+        }
 
         // put the main time-chain first
         vector<CBlockIndex*>& vNext = mapNext[pindex];
@@ -1887,7 +2113,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
                 {
                     CBlock block;
                     blkdat >> block;
-                    if (ProcessBlock(nullptr, &block, false)) {
+                    CValidationState load_state;
+                    if (ProcessBlock(nullptr, &block, false, load_state)) {
                         ++nLoaded;
 
                         if (display_progress) {
@@ -1924,8 +2151,8 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
 // CAlert
 //
 
-extern map<uint256, CAlert> mapAlerts;
 extern CCriticalSection cs_mapAlerts;
+extern map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 string GetWarnings(string strFor)
 {
@@ -1967,7 +2194,7 @@ string GetWarnings(string strFor)
 // Messages
 //
 
-bool static AlreadyHave(CTxDB& txdb, const CInv& inv)
+bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (inv.type)
     {
@@ -2038,11 +2265,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Disconnect peers on old protocol versions after a grace period past the
         // BlockV14Height activation height. Skip entirely if that fork is not yet
         // activated (height == INT_MAX) to avoid signed integer overflow UB in the addition.
+        const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
                 && pfrom->nVersion < PROTOCOL_VERSION
                 && Params().GetConsensus().BlockV14Height != std::numeric_limits<int>::max()
-                && pindexBest->nHeight > Params().GetConsensus().BlockV14Height
+                && nLocalBestHeight > Params().GetConsensus().BlockV14Height
                                              + Params().GetConsensus().ProtocolVersionGracePeriod
                 )
             ) {
@@ -2104,7 +2332,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
 
 
-        pfrom->addrLocal = addrMe;
+        pfrom->SetAddrLocal(addrMe);
         if (pfrom->fInbound && addrMe.IsRoutable())
         {
             SeenLocal(addrMe);
@@ -2119,8 +2347,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // record my external IP reported by peer
-        if (addrMe.IsRoutable())
+        if (addrMe.IsRoutable()) {
+            LOCK(cs_addrSeenByPeer);
             addrSeenByPeer = addrMe;
+        }
 
         // Be shy and don't send version until we hear
         if (pfrom->fInbound)
@@ -2136,7 +2366,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
-        pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        {
+            LOCK(pfrom->cs_vSend);
+            pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
+        }
 
 
         if (!pfrom->fInbound)
@@ -2156,13 +2389,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
-        if (!pfrom->fClient && !pfrom->fOneShot &&
-            (pfrom->nStartingHeight > (nBestHeight - 144)) &&
-             (nAskedForBlocks < 1 || (vNodes.size() <= 1 && nAskedForBlocks < 1)))
+        size_t numNodes;
         {
-            nAskedForBlocks++;
-            pfrom->PushGetBlocks(pindexBest, uint256());
-            LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            LOCK(cs_vNodes);
+            numNodes = vNodes.size();
+        }
+        {
+            LOCK(cs_main);
+            if (!pfrom->fClient && !pfrom->fOneShot &&
+                (pfrom->nStartingHeight > (nBestHeight - 144)) &&
+                 (nAskedForBlocks < 1 || (numNodes <= 1 && nAskedForBlocks < 1)))
+            {
+                nAskedForBlocks++;
+                pfrom->PushGetBlocks(pindexBest, uint256());
+                LogPrint(BCLog::LogFlags::NET, "Asked For blocks.");
+            }
+            // cPeerBlockCounts is read by GetNumBlocksOfPeers / IsInitialBlockDownload
+            // under cs_main, so the input also belongs under cs_main.
+            cPeerBlockCounts.input(pfrom->nStartingHeight);
         }
 
         // Relay alerts
@@ -2181,8 +2425,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LogPrint(BCLog::LogFlags::NOISY, "receive version message: version %d, blocks=%d, us=%s, them=%s, peer=%s", pfrom->nVersion,
             pfrom->nStartingHeight, addrMe.ToString(), addrFrom.ToString(), pfrom->addr.ToString());
-
-        cPeerBlockCounts.input(pfrom->nStartingHeight);
     }
     else if (pfrom->nVersion == 0)
     {
@@ -2194,6 +2436,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     }
     else if (strCommand == NetMsgType::VERACK)
     {
+        LOCK(pfrom->cs_vRecvMsg);
         pfrom->SetRecvVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
     }
     else if (strCommand == NetMsgType::GRIDADDR || strCommand == NetMsgType::ADDR)
@@ -2208,7 +2451,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         // Don't store the node address unless they have block height > 50%
-        if (pfrom->nStartingHeight < (nBestHeight*.5)) return true;
+        if (pfrom->nStartingHeight < (WITH_LOCK(cs_main, return nBestHeight) * .5)) return true;
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -2330,7 +2573,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
 
                 // Track requests for our stuff
-                Inventory(inv.hash);
+                {
+                    LOCK(cs_setpwalletRegistered);
+                    Inventory(inv.hash);
+                }
 
             }
         }
@@ -2465,7 +2711,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Track requests for our stuff
-            Inventory(inv.hash);
+            {
+                LOCK(cs_setpwalletRegistered);
+                Inventory(inv.hash);
+            }
         }
     }
 
@@ -2556,11 +2805,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
+        CValidationState state;
         bool fMissingInputs = false;
-        if (AcceptToMemoryPool(mempool, tx, &fMissingInputs))
+        if (AcceptToMemoryPool(mempool, tx, state, &fMissingInputs))
         {
             RelayTransaction(tx, inv.hash);
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             vWorkQueue.push_back(inv.hash);
             vEraseQueue.push_back(inv.hash);
 
@@ -2574,13 +2827,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 {
                     const uint256& orphanTxHash = *mi;
                     CTransaction& orphanTx = mapOrphanTransactions[orphanTxHash];
+                    CValidationState orphan_state;
                     bool fMissingInputs2 = false;
 
-                    if (AcceptToMemoryPool(mempool, orphanTx, &fMissingInputs2))
+                    if (AcceptToMemoryPool(mempool, orphanTx, orphan_state, &fMissingInputs2))
                     {
                         LogPrintf("   accepted orphan tx %s", orphanTxHash.ToString().substr(0,10));
                         RelayTransaction(orphanTx, orphanTxHash);
-                        mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        {
+                            LOCK(cs_mapAlreadyAskedFor);
+                            mapAlreadyAskedFor.erase(CInv(MSG_TX, orphanTxHash));
+                        }
                         vWorkQueue.push_back(orphanTxHash);
                         vEraseQueue.push_back(orphanTxHash);
                         pfrom->nTrust++;
@@ -2606,7 +2863,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (nEvicted > 0)
                 LogPrintf("mapOrphan overflow, removed %u tx", nEvicted);
         }
-        if (tx.nDoS) pfrom->Misbehaving(tx.nDoS);
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
+            pfrom->Misbehaving(nDoS);
     }
 
 
@@ -2627,14 +2886,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        if (ProcessBlock(pfrom, &block, false))
+        CValidationState state;
+        if (ProcessBlock(pfrom, &block, false, state))
         {
-            mapAlreadyAskedFor.erase(inv);
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                mapAlreadyAskedFor.erase(inv);
+            }
             pfrom->nTrust++;
         }
-        if (block.nDoS)
+        int nDoS = 0;
+        if (state.IsInvalid(nDoS) && nDoS > 0)
         {
-                pfrom->Misbehaving(block.nDoS);
+                pfrom->Misbehaving(nDoS);
                 pfrom->nTrust--;
         }
 
@@ -2804,8 +3068,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     return true;
 }
 
-// requires LOCK(cs_vRecvMsg)
-bool ProcessMessages(CNode* pfrom)
+bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 {
     //
     // Message format
@@ -2820,7 +3083,7 @@ bool ProcessMessages(CNode* pfrom)
     std::deque<CNetMessage>::iterator it = pfrom->vRecvMsg.begin();
     while (!pfrom->fDisconnect && it != pfrom->vRecvMsg.end()) {
         // Don't bother if send buffer is too full to respond anyway
-        if (pfrom->nSendSize >= SendBufferSize())
+        if (WITH_LOCK(pfrom->cs_vSend, return pfrom->nSendSize) >= SendBufferSize())
             break;
 
         // get next message
@@ -2859,7 +3122,15 @@ bool ProcessMessages(CNode* pfrom)
 
         // Checksum
         CDataStream& vRecv = msg.vRecv;
-        uint256 hash = Hash(Span<std::byte>{(std::byte*)&vRecv.begin()[0], nMessageSize});
+        // The previous form `&vRecv.begin()[0]` dereferenced begin() to take
+        // its address, which UBSan reported as a null-pointer-of-type bind on
+        // a zero-length message. `vRecv.data()` is well-defined for an empty
+        // container, but the standard permits it to return nullptr when size()
+        // is 0 -- and passing that down to CSHA256::Write would then exhibit
+        // `nullptr + 0` UB inside the hash core. That root is closed (see
+        // CSHA256::Write's len == 0 guard in crypto/sha256.cpp), so
+        // empty-payload messages (verack et al.) hash cleanly here.
+        uint256 hash = Hash(Span<std::byte>{vRecv.data(), nMessageSize});
 
         // We just received a message off the wire, harvest entropy from the time (and the message checksum)
         RandAddEvent(ReadLE32(hash.begin()));
@@ -2969,8 +3240,14 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage(NetMsgType::PING, nonce);
     }
 
-    // Resend wallet transactions that haven't gotten in a block yet
-    ResendWalletTransactions();
+    // Resend wallet transactions that haven't gotten in a block yet.
+    // No outer locks held here in SendMessages; acquire in canonical order
+    // cs_main -> cs_setpwalletRegistered -> cs_wallet. cs_main is required
+    // for the wallet method's mapBlockIndex / pindexBest reads.
+    {
+        LOCK2(cs_main, cs_setpwalletRegistered);
+        ResendWalletTransactions();
+    }
 
     // Address refresh broadcast
     if (!IsInitialBlockDownload())
@@ -3044,6 +3321,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (!fTrickleWait)
                 {
                     CWalletTx wtx;
+                    LOCK(cs_setpwalletRegistered);
                     if (GetTransaction(inv.hash, wtx))
                         if (wtx.fFromMe)
                             fTrickleWait = true;
@@ -3088,13 +3366,26 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // receives the object. If the request does not exist in this map, we
         // don't need to ask for the object again:
         //
-        if (mapAlreadyAskedFor.find(inv) == mapAlreadyAskedFor.end())
+        bool already_asked_present;
+        {
+            LOCK(cs_mapAlreadyAskedFor);
+            already_asked_present = mapAlreadyAskedFor.find(inv) != mapAlreadyAskedFor.end();
+        }
+        if (!already_asked_present)
         {
             pto->mapAskFor.erase(pto->mapAskFor.begin());
             continue;
         }
 
-        bool fAlreadyHave = AlreadyHave(txdb, inv);
+        // cs_main is required for the AlreadyHave call (mapBlockIndex
+        // lookup) and must be released before the cs_mapManifest scope
+        // below to preserve the canonical cs_main -> subsystem order
+        // documented at the inv-handling site near main.cpp:2533.
+        bool fAlreadyHave;
+        {
+            LOCK(cs_main);
+            fAlreadyHave = AlreadyHave(txdb, inv);
+        }
 
         // Check also the scraper data propagation system to see if it needs
         // this inventory object:
@@ -3114,7 +3405,20 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 vGetData.clear();
             }
 
-            mapAlreadyAskedFor[inv] = nNow;
+            // Re-check presence under the lock before refreshing the
+            // timestamp. Another thread may have removed the entry
+            // between the initial presence check above and here
+            // (e.g. the inventory arrived and was processed via the
+            // TX / BLOCK handlers in ProcessMessage, which erase under
+            // cs_mapAlreadyAskedFor). If the entry is gone, the
+            // request is satisfied and we should not reinsert it.
+            {
+                LOCK(cs_mapAlreadyAskedFor);
+                auto it = mapAlreadyAskedFor.find(inv);
+                if (it != mapAlreadyAskedFor.end()) {
+                    it->second = nNow;
+                }
+            }
         }
         pto->mapAskFor.erase(pto->mapAskFor.begin());
     }

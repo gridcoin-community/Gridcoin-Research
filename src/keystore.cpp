@@ -233,7 +233,7 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
     return true;
 }
 
-bool HaveKey(const CKeyStore& store, const CKey& key)
+bool HaveKey(const SigningProvider& store, const CKey& key)
 {
     CKey key2;
     key2.Set(key.begin(), key.end(), !key.IsCompressed());

@@ -5,6 +5,7 @@
 #include "main.h"
 #include "node/ui_interface.h"
 #include "random.h"
+#include "rpc/util.h"
 
 #include "gridcoin/appcache.h"
 #include "gridcoin/beacon.h"
@@ -88,22 +89,41 @@ CCriticalSection cs_VerifiedBeacons;
 CCriticalSection cs_ProjectPublicKeys;
 
 /**
- * @brief Flag that indicates whether the scraper is supposed to be active
+ * @brief Flag that indicates whether the scraper is supposed to be active.
+ *
+ * Written exclusively from GRC::Initialize() (gridcoin.cpp) at startup
+ * before any scraper thread runs; read on the scraper thread inside the
+ * main loop. atomic<bool> covers the cross-thread visibility.
  */
-bool fScraperActive = false;
+std::atomic<bool> fScraperActive {false};
 /**
- * @brief Vector of usernames and passwords for access to project sites which require logins to meet GPDR requirements
+ * @brief Vector of usernames and passwords for access to project sites which require logins to meet GDPR requirements
+ *
+ * Protected by cs_Scraper. All access paths — UserpassPopulated, the userpass
+ * utility class, and the DownloadProject* helpers — are reached only from the
+ * download section of Scraper() (the LOCK(cs_Scraper) at the start of the
+ * "section to download statistics" block). This covers both the main scraper
+ * thread loop and the reentrant ScraperSingleShot path (called by
+ * ScraperGetSuperblockContract from the staking miner thread, RPC threads,
+ * and ScraperHousekeeping); the singleshot path enters the same critical
+ * section.
  */
-std::vector<std::pair<std::string, std::string>> vuserpass;
+std::vector<std::pair<std::string, std::string>> vuserpass GUARDED_BY(cs_Scraper);
 /**
  * @brief Vector of team IDs for whitelisted teams across the different whitelisted projects. When the team requirement is
  * imposed this is important to correlate teams, since each project uses an independent ID for team names. I.e. Gridcoin
  * in one project will have, in general, a different ID, than another project.
+ *
+ * Currently unused; retained for future per-project team-id correlation work.
  */
 std::vector<std::pair<std::string, int64_t>> vprojectteamids;
-std::vector<std::string> vauthenicationetags;
-int64_t ndownloadsize = 0;
-int64_t nuploadsize = 0;
+/// Cumulative download/upload byte counts. Written by ProcessProjectRacFileByCPID
+/// and read from the "download size so far..." log line in Scraper(). Both call
+/// sites are inside the LOCK(cs_Scraper) covering the download section, so the
+/// data is effectively cs_Scraper-protected (the singleshot reentrant path also
+/// enters that critical section).
+int64_t ndownloadsize GUARDED_BY(cs_Scraper) = 0;
+int64_t nuploadsize GUARDED_BY(cs_Scraper) = 0;
 
 //!
 //! \brief Normalize a project master URL for consistent map key comparison.
@@ -301,19 +321,19 @@ void ScraperSingleShot();
  * testnewsb function (if the scraper log category is enabled).
  * @return Currently returns true. The boolean is reserved for future overall status of housekeeping.
  */
-bool ScraperHousekeeping();
+bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks if vuserpass is populated and if empty, populates it
  * @return bool true if populated
  */
-bool UserpassPopulated();
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Checks the scraper directory structure and files against the manifest and aligns/corrects as appropriate. Also
  * loads the TeamIDMap from file if REQUIRE_TEAM_WHITELIST_MEMBERSHIP is enabled and TeamIDs were saved to disk and loads
  * the VerifiedBeacons from disk.
  * @return
  */
-bool ScraperDirectoryAndConfigSanity();
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Stores the current beacon map to the provided file path
  * @param file
@@ -352,7 +372,7 @@ bool LoadTeamIDList(const fs::path& file);
  * manifest to the network if the scraper is active.
  * @return bool true if successful
  */
-uint256 GetmScraperFileManifestHash();
+uint256 GetmScraperFileManifestHash() EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Stores the mScraperFileManifest map to disk
  * @param file
@@ -372,21 +392,21 @@ bool LoadScraperFileManifest(const fs::path& file);
  * @param entry
  * @return bool true if successful
  */
-bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+bool InsertScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Deletes an entry from the mScraperFileManifest map and also deletes the corresponding file from disk, if it exists.
  * Also updates the mScraperFileManifest map hash and stores the hash in StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return unsigned int of the number of elements erased
  */
-unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry);
+unsigned int DeleteScraperFileManifestEntry(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Marks a file manifest entry non-current in the mScraperFileManifest map and updates the
  * StructScraperFileManifest.nFileManifestMapHash.
  * @param entry
  * @return
  */
-bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry);
+bool MarkScraperFileManifestEntryNonCurrent(ScraperFileManifestEntry& entry) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest);
 /**
  * @brief Aligns the file manifest entries in the mScraperFileManifest map to the files present on disk. Deletes either/both
  * files and/or entries that are not present and have matching hashes in both.
@@ -469,13 +489,13 @@ bool ScraperSaveCScraperManifestToFiles(uint256 nManifestHash);
  * @param Key
  * @return bool true if successful
  */
-bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key);
+bool ScraperSendFileManifestContents(CTxDestination& Address, CKey& Key) EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination
  * @return mmCSManifestsBinnedByScraper
  */
-mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper();
+mmCSManifestsBinnedByScraper BinCScraperManifestsByScraper() EXCLUSIVE_LOCKS_REQUIRED(CScraperManifest::cs_mapManifest);
 /**
  * @brief Sorts the inventory of CScraperManifests by scraper and orders by manifest time, which is important for
  * convergence determination. Also culls old manifest that do not meet retention rules.
@@ -520,14 +540,14 @@ bool ScraperConstructConvergedManifestByProject(const WhitelistSnapshot& project
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download the project team files and stores in the scraper data directory. This is used when
  * REQUIRE_TEAM_WHITELIST_MEMBERSHIP is true OR explorer mode is enabled.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Process project team file and populate TeamIDMap global
  * @param project
@@ -535,13 +555,13 @@ bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist);
  * @param etag
  * @return bool true if successful
  */
-bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag);
+bool ProcessProjectTeamFile(const std::string& project, const fs::path& file, const std::string& etag) EXCLUSIVE_LOCKS_REQUIRED(cs_TeamIDMap);
 /**
  * @brief Download project RAC (user) files (which have CPID level statistics) for each project on the provided whitelist.
  * @param projectWhitelist
  * @return bool true if successful
  */
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist);
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 /**
  * @brief Download project public keys for account ownership proof verification from whitelisted projects.
  * Fetches get_project_config.php for each project and extracts the account_ownership_public_key element.
@@ -561,12 +581,8 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist);
  */
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
-                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit);
-/**
- * @brief Clears the authentication ETag auth.dat file
- */
-void AuthenticationETagClear();
-
+                                 ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper);
 // Need to access from rpcblockchain.cpp
 extern UniValue SuperblockToJson(const Superblock& superblock);
 
@@ -1190,7 +1206,7 @@ private:
     fsbridge::ifstream userpassfile;
 
 public:
-    userpass()
+    userpass() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
 
@@ -1208,7 +1224,7 @@ public:
             userpassfile.close();
     }
 
-    bool import()
+    bool import() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     {
         vuserpass.clear();
         std::string inputdata;
@@ -1659,8 +1675,6 @@ void Scraper(bool bSingleShot)
                 }
             }
 
-            AuthenticationETagClear();
-
             // Note a lock on cs_StructScraperFileManifest is taken in StoreBeaconList,
             // and the block hash for the consensus block height is updated in the struct.
             if (!StoreBeaconList(pathScraper / "BeaconList.csv.gz"))
@@ -1815,7 +1829,7 @@ void ScraperSubscriber()
     }
 }
 
-UniValue testnewsb(const UniValue& params, bool fHelp);
+UniValue testnewsb(const UniValue& params);
 
 bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
@@ -1856,7 +1870,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
         int nReducedCacheBits = 5;
 
         input_params.push_back(nReducedCacheBits);
-        testnewsb(input_params, false);
+        testnewsb(input_params);
     }
 
     // Show this node's contract hash in the log.
@@ -1872,8 +1886,7 @@ bool ScraperHousekeeping() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
     return true;
 }
 
-// A lock on cs_Scraper should be taken before calling this function.
-bool ScraperDirectoryAndConfigSanity()
+bool ScraperDirectoryAndConfigSanity() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto scraper_retain_noncurrent_files = []() { LOCK(cs_ScraperGlobals); return SCRAPER_RETAIN_NONCURRENT_FILES; };
@@ -2039,15 +2052,8 @@ bool ScraperDirectoryAndConfigSanity()
     return true;
 }
 
-void AuthenticationETagClear()
-{
-    fs::path file = fs::current_path() / "auth.dat";
 
-    if (fs::exists(file))
-        fs::remove(file);
-}
-
-bool UserpassPopulated()
+bool UserpassPopulated() EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     if (vuserpass.empty())
     {
@@ -2072,7 +2078,7 @@ bool UserpassPopulated()
     return true;
 }
 
-bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2187,7 +2193,7 @@ bool DownloadProjectHostFiles(const WhitelistSnapshot& projectWhitelist)
     return true;
 }
 
-bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectTeamFiles(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
@@ -2536,11 +2542,14 @@ void DownloadProjectPublicKeys(const WhitelistSnapshot& projectWhitelist)
         g_project_public_keys_timestamp = GetAdjustedTime();
     }
 
-    _log(logattribute::INFO, __func__,
-         "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    {
+        LOCK(cs_ProjectPublicKeys);
+        _log(logattribute::INFO, __func__,
+             "Completed. " + ToString(g_project_public_keys.size()) + " project(s) have ownership proof public keys.");
+    }
 }
 
-bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
+bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist) EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
 
@@ -2761,6 +2770,7 @@ bool DownloadProjectRacFilesByCPID(const WhitelistSnapshot& projectWhitelist)
 bool ProcessProjectRacFileByCPID(const std::string& project, const fs::path& file, const std::string& etag,
                                  BeaconConsensus& Consensus, ScraperVerifiedBeacons& GlobalVerifiedBeaconsCopy,
                                  ScraperVerifiedBeacons& IncomingVerifiedBeacons, double& all_cpid_total_credit)
+                                 EXCLUSIVE_LOCKS_REQUIRED(cs_Scraper)
 {
     auto explorer_mode = []() { LOCK(cs_ScraperGlobals); return fExplorer; };
     auto require_team_whitelist_membership = []() { LOCK(cs_ScraperGlobals); return REQUIRE_TEAM_WHITELIST_MEMBERSHIP; };
@@ -3254,7 +3264,7 @@ bool StoreBeaconList(const fs::path& file)
     BeaconConsensus Consensus = GetConsensusBeaconList();
 
     _log(logattribute::INFO, "StoreBeaconList", "ReadCacheSection element count: "
-         + ToString(GetBeaconRegistry().Beacons().size()));
+         + ToString(WITH_LOCK(cs_main, return GetBeaconRegistry().Beacons().size())));
     _log(logattribute::INFO, "StoreBeaconList", "mBeaconMap element count: "
          + ToString(Consensus.mBeaconMap.size()));
 
@@ -6285,17 +6295,21 @@ Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats, bool bContrac
 /**
  * @brief Publishes a CScraperManifest to the network from the current file manifest IF the node is authorized.
  * @param params
- * @param fHelp
  * @return bool true if successful
  */
-UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "sendscraperfilemanifest\n"
-                "Send a CScraperManifest object from the current ScraperFileManifest.\n"
-                );
+static const RPCHelpMan sendscraperfilemanifest_help{
+    "sendscraperfilemanifest",
+    "Send a CScraperManifest object from the current ScraperFileManifest.",
+    {},
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was broadcast successfully."},
+    RPCExamples{
+        HelpExampleCli("sendscraperfilemanifest", "") +
+        HelpExampleRpc("sendscraperfilemanifest", "")},
+};
+const RPCHelpMan& sendscraperfilemanifest_helpman() { return sendscraperfilemanifest_help; }
 
+UniValue sendscraperfilemanifest(const UniValue& params)
+{
     CTxDestination AddressOut;
     CKey KeyOut;
     bool ret;
@@ -6315,17 +6329,24 @@ UniValue sendscraperfilemanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Saves a CScraperManifest to disk
  * @param params Takes a single parameter which is the hash of the manifest to save to disk.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "savescraperfilemanifest <hash>\n"
-                "Saves a CScraperManifest object to disk.\n"
-                );
+static const RPCHelpMan savescraperfilemanifest_help{
+    "savescraperfilemanifest",
+    "Save a CScraperManifest object to disk.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to save to disk."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest was written successfully."},
+    RPCExamples{
+        HelpExampleCli("savescraperfilemanifest", "\"<hash>\"") +
+        HelpExampleRpc("savescraperfilemanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& savescraperfilemanifest_helpman() { return savescraperfilemanifest_help; }
 
+UniValue savescraperfilemanifest(const UniValue& params)
+{
     bool ret = ScraperSaveCScraperManifestToFiles(uint256S(params[0].get_str()));
 
     return UniValue(ret);
@@ -6336,17 +6357,27 @@ UniValue savescraperfilemanifest(const UniValue& params, bool fHelp)
  * create a grace period entry in the pending deleted manifest map. It also will not delete the underlying manifest object
  * if a shared pointer to the manifest object is also held by the global convergence cache.
  * @param params Takes a single parameter which is the hash if the manifest to delete.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "deletecscrapermanifest <hash>\n"
-                "delete manifest object.\n"
-                );
+static const RPCHelpMan deletecscrapermanifest_help{
+    "deletecscrapermanifest",
+    "Delete a CScraperManifest entry from the global mapManifest map.\n"
+    "Deletion is immediate and does not create a grace-period entry in the pending-deleted-manifest map.\n"
+    "The underlying manifest object will not be deleted if a shared pointer to it is also held by the\n"
+    "global convergence cache.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hash of the manifest to delete."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the manifest entry was deleted."},
+    RPCExamples{
+        HelpExampleCli("deletecscrapermanifest", "\"<hash>\"") +
+        HelpExampleRpc("deletecscrapermanifest", "\"<hash>\"")},
+};
+const RPCHelpMan& deletecscrapermanifest_helpman() { return deletecscrapermanifest_help; }
 
+UniValue deletecscrapermanifest(const UniValue& params)
+{
     LOCK(CScraperManifest::cs_mapManifest);
 
     bool ret = CScraperManifest::DeleteManifest(uint256S(params[0].get_str()), true);
@@ -6357,17 +6388,24 @@ UniValue deletecscrapermanifest(const UniValue& params, bool fHelp)
 /**
  * @brief Immediately archives the specified log, either the debug.log of scraper.log
  * @param params Takes a single parameter specifying the log to archive, debug or scraper.
- * @param fHelp
  * @return bool true if successful
  */
-UniValue archivelog(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1 )
-        throw std::runtime_error(
-                "archivelog <log>\n"
-                "Immediately archives the specified log. Currently valid values are debug and scraper.\n"
-                );
+static const RPCHelpMan archivelog_help{
+    "archivelog",
+    "Immediately archive the specified log. Currently valid values are \"debug\" and \"scraper\".",
+    {
+        {"log", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Which log to archive: either \"debug\" or \"scraper\"."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "True if the log was archived successfully."},
+    RPCExamples{
+        HelpExampleCli("archivelog", "debug") +
+        HelpExampleRpc("archivelog", "\"scraper\"")},
+};
+const RPCHelpMan& archivelog_helpman() { return archivelog_help; }
 
+UniValue archivelog(const UniValue& params)
+{
     std::string sLogger = params[0].get_str();
 
     fs::path pfile_out;
@@ -6443,21 +6481,27 @@ UniValue ConvergedScraperStatsToJson(ConvergedScraperStats& ConvergedScraperStat
 /**
  * @brief Reports on the state of the convergence on the local node.
  * @param params bool true to provide detailed output
- * @param fHelp
  * @return JSON report of convergence state with optional details
  */
-UniValue convergencereport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1)
-        throw std::runtime_error(
-                "convergencereport [convergence_cache_details]\n"
-                "\n"
-                "convergence_cache_details: optional boolean to provide detailed output\n"
-                "from convergence cache\n"
-                "\n"
-                "Display local node report of scraper convergence.\n"
-                );
+static const RPCHelpMan convergencereport_help{
+    "convergencereport",
+    "Display the local node's report of scraper convergence.",
+    {
+        {"convergence_cache_details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include detailed output from the convergence cache. Default: false."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Convergence report; the shape depends on the convergence_cache_details flag. See source."}}},
+    RPCExamples{
+        HelpExampleCli("convergencereport", "") +
+        HelpExampleCli("convergencereport", "true") +
+        HelpExampleRpc("convergencereport", "true")},
+};
+const RPCHelpMan& convergencereport_helpman() { return convergencereport_help; }
 
+UniValue convergencereport(const UniValue& params)
+{
     auto scraper_sleep = []() { LOCK(cs_ScraperGlobals); return nScraperSleep; };
 
     // See if converged stats/contract update needed...
@@ -6560,19 +6604,27 @@ UniValue convergencereport(const UniValue& params, bool fHelp)
  * @brief Tests superblock formation
  * @param params unsigned int to specify the number of bits for the reduced hash hint to force more duplicates to check. This
  * is clamped between 4 and 32, with 32 as the default, which is the normal hint bits.
- * @param fHelp
  * @return report of test results
  */
-UniValue testnewsb(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 1 )
-        throw std::runtime_error(
-                "testnewsb [hint bits]\n"
-                "Tests superblock formation. Optional parameter of the number of bits for the reduced hash hint for"
-                " uncached test.\n"
-                "This is limited to a range of 4 to 32, with 32 as the default (which is the normal hint bits).\n"
-                );
+static const RPCHelpMan testnewsb_help{
+    "testnewsb",
+    "Tests superblock formation.",
+    {
+        {"hint_bits", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Number of bits for the reduced hash hint for the uncached test. "
+            "Clamped to a range of 4 to 32; default: 32 (the normal hint bits)."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Test report; see source for shape."}}},
+    RPCExamples{
+        HelpExampleCli("testnewsb", "") +
+        HelpExampleCli("testnewsb", "16") +
+        HelpExampleRpc("testnewsb", "16")},
+};
+const RPCHelpMan& testnewsb_helpman() { return testnewsb_help; }
 
+UniValue testnewsb(const UniValue& params)
+{
     unsigned int nReducedCacheBits = 32;
 
     if (params.size() == 1) nReducedCacheBits = params[0].get_int();
@@ -6605,7 +6657,9 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
     uint32_t nNewFormatSuperblockReducedContentHashFromUnderlyingManifestHint;
 
     {
-        LOCK(cs_ConvergedScraperStatsCache);
+        // pindexBest read below requires cs_main; canonical order is
+        // cs_main -> subsystem locks, so acquire cs_main first.
+        LOCK2(cs_main, cs_ConvergedScraperStatsCache);
 
         NewFormatSuperblock = SuperblockPtr::BindShared(
             Superblock::FromConvergence(ConvergedScraperStatsCache),
@@ -6742,9 +6796,15 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
         // SuperblockValidator class tests (past convergence)
         //
 
-        SuperblockPtr RandomPastSBPtr = SuperblockPtr::BindShared(
-            std::move(RandomPastSB),
-            pindexBest);
+        SuperblockPtr RandomPastSBPtr;
+        {
+            // pindexBest read requires cs_main; scoped tight so the
+            // ValidateSuperblock calls below run without cs_main held.
+            LOCK(cs_main);
+            RandomPastSBPtr = SuperblockPtr::BindShared(
+                std::move(RandomPastSB),
+                pindexBest);
+        }
 
         if (Quorum::ValidateSuperblock(RandomPastSBPtr))
         {
@@ -6778,17 +6838,23 @@ UniValue testnewsb(const UniValue& params, bool fHelp)
  * @brief Generates a comprehensive report of the scraper convergence, manifest and parts objects. This report is mainly
  * used for integrity checking of the scraper's internal operation
  * @param params none
- * @param fHelp
  * @return JSON report of scraper status
  */
-UniValue scraperreport(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0 )
-        throw std::runtime_error(
-                "scraperreport\n"
-                "Report containing various statistics about the scraper.\n"
-                );
+static const RPCHelpMan scraperreport_help{
+    "scraperreport",
+    "Report containing various statistics about the scraper.",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "",
+            "Scraper diagnostics object including global scraper network sizes and converged-stats cache detail."}}},
+    RPCExamples{
+        HelpExampleCli("scraperreport", "") +
+        HelpExampleRpc("scraperreport", "")},
+};
+const RPCHelpMan& scraperreport_helpman() { return scraperreport_help; }
 
+UniValue scraperreport(const UniValue& params)
+{
     UniValue ret(UniValue::VOBJ);
 
     UniValue global_scraper_net(UniValue::VOBJ);

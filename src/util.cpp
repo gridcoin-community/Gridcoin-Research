@@ -255,7 +255,12 @@ std::string GetFileContents(const fs::path filepath)
 #ifndef UPGRADERFLAG
 // avoid including unnecessary files for standalone upgrader
 
-static int64_t nTimeOffset = 0;
+// Atomic: written by the message-handler thread inside AddTimeData() (which
+// runs from ProcessMessage's VERSION-handling path) and read both there and
+// from the GUI thread via GetTimeOffset() -> GetAdjustedTime() (e.g. poll
+// expiry checks). No common lock; Bitcoin Core fixed the same pattern years
+// ago by making this atomic.
+static std::atomic<int64_t> nTimeOffset{0};
 
 int64_t GetTimeOffset()
 {

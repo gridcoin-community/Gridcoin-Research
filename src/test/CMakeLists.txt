@@ -6,6 +6,7 @@ endif()
 add_executable(test_gridcoin
     bip68_tests.cpp
     checkpoints_tests.cpp
+    coinstake_construction_tests.cpp
     csv_tests.cpp
     dos_tests.cpp
     accounting_tests.cpp
@@ -45,8 +46,16 @@ add_executable(test_gridcoin
     netbase_tests.cpp
     net_tests.cpp
     orphan_block_tests.cpp
+    psgt_tests.cpp
+    # Qt-free transaction filter/sort core (src/qt/txfilter.cpp) + its unit
+    # suite. The core has zero Qt dependencies, so it compiles into the
+    # GUI-OFF test binary directly — landing the GUI predicate logic in the
+    # one configuration CI exercises.
+    ${CMAKE_SOURCE_DIR}/src/qt/txfilter.cpp
+    qt_txfilter_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
+    rpchelpman_tests.cpp
     sanity_tests.cpp
     scheduler_tests.cpp
     script_p2sh_tests.cpp
@@ -55,6 +64,7 @@ add_executable(test_gridcoin
     sigopcount_tests.cpp
     sync_tests.cpp
     test_gridcoin.cpp
+    transaction_identity_tests.cpp
     transaction_tests.cpp
     uint256_tests.cpp
     util_tests.cpp

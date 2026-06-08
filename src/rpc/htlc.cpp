@@ -9,6 +9,7 @@
 #include "policy/fees.h"
 #include "primitives/transaction.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #include "server.h"
 #include "streams.h"
 #include "txdb.h"
@@ -21,25 +22,31 @@ using namespace std;
 
 extern uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 
-UniValue createhtlc(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() < 4 || params.size() > 5)
-        throw runtime_error(
-            "createhtlc <receiver_addr> <sender_addr> <hash_hex> <timeout> [amount]\n"
-            "\n"
-            "Create a Hash Time-Locked Contract.\n"
-            "\n"
-            "Arguments:\n"
-            "1. receiver_addr   (string, required) Address of the receiver (claim path)\n"
-            "2. sender_addr     (string, required) Address of the sender (refund path)\n"
-            "3. hash_hex        (string, required) SHA256 hash of the preimage (64 hex chars)\n"
-            "4. timeout         (numeric, required) Absolute locktime for refund path\n"
-            "5. amount          (numeric, optional) Amount in GRC to fund the HTLC\n"
-            "\n"
-            "Returns a JSON object with the P2SH address and redeem script.\n"
-            "If amount is provided, funds the HTLC with a transaction.\n"
-            + HelpRequiringPassphrase());
+static const RPCHelpMan createhtlc_help{
+    "createhtlc",
+    "Create a Hash Time-Locked Contract.\n"
+    "\n"
+    "Returns a JSON object with the P2SH address and redeem script. "
+    "If amount is provided, funds the HTLC with a transaction.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"receiver_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the receiver (claim path)."},
+        {"sender_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address of the sender (refund path)."},
+        {"hash_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "SHA256 hash of the preimage (64 hex chars)."},
+        {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Absolute locktime for the refund path."},
+        {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "Amount in GRC to fund the HTLC."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "HTLC detail object including p2sh address, redeem_script, and optional fund tx."}}},
+    RPCExamples{
+        HelpExampleCli("createhtlc", "\"recv_addr\" \"send_addr\" \"<64-hex-hash>\" 500000 100") +
+        HelpExampleRpc("createhtlc", "\"recv_addr\", \"send_addr\", \"<64-hex-hash>\", 500000, 100")},
+};
+const RPCHelpMan& createhtlc_helpman() { return createhtlc_help; }
 
+UniValue createhtlc(const UniValue& params)
+{
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // Parse receiver address
@@ -123,22 +130,33 @@ UniValue createhtlc(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue claimhtlc(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 4)
-        throw runtime_error(
-            "claimhtlc <htlc_txid> <vout> <preimage_hex> <destination_addr>\n"
-            "\n"
-            "Claim an HTLC output using the preimage.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. preimage_hex      (string, required) The preimage (hex encoded)\n"
-            "4. destination_addr  (string, required) Address to send claimed funds to\n"
-            + HelpRequiringPassphrase());
+static const RPCHelpMan claimhtlc_help{
+    "claimhtlc",
+    "Claim an HTLC output using the preimage.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+        {"preimage_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The preimage (hex encoded)."},
+        {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send claimed funds to."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Claim result object including the spending txid."}}},
+    RPCExamples{
+        HelpExampleCli("claimhtlc", "\"<htlc_txid>\" 0 \"<preimage_hex>\" \"<dest_addr>\"") +
+        HelpExampleRpc("claimhtlc", "\"<htlc_txid>\", 0, \"<preimage_hex>\", \"<dest_addr>\"")},
+};
+const RPCHelpMan& claimhtlc_helpman() { return claimhtlc_help; }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+UniValue claimhtlc(const UniValue& params)
+{
+    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+    // The wallet-registry lock is needed for the transactionAddedToMempool
+    // dispatch after AcceptToMemoryPool below.
+    LOCK(cs_main);
+    LOCK(cs_setpwalletRegistered);
+    LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
     // Parse txid
@@ -197,27 +215,28 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "Receiver's private key not found in wallet");
 
     // Build the spending transaction
-    CTransaction txSpend;
-    txSpend.nVersion = CTransaction::CURRENT_VERSION;
-    txSpend.nTime = GetAdjustedTime();
-    txSpend.nLockTime = 0;
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+    mtx.nTime = GetAdjustedTime();
+    mtx.nLockTime = 0;
 
     // Input: the HTLC UTXO
     CTxIn txin(COutPoint(htlc_txid, nVout), CScript(), 0xfffffffe);
-    txSpend.vin.push_back(txin);
+    mtx.vin.push_back(txin);
 
     // Output: pay to destination minus fee
     CScript destScript;
     destScript.SetDestination(dest);
 
     CAmount nValue = htlcOutput.nValue;
-    CAmount nFee = GetBaseFee(txSpend);
+    CAmount nFee = GetBaseFee(CTransaction(mtx));
     if (nValue <= nFee)
         throw JSONRPCError(RPC_WALLET_ERROR, "HTLC output value too small to cover fee");
 
-    txSpend.vout.push_back(CTxOut(nValue - nFee, destScript));
+    mtx.vout.push_back(CTxOut(nValue - nFee, destScript));
 
-    // Sign: compute signature hash over the redeem script
+    // Sign: compute sighash using CTransaction for SignatureHash
+    CTransaction txSpend(mtx);
     uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
 
     vector<unsigned char> vchSig;
@@ -226,7 +245,10 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     vchSig.push_back((unsigned char)SIGHASH_ALL);
 
     // Build scriptSig: <sig> <preimage> OP_TRUE <redeemScript>
-    txSpend.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, preimage, redeemScript);
+    mtx.vin[0].scriptSig = CreateHTLCClaimScript(vchSig, preimage, redeemScript);
+
+    // Final tx for verify + broadcast
+    txSpend = CTransaction(mtx);
 
     // Verify the script evaluates correctly
     if (!VerifyScript(txSpend.vin[0].scriptSig, htlcOutput.scriptPubKey,
@@ -239,11 +261,13 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     }
 
     // Broadcast
-    if (!AcceptToMemoryPool(mempool, txSpend, nullptr))
-        throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    {
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, txSpend, state, nullptr))
+            throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);
@@ -251,21 +275,32 @@ UniValue claimhtlc(const UniValue& params, bool fHelp)
     return result;
 }
 
-UniValue refundhtlc(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 3)
-        throw runtime_error(
-            "refundhtlc <htlc_txid> <vout> <destination_addr>\n"
-            "\n"
-            "Refund an HTLC output after the timeout has passed.\n"
-            "\n"
-            "Arguments:\n"
-            "1. htlc_txid        (string, required) Transaction ID of the HTLC funding tx\n"
-            "2. vout              (numeric, required) Output index of the HTLC\n"
-            "3. destination_addr  (string, required) Address to send refunded funds to\n"
-            + HelpRequiringPassphrase());
+static const RPCHelpMan refundhtlc_help{
+    "refundhtlc",
+    "Refund an HTLC output after the timeout has passed.\n"
+    "\n"
+    "Requires wallet passphrase to be set with walletpassphrase first if wallet is encrypted.",
+    {
+        {"htlc_txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Transaction ID of the HTLC funding tx."},
+        {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "Output index of the HTLC."},
+        {"destination_addr", RPCArg::Type::STR, RPCArg::Optional::NO, "Address to send refunded funds to."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {{RPCResult::Type::ELISION, "", "Refund result object including the spending txid."}}},
+    RPCExamples{
+        HelpExampleCli("refundhtlc", "\"<htlc_txid>\" 0 \"<dest_addr>\"") +
+        HelpExampleRpc("refundhtlc", "\"<htlc_txid>\", 0, \"<dest_addr>\"")},
+};
+const RPCHelpMan& refundhtlc_helpman() { return refundhtlc_help; }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+UniValue refundhtlc(const UniValue& params)
+{
+    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
+    // The wallet-registry lock is needed for the transactionAddedToMempool
+    // dispatch after AcceptToMemoryPool below.
+    LOCK(cs_main);
+    LOCK(cs_setpwalletRegistered);
+    LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
     // Parse txid
@@ -333,27 +368,28 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_WALLET_ERROR, "Sender's private key not found in wallet");
 
     // Build the spending transaction
-    CTransaction txSpend;
-    txSpend.nVersion = CTransaction::CURRENT_VERSION;
-    txSpend.nTime = GetAdjustedTime();
-    txSpend.nLockTime = timeout;
+    CMutableTransaction mtx;
+    mtx.nVersion = CTransaction::CURRENT_VERSION;
+    mtx.nTime = GetAdjustedTime();
+    mtx.nLockTime = timeout;
 
     // Input: the HTLC UTXO with nSequence < max to enable nLockTime
     CTxIn txin(COutPoint(htlc_txid, nVout), CScript(), 0xfffffffe);
-    txSpend.vin.push_back(txin);
+    mtx.vin.push_back(txin);
 
     // Output: pay to destination minus fee
     CScript destScript;
     destScript.SetDestination(dest);
 
     CAmount nValue = htlcOutput.nValue;
-    CAmount nFee = GetBaseFee(txSpend);
+    CAmount nFee = GetBaseFee(CTransaction(mtx));
     if (nValue <= nFee)
         throw JSONRPCError(RPC_WALLET_ERROR, "HTLC output value too small to cover fee");
 
-    txSpend.vout.push_back(CTxOut(nValue - nFee, destScript));
+    mtx.vout.push_back(CTxOut(nValue - nFee, destScript));
 
-    // Sign: compute signature hash over the redeem script
+    // Sign: compute sighash using CTransaction for SignatureHash
+    CTransaction txSpend(mtx);
     uint256 sighash = SignatureHash(redeemScript, txSpend, 0, SIGHASH_ALL);
 
     vector<unsigned char> vchSig;
@@ -362,7 +398,10 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     vchSig.push_back((unsigned char)SIGHASH_ALL);
 
     // Build scriptSig: <sig> OP_FALSE <redeemScript>
-    txSpend.vin[0].scriptSig = CreateHTLCRefundScript(vchSig, redeemScript);
+    mtx.vin[0].scriptSig = CreateHTLCRefundScript(vchSig, redeemScript);
+
+    // Final tx for verify + broadcast
+    txSpend = CTransaction(mtx);
 
     // Verify the script evaluates correctly
     if (!VerifyScript(txSpend.vin[0].scriptSig, htlcOutput.scriptPubKey,
@@ -375,11 +414,13 @@ UniValue refundhtlc(const UniValue& params, bool fHelp)
     }
 
     // Broadcast
-    if (!AcceptToMemoryPool(mempool, txSpend, nullptr))
-        throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    {
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, txSpend, state, nullptr))
+            throw JSONRPCError(RPC_TRANSACTION_ERROR, "Transaction rejected by mempool");
+    }
 
     uint256 txHash = txSpend.GetHash();
-    SyncWithWallets(txSpend, nullptr, true);
     RelayTransaction(txSpend, txHash);
 
     UniValue result(UniValue::VOBJ);

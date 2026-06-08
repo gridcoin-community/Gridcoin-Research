@@ -79,6 +79,7 @@ void GRC::RunBackupJob()
 
     backup_file_type.push_back("wallet.dat");
     backup_file_type.push_back("gridcoinresearch.conf");
+    backup_file_type.push_back("gridcoinsettings.json");
 
     std::vector<std::string> files_removed;
 
@@ -97,46 +98,75 @@ void GRC::RunBackupJob()
 
     const bool wallet_result = BackupWallet(*pwalletMain, GetBackupFilename(backup_file_type[0]));
     const bool config_result = BackupConfigFile(GetBackupFilename(backup_file_type[1]));
+    const bool settings_result = BackupSettingsFile(GetBackupFilename(backup_file_type[2]));
     const bool maintain_backups_result = MaintainBackups(GetBackupPath(), backup_file_type, 0, 0, files_removed);
 
-    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; History Maintenance: %s, %d files removed",
+    LogPrintf("%s: Scheduled backup results: Wallet: %s; Config: %s; Settings: %s; History Maintenance: %s, %d files removed",
         __func__,
         (wallet_result ? "succeeded" : "failed"),
         (config_result ? "succeeded" : "failed"),
+        (settings_result ? "succeeded" : "failed"),
         (maintain_backups_result ? "succeeded" : "failed"),
         files_removed.size());
 
     last_backup_time = now;
 }
 
-bool GRC::BackupConfigFile(const std::string& strDest)
+namespace {
+//! Shared implementation of the file-copy logic used by BackupConfigFile and
+//! BackupSettingsFile. Encapsulates the Boost 1.74 symlink-target workaround
+//! so callers only have to provide the source path, the destination string,
+//! and a label for logging.
+bool BackupPlainFile(const fs::path& source, const std::string& strDest, const char* label)
 {
-    // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
-
-    fs::path ConfigSource = GetConfigFile();
-    fs::path ConfigTarget = strDest;
-    fs::create_directories(ConfigTarget.parent_path());
+    fs::path target = strDest;
+    fs::create_directories(target.parent_path());
     try
     {
 #if BOOST_VERSION > 107400
-        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_options::overwrite_existing);
+        fs::copy_file(source, target, fs::copy_options::overwrite_existing);
 #elif BOOST_VERSION == 107400
-        // This is a workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
-        std::filesystem::path StdConfigSource = ConfigSource.wstring();
-        std::filesystem::path StdConfigTarget = strDest;
-        std::filesystem::copy_file(StdConfigSource, StdConfigTarget, std::filesystem::copy_options::overwrite_existing);
+        // Workaround for Boost 1.74's problem with copy_file when the target is inside a symlink.
+        std::filesystem::path StdSource = source.wstring();
+        std::filesystem::path StdTarget = strDest;
+        std::filesystem::copy_file(StdSource, StdTarget, std::filesystem::copy_options::overwrite_existing);
 #else
-        fs::copy_file(ConfigSource, ConfigTarget, fs::copy_option::overwrite_if_exists);
+        fs::copy_file(source, target, fs::copy_option::overwrite_if_exists);
 #endif
-        LogPrintf("BackupConfigFile: Copied gridcoinresearch.conf to %s", ConfigTarget.string());
+        LogPrintf("%s: Copied %s to %s", __func__, label, target.string());
         return true;
     }
-    catch(const fs::filesystem_error &e)
+    catch (const fs::filesystem_error& e)
     {
-        LogPrintf("BackupConfigFile: Error copying gridcoinresearch.conf to %s - %s", ConfigTarget.string(), e.what());
+        LogPrintf("%s: Error copying %s to %s - %s", __func__, label, target.string(), e.what());
         return false;
     }
-    return false;
+}
+} // anonymous namespace
+
+bool GRC::BackupConfigFile(const std::string& strDest)
+{
+    // Check to see if there is a parent_path in strDest to support custom locations by ui - bug fix
+    return BackupPlainFile(GetConfigFile(), strDest, "gridcoinresearch.conf");
+}
+
+bool GRC::BackupSettingsFile(const std::string& strDest)
+{
+    // The settings file path is resolved via ArgsManager so that the -settings
+    // override is honored. If settings are disabled (-nosettings), or the file
+    // has not been created yet (no rw settings have ever been written), there
+    // is nothing to back up; treat that as success so the surrounding backup
+    // job does not report a spurious failure.
+    fs::path source;
+    if (!gArgs.GetSettingsPath(&source, /* temp= */ false)) {
+        LogPrintf("%s: Settings file disabled via -nosettings, skipping.", __func__);
+        return true;
+    }
+    if (!fs::exists(source)) {
+        LogPrintf("%s: Settings file %s does not exist yet, skipping.", __func__, source.string());
+        return true;
+    }
+    return BackupPlainFile(source, strDest, "gridcoinsettings.json");
 }
 
 bool GRC::BackupWallet(const CWallet& wallet, const std::string& strDest)

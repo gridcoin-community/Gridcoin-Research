@@ -83,7 +83,7 @@ bool MRC::WellFormed() const
     return true;
 }
 
-CAmount MRC::ComputeMRCFee() const
+CAmount MRC::ComputeMRCFee() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CAmount fee = 0;
 
@@ -266,13 +266,17 @@ uint256 MRC::GetHash() const
     return hasher.GetHash();
 }
 
-bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
+// IContractHandler::Validate's contract is loosened here from the base-class
+// declaration: cs_main is required (mempool acceptance path holds it; ConnectBlock
+// holds it; tests run single-threaded). The base-class declaration in handler.h
+// is annotated similarly so the contract is visible polymorphically.
+bool GRC::MRCContractHandler::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Fully validate the incoming MRC txn.
     return ValidateMRC(contract, tx, DoS);
 }
 
-bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool GRC::MRCContractHandler::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }

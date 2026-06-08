@@ -29,7 +29,7 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
     return whichType != TX_NONSTANDARD;
 }
 
-bool IsStandardTx(const CTransaction& tx)
+bool IsStandardTx(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     std::string reason = "";
     if (tx.nVersion > CTransaction::CURRENT_VERSION)

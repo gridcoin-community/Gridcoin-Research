@@ -26,7 +26,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "policy/fees.h"
-#include "util.h"
+#include <util.h>
 
 #include <stdexcept>
 
@@ -42,7 +42,7 @@ class MockBlockIndex : CDiskBlockIndex
     };
 
 public:
-    static CBlockIndex* InsertBlockIndex(const uint256& hash)
+    static CBlockIndex* InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         if (hash.IsNull())
             return nullptr;

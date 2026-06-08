@@ -5,10 +5,15 @@
 #ifndef GRIDCOIN_QUORUM_H
 #define GRIDCOIN_QUORUM_H
 
+#include "sync.h"
+
+#include <limits>
 #include <string>
 #include <vector>
 
 class CBlockIndex;
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -58,7 +63,15 @@ public:
 //! update the superblock data for research reward calculations.
 //!
 //! THREAD SAFETY: The quorum system interacts closely with pointers to blocks
-//! in the chain index. Always lock cs_main before calling its methods.
+//! in the chain index, and its in-memory state (g_superblock_index,
+//! g_legacy_consensus) is protected by cs_main. Methods that consult chain
+//! state or mutate that in-memory state are annotated
+//! EXCLUSIVE_LOCKS_REQUIRED(cs_main). The exceptions are:
+//!
+//!   - Participating()       -- pure function over (address, time)
+//!   - ValidateSuperblock()  -- scraper-side; uses cs_ConvergedScraperStatsCache
+//!   - ExplainMagnitude()    -- scraper-side; uses cs_ConvergedScraperStatsCache
+//!   - CreateSuperblock()    -- scraper-side; uses cs_Scraper / cs_mapManifest
 //!
 class Quorum
 {
@@ -85,7 +98,7 @@ public:
     //! \return Quorum hash of the most popular superblock or an invalid hash
     //! when no nodes voted in the current superblock cycle.
     //!
-    static QuorumHash FindPopularHash(const CBlockIndex* const pindex);
+    static QuorumHash FindPopularHash(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Store a node's vote for a pending superblock in the cache.
@@ -97,14 +110,14 @@ public:
     static void RecordVote(
         const QuorumHash quorum_hash,
         const std::string& grc_address,
-        const CBlockIndex* const pindex);
+        const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Remove a node's vote for a pending superblock from the cache.
     //!
     //! \param pindex The block that contains the vote to remove.
     //!
-    static void ForgetVote(const CBlockIndex* const pindex);
+    static void ForgetVote(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Validate a superblock published to the network for the day.
@@ -116,7 +129,7 @@ public:
     static bool ValidateSuperblockClaim(
         const Claim& claim,
         const SuperblockPtr& superblock,
-        const CBlockIndex* const pindex);
+        const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Validate the supplied superblock by comparing it to the node's
@@ -125,13 +138,20 @@ public:
     //! \param superblock The superblock to validate.
     //! \param use_cache  If \c false, skip validation with the scraper cache.
     //! \param hint_bits  For testing by-project fallback validation.
+    //! \param height     Height of the block whose superblock is being
+    //!                   validated, used to gate the by-project fallback
+    //!                   skip-list extension behind BlockV13Height. Defaults
+    //!                   to INT_MAX so non-consensus callers (scraper self-
+    //!                   checks, unit tests) always apply the extended skip
+    //!                   list.
     //!
     //! \return \c true if local manifest data produces a matching superblock.
     //!
     static bool ValidateSuperblock(
         const SuperblockPtr& superblock,
         const bool use_cache = true,
-        const size_t hint_bits = 32);
+        const size_t hint_bits = 32,
+        const int height = std::numeric_limits<int>::max());
 
     //!
     //! \brief Get the current magnitude for the specified CPID.
@@ -140,7 +160,7 @@ public:
     //!
     //! \return Magnitude as of the last tallied superblock.
     //!
-    static Magnitude GetMagnitude(const Cpid cpid);
+    static Magnitude GetMagnitude(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the current magnitude for the specified mining ID.
@@ -150,7 +170,7 @@ public:
     //! \return Magnitude as of the last tallied superblock or zero if the
     //! mining ID represents a non-cruncher.
     //!
-    static Magnitude GetMagnitude(const MiningId mining_id);
+    static Magnitude GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Generate a report from scraper statistics that contains the
@@ -167,7 +187,7 @@ public:
     //!
     //! \return The most recent superblock applied by the tally.
     //!
-    static SuperblockPtr CurrentSuperblock();
+    static SuperblockPtr CurrentSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get a reference to the upcoming superblock.
@@ -178,7 +198,7 @@ public:
     //! \return A superblock pending activation if one exists. Returns an empty
     //! superblock when the tally already activated the latest superblock.
     //!
-    static SuperblockPtr PendingSuperblock();
+    static SuperblockPtr PendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether any superblocks are pending activation.
@@ -186,7 +206,7 @@ public:
     //! \return \c true if the index contains a superblock loaded at a height
     //! above the last tally window.
     //!
-    static bool HasPendingSuperblock();
+    static bool HasPendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether the network expects a new superblock.
@@ -196,14 +216,14 @@ public:
     //! \return \c true if the age of the current superblock exceeds the
     //! protocol's superblock spacing parameter.
     //!
-    static bool SuperblockNeeded(const int64_t now);
+    static bool SuperblockNeeded(const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the tally's superblock context.
     //!
     //! \param pindexLast The most recent block to begin loading backward from.
     //!
-    static void LoadSuperblockIndex(const CBlockIndex* pindexLast);
+    static void LoadSuperblockIndex(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Create a new superblock from scraper convergence data.
@@ -217,14 +237,14 @@ public:
     //!
     //! \param superblock Contains the superblock data to load.
     //!
-    static void PushSuperblock(SuperblockPtr superblock);
+    static void PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Drop the last superblock loaded into the tally.
     //!
     //! \param pindex Represents the block that contains the superblock to drop.
     //!
-    static void PopSuperblock(const CBlockIndex* const pindex);
+    static void PopSuperblock(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Activate the superblock received at or below the specified
@@ -235,7 +255,7 @@ public:
     //! \return \c true if a superblock at or below the specified height was
     //! activated.
     //!
-    static bool CommitSuperblock(const uint32_t height);
+    static bool CommitSuperblock(const uint32_t height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 };
 }
 

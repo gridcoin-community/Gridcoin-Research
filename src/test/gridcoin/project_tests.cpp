@@ -5,9 +5,21 @@
 #include "main.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "util/string.h"
 #include "wallet/generated_type.h"
 
 #include <boost/test/unit_test.hpp>
+
+// Tests are single-threaded and drive the Whitelist contract handler
+// directly (not via ApplyContracts). The handler is
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main) under the thread-safety annotation
+// rollout; suppress the analyzer for this file rather than take a lock
+// the tests do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 namespace {
 void AddProjectEntry(const uint32_t& payload_version, const std::string& name, const std::string& url,
@@ -18,7 +30,7 @@ void AddProjectEntry(const uint32_t& payload_version, const std::string& name, c
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -53,7 +65,8 @@ void AddProjectEntry(const uint32_t& payload_version, const std::string& name, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name,
@@ -64,7 +77,7 @@ void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
     dummy_tx.nTime = time;
@@ -96,7 +109,47 @@ void DeleteProjectEntry(const uint32_t& payload_version, const std::string& name
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
+}
+
+//!
+//! \brief Applies a v4 project ADD contract carrying an EXPLICIT status through the registry contract handler,
+//! persisting it to LevelDB (a real CBlockIndex height is supplied so RegistryDB::Store runs and
+//! GetProjectsFromDisk can read it back).
+//!
+//! This is a reusable building block for tests that need the registry/contract/LevelDB layer actually populated --
+//! e.g. verifying the raw contract status read by getrawprojectstatus, and (when the autogreylist "bad project" run
+//! is extended through this same path) asserting that the in-memory Snapshot overlay can diverge from the persisted
+//! contract status. Pass status = ProjectEntryStatus::UNKNOWN for a plain ACTIVE add (the handler maps
+//! ADD + UNKNOWN -> ACTIVE, exactly as the addkey client does).
+//!
+void AddProjectEntryWithStatus(const std::string& name, const std::string& url,
+                               const GRC::ProjectEntryStatus& status, const int& height, const uint64_t time,
+                               const bool& gdpr_status = false, const bool& requires_ext_adapter = false)
+{
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    CMutableTransaction dummy_tx;
+    CBlockIndex dummy_index = CBlockIndex {};
+    dummy_index.nHeight = height;
+    dummy_tx.nTime = time;
+    dummy_index.nTime = time;
+
+    GRC::Contract contract = GRC::MakeContract<GRC::Project>(
+                uint32_t {3},   // Contract version (post v13)
+                GRC::ContractAction::ADD,
+                uint32_t {4},   // Payload version (v4)
+                name,
+                url,
+                gdpr_status,
+                requires_ext_adapter,
+                status);
+
+    dummy_tx.vContracts.push_back(contract);
+
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 
 struct AutoGreylistEntryState
@@ -519,19 +572,19 @@ BOOST_AUTO_TEST_CASE(it_adds_whitelisted_projects_from_contract_data)
     int height = 0;
     int64_t time = 0;
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 0);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 1);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
 
     AddProjectEntry(2, "Foo", "http://foo.test", false, height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 2);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 2);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
@@ -543,13 +596,13 @@ BOOST_AUTO_TEST_CASE(it_removes_whitelisted_projects_from_contract_data)
 
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 1);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 1);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == true);
 
     DeleteProjectEntry(1, "Enigma", height++, time++, false);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).size() == 0);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).size() == 0);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
 }
 
 BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
@@ -562,14 +615,14 @@ BOOST_AUTO_TEST_CASE(it_does_not_mutate_existing_snapshots)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Foo", "http://foo.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false);
+    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false);
 
     DeleteProjectEntry(1, "Enigma", height, time, false);
 
     BOOST_CHECK(snapshot.Contains("Enigma") == true);
 
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Enigma") == false);
-    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false).Contains("Foo") == true);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Enigma") == false);
+    BOOST_CHECK(whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false).Contains("Foo") == true);
 }
 
 BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
@@ -582,12 +635,65 @@ BOOST_AUTO_TEST_CASE(it_overwrites_projects_with_the_same_name)
     AddProjectEntry(1, "Enigma", "http://enigma.test", false, height, time, true);
     AddProjectEntry(2, "Enigma", "http://new.enigma.test", true, height++, time++, false);
 
-    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false, false);
+    auto snapshot = whitelist.Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ACTIVE, false);
     BOOST_CHECK(snapshot.size() == 1);
 
     for (const auto& project : snapshot) {
         BOOST_CHECK(project.m_url == "http://new.enigma.test");
     }
+}
+
+BOOST_AUTO_TEST_CASE(it_reads_raw_contract_status_from_leveldb)
+{
+    using Status = GRC::ProjectEntryStatus;
+
+    GRC::Whitelist& registry = GRC::GetWhitelist();
+
+    // Reset clears the in-memory maps AND the (in-memory test) LevelDB storage, so the disk reads below see only the
+    // entries this test applies.
+    registry.Reset();
+
+    const std::string name = "RawStatusTest";
+    const std::string url = "https://rawstatustest.example/@";
+
+    // Plain ACTIVE add (handler maps ADD + UNKNOWN -> ACTIVE), persisted to LevelDB.
+    AddProjectEntryWithStatus(name, url, Status::UNKNOWN, 100, 100);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::ACTIVE);
+    }
+
+    // A later contract for the same key becomes the HEAD that GetProjectsFromDisk reports.
+    AddProjectEntryWithStatus(name, url, Status::MAN_GREYLISTED, 101, 101);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::MAN_GREYLISTED);
+    }
+
+    AddProjectEntryWithStatus(name, url, Status::AUTO_GREYLIST_OVERRIDE, 102, 102);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::AUTO_GREYLIST_OVERRIDE);
+    }
+
+    // A delete persists a DELETED HEAD, which the raw read reports as-is.
+    DeleteProjectEntry(3, name, 103, 103);
+    {
+        const auto raw = registry.GetProjectsFromDisk();
+        BOOST_REQUIRE(raw.count(name) == 1);
+        BOOST_CHECK(raw.at(name)->m_status == Status::DELETED);
+    }
+
+    // This locks in that getrawprojectstatus (via GetProjectsFromDisk) reports the raw, contract-applied status read
+    // from LevelDB, and that HEAD selection follows the latest record per key. The complementary assertion -- that the
+    // AutoGreylist Snapshot overlay can rewrite the in-memory status to AUTO_GREYLISTED while the persisted status read
+    // here stays ACTIVE/MAN/OVERRIDE -- belongs with the bad-project autogreylist run once it is extended through this
+    // same contract-application facility to the registry/LevelDB layer.
+
+    registry.Reset();
 }
 
 BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
@@ -1377,6 +1483,164 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
     delete whitelist_index_entry;
 }
 
+//!
+//! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
+//!
+//! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at
+//! project.cpp:665 is a SHALLOW copy of ProjectEntryMap (std::map<std::string,
+//! std::shared_ptr<ProjectEntry>>), so setting m_status = AUTO_GREYLISTED on the copy
+//! (project.cpp:680) mutates the SHARED registry ProjectEntry in place. There is no revert
+//! path, so a recovered project stays stuck AUTO_GREYLISTED in memory while a restarted node
+//! reloads ACTIVE from LevelDB -- the in-memory-vs-persisted divergence that splits the network.
+//!
+//! Drives a project into the auto-greylist (reusing the it_auto_greylists_correctly "horrible
+//! project" series through the point it meets criteria), takes a Snapshot with the overlay,
+//! then asserts (1) the in-memory registry entry is still ACTIVE and (2) it agrees with the
+//! persisted (LevelDB) contract status. Both FAIL on the buggy shallow-copy Snapshot and pass
+//! once Snapshot deep-copies the entries before overlaying.
+//!
+BOOST_AUTO_TEST_CASE(snapshot_overlay_must_not_mutate_registry_entries)
+{
+    using Status = GRC::ProjectEntryStatus;
+    using Filter = GRC::ProjectEntry::ProjectFilterFlag;
+
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+
+    const std::string name = "snapshot_mutation_test";
+    const std::string url = "http://snapshot.mutation.test";
+
+    int height = 0;
+    int64_t time = 0;
+
+    whitelist.Reset();
+
+    // RAII guard so a mid-test BOOST_REQUIRE abort doesn't leak -autogreylistdeepcopyheight=0
+    // into subsequent test cases in the same binary.
+    struct DeepCopyHeightGuard {
+        ~DeepCopyHeightGuard()
+        {
+            gArgs.ForceSetArg("-autogreylistdeepcopyheight",
+                              ToString(Params().GetConsensus().AutoGreylistDeepCopyHeight));
+        }
+    } deep_copy_height_guard;
+
+    // Activate the deep-copy gate for this test (low override) so Snapshot exercises the post-gate
+    // registry-safe overlay. Pre-fix code has no gate and mutates regardless -> the test fails (red);
+    // post-fix code deep-copies the entries -> the registry is untouched (green).
+    gArgs.ForceSetArg("-autogreylistdeepcopyheight", "0");
+
+    // Add the project as a real v4 ACTIVE contract through the registry/contract/LevelDB path
+    // (ADD + UNKNOWN -> ACTIVE; a real height is supplied so it persists and GetProjectsFromDisk
+    // can read it back).
+    AddProjectEntryWithStatus(name, url, Status::UNKNOWN, height, time);
+
+    // Sanity: the contract status is ACTIVE on disk to start.
+    {
+        const auto disk = whitelist.GetProjectsFromDisk();
+        BOOST_REQUIRE(disk.count(name) == 1);
+        BOOST_REQUIRE(disk.at(name)->m_status == Status::ACTIVE);
+    }
+
+    // Drive the AutoGreylist with the "horrible project" total-credit series through the point
+    // where it meets greylisting criteria (subset of it_auto_greylists_correctly's data; the
+    // project meets criteria from superblock 12 onward).
+    const std::vector<std::optional<uint64_t>> tc_series = {
+        std::nullopt, 1000, std::nullopt, std::nullopt, 1000, 2000, 3000, std::nullopt,
+        3000, 4000, 5000, 5000, std::nullopt, 5001, 5002,
+    };
+
+    auto unit_test_blocks =
+        std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+    CBlockIndex* whitelist_index_entry = new CBlockIndex;
+    ++height;
+    ++time;
+
+    CBlockIndex* index_ptr = whitelist_index_entry;
+    CBlockIndex* index_ptr_prev = nullptr;
+    GRC::SuperblockPtr superblock_ptr;
+
+    for (const auto& tc : tc_series) {
+        index_ptr_prev = index_ptr;
+        index_ptr = new CBlockIndex;
+        index_ptr->nHeight = height;
+        index_ptr->nTime = time;
+        index_ptr->MarkAsSuperblock();
+        index_ptr->pprev = index_ptr_prev;
+
+        GRC::Superblock superblock = GRC::Superblock();
+        if (tc) {
+            superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                .insert(std::make_pair(name, *tc));
+        }
+
+        superblock_ptr = GRC::SuperblockPtr();
+        superblock_ptr.Replace(superblock);
+        superblock_ptr.Rebind(index_ptr);
+
+        unit_test_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+
+        ++height;
+        ++time;
+    }
+
+    auto_greylist->Reset();
+    auto_greylist->RefreshWithSuperblock(superblock_ptr, unit_test_blocks);
+
+    // Precondition: the project now meets greylisting criteria (is in the auto-greylist).
+    BOOST_REQUIRE(auto_greylist->Contains(name));
+
+    // Take a Snapshot WITH the overlay applied. On the buggy shallow-copy Snapshot this mutates
+    // the shared registry ProjectEntry in place. The test drives RefreshWithSuperblock above so the
+    // greylist reflects the synthetic superblock series; the chain-handler-driven Refresh path is
+    // bypassed in this unit-test setup.
+    whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/true);
+
+    // Read back the in-memory registry status WITHOUT re-applying the overlay
+    // (include_override=false) -- this reflects whatever the previous Snapshot left behind in
+    // m_project_entries.
+    Status in_memory_status = Status::UNKNOWN;
+    bool found = false;
+    for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, false)) {
+        if (entry.m_name == name) {
+            in_memory_status = entry.m_status.Value();
+            found = true;
+        }
+    }
+    BOOST_REQUIRE(found);
+
+    // The persisted (LevelDB) contract status is never overlaid.
+    Status disk_status = Status::UNKNOWN;
+    {
+        const auto disk = whitelist.GetProjectsFromDisk();
+        BOOST_REQUIRE(disk.count(name) == 1);
+        disk_status = disk.at(name)->m_status.Value();
+    }
+
+    LogPrintf("snapshot_overlay_must_not_mutate_registry_entries: in_memory=%d disk=%d "
+              "(ACTIVE=%d AUTO_GREYLISTED=%d)",
+              static_cast<int>(in_memory_status), static_cast<int>(disk_status),
+              static_cast<int>(Status::ACTIVE), static_cast<int>(Status::AUTO_GREYLISTED));
+
+    // (1) The overlay must not have mutated the underlying registry entry.
+    BOOST_CHECK(in_memory_status == Status::ACTIVE);
+
+    // (2) In-memory and persisted status must agree -- divergence here is the fork vector.
+    BOOST_CHECK(in_memory_status == disk_status);
+
+    // Clean up the heap-allocated test block indices.
+    for (auto& iter : *unit_test_blocks) {
+        delete iter.second.first;
+    }
+    unit_test_blocks->clear();
+    delete whitelist_index_entry;
+
+    // gArgs restore handled by DeepCopyHeightGuard's dtor on scope exit.
+
+    whitelist.Reset();
+}
+
 BOOST_AUTO_TEST_CASE(it_applies_benefit_of_doubt_correctly)
 {
     /**
@@ -1532,4 +1796,261 @@ BOOST_AUTO_TEST_CASE(it_applies_benefit_of_doubt_correctly)
     delete whitelist_index_entry;
 }
 
+//!
+//! Verifies the deep-copy gate-crossing rebuild fires at the right chain-handler point.
+//!
+//! Sequence:
+//!  1. Set -autogreylistdeepcopyheight=100 so SBs with m_height >= 100 are post-gate.
+//!  2. Add a project as ACTIVE through the real contract + LevelDB path.
+//!  3. Drive AutoGreylist to put the project into the greylist (replays the "horrible project" series).
+//!  4. Snapshot WITH overlay while m_deep_copy_active is false (synthetic SBs are pre-gate by height)
+//!     -- this exercises the LEGACY shallow-copy path and mutates m_project_entries->m_status in place
+//!     to AUTO_GREYLISTED. Verify in-memory diverges from LevelDB (corruption simulated).
+//!  5. Push a pre-gate SuperblockPtr (height 50) through Quorum::PushSuperblock. Gate crossing does
+//!     not fire (prev empty, current pre-gate); in-memory corruption persists.
+//!  6. Push a post-gate SuperblockPtr (height 100) through Quorum::PushSuperblock. Gate crossing
+//!     fires (prev pre-gate, current post-gate); ReinitFromDisk rebuilds m_project_entries from
+//!     LevelDB; in-memory status reverts to ACTIVE.
+//!
+//! Locks in the chain-handler wiring so a future refactor cannot silently delete the heal again
+//! (the prior incarnation lived in Quorum::CommitSuperblock, which is structurally unreachable for
+//! v2+ SBs in v11+ steady state -- the bug that motivated this test).
+//!
+BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
+{
+    using Status = GRC::ProjectEntryStatus;
+    using Filter = GRC::ProjectEntry::ProjectFilterFlag;
+
+    GRC::Whitelist& whitelist = GRC::GetWhitelist();
+    std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+
+    const std::string name = "push_heal_test_project";
+    const std::string url = "http://push.heal.test";
+
+    whitelist.Reset();
+
+    // RAII guard so a mid-test BOOST_REQUIRE failure doesn't leak -autogreylistdeepcopyheight=100
+    // into subsequent test cases in the same binary. Also save/restore pindexBest: earlier tests in
+    // the suite may leave pindexBest pointing at a stack-allocated CBlockIndex that has since gone
+    // out of scope, and Quorum::PushSuperblock's Refresh path runs BlockFinder::FindByHeight which
+    // dereferences pindexBest -- triggers ASan stack-use-after-return on CI. Set pindexBest=nullptr
+    // for the duration of the test so FindByHeight returns immediately at its null-check.
+    struct TestStateGuard {
+        CBlockIndex* saved_pindexBest;
+        TestStateGuard() : saved_pindexBest(pindexBest) { pindexBest = nullptr; }
+        ~TestStateGuard()
+        {
+            pindexBest = saved_pindexBest;
+            gArgs.ForceSetArg("-autogreylistdeepcopyheight",
+                              ToString(Params().GetConsensus().AutoGreylistDeepCopyHeight));
+        }
+    } test_state_guard;
+
+    // Activate the deep-copy gate with a test height. SBs with m_height < 100 are pre-gate; m_height
+    // >= 100 are post-gate. The "horrible project" synthetic series uses heights 1..N so the
+    // AutoGreylist's RefreshWithSuperblock leaves m_deep_copy_active=false at the end -- exactly the
+    // state needed to trigger the legacy in-place overlay corruption below.
+    gArgs.ForceSetArg("-autogreylistdeepcopyheight", "100");
+
+    // ---- Step 1: add project as ACTIVE through real contract + LevelDB path ----
+    // Non-zero height so LevelDB's height_stored persists past ReinitFromDisk's clear_in_memory_only.
+    // Initialize bails when LoadDBHeight returns 0 (the registry_db's "uninitialized" sentinel).
+    // Time=0 so RefreshWithSuperblock's project_first_active timestamp check (synth SB ts >= project ts)
+    // succeeds for the synthetic SBs at time 1..15 below.
+    AddProjectEntryWithStatus(name, url, Status::UNKNOWN, /*height=*/20, /*time=*/0);
+
+    {
+        const auto disk = whitelist.GetProjectsFromDisk();
+        BOOST_REQUIRE(disk.count(name) == 1);
+        BOOST_REQUIRE(disk.at(name)->m_status == Status::ACTIVE);
+    }
+
+    // ---- Step 2: drive AutoGreylist so the project meets greylisting criteria ----
+    // Reused "horrible project" TC series from it_auto_greylists_correctly -- the project meets
+    // criteria from sb_from_baseline >= 12.
+    const std::vector<std::optional<uint64_t>> tc_series = {
+        std::nullopt, 1000, std::nullopt, std::nullopt, 1000, 2000, 3000, std::nullopt,
+        3000, 4000, 5000, 5000, std::nullopt, 5001, 5002,
+    };
+
+    auto unit_test_blocks =
+        std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+    CBlockIndex* whitelist_index_entry = new CBlockIndex;
+    int height = 1;
+    int64_t time = 1;
+
+    CBlockIndex* synth_index = whitelist_index_entry;
+    CBlockIndex* synth_index_prev = nullptr;
+    GRC::SuperblockPtr synth_head_ptr;
+
+    for (const auto& tc : tc_series) {
+        synth_index_prev = synth_index;
+        synth_index = new CBlockIndex;
+        synth_index->nHeight = height;
+        synth_index->nTime = time;
+        synth_index->MarkAsSuperblock();
+        synth_index->pprev = synth_index_prev;
+
+        GRC::Superblock sb;
+        if (tc) {
+            sb.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                .insert(std::make_pair(name, *tc));
+        }
+
+        synth_head_ptr = GRC::SuperblockPtr();
+        synth_head_ptr.Replace(sb);
+        synth_head_ptr.Rebind(synth_index);
+
+        unit_test_blocks->insert(std::make_pair(height, std::make_pair(synth_index, synth_head_ptr)));
+
+        ++height;
+        ++time;
+    }
+
+    auto_greylist->Reset();
+    auto_greylist->RefreshWithSuperblock(synth_head_ptr, unit_test_blocks);
+    BOOST_REQUIRE(auto_greylist->Contains(name));
+
+    // Synthetic SBs are at heights 1..N (all pre-gate at 100); m_deep_copy_active should be false.
+    BOOST_REQUIRE(!auto_greylist->IsDeepCopyActive());
+
+    // ---- Step 3: trigger the legacy in-place overlay mutation (corruption simulated) ----
+    whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/true);
+
+    {
+        Status in_memory_status = Status::UNKNOWN;
+        bool found = false;
+        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+            if (entry.m_name == name) {
+                in_memory_status = entry.m_status.Value();
+                found = true;
+            }
+        }
+        BOOST_REQUIRE(found);
+        BOOST_REQUIRE_EQUAL(static_cast<int>(in_memory_status), static_cast<int>(Status::AUTO_GREYLISTED));
+
+        // Disk is untouched -- still ACTIVE -- because the legacy overlay mutates m_status in the
+        // shared shared_ptr backing m_project_entries, not the registry DB.
+        const auto disk = whitelist.GetProjectsFromDisk();
+        BOOST_REQUIRE_EQUAL(static_cast<int>(disk.at(name)->m_status.Value()),
+                            static_cast<int>(Status::ACTIVE));
+    }
+
+    // ---- Step 4: push a pre-gate SuperblockPtr through Quorum::PushSuperblock ----
+    CBlockIndex* pre_gate_index = new CBlockIndex;
+    pre_gate_index->nHeight = 50;   // pre-gate
+    pre_gate_index->nTime = 50000;
+    pre_gate_index->MarkAsSuperblock();
+
+    GRC::Superblock pre_gate_sb;
+    GRC::SuperblockPtr pre_gate_ptr;
+    pre_gate_ptr.Replace(pre_gate_sb);
+    pre_gate_ptr.Rebind(pre_gate_index);
+
+    GRC::Quorum::PushSuperblock(pre_gate_ptr);
+
+    // Gate did NOT cross (pre_gate_ptr at height 50 < gate 100); m_deep_copy_active stays false.
+    BOOST_CHECK(!auto_greylist->IsDeepCopyActive());
+
+    // Corruption persists -- pre-gate push does not cross the gate.
+    {
+        Status in_memory_status = Status::UNKNOWN;
+        bool found = false;
+        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+            if (entry.m_name == name) {
+                in_memory_status = entry.m_status.Value();
+                found = true;
+            }
+        }
+        BOOST_REQUIRE(found);
+        BOOST_CHECK_EQUAL(static_cast<int>(in_memory_status), static_cast<int>(Status::AUTO_GREYLISTED));
+    }
+
+    // ---- Step 5: push a post-gate SuperblockPtr through Quorum::PushSuperblock ----
+    CBlockIndex* post_gate_index = new CBlockIndex;
+    post_gate_index->nHeight = 100;   // post-gate (== AutoGreylistDeepCopyHeight)
+    post_gate_index->nTime = 100000;
+    post_gate_index->MarkAsSuperblock();
+    post_gate_index->pprev = pre_gate_index;
+
+    GRC::Superblock post_gate_sb;
+    GRC::SuperblockPtr post_gate_ptr;
+    post_gate_ptr.Replace(post_gate_sb);
+    post_gate_ptr.Rebind(post_gate_index);
+
+    GRC::Quorum::PushSuperblock(post_gate_ptr);
+
+    // Gate crossed forward; m_deep_copy_active is now true. Asserting this separately from the
+    // healed-status check below localizes future regressions: if this fails the gate detector itself
+    // is broken; if this passes but the status check fails the ReinitFromDisk side-effect is broken.
+    BOOST_CHECK(auto_greylist->IsDeepCopyActive());
+
+    // Gate crossing fired -> ReinitFromDisk rebuilt m_project_entries from LevelDB ->
+    // in-memory status is back to ACTIVE.
+    {
+        Status in_memory_status = Status::UNKNOWN;
+        bool found = false;
+        for (const auto& entry : whitelist.Snapshot(Filter::ALL_BUT_DELETED, /*include_override=*/false)) {
+            if (entry.m_name == name) {
+                in_memory_status = entry.m_status.Value();
+                found = true;
+            }
+        }
+        BOOST_REQUIRE(found);
+        BOOST_CHECK_EQUAL(static_cast<int>(in_memory_status), static_cast<int>(Status::ACTIVE));
+    }
+
+    // ---- Cleanup ----
+    // Pop the two Quorum-pushed SBs before deleting their CBlockIndex backing storage. Pop's Refresh
+    // bails harmlessly when the cache becomes empty.
+    GRC::Quorum::PopSuperblock(post_gate_index);
+    GRC::Quorum::PopSuperblock(pre_gate_index);
+    delete pre_gate_index;
+    delete post_gate_index;
+
+    for (auto& iter : *unit_test_blocks) {
+        delete iter.second.first;
+    }
+    unit_test_blocks->clear();
+    delete whitelist_index_entry;
+
+    // gArgs restore handled by DeepCopyHeightGuard's dtor on scope exit.
+
+    whitelist.Reset();
+}
+
+BOOST_AUTO_TEST_CASE(it_does_not_throw_when_the_40SB_average_truncates_to_zero)
+{
+    // Regression test for the GetWAS() divide-by-zero that crashed mainnet nodes in
+    // ThreadScraperSubscriber (St12out_of_range "denominator specified is zero").
+    //
+    // GetWAS() returns Fraction(TC_7_SB_avg, TC_40_SB_avg), where both averages are
+    // integer divisions (sum / min(processed, 7|40)). A low-activity project whose
+    // 40-SB total-credit delta is small enough that m_TC_40_SB_sum / 40 truncates to 0,
+    // while m_TC_7_SB_sum / 7 is still non-zero, used to fall through the old
+    // "TC_7_SB_avg == 0 && TC_40_SB_avg == 0" guard to Fraction(non-zero, 0), which
+    // throws. The fix guards on the denominator (TC_40_SB_avg) alone and returns WAS = 0.
+    //
+    // Drive the candidate through the public UpdateGreylistCandidateEntry path (which
+    // itself calls GetWAS() internally) so this reproduces the exact production code path.
+    GRC::AutoGreylist::GreylistCandidateEntry candidate("TestProject", std::optional<uint64_t>(1000));
+
+    // sb_from_baseline = 7, total credit 990: 7-SB delta = 1000 - 990 = 10 -> m_TC_7_SB_sum = 10.
+    candidate.UpdateGreylistCandidateEntry(990, 7, false);
+
+    // sb_from_baseline = 40, total credit 970: 40-SB delta = 1000 - 970 = 30 -> m_TC_40_SB_sum = 30,
+    // m_sb_from_baseline_processed = 40. GetWAS() (called inside UpdateGreylistCandidateEntry) then
+    // computes TC_7_SB_avg = 10 / min(40,7) = 10/7 = 1 (non-zero) and
+    // TC_40_SB_avg = 30 / min(40,40) = 30/40 = 0 (integer truncation) -- the crash trigger.
+    BOOST_REQUIRE_NO_THROW(candidate.UpdateGreylistCandidateEntry(970, 40, false));
+
+    // A zero 40-SB average means negligible long-term work availability, so WAS = 0.0.
+    BOOST_CHECK(candidate.GetWAS() == Fraction(0));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

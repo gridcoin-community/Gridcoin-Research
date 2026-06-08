@@ -187,8 +187,14 @@ ProtocolEntryPayload ProtocolEntryPayload::Parse(const std::string& key, const s
 // -----------------------------------------------------------------------------
 // Class: ProtocolRegistry
 // -----------------------------------------------------------------------------
-const ProtocolRegistry::ProtocolEntryMap& ProtocolRegistry::ProtocolEntries() const
+ProtocolRegistry::ProtocolEntryMap ProtocolRegistry::ProtocolEntries() const
 {
+    LOCK(cs_lock);
+
+    // Returns a by-value snapshot. The map is copied under the lock; its
+    // ProtocolEntry_ptr (shared_ptr) elements are shared, not deep-copied.
+    // Entries are immutable once published (mutations swap the pointer, never
+    // mutate a live entry), so the snapshot is safe to use after the lock drops.
     return m_protocol_entries;
 }
 
@@ -335,7 +341,7 @@ ProtocolEntryOption ProtocolRegistry::TryLastBeforeTimestamp(const std::string& 
     }
 }
 
-void ProtocolRegistry::Reset()
+void ProtocolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -418,17 +424,17 @@ void ProtocolRegistry::AddDelete(const ContractContext& ctx)
     return;
 }
 
-void ProtocolRegistry::Add(const ContractContext& ctx)
+void ProtocolRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Delete(const ContractContext& ctx)
+void ProtocolRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AddDelete(ctx);
 }
 
-void ProtocolRegistry::Revert(const ContractContext& ctx)
+void ProtocolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const auto payload = ctx->SharePayloadAs<ProtocolEntryPayload>();
 
@@ -442,7 +448,7 @@ void ProtocolRegistry::Revert(const ContractContext& ctx)
     if (entry_to_revert == m_protocol_entries.end()) {
         error("%s: The protocol entry for key %s to revert was not found in the protocol entry map.",
               __func__,
-              entry_to_revert->second->m_key);
+              payload->m_entry.m_key);
 
         // If there is no record in the current m_protocol_entries map, then there is nothing to do here. This
         // should not occur.
@@ -494,7 +500,7 @@ void ProtocolRegistry::Revert(const ContractContext& ctx)
     }
 }
 
-bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const
+bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx, int &DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (contract.m_version < 1) {
         return true;
@@ -517,7 +523,7 @@ bool ProtocolRegistry::Validate(const Contract& contract, const CTransaction& tx
     return true;
 }
 
-bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+bool ProtocolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Validate(ctx.m_contract, ctx.m_tx, DoS);
 }
@@ -569,11 +575,6 @@ uint64_t ProtocolRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_protocol_db.passivate_db();
-}
-
-ProtocolRegistry::ProtocolEntryDB &ProtocolRegistry::GetProtocolEntryDB()
-{
-    return m_protocol_db;
 }
 
 template<> const std::string ProtocolRegistry::ProtocolEntryDB::KeyType()

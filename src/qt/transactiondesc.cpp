@@ -1,12 +1,15 @@
 #include "transactiondesc.h"
 #include "clientmodel.h"
 #include "guiutil.h"
-#include "gridcoin/tx_message.h"
 #include "bitcoinunits.h"
 #include "main.h"
 #include "wallet/wallet.h"
 #include "txdb.h"
 #include "node/ui_interface.h"
+#ifdef GetMessage
+#undef GetMessage
+#endif
+#include "gridcoin/tx_message.h"
 #include <key_io.h>
 #include "bitcoingui.h"
 #include "util.h"
@@ -16,7 +19,7 @@
 #include <QMessageBox>
 #include <string>
 
-std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx);
+std::vector<std::pair<std::string, std::string>> GetTxStakeBoincHashInfo(const CMerkleTx& mtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 std::vector<std::pair<std::string, std::string>> GetTxNormalBoincHashInfo(const CMerkleTx& mtx);
 
 QString ToQString(std::string s)
@@ -319,13 +322,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
     strHTML += "<b>" + tr("TX ID") + ":</b> " + wtx.GetHash().ToString().c_str() + "<br>";
 
-    std::string sHashBlock = wtx.hashBlock.ToString();
-
-    if (wtx.hashBlock.IsNull())
+    if (const auto* conf = wtx.state<TxStateConfirmed>()) {
+        strHTML += "<b>" + tr("Block Hash") + ":</b> " + conf->m_confirmed_block_hash.ToString().c_str() + "<br>";
+    } else {
         strHTML += "<b>" + tr("Block Hash") + ":</b> Not yet in chain<br>";
-
-    else
-        strHTML += "<b>" + tr("Block Hash") + ":</b> " + sHashBlock.c_str() + "<br>";
+    }
 
     const std::string tx_message = GetMessage(wtx);
 

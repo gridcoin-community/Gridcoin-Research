@@ -125,7 +125,7 @@ Key threads: `ThreadStakeMiner` (block generation), `ThreadScraper`/`ThreadScrap
 
 ### Consensus Changes
 
-All consensus rule changes must be gated by block height or version. Current mainnet block version is 12; version 13 is in testnet/development. Consensus changes require hard fork coordination.
+All consensus rule changes must be gated by block height or version. Mainnet block-version activation heights are set in `src/chainparams.cpp` (`CMainParams`) — check there for the current, authoritative values rather than relying on this file. As of this writing: `BlockV13Height = 3989800`, `BlockV14Height = 3990000` (both set, scheduled as future mainnet activations at the time of this line's last update). Consensus changes require hard fork coordination.
 
 ## Test Conventions
 

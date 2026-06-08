@@ -10,6 +10,7 @@
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/support/enumbytes.h"
 #include "serialize.h"
+#include "sync.h"
 
 #include <optional>
 #include <string>
@@ -18,6 +19,7 @@
 class CBlock;
 class CBlockIndex;
 class CTransaction;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 class RegistryBookmarks;
@@ -238,7 +240,11 @@ public:
         //!
         //! \param type Indicates which IContractHandler type to construct.
         //!
-        void ResetType(const ContractType type);
+        //! THREAD SAFETY: Called from Contract::Unserialize (template,
+        //! header-defined below). Reads nBestHeight for POLL/PROJECT/PROTOCOL/
+        //! SCRAPER payload version selection — requires cs_main.
+        //!
+        void ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     }; // Contract::Body
 
     //!
@@ -446,10 +452,14 @@ public:
     //!
     //! For CTransaction::nVersion >= 2.
     //!
+    //! THREAD SAFETY: m_body.ResetType reads nBestHeight for payload version
+    //! selection — requires cs_main. Callers (CTransaction deserialization
+    //! paths invoked from block / mempool / wallet load) must hold cs_main.
+    //!
     //! \param stream The input stream.
     //!
     template<typename Stream>
-    void Unserialize(Stream& s)
+    void Unserialize(Stream& s) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         s >> m_version;
         s >> m_type;
@@ -603,7 +613,7 @@ Contract MakeLegacyContract(
 //!
 //! \param pindex Block index to start with.
 //!
-void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr);
+void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions in a block by passing them to the
@@ -616,7 +626,7 @@ void ReplayContracts(CBlockIndex *pindex_end, CBlockIndex *pindex_start = nullpt
 //!
 void ApplyContracts(const CBlock& block,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract);
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Apply contracts from transactions by passing them to the appropriate
@@ -628,7 +638,7 @@ void ApplyContracts(const CBlock& block,
 //!
 void ApplyContracts(const CTransaction& tx,
     const CBlockIndex* const pindex, const RegistryBookmarks& db_heights,
-    bool& out_found_contract);
+    bool& out_found_contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Perform contextual validation for the contracts in a transaction.
@@ -638,7 +648,7 @@ void ApplyContracts(const CTransaction& tx,
 //!
 //! \return \c false When a contract in the transaction fails validation.
 //!
-bool ValidateContracts(const CTransaction& tx, int& DoS);
+bool ValidateContracts(const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Perform contextual validation for the contracts in a transaction including block context. This is used
@@ -650,7 +660,7 @@ bool ValidateContracts(const CTransaction& tx, int& DoS);
 //!
 //! \return  \c false If the contract fails validation.
 //!
-bool BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS);
+bool BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction& tx, int& DoS) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Revert previously-applied contracts from a transaction by passing
@@ -659,7 +669,7 @@ bool BlockValidateContracts(const CBlockIndex* const pindex, const CTransaction&
 //! \param tx     Transaction that contains contracts to revert.
 //! \param pindex Block index for the block that contains the transaction.
 //!
-void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex);
+void RevertContracts(const CTransaction& tx, const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_CONTRACT_H

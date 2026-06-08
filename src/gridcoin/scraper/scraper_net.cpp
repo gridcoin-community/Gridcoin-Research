@@ -12,6 +12,7 @@
 #include "net.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"
+#include "rpc/util.h"
 #ifdef SCRAPER_NET_PK_AS_ADDRESS
 #include <key_io.h>
 #endif
@@ -44,7 +45,10 @@ bool CSplitBlob::RecvPart(CNode* pfrom, CDataStream& vRecv)
     */
     auto& ss = vRecv;
     uint256 hash(Hash(ss));
-    mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(CInv(MSG_PART, hash));
+    }
 
     LOCK(cs_mapParts);
 
@@ -935,19 +939,26 @@ UniValue CScraperManifest::dentry::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSpli
 }
 
 /** RPC function to list manifests and optionally provide their contents in JSON form. */
-UniValue listmanifests(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() > 2)
+static const RPCHelpMan listmanifests_help{
+    "listmanifests",
+    "Show list of known ScraperManifest objects.",
     {
-        throw std::runtime_error(
-                "listmanifests [bool details] [manifest hash]\n"
-                "\n"
-                "details: boolean to show details of manifests\n"
-                "manifest hash: hash of specific manifest (Not provided returns all.)"
-                "\n"
-                "Show list of known ScraperManifest objects.\n"
-                );
-    }
+        {"details", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, show full details of each manifest. Default: false."},
+        {"manifest_hash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
+            "Hash of a specific manifest. If omitted, all are returned."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "Mapping of manifest hash to manifest detail",
+        {{RPCResult::Type::ELISION, "", "Manifest object; shape depends on the 'details' flag."}}},
+    RPCExamples{
+        HelpExampleCli("listmanifests", "") +
+        HelpExampleCli("listmanifests", "true") +
+        HelpExampleRpc("listmanifests", "true")},
+};
+const RPCHelpMan& listmanifests_helpman() { return listmanifests_help; }
+
+UniValue listmanifests(const UniValue& params)
+{
     UniValue obj(UniValue::VOBJ);
     UniValue subset(UniValue::VOBJ);
 
@@ -1017,16 +1028,21 @@ UniValue listmanifests(const UniValue& params, bool fHelp)
 }
 
 /** Provides hex string output of part object contents. */
-UniValue getmpart(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 1)
+static const RPCHelpMan getmpart_help{
+    "getmpart",
+    "Show content of a CPart object.",
     {
-        throw std::runtime_error(
-                "getmpart <hash>\n"
-                "Show content of CPart object.\n"
-                );
-    }
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "Hash of the CPart to look up."},
+    },
+    RPCResult{RPCResult::Type::STR_HEX, "", "Hex-encoded CPart contents."},
+    RPCExamples{
+        HelpExampleCli("getmpart", "\"<hash>\"") +
+        HelpExampleRpc("getmpart", "\"<hash>\"")},
+};
+const RPCHelpMan& getmpart_helpman() { return getmpart_help; }
 
+UniValue getmpart(const UniValue& params)
+{
     LOCK(CSplitBlob::cs_mapParts);
 
     auto ipart = CSplitBlob::mapParts.find(uint256S(params[0].get_str()));

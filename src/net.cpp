@@ -61,11 +61,12 @@ bool fDiscover = true;
 bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
-std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
+std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
-CAddress addrSeenByPeer(LookupNumeric("0.0.0.0", 0), nLocalServices);
-uint64_t nLocalHostNonce = 0;
+CCriticalSection cs_addrSeenByPeer;
+CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer)(LookupNumeric("0.0.0.0", 0), nLocalServices);
+std::atomic<uint64_t> nLocalHostNonce{0};
 
 
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
@@ -78,21 +79,22 @@ CAddrMan addrman;
 // Initialization of static class variable.
 std::atomic<NodeId> CNode::nLastNodeId {-1};
 
-vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
-vector<std::string> vAddedNodes;
+vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 CCriticalSection cs_vAddedNodes;
+vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
-map<CInv, CDataStream> mapRelay;
-deque<pair<int64_t, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
-map<CInv, int64_t> mapAlreadyAskedFor;
+map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
+CCriticalSection cs_mapAlreadyAskedFor;
+map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 
-static deque<string> vOneShots;
 CCriticalSection cs_vOneShots;
+static deque<string> vOneShots GUARDED_BY(cs_vOneShots);
 
-set<CNetAddr> setservAddNodeAddresses;
 CCriticalSection cs_setservAddNodeAddresses;
+set<CNetAddr> setservAddNodeAddresses GUARDED_BY(cs_setservAddNodeAddresses);
 
 std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
 CCriticalSection CNode::cs_mapMisbehavior;
@@ -197,7 +199,7 @@ static int GetnScore(const CService& addr)
 // Is our peer's addrLocal potentially useful as an external IP source?
 bool IsPeerAddrLocalGood(CNode *pnode)
 {
-    CService addrLocal = pnode->addrLocal;
+    CService addrLocal = pnode->GetAddrLocal();
     return fDiscover && pnode->addr.IsRoutable() && addrLocal.IsRoutable() &&
            IsReachable(addrLocal);
 }
@@ -216,7 +218,7 @@ void AdvertiseLocal(CNode *pnode)
         if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
              randomNumber == 0))
         {
-            addrLocal.SetIP(pnode->addrLocal);
+            addrLocal.SetIP(pnode->GetAddrLocal());
         }
         if (addrLocal.IsRoutable())
         {
@@ -486,9 +488,30 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
-    GetRandBytes({(unsigned char*)&nLocalHostNonce, sizeof(nLocalHostNonce)});
+    // GetRandBytes() writes raw bytes into the provided buffer; that's
+    // incompatible with memcpy'ing into a std::atomic's storage directly,
+    // so go through a local and store atomically.
+    //
+    // The local `nonce` is what we send on the wire below -- the atomic
+    // store is only to publish it to ProcessMessage's self-connection
+    // sentinel check. Reading the atomic back here for the PushMessage
+    // payload would lose the value to a concurrent PushVersion() on
+    // another outbound connection that ran between our store() and
+    // load(). (The single-global-nonce design is still racy across
+    // multiple simultaneous outbound connections versus their respective
+    // self-connection echoes -- a separate per-connection-nonce follow-up
+    // is the proper fix; see PR #2957 commit message for context.)
+    uint64_t nonce;
+    GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    nLocalHostNonce.store(nonce);
+
+    // Snapshot the chain height under cs_main so this method can be called
+    // from CNode construction (socket handler thread, no outer locks held)
+    // and from ProcessMessage without imposing cs_main on the call site.
+    const int nLocalBestHeight = WITH_LOCK(cs_main, return nBestHeight);
+
     LogPrint(BCLog::LogFlags::NET, "send version message: version %d, blocks=%d, us=%s, them=%s, peer=%s",
-        PROTOCOL_VERSION, nBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
+        PROTOCOL_VERSION, nLocalBestHeight, addrMe.ToString(), addrYou.ToString(), addr.ToString());
 
     //TODO: change `PushMessage()` to use ServiceFlags so we don't need to cast nLocalServices
     PushMessage(
@@ -498,9 +521,9 @@ void CNode::PushVersion()
         nTime,
         addrYou,
         addrMe,
-        nLocalHostNonce,
+        nonce,
         FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, std::vector<string>()),
-        nBestHeight);
+        nLocalBestHeight);
 }
 
 bool CNode::Misbehaving(int howmuch)
@@ -594,6 +617,23 @@ bool CNode::MisbehavingAddr(const CAddress& addr, int howmuch)
     return false;
 }
 
+CService CNode::GetAddrLocal() const
+{
+    LOCK(cs_addrLocal);
+    return addrLocal;
+}
+
+void CNode::SetAddrLocal(const CService& addrLocalIn)
+{
+    LOCK(cs_addrLocal);
+    if (addrLocal.IsValid()) {
+        LogPrintf("WARN: %s: addrLocal already set for node %d: refusing to change from %s to %s",
+                  __func__, id, addrLocal.ToString(), addrLocalIn.ToString());
+    } else {
+        addrLocal = addrLocalIn;
+    }
+}
+
 void CNode::copyStats(CNodeStats &stats)
 {
     stats.id = id;
@@ -630,7 +670,8 @@ void CNode::copyStats(CNodeStats &stats)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
     stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
-    stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
+    const CService al = GetAddrLocal();
+    stats.addrLocal = al.IsValid() ? al.ToString() : "";
 
 }
 
@@ -732,8 +773,7 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 
 
-// requires LOCK(cs_vSend)
-void SocketSendData(CNode *pnode)
+void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
 {
     std::deque<SerializeData>::iterator it = pnode->vSendMsg.begin();
 
@@ -822,8 +862,18 @@ void ThreadSocketHandler2(void* parg)
             vector<CNode*> vNodesCopy = vNodes;
             for (auto const& pnode : vNodesCopy)
             {
-                if (pnode->fDisconnect ||
-                    (pnode->GetRefCount() <= 0 && pnode->vRecvMsg.empty() && pnode->nSendSize == 0 && pnode->ssSend.empty()))
+                // vRecvMsg / nSendSize / ssSend are guarded by per-node locks.
+                // Take them in canonical order (cs_vRecvMsg first, then cs_vSend)
+                // for the disconnect-eligibility check. Lazy: only if refcount
+                // has dropped to zero, since the test short-circuits otherwise.
+                bool empty_buffers = false;
+                if (pnode->GetRefCount() <= 0) {
+                    LOCK2(pnode->cs_vRecvMsg, pnode->cs_vSend);
+                    empty_buffers = pnode->vRecvMsg.empty()
+                                    && pnode->nSendSize == 0
+                                    && pnode->ssSend.empty();
+                }
+                if (pnode->fDisconnect || empty_buffers)
                 {
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
@@ -1126,10 +1176,14 @@ void ThreadSocketHandler2(void* parg)
             // Inactivity checking
             //
             // Consider this for future removal as this really is not beneficial nor harmful.
-            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodes.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
+            // Read vNodesCopy.size() (the snapshot taken under cs_vNodes above
+            // at line 1100) rather than vNodes.size() — vNodes is GUARDED_BY
+            // (cs_vNodes) and the size at iteration time is what this check
+            // wants anyway.
+            if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodesCopy.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
                     LogPrint(BCLog::LogFlags::NET, "Node %s connected longer than 2 hours with connection count of %zd, disconnecting. ",
-                             pnode->addr.ToString(), vNodes.size());
+                             pnode->addr.ToString(), vNodesCopy.size());
 
                     pnode->fDisconnect = true;
 

@@ -10,6 +10,7 @@
 #include "util/threadnames.h"
 
 #include <QtConcurrentRun>
+#include <QPointer>
 #include <QSortFilterProxyModel>
 #include <QStringList>
 
@@ -104,6 +105,44 @@ QVariant PollTableDataModel::data(const QModelIndex &index, int role) const
                     return QVariant(Qt::AlignRight | Qt::AlignVCenter);
             }
             break;
+
+        case Qt::AccessibleTextRole:
+            // For screen readers (issue #2604). Title column returns a one-shot
+            // row summary so a screen reader announces the most-important fields
+            // (title, type, expiration, top answer) at row entry; other columns
+            // prepend the header name so per-cell navigation is self-contained.
+            switch (index.column()) {
+                case PollTableModel::Title:
+                    return tr("Poll \"%1\", type %2, expires %3, top answer %4")
+                        .arg(row->m_title,
+                             row->m_version >= 3 ? row->m_type_str : tr("(legacy)"),
+                             GUIUtil::dateTimeStr(row->m_expiration),
+                             row->m_top_answer.isEmpty() ? tr("none") : row->m_top_answer);
+                case PollTableModel::PollType:
+                    return tr("Poll type: %1")
+                        .arg(row->m_version >= 3 ? row->m_type_str : tr("(legacy)"));
+                case PollTableModel::Duration:
+                    return tr("Duration: %1").arg(QString::number(row->m_duration));
+                case PollTableModel::Expiration:
+                    return tr("Expires: %1").arg(GUIUtil::dateTimeStr(row->m_expiration));
+                case PollTableModel::WeightType:
+                    return tr("Weight type: %1").arg(row->m_weight_type_str);
+                case PollTableModel::TotalVotes:
+                    return tr("Total votes: %1").arg(QString::number(row->m_total_votes));
+                case PollTableModel::TotalWeight:
+                    return tr("Total weight: %1").arg(QString::number(row->m_total_weight));
+                case PollTableModel::VotePercentAVW:
+                    return tr("Percent of active vote weight: %1")
+                        .arg(QString::number(row->m_vote_percent_AVW, 'f', 4));
+                case PollTableModel::Validated:
+                    return tr("Validated: %1").arg(row->m_validated.toString());
+                case PollTableModel::TopAnswer:
+                    return tr("Top answer: %1")
+                        .arg(row->m_top_answer.isEmpty() ? tr("none") : row->m_top_answer);
+                case PollTableModel::StaleResults:
+                    return tr("Stale results: %1").arg(row->m_stale ? tr("yes") : tr("no"));
+            } // no default case, so the compiler can warn about missing cases
+            assert(false);
 
         case PollTableModel::SortRole:
             switch (index.column()) {
@@ -208,16 +247,45 @@ PollTableModel::PollTableModel(QObject* parent)
 
 PollTableModel::~PollTableModel()
 {
-    // Nothing to do yet...
+    // Block until any in-flight refresh worker is done dereferencing `this`.
+    // refresh() captures `this` directly to read m_voting_model /
+    // m_filter_flags / m_data_model and to write m_refresh_in_flight; without
+    // this wait the worker can touch those members after PollTableModel is
+    // destroyed (use-after-free during GUI shutdown). A default-constructed
+    // QFuture is already in the finished state, so this is a no-op when no
+    // refresh has ever been launched. (The queued reload-on-the-GUI-thread
+    // lambda guards its own captures with QPointer, so it remains safe even
+    // if the event queue drains after the model is gone.)
+    m_refresh_future.waitForFinished();
 }
 
 void PollTableModel::setModel(VotingModel* model)
 {
+    if (m_voting_model == model) {
+        return;
+    }
+
+    // If we are detaching from a model (e.g. shutdown of the GUI sets this to
+    // nullptr before VotingModel goes out of scope), ensure any in-flight
+    // refresh worker has finished dereferencing it. PollTableModel's destructor
+    // also waitForFinished()s, but by then VotingModel may already have been
+    // destroyed -- it is a stack object in StartGridcoinQt() whose scope ends
+    // before BitcoinGUI / VotingPage / PollTableModel are torn down. Draining
+    // here, while VotingModel is still alive, closes that UAF window.
+    if (m_voting_model) {
+        m_refresh_future.waitForFinished();
+        disconnect(m_voting_model, &VotingModel::newVoteReceived,
+                   this, &PollTableModel::handlePollStaleFlag);
+    }
+
     m_voting_model = model;
 
-    // Connect poll stale handler to newVoteReceived signal from voting model, which propagates
-    // from the core.
-    connect(m_voting_model, &VotingModel::newVoteReceived, this, &PollTableModel::handlePollStaleFlag);
+    if (m_voting_model) {
+        // Connect poll stale handler to newVoteReceived signal from voting model,
+        // which propagates from the core.
+        connect(m_voting_model, &VotingModel::newVoteReceived,
+                this, &PollTableModel::handlePollStaleFlag);
+    }
 }
 
 void PollTableModel::setPollFilterFlags(PollFilterFlag flags)
@@ -255,26 +323,71 @@ const PollItem* PollTableModel::rowItem(int row) const
 
 void PollTableModel::refresh()
 {
-    if (!m_voting_model || !m_refresh_mutex.tryLock()) {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex is already taken, so tryLock failed",
+    if (!m_voting_model) {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: no voting model set, skipping refresh",
                  __func__);
 
         return;
-    } else {
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex trylock succeeded.",
-                 __func__);
     }
 
-    (void) QtConcurrent::run([this]() {
+    bool expected = false;
+    if (!m_refresh_in_flight.compare_exchange_strong(expected, true)) {
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh already in flight, skipping",
+                 __func__);
+
+        return;
+    }
+
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh dispatched", __func__);
+
+    // Capture the enclosing function name as a string literal so log lines
+    // emitted from inside the worker lambda print "PollTableModel::refresh"
+    // (the enclosing function) rather than "operator()" (which is what
+    // __func__ resolves to inside a lambda body).
+    const char* const func_name = __func__;
+
+    m_refresh_future = QtConcurrent::run([this, func_name]() {
         RenameThread("PollTableModel_refresh");
         util::ThreadSetInternalName("PollTableModel_refresh");
 
-        static_cast<PollTableDataModel*>(m_data_model.get())
-            ->reload(m_voting_model->buildPollTable(m_filter_flags));
+        // Build the new poll table off the GUI thread (this is the slow
+        // bit -- AVW recompute, candidate iteration).
+        std::vector<PollItem> new_rows = m_voting_model->buildPollTable(m_filter_flags);
 
-        m_refresh_mutex.unlock();
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: m_refresh_mutex lock released.",
-                 __func__);
+        // Hand the result back to the GUI thread for the actual model
+        // mutation. m_rows is the std::vector backing a QAbstractItemModel
+        // the views read concurrently via rowCount() / index() / data();
+        // mutating it (and emitting layoutAboutToBeChanged / layoutChanged)
+        // from this worker violates Qt model thread-affinity -- TSan G16
+        // reports a real race against PollTableDataModel::rowCount on the
+        // main thread. A QueuedConnection invoke onto m_data_model (whose
+        // thread affinity is the GUI thread) runs reload() in the GUI
+        // event loop, where every other access already happens.
+        //
+        // Both captures are wrapped in QPointer so the queued lambda is safe
+        // even if PollTableModel / PollTableDataModel are destroyed before
+        // the GUI event loop processes the post (e.g. shutdown race after
+        // the worker thread has already exited). m_refresh_in_flight is
+        // cleared in the GUI continuation -- after reload() actually runs --
+        // so the debounce covers build + queued mutation, not just the
+        // build; a stream of refresh() calls collapses to one full cycle
+        // at a time.
+        QMetaObject::invokeMethod(
+            m_data_model.get(),
+            [data_model = QPointer<PollTableDataModel>(
+                 static_cast<PollTableDataModel*>(m_data_model.get())),
+             self = QPointer<PollTableModel>(this),
+             rows = std::move(new_rows)]() mutable {
+                if (data_model) {
+                    data_model->reload(std::move(rows));
+                }
+                if (self) {
+                    self->m_refresh_in_flight.store(false);
+                }
+            },
+            Qt::QueuedConnection);
+
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: refresh worker complete", func_name);
     });
 }
 

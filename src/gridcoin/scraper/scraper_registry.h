@@ -446,9 +446,12 @@ public:
     //! \brief Get the collection of current scraper entries. Note that this INCLUDES deleted
     //! scraper entries.
     //!
-    //! \return \c A reference to the current scraper entries stored in the registry.
+    //! \return A by-value snapshot of the current scraper entries, taken under cs_lock.
+    //! The map is copied; its ScraperEntry_ptr (shared_ptr) elements are shared, not
+    //! deep-copied. Entries are immutable once published, so the snapshot is safe to use
+    //! without holding any lock. See doc/contract_registry_locking_design.md.
     //!
-    const ScraperMap& Scrapers() const;
+    ScraperMap Scrapers() const;
 
     //!
     //! \brief A shim method to cross-wire this into the existing scraper code
@@ -502,7 +505,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for scraper entries.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a scraper entry contract is valid.
@@ -513,7 +516,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid scraper entry.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a scraper entry contract is valid including block context. This is used
@@ -525,7 +528,7 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Add a scraper entry to the registry from contract data. For the scraper registry
@@ -533,7 +536,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Mark a scraper entry deleted in the registry from contract data. For the scraper registry
@@ -541,7 +544,7 @@ public:
     //! is actually symmetric to both.
     //! \param ctx
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the scraper entry to the state prior
@@ -550,7 +553,7 @@ public:
     //!
     //! \param ctx References the scraper entry contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the ScraperRegistry, which now includes restoring the state of the ScraperRegistry from
@@ -622,18 +625,14 @@ private:
     //!
     void AddDelete(const ContractContext& ctx);
 
-    ScraperMap m_scrapers;                   //!< Contains the current scraper entries, including entries marked DELETED.
-    PendingScraperMap m_pending_scrapers {}; //!< Not actually used for scrapers. To satisfy the template only.
+    ScraperMap m_scrapers GUARDED_BY(cs_lock);                   //!< Contains the current scraper entries, including entries marked DELETED.
+    PendingScraperMap m_pending_scrapers GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    std::set<ScraperEntry> m_expired_scraper_entries {}; //!< Not actually used for scrapers. To satisfy the template only.
+    std::set<ScraperEntry> m_expired_scraper_entries GUARDED_BY(cs_lock) {}; //!< Not actually used for scrapers. To satisfy the template only.
 
-    ScraperMap m_first_scraper_entries {};   //!< Not used here. To satisfy the template only.
+    ScraperMap m_first_scraper_entries GUARDED_BY(cs_lock) {};   //!< Not used here. To satisfy the template only.
 
-    ScraperEntryDB m_scraper_db;
-
-public:
-
-    ScraperEntryDB& GetScraperDB();
+    ScraperEntryDB m_scraper_db GUARDED_BY(cs_lock);
 }; // ScraperRegistry
 
 //!

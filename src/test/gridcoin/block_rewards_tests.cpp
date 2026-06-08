@@ -6,7 +6,6 @@
 
 #include "amount.h"
 #include "gridcoin/consensus/block_rewards.h"
-#include "gridcoin/consensus/mutable_transaction.h"
 #include "gridcoin/sidestake.h"
 #include "key.h"
 #include "script.h"
@@ -47,26 +46,26 @@ CTransaction MakeTestCoinstake(
     CAmount coinstake_value,
     const std::vector<std::pair<CTxDestination, CAmount>>& additional_outputs)
 {
-    CTransaction tx;
-    tx.vin.resize(1);
-    tx.vin[0].prevout.hash.SetNull(); // will be non-null in real use
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.hash.SetNull(); // will be non-null in real use
 
     // vout[0]: empty coinstake marker
-    tx.vout.push_back(CTxOut());
+    mtx.vout.push_back(CTxOut());
 
     // vout[1]: coinstake output
     CScript coinstake_script;
     coinstake_script.SetDestination(coinstake_dest);
-    tx.vout.push_back(CTxOut(coinstake_value, coinstake_script));
+    mtx.vout.push_back(CTxOut(coinstake_value, coinstake_script));
 
     // Additional outputs (sidestakes, MRC, etc.)
     for (const auto& [dest, amount] : additional_outputs) {
         CScript script;
         script.SetDestination(dest);
-        tx.vout.push_back(CTxOut(amount, script));
+        mtx.vout.push_back(CTxOut(amount, script));
     }
 
-    return tx;
+    return CTransaction(mtx);
 }
 
 } // anonymous namespace
@@ -495,19 +494,21 @@ BOOST_AUTO_TEST_CASE(validate_fails_when_only_voluntary_present)
 }
 
 // =============================================================================
-// CMutableTransaction scaffold tests
+// CMutableTransaction round-trip (uses real CMutableTransaction from E1)
 // =============================================================================
 
 BOOST_AUTO_TEST_CASE(mutable_transaction_round_trip)
 {
-    CTransaction orig;
-    orig.nVersion = 2;
-    orig.nTime = 1234567890;
-    orig.nLockTime = 42;
+    CMutableTransaction mtx_orig;
+    mtx_orig.nVersion = 2;
+    mtx_orig.nTime = 1234567890;
+    mtx_orig.nLockTime = 42;
 
     CScript script;
     script.SetDestination(MakeTestDest(1));
-    orig.vout.push_back(CTxOut(5 * COIN, script));
+    mtx_orig.vout.push_back(CTxOut(5 * COIN, script));
+
+    CTransaction orig(mtx_orig);
 
     // Copy out to CMutableTransaction
     CMutableTransaction mtx(orig);
@@ -525,8 +526,8 @@ BOOST_AUTO_TEST_CASE(mutable_transaction_round_trip)
     BOOST_CHECK_EQUAL(mtx.vout.size(), 2u);
     BOOST_CHECK_EQUAL(orig.vout.size(), 1u); // original unchanged
 
-    // Convert back
-    CTransaction result = MakeTransaction(mtx);
+    // Convert back via CTransaction constructor
+    CTransaction result(mtx);
     BOOST_CHECK_EQUAL(result.vout.size(), 2u);
     BOOST_CHECK_EQUAL(result.nVersion, orig.nVersion);
     BOOST_CHECK_EQUAL(result.nTime, orig.nTime);

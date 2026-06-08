@@ -68,7 +68,7 @@ int64_t nBeaconCount = 0;
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddTestBeacon(const GRC::Cpid cpid)
+void AddTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -80,15 +80,16 @@ void AddTestBeacon(const GRC::Cpid cpid)
 
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = now;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, now, uint256(), -1);
 }
 
@@ -97,7 +98,7 @@ void AddTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void AddExpiredTestBeacon(const GRC::Cpid cpid)
+void AddExpiredTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
@@ -106,16 +107,17 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
     const CKeyID key_id = public_key.GetID();
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = nBeaconCount;
     nBeaconCount++;
+    CTransaction ctx_tx(tx);
 
     GRC::Contract contract = GRC::MakeContract<GRC::BeaconPayload>(
         GRC::ContractAction::ADD,
         cpid,
         std::move(public_key));
 
-    GRC::GetBeaconRegistry().Add({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Add({ contract, ctx_tx, nullptr });
     GRC::GetBeaconRegistry().ActivatePending({ key_id }, 0, uint256(), -1);
 }
 
@@ -124,15 +126,16 @@ void AddExpiredTestBeacon(const GRC::Cpid cpid)
 //!
 //! \param cpid External CPID used in the test.
 //!
-void RemoveTestBeacon(const GRC::Cpid cpid)
+void RemoveTestBeacon(const GRC::Cpid cpid) NO_THREAD_SAFETY_ANALYSIS
 {
     // TODO: mock the beacon registry
     CPubKey public_key = CPubKey(ParseHex(
         "111111111111111111111111111111111111111111111111111111111111111111"));
 
     // Dummy transaction for the contract handler API:
-    CTransaction tx;
+    CMutableTransaction tx;
     tx.nTime = 0;
+    CTransaction ctx_tx(tx);
 
     uint256 mock_superblock_hash = uint256();
 
@@ -142,18 +145,18 @@ void RemoveTestBeacon(const GRC::Cpid cpid)
         std::move(public_key));
 
     GRC::GetBeaconRegistry().Deactivate(mock_superblock_hash);
-    GRC::GetBeaconRegistry().Delete({ contract, tx, nullptr });
+    GRC::GetBeaconRegistry().Delete({ contract, ctx_tx, nullptr });
 }
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
-                      const int& height, const bool& reset_registry = false)
+                      const int& height, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 
     // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
+    CMutableTransaction dummy_tx;
     CBlockIndex dummy_index = CBlockIndex {};
     dummy_index.nHeight = height;
 
@@ -181,7 +184,8 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
 
     dummy_tx.vContracts.push_back(contract);
 
-    registry.Add({contract, dummy_tx, &dummy_index});
+    CTransaction ctx_tx(dummy_tx);
+    registry.Add({contract, ctx_tx, &dummy_index});
 }
 } // anonymous namespace
 
@@ -509,7 +513,15 @@ BOOST_AUTO_TEST_CASE(it_parses_a_set_of_project_xml_sections)
 
     // Clean up:
     gArgs.ForceSetArg("email", "");
+    // Reload requires cs_main but the test fixture is single-threaded.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
     GRC::Researcher::Reload(GRC::MiningProjectMap());
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(it_skips_loading_project_xml_with_empty_project_names)
@@ -704,6 +716,14 @@ BOOST_AUTO_TEST_SUITE_END()
 // -----------------------------------------------------------------------------
 
 BOOST_AUTO_TEST_SUITE(Researcher)
+
+// Researcher::Reload/Refresh are EXCLUSIVE_LOCKS_REQUIRED(cs_main). Tests
+// invoke them directly on the single-threaded test fixture without acquiring
+// cs_main. Suppress thread-safety warnings for the suite.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 BOOST_AUTO_TEST_CASE(it_initializes_to_an_noncruncher)
 {
@@ -1825,5 +1845,9 @@ BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
     gArgs.ForceSetArg("pooloperator", "0");
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()

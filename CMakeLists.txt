@@ -23,7 +23,7 @@ HunterGate(
 # =====================
 
 project("Gridcoin"
-    VERSION 5.5.0.1
+    VERSION 5.5.1.1
     DESCRIPTION "POS-based cryptocurrency that rewards BOINC computation"
     HOMEPAGE_URL "https://gridcoin.us"
     LANGUAGES C CXX
@@ -123,6 +123,7 @@ option(USE_ASM_SCRYPT   "Enable scrypt assembly routines (requires GNU assembler
 # Optional functionality
 option(ENABLE_PIE       "Build position-independent executables" OFF)
 option(ENABLE_DEBUG_LOCKORDER "Enable run-time lock-order checking (DEBUG_LOCKORDER)" OFF)
+option(WERROR_THREAD_SAFETY "Promote Clang thread-safety diagnostics to build errors" OFF)
 option(ENABLE_QRENCODE  "Enable generation of QR Codes for receiving payments" OFF)
 option(ENABLE_UPNP      "Enable UPnP port mapping support" OFF)
 option(DEFAULT_UPNP     "Turn UPnP on startup" OFF)
@@ -318,8 +319,36 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${ENABLE_PIE})
 # Set compiler flags
 if(APPLE)
     add_compile_options(-Wno-error=deprecated-declarations)
-    add_compile_options(-Wno-error=thread-safety-analysis)
-    add_compile_options(-Wno-error=thread-safety-reference)
+    # MAC_OSX gates macOS-specific code paths inherited from Bitcoin (data
+    # directory under ~/Library/Application Support, F_FULLFSYNC, getentropy,
+    # pthread thread names). The Autotools build defined it via configure.ac;
+    # the move to CMake dropped it, silently disabling those paths on macOS.
+    add_compile_definitions(MAC_OSX)
+endif()
+
+# Enable Clang Thread Safety Analysis where supported (issue #2869). The
+# analyzer ships in upstream Clang and Apple Clang; gcc has no equivalent
+# attribute set. Detect rather than gating on CMAKE_CXX_COMPILER_ID so any
+# clang-compatible compiler picks it up (e.g. clang-cl on Windows).
+#
+# By default thread-safety diagnostics are warning-only (the -Wno-error=
+# flags below): a stale or missing annotation does not break a normal build.
+# When WERROR_THREAD_SAFETY is set they are promoted to hard errors instead.
+# The "Thread Safety (Clang)" job in .github/workflows/cmake_quality.yml
+# builds with WERROR_THREAD_SAFETY=ON, so an annotation regression fails CI;
+# a local build can opt in the same way. See doc/developer-notes.md, section
+# "Clang thread-safety analysis".
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag(-Wthread-safety HAVE_CLANG_THREAD_SAFETY)
+if(HAVE_CLANG_THREAD_SAFETY)
+    add_compile_options(-Wthread-safety)
+    if(WERROR_THREAD_SAFETY)
+        add_compile_options(-Werror=thread-safety-analysis)
+        add_compile_options(-Werror=thread-safety-reference)
+    else()
+        add_compile_options(-Wno-error=thread-safety-analysis)
+        add_compile_options(-Wno-error=thread-safety-reference)
+    endif()
 endif()
 
 if(STATIC_LIBS)

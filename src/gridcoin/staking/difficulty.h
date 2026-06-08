@@ -6,10 +6,14 @@
 #ifndef GRIDCOIN_STAKING_DIFFICULTY_H
 #define GRIDCOIN_STAKING_DIFFICULTY_H
 
+#include "sync.h"
+
 #include <cstdint>
 class CBlockIndex;
 class CWallet;
 #include <cmath>
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 // Note that dDiff cannot be = 0 normally. This is set as default because you can't specify the output of
@@ -17,16 +21,18 @@ namespace GRC {
 // The default confidence is 1-1/e which is the mean for the geometric distribution for small probabilities.
 const double DEFAULT_ETTS_CONFIDENCE = 1.0 - 1.0 / exp(1.0);
 
-unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast);
-double GetDifficulty(const CBlockIndex* blockindex = nullptr);
+unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+double GetDifficulty(const CBlockIndex* blockindex = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double GetBlockDifficulty(unsigned int nBits);
-double GetCurrentDifficulty();
-double GetTargetDifficulty();
-double GetAverageDifficulty(unsigned int nPoSInterval = 40);
-double GetSmoothedDifficulty(int64_t nStakeableBalance);
+double GetCurrentDifficulty() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+double GetTargetDifficulty() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+double GetAverageDifficulty(unsigned int nPoSInterval = 40) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+double GetSmoothedDifficulty(int64_t nStakeableBalance) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//! Self-managed locking: takes LOCK2(cs_main, wallet.cs_wallet) internally.
+//! Safe to call with or without cs_main already held (cs_main is recursive).
 uint64_t GetStakeWeight(const CWallet& wallet);
-double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
+double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief This returns the precise average network weight in units of Halfords as a 64 bit unsigned integer. This form takes
@@ -42,7 +48,7 @@ double GetEstimatedNetworkWeight(unsigned int nPoSInterval = 40);
 //!
 //! \return uint64_t of the average network weight in Halford units.
 //!
-uint64_t GetAvgNetworkWeight(const unsigned int& block_interval, CBlockIndex* index_start = nullptr);
+uint64_t GetAvgNetworkWeight(const unsigned int& block_interval, CBlockIndex* index_start = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief This returns the precise average network weight in units of Halfords as a 64 bit unsigned integer. The starting index
@@ -60,7 +66,9 @@ uint64_t GetAvgNetworkWeight(const unsigned int& block_interval, CBlockIndex* in
 //!
 //! \return uint64_t of the average network weight in Halford units.
 //!
-uint64_t GetAvgNetworkWeight(CBlockIndex* index_start = nullptr, CBlockIndex* index_end = nullptr);
+uint64_t GetAvgNetworkWeight(CBlockIndex* index_start = nullptr, CBlockIndex* index_end = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+//! Self-managed locking: takes LOCK2(cs_main, pwalletMain->cs_wallet) internally.
+//! Safe to call with or without cs_main already held (cs_main is recursive).
 double GetEstimatedTimetoStake(bool ignore_staking_status = false, double dDiff = 0.0, double dConfidence = DEFAULT_ETTS_CONFIDENCE);
 } // namespace GRC
 

@@ -182,12 +182,14 @@ add_library(gridcoin_util STATIC
     netaddress.cpp
     netbase.cpp
     node/blockstorage.cpp
+    node/coherence.cpp
     node/orphan_blocks.cpp
     node/ui_interface.cpp
     noui.cpp
     pbkdf2.cpp
     policy/policy.cpp
     primitives/transaction.cpp
+    psgt.cpp
     protocol.cpp
     pubkey.cpp
     random.cpp
@@ -200,11 +202,17 @@ add_library(gridcoin_util STATIC
     rpc/misc.cpp
     rpc/net.cpp
     rpc/protocol.cpp
+    rpc/psgt.cpp
     rpc/rawtransaction.cpp
     rpc/server.cpp
+    rpc/util.cpp
     rpc/voting.cpp
     scheduler.cpp
     script.cpp
+    script/interpreter.cpp
+    script/script.cpp
+    script/sign.cpp
+    script/standard.cpp
     scrypt.cpp
     support/cleanse.cpp
     support/lockedpool.cpp

@@ -8,6 +8,7 @@
 #include "amount.h"
 #include "dbwrapper.h"
 #include "key.h"
+#include "sync.h"
 #include "gridcoin/contract/handler.h"
 #include "gridcoin/contract/payload.h"
 #include "gridcoin/contract/registry_db.h"
@@ -19,6 +20,8 @@
 
 class CTransaction;
 class CWallet;
+
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -652,21 +655,21 @@ public:
     //!
     //! \return A reference to the beacons stored in the registry.
     //!
-    const BeaconMap& Beacons() const;
+    const BeaconMap& Beacons() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the collection of beacons awaiting verification.
     //!
     //! \return A reference to the pending beacon map stored in the registry.
     //!
-    const PendingBeaconMap& PendingBeacons() const;
+    const PendingBeaconMap& PendingBeacons() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the ownership proofs associated with pending beacons.
     //!
     //! \return A reference to the pending ownership proofs map.
     //!
-    const std::map<CKeyID, OwnershipProof>& PendingOwnershipProofs() const;
+    const std::map<CKeyID, OwnershipProof>& PendingOwnershipProofs() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Try to get the ownership proof for a pending beacon.
@@ -675,13 +678,13 @@ public:
     //!
     //! \return A pointer to the ownership proof if it exists, or nullptr.
     //!
-    const OwnershipProof* TryOwnershipProof(const CKeyID& key_id) const;
+    const OwnershipProof* TryOwnershipProof(const CKeyID& key_id) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the set of beacons that have expired while pending (awaiting verification)
     //! \return A reference to the expired pending beacon set.
     //!
-    const std::set<Beacon_ptr>& ExpiredBeacons() const;
+    const std::set<Beacon_ptr>& ExpiredBeacons() const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the beacon for the specified CPID.
@@ -691,7 +694,7 @@ public:
     //! \return An object that either contains a reference to some beacon if
     //! it exists for the CPID or does not.
     //!
-    BeaconOption Try(const Cpid& cpid) const;
+    BeaconOption Try(const Cpid& cpid) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the beacon for the specified CPID if it did not expire.
@@ -702,7 +705,7 @@ public:
     //! \return An object that either contains a reference to some beacon if
     //! it is active for the CPID or does not.
     //!
-    BeaconOption TryActive(const Cpid& cpid, const int64_t now) const;
+    BeaconOption TryActive(const Cpid& cpid, const int64_t now) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the set of pending beacons for the specified CPID.
@@ -711,7 +714,7 @@ public:
     //!
     //! \return A set of pending beacons advertised for the supplied CPID.
     //!
-    std::vector<Beacon_ptr> FindPending(const Cpid& cpid) const;
+    std::vector<Beacon_ptr> FindPending(const Cpid& cpid) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Find a historical beacon entry from the beacon (txid) hash;
@@ -719,7 +722,7 @@ public:
     //! \return An object that either contains a reference to a historical
     //! beacon entry if found or does not.
     //!
-    const BeaconOption FindHistorical(const uint256& hash);
+    const BeaconOption FindHistorical(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID.
@@ -730,7 +733,7 @@ public:
     //! \return \c true if the registry contains an active beacon for the
     //! specified CPID.
     //!
-    bool ContainsActive(const Cpid& cpid, const int64_t now) const;
+    bool ContainsActive(const Cpid& cpid, const int64_t now) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a beacon is active for the specified CPID at
@@ -741,7 +744,7 @@ public:
     //! \return \c true if the registry contains an active beacon for the
     //! specified CPID.
     //!
-    bool ContainsActive(const Cpid& cpid) const;
+    bool ContainsActive(const Cpid& cpid) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Destroy the contract handler state in case of an error in loading
@@ -750,7 +753,7 @@ public:
     //! as a startup argument, because contract replay storage and full reversion has
     //! been implemented for beacons.
     //!
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a beacon contract is valid.
@@ -761,7 +764,7 @@ public:
     //!
     //! \return \c true if the contract contains a valid beacon.
     //!
-    bool Validate(const Contract& contract, const CTransaction& tx, int &DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int &DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Determine whether a beacon contract is valid including block context. This is used
@@ -772,14 +775,14 @@ public:
     //!
     //! \return  \c false If the contract fails validation.
     //!
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Register a beacon from contract data.
     //!
     //! \param ctx References the beacon contract and associated context.
     //!
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Deregister the beacon specified by contract data. Note this is the
@@ -787,7 +790,7 @@ public:
     //!
     //! \param ctx References the beacon contract and associated context.
     //!
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Revert the registry state for the cpid to the state prior
@@ -796,7 +799,7 @@ public:
     //!
     //! \param ctx References the beacon contract and associated context.
     //!
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Activate the set of pending beacons verified in a superblock. This is called
@@ -807,7 +810,7 @@ public:
     //! \param height          Height of the superblock
     //!
     void ActivatePending(const std::vector<uint160>& beacon_ids,
-        const int64_t superblock_time, const uint256& block_hash, const int &height);
+        const int64_t superblock_time, const uint256& block_hash, const int &height) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Deactivate the set of beacons verified in a superblock. This is called in BlockDisconnectBatch
@@ -816,7 +819,7 @@ public:
     //!
     //! \param hash of the superblock.
     //!
-    void Deactivate(const uint256 superblock_hash);
+    void Deactivate(const uint256 superblock_hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Initialize the BeaconRegistry, which now includes restoring the state of the BeaconRegistry from
@@ -826,14 +829,14 @@ public:
     //! there is some issue in LevelDB beacon retrieval. (This will cause the contract replay to change scope
     //! and initialize the BeaconRegistry from contract replay and store in LevelDB.)
     //!
-    int Initialize() override;
+    int Initialize() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Gets the block height through which is stored in the beacon registry database.
     //!
     //! \return block height.
     //!
-    int GetDBHeight() override;
+    int GetDBHeight() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Function normally only used after a series of reverts during block disconnects, because
@@ -844,13 +847,13 @@ public:
     //!
     //! \param height to set the storage DB bookmark.
     //!
-    void SetDBHeight(int& height) override;
+    void SetDBHeight(int& height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Resets the maps in the BeaconRegistry but does not disturb the underlying LevelDB
     //! storage. This is only used during testing in the testing harness.
     //!
-    void ResetInMemoryOnly();
+    void ResetInMemoryOnly() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Passivates the elements in the beacon db, which means remove from memory elements in the
@@ -860,7 +863,7 @@ public:
     //!
     //! \return The number of elements passivated.
     //!
-    uint64_t PassivateDB() override;
+    uint64_t PassivateDB() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief This function walks the linked beacon entries back (using the m_previous_hash member) from a provided
@@ -872,20 +875,20 @@ public:
     //! \return root (advertisement) beacon entry smart shared pointer
     //!
     Beacon_ptr GetBeaconChainletRoot(Beacon_ptr beacon,
-                                     std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out = nullptr);
+                                     std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Returns whether IsContract correction is needed in ReplayContracts during initialization
     //! \return
     //!
-    bool NeedsIsContractCorrection();
+    bool NeedsIsContractCorrection() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Sets the state of the IsContract needs correction flag in memory and LevelDB
     //! \param flag The state to set
     //! \return
     //!
-    bool SetNeedsIsContractCorrection(bool flag);
+    bool SetNeedsIsContractCorrection(bool flag) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Specializes the template RegistryDB for the ScraperEntry class
@@ -899,13 +902,8 @@ public:
                        HistoricalBeaconMap> BeaconDB;
 
 private:
-    //!
-    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to the registry class.
-    //!
-    mutable CCriticalSection cs_lock;
-
-    BeaconMap m_beacons;        //!< Contains the active registered beacons.
-    PendingBeaconMap m_pending; //!< Contains beacons awaiting verification.
+    BeaconMap m_beacons        GUARDED_BY(cs_main); //!< Contains the active registered beacons.
+    PendingBeaconMap m_pending GUARDED_BY(cs_main); //!< Contains beacons awaiting verification.
 
     //!
     //! \brief In-memory side map of ownership proofs for pending beacons.
@@ -913,7 +911,7 @@ private:
     //! Keyed by the pending beacon's CKeyID. Rebuilt from contract replay on
     //! restart (same lifecycle as m_pending itself). Not persisted to LevelDB.
     //!
-    std::map<CKeyID, OwnershipProof> m_pending_ownership_proofs;
+    std::map<CKeyID, OwnershipProof> m_pending_ownership_proofs GUARDED_BY(cs_main);
 
     //!
     //! \brief Contains pending beacons that have expired.
@@ -929,15 +927,15 @@ private:
     //!
     //! This set is cleared and repopulated at each SB accepted by the node with the current expired pending beacons.
     //!
-    std::set<Beacon_ptr> m_expired_pending;
+    std::set<Beacon_ptr> m_expired_pending GUARDED_BY(cs_main);
 
-    BeaconMap m_beacon_first_entries {}; //!< Not used here. Only to satisfy the template.
+    BeaconMap m_beacon_first_entries GUARDED_BY(cs_main) {}; //!< Not used here. Only to satisfy the template.
 
     //!
     //! \brief The member variable that is the instance of the beacon database. This is private to the
     //! beacon registry and is only accessible by beacon registry functions.
     //!
-    BeaconDB m_beacon_db;
+    BeaconDB m_beacon_db GUARDED_BY(cs_main);
 
     //!
     //! \brief The function that is used in Add() to try to renew a beacon by matching the incoming beacon's
@@ -950,7 +948,7 @@ private:
     //!
     //! \return Success or failure of renewal attempt.
     //!
-    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload);
+    bool TryRenewal(Beacon_ptr& current_beacon_ptr, int& height, const BeaconPayload& payload) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 public:
     //!
@@ -958,7 +956,7 @@ public:
     //!
     //! \return Current beacon database instance.
     //!
-    BeaconDB& GetBeaconDB();
+    BeaconDB& GetBeaconDB() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 }; // BeaconRegistry
 

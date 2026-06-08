@@ -190,6 +190,7 @@ PollWizardDetailsPage::PollWizardDetailsPage(QWidget* parent)
 
     ui->additionalFieldsTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->additionalFieldsTableView->sortByColumn(AdditionalFieldsTableModel::Required, Qt::DescendingOrder);
+    ui->additionalFieldsTableView->setAccessibleName(tr("Poll additional fields"));
 
     ui->weightTypeList->addItem(tr("Balance"));
     ui->weightTypeList->addItem(tr("Magnitude+Balance"));
@@ -310,7 +311,10 @@ void PollWizardDetailsPage::initializePage()
 
         // Only populate poll additional field entries if version >= 3.
         bool v3_enabled = false;
-        v3_enabled = IsPollV3Enabled(nBestHeight);
+        {
+            LOCK(cs_main);
+            v3_enabled = IsPollV3Enabled(nBestHeight);
+        }
 
         if (v3_enabled) {
             poll_item.m_additional_field_entries.push_back(

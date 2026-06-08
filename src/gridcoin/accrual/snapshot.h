@@ -99,7 +99,7 @@ public:
     //!
     //! \return Allocation fraction representing magnitude unit.
     //!
-    static Allocation GetMagnitudeUnit(CBlockIndex* index)
+    static Allocation GetMagnitudeUnit(CBlockIndex* index) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         CBlockIndex* sb_index = BlockFinder::FindLatestSuperblock(index);
 
@@ -366,7 +366,7 @@ public:
         return GetMagnitudeUnit().ToDouble();
     }
 
-    int64_t AccrualAge() const override
+    int64_t AccrualAge() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // For the CPIDs that never staked a block, report the accrual age as
         // the time since the CPID advertised a beacon. This is not perfectly
@@ -393,7 +393,7 @@ public:
         return SnapshotCalculator::AccrualAge(m_account);
     }
 
-    double AccrualDays() const override
+    double AccrualDays() const override EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Since this informational value is not consensus-critical, we use
         // floating-point arithmetic for readability:
@@ -1578,6 +1578,42 @@ public:
         AccrualSnapshotFile::Remove(height);
 
         return m_registry.Deregister(height);
+    }
+
+    //!
+    //! \brief Drop every snapshot whose height is strictly greater than the
+    //! supplied chain tip. Used by Tally::ActivateSnapshotAccrual to reconcile
+    //! the registry with a chain tip that has rewound below the latest
+    //! snapshot -- typically after a Phase 2 abandonment-style recovery
+    //! (issue #2865) where pindexBest jumps backward without going through
+    //! the normal DisconnectBlock path. Without this pass, the registry's
+    //! strict-monotonic Register invariant would assert on the first SB the
+    //! forward sync re-crosses, killing the wallet on startup.
+    //!
+    //! Implementation walks the registry's LIFO Deregister path, popping the
+    //! latest entry each iteration. Bounded by the SB-cross count of the
+    //! rewind -- at most a few entries in any realistic recovery (the
+    //! -coherencewalkmax default of 10000 blocks is well under ten SBs on
+    //! mainnet, around ten on testnet). PruneSnapshotFiles() should be
+    //! called after this to clean up the orphaned snapshot files on disk.
+    //!
+    //! \param tip_height Current chain tip height. Snapshots strictly above
+    //!                   this are dropped.
+    //! \return Count of snapshots dropped, or -1 if a Drop call failed
+    //!         (registry is then in a partially-trimmed state; the caller
+    //!         should fall through to RebuildAccrualSnapshots()).
+    //!
+    int DropAboveHeight(const uint64_t tip_height)
+    {
+        int dropped = 0;
+        while (m_registry.LatestHeight() > tip_height) {
+            const uint64_t latest = m_registry.LatestHeight();
+            if (!Drop(latest)) {
+                return -1;
+            }
+            ++dropped;
+        }
+        return dropped;
     }
 
     bool CloseRegistryFile()

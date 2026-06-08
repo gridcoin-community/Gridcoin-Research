@@ -73,20 +73,20 @@ typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_tx_val_commit_to_disk;
-extern BlockMap mapBlockIndex;
-extern CBlockIndex* pindexGenesisBlock;
+extern BlockMap mapBlockIndex GUARDED_BY(cs_main);
+extern CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main);
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
-extern int nBestHeight;
-extern arith_uint256 nBestChainTrust;
-extern uint256 hashBestChain;
-extern CBlockIndex* pindexBest;
+extern int nBestHeight GUARDED_BY(cs_main);
+extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
+extern uint256 hashBestChain GUARDED_BY(cs_main);
+extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
 extern std::atomic<bool> g_reorg_in_progress;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
-extern std::set<CWallet*> setpwalletRegistered;
+extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
 // Settings
@@ -102,7 +102,14 @@ extern bool fEnforceCanonical;
 // Minimum disk space required - used in CheckDiskSpace()
 static const uint64_t nMinDiskSpace = 52428800;
 
-extern std::string  msMiningErrors;
+//! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
+//! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
+//! model on their respective threads. std::string assignment / copy is not
+//! atomic, so the writer's release of internal buffer storage can race with a
+//! reader's traversal of the same buffer — undefined behaviour without
+//! serialization.
+extern CCriticalSection cs_msMiningErrors;
+extern std::string msMiningErrors GUARDED_BY(cs_msMiningErrors);
 
 extern int nGrandfather;
 
@@ -110,43 +117,107 @@ class CReserveKey;
 class CTxDB;
 class CTxIndex;
 
+/** Reason why transaction was removed from mempool */
+// TODO: Consider moving MemPoolRemovalReason to a shared header (e.g. txmempool.h)
+// so that both main.cpp and wallet code can reference it without pulling in all of main.h.
+enum class MemPoolRemovalReason {
+    UNKNOWN = 0,      //!< Manually removed or unknown reason
+    EXPIRY = 1,       //!< Expired from mempool
+    SIZELIMIT = 2,    //!< Removed due to size limit
+    REORG = 3,        //!< Removed for reorganization
+    BLOCK = 4,        //!< Removed because included in block
+    CONFLICT = 5,     //!< Removed due to conflict
+    REPLACED = 6      //!< Removed due to replacement (RBF)
+};
+
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock = nullptr, bool fUpdate = false, bool fConnect = true);
-void UpdatedTransaction(const uint256& hashTx);
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me);
+void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
+// Takes cs_main internally; callers MUST NOT hold cs_main when calling
+// (the internal LOCK would deadlock under non-recursive locking; cs_main
+// is currently recursive but the annotation contract documents the intent).
 bool LoadBlockIndex(bool fAllowNew=true);
-void PrintBlockTree();
+void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
-bool ProcessMessages(CNode* pfrom);
+bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
+// Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
+// cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires
+// cs_main again internally for each section it needs. The current pattern
+// is recursive-safe but TSA cannot model the recursive-acquire correctly,
+// so the function intentionally has no EXCLUSIVE_LOCKS_REQUIRED annotation.
 bool SendMessages(CNode* pto, bool fSendTrickle);
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
-GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex);
+//! Abandonment-style rewind of the chain to `pindex_target`. Updates the in-memory chain
+//! globals (pindexBest, nBestHeight, hashBestChain, g_chain_trust, sync time) and persists
+//! the new hashBestChain to LevelDB via the supplied CTxDB. Unlike DisconnectBlocksBatch,
+//! this does NOT call DisconnectBlock on the abandoned range -- the on-disk data for those
+//! blocks is by definition unreadable (we are recovering from corruption that made them
+//! unhashable). The downstream cleanup of chainstate (CTxIndex / vSpent) and the in-memory
+//! mapBlockIndex purge happen separately via CTxDB::CleanAbandonedRange and
+//! PurgeOrphanedBlockIndexEntries below. Phase 2 of issue #2865; see src/node/coherence.cpp
+//! and doc/block_corruption_recovery_design.md.
+bool AbandonChainTo(class CBlockIndex* pindex_target, class CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Purge the abandoned CBlockIndex entries from in-memory mapBlockIndex AND from on-disk
+//! LevelDB (CDiskBlockIndex records). Called by the Phase 2 abandonment path after
+//! AbandonChainTo + CTxDB::CleanAbandonedRange. The caller must guarantee that no consumer
+//! holds references to the abandoned entries -- in the Phase 2 hook this is true by
+//! construction (runs after LoadBlockIndex, before GRC::Initialize -- the wallet, Quorum,
+//! Tally, mempool, and net have not yet started).
+//!
+//! Erases the mapBlockIndex slot and the LevelDB CDiskBlockIndex record. Does NOT delete
+//! the CBlockIndex object: the index objects are allocated out of GRC::BlockIndexPool,
+//! which never reclaims slots (see src/gridcoin/block_index.h:54-55 and
+//! .claude/memory/reference_block_index_pool.md). Calling `delete` on a pool slot is
+//! undefined behaviour and corrupts the heap free list -- the symptom (originally hit
+//! 2026-05-16 on isolated testnet) is `assert(!pindexBest->pnext)` firing in
+//! DisconnectBlocksBatch on the first P2P block delivered after Phase 2 reported clean
+//! completion, because heap corruption rewrites neighbouring pool memory at allocation
+//! time. The pool slot leaks by design (a few hundred bytes per discarded entry,
+//! permanently); the entry becomes inert because nothing in mapBlockIndex points at it
+//! and the on-disk record is gone.
+//!
+//! The LevelDB erase is what makes Phase 2 durable across restarts -- without it,
+//! LoadBlockIndex would rebuild the same ghost pnext linkage from the stale on-disk
+//! hashNext values, causing the recovered tip to appear corrupt again on every boot.
+//!
+//! The input vector entries are nulled out after the map erase to make it harder to
+//! accidentally dereference a still-live pool pointer.
+//!
+//! Doing this at startup-init is safe; doing it at runtime would require coordinating
+//! with live consumers (e.g. blockindex iteration in RPC handlers, Quorum lookups),
+//! which is why the runtime DisconnectBlocksBatch path does NOT also purge -- it leaves
+//! orphans in mapBlockIndex and accepts the small live-state weight.
+void PurgeOrphanedBlockIndexEntries(class CTxDB& txdb, std::vector<class CBlockIndex*>& abandoned)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-void ResendWalletTransactions(bool fForce = false);
+void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
-                        bool* pfMissingInputs);
-bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew);
+                        CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction
 {
-private:
-    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
+protected:
+    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
 public:
     uint256 hashBlock;
     int nIndex;
@@ -160,6 +231,8 @@ public:
     {
         Init();
     }
+
+    virtual ~CMerkleTx() = default;
 
     void Init()
     {
@@ -343,9 +416,8 @@ public:
     // memory only
     mutable bool fChecked;
 
-    // Denial-of-service detection:
-    mutable int nDoS;
-    bool DoS(int nDoSIn, bool fIn) const { nDoS += nDoSIn; return fIn; }
+    //! Lazy cache for the parsed claim contract on legacy (pre-v11) blocks.
+    mutable GRC::Contract m_claim_contract_cache;
 
     CBlock()
     {
@@ -382,7 +454,7 @@ public:
         vtx.clear();
         vchBlockSig.clear();
         fChecked = false;
-        nDoS = 0;
+        m_claim_contract_cache = GRC::Contract();
     }
 
     CBlockHeader GetBlockHeader() const
@@ -571,7 +643,7 @@ public:
 
     arith_uint256 GetBlockTrust() const;
 
-    bool IsInMainChain() const
+    bool IsInMainChain() const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         return (pnext || this == pindexBest);
     }
@@ -1034,7 +1106,7 @@ public:
         vHave.push_back((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
     }
 
-    int GetDistanceBack()
+    int GetDistanceBack() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Retrace how far back it was in the sender's branch
         int nDistance = 0;
@@ -1055,7 +1127,7 @@ public:
         return nDistance;
     }
 
-    CBlockIndex* GetBlockIndex()
+    CBlockIndex* GetBlockIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
@@ -1071,7 +1143,7 @@ public:
         return pindexGenesisBlock;
     }
 
-    uint256 GetBlockHash()
+    uint256 GetBlockHash() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         // Find the first block the caller has in the main chain
         for (auto const& hash : vHave)
@@ -1087,7 +1159,7 @@ public:
         return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
     }
 
-    int GetHeight()
+    int GetHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     {
         CBlockIndex* pindex = GetBlockIndex();
         if (!pindex)

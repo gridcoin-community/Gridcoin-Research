@@ -27,14 +27,19 @@ jobs:
             prep_cmd: "dnf install -y which sudo git"
             build_args: ""
 
-          - distro: OpenSUSE Leap 15.6
-            image: opensuse/leap:15.6
+          - distro: OpenSUSE Leap 16.0
+            image: opensuse/leap:16.0
             prep_cmd: "zypper refresh && zypper install -y sudo which git"
             build_args: "CC=gcc-13 CXX=g++-13"
 
           - distro: OpenSUSE Tumbleweed
             image: opensuse/tumbleweed
-            prep_cmd: "zypper refresh && zypper install -y sudo which git"
+            # Rolling distro: dist-upgrade to align the container's snapshot
+            # with the current repo head before installing patterns/packages.
+            # Without this, pattern installs (e.g. devel_basis) can fail when
+            # the pattern was rebuilt against newer libs than the image ships
+            # — a recurring CI drift caused by Tumbleweed's release cadence.
+            prep_cmd: "zypper --non-interactive --gpg-auto-import-keys ref && zypper --non-interactive dup --auto-agree-with-licenses --allow-vendor-change && zypper install -y sudo which git"
             build_args: ""
 
           - distro: Arch Linux

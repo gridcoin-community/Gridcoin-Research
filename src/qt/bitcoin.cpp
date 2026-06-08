@@ -72,7 +72,7 @@ Q_IMPORT_PLUGIN(QSvgIconPlugin);
 #endif
 
 extern bool fQtActive;
-extern bool bGridcoinCoreInitComplete;
+extern std::atomic<bool> bGridcoinCoreInitComplete;
 
 // Need a global reference for the notifications to find the GUI
 static BitcoinGUI *guiref;
@@ -141,10 +141,10 @@ static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption
     {
         LOCK(cs_main);
 
-        CTransaction txDummy;
+        CMutableTransaction txDummy;
 
         // Min Fee
-        nMinFee = GetBaseFee(txDummy, GMF_SEND);
+        nMinFee = GetBaseFee(CTransaction(txDummy), GMF_SEND);
     }
 
     if (nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee)
@@ -717,6 +717,11 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.setClientModel(nullptr);
                 window.setWalletModel(nullptr);
                 window.setResearcherModel(nullptr);
+                // Clear the voting model BEFORE the enclosing block exits and
+                // destroys the stack-allocated VotingModel: this propagates to
+                // PollTableModel::setModel(nullptr) which drains any in-flight
+                // QtConcurrent refresh worker still dereferencing the model.
+                window.setVotingModel(nullptr);
                 guiref = nullptr;
             }
             // Shutdown the core and its threads, but don't exit Bitcoin-Qt here

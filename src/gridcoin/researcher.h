@@ -7,6 +7,8 @@
 
 #include "amount.h"
 #include "key.h"
+#include "sync.h"
+#include "wallet/wallet.h"
 #include "gridcoin/cpid.h"
 
 #include <map>
@@ -14,8 +16,10 @@
 #include <string>
 #include <vector>
 
-class CWallet;
 class uint256;
+
+extern CCriticalSection cs_main;
+extern CWallet* pwalletMain;
 
 namespace GRC {
 
@@ -371,7 +375,7 @@ class OwnershipProof;
 //! \return A variant that contains the new public key if successful or a
 //! description of the error that occurred.
 //!
-AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid);
+AdvertiseBeaconResult GenerateBeaconKey(const Cpid& cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Send a v3 beacon contract with an ownership proof.
@@ -388,7 +392,7 @@ AdvertiseBeaconResult SendBeaconContractV3(
     const Cpid& cpid,
     Beacon beacon,
     OwnershipProof proof,
-    const bool force = false);
+    const bool force = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet);
 
 //!
 //! \brief Manages the global BOINC researcher context.
@@ -487,7 +491,7 @@ public:
     //! to mint blocks that claim Proof-of-Research rewards. Otherwise, this
     //! method resets the wallet's mining context to non-cruncher mode.
     //!
-    static void Reload();
+    static void Reload() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Reload the wallet's researcher mining context from the supplied
@@ -499,7 +503,7 @@ public:
     //!
     static void Reload(
         MiningProjectMap projects,
-        BeaconError beacon_error = GRC::BeaconError::NONE);
+        BeaconError beacon_error = GRC::BeaconError::NONE) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Rescan the set of in-memory projects for eligible CPIDs without
@@ -511,7 +515,7 @@ public:
     //! application calls this method to update the researcher context with any
     //! newly eligible or ineligible CPIDs.
     //!
-    static void Refresh();
+    static void Refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //!
     //! \brief Get the primary mining ID that identifies the owner of the wallet.

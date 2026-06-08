@@ -465,8 +465,14 @@ VotingResult VotingModel::sendPoll(
     PollBuilder builder = PollBuilder();
 
     try {
-        builder = builder
-            .SetPayloadVersion(payload_version)
+        {
+            // SetPayloadVersion reads nBestHeight; the other setters do not.
+            // Scope cs_main tightly to just that call.
+            LOCK(cs_main);
+            builder = std::move(builder).SetPayloadVersion(payload_version);
+        }
+
+        builder = std::move(builder)
             .SetType(type_by_poll_payload_version)
             .SetTitle(title.toStdString())
             .SetDuration(duration_days)

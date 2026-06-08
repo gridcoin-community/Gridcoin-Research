@@ -279,7 +279,7 @@ static bool SelectBlockFromCandidates(
 // block. This is to make it difficult for an attacker to gain control of
 // additional bits in the stake modifier, even after generating a chain of
 // blocks.
-bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier)
+bool GRC::ComputeNextStakeModifier(const CBlockIndex* pindexPrev, uint64_t& nStakeModifier, bool& fGeneratedStakeModifier) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     nStakeModifier = 0;
     fGeneratedStakeModifier = false;
@@ -388,7 +388,7 @@ bool GRC::ReadStakedInput(
     const uint256 prevout_hash,
     CBlockHeader& out_header,
     CTransaction& out_txprev,
-    CBlockIndex* pindexPrev)
+    CBlockIndex* pindexPrev) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     CTxIndex tx_index;
 
@@ -439,7 +439,8 @@ bool GRC::CalculateLegacyV3HashProof(
     CTxDB& txdb,
     const CBlock& block,
     const double por_nonce,
-    uint256& out_hash_proof)
+    CValidationState& state,
+    uint256& out_hash_proof) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     const CTransaction& coinstake = block.vtx[1];
     const COutPoint& prevout = coinstake.vin[0].prevout;
@@ -448,7 +449,7 @@ bool GRC::CalculateLegacyV3HashProof(
     CBlockHeader input_block;
 
     if (!ReadStakedInput(txdb, prevout.hash, input_block, input_tx, nullptr)) {
-        return coinstake.DoS(1, error("Read staked input failed."));
+        return state.DoS(1, error("Read staked input failed."));
     }
 
     CHashWriter out(SER_GETHASH, 0);
@@ -556,7 +557,7 @@ int64_t GRC::CalculateStakeWeightV8(const CAmount& nValueIn)
 
 // Another version of GetKernelStakeModifier (TomasBrod)
 // Todo: security considerations
-bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod)
+bool GRC::FindStakeModifierRev(uint64_t& nStakeModifier, CBlockIndex* pindexPrev, int& nHeight_mod) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     nStakeModifier = 0;
     CBlockIndex* pindex_mod = pindexPrev;
@@ -583,7 +584,8 @@ bool GRC::CheckProofOfStakeV8(
     CBlockIndex* pindexPrev, //previous block in chain index
     CBlock& Block, //block to check
     bool generated_by_me,
-    uint256& hashProofOfStake) //proof hash out-parameter
+    CValidationState& state,
+    uint256& hashProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main) //proof hash out-parameter
 {
     //Block Transaction 0 is coin:base
     //Block Transaction 1 is coin:stake
@@ -603,21 +605,21 @@ bool GRC::CheckProofOfStakeV8(
     CTransaction txPrev;
 
     if (!ReadStakedInput(txdb, prevout.hash, header, txPrev, pindexPrev))
-        return tx.DoS(10, error("%s: read staked input failed", __func__));
+        return state.DoS(10, error("%s: read staked input failed", __func__));
 
     if (!VerifySignature(txPrev, tx, SCRIPT_VERIFY_P2SH, 0, 0))
-        return tx.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
+        return state.DoS(100, error("%s: VerifySignature failed on coinstake %s", __func__, tx.GetHash().ToString()));
 
     // Check times
     if (tx.nTime < txPrev.nTime)
-        return tx.DoS(100, error("%s: nTime violation", __func__));
+        return state.DoS(100, error("%s: nTime violation", __func__));
 
     if (header.nTime + nStakeMinAge > tx.nTime)
-        return tx.DoS(100, error("%s: min age violation", __func__));
+        return state.DoS(100, error("%s: min age violation", __func__));
 
     if (Block.nVersion >= 12) {
         if (tx.nTime != MaskStakeTime(tx.nTime)) {
-            return tx.DoS(100, error("%s: mask violation", __func__));
+            return state.DoS(100, error("%s: mask violation", __func__));
         }
     }
 
@@ -650,7 +652,7 @@ bool GRC::CheckProofOfStakeV8(
 
     // Now check if proof-of-stake hash meets target protocol
     if (bnHashProof > bnTarget) {
-        return tx.DoS(100, error("%s: invalid proof (proof: %s, target: %s)", __func__, bnHashProof.GetHex(), bnTarget.GetHex()));
+        return state.DoS(100, error("%s: invalid proof (proof: %s, target: %s)", __func__, bnHashProof.GetHex(), bnTarget.GetHex()));
     }
 
     return true;

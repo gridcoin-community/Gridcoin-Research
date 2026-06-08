@@ -575,11 +575,19 @@ public:
     //! \brief Create a new validator for the provided superblock.
     //!
     //! \param superblock The superblock data to validate.
+    //! \param hint_bits  For testing by-project fallback validation.
+    //! \param height     Height of the block whose superblock is being
+    //!                   validated. Threaded through to ProjectResolver to
+    //!                   gate the PPK/PACTC skip-list extension behind
+    //!                   BlockV13Height.
     //!
-    SuperblockValidator(const SuperblockPtr& superblock, size_t hint_bits = 32)
+    SuperblockValidator(const SuperblockPtr& superblock,
+                        size_t hint_bits = 32,
+                        int height = std::numeric_limits<int>::max())
         : m_superblock(superblock)
         , m_quorum_hash(superblock->GetHash())
         , m_hint_shift(32 + std::clamp<size_t>(32 - hint_bits, 0, 32))
+        , m_height(height)
     {
     }
 
@@ -680,13 +688,25 @@ private: // SuperblockValidator classes
         uint256 m_source_manifest_hash; //!< Manifest that contains this part.
         int64_t m_source_manifest_time; //!< For selecting the beacon list.
 
+        //! Shared pointer to the CScraperManifest that contains this part. Pins the source manifest for the
+        //! lifetime of this ResolvedPart, which in turn pins the CPart at m_part_hash in CSplitBlob::mapParts
+        //! (CSplitBlob::vParts is append-only after addPart/addPartData -- never shrinks during a manifest's
+        //! lifetime -- so as long as the manifest is alive its parts stay alive via their refs[] entries).
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h) at the validator-side
+        //! ConvergenceCandidate consumer, which does NOT set ConvergedManifest::CScraperConvergedManifest_ptr
+        //! -- closes a latent fragility that previously relied solely on the global mapManifest /
+        //! mapPendingDeletedManifest scraper-sleep-bounded housekeeping holding pen.
+        CScraperManifest_shared_ptr m_source_manifest;
+
         ResolvedPart(
             uint256 part_hash,
             uint256 source_manifest_hash,
-            int64_t source_manifest_time)
+            int64_t source_manifest_time,
+            CScraperManifest_shared_ptr source_manifest)
             : m_part_hash(part_hash)
             , m_source_manifest_hash(source_manifest_hash)
             , m_source_manifest_time(source_manifest_time)
+            , m_source_manifest(std::move(source_manifest))
         {
         }
     };
@@ -790,7 +810,9 @@ private: // SuperblockValidator classes
         {
             m_candidate_hashes.erase(part.m_part_hash);
 
-            m_resolved_parts.emplace_back(part);
+            // std::move so the new m_source_manifest shared_ptr in ResolvedPart is moved (refcount-neutral)
+            // rather than copied (refcount inc on emplace_back + dec on `part`'s destruction).
+            m_resolved_parts.emplace_back(std::move(part));
         }
     };
 
@@ -802,16 +824,54 @@ private: // SuperblockValidator classes
     {
     public:
         //!
-        //! \brief Add the provided manifest part to the convergence.
+        //! \brief Add the provided manifest part to the convergence and pin its source CScraperManifest.
         //!
-        //! \param project_name      Identifies the project to add.
-        //! \param project_part_data Serialized project stats of the part.
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h). The validator builds m_convergence
+        //! piecemeal via this AddPart rather than from a single source manifest, so m_convergence's own
+        //! CScraperConvergedManifest_ptr is never set. Without external pinning, the raw CPart* values in
+        //! m_convergence.ConvergedManifestPartPtrsMap would depend on global mapManifest +
+        //! mapPendingDeletedManifest scraper-sleep-bounded housekeeping for their lifetime -- a latent
+        //! fragility against any change to housekeeping cadence. Holding the source_manifest shared_ptr
+        //! in m_source_manifests closes the type-level hole.
         //!
-        void AddPart(std::string project_name, CSplitBlob::CPart* project_part_ptr)
+        //! \param project_name    Identifies the project to add.
+        //! \param project_part_ptr Pointer to the CPart in CSplitBlob::mapParts. If null (e.g. the part
+        //!                         disappeared from mapParts between resolution and combination), the
+        //!                         add is dropped and logged -- preventing a later crash in
+        //!                         GetScraperStatsByConvergedManifest, which dereferences this pointer
+        //!                         without a null check.
+        //! \param source_manifest  Shared pointer to a CScraperManifest whose vParts contains this part.
+        //!                         May be the empty shared_ptr only if the caller has its own external
+        //!                         guarantee that the part outlives this candidate (no current call site
+        //!                         passes a null shared_ptr).
+        //!
+        void AddPart(std::string project_name,
+                     CSplitBlob::CPart* project_part_ptr,
+                     CScraperManifest_shared_ptr source_manifest)
         {
+            // GetResolvedPartPtr returns nullptr if the resolved part disappeared from CSplitBlob::mapParts
+            // between resolution and the combination iteration ("the most recent project part should
+            // always exist" per the comment there, but defensive). Inserting a nullptr would leave a
+            // (name, nullptr) entry that ComputeQuorumHash -> GetScraperStatsByConvergedManifest later
+            // dereferences without a null check (scraper.cpp:4179 etc.) -- crash. Drop the part instead;
+            // the resulting candidate will produce a different quorum hash than the validated superblock
+            // and validation will simply fail for this combination, which is the correct behavior.
+            if (project_part_ptr == nullptr) {
+                LogPrintf("ValidateSuperblock(): AddPart: null CPart for project %s; dropping.",
+                          project_name);
+                return;
+            }
+
             m_convergence.ConvergedManifestPartPtrsMap.emplace(
                 std::move(project_name),
                 std::move(project_part_ptr));
+
+            if (source_manifest) {
+                // Set dedups by stored-pointer address (shared_ptr::get() via std::less<shared_ptr>
+                // per [util.smartptr.shared.cmp]): a manifest contributing N parts pins exactly one
+                // shared_ptr ref. Cheap (one atomic increment per distinct contributing manifest).
+                m_source_manifests.insert(std::move(source_manifest));
+            }
         }
 
         //!
@@ -830,6 +890,13 @@ private: // SuperblockValidator classes
 
     private:
         ConvergedManifest m_convergence; //!< Used to compute a superblock hash
+
+        //! Shared pointers to every source CScraperManifest that contributed a part to m_convergence.
+        //! Preserves the ConvergedManifest pair-invariant (see fwd.h) -- the raw CPart* values in
+        //! m_convergence.ConvergedManifestPartPtrsMap are valid as long as at least one of these
+        //! shared_ptrs is alive (CSplitBlob::vParts is append-only, so a manifest never loses a part
+        //! during its lifetime). Set dedups across multiple parts from the same manifest.
+        std::set<CScraperManifest_shared_ptr> m_source_manifests;
     };
 
     //!
@@ -862,11 +929,17 @@ private: // SuperblockValidator classes
         //!
         //! \param projects Contains matching manifest parts hashes for each
         //! project hinted in the superblock.
+        //! \param height   Height of the block whose superblock is being
+        //!                 validated. Used to gate post-v13 side-channel
+        //!                 part inclusion (PACTC, PPK) in the reconstructed
+        //!                 convergence.
         //!
-        ProjectCombiner(std::map<std::string, ResolvedProject> projects)
+        ProjectCombiner(std::map<std::string, ResolvedProject> projects,
+                        int height = std::numeric_limits<int>::max())
             : m_projects(std::move(projects))
             , m_total_combinations(1)
             , m_current_combination(0)
+            , m_height(height)
         {
             for (auto& project_pair : reverse_iterate(m_projects)) {
                 project_pair.second.m_combiner_mask = m_total_combinations;
@@ -880,6 +953,7 @@ private: // SuperblockValidator classes
         ProjectCombiner()
             : m_total_combinations(0)
             , m_current_combination(0)
+            , m_height(std::numeric_limits<int>::max())
         {
         }
 
@@ -944,7 +1018,7 @@ private: // SuperblockValidator classes
 
             ConvergenceCandidate convergence;
             size_t remainder = m_current_combination;
-            uint256 latest_manifest;
+            CScraperManifest_shared_ptr latest_manifest_ptr;
             int64_t latest_manifest_time = 0;
 
             for (const auto& project_pair : m_projects) {
@@ -963,20 +1037,24 @@ private: // SuperblockValidator classes
 
                 convergence.AddPart(
                     project_pair.first, // project name
-                    GetResolvedPartPtr(resolved_part.m_part_hash));
+                    GetResolvedPartPtr(resolved_part.m_part_hash),
+                    resolved_part.m_source_manifest); // pin source manifest (pair invariant)
 
                 remainder -= part_index * project.m_combiner_mask;
 
                 // Find the most recent manifest that provided one of the parts
-                // to fetch the beacon list from:
-                //
+                // to fetch the beacon list from. Capture the pinned shared_ptr
+                // rather than the hash so AddBeaconPartsData below can use it
+                // directly -- no separate mapManifest lookup needed (and no
+                // dependence on mapManifest housekeeping cadence between here
+                // and the deref).
                 if (resolved_part.m_source_manifest_time > latest_manifest_time) {
-                    latest_manifest = resolved_part.m_source_manifest_hash;
+                    latest_manifest_ptr = resolved_part.m_source_manifest;
                     latest_manifest_time = resolved_part.m_source_manifest_time;
                 }
             }
 
-            AddBeaconPartsData(convergence, latest_manifest);
+            AddBeaconPartsData(convergence, latest_manifest_ptr, m_height);
 
             ++m_current_combination;
 
@@ -992,6 +1070,16 @@ private: // SuperblockValidator classes
 
         size_t m_total_combinations;  //!< Number of project part combinations.
         size_t m_current_combination; //!< Number of the combination to try.
+
+        //!
+        //! \brief Height of the block whose superblock is being validated.
+        //!
+        //! Threaded from SuperblockValidator so AddBeaconPartsData can gate
+        //! the PACTC/PPK inclusion (post-BlockV13Height) in the reconstructed
+        //! convergence, matching the scraper-side behavior at
+        //! scraper.cpp:5613-5627.
+        //!
+        const int m_height;
 
         //!
         //! \brief Fetch the project part data for the specified part hash.
@@ -1017,36 +1105,63 @@ private: // SuperblockValidator classes
         }
 
         //!
-        //! \brief Insert the beacon list and verified beacons part data from
-        //! the specified manifest into the provided convergence candidate.
+        //! \brief Insert the beacon list and (optionally) the side-channel
+        //! parts from the specified manifest into the provided convergence
+        //! candidate.
         //!
-        //! \param convergence   Convergence to add the beacon parts to.
-        //! \param manifest_hash Identifies the manifest to fetch the parts from.
+        //! Mirrors the scraper-side convergence construction at
+        //! scraper.cpp:5611-5627: after the per-project supermajority check
+        //! selects a winning source manifest, pull BeaconList (always at
+        //! part 0) and any of the side-channel parts (VerifiedBeacons,
+        //! ProjectsAllCpidTotalCredits, ProjectPublicKeys) that the manifest
+        //! happens to carry. Absence of any side-channel part is not a
+        //! failure — scrapers emit them conditionally (e.g. VerifiedBeacons
+        //! only when beacons are pending verification; PPK only when
+        //! v3-beacon-capable projects are whitelisted).
+        //!
+        //! Side-channel-part integrity is inherited transitively: the
+        //! source manifest was already in supermajority for at least one
+        //! regular project, so its side-channel parts are trusted for this
+        //! convergence candidate, matching the scraper-side security model.
+        //!
+        //! \param convergence Convergence to add the parts to.
+        //! \param manifest    Pinned shared pointer to the source manifest. Selected in
+        //!                    GetNextConvergence as the latest-timestamped of the convergence's
+        //!                    pinned source manifests (already in resolved_part.m_source_manifest),
+        //!                    so no mapManifest lookup is needed here and the BeaconList resolution
+        //!                    does not depend on global housekeeping cadence.
+        //! \param height      Height of the block whose superblock is
+        //!                    being validated. PACTC and PPK are only
+        //!                    included in the reconstructed convergence
+        //!                    at or after BlockV13Height — before that
+        //!                    the fallback did not handle these parts at
+        //!                    all (and scrapers did not emit them), so
+        //!                    preserving pre-v13 convergence contents
+        //!                    keeps the hard-fork story clean.
         //!
         static void AddBeaconPartsData(
             ConvergenceCandidate& convergence,
-            const uint256& manifest_hash)
+            const CScraperManifest_shared_ptr& manifest,
+            const int height)
         {
-            LOCK(CScraperManifest::cs_mapManifest);
-
-            const auto iter = CScraperManifest::mapManifest.find(manifest_hash);
-
-            // If the manifest for the beacon list disappeared, we cannot
-            // proceed, but the most recent manifest should always exist:
-            if (iter == CScraperManifest::mapManifest.end()) {
-                LogPrintf("ValidateSuperblock(): beacon manifest disappeared.");
+            // Empty shared_ptr would only happen on a candidate with zero resolved parts (no
+            // m_source_manifest ever captured into latest_manifest_ptr). The combiner enforces
+            // non-empty m_resolved_parts before constructing a ProjectCombiner (quorum.cpp
+            // ResolveProjectParts returns ProjectCombiner() on empty), so reaching here with
+            // an empty shared_ptr would indicate a logic regression upstream.
+            if (!manifest) {
+                LogPrintf("ValidateSuperblock(): beacon manifest pin is empty.");
                 return;
             }
 
-            const CScraperManifest_shared_ptr manifest = iter->second;
+            const bool include_extra_side_channel_parts = IsV13Enabled(height);
 
-            // If the manifest for the beacon list is now empty, we cannot
-            // proceed, but ProjectResolver should always select manifests
-            // with a beacon list part:
-
-            // Note using fine-grained locking here to avoid lock-order issues and
-            // also to deal with Clang potential false positive below.
-            std::vector<CScraperManifest::dentry>::iterator verified_beacons_entry_iter;
+            // Note using fine-grained locking here to avoid lock-order issues
+            // (cs_manifest must be released and re-acquired after cs_mapParts
+            // for the second block below, per the LOCK2 ordering note).
+            std::vector<CScraperManifest::dentry>::iterator verified_beacons_iter;
+            std::vector<CScraperManifest::dentry>::iterator pactc_iter;
+            std::vector<CScraperManifest::dentry>::iterator ppk_iter;
             {
                 LOCK(manifest->cs_manifest);
 
@@ -1055,37 +1170,71 @@ private: // SuperblockValidator classes
                     return;
                 }
 
-                convergence.AddPart("BeaconList", manifest->vParts[0]);
+                convergence.AddPart("BeaconList", manifest->vParts[0], manifest); // pin source manifest
 
-                // Find the offset of the verified beacons project part. Typically
-                // this exists at vParts offset 1 when a scraper verified at least
-                // one pending beacon. If it doesn't exist, omit the part from the
-                // reconstructed convergence:
-                verified_beacons_entry_iter = std::find_if(
-                            manifest->projects.begin(),
-                            manifest->projects.end(),
-                            [](const CScraperManifest::dentry& entry) {
-                    return entry.project == "VerifiedBeacons";
-                });
+                // Inlined the previous find_entry lambda so the analyzer can
+                // see that cs_manifest (the lock guarding manifest->projects)
+                // is held — lambda captures don't propagate hold-state.
+                auto find_project = [](std::vector<CScraperManifest::dentry>& projects,
+                                       const std::string& name) {
+                    return std::find_if(
+                        projects.begin(),
+                        projects.end(),
+                        [&name](const CScraperManifest::dentry& entry) {
+                            return entry.project == name;
+                        });
+                };
+
+                verified_beacons_iter = find_project(manifest->projects, "VerifiedBeacons");
+
+                if (include_extra_side_channel_parts) {
+                    pactc_iter = find_project(manifest->projects, "ProjectsAllCpidTotalCredits");
+                    ppk_iter = find_project(manifest->projects, "ProjectPublicKeys");
+                } else {
+                    pactc_iter = manifest->projects.end();
+                    ppk_iter = manifest->projects.end();
+                }
             }
 
             // The manifest must be unlocked above and then relocked after cs_mapParts to avoid possible
             // deadlock due to lock order.
             LOCK2(CSplitBlob::cs_mapParts, manifest->cs_manifest);
 
-            if (verified_beacons_entry_iter == manifest->projects.end()) {
-                LogPrintf("ValidateSuperblock(): verified beacon project missing.");
-                return;
-            }
+            // Add a side-channel part to the convergence if the manifest
+            // carries it. Absent parts are silently skipped — scrapers emit
+            // these conditionally and the convergence is expected to omit
+            // them when the manifest did. Mirrors scraper.cpp:5622-5626.
+            //
+            // The helper takes projects / vParts as parameters (rather than
+            // capturing manifest by reference) so the analyzer can see that
+            // the values consumed are the ones the enclosing LOCK2 protects;
+            // lambda captures don't propagate hold-state in the same way.
+            //
+            // manifest IS captured (by value) for the AddPart pair-invariant pin -- shared_ptr copy is
+            // cheap (one atomic increment) and the value capture has no thread-safety analyzer implication
+            // because the shared_ptr's lifetime, not its pointee's, is what AddPart relies on.
+            const auto add_optional_part = [&convergence, manifest](
+                                               const std::vector<CScraperManifest::dentry>& projects,
+                                               const std::vector<CSplitBlob::CPart*>& vParts,
+                                               const std::string& name,
+                                               const std::vector<CScraperManifest::dentry>::iterator it) {
+                if (it == projects.end()) {
+                    return;
+                }
+                const size_t part_offset = it->part1;
+                if (part_offset == 0 || part_offset >= vParts.size()) {
+                    LogPrintf("ValidateSuperblock(): out-of-range part offset for %s.", name);
+                    return;
+                }
+                convergence.AddPart(name, vParts[part_offset], manifest); // pin source manifest
+            };
 
-            const size_t part_offset = verified_beacons_entry_iter->part1;
-
-            if (part_offset == 0 || part_offset >= manifest->vParts.size()) {
-                LogPrintf("ValidateSuperblock(): out-of-range verified beacon part.");
-                return;
-            }
-
-            convergence.AddPart("VerifiedBeacons", manifest->vParts[part_offset]);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "VerifiedBeacons", verified_beacons_iter);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "ProjectsAllCpidTotalCredits", pactc_iter);
+            add_optional_part(manifest->projects, manifest->vParts,
+                              "ProjectPublicKeys", ppk_iter);
         }
     }; // ProjectCombiner
 
@@ -1105,9 +1254,11 @@ private: // SuperblockValidator classes
         //!
         ProjectResolver(
             std::map<std::string, CandidatePartHashMap> candidate_parts,
-            mmCSManifestsBinnedByScraper manifests_by_scraper)
+            mmCSManifestsBinnedByScraper manifests_by_scraper,
+            int height = std::numeric_limits<int>::max())
             : m_manifests_by_scraper(std::move(manifests_by_scraper))
             , m_supermajority(NumScrapersForSupermajority(m_manifests_by_scraper.size()))
+            , m_height(height)
         {
             for (auto&& project_part_pair : candidate_parts) {
                 m_resolved_projects.emplace(
@@ -1168,7 +1319,7 @@ private: // SuperblockValidator classes
                 }
             }
 
-            return ProjectCombiner(std::move(m_resolved_projects));
+            return ProjectCombiner(std::move(m_resolved_projects), m_height);
         }
 
     private:
@@ -1202,6 +1353,14 @@ private: // SuperblockValidator classes
         std::map<std::string, std::set<ScraperID>> m_other_projects;
 
         //!
+        //! \brief Height of the block whose superblock is being validated.
+        //!
+        //! Used to gate the PPK/PACTC skip-list extension behind
+        //! BlockV13Height. See TallyProject().
+        //!
+        const int m_height;
+
+        //!
         //! \brief Record the supplied scraper ID for the specified project to
         //! track supermajority status.
         //!
@@ -1220,6 +1379,25 @@ private: // SuperblockValidator classes
             // stage:
             //
             if (project == "BeaconList" || project == "VerifiedBeacons") {
+                return nullptr;
+            }
+
+            // ProjectsAllCpidTotalCredits (added to manifests in 2025-01) and
+            // ProjectPublicKeys (added in 2026-02 for v3 beacon ownership
+            // proofs) are also manifest-level side-channel parts rather than
+            // BOINC projects, but were not added to the skip list above when
+            // the scraper started emitting them. The scraper's own roll-up
+            // (ScraperConstructConvergedManifestByProject) filters them, so
+            // cached-convergence and current-convergence validation paths are
+            // unaffected. The by-project fallback path is not: scrapers pass
+            // supermajority on both entries every cycle, and the
+            // "missing from superblock" check below rejects every modern
+            // superblock. Gated behind BlockV13Height so the rule change has
+            // a documented activation marker bundled with the v13 hard fork.
+            //
+            if (IsV13Enabled(m_height)
+                && (project == "ProjectsAllCpidTotalCredits"
+                    || project == "ProjectPublicKeys")) {
                 return nullptr;
             }
 
@@ -1267,7 +1445,9 @@ private: // SuperblockValidator classes
                     project_option->LinkPart(ResolvedPart(
                         manifest->vParts[entry.part1]->hash,
                         manifest_hash,
-                        entry.LastModified));
+                        entry.LastModified,
+                        manifest)); // pin source manifest -- preserves ConvergedManifest pair invariant
+                                    // when the ResolvedPart is later consumed by ConvergenceCandidate::AddPart.
                 }
             }
         }
@@ -1278,6 +1458,9 @@ private: // SuperblockValidator fields
     const SuperblockPtr& m_superblock; //!< Points to the superblock to validate.
     const QuorumHash m_quorum_hash;    //!< Hash of the superblock to validate.
     const size_t m_hint_shift;         //!< For testing by-project combinations.
+    const int m_height;                //!< Height of the block being validated;
+                                       //!< threaded to ProjectResolver for the
+                                       //!< PPK/PACTC skip-list gate.
 
 private: // SuperblockValidator methods
 
@@ -1429,7 +1612,9 @@ private: // SuperblockValidator methods
             return false;
         }
 
-        ProjectResolver resolver(std::move(candidates), ScraperCullAndBinCScraperManifests());
+        ProjectResolver resolver(std::move(candidates),
+                                 ScraperCullAndBinCScraperManifests(),
+                                 m_height);
         ProjectCombiner combiner = resolver.ResolveProjectParts();
 
         LogPrint(BCLog::LogFlags::VERBOSE,
@@ -1496,12 +1681,21 @@ private: // SuperblockValidator methods
 //!
 //! \brief Stores recent superblock data.
 //!
-SuperblockIndex g_superblock_index;
+//! Touched by Quorum static methods that mutate (PushSuperblock,
+//! PopSuperblock, CommitSuperblock, LoadSuperblockIndex) or read
+//! (CurrentSuperblock, PendingSuperblock, HasPendingSuperblock, GetMagnitude).
+//! Has no internal mutex; cs_main is the external protection per the
+//! Quorum class contract.
+//!
+SuperblockIndex g_superblock_index GUARDED_BY(cs_main);
 
 //!
 //! \brief Orchestrates superblock voting for legacy quorum consensus.
 //!
-LegacyConsensus g_legacy_consensus;
+//! Touched by Quorum's vote-recording methods (FindPopularHash, RecordVote,
+//! ForgetVote). No internal mutex; cs_main is the external protection.
+//!
+LegacyConsensus g_legacy_consensus GUARDED_BY(cs_main);
 
 } // anonymous namespace
 
@@ -1515,7 +1709,7 @@ bool Quorum::Participating(const std::string& grc_address, const int64_t time)
     return LegacyConsensus::Participating(grc_address, time);
 }
 
-QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex)
+QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_legacy_consensus.FindPopularHash(pindex);
 }
@@ -1523,12 +1717,12 @@ QuorumHash Quorum::FindPopularHash(const CBlockIndex* const pindex)
 void Quorum::RecordVote(
     const QuorumHash quorum_hash,
     const std::string& grc_address,
-    const CBlockIndex* const pindex)
+    const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     g_legacy_consensus.RecordVote(quorum_hash, grc_address, pindex);
 }
 
-void Quorum::ForgetVote(const CBlockIndex* const pindex)
+void Quorum::ForgetVote(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     g_legacy_consensus.ForgetVote(pindex);
 }
@@ -1536,7 +1730,7 @@ void Quorum::ForgetVote(const CBlockIndex* const pindex)
 bool Quorum::ValidateSuperblockClaim(
     const Claim& claim,
     const SuperblockPtr& superblock,
-    const CBlockIndex* const pindex)
+    const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!SuperblockNeeded(pindex->nTime)) {
         return error("%s: superblock too early.", __func__);
@@ -1559,7 +1753,7 @@ bool Quorum::ValidateSuperblockClaim(
             return error("%s: quorum hash mismatch.", __func__);
         }
 
-        return ValidateSuperblock(superblock);
+        return ValidateSuperblock(superblock, true, 32, pindex->nHeight);
     }
 
     const CTxDestination address = DecodeDestination(claim.m_quorum_address);
@@ -1591,11 +1785,12 @@ bool Quorum::ValidateSuperblockClaim(
 bool Quorum::ValidateSuperblock(
     const SuperblockPtr& superblock,
     const bool use_cache,
-    const size_t hint_bits)
+    const size_t hint_bits,
+    const int height)
 {
     using Result = SuperblockValidator::Result;
 
-    const Result result = SuperblockValidator(superblock, hint_bits).Validate(use_cache);
+    const Result result = SuperblockValidator(superblock, hint_bits, height).Validate(use_cache);
     std::string message;
 
     switch (result) {
@@ -1627,12 +1822,12 @@ bool Quorum::ValidateSuperblock(
     return result != Result::INVALID;
 }
 
-Magnitude Quorum::GetMagnitude(const Cpid cpid)
+Magnitude Quorum::GetMagnitude(const Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return Quorum::CurrentSuperblock()->m_cpids.MagnitudeOf(cpid);
 }
 
-Magnitude Quorum::GetMagnitude(const MiningId mining_id)
+Magnitude Quorum::GetMagnitude(const MiningId mining_id) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (const auto cpid_option = mining_id.TryCpid()) {
         return GetMagnitude(*cpid_option);
@@ -1647,8 +1842,8 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     // TODO: unwrap this from ScraperGetSuperblockContract()
     CreateSuperblock();
 
-    // Get a read-only view of the current project greylist
-    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, false, true);
+    // Get a read-only view of the current project greylist.
+    const WhitelistSnapshot greylist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::GREYLISTED, true);
 
     const std::string cpid_str = cpid.ToString();
     const Span<const char> cpid_span = Span{cpid_str};
@@ -1690,22 +1885,22 @@ std::vector<ExplainMagnitudeProject> Quorum::ExplainMagnitude(const Cpid cpid)
     return projects;
 }
 
-SuperblockPtr Quorum::CurrentSuperblock()
+SuperblockPtr Quorum::CurrentSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.Current();
 }
 
-SuperblockPtr Quorum::PendingSuperblock()
+SuperblockPtr Quorum::PendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.Pending();
 }
 
-bool Quorum::HasPendingSuperblock()
+bool Quorum::HasPendingSuperblock() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     return g_superblock_index.HasPending();
 }
 
-bool Quorum::SuperblockNeeded(const int64_t now)
+bool Quorum::SuperblockNeeded(const int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (HasPendingSuperblock()) {
         return false;
@@ -1718,13 +1913,18 @@ bool Quorum::SuperblockNeeded(const int64_t now)
 
 }
 
-void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast)
+void Quorum::LoadSuperblockIndex(const CBlockIndex* pindexLast) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!pindexLast) {
         return;
     }
 
     g_superblock_index.Reload(pindexLast);
+
+    // Refresh the AutoGreylist cache against the reloaded superblock index (startup path). Moved out
+    // of Whitelist::Snapshot() (stage 3a) so the cache is populated explicitly here rather than
+    // lazily on the first Snapshot read.
+    GetAutoGreylistCache()->Refresh();
 }
 
 Superblock Quorum::CreateSuperblock()
@@ -1732,21 +1932,92 @@ Superblock Quorum::CreateSuperblock()
     return ScraperGetSuperblockContract();
 }
 
-void Quorum::PushSuperblock(SuperblockPtr superblock)
+void Quorum::PushSuperblock(SuperblockPtr superblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Quorum::PushSuperblock(%" PRId64 ")", superblock.m_height);
 
+    // Capture the deep-copy gate status of the currently-active (prior) superblock BEFORE the inner
+    // SuperblockIndex::PushSuperblock installs the new one. For v2+ superblocks the inner routine
+    // emplaces the new SB at the front of m_cache, so after the call CurrentSuperblock() returns the
+    // newly-pushed one and the gate-crossing detection below sees the transition.
+    //
+    // V1 superblocks ALSO reach this function (it's the single public Quorum entry for any SB version),
+    // but the inner SuperblockIndex routes them to m_pending instead of m_cache (legacy v1 deferred-
+    // commit path; see SuperblockIndex::PushSuperblock for the version branch). m_cache.front() is
+    // therefore unchanged for v1 input, current == prev, and the gate-crossing condition naturally
+    // never fires for them -- no separate special case needed.
+    SuperblockPtr prev = CurrentSuperblock();
+    const bool prev_deep_copy = !prev.IsEmpty() && IsAutoGreylistDeepCopyEnabled(prev.m_height);
+
     g_superblock_index.PushSuperblock(std::move(superblock));
+
+    SuperblockPtr current = CurrentSuperblock();
+
+    // Deep-copy gate CROSSING: the just-pushed superblock is post-gate but the prior one was pre-gate.
+    // On that transition, rebuild the project registry from LevelDB so a node that ran the legacy
+    // in-place overlay across the gate discards its corrupted in-memory m_project_entries state (the
+    // overlay only promotes ACTIVE/MAN -> AUTO_GREYLISTED and never demotes, so it cannot self-heal).
+    //
+    // A node already running on this binary post-gate has a post-gate prior here and the rebuild is
+    // skipped. A node doing fresh initial-block-download from genesis with this binary will hit the
+    // crossing once at the historical gate height during sync -- the rebuild then fires but is
+    // effectively idempotent because Initialize() at startup already loaded m_project_entries clean
+    // from LevelDB and nothing has corrupted it since. Cost is one extra LevelDB load during IBD.
+    if (!current.IsEmpty() && IsAutoGreylistDeepCopyEnabled(current.m_height) && !prev_deep_copy) {
+        LogPrintf("Quorum::PushSuperblock: deep-copy gate crossing detected "
+                  "(prev_height=%" PRId64 ", current_height=%" PRId64 "); invoking ReinitFromDisk",
+                  prev.IsEmpty() ? -1 : (int64_t) prev.m_height, (int64_t) current.m_height);
+        GetWhitelist().ReinitFromDisk();
+    }
+
+    // Refresh the AutoGreylist cache against the newly-activated superblock. Fires deterministically at
+    // this chain-handler point rather than relying on whichever thread happens to read first. Every
+    // PushSuperblock changes the current SB's hash, so the early-bail in AutoGreylist::Refresh()
+    // (which fires only when superblock_ptr->GetHash() == m_superblock_hash) does NOT short-circuit
+    // here -- this call pays the full Snapshot + 40-SB walk-back cost on each push. That cost is
+    // intrinsic to the explicit-trigger redesign; it's paid here on the validation thread rather than
+    // lazily on whichever consumer reads first.
+    GetAutoGreylistCache()->Refresh();
 }
 
-void Quorum::PopSuperblock(const CBlockIndex* const pindex)
+void Quorum::PopSuperblock(const CBlockIndex* const pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrintf("Quorum::PopSuperblock(%" PRId64 ")", pindex->nHeight);
 
     g_superblock_index.PopSuperblock();
+
+    // Refresh the AutoGreylist cache against the new current superblock (the one that becomes active
+    // after the pop). Moved out of Whitelist::Snapshot() (stage 3a) so the refresh fires explicitly
+    // at the chain handler points rather than on-snapshot.
+    //
+    // NO backward-crossing ReinitFromDisk here, intentionally. A deep reorg that walks the chain tip
+    // back across AutoGreylistDeepCopyHeight reverts m_deep_copy_active to false (via the Refresh
+    // call below) and re-exposes the legacy in-place overlay path on subsequent Snapshot() calls.
+    // That's by definition of the pre-gate regime; there is nothing to "heal" at the moment of the
+    // backward cross (m_project_entries is currently clean, because the post-gate deep-copy path
+    // doesn't mutate it). Any corruption that accumulates DURING the subsequent pre-gate run is
+    // healed atomically by the next forward Push that re-crosses the gate (ReinitFromDisk in
+    // Quorum::PushSuperblock). The pre-gate window after a backward cross has the same in-place
+    // overlay vulnerability the pre-PR-2997 code did, with one subtle difference: pre-PR-2997 the
+    // AutoGreylist cache was refreshed on demand from every Snapshot reader, whereas post-PR-2997
+    // refresh fires only at chain-handler boundaries. So the corruption window opens identically,
+    // but cache freshness DURING the pre-gate window is slightly staler in the new model -- a
+    // documented limitation of the gate (the fix is mandatory at v15; sub-v15 chain reorgs across
+    // the gate are extraordinarily unlikely on mainnet and only happen by operator intent on
+    // testnet).
+    GetAutoGreylistCache()->Refresh();
 }
 
-bool Quorum::CommitSuperblock(const uint32_t height)
+bool Quorum::CommitSuperblock(const uint32_t height) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    // SuperblockIndex::PushSuperblock routes v2+ superblocks directly to m_cache and skips m_pending,
+    // so g_superblock_index.Commit() can only return true for v1 superblocks committed via m_pending --
+    // a path that exists today only during initial-sync replay of pre-v11 history. The AutoGreylist cache
+    // refresh and project-registry deep-copy gate-crossing rebuild live at Quorum::PushSuperblock (the
+    // v2+ activation point), Quorum::PopSuperblock (reorg) and Quorum::LoadSuperblockIndex (startup);
+    // neither is needed here because RefreshWithSuperblock bails on m_version < 3 and
+    // IsAutoGreylistDeepCopyEnabled is false at any v1-superblock height under default consensus params.
+    // Keeping this function as a thin wrapper preserves the pre-v11 priming callers
+    // (Tally::ActivateSnapshotAccrual / Tally::LegacyRecount).
     return g_superblock_index.Commit(height);
 }

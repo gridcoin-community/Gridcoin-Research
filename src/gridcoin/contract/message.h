@@ -5,9 +5,12 @@
 #ifndef GRIDCOIN_CONTRACT_MESSAGE_H
 #define GRIDCOIN_CONTRACT_MESSAGE_H
 
+#include "sync.h"
+
 #include <string>
 
 class CWalletTx;
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -21,7 +24,7 @@ class Contract;
 //! \return Contains the finalized transaction and error message, if any.
 //! TODO: refactor to remove string-based signaling.
 //!
-std::pair<CWalletTx, std::string> SendContract(Contract contract);
+std::pair<CWalletTx, std::string> SendContract(Contract contract) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //!
 //! \brief Send a transaction that contains a contract.
@@ -34,7 +37,7 @@ std::pair<CWalletTx, std::string> SendContract(Contract contract);
 //! \return Contains the finalized transaction and error message, if any.
 //! TODO: refactor to remove string-based signaling.
 //!
-std::pair<CWalletTx, std::string> SendContract(CWalletTx wtx);
+std::pair<CWalletTx, std::string> SendContract(CWalletTx wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 }
 
 #endif // GRIDCOIN_CONTRACT_MESSAGE_H

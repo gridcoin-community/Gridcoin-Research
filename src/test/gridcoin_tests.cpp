@@ -33,15 +33,15 @@ struct GridcoinTestsConfig
 };
 
 void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, const std::string& value,
-                      const CBlockIndex index, const bool& reset_registry = false)
+                      const CBlockIndex index, const bool& reset_registry = false) NO_THREAD_SAFETY_ANALYSIS
 {
     GRC::ProtocolRegistry& registry = GRC::GetProtocolRegistry();
 
            // Make sure the registry is reset.
     if (reset_registry) registry.Reset();
 
-    CTransaction dummy_tx;
-    dummy_tx.nTime = index.nTime;
+    CMutableTransaction mtx;
+    mtx.nTime = index.nTime;
 
     GRC::Contract contract;
 
@@ -61,8 +61,9 @@ void AddProtocolEntry(const uint32_t& payload_version, const std::string& key, c
             GRC::ProtocolEntryStatus::ACTIVE);
     }
 
-    dummy_tx.vContracts.push_back(contract);
+    mtx.vContracts.push_back(contract);
 
+    CTransaction dummy_tx(mtx);
     registry.Add({contract, dummy_tx, &index});
 }
 
@@ -102,6 +103,15 @@ BOOST_AUTO_TEST_SUITE_END()
 //
 // CBR tests
 //
+
+// Tests drive the ProtocolRegistry contract handler directly (Reset,
+// AddProtocolEntry helper above which calls Add). The handler is
+// EXCLUSIVE_LOCKS_REQUIRED(cs_main); suppress the analyzer for these
+// single-threaded tests rather than take a lock they do not need.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wthread-safety-analysis"
+#endif
 
 BOOST_AUTO_TEST_SUITE(gridcoin_cbr_tests)
 
@@ -364,3 +374,7 @@ BOOST_AUTO_TEST_CASE(gridcoin_PriorObsoleteConfigurableCBRShouldNotResortToDefau
 
 
 BOOST_AUTO_TEST_SUITE_END()
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

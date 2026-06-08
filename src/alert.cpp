@@ -21,8 +21,8 @@
 
 using namespace std;
 
-map<uint256, CAlert> mapAlerts;
 CCriticalSection cs_mapAlerts;
+map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 
 void CUnsignedAlert::SetNull()
 {

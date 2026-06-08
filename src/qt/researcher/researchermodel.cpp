@@ -26,7 +26,6 @@
 #include <QApplication>
 #include <QIcon>
 #include <QMessageBox>
-#include <QTimer>
 
 extern CWallet* pwalletMain;
 extern ConvergedScraperStats ConvergedScraperStatsCache;
@@ -70,6 +69,25 @@ void BeaconChanged(ResearcherModel* model)
     LogPrint(LogFlags::QT, "GUI: received BeaconChanged() core signal");
 
     QMetaObject::invokeMethod(model, "updateBeacon", Qt::QueuedConnection);
+}
+
+//!
+//! \brief Model callback bound to the \c NotifyBlocksChanged core signal.
+//!
+//! Replaces the 30-second wall-clock refresh timer. Per-block events drive
+//! the researcher-state refresh (accrual ticks up, magnitude changes on
+//! superblock activation), so the natural cadence is "every chain tip
+//! advance" rather than "every 30 seconds regardless". The refresh()
+//! slot retains its TRY_LOCK guard for cs_main, so this is safe to fire
+//! during heavy chain catch-up — it bows out cleanly when contended.
+//!
+void NotifyBlocksChangedForResearcher(ResearcherModel* model,
+                                       bool /*syncing*/,
+                                       int /*height*/,
+                                       int64_t /*best_time*/,
+                                       uint32_t /*target_bits*/)
+{
+    QMetaObject::invokeMethod(model, "refresh", Qt::QueuedConnection);
 }
 
 //!
@@ -120,9 +138,12 @@ ResearcherModel::ResearcherModel()
         m_configured_for_noncruncher_mode = true;
     }
 
-    QTimer *refresh_timer = new QTimer(this);
-    connect(refresh_timer, &QTimer::timeout, this, &ResearcherModel::refresh);
-    refresh_timer->start(30 * 1000);
+    // The 30-second polling refresh timer that used to be here is removed in
+    // favour of an event-driven refresh on uiInterface.NotifyBlocksChanged
+    // (subscribed below). Per-block accrual updates now propagate within one
+    // chain-tip-advance event instead of within 30 seconds. Other signals
+    // (ResearcherChanged, AccrualChangedFromStakeOrMRC, BeaconChanged)
+    // continue to drive their own targeted refreshes as before.
 }
 
 ResearcherModel::~ResearcherModel()
@@ -424,7 +445,12 @@ QString ResearcherModel::formatStatus() const
     }
 
     // TODO: The getstakinginfo RPC shares this global. Refactor to remove it:
-    return QString::fromStdString(msMiningErrors);
+    std::string status;
+    {
+        LOCK(cs_msMiningErrors);
+        status = msMiningErrors;
+    }
+    return QString::fromStdString(status);
 }
 
 QString ResearcherModel::formatBoincPath() const
@@ -674,7 +700,10 @@ std::vector<ProjectRow> ResearcherModel::buildProjectTable(bool extended) const
 
 void ResearcherModel::reload()
 {
-    Researcher::Reload();
+    {
+        LOCK(cs_main);
+        Researcher::Reload();
+    }
     resetResearcher(Researcher::Get());
 }
 
@@ -803,6 +832,7 @@ BeaconStatus ResearcherModel::advertiseBeacon()
 
 bool ResearcherModel::isV14Enabled() const
 {
+    LOCK(cs_main);
     return IsV14Enabled(nBestHeight);
 }
 
@@ -852,6 +882,8 @@ QString ResearcherModel::generateBeaconKeyForV3()
         return QString();
     }
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     AdvertiseBeaconResult result = GenerateBeaconKey(*cpid);
 
     if (auto public_key = result.TryPublicKey()) {
@@ -900,6 +932,8 @@ BeaconStatus ResearcherModel::advertiseBeaconV3(const QString& ownership_proof_x
         return BeaconStatus::ERROR_INVALID_PROOF_XML;
     }
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
     if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
         return BeaconStatus::ERROR_MISSING_KEY;
     }
@@ -939,6 +973,9 @@ void ResearcherModel::subscribeToCoreSignals()
     uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
     uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this));
     uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
+    uiInterface.NotifyBlocksChanged_connect(std::bind(NotifyBlocksChangedForResearcher, this,
+                                                     std::placeholders::_1, std::placeholders::_2,
+                                                     std::placeholders::_3, std::placeholders::_4));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
