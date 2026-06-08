@@ -2020,6 +2020,35 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     whitelist.Reset();
 }
 
+BOOST_AUTO_TEST_CASE(it_does_not_throw_when_the_40SB_average_truncates_to_zero)
+{
+    // Regression test for the GetWAS() divide-by-zero that crashed mainnet nodes in
+    // ThreadScraperSubscriber (St12out_of_range "denominator specified is zero").
+    //
+    // GetWAS() returns Fraction(TC_7_SB_avg, TC_40_SB_avg), where both averages are
+    // integer divisions (sum / min(processed, 7|40)). A low-activity project whose
+    // 40-SB total-credit delta is small enough that m_TC_40_SB_sum / 40 truncates to 0,
+    // while m_TC_7_SB_sum / 7 is still non-zero, used to fall through the old
+    // "TC_7_SB_avg == 0 && TC_40_SB_avg == 0" guard to Fraction(non-zero, 0), which
+    // throws. The fix guards on the denominator (TC_40_SB_avg) alone and returns WAS = 0.
+    //
+    // Drive the candidate through the public UpdateGreylistCandidateEntry path (which
+    // itself calls GetWAS() internally) so this reproduces the exact production code path.
+    GRC::AutoGreylist::GreylistCandidateEntry candidate("TestProject", std::optional<uint64_t>(1000));
+
+    // sb_from_baseline = 7, total credit 990: 7-SB delta = 1000 - 990 = 10 -> m_TC_7_SB_sum = 10.
+    candidate.UpdateGreylistCandidateEntry(990, 7, false);
+
+    // sb_from_baseline = 40, total credit 970: 40-SB delta = 1000 - 970 = 30 -> m_TC_40_SB_sum = 30,
+    // m_sb_from_baseline_processed = 40. GetWAS() (called inside UpdateGreylistCandidateEntry) then
+    // computes TC_7_SB_avg = 10 / min(40,7) = 10/7 = 1 (non-zero) and
+    // TC_40_SB_avg = 30 / min(40,40) = 30/40 = 0 (integer truncation) -- the crash trigger.
+    BOOST_REQUIRE_NO_THROW(candidate.UpdateGreylistCandidateEntry(970, 40, false));
+
+    // A zero 40-SB average means negligible long-term work availability, so WAS = 0.0.
+    BOOST_CHECK(candidate.GetWAS() == Fraction(0));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 #if defined(__clang__)
