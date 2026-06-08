@@ -635,11 +635,22 @@ public:
                 TC_40_SB_avg /= 2;
             }
 
-            if (TC_7_SB_avg == 0 && TC_40_SB_avg == 0) {
+            // The denominator of the WAS fraction is TC_40_SB_avg, so guard on
+            // THAT alone, not on both averages being zero. A zero 40-SB average
+            // — including the integer-division-truncation case where a small
+            // 40-SB total-credit delta divided by up to 40 rounds down to 0
+            // while TC_7_SB_avg is still non-zero — means there is negligible
+            // long-term work availability, so the WAS is 0.0 (exactly the
+            // no-statistics value this method documents above). The previous
+            // "TC_7_SB_avg == 0 && TC_40_SB_avg == 0" guard let TC_40_SB_avg == 0
+            // with TC_7_SB_avg != 0 fall through to Fraction(x, 0), which throws
+            // std::out_of_range("denominator specified is zero") and aborts
+            // ThreadScraperSubscriber on every node processing that superblock.
+            if (TC_40_SB_avg == 0) {
                 return Fraction(0);
-            } else {
-                return Fraction(TC_7_SB_avg, TC_40_SB_avg);
             }
+
+            return Fraction(TC_7_SB_avg, TC_40_SB_avg);
         }
 
         //!
