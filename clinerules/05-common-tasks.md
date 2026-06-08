@@ -85,9 +85,8 @@ static const RPCHelpMan mycommand_help{
 const RPCHelpMan& mycommand_helpman() { return mycommand_help; }
 ```
 
-`RPCArg::Optional` values: `NO` (required), `OMITTED` (optional, may be absent),
-`OMITTED_NAMED_ARG` (optional via named call only). `RPCResult::Type` values
-include `STR`, `STR_HEX`, `NUM`, `BOOL`, `OBJ`, `OBJ_DYN`, `ARR`, `NONE`,
+`RPCArg::Optional` values: `NO` (required), `OMITTED` (optional, may be absent).
+`RPCResult::Type` values include `STR`, `STR_HEX`, `NUM`, `BOOL`, `OBJ`, `OBJ_DYN`, `ARR`, `NONE`,
 `ELISION`. See `src/rpc/util.h` for the full vocabulary.
 
 #### 1.3 Implement the Command Body
