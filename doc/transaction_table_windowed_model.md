@@ -93,6 +93,16 @@ existing `updateStatus(wtx)` under `cs_main`+`cs_wallet`. It is guarded by a
 *before* taking `cs_store`; where both are needed the order is
 `cs_main → cs_wallet → cs_store`.
 
+This describes the store once it *serves reads*. In the relocation step (step 2
+below) the store does not yet serve reads — the consumer keeps its own full
+replica and the producer only stamps positions — so the store holds **ordering
+keys only** (`TxOrderKey` + the hash index), not full records; materializing
+records there would merely double resident memory. It grows to the full
+`records[]` + `TransactionStatus` form above in the windowing step (step 5),
+when the consumer drops its replica for a viewport slice and begins reading the
+store. The status-correctness rationale below is precisely what dictates *full
+records once the store serves reads*.
+
 Two alternatives were considered and rejected as the primary store:
 
 - **Reduced order-key store + lazy per-window decompose** would yield an
@@ -240,15 +250,17 @@ working on its own.
 | PR | Scope | Risk |
 |----|-------|------|
 | **1** | Qt-free `txfilter.{h,cpp}` (`FilterSpec` / `Accepts` / `Less`, exact ports) + GUI-OFF unit suite; `TransactionFilterProxy` collapses its members into one `FilterSpec` and delegates `filterAcceptsRow` to `Accepts()`. Sort still via Qt `EditRole`. **Zero GUI behavior change.** | Low |
-| **2** | Relocate the cached wallet into a producer-owned `GRC::WalletTxStore` (`cs_store` leaf lock); `TransactionTableModel` becomes a thin full passthrough; the proxy is unchanged on top. The producer emits `RowsInserted`/`RowsRemoved` with producer-computed positions. `rowCount` becomes event-driven. | Med-high (new lock) |
+| **2** | Relocate the cached-wallet **ordering** into a producer-owned `GRC::WalletTxStore` (key-only; `cs_store` leaf lock). The producer computes positions and emits `RowsInserted{position,records}`/`RowsRemoved{position,count}`; `TransactionTableModel` keeps its own Qt-thread-exclusive replica and applies the events at the stamped position in lockstep — it never reads the store on the render path, which keeps the unchanged proxy consistent across a multi-insert batch. `rowCount` is the replica's size (event-driven). | Med-high (new lock) |
 | **3** | Per-view `Cursor` infrastructure + `Rows*`/`RowsReset` events; producer-side O(viewport) status refresh on tip-advance and the `CT_UPDATED` reposition/membership-flip correctness. Migrate **OverviewPage** off its proxy to a cursor-bound model (the easy consumer — limit ≈ viewport, no scroll path). | Med |
 | **4** | Migrate **TransactionView** off its proxy to a cursor-bound model; **delete `TransactionFilterProxy`**; wire header-click sort → `setSort`, the filter widgets → `setFilter`, `focusTransaction` → `rowForKey`, CSV export + select-all → `getAllRows`, selection re-resolution by `(hash, idx)`. Remove the `updateConfirmations` sledgehammer. Still full-materialized. | Med-high |
 | **5** | Windowing: the model holds only a slice cache + margin; `data()` on a miss returns a placeholder and schedules `setViewport` + async `getRows`; status refresh moves fully producer-side; delete `index()`'s Qt-thread `TRY_LOCK`+`updateStatus` and `describe()`'s `LOCK2` (replaced by `getRowDetail`). | **High** (the irreducible multithreaded-GUI concentration) |
 | **6** | Off-Qt-thread progressive startup decompose: the `O(N)` decompose moves to a chunked background core task; the table opens at row count 0 and paints progressively. Order-flexible after PR 2. | Med |
 
-PR 2's full-passthrough model mode is the one mild staging artifact (a thin
-`rowCount`/`data` forwarding superseded by cursor binding in PR 4); it is
-justified to isolate the store relocation from the cursor change.
+PR 2's consumer-side replica is the one transient: a full replica fed by
+position-stamped events, kept (rather than reading the store directly) so the
+unchanged proxy stays consistent during a multi-insert drain. It shrinks to a
+viewport slice in the windowing step (PR 5); nothing is discarded, only
+narrowed.
 
 ## Deliberate divergences
 
