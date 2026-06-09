@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create gridcoin system user and group
+        if ! getent group gridcoin >/dev/null; then
+            addgroup --system gridcoin
+        fi
+        if ! getent passwd gridcoin >/dev/null; then
+            adduser --system --group \
+                --home /var/lib/gridcoinresearchd \
+                --no-create-home \
+                --disabled-login \
+                --gecos "Gridcoin daemon" \
+                gridcoin
+        fi
+
+        # Ensure data and config directories have proper ownership
+        if [ -d /var/lib/gridcoinresearchd ]; then
+            chown gridcoin:gridcoin /var/lib/gridcoinresearchd
+            chmod 0710 /var/lib/gridcoinresearchd
+        fi
+        if [ -d /etc/gridcoin ]; then
+            chown root:gridcoin /etc/gridcoin
+            chmod 0710 /etc/gridcoin
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
