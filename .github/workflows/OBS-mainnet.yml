@@ -1,0 +1,23 @@
+name: OBS mainnet
+
+# Thin caller: builds the mainnet (stable) package on OBS.
+# Tag-triggered only (never on push) — a deliberate release tag, never raw
+# commits. Mainnet release tags are bare 4-part versions ending in .0
+# (e.g. 5.5.1.0); the !*-testnet guard keeps testnet tags out.
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - "*.*.*.0"
+      - "!*-testnet"
+
+jobs:
+  mainnet:
+    uses: ./.github/workflows/obs-build.yml
+    with:
+      variant: mainnet
+      obs_project: ${{ vars.OBS_PROJECT }}
+      obs_package: gridcoinresearch
+    secrets:
+      OBS_USER: ${{ secrets.OBS_USER }}
+      OBS_PASS: ${{ secrets.OBS_PASS }}

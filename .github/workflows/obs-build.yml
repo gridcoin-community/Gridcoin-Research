@@ -1,0 +1,79 @@
+name: OBS source build (engine)
+
+# Reusable engine: generates a 3.0 (quilt) source package from the in-tree
+# packaging and pushes it to OBS, which builds + publishes per its repo/arch
+# matrix. Called by the thin per-variant trigger workflows (OBS-mainnet.yml,
+# OBS-testnet.yml). The same engine serves deb today and rpm later.
+on:
+  workflow_call:
+    inputs:
+      variant:
+        description: "mainnet | testnet"
+        required: true
+        type: string
+      obs_project:
+        required: true
+        type: string
+      obs_package:
+        required: true
+        type: string
+      ref:
+        description: "git ref to build (default: the triggering ref)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      OBS_USER:
+        required: true
+      OBS_PASS:
+        required: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    # Inert by default: runs only when the consuming repo has set an OBS_PROJECT
+    # variable (passed through as inputs.obs_project). A repo without it — e.g.
+    # upstream after a merge — runs this as a clean no-op until they opt in.
+    if: inputs.obs_project != ''
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Install tooling (dpkg-dev, xz, osc)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg-dev xz-utils osc
+
+      - name: Activate ${{ inputs.variant }} packaging
+        run: |
+          if [ "${{ inputs.variant }}" = "testnet" ]; then
+            test -d debian-testnet || { echo "::error::debian-testnet/ missing on this ref"; exit 1; }
+            rm -rf debian
+            cp -aT debian-testnet debian
+            rm -rf debian-testnet   # drop the now-inactive sibling so the quilt source stays clean
+          fi
+          echo "Active changelog: $(head -1 debian/changelog)"
+
+      - name: Build 3.0 (quilt) source package
+        run: contrib/obs/build-source-package.sh "$PWD/obs-out"
+
+      - name: Configure osc
+        env:
+          OBS_USER: ${{ secrets.OBS_USER }}
+          OBS_PASS: ${{ secrets.OBS_PASS }}
+        run: |
+          mkdir -p ~/.config/osc
+          umask 077
+          cat > ~/.config/osc/oscrc <<EOF
+          [general]
+          apiurl = https://api.opensuse.org
+          [https://api.opensuse.org]
+          user = ${OBS_USER}
+          pass = ${OBS_PASS}
+          credentials_mgr_class = osc.credentials.PlaintextConfigFileCredentialsManager
+          EOF
+
+      - name: Push source to OBS
+        run: contrib/obs/push-to-obs.sh "${{ inputs.obs_project }}" "${{ inputs.obs_package }}" "$PWD/obs-out"
