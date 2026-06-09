@@ -61,8 +61,13 @@ void WalletTxStore::insertTransaction(std::vector<TransactionRecord> records)
     // Datetime-display cutoff (cached from the last reloadAndSnapshot). All
     // records of one tx share `time`, so this is all-or-nothing.
     if (m_limit_enabled) {
+        // Hoist the guarded member into a local read under cs_store: the Clang
+        // thread-safety analyzer does not propagate held-lock state into the
+        // lambda body, so capture the value rather than read m_limit_time inside
+        // the predicate.
+        const int64_t limit_time = m_limit_time;
         records.erase(std::remove_if(records.begin(), records.end(),
-                          [&](const TransactionRecord& r) { return r.time < m_limit_time; }),
+                          [limit_time](const TransactionRecord& r) { return r.time < limit_time; }),
                       records.end());
     }
     if (records.empty()) {
