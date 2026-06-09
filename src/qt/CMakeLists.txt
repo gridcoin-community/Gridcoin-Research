@@ -88,10 +88,12 @@ add_library(gridcoinqt STATIC
     transactiondescdialog.cpp
     transactionfilterproxy.cpp
     txfilter.cpp
+    txorder.cpp
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
     wallet_event_queue.cpp
+    wallettxstore.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp

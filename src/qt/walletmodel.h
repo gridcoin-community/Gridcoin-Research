@@ -6,6 +6,7 @@
 #include <map>
 
 #include "qt/wallet_event_queue.h"
+#include "qt/wallettxstore.h"
 #include "support/allocators/secure.h" /* for SecureString */
 #include "wallet/ismine.h"
 
@@ -142,6 +143,13 @@ public:
     //!
     GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
 
+    //!
+    //! \brief Accessor for the producer-owned transaction ordering store. The
+    //! producer (NotifyTransactionChanged) mutates it; TransactionTableModel
+    //! reads it only at reset time (reloadAndSnapshot).
+    //!
+    GRC::WalletTxStore& getTxStore() { return m_txStore; }
+
 private:
     CWallet *wallet;
 
@@ -171,6 +179,13 @@ private:
     //! drainEventQueue(), fired by eventDrainTimer every 500ms.
     //!
     GRC::WalletEventQueue m_event_queue;
+
+    //!
+    //! \brief Producer-owned transaction ordering store. Declared AFTER
+    //! m_event_queue so the WalletEventQueue& it holds is bound to a fully
+    //! constructed object (member init order == declaration order).
+    //!
+    GRC::WalletTxStore m_txStore;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
