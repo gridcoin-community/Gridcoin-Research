@@ -52,6 +52,13 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
 
+    // Launch the store-worker now — before producers can fire (subscribe is
+    // below) — so it is ready to drain the intake queue off the core locks
+    // (PR2.5). The initial reloadAndSnapshot in the TransactionTableModel ctor
+    // above ran with no worker yet; that is fine, it skips the worker barrier
+    // when the worker has not started.
+    m_txStore.start();
+
     subscribeToCoreSignals();
 }
 
@@ -728,7 +735,7 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
                      "NotifyTransactionChanged: %s status=%d but tx not in mapWallet "
                      "— removing from store",
                      hash.GetHex(), status);
-            walletmodel->getTxStore().removeTransaction(hash);
+            walletmodel->getTxStore().enqueueRemove(hash);
             break;
         }
         const CWalletTx& wtx = it->second;
@@ -764,25 +771,27 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
         }
 
         if (visible) {
-            // Decompose under the locks already held, then hand the records to
-            // the producer-side store, which applies the datetime cutoff,
-            // de-dupes, computes the insert position, and emits RowsInserted.
+            // Decompose under the locks already held, then ENQUEUE the records
+            // to the store-worker (PR2.5). The worker applies the datetime
+            // cutoff, de-dupes, computes the insert position, and emits
+            // RowsInserted off the core locks; the enqueue itself is O(1), so
+            // this handler no longer does O(N) ordering work under cs_main.
             const QList<TransactionRecord> decomposed =
                 TransactionRecord::decomposeTransaction(wallet, wtx);
             if (!decomposed.isEmpty()) {
-                walletmodel->getTxStore().insertTransaction(
+                walletmodel->getTxStore().enqueueInsert(
                     std::vector<TransactionRecord>(decomposed.begin(), decomposed.end()));
             }
         } else {
             // Tx is genuinely filtered out (a real orphan coinstake, or a
             // legacy non-IsFromMe OP_RETURN). Ensure the store removes the rows
             // if they were previously visible — a no-op if absent.
-            walletmodel->getTxStore().removeTransaction(hash);
+            walletmodel->getTxStore().enqueueRemove(hash);
         }
         break;
     }
     case CT_DELETED:
-        walletmodel->getTxStore().removeTransaction(hash);
+        walletmodel->getTxStore().enqueueRemove(hash);
         break;
     }
 }

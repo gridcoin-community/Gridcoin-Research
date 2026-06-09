@@ -33,6 +33,95 @@ WalletTxStore::WalletTxStore(CWallet* wallet, GRC::WalletEventQueue& queue)
 {
 }
 
+WalletTxStore::~WalletTxStore()
+{
+    {
+        LOCK(cs_intake);
+        m_stop = true;
+    }
+    m_intake_cv.notify_all();
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
+}
+
+void WalletTxStore::start()
+{
+    // Qt thread, once. Launch the worker that drains the intake queue off the
+    // core locks. Idempotent so a double-call (e.g. re-init) is harmless.
+    if (m_started) {
+        return;
+    }
+    m_started = true;
+    m_worker = std::thread([this] { workerLoop(); });
+}
+
+void WalletTxStore::enqueueInsert(std::vector<TransactionRecord> records)
+{
+    {
+        LOCK(cs_intake);
+        m_intake.push_back(IntakeItem{IntakeItem::Insert, std::move(records), uint256()});
+    }
+    m_intake_cv.notify_one();
+}
+
+void WalletTxStore::enqueueRemove(const uint256& hash)
+{
+    {
+        LOCK(cs_intake);
+        m_intake.push_back(IntakeItem{IntakeItem::Remove, {}, hash});
+    }
+    m_intake_cv.notify_one();
+}
+
+void WalletTxStore::workerLoop()
+{
+    WAIT_LOCK(cs_intake, lock);
+    while (true) {
+        // Wait for work, a stop request, or a rebuild pause. Use the explicit
+        // while-condition form (NOT a wait() predicate lambda): the Clang
+        // thread-safety analyzer does not propagate the held lock into a lambda
+        // body, but it does into this loop, so the guarded reads stay verified.
+        while (!m_stop && (m_rebuilding || m_intake.empty())) {
+            // While a rebuild is pending, park and tell reloadAndSnapshot we are
+            // idle so it can clear the intake queue and rebuild the index with no
+            // concurrent worker mutation.
+            if (m_rebuilding && !m_worker_parked) {
+                m_worker_parked = true;
+                m_idle_cv.notify_all();
+            }
+            m_intake_cv.wait(lock);
+        }
+        if (m_stop) {
+            return;
+        }
+        // We have work and are not rebuilding.
+        m_worker_parked = false;
+
+        IntakeItem item = std::move(m_intake.front());
+        m_intake.pop_front();
+
+        // Drop cs_intake while doing the O(N) store maintenance (which takes
+        // cs_store). cs_intake and cs_store are NEVER held simultaneously, so the
+        // two leaves cannot invert. The lock re-acquires at the end of this scope
+        // before the loop re-evaluates its wait condition.
+        {
+            REVERSE_LOCK(lock);
+            applyIntake(std::move(item));
+        }
+    }
+}
+
+void WalletTxStore::applyIntake(IntakeItem item)
+{
+    // No lock held here; insert/removeTransaction take cs_store internally.
+    if (item.kind == IntakeItem::Insert) {
+        insertTransaction(std::move(item.records));
+    } else {
+        removeTransaction(item.hash);
+    }
+}
+
 void WalletTxStore::shiftIndex(std::size_t from, std::ptrdiff_t delta)
 {
     // Bump every index entry at or after `from` by `delta`. Logical positions,
@@ -182,6 +271,22 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     // emptied queue mutually consistent.
     LOCK2(cs_main, m_wallet->cs_wallet);
 
+    // Quiesce the store-worker (PR2.5) before clearing/rebuilding. The worker is
+    // an independent store mutator that cs_main/cs_wallet does NOT exclude, so
+    // signal a rebuild and wait for it to park. It never needs cs_main/cs_wallet
+    // (insert/removeTransaction take only cs_store), so waiting for it here while
+    // we hold both cannot deadlock. m_started guards the pre-start() first reload
+    // (no worker yet → nothing to wait for).
+    {
+        WAIT_LOCK(cs_intake, ilock);
+        m_rebuilding = true;
+        m_intake_cv.notify_all();   // wake the worker so it observes m_rebuilding
+        while (m_started && !m_worker_parked) {
+            m_idle_cv.wait(ilock);  // wait until the worker confirms it has parked
+        }
+        m_intake.clear();           // pre-rebuild intake is superseded by the scan below
+    }
+
     built.reserve(m_wallet->mapWallet.size() * 2);
     for (auto it = m_wallet->mapWallet.begin(); it != m_wallet->mapWallet.end(); ++it) {
         if (!TransactionRecord::showTransaction(it->second)) {
@@ -215,6 +320,16 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     // on cs_wallet, so nothing new can be queued until we return; the returned
     // snapshot, the rebuilt index, and the now-empty queue are consistent.
     m_queue.drain();
+
+    // Release the store-worker (PR2.5): the rebuilt index is live, so resume
+    // draining. Producers remain blocked on cs_wallet until we return, so the
+    // worker has nothing to apply until the snapshot is installed.
+    {
+        LOCK(cs_intake);
+        m_rebuilding = false;
+        m_worker_parked = false;
+        m_intake_cv.notify_all();
+    }
 
     return built;
 }
