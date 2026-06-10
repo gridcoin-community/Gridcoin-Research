@@ -58,6 +58,7 @@ add_library(gridcoinqt STATIC
     optionsdialog.cpp
     optionsmodel.cpp
     overviewpage.cpp
+    overviewtxmodel.cpp
     peertablemodel.cpp
     qtipcserver.cpp
     qvalidatedlineedit.cpp

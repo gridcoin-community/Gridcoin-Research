@@ -302,6 +302,21 @@ int TransactionTableModel::rowCount(const QModelIndex &parent) const
     return priv->size();
 }
 
+QModelIndex TransactionTableModel::indexForTxid(const uint256& hash) const
+{
+    // First replica row whose tx hash matches (same-hash parts are contiguous;
+    // the first is a fine click-through anchor). Linear scan — off the hot path
+    // (runs only on a recent-transaction click).
+    const int rows = priv->size();
+    for (int row = 0; row < rows; ++row) {
+        TransactionRecord* rec = priv->index(row);
+        if (rec && rec->hash == hash) {
+            return index(row, 0);
+        }
+    }
+    return QModelIndex();
+}
+
 int TransactionTableModel::columnCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) {

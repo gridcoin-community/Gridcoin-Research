@@ -211,6 +211,10 @@ void WalletModel::drainEventQueue()
         }
     }
 
+    // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
+    // which filter to their own viewId. The queue is drained exactly once, here.
+    emit walletEventsDrained(events);
+
     // Balance and number of transactions might have changed.
     checkBalanceChanged();
 

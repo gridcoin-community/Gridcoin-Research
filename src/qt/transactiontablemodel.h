@@ -70,6 +70,11 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
 
+    //! First replica row matching tx \p hash, as a model index, or an invalid
+    //! index. Maps a per-view consumer's clicked row (OverviewTxModel, PR3) back
+    //! to a TransactionTableModel index for the detailed-view click-through.
+    QModelIndex indexForTxid(const uint256& hash) const;
+
     //!
     //! \brief Consume a batch of producer-side wallet events drained from
     //! WalletModel's WalletEventQueue. Inserts/removes rows from the cached
