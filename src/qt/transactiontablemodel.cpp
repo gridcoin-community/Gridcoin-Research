@@ -131,6 +131,11 @@ public:
 
     void applyRowsInserted(const GRC::RowsInsertedPayload& payload)
     {
+        // This consumer owns only the native, unfiltered VIEW_FULL stream;
+        // per-view cursor events (OverviewPage etc.) belong to other consumers.
+        if (payload.viewId != GRC::VIEW_FULL) {
+            return;
+        }
         if (payload.records.empty()) {
             return;
         }
@@ -163,6 +168,9 @@ public:
 
     void applyRowsRemoved(const GRC::RowsRemovedPayload& payload)
     {
+        if (payload.viewId != GRC::VIEW_FULL) {
+            return;  // per-view cursor event — not this consumer's
+        }
         // A RowsRemoved is emitted only for a real, non-empty erase the store
         // located, so the range is provably in this replica. Validate anyway —
         // the deployed -DNDEBUG build drops asserts, and a bad position/count
@@ -659,7 +667,17 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     TransactionRecord *rec = priv->index(index.row());
     if (!rec) return QVariant();
 
-    const auto column = static_cast<ColumnIndex>(index.column());
+    return formatRole(rec, index.column(), role);
+}
+
+// Role-formatting core, factored out of data() so the per-view consumers
+// (OverviewPage's OverviewTxModel — windowed-model PR3) render their own served
+// records through the identical formatters instead of duplicating them. `rec`
+// is any record (this model's replica row or a cursor's served row); `columnInt`
+// is a TransactionTableModel::ColumnIndex.
+QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt, int role) const
+{
+    const auto column = static_cast<ColumnIndex>(columnInt);
     switch (role) {
     case Qt::DecorationRole:
         switch (column) {
@@ -728,18 +746,18 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         } // no default case, so the compiler can warn about missing cases
         assert(false);
     case Qt::TextAlignmentRole:
-        return column_alignments[index.column()];
+        return column_alignments[columnInt];
     case Qt::ForegroundRole:
         // Non-confirmed (but not immature) as transactions are grey
         if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature)
         {
             return COLOR_UNCONFIRMED;
         }
-        if(index.column() == Amount && (rec->credit+rec->debit) < 0)
+        if(columnInt == Amount && (rec->credit+rec->debit) < 0)
         {
             return COLOR_NEGATIVE;
         }
-        if(index.column() == ToAddress)
+        if(columnInt == ToAddress)
         {
             return addressColor(rec);
         }
