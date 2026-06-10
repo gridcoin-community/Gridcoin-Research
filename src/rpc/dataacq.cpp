@@ -358,12 +358,13 @@ static const RPCHelpMan rpc_exportstats_help{
     "exportstats1",
     "Export aggregated block statistics to a file under the reports directory.",
     {
-        {"maxblocks", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Maximum number of blocks to scan (default: 805)."},
-        {"aggregate", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Smoothing window size; must be a positive even number (default: 23)."},
-        {"endblock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Ending block height (default: chain head)."},
+        {"maxblocks", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Maximum number of blocks to scan, as a string (the legacy interface parses it "
+            "server-side; default: 805)."},
+        {"aggregate", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Smoothing window size, as a string; must be a positive even number (default: 23)."},
+        {"endblock", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Ending block height, as a string (default: chain head)."},
     },
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
@@ -574,11 +575,12 @@ static const RPCHelpMan rpc_getrecentblocks_help{
     "detail 100   -> json from index\n"
     "detail 120   -> json from index and block",
     {
-        {"detail", RPCArg::Type::NUM, RPCArg::Optional::NO,
-            "Detail level (0, 1, 2, 20, 21, 100, or 120). See description."},
-        {"count", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
-            "Maximum number of recent blocks to return (legacy default: 0). Optional to preserve "
-            "the legacy 1-arg form."},
+        {"detail", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Detail level as a string (0, 1, 2, 20, 21, 100, or 120; the legacy interface "
+            "parses it server-side). See description."},
+        {"count", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
+            "Maximum number of recent blocks to return, as a string (legacy default: 0). "
+            "Optional to preserve the legacy 1-arg form."},
         {"requested_message_filter", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "Ignored; accepted for compatibility with the legacy 3-arg form."},
     },
