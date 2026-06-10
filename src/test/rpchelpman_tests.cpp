@@ -4,6 +4,7 @@
 
 #include <rpc/util.h>
 
+#include <rpc/client.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>   // PR M2: bring in the extern <cmd>_helpman() accessor declarations
 #include <tinyformat.h>
@@ -855,6 +856,156 @@ BOOST_AUTO_TEST_CASE(pre_2922_and_late_adds_help_renders)
         {"walletpassphrase",       &walletpassphrase_helpman},
         {"walletpassphrasechange", &walletpassphrasechange_helpman},
     });
+}
+
+// -----------------------------------------------------------------------------
+// CLI parameter-conversion mapping (replaces test/lint/check-rpc-mappings.py)
+// -----------------------------------------------------------------------------
+//
+// The CLI client (CommandLineRPC) sends every argument as a JSON string
+// unless rpc/client.cpp's vRPCConvertParams names the (method, index) pair,
+// in which case the string is parsed as JSON first. A non-string argument
+// with a missing entry therefore reaches the server as a string and fails
+// get_bool()/get_int()/get_real() at runtime -- but only when invoked from
+// the command line, so the breakage is invisible both to unit tests that
+// build UniValue params directly and to functional tests that speak
+// JSON-RPC. Post-#2922 every registered command's RPCHelpMan declares each
+// positional argument's type, which supplies the other side of the mapping
+// to cross-check. (The old test/lint/check-rpc-mappings.py did this for
+// Bitcoin Core's table format by regex; it never matched Gridcoin's table
+// and is removed in favor of this test.)
+//
+// For each registered command we build one CLI-style token list (valid JSON
+// for args that must convert, a deliberately-not-JSON token for string args)
+// and run it through RPCConvertValues:
+//   * a JSON-typed arg that comes back as a string  -> missing
+//     vRPCConvertParams entry;
+//   * a throw -> a vRPCConvertParams entry on a string-typed arg (the
+//     not-JSON token only reaches the JSON parser when an entry exists).
+
+namespace {
+
+//! What the CLI client must do with a string typed for this declared arg type.
+enum class CliConversion {
+    REQUIRED,  //!< must be parsed as JSON: a vRPCConvertParams entry is mandatory
+    FORBIDDEN, //!< must stay a string: a vRPCConvertParams entry would break it
+    EITHER,    //!< type permits both wire shapes; not statically checkable
+};
+
+CliConversion ArgTypeCliConversion(const RPCArg::Type type)
+{
+    switch (type) {
+    case RPCArg::Type::STR:
+    case RPCArg::Type::STR_HEX:
+        return CliConversion::FORBIDDEN;
+    case RPCArg::Type::AMOUNT:
+        // Documented as "can be either NUM or STR" (rpc/util.h); which one a
+        // command needs depends on its body (AmountFromValue wants VNUM,
+        // ParseMoney wants VSTR), so the table entry is per-command policy.
+        return CliConversion::EITHER;
+    case RPCArg::Type::OBJ:
+    case RPCArg::Type::ARR:
+    case RPCArg::Type::NUM:
+    case RPCArg::Type::BOOL:
+    case RPCArg::Type::OBJ_NAMED_PARAMS:
+    case RPCArg::Type::OBJ_USER_KEYS:
+    case RPCArg::Type::RANGE:
+        return CliConversion::REQUIRED;
+    }
+    return CliConversion::REQUIRED; // unreachable; satisfies -Wreturn-type without a default label
+}
+
+//! (method, index) pairs exempt from the cross-check because the command body
+//! deliberately accepts BOTH a JSON value and a plain string for the arg.
+//! `logging` predates CLI JSON support: EnableOrDisableLogCategories
+//! (rpc/misc.cpp) takes an array or a single bare category string, and adding
+//! a conversion entry would break the long-standing `logging NET` plain-string
+//! form (a bare word is not valid JSON).
+bool IsDualModeArg(const std::string& method, const size_t idx)
+{
+    return method == "logging" && (idx == 0 || idx == 1);
+}
+
+//! A CLI token for the arg type: valid JSON where conversion is expected,
+//! deliberately *invalid* JSON for string args so a stray conversion entry
+//! surfaces as a parse throw instead of passing silently.
+std::string SampleCliToken(const RPCArg::Type type)
+{
+    switch (type) {
+    case RPCArg::Type::STR:
+    case RPCArg::Type::STR_HEX:
+        return "not-json";
+    case RPCArg::Type::NUM:
+    case RPCArg::Type::AMOUNT:
+    case RPCArg::Type::RANGE:
+        return "0";
+    case RPCArg::Type::BOOL:
+        return "true";
+    case RPCArg::Type::ARR:
+        return "[]";
+    case RPCArg::Type::OBJ:
+    case RPCArg::Type::OBJ_NAMED_PARAMS:
+    case RPCArg::Type::OBJ_USER_KEYS:
+        return "{}";
+    }
+    return "0";
+}
+
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
+{
+    for (const std::string& name : tableRPC.listCommands()) {
+        const CRPCCommand* cmd = tableRPC[name];
+        BOOST_REQUIRE_MESSAGE(cmd != nullptr && cmd->helpman != nullptr,
+                              name + ": registered command must carry a helpman accessor");
+
+        const std::vector<RPCArg>& args = cmd->helpman().GetArgs();
+        if (args.empty()) {
+            continue;
+        }
+
+        std::vector<std::string> cli_tokens;
+        cli_tokens.reserve(args.size());
+        for (const RPCArg& arg : args) {
+            cli_tokens.push_back(SampleCliToken(arg.m_type));
+        }
+
+        UniValue converted;
+        try {
+            converted = RPCConvertValues(name, cli_tokens);
+        } catch (const std::runtime_error& e) {
+            BOOST_FAIL(name + ": RPCConvertValues threw (" + std::string(e.what()) + ") -- "
+                       "a vRPCConvertParams entry exists for a string-typed argument");
+        }
+
+        BOOST_REQUIRE_EQUAL(converted.size(), args.size());
+
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (IsDualModeArg(name, i)) {
+                continue;
+            }
+
+            switch (ArgTypeCliConversion(args[i].m_type)) {
+            case CliConversion::REQUIRED:
+                BOOST_CHECK_MESSAGE(!converted[i].isStr(),
+                    strprintf("%s arg %u (%s): declared as a non-string JSON type but "
+                              "vRPCConvertParams has no { \"%s\", %u } entry -- the value "
+                              "reaches the server as a string when invoked from the CLI",
+                              name, i, args[i].m_names, name, i));
+                break;
+            case CliConversion::FORBIDDEN:
+                BOOST_CHECK_MESSAGE(converted[i].isStr(),
+                    strprintf("%s arg %u (%s): declared as a string but a vRPCConvertParams "
+                              "entry parses it as JSON, breaking plain-string input from "
+                              "the CLI",
+                              name, i, args[i].m_names));
+                break;
+            case CliConversion::EITHER:
+                break;
+            }
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
