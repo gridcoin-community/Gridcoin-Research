@@ -13,6 +13,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -63,32 +65,35 @@ class WalletTxStore
 {
 public:
     WalletTxStore(CWallet* wallet, GRC::WalletEventQueue& queue);
+    ~WalletTxStore();
 
     WalletTxStore(const WalletTxStore&) = delete;
     WalletTxStore& operator=(const WalletTxStore&) = delete;
 
     //!
-    //! \brief Producer: a transaction became visible. Applies the cached
-    //! datetime-display cutoff, de-duplicates, computes the TxOrderLess insert
-    //! position, updates the index, and pushes one RowsInserted carrying the
-    //! surviving records. A no-op (no event) if the tx is already present or
-    //! every record is filtered out.
+    //! \brief Start the store-worker thread. Called once by WalletModel after
+    //! construction, before the first reloadAndSnapshot. Idempotent.
     //!
-    //! Called from core threads. Takes cs_store internally; the caller must NOT
-    //! hold cs_store. (Callers that produced \p records via decomposeTransaction
-    //! already released nothing — they still hold cs_main/cs_wallet, which is
-    //! fine: cs_store is the innermost leaf.)
+    void start();
+
     //!
-    void insertTransaction(std::vector<TransactionRecord> records);
+    //! \brief Producer: a transaction became visible. Enqueues the
+    //! already-decomposed \p records onto the intake queue and returns
+    //! immediately (O(1), no store mutation on the caller's thread); the worker
+    //! applies the datetime cutoff, dedup, ordering, and the RowsInserted event
+    //! off-lock. Called from core threads under cs_main/cs_wallet — takes only
+    //! the leaf cs_intake, never cs_store, so it never waits on the O(N)
+    //! ordering maintenance (PR2.5 double-queue).
+    //!
+    void enqueueInsert(std::vector<TransactionRecord> records);
 
     //!
     //! \brief Producer: a transaction is no longer visible / was deleted.
-    //! Locates its contiguous range via the hash index and pushes one
-    //! RowsRemoved. A no-op (no event) if the tx is not present. Touches only
-    //! the store (cs_store) — never the wallet — so it is safe to call from the
-    //! CT_DELETED path which holds no wallet locks.
+    //! Enqueues a removal by \p hash for the worker (O(1), same threading
+    //! contract as enqueueInsert). Safe from the CT_DELETED path (no wallet
+    //! locks held).
     //!
-    void removeTransaction(const uint256& hash);
+    void enqueueRemove(const uint256& hash);
 
     //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full
@@ -107,6 +112,26 @@ public:
     std::vector<TransactionRecord> reloadAndSnapshot(bool limit_enabled, int64_t limit_time);
 
 private:
+    //! One unit of deferred store maintenance handed from a producer to the worker.
+    struct IntakeItem {
+        enum Kind { Insert, Remove } kind;
+        std::vector<TransactionRecord> records; //!< Insert: the decomposed parts.
+        uint256 hash;                           //!< Remove: the tx hash.
+    };
+
+    //! Worker entry point: drain the intake queue and apply each item. Parks
+    //! while m_rebuilding is set (acknowledging via m_worker_parked); exits on
+    //! m_stop. Holds cs_intake only while waiting/dequeuing — never with cs_store.
+    void workerLoop();
+    //! Worker: apply one intake item (the O(N) store maintenance). Must be called
+    //! with NO lock held; insert/removeTransaction take cs_store internally.
+    void applyIntake(IntakeItem item);
+
+    //! The O(N) ordering maintenance, now worker-private (was the public PR2 API;
+    //! producers call enqueue* instead). Each takes cs_store and pushes one event.
+    void insertTransaction(std::vector<TransactionRecord> records);
+    void removeTransaction(const uint256& hash);
+
     void shiftIndex(std::size_t from, std::ptrdiff_t delta) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
     void rebuildIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
@@ -123,6 +148,20 @@ private:
     //! Cached OptionsModel datetime-display cutoff, set by reloadAndSnapshot.
     bool m_limit_enabled GUARDED_BY(cs_store){false};
     int64_t m_limit_time GUARDED_BY(cs_store){0};
+
+    //! Intake queue (PR2.5). Producers enqueue here; the store-worker drains it
+    //! and performs the O(N) maintenance off the core locks. cs_intake is an
+    //! independent leaf — it is NEVER held while taking cs_store (and vice
+    //! versa), so the two never invert.
+    mutable Mutex cs_intake;
+    std::deque<IntakeItem> m_intake GUARDED_BY(cs_intake);
+    bool m_stop GUARDED_BY(cs_intake){false};          //!< shutdown request (dtor)
+    bool m_rebuilding GUARDED_BY(cs_intake){false};    //!< reloadAndSnapshot wants the worker parked
+    bool m_worker_parked GUARDED_BY(cs_intake){false}; //!< worker has acknowledged the pause
+    CConditionVariable m_intake_cv;  //!< worker waits for work / stop / resume
+    CConditionVariable m_idle_cv;    //!< reloadAndSnapshot waits for m_worker_parked
+    std::thread m_worker;
+    bool m_started{false};           //!< Qt-thread only: start() idempotency guard
 };
 
 } // namespace GRC
