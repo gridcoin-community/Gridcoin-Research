@@ -11,7 +11,6 @@
 #include "sync.h"
 #include "uint256.h"
 
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
