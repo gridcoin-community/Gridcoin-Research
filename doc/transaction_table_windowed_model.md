@@ -490,3 +490,59 @@ Per store op / status update: O(N) over `view_index` (the absolute-index shift a
 the identity scan) — which is exactly why PR2.5 moved this onto the off-`cs_main`
 store-worker. An order-statistics structure to reach O(log N) is tracked separately;
 the contract here is correctness, not asymptotics.
+
+---
+
+## Addendum: scrollbar + resort contract for the detailed view (PR5)
+
+The detailed `TransactionView` is a scrolling `QTableView` over the full filtered
+list (up to ~300k rows). PR3 (OverviewPage) does not scroll — its `limit ≈ viewport`
+— so this contract lands with PR5's virtual model, but the primitives it relies on
+(epoch, identity-locate) are established by the PR3-A cursor core.
+
+### The model reports the TOTAL count, never the cached slice
+
+`rowCount()` returns the cursor's `totalAccepted()` — the whole filtered count — NOT
+the size of the materialized viewport slice. Consequences:
+
+- The scrollbar is sized for the full list (correct thumb size + position), and the
+  user can drag to **any** absolute position, including the middle and the end.
+- The viewport slice (~visible rows + a prefetch margin) is a **cache the view never
+  observes**. A `data(row)` for a row outside the slice returns a placeholder and
+  triggers an async `getRows(first,last)`; the returned slice is applied with a
+  `dataChanged`, and the placeholder rows fill in. A fast drag to an un-cached region
+  shows placeholders for a frame, then resolves — standard virtual-scroll behaviour.
+
+This is the **"full rowCount + placeholder-on-miss, NOT `canFetchMore`"** decision.
+`canFetchMore`/`fetchMore` is rejected precisely because it makes the scrollbar
+misbehave: the row count would grow as you scroll, the thumb would misreport the
+total, and you could not drag to the middle or end (append-only). The full-rowCount
+model is what makes random-access scrolling and a correctly-sized scrollbar possible
+— the slice underneath does NOT make the scrollbar act weird, because it is invisible
+to it.
+
+### Resort while scrolled into the middle — anchor on the SELECTED row
+
+A header-click resort is a cursor `setSort` → a `Reset` (the whole `view_index`
+reorders) that bumps the **epoch**. `rowCount` is unchanged, so the scrollbar does not
+resize or jump; only content reorders. The position policy (decided 2026-06-10):
+
+1. **Capture the anchor before the resort:** the `(hash,idx)` identity of the
+   currently **selected** row. If there is no selection, fall back to the identity of
+   the **topmost visible** row, so there is always a stable anchor.
+2. **Resort** (`setSort` → `Reset`, epoch bumped).
+3. **Scroll to the anchor's new position:** `cursor.findSlot(anchor_absidx)` (the
+   PR3-A identity-locate) gives the anchor's row index in the new order; scroll so it
+   is back in view (re-selected if it was the selection). The list reorders *around*
+   the user's anchor instead of throwing them to row 0 or to an unrelated row.
+
+The windowing interaction is only a **re-fetch**: after the `Reset` the cached slice
+holds the wrong transactions for those indices, so the model fetches the slice for the
+post-resort viewport. The **epoch** is the reconciliation token — any async
+`getRows` issued before the resort that arrives late carries the stale epoch and is
+discarded, so pre-resort rows are never painted into the post-resort window. No
+scrollbar weirdness, just a guarded re-fetch.
+
+Net: the scrollbar stays correctly sized and positioned across both fast scrolling and
+resort; the only moving parts are a transient placeholder fill and an anchor-preserving
+scroll, both supported by the cursor's `epoch` + identity-locate from PR3-A.
