@@ -80,9 +80,13 @@ bool PoolRegistry::IsBuiltin(const Cpid& cpid) const
 
 void PoolRegistry::SeedBuiltinPools()
 {
-    // No cs_lock here: constructor runs single-threaded before any other
-    // accessor can race. Taking the lock would also be unsafe in some
-    // static-init orderings.
+    // The constructor call site runs single-threaded before any other
+    // accessor can race, but cs_lock is a member (fully constructed by the
+    // time this body runs), so taking it is safe there as well as on the
+    // ClearForTests re-seed path — and it keeps the GUARDED_BY(cs_lock)
+    // member accesses below analyzer-clean.
+    LOCK(cs_lock);
+
     for (const BuiltinSeed& seed : BuiltinPoolSeeds()) {
         Cpid cpid = Cpid::Parse(seed.cpid_hex);
 
@@ -434,7 +438,7 @@ bool PoolRegistry::IsActivePoolName(const std::string& name) const
     return false;
 }
 
-void PoolRegistry::Reset()
+void PoolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
     m_pool_entries.clear();
@@ -621,22 +625,18 @@ bool PoolRegistry::ValidateAtHeight(const Contract& contract, int at_height, int
 }
 
 bool PoolRegistry::Validate(const Contract& contract, const CTransaction& tx, int& DoS) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    // Snapshot the chain-tip height under cs_main (the canonical
-    // GUARDED_BY(cs_main) accessor). Mempool admission may or may not be
-    // running under cs_main from its caller; CCriticalSection is
-    // recursive so re-acquiring here is safe in both cases. Released
-    // immediately so cs_lock acquisition inside ValidateAtHeight
-    // honours the cs_main → cs_lock lock order without contention.
-    int tip_height = 0;
-    {
-        LOCK(cs_main);
-        tip_height = nBestHeight;
-    }
-    return ValidateAtHeight(contract, tip_height, DoS);
+    // The contract dispatch path (GRC::ValidateContracts -> Dispatcher::
+    // Validate) is annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main), so the
+    // chain-tip height read is already under the canonical lock; cs_lock
+    // acquisition inside ValidateAtHeight then honours the cs_main ->
+    // cs_lock lock order.
+    return ValidateAtHeight(contract, nBestHeight, DoS);
 }
 
 bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // The V15 activation gate and registry-aware authentication both live
     // in the shared ValidateAtHeight helper. BlockValidate is the
@@ -658,7 +658,7 @@ bool PoolRegistry::BlockValidate(const ContractContext& ctx, int& DoS) const
     return ValidateAtHeight(ctx.m_contract, ctx.m_pindex->nHeight, DoS);
 }
 
-void PoolRegistry::Add(const ContractContext& ctx)
+void PoolRegistry::Add(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (ctx->m_type.Value()) {
         case ContractType::POOL_REGISTER:
@@ -674,7 +674,7 @@ void PoolRegistry::Add(const ContractContext& ctx)
     }
 }
 
-void PoolRegistry::Delete(const ContractContext& ctx)
+void PoolRegistry::Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Symmetric to Add; the action on the contract is REMOVE and the per-type
     // helpers branch on it internally.
@@ -837,7 +837,7 @@ void PoolRegistry::ApplyApprove(const ContractContext& ctx)
     m_pool_entries[payload.m_cpid] = m_pool_db.find(ctx.m_tx.GetHash())->second;
 }
 
-void PoolRegistry::Revert(const ContractContext& ctx)
+void PoolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LOCK(cs_lock);
 
@@ -922,12 +922,6 @@ uint64_t PoolRegistry::PassivateDB()
 {
     LOCK(cs_lock);
     return m_pool_db.passivate_db();
-}
-
-PoolRegistry::PoolDB& PoolRegistry::GetPoolDB()
-{
-    LOCK(cs_lock);
-    return m_pool_db;
 }
 
 void PoolRegistry::SeedForTests(const Pool& entry)

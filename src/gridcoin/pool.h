@@ -487,17 +487,19 @@ public:
     //!
     static bool IsAuthorizationExpired(const Pool& entry, int at_height);
 
-    void Reset() override;
+    void Reset() override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override;
+    bool Validate(const Contract& contract, const CTransaction& tx, int& DoS) const override
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    bool BlockValidate(const ContractContext& ctx, int& DoS) const override;
+    bool BlockValidate(const ContractContext& ctx, int& DoS) const override
+        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    void Add(const ContractContext& ctx) override;
+    void Add(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    void Delete(const ContractContext& ctx) override;
+    void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    void Revert(const ContractContext& ctx) override;
+    void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     int Initialize() override;
 
@@ -519,8 +521,6 @@ public:
                        std::set<Pool>,
                        HistoricalPoolMap> PoolDB;
 
-    PoolDB& GetPoolDB();
-
     //!
     //! \brief Test-only: directly insert a fully-formed Pool into the
     //! in-memory map without going through contract validation or LevelDB.
@@ -535,14 +535,21 @@ public:
     void ClearForTests();
 
 private:
+    //!
+    //! \brief Protects the registry with multithreaded access. This is implemented INTERNAL to
+    //! the registry class, following pattern (b) of doc/contract_registry_locking_design.md:
+    //! no public method carries a cs_lock annotation; read accessors take cs_lock internally
+    //! and return self-contained values; chain handlers additionally require cs_main from the
+    //! caller (canonical order cs_main -> cs_lock).
+    //!
     mutable CCriticalSection cs_lock;
 
-    PoolMap m_pool_entries;                //!< CPID -> current entry (any status).
-    PendingPoolMap m_pending_pool_entries{}; //!< Not used; satisfies template.
-    std::set<Pool> m_expired_pool_entries{}; //!< Not used; satisfies template.
-    PoolMap m_pool_first_entries{};        //!< Not used; satisfies template.
+    PoolMap m_pool_entries GUARDED_BY(cs_lock);                //!< CPID -> current entry (any status).
+    PendingPoolMap m_pending_pool_entries GUARDED_BY(cs_lock) {}; //!< Not used; satisfies template.
+    std::set<Pool> m_expired_pool_entries GUARDED_BY(cs_lock) {}; //!< Not used; satisfies template.
+    PoolMap m_pool_first_entries GUARDED_BY(cs_lock) {};       //!< Not used; satisfies template.
 
-    PoolDB m_pool_db;
+    PoolDB m_pool_db GUARDED_BY(cs_lock);
 
     //!
     //! \brief Extra shared_ptrs to the grandfathered builtin seed entries.
@@ -552,7 +559,7 @@ private:
     //! find() would then miss because the seeds have no LevelDB backing.
     //! Also doubles as the membership oracle for IsBuiltin().
     //!
-    std::map<Cpid, Pool_ptr> m_builtin_seeds;
+    std::map<Cpid, Pool_ptr> m_builtin_seeds GUARDED_BY(cs_lock);
 
     //!
     //! \brief Construct seed Pool entries for each row of BuiltinPoolSeeds(),
