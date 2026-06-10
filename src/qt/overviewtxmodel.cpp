@@ -47,11 +47,14 @@ QVariant OverviewTxModel::data(const QModelIndex& index, int role) const
             || static_cast<std::size_t>(index.row()) >= m_rows.size()) {
         return QVariant();
     }
-    // Render the Status column (the list's single visual column), reusing the
-    // TransactionTableModel formatters. const_cast: formatRole takes a non-const
-    // record (legacy getTxID()/describe() are non-const) but does not mutate it.
+    // Render the ToAddress column's roles — the single visual column the recent-tx
+    // delegate composes (its DecorationRole is the transaction-TYPE icon
+    // txAddressDecoration, and its DisplayRole is the address), matching the old
+    // proxy list which set modelColumn = ToAddress. Reuse the TransactionTableModel
+    // formatters. const_cast: formatRole takes a non-const record (legacy
+    // getTxID()/describe() are non-const) but does not mutate it.
     return m_ttm->formatRole(const_cast<TransactionRecord*>(&m_rows[index.row()]),
-                             TransactionTableModel::Status, role);
+                             TransactionTableModel::ToAddress, role);
 }
 
 void OverviewTxModel::setLimit(int limit)

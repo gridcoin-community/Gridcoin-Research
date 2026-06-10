@@ -27,10 +27,11 @@ class TransactionTableModel;
 //! RowsInserted/Removed/Changed — so the count/limit/resize mechanics are proven
 //! here before the detailed transaction table migrates to the same path (PR5).
 //!
-//! It is a single-column list (the recent-tx delegate composes several roles for
-//! the Status column, exactly as the old proxy did). Role values are produced by
-//! TransactionTableModel::formatRole, so the formatters live in one place and the
-//! delegate reads identical data.
+//! It is a single-column list whose column renders the ToAddress column's roles
+//! (the recent-tx delegate composes several of them — the type icon, address,
+//! amount, date — exactly as the old proxy did with modelColumn = ToAddress).
+//! Role values are produced by TransactionTableModel::formatRole, so the
+//! formatters live in one place and the delegate reads identical data.
 //!
 class OverviewTxModel : public QAbstractListModel
 {

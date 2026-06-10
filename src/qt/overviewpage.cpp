@@ -446,7 +446,9 @@ void OverviewPage::setWalletModel(WalletModel *model)
                  __func__, num_transactions_for_view, m_overviewTxModel->limit());
 
         ui->listTransactions->setModel(m_overviewTxModel.get());
-        ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
+        // OverviewTxModel is a single-column list whose column already renders the
+        // ToAddress column's roles, so no setModelColumn is needed (the old proxy
+        // exposed all 5 columns and selected ToAddress here).
 
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());
