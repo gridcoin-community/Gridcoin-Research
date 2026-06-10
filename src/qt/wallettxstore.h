@@ -5,6 +5,7 @@
 #ifndef BITCOIN_QT_WALLETTXSTORE_H
 #define BITCOIN_QT_WALLETTXSTORE_H
 
+#include "qt/cursor.h"
 #include "qt/txorder.h"
 #include "qt/transactionrecord.h"
 #include "qt/wallet_event_queue.h"
@@ -14,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -95,6 +97,39 @@ public:
     void enqueueRemove(const uint256& hash);
 
     //!
+    //! \brief Producer: a transaction already in the store changed (CT_UPDATED —
+    //! e.g. first confirmation). Enqueues the freshly re-decomposed \p records
+    //! (with producer-computed status) for the worker, which replaces the stored
+    //! records in place and re-evaluates each cursor's membership/sort slot
+    //! (applyStatusUpdate). Same O(1) threading contract as enqueueInsert.
+    //!
+    void enqueueUpsert(std::vector<TransactionRecord> records);
+
+    //!
+    //! \brief Qt thread: register a per-view cursor (server-side filter+sort).
+    //! Builds the cursor over the current m_records and pushes a RowsReset so the
+    //! consumer bulk-refills via getRows. Re-registering an existing viewId
+    //! replaces it. \p viewId is one of the GRC::VIEW_* identifiers.
+    //!
+    void registerView(int viewId, FilterSpec filter, int sort_column, int sort_order);
+
+    //! Qt thread: change a registered view's sort / filter / served-row cap.
+    //! Each pushes the cursor's resulting events (Reset for sort/filter,
+    //! Insert/Remove at the boundary for a limit change).
+    void setViewSort(int viewId, int sort_column, int sort_order);
+    void setViewFilter(int viewId, FilterSpec filter);
+    void setViewLimit(int viewId, int limit);
+
+    //! Qt thread: read [first, first+count) served rows of \p viewId as records
+    //! (a copy of the slice). Clamps to the served window; returns fewer rows if
+    //! the window is shorter. Unknown viewId -> empty.
+    std::vector<TransactionRecord> getRows(int viewId, int first, int count);
+
+    //! Qt thread: total accepted rows for \p viewId (the virtual rowCount), or 0
+    //! if the view is not registered.
+    int totalAccepted(int viewId);
+
+    //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full
     //! decomposed snapshot for the consumer's replica.
     //!
@@ -113,8 +148,8 @@ public:
 private:
     //! One unit of deferred store maintenance handed from a producer to the worker.
     struct IntakeItem {
-        enum Kind { Insert, Remove } kind;
-        std::vector<TransactionRecord> records; //!< Insert: the decomposed parts.
+        enum Kind { Insert, Remove, Update } kind;
+        std::vector<TransactionRecord> records; //!< Insert/Update: the decomposed parts.
         uint256 hash;                           //!< Remove: the tx hash.
     };
 
@@ -127,12 +162,38 @@ private:
     void applyIntake(IntakeItem item);
 
     //! The O(N) ordering maintenance, now worker-private (was the public PR2 API;
-    //! producers call enqueue* instead). Each takes cs_store and pushes one event.
+    //! producers call enqueue* instead). Each takes cs_store and pushes the native
+    //! VIEW_FULL event AND drives the registered cursors.
     void insertTransaction(std::vector<TransactionRecord> records);
     void removeTransaction(const uint256& hash);
+    //! Worker: a present tx's records changed in place (CT_UPDATED). Replaces the
+    //! stored records and re-evaluates each cursor (applyStatusUpdate). Takes cs_store.
+    void updateTransaction(std::vector<TransactionRecord> records);
+    //! Lock-free cores (caller already holds cs_store): the actual O(N) maintenance
+    //! + cursor drive. insert/removeTransaction are thin lock-taking wrappers;
+    //! updateTransaction composes these directly for its not-present /
+    //! part-count-changed fallback without re-entering the non-recursive cs_store.
+    void insertLocked(std::vector<TransactionRecord> records) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+    void removeLocked(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     void shiftIndex(std::size_t from, std::ptrdiff_t delta) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
     void rebuildIndex() EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Translate one cursor's served-window CursorDeltas into WalletEvents for
+    //! \p viewId (Reset/Insert/Remove/Change), fetching records from m_records for
+    //! the inserted/changed served rows. Caller holds cs_store.
+    void emitCursorDeltas(int viewId, uint64_t epoch,
+                          const std::vector<CursorDelta>& deltas) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! Cursor projectors over m_records[i]. Read m_records while the caller holds
+    //! cs_store, but they are invoked through the cursor's std::function
+    //! indirection, which the Clang thread-safety analyzer cannot see the lock
+    //! through — hence NO_THREAD_SAFETY_ANALYSIS. Every call path holds cs_store
+    //! (the worker's apply* and the Qt-thread register/getRows all take it).
+    TxFilterFields projectFieldsAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    SortKey projectKeysAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    //! Build the (Fields, Keys) projector pair bound to this store for a cursor.
+    void makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysFn& keys);
 
     CWallet* const m_wallet;
     GRC::WalletEventQueue& m_queue;
@@ -145,6 +206,12 @@ private:
     std::vector<TransactionRecord> m_records GUARDED_BY(cs_store);
     //! tx hash -> positions in m_records. Same-hash records are contiguous.
     std::unordered_multimap<uint256, std::size_t, TxHashHasher> m_by_hash GUARDED_BY(cs_store);
+
+    //! Registered per-view cursors (server-side filter+sort), keyed by VIEW_*.
+    //! Each indexes into m_records; maintained on the worker thread (insert/
+    //! remove/update) and on the Qt thread (register/setView*/getRows), all under
+    //! cs_store. std::map for stable references across insertion.
+    std::map<int, Cursor> m_cursors GUARDED_BY(cs_store);
 
     //! Cached OptionsModel datetime-display cutoff, set by reloadAndSnapshot.
     bool m_limit_enabled GUARDED_BY(cs_store){false};

@@ -89,6 +89,7 @@ add_library(gridcoinqt STATIC
     transactionfilterproxy.cpp
     txfilter.cpp
     txorder.cpp
+    cursor.cpp
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp

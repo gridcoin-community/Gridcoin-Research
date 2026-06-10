@@ -23,6 +23,27 @@ struct RecordOrder {
     }
 };
 
+//! Project a stored record to the Qt-free filter inputs. `label` is left empty:
+//! the Overview view (PR3) does not filter by address substring, and the
+//! address-book label needs cs_wallet, which the worker does not hold. The
+//! detailed table's address filter populates it in PR4.
+GRC::TxFilterFields projectFields(const TransactionRecord& r)
+{
+    return GRC::TxFilterFields{
+        r.time, r.credit + r.debit, static_cast<int>(r.type),
+        static_cast<int>(r.status.status), r.address, std::string()};
+}
+
+//! Project a stored record to the Qt-free sort inputs. type_string /
+//! address_string are left empty: those are the localized Qt formatter strings,
+//! used only when sorting by Type/Address — which the Overview view does not (it
+//! sorts by date/status). PR4 supplies them when the detailed table migrates.
+GRC::SortKey projectKeys(const TransactionRecord& r)
+{
+    return GRC::SortKey{
+        r.time, r.credit + r.debit, r.status.sortKey, std::string(), std::string()};
+}
+
 } // anonymous namespace
 
 namespace GRC {
@@ -74,6 +95,19 @@ void WalletTxStore::enqueueRemove(const uint256& hash)
     m_intake_cv.notify_one();
 }
 
+void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
+{
+    if (records.empty()) {
+        return;
+    }
+    const uint256 hash = records.front().hash;
+    {
+        LOCK(cs_intake);
+        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash});
+    }
+    m_intake_cv.notify_one();
+}
+
 void WalletTxStore::workerLoop()
 {
     WAIT_LOCK(cs_intake, lock);
@@ -114,9 +148,11 @@ void WalletTxStore::workerLoop()
 
 void WalletTxStore::applyIntake(IntakeItem item)
 {
-    // No lock held here; insert/removeTransaction take cs_store internally.
+    // No lock held here; insert/remove/updateTransaction take cs_store internally.
     if (item.kind == IntakeItem::Insert) {
         insertTransaction(std::move(item.records));
+    } else if (item.kind == IntakeItem::Update) {
+        updateTransaction(std::move(item.records));
     } else {
         removeTransaction(item.hash);
     }
@@ -146,7 +182,11 @@ void WalletTxStore::rebuildIndex()
 void WalletTxStore::insertTransaction(std::vector<TransactionRecord> records)
 {
     LOCK(cs_store);
+    insertLocked(std::move(records));
+}
 
+void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
+{
     // Datetime-display cutoff (cached from the last reloadAndSnapshot). All
     // records of one tx share `time`, so this is all-or-nothing.
     if (m_limit_enabled) {
@@ -196,12 +236,22 @@ void WalletTxStore::insertTransaction(std::vector<TransactionRecord> records)
     // Push the position-stamped event WHILE cs_store is held so that queue
     // seqno-order equals store-mutation-order across all producer threads.
     m_queue.push(GRC::RowsInsertedPayload{static_cast<int>(insertIdx), std::move(records)});
+
+    // Drive each registered cursor: the new records now occupy
+    // [insertIdx, insertIdx+count) in m_records (cursors index into m_records).
+    for (auto& [viewId, cursor] : m_cursors) {
+        emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStoreInsert(insertIdx, count));
+    }
 }
 
 void WalletTxStore::removeTransaction(const uint256& hash)
 {
     LOCK(cs_store);
+    removeLocked(hash);
+}
 
+void WalletTxStore::removeLocked(const uint256& hash)
+{
     auto range = m_by_hash.equal_range(hash);
     if (range.first == range.second) {
         // Not present — filtered out at insert time, or never inserted. No-op,
@@ -247,6 +297,12 @@ void WalletTxStore::removeTransaction(const uint256& hash)
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
     m_queue.push(GRC::RowsRemovedPayload{static_cast<int>(minPos), static_cast<int>(count)});
+
+    // Drive each registered cursor: [minPos, minPos+count) were erased from
+    // m_records and later positions shifted down by count.
+    for (auto& [viewId, cursor] : m_cursors) {
+        emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStoreRemove(minPos, count));
+    }
 }
 
 std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabled, int64_t limit_time)
@@ -297,12 +353,21 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     }
     std::sort(built.begin(), built.end(), RecordOrder());
 
+    std::vector<GRC::RowsResetPayload> cursor_resets;
     {
         LOCK(cs_store);
         m_limit_enabled = limit_enabled;
         m_limit_time = limit_time;
         m_records = built;
         rebuildIndex();
+        // Rebuild each registered cursor over the new m_records. Their Reset
+        // events are pushed AFTER the drain below (which discards pre-rebuild
+        // events), so the windowed consumers refill against the new snapshot.
+        for (auto& [viewId, cursor] : m_cursors) {
+            cursor.rebuild(m_records.size());
+            cursor_resets.push_back(GRC::RowsResetPayload{
+                viewId, cursor.epoch(), static_cast<int>(cursor.servedCount())});
+        }
     }
 
     // Discard any events queued before this rebuild: they were computed against
@@ -310,6 +375,14 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     // on cs_wallet, so nothing new can be queued until we return; the returned
     // snapshot, the rebuilt index, and the now-empty queue are consistent.
     m_queue.drain();
+
+    // Re-publish the per-view cursor Resets AFTER the drain so they survive it;
+    // the windowed consumers (e.g. OverviewTxModel) refill via getRows. Producers
+    // are still blocked on cs_wallet, so these are the only queued events until
+    // we return.
+    for (const GRC::RowsResetPayload& reset : cursor_resets) {
+        m_queue.push(reset);
+    }
 
     // Release the store-worker (PR2.5): the rebuilt index is live, so resume
     // draining. Producers remain blocked on cs_wallet until we return, so the
@@ -322,6 +395,180 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     }
 
     return built;
+}
+
+void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
+{
+    LOCK(cs_store);
+
+    if (m_limit_enabled) {
+        const int64_t limit_time = m_limit_time;
+        records.erase(std::remove_if(records.begin(), records.end(),
+                          [limit_time](const TransactionRecord& r) { return r.time < limit_time; }),
+                      records.end());
+    }
+    if (records.empty()) {
+        // The whole tx fell outside the datetime cutoff. If it was present, it
+        // must go (its parts are now hidden); a bare hash remove handles that.
+        return;
+    }
+    std::sort(records.begin(), records.end(), RecordOrder());
+    const uint256 hash = records.front().hash;
+
+    auto range = m_by_hash.equal_range(hash);
+    if (range.first == range.second) {
+        // Not present (previously filtered, or just became visible) -> insert.
+        insertLocked(std::move(records));
+        return;
+    }
+
+    std::size_t minPos = std::numeric_limits<std::size_t>::max();
+    std::size_t maxPos = 0;
+    for (auto it = range.first; it != range.second; ++it) {
+        if (it->second < minPos) minPos = it->second;
+        if (it->second > maxPos) maxPos = it->second;
+    }
+    const std::size_t stored = maxPos - minPos + 1;
+
+    // Structural guard (mirrors removeLocked): same-hash records must be one
+    // contiguous run AND the part count must be unchanged for an in-place
+    // overwrite. If the part count changed or the run is broken, fall back to
+    // remove+insert rather than overwrite mismatched slots.
+    if (maxPos >= m_records.size()
+            || stored != records.size()
+            || static_cast<std::size_t>(std::distance(range.first, range.second)) != stored
+            || m_records[minPos].hash != hash
+            || m_records[maxPos].hash != hash) {
+        removeLocked(hash);
+        insertLocked(std::move(records));
+        return;
+    }
+
+    // In-place overwrite: the status changed but the ordering key (time,hash,idx)
+    // did not, so positions are unchanged. No VIEW_FULL event is emitted — the
+    // detailed table refreshes confirmation status lazily on read (unchanged
+    // behaviour). Re-evaluate each cursor per affected row: under a status sort a
+    // first confirmation repositions the row.
+    for (std::size_t k = 0; k < records.size(); ++k) {
+        m_records[minPos + k] = records[k];
+    }
+    for (auto& [viewId, cursor] : m_cursors) {
+        for (std::size_t p = minPos; p <= maxPos; ++p) {
+            emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
+        }
+    }
+}
+
+TxFilterFields WalletTxStore::projectFieldsAt(std::size_t i) const
+{
+    return projectFields(m_records[i]);
+}
+
+SortKey WalletTxStore::projectKeysAt(std::size_t i) const
+{
+    return projectKeys(m_records[i]);
+}
+
+void WalletTxStore::makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysFn& keys)
+{
+    fields = [this](std::size_t i) { return projectFieldsAt(i); };
+    keys = [this](std::size_t i) { return projectKeysAt(i); };
+}
+
+void WalletTxStore::registerView(int viewId, FilterSpec filter, int sort_column, int sort_order)
+{
+    LOCK(cs_store);
+    Cursor::FieldsFn fields;
+    Cursor::KeysFn keys;
+    makeCursorProjectors(fields, keys);
+    Cursor cursor(viewId, std::move(filter), sort_column, sort_order,
+                  std::move(fields), std::move(keys));
+    const auto deltas = cursor.rebuild(m_records.size());
+    const uint64_t epoch = cursor.epoch();
+    m_cursors.insert_or_assign(viewId, std::move(cursor));
+    emitCursorDeltas(viewId, epoch, deltas);
+}
+
+void WalletTxStore::setViewSort(int viewId, int sort_column, int sort_order)
+{
+    LOCK(cs_store);
+    auto it = m_cursors.find(viewId);
+    if (it == m_cursors.end()) return;
+    emitCursorDeltas(viewId, it->second.epoch(), it->second.setSort(sort_column, sort_order));
+}
+
+void WalletTxStore::setViewFilter(int viewId, FilterSpec filter)
+{
+    LOCK(cs_store);
+    auto it = m_cursors.find(viewId);
+    if (it == m_cursors.end()) return;
+    emitCursorDeltas(viewId, it->second.epoch(), it->second.setFilter(filter, m_records.size()));
+}
+
+void WalletTxStore::setViewLimit(int viewId, int limit)
+{
+    LOCK(cs_store);
+    auto it = m_cursors.find(viewId);
+    if (it == m_cursors.end()) return;
+    emitCursorDeltas(viewId, it->second.epoch(), it->second.setLimit(limit));
+}
+
+std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int count)
+{
+    LOCK(cs_store);
+    std::vector<TransactionRecord> out;
+    auto it = m_cursors.find(viewId);
+    if (it == m_cursors.end() || first < 0 || count <= 0) {
+        return out;
+    }
+    const std::size_t served = it->second.servedCount();
+    const std::size_t begin = static_cast<std::size_t>(first);
+    if (begin >= served) {
+        return out;
+    }
+    const std::size_t end = std::min(served, begin + static_cast<std::size_t>(count));
+    out.reserve(end - begin);
+    for (std::size_t i = begin; i < end; ++i) {
+        out.push_back(m_records[it->second.rowAt(i)]);
+    }
+    return out;
+}
+
+int WalletTxStore::totalAccepted(int viewId)
+{
+    LOCK(cs_store);
+    auto it = m_cursors.find(viewId);
+    return it == m_cursors.end() ? 0 : static_cast<int>(it->second.totalAccepted());
+}
+
+void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
+                                     const std::vector<CursorDelta>& deltas)
+{
+    auto it = m_cursors.find(viewId);
+    for (const CursorDelta& d : deltas) {
+        switch (d.type) {
+        case CursorDelta::Reset:
+            m_queue.push(GRC::RowsResetPayload{viewId, epoch, d.count});
+            break;
+        case CursorDelta::Insert: {
+            std::vector<TransactionRecord> recs;
+            if (it != m_cursors.end()) {
+                recs.reserve(static_cast<std::size_t>(d.count));
+                for (int j = 0; j < d.count; ++j) {
+                    recs.push_back(m_records[it->second.rowAt(static_cast<std::size_t>(d.first + j))]);
+                }
+            }
+            m_queue.push(GRC::RowsInsertedPayload{d.first, std::move(recs), viewId, epoch});
+            break;
+        }
+        case CursorDelta::Remove:
+            m_queue.push(GRC::RowsRemovedPayload{d.first, d.count, viewId, epoch});
+            break;
+        case CursorDelta::Change:
+            m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count});
+            break;
+        }
+    }
 }
 
 } // namespace GRC
