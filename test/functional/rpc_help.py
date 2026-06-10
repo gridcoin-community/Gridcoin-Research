@@ -51,12 +51,15 @@ floor whenever a new tier merges.
 What it catches per converted command
 -------------------------------------
   - `help <cmd>` includes Result:/Examples: sections (format regression).
-  - Wrong-arity call is rejected. Most converted commands fail IsValidNumArgs
-    and surface RPC_MISC_ERROR (-1) with help.ToString() in the message.
-    Variadic commands accept the 100 args and fall through to per-argument
+  - Wrong-arity call is rejected. Most converted commands fail the
+    dispatcher's IsValidNumArgs pre-check, which throws help.ToString() as
+    a std::runtime_error before CRPCTable::execute's try-block and surfaces
+    as RPC_PARSE_ERROR (-32700) via the connection handler. Commands whose
+    bodies reject instead surface RPC_MISC_ERROR (-1), and variadic
+    commands accept the 100 args and fall through to per-argument
     validation, raising RPC_INVALID_PARAMETER (-8) from the function body.
-    Either constitutes "the command rejected the call", which is enough to
-    verify dispatcher + arity-or-arg-validation behavior end-to-end.
+    Any of these constitutes "the command rejected the call", which is
+    enough to verify dispatcher + arity-or-arg-validation end-to-end.
 
 What it does NOT catch (deferred to richer tests once regtest lands)
 -------------------------------------------------------------------
@@ -73,16 +76,21 @@ from test_framework.util import assert_equal
 
 # JSON-RPC error codes (src/rpc/protocol.h).
 #
-# RPC_MISC_ERROR (-1) is emitted by the dispatcher when an RPC handler throws
-# std::runtime_error -- exactly what `throw runtime_error(help.ToString())`
-# does on an arity violation. RPC_INVALID_PARAMETER (-8) is what *some*
-# RPCs throw when they reach the function body with the wrong shape (e.g.,
-# variadic commands that accept the 100 args and then fail on individual
-# argument validation). Either constitutes "the command rejected the bad
-# call", which is the per-command invariant we want to assert.
+# RPC_PARSE_ERROR (-32700) is what the dispatcher's arity pre-check surfaces
+# since #2922 PR M3: CRPCTable::execute throws help.ToString() as a
+# std::runtime_error *before* its try-block, so the throw escapes to the
+# connection handler, whose generic std::exception catch maps it to
+# RPC_PARSE_ERROR. RPC_MISC_ERROR (-1) is emitted when an RPC handler body
+# throws std::runtime_error inside execute's try-block. RPC_INVALID_PARAMETER
+# (-8) is what *some* RPCs throw when they reach the function body with the
+# wrong shape (e.g., variadic commands that accept the 100 args and then fail
+# on individual argument validation). Any of these constitutes "the command
+# rejected the bad call", which is the per-command invariant we want to
+# assert.
+RPC_PARSE_ERROR = -32700
 RPC_MISC_ERROR = -1
 RPC_INVALID_PARAMETER = -8
-RPC_ARITY_REJECTION_CODES = (RPC_MISC_ERROR, RPC_INVALID_PARAMETER)
+RPC_ARITY_REJECTION_CODES = (RPC_PARSE_ERROR, RPC_MISC_ERROR, RPC_INVALID_PARAMETER)
 
 # Categories advertised by the help RPC (see src/rpc/server.cpp). The help
 # RPC accepts each of these as a single-word category filter and returns a
@@ -94,6 +102,17 @@ HELP_CATEGORIES = ("wallet", "staking", "developer", "network", "voting")
 # than any sensible RPC declares is the simplest way to trip it without
 # knowing each command's signature.
 ARITY_VIOLATION_ARGS = ["x"] * 100
+
+# Commands marked MarkVariadic() in C++ whose bodies deliberately accept
+# and silently ignore extra trailing positional args (legacy lenience kept
+# by #2922). For these, a non-raising 100-arg call is the documented
+# behavior, not an arity-enforcement regression. Every other converted
+# command must reject the probe. If a future conversion legitimately adds
+# such lenience, list it here with a pointer to the C++ MarkVariadic()
+# site; an unexpected name in this situation is a real failure.
+VARIADIC_ACCEPTS_EXTRA_ARGS = {
+    "parselegacysb",  # src/rpc/blockchain.cpp: body uses params[0] only
+}
 
 # Floor for the converted-command count. Bump when a new tier merges. If
 # discovery ever returns fewer than this, a previously-converted command
@@ -242,12 +261,19 @@ class RpcHelpTest(GridcoinTestFramework):
 
         # 2. Wrong-arity call: passing 100 dummy positional args exceeds
         #    every realistic m_args.size(). Most converted commands reject
-        #    this via IsValidNumArgs -> runtime_error -> RPC_MISC_ERROR (-1).
-        #    Variadic commands (e.g. changesettings) accept the args and
-        #    fail downstream with RPC_INVALID_PARAMETER (-8) on individual
-        #    arg validation. Either outcome satisfies "the command rejected
-        #    the bad call", which is the per-command invariant we want.
-        method = getattr(node, name)
+        #    this via the dispatcher's IsValidNumArgs pre-check
+        #    (RPC_PARSE_ERROR); commands whose bodies reject instead raise
+        #    RPC_MISC_ERROR. Variadic commands (e.g. changesettings) accept
+        #    the args and fail downstream with RPC_INVALID_PARAMETER (-8)
+        #    on individual arg validation. Any outcome in the accepted set
+        #    satisfies "the command rejected the bad call", which is the
+        #    per-command invariant we want.
+        #
+        #    Probe through the raw RPC proxy, not TestNode attribute
+        #    access: TestNode defines Python convenience wrappers (e.g.
+        #    TestNode.generate) that shadow same-named RPCs and would
+        #    raise TypeError on the 100-arg call before any RPC is made.
+        method = getattr(node.rpc, name)
         try:
             method(*ARITY_VIOLATION_ARGS)
         except JSONRPCException as e:
@@ -256,10 +282,12 @@ class RpcHelpTest(GridcoinTestFramework):
                 f"on 100-arg call (expected one of {RPC_ARITY_REJECTION_CODES})"
             )
         else:
-            raise AssertionError(
-                f"{name}: 100-arg call did not raise -- the command "
-                f"accepted clearly-bogus args without rejection"
-            )
+            if name not in VARIADIC_ACCEPTS_EXTRA_ARGS:
+                raise AssertionError(
+                    f"{name}: 100-arg call did not raise -- the command "
+                    f"accepted clearly-bogus args without rejection"
+                )
+            self.log.info("  (variadic-lenient: accepted extra args by design)")
 
     # --- Test driver -------------------------------------------------------
 
