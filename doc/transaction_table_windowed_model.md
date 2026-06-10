@@ -358,3 +358,135 @@ explicitly deferred to that work (tracked under the multiprocess RFC, #2937);
 this effort deliberately does not build the abstraction shell, because what
 matters for a clean split is the **shape of the calls underneath**, which this
 contract establishes.
+
+---
+
+## Addendum: the per-view cursor `view_index`-maintenance algorithm (PR3)
+
+This pins down the cursor arithmetic before any wiring (the PR1 risk-control move:
+get the trickiest logic into the GUI-OFF unit suite first). A cursor is a Qt-free
+object (`src/qt/cursor.{h,cpp}`) maintaining one filtered+sorted view over the
+producer's record table, using PR1's `GRC::Accepts` / `GRC::Less` / `SortKey` /
+`TxFilterFields` / `FilterSpec`. It never holds records; it is parameterized on two
+projector callables supplied by the caller (the store in production, a synthetic
+table in the unit tests):
+
+- `Fields(absidx) -> TxFilterFields` — the filter inputs for record `absidx`.
+- `Keys(absidx)   -> SortKey`        — the sort inputs for record `absidx`.
+
+### State + invariant
+
+```
+std::vector<std::size_t> view_index;   // accepted ABSOLUTE indices into the record
+                                       // table, kept sorted by Less(Keys(a),Keys(b),col,order)
+```
+
+**Invariant (I):** at every observable point, `view_index` contains *exactly* the
+absolute indices `i` with `Accepts(Fields(i), filter) == true`, in `Less`-sorted
+order for the current `(sort_column, sort_order)`, and every stored value equals the
+record's *current* absolute index in the table.
+
+The **served window** the consumer sees is `view_index[0 .. served)`, where
+`served = (limit < 0) ? view_index.size() : min(view_index.size(), limit)`. All
+emitted `CursorDelta`s are in **served-window-local** coordinates.
+
+```
+struct CursorDelta { enum {Reset, Insert, Remove, Change} type; int first; int count; };
+```
+
+### ⚠ Item 1 — locate existing rows by identity, never by sort-key
+
+To find an *existing* record's slot in `view_index` (for remove/update), search for
+its **absolute index value** (the `(hash,idx)` identity maps 1:1 to it), NOT a
+`lower_bound` over `Less`. Sort-keys are **not unique** — every Unconfirmed row
+shares the `INT_MAX`-height `status_sort_key`, so a `lower_bound` on a captured key
+lands anywhere in that band and can evict/reposition a *sibling*. Locating an
+existing row is therefore an identity scan (or a reverse map); `lower_bound`/`Less`
+is used **only** to choose the insertion slot for a row not currently present.
+
+### ⚠ Item 2 — reposition = erase, THEN lower_bound
+
+When a row that is present moves (its `SortKey` changed): **erase it from its old
+slot first, then compute the insert slot via `lower_bound` over the post-erase
+`view_index`.** A `new_pos` computed against the pre-erase vector is off-by-one
+whenever `old_pos <= new_pos`. Erase-then-`lower_bound` is exact by construction.
+
+### ⚠ Item 3 — off-window rows are still maintained; only emission is gated
+
+Membership/position changes update `view_index` for **all** rows, in-window or not
+(else an off-window row renders out of order when the window later grows/scrolls —
+Invariant I must always hold over the *whole* vector). Only the *delta emission* is
+gated by the served boundary (below). First confirmations on a Status-DESC Overview
+cross the served boundary constantly, so this path is hot.
+
+### ⚠ Item 4 — reindex/splice discipline (composes across a batch drain)
+
+The store-worker drains a batch of intake ops; each must leave Invariant I intact
+before the next:
+
+- `applyStoreInsert(P, count)`: the table inserted `count` records at absolute
+  `[P, P+count)`, shifting every later absolute index by `+count`. **(a)** for each
+  entry `e` in `view_index`, `if (e >= P) e += count` (fixes the stored absolute
+  indices); **(b)** for each new `i` in `[P, P+count)`, `if (Accepts(Fields(i)))`
+  insert `i` at its `lower_bound`-by-`Less` slot. Shift-before-insert so the new
+  entries are placed against an already-consistent vector.
+- `applyStoreRemove(P, count)`: the table removed absolute `[P, P+count)`, shifting
+  later indices by `-count`. **(a)** erase the entries whose value is in
+  `[P, P+count)` (located by identity, Item 1); **(b)** for each remaining entry
+  `e`, `if (e >= P+count) e -= count`. Remove-before-shift, mirror of insert.
+
+Both end with Invariant I, so a sequence of ops composes.
+
+### CT_UPDATED / applyStatusUpdate(P) — the membership/reposition cases
+
+Record `P`'s status (and thus `Accepts`/`SortKey`) changed. Let `old_in =` (P found
+in `view_index` at `old_pos`, Item 1), `new_in = Accepts(Fields(P))`:
+
+| old_in | new_in | action | emission |
+|--------|--------|--------|----------|
+| no  | no  | nothing | — |
+| no  | yes | `lower_bound`-insert P at `new_pos` | Insert (+ eviction) if `new_pos < served` |
+| yes | no  | erase P at `old_pos` | Remove (+ promotion) if `old_pos < served` |
+| yes | yes, slot unchanged | none (keys re-read) | Change at `old_pos` if `< served` |
+| yes | yes, slot moved | erase `old_pos`, then `lower_bound`-insert (Item 2) | translate (`old_pos`,`new_pos`) below |
+
+### Served-window translation (eviction / promotion at the boundary)
+
+With `served_old`/`served_new` computed before/after, and `cap = (limit<0)?∞:limit`:
+
+- **Insert at `view_index` slot `p`:**
+  - `p >= served_old` → off-window, no emission.
+  - `p < served_old` → emit `Insert(first=p, 1)`; **if the window was full**
+    (`view_index.size()-1 >= cap`, i.e. `served_old == cap`) the old last visible row
+    is pushed out → also emit `Remove(first=cap-1 [post-insert: served_new... =cap], 1)`
+    (eviction). Net visible count stays `cap`.
+- **Remove at slot `p`:**
+  - `p >= served_old` → off-window, no emission (served may shrink if unlimited).
+  - `p < served_old` → emit `Remove(first=p, 1)`; **if a row existed just past the
+    boundary** (`view_index.size() (pre-remove) > cap`, i.e. there was an off-window
+    row at `cap`) it promotes into view → also emit `Insert(first=served_new-1, 1)`
+    (promotion).
+- **Reposition (`old_pos`→`new_pos`, both relative to the same vector state):** apply
+  the Remove translation for `old_pos` then the Insert translation for `new_pos`
+  against the post-erase vector, collapsing a same-visible-slot move to a `Change`.
+
+### setLimit(new_limit)
+
+Recompute `served`. If it grows by `k`, emit `Insert(first=served_old, k)` (rows
+`view_index[served_old .. served_new)` promote in). If it shrinks by `k`, emit
+`Remove(first=served_new, k)`. `view_index` itself is untouched (Item 3) — only the
+window boundary moved. This is the cheap stairstep-resize op (decision 1).
+
+### setFilter / setSort
+
+A wholesale change to membership or order: rebuild `view_index` from scratch and emit
+a single `Reset(total = served_new)`; the consumer bulk-refills via `getRows`. (An
+incremental diff is possible but not worth the complexity for an interactive
+filter/sort change.)
+
+### Complexity
+
+Per store op / status update: O(N) over `view_index` (the absolute-index shift and/or
+the identity scan) — which is exactly why PR2.5 moved this onto the off-`cs_main`
+store-worker. An order-statistics structure to reach O(log N) is tracked separately;
+the contract here is correctness, not asymptotics.

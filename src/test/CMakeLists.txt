@@ -58,6 +58,10 @@ add_executable(test_gridcoin
     # tested in the GUI-OFF configuration CI exercises.
     ${CMAKE_SOURCE_DIR}/src/qt/txorder.cpp
     qt_txorder_tests.cpp
+    # Qt-free per-view cursor (src/qt/cursor.cpp) + its unit suite: the
+    # view_index-maintenance arithmetic (windowed-model PR3), tested GUI-OFF.
+    ${CMAKE_SOURCE_DIR}/src/qt/cursor.cpp
+    qt_cursor_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp
