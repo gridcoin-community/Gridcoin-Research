@@ -47,13 +47,12 @@ struct TxHashHasher {
 //! batch (a pure-passthrough-reading-the-eager-store consumer would mis-map
 //! rows mid-replay).
 //!
-//! In PR2 the store holds ORDERING KEYS ONLY (not full TransactionRecords): it
-//! does not yet serve reads, so materializing full records here would only
-//! double resident memory. It grows to the full-records authoritative store in
-//! the windowing step (PR5), when the consumer drops its full replica for a
-//! viewport slice and begins reading the store.
+//! As of PR3 the store holds the FULL authoritative TransactionRecords (not just
+//! ordering keys): the per-view cursors filter/sort over them and the store
+//! serves reads (getRows) for the windowed consumers. The detailed-table consumer
+//! still keeps its own full replica until it migrates to a viewport slice (PR5).
 //!
-//! Threading: m_keys / m_by_hash are guarded by the leaf mutex cs_store. The
+//! Threading: m_records / m_by_hash are guarded by the leaf mutex cs_store. The
 //! canonical lock order is cs_main -> cs_wallet -> cs_store; cs_store is NEVER
 //! held while acquiring cs_main / cs_wallet. Producers finish all wallet work
 //! (decompose under the locks they already hold) BEFORE calling into the store,
@@ -140,9 +139,11 @@ private:
 
     mutable Mutex cs_store;
 
-    //! Ordering keys, sorted by TxOrderLess. Authoritative position oracle.
-    std::vector<TxOrderKey> m_keys GUARDED_BY(cs_store);
-    //! tx hash -> positions in m_keys. Same-hash keys are contiguous.
+    //! Full authoritative records, sorted by TxOrderLess (RecordOrder). Position
+    //! oracle for the native VIEW_FULL stream and the backing table the per-view
+    //! cursors index into.
+    std::vector<TransactionRecord> m_records GUARDED_BY(cs_store);
+    //! tx hash -> positions in m_records. Same-hash records are contiguous.
     std::unordered_multimap<uint256, std::size_t, TxHashHasher> m_by_hash GUARDED_BY(cs_store);
 
     //! Cached OptionsModel datetime-display cutoff, set by reloadAndSnapshot.

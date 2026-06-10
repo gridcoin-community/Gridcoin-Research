@@ -137,9 +137,9 @@ void WalletTxStore::shiftIndex(std::size_t from, std::ptrdiff_t delta)
 void WalletTxStore::rebuildIndex()
 {
     m_by_hash.clear();
-    m_by_hash.reserve(m_keys.size() * 2 + 1);
-    for (std::size_t i = 0; i < m_keys.size(); ++i) {
-        m_by_hash.emplace(m_keys[i].hash, i);
+    m_by_hash.reserve(m_records.size() * 2 + 1);
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        m_by_hash.emplace(m_records[i].hash, i);
     }
 }
 
@@ -178,23 +178,17 @@ void WalletTxStore::insertTransaction(std::vector<TransactionRecord> records)
 
     // All records share `time` and `hash` and differ only in `idx`; under
     // TxOrderLess they form a contiguous range slotting in at the lower_bound
-    // of the first key.
-    const TxOrderKey first_key{records.front().time, hash, records.front().idx};
-    const auto pos = std::lower_bound(m_keys.begin(), m_keys.end(), first_key, GRC::TxOrderLess);
-    const std::size_t insertIdx = static_cast<std::size_t>(pos - m_keys.begin());
+    // of the first record.
+    const auto pos = std::lower_bound(m_records.begin(), m_records.end(), records.front(), RecordOrder());
+    const std::size_t insertIdx = static_cast<std::size_t>(pos - m_records.begin());
     const std::size_t count = records.size();
-
-    std::vector<TxOrderKey> new_keys;
-    new_keys.reserve(count);
-    for (const TransactionRecord& r : records) {
-        new_keys.push_back({r.time, r.hash, r.idx});
-    }
 
     // Shift the index BEFORE splicing the vector (the shift uses logical
     // positions), then splice, then add the new index entries — keeping the
-    // index consistent at every observable point.
+    // index consistent at every observable point. The records are copied into the
+    // store (the authoritative full-records table) and then moved into the event.
     shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
-    m_keys.insert(m_keys.begin() + insertIdx, new_keys.begin(), new_keys.end());
+    m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
     for (std::size_t k = 0; k < count; ++k) {
         m_by_hash.emplace(hash, insertIdx + k);
     }
@@ -231,24 +225,24 @@ void WalletTxStore::removeTransaction(const uint256& hash)
     // via assert: the deployed build is -DNDEBUG, so an assert would vanish and
     // a de-clustered index would erase a wider [minPos, maxPos] range that
     // swallows foreign rows (heap/structure corruption). The bounds check is
-    // ordered first and short-circuits, so the m_keys[] subscripts below it
+    // ordered first and short-circuits, so the m_records[] subscripts below it
     // never run out of range. If the invariant is ever violated, bail without
     // erasing or emitting — a stale row is a safe degradation; a wrong erase is
     // not.
-    if (maxPos >= m_keys.size()
+    if (maxPos >= m_records.size()
             || count != distance
-            || m_keys[minPos].hash != hash
-            || m_keys[maxPos].hash != hash) {
+            || m_records[minPos].hash != hash
+            || m_records[maxPos].hash != hash) {
         LogPrintf("ERROR: %s: hash %s index non-contiguous/out-of-range "
                   "(minPos=%u maxPos=%u count=%u distance=%u keys=%u) — skipping remove",
                   __func__, hash.GetHex(),
                   static_cast<unsigned int>(minPos), static_cast<unsigned int>(maxPos),
                   static_cast<unsigned int>(count), static_cast<unsigned int>(distance),
-                  static_cast<unsigned int>(m_keys.size()));
+                  static_cast<unsigned int>(m_records.size()));
         return;
     }
 
-    m_keys.erase(m_keys.begin() + minPos, m_keys.begin() + maxPos + 1);
+    m_records.erase(m_records.begin() + minPos, m_records.begin() + maxPos + 1);
     m_by_hash.erase(hash);
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
@@ -307,11 +301,7 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
         LOCK(cs_store);
         m_limit_enabled = limit_enabled;
         m_limit_time = limit_time;
-        m_keys.clear();
-        m_keys.reserve(built.size());
-        for (const TransactionRecord& r : built) {
-            m_keys.push_back({r.time, r.hash, r.idx});
-        }
+        m_records = built;
         rebuildIndex();
     }
 
