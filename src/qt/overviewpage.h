@@ -15,7 +15,7 @@ class ResearcherModel;
 class MRCModel;
 class WalletModel;
 class TxViewDelegate;
-class TransactionFilterProxy;
+class OverviewTxModel;
 
 /** Overview ("home") page widget */
 class OverviewPage : public QWidget
@@ -63,7 +63,9 @@ private:
     bool m_privacy = false;
 
     TxViewDelegate *txdelegate;
-    std::unique_ptr<TransactionFilterProxy> filter;
+    //! Windowed-model recent-transactions list (PR3): a VIEW_OVERVIEW cursor in
+    //! the producer store backs this instead of a client-side QSortFilterProxy.
+    std::unique_ptr<OverviewTxModel> m_overviewTxModel;
 
 private slots:
     void updateDisplayUnit();
