@@ -348,7 +348,12 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
             if (limit_enabled && rec.time < limit_time) {
                 continue;
             }
-            built.push_back(rec);
+            // Compute status producer-side (cs_main held here) so the cursors
+            // rebuilt over m_records can filter/sort by it. The VIEW_FULL consumer
+            // still refreshes status lazily on read; this is a harmless head-start.
+            TransactionRecord r = rec;
+            r.updateStatus(it->second);
+            built.push_back(std::move(r));
         }
     }
     std::sort(built.begin(), built.end(), RecordOrder());
