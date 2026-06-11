@@ -7,6 +7,7 @@
 #include "qt/transactiontablemodel.h"
 #include "qt/walletmodel.h"
 #include "qt/wallettxstore.h"
+#include "util/system.h"
 
 #include <type_traits>
 #include <variant>
@@ -18,12 +19,15 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
 {
     // Register the server-side view: the full history sorted by Date DESC, the
     // TransactionView's default ordering. The default FilterSpec is the
-    // "show everything" spec the unfiltered detailed view starts from; PR4-E
-    // confirms the exact show_inactive/show_orphans defaults against the old
-    // TransactionFilterProxy when the filter UI is wired. limit_rows defaults to
-    // unlimited, so the served window is the full filtered+sorted set (PR4);
-    // the viewport-slice cap is PR5.
+    // "show everything" initial state of the unfiltered detailed view (all dates,
+    // ALL_TYPES, no address filter, min_amount 0, show_inactive true). The one
+    // runtime input is -showorphans, read once here — exactly mirroring the old
+    // TransactionFilterProxy ctor (a launch-time arg with no runtime mutation
+    // path, so reading it once is behavior-identical). limit_rows defaults to
+    // unlimited, so the served window is the full filtered+sorted set (PR4); the
+    // viewport-slice cap is PR5.
     GRC::FilterSpec spec;
+    spec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
     GRC::WalletTxStore& store = m_walletModel->getTxStore();
     store.registerView(GRC::VIEW_DETAILED, spec, GRC::TXCOL_DATE, GRC::TXSORT_DESC);
 

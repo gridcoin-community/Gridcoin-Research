@@ -1,6 +1,6 @@
 #include "transactionview.h"
 
-#include "transactionfilterproxy.h"
+#include "detailedtxmodel.h"
 #include "transactionrecord.h"
 #include "walletmodel.h"
 #include "addresstablemodel.h"
@@ -12,6 +12,7 @@
 #include "optionsmodel.h"
 #include "guiutil.h"
 #include "qt/decoration.h"
+#include "util/system.h"
 
 #include <QScrollBar>
 #include <QComboBox>
@@ -34,7 +35,7 @@
 TransactionView::TransactionView(QWidget *parent)
     : QFrame(parent)
     , model(nullptr)
-    , transactionProxyModel(nullptr)
+    , m_detailedModel(nullptr)
     , transactionView(nullptr)
     , searchWidgetIconAction(new QAction())
     , m_table_column_sizes({23, 120, 120, 400, 100})
@@ -83,11 +84,11 @@ TransactionView::TransactionView(QWidget *parent)
     typeWidget = new QComboBox(this);
 
     // Add catch-all
-    typeWidget->addItem(tr("All Types"), TransactionFilterProxy::ALL_TYPES);
+    typeWidget->addItem(tr("All Types"), GRC::ALL_TYPES);
 
     // Add types from TransactionRecord Type enum.
     for (const auto& iter : TransactionRecord::TYPES) {
-        typeWidget->addItem(TransactionRecord::TypeToString(iter), TransactionFilterProxy::TYPE(iter));
+        typeWidget->addItem(TransactionRecord::TypeToString(iter), GRC::TypeBit(iter));
     }
 
     filterFrameLayout->addWidget(typeWidget);
@@ -170,15 +171,18 @@ void TransactionView::setModel(WalletModel *model)
     this->model = model;
     if(model)
     {
-        transactionProxyModel = new TransactionFilterProxy(this);
-        transactionProxyModel->setSourceModel(model->getTransactionTableModel());
-        transactionProxyModel->setDynamicSortFilter(true);
-        transactionProxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
-        transactionProxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+        // The cursor-backed model registers a VIEW_DETAILED view in the producer
+        // WalletTxStore (server-side filter+sort off cs_main) and is the table's
+        // direct model — no proxy. Sorting and filtering are pushed to the cursor
+        // (sort() / setFilter()) instead of recomputed Qt-side per row. Seed the
+        // local filter spec's -showorphans gate to match the model's registered
+        // spec so the first widget-driven applyFilter() does not drop it.
+        m_filterSpec = GRC::FilterSpec();
+        m_filterSpec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
 
-        transactionProxyModel->setSortRole(Qt::EditRole);
+        m_detailedModel = new DetailedTxModel(model, this);
 
-        transactionView->setModel(transactionProxyModel);
+        transactionView->setModel(m_detailedModel);
         transactionView->setAlternatingRowColors(true);
         transactionView->setSelectionBehavior(QAbstractItemView::SelectRows);
         transactionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -198,82 +202,95 @@ void TransactionView::setModel(WalletModel *model)
     }
 }
 
+// The cursor's date bounds are seconds since epoch (FilterSpec defaults
+// 0 == MIN_DATE, 0xFFFFFFFF == MAX_DATE), comparing the same instants the old
+// proxy compared as QDateTime — GUIUtil::StartOfDay()'s QDateTime carries its own
+// zone, so toSecsSinceEpoch() yields the identical UTC boundary.
+namespace {
+constexpr int64_t MIN_DATE_SECS = 0;
+constexpr int64_t MAX_DATE_SECS = 0xFFFFFFFF;
+int64_t StartOfDaySecs(const QDate& date) { return GUIUtil::StartOfDay(date).toSecsSinceEpoch(); }
+} // namespace
+
 void TransactionView::chooseDate(int idx)
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
     QDate current = QDate::currentDate();
     dateRangeWidget->setVisible(false);
     switch(dateWidget->itemData(idx).toInt())
     {
     case All:
-        transactionProxyModel->setDateRange(
-                TransactionFilterProxy::MIN_DATE,
-                TransactionFilterProxy::MAX_DATE);
+        m_filterSpec.date_from = MIN_DATE_SECS;
+        m_filterSpec.date_to = MAX_DATE_SECS;
         break;
     case Today:
-        transactionProxyModel->setDateRange(
-                GUIUtil::StartOfDay(current),
-                TransactionFilterProxy::MAX_DATE);
+        m_filterSpec.date_from = StartOfDaySecs(current);
+        m_filterSpec.date_to = MAX_DATE_SECS;
         break;
     case ThisWeek: {
         // Find last Monday
         QDate startOfWeek = current.addDays(-(current.dayOfWeek()-1));
-        transactionProxyModel->setDateRange(
-                GUIUtil::StartOfDay(startOfWeek),
-                TransactionFilterProxy::MAX_DATE);
-
+        m_filterSpec.date_from = StartOfDaySecs(startOfWeek);
+        m_filterSpec.date_to = MAX_DATE_SECS;
         } break;
     case ThisMonth:
-        transactionProxyModel->setDateRange(
-                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1)),
-                TransactionFilterProxy::MAX_DATE);
+        m_filterSpec.date_from = StartOfDaySecs(QDate(current.year(), current.month(), 1));
+        m_filterSpec.date_to = MAX_DATE_SECS;
         break;
     case LastMonth:
-        transactionProxyModel->setDateRange(
-                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1).addMonths(-1)),
-                GUIUtil::StartOfDay(QDate(current.year(), current.month(), 1)));
+        m_filterSpec.date_from = StartOfDaySecs(QDate(current.year(), current.month(), 1).addMonths(-1));
+        m_filterSpec.date_to = StartOfDaySecs(QDate(current.year(), current.month(), 1));
         break;
     case ThisYear:
-        transactionProxyModel->setDateRange(
-                GUIUtil::StartOfDay(QDate(current.year(), 1, 1)),
-                TransactionFilterProxy::MAX_DATE);
+        m_filterSpec.date_from = StartOfDaySecs(QDate(current.year(), 1, 1));
+        m_filterSpec.date_to = MAX_DATE_SECS;
         break;
     case Range:
         dateRangeWidget->setVisible(true);
         dateRangeChanged();
-        break;
+        return;  // dateRangeChanged() applies the filter
     }
+    applyFilter();
 }
 
 void TransactionView::chooseType(int idx)
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
-    transactionProxyModel->setTypeFilter(
-        typeWidget->itemData(idx).toInt());
+    m_filterSpec.type_mask = typeWidget->itemData(idx).toUInt();
+    applyFilter();
 }
 
 void TransactionView::changedPrefix(const QString &prefix)
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
-    transactionProxyModel->setAddressPrefix(prefix);
+    m_filterSpec.address_substr = prefix.toStdString();
+    applyFilter();
 }
 
 void TransactionView::changedAmount(const QString &amount)
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
     qint64 amount_parsed = 0;
     if(BitcoinUnits::parse(model->getOptionsModel()->getDisplayUnit(), amount, &amount_parsed))
     {
-        transactionProxyModel->setMinAmount(amount_parsed);
+        m_filterSpec.min_amount = amount_parsed;
     }
     else
     {
-        transactionProxyModel->setMinAmount(0);
+        m_filterSpec.min_amount = 0;
     }
+    applyFilter();
+}
+
+void TransactionView::applyFilter()
+{
+    if(!m_detailedModel)
+        return;
+    m_detailedModel->setFilter(m_filterSpec);
 }
 
 void TransactionView::exportClicked()
@@ -288,8 +305,9 @@ void TransactionView::exportClicked()
 
     CSVModelWriter writer(filename);
 
-    // name, column, role
-    writer.setModel(transactionProxyModel);
+    // name, column, role. The cursor model exposes the full filtered+sorted set
+    // (unlimited cap in PR4), so export still covers every matching row.
+    writer.setModel(m_detailedModel);
     writer.addColumn(tr("Confirmed"), 0, TransactionTableModel::ConfirmedRole);
     writer.addColumn(tr("Date"), 0, TransactionTableModel::DateRole);
     writer.addColumn(tr("Type"), TransactionTableModel::Type, Qt::EditRole);
@@ -430,18 +448,25 @@ QWidget *TransactionView::createDateRangeWidget()
 
 void TransactionView::dateRangeChanged()
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
-    transactionProxyModel->setDateRange(
-            GUIUtil::StartOfDay(dateFrom->date()),
-            GUIUtil::StartOfDay(dateTo->date()).addDays(1));
+    m_filterSpec.date_from = StartOfDaySecs(dateFrom->date());
+    m_filterSpec.date_to = GUIUtil::StartOfDay(dateTo->date()).addDays(1).toSecsSinceEpoch();
+    applyFilter();
 }
 
 void TransactionView::focusTransaction(const QModelIndex &idx)
 {
-    if(!transactionProxyModel)
+    if(!m_detailedModel)
         return;
-    QModelIndex targetIdx = transactionProxyModel->mapFromSource(idx);
+    // The incoming index belongs to the TransactionTableModel (OverviewPage emits
+    // one mapped through indexForTxid). There is no proxy source-mapping anymore;
+    // bridge to this view by transaction id, the identity shared across cursors.
+    uint256 hash;
+    hash.SetHex(idx.data(TransactionTableModel::TxIDRole).toString().toStdString());
+    const QModelIndex targetIdx = m_detailedModel->indexForTxid(hash);
+    if(!targetIdx.isValid())
+        return;
     transactionView->scrollTo(targetIdx);
     transactionView->setCurrentIndex(targetIdx);
     transactionView->setFocus();
