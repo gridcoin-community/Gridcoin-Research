@@ -213,6 +213,13 @@ signals:
     // needs this signal instead.
     void transactionUpdated();
 
+    //! Fan-out of a drained wallet-event batch to per-view windowed consumers
+    //! (PR3: OverviewTxModel). WalletModel drains the queue once and applies the
+    //! VIEW_FULL stream to its TransactionTableModel; this delivers the same batch
+    //! to the per-view consumers, which filter to their own viewId. Same-thread
+    //! (DirectConnection), so the const-ref is passed without a copy.
+    void walletEventsDrained(const std::vector<GRC::WalletEvent>& events);
+
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);
 

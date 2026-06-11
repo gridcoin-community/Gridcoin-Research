@@ -211,6 +211,10 @@ void WalletModel::drainEventQueue()
         }
     }
 
+    // Fan the same batch out to the per-view windowed consumers (OverviewTxModel),
+    // which filter to their own viewId. The queue is drained exactly once, here.
+    emit walletEventsDrained(events);
+
     // Balance and number of transactions might have changed.
     checkBalanceChanged();
 
@@ -771,16 +775,28 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
         }
 
         if (visible) {
-            // Decompose under the locks already held, then ENQUEUE the records
-            // to the store-worker (PR2.5). The worker applies the datetime
-            // cutoff, de-dupes, computes the insert position, and emits
-            // RowsInserted off the core locks; the enqueue itself is O(1), so
-            // this handler no longer does O(N) ordering work under cs_main.
+            // Decompose under the locks already held, compute per-row status
+            // producer-side (updateStatus requires cs_main, held here), then
+            // ENQUEUE to the store-worker (PR2.5). The worker applies the datetime
+            // cutoff, de-dupes, computes positions, maintains the per-view cursors
+            // and emits events off the core locks; the enqueue itself is O(1).
+            // Status is computed here so the off-lock cursors can filter/sort by
+            // it without re-touching the wallet.
             const QList<TransactionRecord> decomposed =
                 TransactionRecord::decomposeTransaction(wallet, wtx);
             if (!decomposed.isEmpty()) {
-                walletmodel->getTxStore().enqueueInsert(
-                    std::vector<TransactionRecord>(decomposed.begin(), decomposed.end()));
+                std::vector<TransactionRecord> recs(decomposed.begin(), decomposed.end());
+                for (TransactionRecord& rec : recs) {
+                    rec.updateStatus(wtx);
+                }
+                // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
+                // of an existing tx (e.g. a confirmation) — the store updates it in
+                // place and repositions it in any status-sorted cursor.
+                if (status == CT_NEW) {
+                    walletmodel->getTxStore().enqueueInsert(std::move(recs));
+                } else {
+                    walletmodel->getTxStore().enqueueUpsert(std::move(recs));
+                }
             }
         } else {
             // Tx is genuinely filtered out (a real orphan coinstake, or a

@@ -20,6 +20,17 @@
 namespace GRC {
 
 //!
+//! \brief View identifiers stamped on per-view events (PR3).
+//!
+//! VIEW_FULL is the native unfiltered/unsorted stream the TransactionTableModel
+//! consumes today (PR2/PR2.5 behaviour, epoch 0). Registered cursors (server-side
+//! filter/sort) use VIEW_OVERVIEW and up. The consumer ignores events whose viewId
+//! it does not own.
+//!
+constexpr int VIEW_FULL = 0;
+constexpr int VIEW_OVERVIEW = 1;
+
+//!
 //! \brief Producer-side payload: rows were inserted into the ordered wallet
 //! view at a producer-computed position.
 //!
@@ -39,6 +50,8 @@ struct RowsInsertedPayload
 {
     int position;
     std::vector<TransactionRecord> records;
+    int viewId = VIEW_FULL;   //!< which view this insert belongs to (PR3)
+    uint64_t epoch = 0;       //!< source cursor epoch, for stale-fetch reconciliation (PR3)
 };
 
 //!
@@ -52,6 +65,48 @@ struct RowsInsertedPayload
 struct RowsRemovedPayload
 {
     int position;
+    int count;
+    int viewId = VIEW_FULL;   //!< which view this removal belongs to (PR3)
+    uint64_t epoch = 0;       //!< source cursor epoch, for stale-fetch reconciliation (PR3)
+};
+
+//!
+//! \brief Producer-side payload (PR3): a per-view cursor was rebuilt wholesale
+//! (filter or sort change) — the consumer must drop its replica for \p viewId
+//! and bulk-refill \p total served rows via the store's getRows. Carries the
+//! new \p epoch so any in-flight pre-rebuild fetch can be discarded on arrival.
+//!
+struct RowsResetPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int total;       //!< served-window row count after the rebuild
+};
+
+//!
+//! \brief Producer-side payload (PR3): the TOTAL accepted row count for a view
+//! changed (e.g. a row entered/left the filter off-window, so the scrollbar
+//! extent moves but no served row was inserted/removed). The consumer resizes
+//! its virtual rowCount to \p total_accepted without touching cached rows.
+//! Decision 4 (RowCountChanged not deferred — OverviewPage is the windowed testbed).
+//!
+struct RowCountChangedPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int total_accepted;
+};
+
+//!
+//! \brief Producer-side payload (PR3): rows [first, first+count) of \p viewId
+//! changed in place (a status/field update that did NOT move them) — the
+//! consumer re-reads them (dataChanged), re-fetching from the store if windowed.
+//!
+struct RowsChangedPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int first;
     int count;
 };
 
@@ -81,7 +136,10 @@ struct ChainTipChangedPayload
 using WalletEventPayload = std::variant<
     RowsInsertedPayload,
     RowsRemovedPayload,
-    ChainTipChangedPayload>;
+    ChainTipChangedPayload,
+    RowsResetPayload,
+    RowCountChangedPayload,
+    RowsChangedPayload>;
 
 //!
 //! \brief A single event in the wallet→GUI event channel.

@@ -15,7 +15,8 @@
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
 #include "transactiontablemodel.h"
-#include "transactionfilterproxy.h"
+#include "overviewtxmodel.h"
+#include "uint256.h"
 #include "guiutil.h"
 #include "guiconstants.h"
 #include "gridcoin/voting/fwd.h"
@@ -207,8 +208,16 @@ OverviewPage::OverviewPage(QWidget *parent) :
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
-    if(filter)
-        emit transactionClicked(filter->mapToSource(index));
+    // Map the clicked served-window row to a TransactionTableModel index (via the
+    // tx identity) so the detailed view can select it — the windowed equivalent
+    // of the old proxy mapToSource().
+    if (m_overviewTxModel && walletModel && walletModel->getTransactionTableModel()) {
+        const uint256 txid = m_overviewTxModel->txidAt(index.row());
+        const QModelIndex source = walletModel->getTransactionTableModel()->indexForTxid(txid);
+        if (source.isValid()) {
+            emit transactionClicked(source);
+        }
+    }
 }
 
 void OverviewPage::handlePollLabelClicked()
@@ -251,40 +260,37 @@ int OverviewPage::getNumTransactionsForView()
 
 void OverviewPage::updateTransactions()
 {
-    if (filter)
+    if (m_overviewTxModel)
     {
         int numItems = getNumTransactionsForView();
 
-        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, getLimit() = %d",
-                 numItems, filter->getLimit());
+        LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(): numItems = %d, limit = %d",
+                 numItems, m_overviewTxModel->limit());
 
-        // This is a "stairstep" approach, using x3 to x6 factors to size the setLimit.
-        // Based on testing with a wallet with a large number of transactions (40k+)
-        // Using a factor of three is a good balance between the setRowHidden loop
-        // and the very high expense of the getLimit call, which invalidates the filter
-        // and sort, and implicitly redoes the sort, which can take seconds for a large
-        // wallet.
-
-        // Most main window resizes will be done without an actual call to setLimit.
-        if (filter->getLimit() < numItems)
+        // "Stairstep" the served-window cap with x3..x6 factors so most window
+        // resizes do not change the limit at all. The cap is now a cheap
+        // setViewLimit on the producer cursor (boundary Insert/Remove events,
+        // applied on the next drain) rather than the old proxy's full re-sort,
+        // but the stairstep still avoids needless churn.
+        if (m_overviewTxModel->limit() < numItems)
         {
-            filter->setLimit(numItems * 3);
+            m_overviewTxModel->setLimit(numItems * 3);
             LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
-        else if (filter->getLimit() > numItems * 6)
+        else if (m_overviewTxModel->limit() > numItems * 6)
         {
-            filter->setLimit(numItems * 3);
+            m_overviewTxModel->setLimit(numItems * 3);
             LogPrint(BCLog::LogFlags::QT, "OverviewPage::updateTransactions(), setLimit(%d)", numItems * 3);
         }
 
-        for (int i = 0; i <= filter->getLimit(); ++i)
+        for (int i = 0; i <= m_overviewTxModel->limit(); ++i)
         {
             ui->listTransactions->setRowHidden(i, i >= numItems);
         }
 
         ui->listTransactions->update();
 
-        int transaction_count = filter->rowCount();
+        int transaction_count = m_overviewTxModel->rowCount();
 
         // This needs to be both here and in SetPrivacy because the trigger could come from either.
         ui->recentTransactionsNoResult->setVisible(m_privacy || !transaction_count);
@@ -365,7 +371,7 @@ void OverviewPage::setCurrentPollTitle(const QString& title)
 void OverviewPage::setPrivacy(bool privacy)
 {
     m_privacy = privacy;
-    int transaction_count = filter->rowCount();
+    int transaction_count = m_overviewTxModel ? m_overviewTxModel->rowCount() : 0;
 
     if (currentBalance != -1) {
         setBalance(currentBalance, currentStake, currentUnconfirmedBalance, currentImmatureBalance);
@@ -429,22 +435,20 @@ void OverviewPage::setWalletModel(WalletModel *model)
     this->walletModel = model;
     if(model && model->getOptionsModel())
     {
-        // Set up transaction list
-        filter.reset(new TransactionFilterProxy());
-        filter->setSourceModel(model->getTransactionTableModel());
-        filter->setDynamicSortFilter(true);
-        filter->setSortRole(Qt::EditRole);
-        filter->setShowInactive(false);
-
+        // Set up the recent-transactions list as a mini windowed model (PR3):
+        // a VIEW_OVERVIEW cursor (Status DESC, inactive masked) maintained in the
+        // producer WalletTxStore backs it, instead of a client-side
+        // QSortFilterProxyModel over the full TransactionTableModel replica.
         int num_transactions_for_view = getNumTransactionsForView();
-        filter->setLimit(num_transactions_for_view);
+        m_overviewTxModel.reset(new OverviewTxModel(model, num_transactions_for_view));
 
-        LogPrint(BCLog::LogFlags::QT, "INFO: %s: num_transactions_for_view = %i, getLimit() = %i",
-                 __func__, num_transactions_for_view, filter->getLimit());
+        LogPrint(BCLog::LogFlags::QT, "INFO: %s: num_transactions_for_view = %i, limit = %i",
+                 __func__, num_transactions_for_view, m_overviewTxModel->limit());
 
-        filter->sort(TransactionTableModel::Status, Qt::DescendingOrder);
-        ui->listTransactions->setModel(filter.get());
-        ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
+        ui->listTransactions->setModel(m_overviewTxModel.get());
+        // OverviewTxModel is a single-column list whose column already renders the
+        // ToAddress column's roles, so no setModelColumn is needed (the old proxy
+        // exposed all 5 columns and selected ToAddress here).
 
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance());

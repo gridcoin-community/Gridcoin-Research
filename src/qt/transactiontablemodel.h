@@ -61,8 +61,19 @@ public:
     int rowCount(const QModelIndex &parent) const;
     int columnCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
+    //! Role-formatting core (factored out of data()): render \p role for an
+    //! arbitrary \p rec at \p column (a ColumnIndex). data() calls it for this
+    //! model's rows; the per-view windowed consumers (OverviewTxModel, PR3) call
+    //! it for their own served records, so the formatters live in exactly one
+    //! place. \p rec may be any record, not necessarily in this model's replica.
+    QVariant formatRole(TransactionRecord *rec, int column, int role) const;
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
+
+    //! First replica row matching tx \p hash, as a model index, or an invalid
+    //! index. Maps a per-view consumer's clicked row (OverviewTxModel, PR3) back
+    //! to a TransactionTableModel index for the detailed-view click-through.
+    QModelIndex indexForTxid(const uint256& hash) const;
 
     //!
     //! \brief Consume a batch of producer-side wallet events drained from

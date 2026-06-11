@@ -58,6 +58,7 @@ add_library(gridcoinqt STATIC
     optionsdialog.cpp
     optionsmodel.cpp
     overviewpage.cpp
+    overviewtxmodel.cpp
     peertablemodel.cpp
     qtipcserver.cpp
     qvalidatedlineedit.cpp
@@ -89,6 +90,7 @@ add_library(gridcoinqt STATIC
     transactionfilterproxy.cpp
     txfilter.cpp
     txorder.cpp
+    cursor.cpp
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
