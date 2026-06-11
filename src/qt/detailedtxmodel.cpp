@@ -12,6 +12,19 @@
 #include <type_traits>
 #include <variant>
 
+// Guard the standalone (Qt-free) mirrors in txfilter.h against the authoritative
+// Qt-side enums so they can never silently drift. Relocated here from the retired
+// transactionfilterproxy.cpp — this is now the primary detailed-view consumer.
+static_assert(GRC::TXSTATUS_CONFLICTED  == TransactionStatus::Conflicted,
+              "TXSTATUS_CONFLICTED mirror out of sync with TransactionStatus::Conflicted");
+static_assert(GRC::TXSTATUS_NOTACCEPTED == TransactionStatus::NotAccepted,
+              "TXSTATUS_NOTACCEPTED mirror out of sync with TransactionStatus::NotAccepted");
+static_assert(static_cast<int>(GRC::TXCOL_STATUS)  == static_cast<int>(TransactionTableModel::Status),    "TXCOL_STATUS mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_DATE)    == static_cast<int>(TransactionTableModel::Date),      "TXCOL_DATE mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_TYPE)    == static_cast<int>(TransactionTableModel::Type),      "TXCOL_TYPE mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_ADDRESS) == static_cast<int>(TransactionTableModel::ToAddress), "TXCOL_ADDRESS mirror drift");
+static_assert(static_cast<int>(GRC::TXCOL_AMOUNT)  == static_cast<int>(TransactionTableModel::Amount),    "TXCOL_AMOUNT mirror drift");
+
 DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
     : QAbstractTableModel(parent)
     , m_walletModel(walletModel)
