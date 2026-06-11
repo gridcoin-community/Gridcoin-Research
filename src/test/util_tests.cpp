@@ -1823,6 +1823,19 @@ BOOST_AUTO_TEST_CASE(util_ReplaceAll)
     test_replaceall("%s", "foo", "A test \"foo\" string 'foo'.");
     test_replaceall("\"", "foo", "A test foo%sfoo string '%s'.");
     test_replaceall("'", "foo", "A test \"%s\" string foo%sfoo.");
+
+    // Termination/overlap invariants of the pos += substitute.length() loop:
+    std::string grow("a");
+    ReplaceAll(grow, "a", "aa");     // substitute contains search: no re-processing
+    BOOST_CHECK_EQUAL(grow, "aa");
+
+    std::string overlap("aaaa");
+    ReplaceAll(overlap, "aa", "x");  // matches consumed non-overlapping, left-to-right
+    BOOST_CHECK_EQUAL(overlap, "xx");
+
+    std::string shrink("aaa");
+    ReplaceAll(shrink, "a", "");     // empty substitute with consecutive matches terminates
+    BOOST_CHECK_EQUAL(shrink, "");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
