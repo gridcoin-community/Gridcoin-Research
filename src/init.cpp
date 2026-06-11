@@ -26,10 +26,7 @@
 #include "node/coherence.h"
 #include <util/syserror.h>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
-
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
