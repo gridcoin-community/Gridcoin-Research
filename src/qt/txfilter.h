@@ -69,6 +69,14 @@ enum TxSortOrder {
 };
 
 //!
+//! \brief Type-mask helpers — Qt-free replacements for the deleted
+//! TransactionFilterProxy::ALL_TYPES / TYPE(). FilterSpec.type_mask is a bit field
+//! of (1u << TransactionRecord::Type); ALL_TYPES selects every type.
+//!
+constexpr uint32_t ALL_TYPES = 0xFFFFFFFF;
+constexpr uint32_t TypeBit(int type) { return 1u << type; }
+
+//!
 //! \brief Serializable filter specification.
 //!
 //! The value-typed parameter the view pushes down to the producer-side cursor

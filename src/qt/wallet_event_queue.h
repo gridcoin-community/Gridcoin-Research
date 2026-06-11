@@ -29,6 +29,7 @@ namespace GRC {
 //!
 constexpr int VIEW_FULL = 0;
 constexpr int VIEW_OVERVIEW = 1;
+constexpr int VIEW_DETAILED = 2;   //!< the detailed history view (PR4)
 
 //!
 //! \brief Producer-side payload: rows were inserted into the ordered wallet
