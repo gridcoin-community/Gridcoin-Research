@@ -42,6 +42,27 @@ BOOST_AUTO_TEST_CASE(accepts_default_spec_passes)
     BOOST_CHECK(Accepts(DefaultPassingRow(), FilterSpec{}));
 }
 
+// ---- Accepts(): address_substr matches the address OR the label ----------
+// The label arm is what PR4 newly exercises — the producer snapshots the
+// address-book label onto the record so this filter works off the wallet.
+BOOST_AUTO_TEST_CASE(accepts_address_substr_matches_address_or_label)
+{
+    const TxFilterFields row = DefaultPassingRow();  // address has "Gridcoin", label "Donations"
+    FilterSpec spec;
+
+    spec.address_substr = "Gridcoin";   // substring of the ADDRESS
+    BOOST_CHECK(Accepts(row, spec));
+
+    spec.address_substr = "onation";    // substring of the LABEL only (not the address)
+    BOOST_CHECK(Accepts(row, spec));
+
+    spec.address_substr = "DONATION";   // case-insensitive (mirrors Qt::CaseInsensitive)
+    BOOST_CHECK(Accepts(row, spec));
+
+    spec.address_substr = "zzz_nomatch"; // in neither -> rejected
+    BOOST_CHECK(!Accepts(row, spec));
+}
+
 // ---- Accepts(): inactive (Conflicted / NotAccepted) gating ---------------
 
 BOOST_AUTO_TEST_CASE(accepts_inactive_gating)

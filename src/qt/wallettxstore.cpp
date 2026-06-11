@@ -29,9 +29,11 @@ struct RecordOrder {
 //! detailed table's address filter populates it in PR4.
 GRC::TxFilterFields projectFields(const TransactionRecord& r)
 {
+    // label is the address-book label snapshotted producer-side (PR4) — the
+    // address-substring filter matches address OR label.
     return GRC::TxFilterFields{
         r.time, r.credit + r.debit, static_cast<int>(r.type),
-        static_cast<int>(r.status.status), r.address, std::string()};
+        static_cast<int>(r.status.status), r.address, r.label};
 }
 
 //! Project a stored record to the Qt-free sort inputs. type_string /
@@ -40,8 +42,19 @@ GRC::TxFilterFields projectFields(const TransactionRecord& r)
 //! sorts by date/status). PR4 supplies them when the detailed table migrates.
 GRC::SortKey projectKeys(const TransactionRecord& r)
 {
+    // Locale-free Type / Address sort keys (windowed-model PR4, decision b):
+    //  - Type sorts by the (type, generated_type) enum tuple — category-grouped
+    //    and language-independent (digits only, so the case-insensitive GRC::Less
+    //    compare is byte-safe).
+    //  - Address sorts by (label, address) with a low separator so the label is
+    //    the primary key.
+    // Both are Qt-free, so the off-cs_main store-worker sorts these columns
+    // without localizing (the multiprocess-clean choice).
     return GRC::SortKey{
-        r.time, r.credit + r.debit, r.status.sortKey, std::string(), std::string()};
+        r.time, r.credit + r.debit, r.status.sortKey,
+        strprintf("%03d.%03d", static_cast<int>(r.type),
+                  static_cast<int>(r.status.generated_type)),
+        r.label + std::string(1, '\x01') + r.address};
 }
 
 } // anonymous namespace
@@ -353,6 +366,7 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
             // still refreshes status lazily on read; this is a harmless head-start.
             TransactionRecord r = rec;
             r.updateStatus(it->second);
+            r.populateDisplayLabel(*m_wallet);  // address-book label snapshot (PR4)
             built.push_back(std::move(r));
         }
     }

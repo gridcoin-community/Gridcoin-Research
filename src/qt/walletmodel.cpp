@@ -788,6 +788,7 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
                 std::vector<TransactionRecord> recs(decomposed.begin(), decomposed.end());
                 for (TransactionRecord& rec : recs) {
                     rec.updateStatus(wtx);
+                    rec.populateDisplayLabel(*wallet);  // address-book label snapshot (PR4)
                 }
                 // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
                 // of an existing tx (e.g. a confirmation) — the store updates it in
