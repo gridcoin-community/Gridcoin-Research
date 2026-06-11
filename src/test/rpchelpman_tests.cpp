@@ -875,9 +875,10 @@ BOOST_AUTO_TEST_CASE(pre_2922_and_late_adds_help_renders)
 // Bitcoin Core's table format by regex; it never matched Gridcoin's table
 // and is removed in favor of this test.)
 //
-// For each registered command we build one CLI-style token list (valid JSON
-// for args that must convert, a deliberately-not-JSON token for string args)
-// and run it through RPCConvertValues:
+// For each registered command (deprecated ones included -- they are hidden
+// from autocomplete but remain callable) we build one CLI-style token list
+// (valid JSON for args that must convert, a deliberately-not-JSON token for
+// string args) and run it through RPCConvertValues:
 //   * a JSON-typed arg that comes back as a string  -> missing
 //     vRPCConvertParams entry;
 //   * a throw -> a vRPCConvertParams entry on a string-typed arg (the
@@ -889,20 +890,29 @@ namespace {
 enum class CliConversion {
     REQUIRED,  //!< must be parsed as JSON: a vRPCConvertParams entry is mandatory
     FORBIDDEN, //!< must stay a string: a vRPCConvertParams entry would break it
-    EITHER,    //!< type permits both wire shapes; not statically checkable
 };
 
-CliConversion ArgTypeCliConversion(const RPCArg::Type type)
+//! AMOUNT args whose command body parses a *string* (ParseMoney(get_str()))
+//! instead of calling the number-only AmountFromValue (rpc/server.cpp), so a
+//! conversion entry would break them. createmrcrequest's fee is the only one.
+bool IsStringParsedAmountArg(const std::string& method, const size_t idx)
+{
+    return method == "createmrcrequest" && idx == 2;
+}
+
+CliConversion ArgTypeCliConversion(const std::string& method, const size_t idx, const RPCArg::Type type)
 {
     switch (type) {
     case RPCArg::Type::STR:
     case RPCArg::Type::STR_HEX:
         return CliConversion::FORBIDDEN;
     case RPCArg::Type::AMOUNT:
-        // Documented as "can be either NUM or STR" (rpc/util.h); which one a
-        // command needs depends on its body (AmountFromValue wants VNUM,
-        // ParseMoney wants VSTR), so the table entry is per-command policy.
-        return CliConversion::EITHER;
+        // Documented as "can be either NUM or STR" (rpc/util.h), but which of
+        // the two a command accepts is fixed by its body (AmountFromValue
+        // wants VNUM, ParseMoney wants VSTR), so resolve the expectation per
+        // (method, index) instead of exempting the type from the cross-check.
+        return IsStringParsedAmountArg(method, idx) ? CliConversion::FORBIDDEN
+                                                    : CliConversion::REQUIRED;
     case RPCArg::Type::OBJ:
     case RPCArg::Type::ARR:
     case RPCArg::Type::NUM:
@@ -951,11 +961,20 @@ std::string SampleCliToken(const RPCArg::Type type)
     return "0";
 }
 
+//! Commands accepting a variadic tail of positional CLI args: the conversion
+//! table legitimately names indices past the declared RPCHelpMan args.
+//! votebyid declares {poll_id, answers} but takes each answer as its own
+//! positional arg from the CLI, with entries up to index 21.
+bool IsVariadicRpc(const std::string& method)
+{
+    return method == "votebyid";
+}
+
 } // anonymous namespace
 
 BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
 {
-    for (const std::string& name : tableRPC.listCommands()) {
+    for (const std::string& name : tableRPC.listCommands(/*include_deprecated=*/true)) {
         const CRPCCommand* cmd = tableRPC[name];
         BOOST_REQUIRE_MESSAGE(cmd != nullptr && cmd->helpman != nullptr,
                               name + ": registered command must carry a helpman accessor");
@@ -975,8 +994,9 @@ BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
         try {
             converted = RPCConvertValues(name, cli_tokens);
         } catch (const std::runtime_error& e) {
-            BOOST_FAIL(name + ": RPCConvertValues threw (" + std::string(e.what()) + ") -- "
-                       "a vRPCConvertParams entry exists for a string-typed argument");
+            BOOST_ERROR(name + ": RPCConvertValues threw (" + std::string(e.what()) + ") -- "
+                        "a vRPCConvertParams entry exists for a string-typed argument");
+            continue;
         }
 
         BOOST_REQUIRE_EQUAL(converted.size(), args.size());
@@ -986,7 +1006,7 @@ BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
                 continue;
             }
 
-            switch (ArgTypeCliConversion(args[i].m_type)) {
+            switch (ArgTypeCliConversion(name, i, args[i].m_type)) {
             case CliConversion::REQUIRED:
                 BOOST_CHECK_MESSAGE(!converted[i].isStr(),
                     strprintf("%s arg %u (%s): declared as a non-string JSON type but "
@@ -996,15 +1016,37 @@ BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
                 break;
             case CliConversion::FORBIDDEN:
                 BOOST_CHECK_MESSAGE(converted[i].isStr(),
-                    strprintf("%s arg %u (%s): declared as a string but a vRPCConvertParams "
-                              "entry parses it as JSON, breaking plain-string input from "
-                              "the CLI",
+                    strprintf("%s arg %u (%s): the server parses this arg from a string "
+                              "but a vRPCConvertParams entry converts it to JSON, "
+                              "breaking plain-string input from the CLI",
                               name, i, args[i].m_names));
-                break;
-            case CliConversion::EITHER:
                 break;
             }
         }
+    }
+}
+
+// The reverse direction: every conversion-table entry must name a registered
+// command and an index inside its declared positional args. Catches entries
+// orphaned by a rename or removal, and typo'd indices, which the forward
+// check above cannot see (it only probes the indices a command declares).
+BOOST_AUTO_TEST_CASE(every_client_conversion_entry_references_a_declared_arg)
+{
+    for (const auto& [method, idx] : ListConvertedParams()) {
+        const CRPCCommand* cmd = tableRPC[method];
+        BOOST_CHECK_MESSAGE(cmd != nullptr && cmd->helpman != nullptr,
+            strprintf("vRPCConvertParams entry { \"%s\", %d } references an "
+                      "unregistered command -- misspelled, renamed, or removed",
+                      method, idx));
+        if (cmd == nullptr || cmd->helpman == nullptr || IsVariadicRpc(method)) {
+            continue;
+        }
+
+        const size_t num_args = cmd->helpman().GetArgs().size();
+        BOOST_CHECK_MESSAGE(idx >= 0 && static_cast<size_t>(idx) < num_args,
+            strprintf("vRPCConvertParams entry { \"%s\", %d } is out of range -- "
+                      "the command declares only %u positional args",
+                      method, idx, num_args));
     }
 }
 

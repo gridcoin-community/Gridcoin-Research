@@ -291,6 +291,15 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "votebyid"               , 21 },
 };
 
+std::vector<std::pair<std::string, int>> ListConvertedParams()
+{
+    std::vector<std::pair<std::string, int>> entries;
+    for (const auto& elem : vRPCConvertParams) {
+        entries.emplace_back(elem.methodName, elem.paramIdx);
+    }
+    return entries;
+}
+
 class CRPCConvertTable
 {
 private:

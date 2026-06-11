@@ -95,9 +95,11 @@ public:
 
     /**
     * Returns a list of registered commands
+    * @param include_deprecated   Also list commands in DEPRECATED_RPCS
+    *                             (hidden from autocomplete but still callable).
     * @returns List of registered commands.
     */
-    std::vector<std::string> listCommands() const;
+    std::vector<std::string> listCommands(bool include_deprecated = false) const;
 
 };
 extern const CRPCTable tableRPC;
