@@ -20,6 +20,7 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 void ParseString(const std::string& str, char c, std::vector<std::string>& v);
@@ -105,7 +106,7 @@ std::vector<T> Split(const Span<const char>& sp, char sep, bool include_sep = fa
  * Replace all (non-overlapping) occurrences of @a search in @a in_out with
  * @a substitute, in place. Equivalent to boost::replace_all.
  */
-inline void ReplaceAll(std::string& in_out, const std::string& search, const std::string& substitute)
+inline void ReplaceAll(std::string& in_out, std::string_view search, std::string_view substitute)
 {
     if (search.empty()) return;
     std::string::size_type pos = 0;
