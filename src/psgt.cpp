@@ -808,8 +808,11 @@ std::string PSGTRoleName(PSGTRole role)
 }
 
 // Maximum serialized scriptSig sizes used for final-size estimation.
-// A DER-encoded ECDSA signature plus sighash byte is at most 72 bytes,
-// 73 with its push opcode; a compressed pubkey is 33 bytes, 34 pushed.
+// A standard low-S DER-encoded ECDSA signature plus sighash byte is at most
+// 72 bytes, 73 with its push opcode (the consensus maximum is one byte more,
+// but SCRIPT_VERIFY_LOW_S is part of STANDARD_SCRIPT_VERIFY_FLAGS, so a
+// high-S signature would not relay and is the wrong bound for a broadcast
+// size estimate); a compressed pubkey is 33 bytes, 34 pushed.
 static constexpr unsigned int DUMMY_SIG_PUSH_SIZE = 73;
 static constexpr unsigned int DUMMY_PUBKEY_PUSH_SIZE = 34;
 
@@ -982,7 +985,8 @@ PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx)
             out_amt += txout.nValue;
         }
         result.fee = in_amt - out_amt;
-        if (*result.fee < 0) {
+        if (*result.fee < 0 && result.error.empty()) {
+            // Don't overwrite a per-input error recorded above.
             result.error = "Transaction outputs exceed inputs";
         }
     }

@@ -440,7 +440,7 @@ UniValue analyzepsgt(const UniValue& params)
     result.pushKV("inputs", inputs_arr);
 
     if (analysis.estimated_final_size)
-        result.pushKV("estimated_final_size", (int)*analysis.estimated_final_size);
+        result.pushKV("estimated_final_size", (int64_t)*analysis.estimated_final_size);
     if (analysis.fee)
         result.pushKV("fee", ValueFromAmount(*analysis.fee));
     if (analysis.min_required_fee)

@@ -888,4 +888,28 @@ BOOST_AUTO_TEST_CASE(analyze_negative_fee_and_empty)
     BOOST_CHECK(analysis.error.empty());
 }
 
+// Test: when an input error and the negative-fee condition hold at once, the
+// per-input message recorded first is not overwritten by the fee check.
+BOOST_AUTO_TEST_CASE(analyze_error_precedence)
+{
+    // A bare OP_TRUE matches no script template: non-standard. The UTXO
+    // itself is still known, so the fee gets computed -- and is negative,
+    // since the spend pays out more than the input carries.
+    CTransaction prevTx = MakePrevTxScript(CScript() << OP_TRUE, 1 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 2 * COIN);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(analysis.inputs[0].has_utxo);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::UPDATER);
+    BOOST_CHECK(!analysis.estimated_final_size.has_value());
+
+    BOOST_REQUIRE(analysis.fee.has_value());
+    BOOST_CHECK_EQUAL(*analysis.fee, -1 * COIN);
+
+    BOOST_CHECK_EQUAL(analysis.error,
+        "Input 0 spends a non-standard or unspendable output");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
