@@ -6,13 +6,18 @@
 
 #include <hash.h>
 #include <keystore.h>
+#include <policy/fees.h>
 #include <script/interpreter.h>
 #include <script/sign.h>
 #include <script/standard.h>
 #include <span.h>
 #include <streams.h>
+#include <tinyformat.h>
 #include <util/strencodings.h>
+#include <version.h>
 
+#include <algorithm>
+#include <cassert>
 #include <set>
 
 // Helper: extract a vector<unsigned char> from a CDataStream.
@@ -787,4 +792,208 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
     }
 
     return true;
+}
+
+std::string PSGTRoleName(PSGTRole role)
+{
+    switch (role) {
+    case PSGTRole::CREATOR: return "creator";
+    case PSGTRole::UPDATER: return "updater";
+    case PSGTRole::SIGNER: return "signer";
+    case PSGTRole::FINALIZER: return "finalizer";
+    case PSGTRole::EXTRACTOR: return "extractor";
+    } // no default case, so the compiler can warn about missing cases
+    assert(false);
+    return "";
+}
+
+// Maximum serialized scriptSig sizes used for final-size estimation.
+// A DER-encoded ECDSA signature plus sighash byte is at most 72 bytes,
+// 73 with its push opcode; a compressed pubkey is 33 bytes, 34 pushed.
+static constexpr unsigned int DUMMY_SIG_PUSH_SIZE = 73;
+static constexpr unsigned int DUMMY_PUBKEY_PUSH_SIZE = 34;
+
+/** Serialized size of pushing a redeem script onto a scriptSig. */
+static unsigned int RedeemScriptPushSize(const CScript& redeem_script)
+{
+    const size_t n = redeem_script.size();
+    return n + (n < OP_PUSHDATA1 ? 1 : n <= 0xff ? 2 : 3);
+}
+
+PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx)
+{
+    PSGTAnalysis result;
+
+    if (psgtx.tx.vin.empty()) {
+        result.next = PSGTRole::CREATOR;
+        return result;
+    }
+
+    if (psgtx.inputs.size() != psgtx.tx.vin.size()) {
+        result.error = "PSGT input count does not match unsigned transaction input count";
+        result.next = PSGTRole::CREATOR;
+        return result;
+    }
+
+    bool all_have_utxo = true;
+    bool all_sizable = true;
+    CAmount in_amt = 0;
+
+    // Copy of the unsigned tx whose scriptSigs are filled with dummies of the
+    // expected final length, so one GetSerializeSize call yields the estimate.
+    CMutableTransaction est_tx = psgtx.tx;
+
+    result.inputs.resize(psgtx.inputs.size());
+
+    for (unsigned int i = 0; i < psgtx.inputs.size(); ++i) {
+        const PSGTInput& input = psgtx.inputs[i];
+        PSGTInputAnalysis& ia = result.inputs[i];
+
+        ia.is_final = PSGTInputSigned(input);
+
+        // Unlike SignPSGTInput/FinalizePSGT, also require the provided
+        // previous transaction to actually match prevout.hash — a mismatched
+        // utxo would yield a bogus amount and scriptPubKey for analysis.
+        const COutPoint& prevout = psgtx.tx.vin[i].prevout;
+        ia.has_utxo = !input.non_witness_utxo.IsNull()
+            && prevout.n < input.non_witness_utxo.vout.size()
+            && input.non_witness_utxo.GetHash() == prevout.hash;
+
+        if (ia.has_utxo) {
+            in_amt += input.non_witness_utxo.vout[prevout.n].nValue;
+        } else {
+            all_have_utxo = false;
+        }
+
+        if (ia.is_final) {
+            ia.next = PSGTRole::EXTRACTOR;
+            est_tx.vin[i].scriptSig = input.final_script_sig;
+            continue;
+        }
+
+        if (!ia.has_utxo) {
+            ia.next = PSGTRole::UPDATER;
+            all_sizable = false;
+            continue;
+        }
+
+        const CScript& scriptPubKey = input.non_witness_utxo.vout[prevout.n].scriptPubKey;
+        CScript signScript = scriptPubKey;
+        bool is_p2sh = scriptPubKey.IsPayToScriptHash();
+
+        if (is_p2sh) {
+            CScriptID expected(uint160(std::vector<unsigned char>(
+                scriptPubKey.begin() + 2, scriptPubKey.begin() + 22)));
+            if (input.redeem_script.empty() || CScriptID(input.redeem_script) != expected) {
+                ia.missing_redeem_script = true;
+                ia.next = PSGTRole::UPDATER;
+                all_sizable = false;
+                continue;
+            }
+            signScript = input.redeem_script;
+        }
+
+        txnouttype scriptType;
+        std::vector<std::vector<unsigned char>> vSolutions;
+        Solver(signScript, scriptType, vSolutions);
+
+        unsigned int script_sig_size = 0;
+
+        switch (scriptType) {
+        case TX_PUBKEY:
+        {
+            ia.missing_sigs.push_back(CPubKey(vSolutions[0]).GetID());
+            ia.next = PSGTRole::SIGNER;
+            script_sig_size = DUMMY_SIG_PUSH_SIZE;
+            break;
+        }
+        case TX_PUBKEYHASH:
+        {
+            const CKeyID keyid = CKeyID(uint160(vSolutions[0]));
+            ia.missing_sigs.push_back(keyid);
+            // The signer also needs the full pubkey; report it missing unless
+            // the PSGT carries it in hd_keypaths (a wallet signer will have
+            // its own copy, but an offline analyzer cannot know that).
+            bool have_pubkey = false;
+            for (const auto& kp : input.hd_keypaths) {
+                if (kp.first.GetID() == keyid) {
+                    have_pubkey = true;
+                    break;
+                }
+            }
+            if (!have_pubkey) ia.missing_pubkeys.push_back(keyid);
+            ia.next = PSGTRole::SIGNER;
+            script_sig_size = DUMMY_SIG_PUSH_SIZE + DUMMY_PUBKEY_PUSH_SIZE;
+            break;
+        }
+        case TX_MULTISIG:
+        {
+            // vSolutions[0][0] = required count, [1..N] = pubkeys, [N+1][0] = key count
+            const unsigned int required = vSolutions.front()[0];
+            unsigned int have = 0;
+            for (unsigned int k = 1; k + 1 < vSolutions.size(); ++k) {
+                CKeyID keyid = CPubKey(vSolutions[k]).GetID();
+                if (input.partial_sigs.count(keyid)) {
+                    ++have;
+                } else {
+                    ia.missing_sigs.push_back(keyid);
+                }
+            }
+            if (have >= required) {
+                // Enough signatures to assemble; the remaining keys are optional.
+                ia.missing_sigs.clear();
+                ia.next = PSGTRole::FINALIZER;
+            } else {
+                ia.next = PSGTRole::SIGNER;
+            }
+            script_sig_size = 1 /* OP_0 */ + required * DUMMY_SIG_PUSH_SIZE;
+            break;
+        }
+        default:
+            result.error = strprintf("Input %u spends a non-standard or unspendable output", i);
+            ia.next = PSGTRole::UPDATER;
+            all_sizable = false;
+            continue;
+        }
+
+        if (is_p2sh) {
+            script_sig_size += RedeemScriptPushSize(input.redeem_script);
+        }
+
+        // Raw filler bytes (not a push) so the dummy scriptSig serializes to
+        // exactly script_sig_size bytes of script body.
+        CScript dummy;
+        dummy.insert(dummy.end(), script_sig_size, 0x00);
+        est_tx.vin[i].scriptSig = dummy;
+    }
+
+    // Note: unlike Bitcoin, a non-final single-sig (P2PK/P2PKH) input is
+    // always the signer's job, never the finalizer's — SignPSGTInput writes
+    // final_script_sig directly and FinalizeInput cannot assemble single-sig
+    // inputs from partial_sigs (the full pubkey is not stored there).
+    result.next = PSGTRole::EXTRACTOR;
+    for (const PSGTInputAnalysis& ia : result.inputs) {
+        result.next = std::min(result.next, ia.next);
+    }
+
+    if (all_have_utxo) {
+        CAmount out_amt = 0;
+        for (const CTxOut& txout : psgtx.tx.vout) {
+            out_amt += txout.nValue;
+        }
+        result.fee = in_amt - out_amt;
+        if (*result.fee < 0) {
+            result.error = "Transaction outputs exceed inputs";
+        }
+    }
+
+    if (all_sizable) {
+        const unsigned int est_size =
+            ::GetSerializeSize(CTransaction(est_tx), SER_NETWORK, PROTOCOL_VERSION);
+        result.estimated_final_size = est_size;
+        result.min_required_fee =
+            GetMinFee(CTransaction(psgtx.tx), 1000, GMF_SEND, est_size);
+    }
+
+    return result;
 }

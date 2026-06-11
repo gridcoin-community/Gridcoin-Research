@@ -6,6 +6,7 @@
 
 #include <key.h>
 #include <keystore.h>
+#include <policy/fees.h>
 #include <policy/policy.h>
 #include <primitives/transaction.h>
 #include <psgt.h>
@@ -14,6 +15,7 @@
 #include <script/standard.h>
 #include <streams.h>
 #include <util/strencodings.h>
+#include <version.h>
 
 BOOST_AUTO_TEST_SUITE(psgt_tests)
 
@@ -640,6 +642,250 @@ BOOST_AUTO_TEST_CASE(hd_keypaths_roundtrip)
     BOOST_CHECK(it2 != psgt2.outputs[0].hd_keypaths.end());
     BOOST_CHECK_EQUAL(it2->second.fingerprint[0], 0xCA);
     BOOST_CHECK_EQUAL(it2->second.path[2], 0x8000002Au);
+}
+
+// ---------------------------------------------------------------------------
+// AnalyzePSGT tests.
+// ---------------------------------------------------------------------------
+
+static CScript P2SH(const CScriptID& id)
+{
+    CScript s;
+    s << OP_HASH160 << id << OP_EQUAL;
+    return s;
+}
+
+static CScript Multisig1of2(const CKey& key1, const CKey& key2)
+{
+    CScript s;
+    s << OP_1 << key1.GetPubKey() << key2.GetPubKey() << OP_2 << OP_CHECKMULTISIG;
+    return s;
+}
+
+// Build a fake previous transaction with an arbitrary scriptPubKey.
+static CTransaction MakePrevTxScript(const CScript& scriptPubKey, CAmount amount)
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700000000;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout.SetNull();
+    mtx.vin[0].scriptSig = CScript() << 0;
+    mtx.vout.push_back(CTxOut(amount, scriptPubKey));
+    return CTransaction(mtx);
+}
+
+// Build an unsigned one-input spend of prevTx:0 paying amount to a fresh key.
+static PartiallySignedTransaction MakeSpendPSGT(const CTransaction& prevTx, CAmount amount)
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700002000;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(prevTx.GetHash(), 0);
+    mtx.vout.push_back(CTxOut(amount, P2PKH(MakeKey().GetPubKey().GetID())));
+
+    PartiallySignedTransaction psgt(mtx);
+    psgt.inputs[0].non_witness_utxo = prevTx;
+    return psgt;
+}
+
+// Test: unsigned P2PKH input — signer's turn, missing sig and pubkey,
+// fee/size/min-fee all computable.
+BOOST_AUTO_TEST_CASE(analyze_p2pkh_unsigned)
+{
+    CKey key = MakeKey();
+    CKeyID keyid = key.GetPubKey().GetID();
+    CTransaction prevTx = MakePrevTx(key, 10 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    const PSGTInputAnalysis& ia = analysis.inputs[0];
+    BOOST_CHECK(ia.has_utxo);
+    BOOST_CHECK(!ia.is_final);
+    BOOST_CHECK(ia.next == PSGTRole::SIGNER);
+    BOOST_REQUIRE_EQUAL(ia.missing_sigs.size(), 1u);
+    BOOST_CHECK(ia.missing_sigs[0] == keyid);
+    // No hd_keypaths entry, so the full pubkey is unknown to the PSGT.
+    BOOST_REQUIRE_EQUAL(ia.missing_pubkeys.size(), 1u);
+    BOOST_CHECK(ia.missing_pubkeys[0] == keyid);
+    BOOST_CHECK(!ia.missing_redeem_script);
+
+    BOOST_CHECK(analysis.next == PSGTRole::SIGNER);
+    BOOST_CHECK(analysis.error.empty());
+
+    BOOST_REQUIRE(analysis.fee.has_value());
+    BOOST_CHECK_EQUAL(*analysis.fee, 1 * COIN);
+
+    // Estimated size = unsigned size + dummy P2PKH scriptSig (107 bytes).
+    BOOST_REQUIRE(analysis.estimated_final_size.has_value());
+    const unsigned int unsigned_size =
+        ::GetSerializeSize(CTransaction(psgt.tx), SER_NETWORK, PROTOCOL_VERSION);
+    BOOST_CHECK_EQUAL(*analysis.estimated_final_size, unsigned_size + 107);
+
+    BOOST_REQUIRE(analysis.min_required_fee.has_value());
+    BOOST_CHECK_EQUAL(*analysis.min_required_fee,
+        GetMinFee(CTransaction(psgt.tx), 1000, GMF_SEND, *analysis.estimated_final_size));
+
+    // With a pubkey present in hd_keypaths, only the signature is missing.
+    psgt.inputs[0].hd_keypaths[key.GetPubKey()] = KeyOriginInfo();
+    analysis = AnalyzePSGT(psgt);
+    BOOST_CHECK(analysis.inputs[0].missing_pubkeys.empty());
+    BOOST_CHECK_EQUAL(analysis.inputs[0].missing_sigs.size(), 1u);
+}
+
+// Test: input without UTXO data — updater's turn, no fee or size estimate.
+BOOST_AUTO_TEST_CASE(analyze_no_utxo)
+{
+    CKey key = MakeKey();
+    CTransaction prevTx = MakePrevTx(key, 10 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+    psgt.inputs[0].non_witness_utxo = CTransaction();
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(!analysis.inputs[0].has_utxo);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::UPDATER);
+    BOOST_CHECK(analysis.next == PSGTRole::UPDATER);
+    BOOST_CHECK(!analysis.fee.has_value());
+    BOOST_CHECK(!analysis.estimated_final_size.has_value());
+    BOOST_CHECK(!analysis.min_required_fee.has_value());
+}
+
+// Test: provided UTXO does not match the input's prevout hash — treated as
+// missing (stricter than SignPSGTInput, which skips the hash check).
+BOOST_AUTO_TEST_CASE(analyze_wrong_utxo_hash)
+{
+    CKey key = MakeKey();
+    CTransaction prevTx = MakePrevTx(key, 10 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+    // Substitute a different transaction as the claimed UTXO.
+    psgt.inputs[0].non_witness_utxo = MakePrevTx(MakeKey(), 10 * COIN);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(!analysis.inputs[0].has_utxo);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::UPDATER);
+    BOOST_CHECK(!analysis.fee.has_value());
+}
+
+// Test: P2SH 1-of-2 multisig — signer's turn until enough partial sigs,
+// then finalizer's turn.
+BOOST_AUTO_TEST_CASE(analyze_multisig_partial)
+{
+    CKey key1 = MakeKey();
+    CKey key2 = MakeKey();
+    CScript redeem = Multisig1of2(key1, key2);
+    CTransaction prevTx = MakePrevTxScript(P2SH(CScriptID(redeem)), 10 * COIN);
+
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+    psgt.inputs[0].redeem_script = redeem;
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(analysis.inputs[0].has_utxo);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::SIGNER);
+    BOOST_CHECK_EQUAL(analysis.inputs[0].missing_sigs.size(), 2u);
+    BOOST_CHECK(analysis.next == PSGTRole::SIGNER);
+
+    // Estimated scriptSig: OP_0 + 1 dummy sig + redeem script push.
+    BOOST_REQUIRE(analysis.estimated_final_size.has_value());
+    const unsigned int unsigned_size =
+        ::GetSerializeSize(CTransaction(psgt.tx), SER_NETWORK, PROTOCOL_VERSION);
+    BOOST_CHECK_EQUAL(*analysis.estimated_final_size,
+        unsigned_size + 1 + 73 + redeem.size() + 1);
+
+    // Sign with one key — 1-of-2 is now satisfiable: finalizer's turn.
+    CBasicKeyStore keystore;
+    keystore.AddKey(key1);
+    keystore.AddCScript(redeem);
+    BOOST_REQUIRE(SignPSGTInput(keystore, psgt, 0));
+    BOOST_REQUIRE_EQUAL(psgt.inputs[0].partial_sigs.size(), 1u);
+
+    analysis = AnalyzePSGT(psgt);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::FINALIZER);
+    BOOST_CHECK(analysis.inputs[0].missing_sigs.empty());
+    BOOST_CHECK(analysis.next == PSGTRole::FINALIZER);
+}
+
+// Test: P2SH input with unknown redeem script — updater's turn; fee is still
+// known (the UTXO is present) but the final size is not estimable.
+BOOST_AUTO_TEST_CASE(analyze_p2sh_missing_redeem)
+{
+    CKey key1 = MakeKey();
+    CKey key2 = MakeKey();
+    CScript redeem = Multisig1of2(key1, key2);
+    CTransaction prevTx = MakePrevTxScript(P2SH(CScriptID(redeem)), 10 * COIN);
+
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(analysis.inputs[0].has_utxo);
+    BOOST_CHECK(analysis.inputs[0].missing_redeem_script);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::UPDATER);
+    BOOST_CHECK(analysis.next == PSGTRole::UPDATER);
+    BOOST_REQUIRE(analysis.fee.has_value());
+    BOOST_CHECK_EQUAL(*analysis.fee, 1 * COIN);
+    BOOST_CHECK(!analysis.estimated_final_size.has_value());
+}
+
+// Test: fully signed input — extractor's turn; the actual final scriptSig is
+// used for the size estimate.
+BOOST_AUTO_TEST_CASE(analyze_final_extractor)
+{
+    CKey key = MakeKey();
+    CTransaction prevTx = MakePrevTx(key, 10 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+
+    CBasicKeyStore keystore;
+    keystore.AddKey(key);
+    BOOST_REQUIRE(SignPSGTInput(keystore, psgt, 0));
+    BOOST_REQUIRE(PSGTInputSigned(psgt.inputs[0]));
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_REQUIRE_EQUAL(analysis.inputs.size(), 1u);
+    BOOST_CHECK(analysis.inputs[0].is_final);
+    BOOST_CHECK(analysis.inputs[0].next == PSGTRole::EXTRACTOR);
+    BOOST_CHECK(analysis.inputs[0].missing_sigs.empty());
+    BOOST_CHECK(analysis.next == PSGTRole::EXTRACTOR);
+
+    // The estimate uses the actual final scriptSig, so it must equal the
+    // size of the extracted, fully-signed transaction.
+    CMutableTransaction final_tx = psgt.tx;
+    final_tx.vin[0].scriptSig = psgt.inputs[0].final_script_sig;
+    BOOST_REQUIRE(analysis.estimated_final_size.has_value());
+    BOOST_CHECK_EQUAL(*analysis.estimated_final_size,
+        ::GetSerializeSize(CTransaction(final_tx), SER_NETWORK, PROTOCOL_VERSION));
+}
+
+// Test: outputs exceed inputs — error reported with a negative fee; and a
+// PSGT with no inputs is the creator's problem.
+BOOST_AUTO_TEST_CASE(analyze_negative_fee_and_empty)
+{
+    CKey key = MakeKey();
+    CTransaction prevTx = MakePrevTx(key, 10 * COIN);
+    PartiallySignedTransaction psgt = MakeSpendPSGT(prevTx, 11 * COIN);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    BOOST_CHECK(!analysis.error.empty());
+    BOOST_REQUIRE(analysis.fee.has_value());
+    BOOST_CHECK_EQUAL(*analysis.fee, -1 * COIN);
+
+    // Empty PSGT: nothing to analyze, back to the creator.
+    PartiallySignedTransaction empty;
+    analysis = AnalyzePSGT(empty);
+    BOOST_CHECK(analysis.inputs.empty());
+    BOOST_CHECK(analysis.next == PSGTRole::CREATOR);
+    BOOST_CHECK(analysis.error.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

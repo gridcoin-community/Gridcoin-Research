@@ -10,6 +10,8 @@
 #include <pubkey.h>
 
 #include <map>
+#include <optional>
+#include <string>
 #include <vector>
 
 // BIP 174-style key types for PSGT serialization.
@@ -126,5 +128,48 @@ std::vector<unsigned char> SerializePSGT(const PartiallySignedTransaction& psgt)
 void UpdatePSGTOutput(const SigningProvider& provider,
                        PartiallySignedTransaction& psgt,
                        unsigned int index);
+
+/** Roles in the PSGT workflow, in pipeline order. */
+enum class PSGTRole {
+    CREATOR,
+    UPDATER,
+    SIGNER,
+    FINALIZER,
+    EXTRACTOR,
+};
+
+/** Lowercase display name of a PSGT role ("creator", "updater", ...). */
+std::string PSGTRoleName(PSGTRole role);
+
+/** Analysis result for a single PSGT input. */
+struct PSGTInputAnalysis
+{
+    bool has_utxo = false;  //!< non_witness_utxo present, prevout.n in range, hash matches
+    bool is_final = false;  //!< final_script_sig present
+    PSGTRole next = PSGTRole::UPDATER; //!< Next role needed to make progress on this input
+
+    std::vector<CKeyID> missing_pubkeys; //!< Keys whose full pubkey is not in the PSGT
+    std::vector<CKeyID> missing_sigs;    //!< Keys whose signature is still required
+    bool missing_redeem_script = false;  //!< P2SH input whose redeem script is unknown
+};
+
+/** Whole-PSGT analysis result (Bitcoin Core analyzepsbt equivalent). */
+struct PSGTAnalysis
+{
+    std::optional<CAmount> fee;                       //!< Inputs minus outputs; set iff all input UTXOs are known
+    std::optional<unsigned int> estimated_final_size; //!< Bytes of the fully-signed tx; set iff every input's final size can be estimated
+    std::optional<CAmount> min_required_fee;          //!< GetMinFee at the estimated final size
+    std::vector<PSGTInputAnalysis> inputs;
+    PSGTRole next = PSGTRole::EXTRACTOR; //!< Earliest-stage role needed across all inputs
+    std::string error;                   //!< Non-empty if a problem was detected
+};
+
+/**
+ * Analyze a PSGT: per-input UTXO/finality status, missing material
+ * (pubkeys, signatures, redeem scripts), the next role required per input
+ * and globally, plus fee and estimated final size when computable.
+ * Pure function of the PSGT; does not consult the wallet or mutate anything.
+ */
+PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx);
 
 #endif // GRIDCOIN_PSGT_H
