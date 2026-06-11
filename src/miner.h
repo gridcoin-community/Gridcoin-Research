@@ -58,4 +58,13 @@ bool TryMineRegtestBlock(CWallet* pwallet,
                          CBlock& blocknew_out,
                          std::string& err);
 
+//! \brief The proof-of-stake miner loop. Runs until \ref fShutdown is set.
+void StakeMiner(CWallet* pwallet);
+
+//! \brief Thread entry point wrapping StakeMiner. \p parg is the CWallet to
+//! stake with. Launched from AppInit2 and joined in Shutdown() before the
+//! block-file flush, so a block staked during shutdown cannot land after the
+//! flush (see issue #2865).
+void ThreadStakeMiner(void* parg);
+
 #endif // BITCOIN_MINER_H

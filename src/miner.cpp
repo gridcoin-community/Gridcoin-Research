@@ -27,6 +27,7 @@
 #include "policy/fees.h"
 #include "random.h"
 #include "util.h"
+#include "util/threadnames.h"
 #include "validation.h"
 #include "wallet/wallet.h"
 
@@ -1768,4 +1769,31 @@ bool TryMineRegtestBlock(CWallet* pwallet,
     g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
     blocknew_out = StakeBlock;
     return true;
+}
+
+void ThreadStakeMiner(void* parg)
+{
+    RenameThread("grc-stakeminer");
+    util::ThreadSetInternalName("grc-stakeminer");
+
+    LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
+    CWallet* pwallet = (CWallet*)parg;
+    try
+    {
+        StakeMiner(pwallet);
+    }
+    catch (std::exception& e)
+    {
+        PrintException(&e, "ThreadStakeMiner()");
+    }
+    catch(boost::thread_interrupted&)
+    {
+        LogPrintf("ThreadStakeMiner exited (interrupt)");
+        return;
+    }
+    catch (...)
+    {
+        PrintException(nullptr, "ThreadStakeMiner()");
+    }
+    LogPrintf("ThreadStakeMiner exited");
 }
