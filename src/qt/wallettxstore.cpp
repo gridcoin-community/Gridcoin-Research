@@ -565,21 +565,20 @@ void WalletTxStore::applyAddressBookChange(const std::string& address, const std
     // (the label is not part of RecordOrder), so a single pass is safe; recompute
     // ALL affected caches BEFORE driving cursors, so each reposition sees every
     // affected row's new key.
-    std::vector<std::size_t> affected;
+    // Re-snapshot + re-drive ONE record at a time. applyStatusUpdate repositions a
+    // row via lower_bound, which requires the rest of view_index sorted; recomputing
+    // ALL same-address keys first would leave several rows mis-keyed in their old
+    // slots (view_index transiently unsorted) and break lower_bound under an Address
+    // sort. Interleaving keeps every not-yet-processed row at its consistent prior
+    // key/slot. Positions in m_records are stable (the label is not part of
+    // RecordOrder). (PR4-fix C, review follow-up.)
     for (std::size_t i = 0; i < m_records.size(); ++i) {
-        if (m_records[i].address == address) {
-            affected.push_back(i);
+        if (m_records[i].address != address) {
+            continue;
         }
-    }
-    if (affected.empty()) {
-        return;
-    }
-    for (std::size_t i : affected) {
         m_records[i].label = label;
         recomputeCacheAt(i);
-    }
-    for (auto& [viewId, cursor] : m_cursors) {
-        for (std::size_t i : affected) {
+        for (auto& [viewId, cursor] : m_cursors) {
             emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(i));
         }
     }
@@ -621,14 +620,16 @@ void WalletTxStore::applyChainTipRefresh()
             positions.push_back(it->second);
         }
         std::sort(positions.begin(), positions.end());
-        // Refresh status + cache first (positions are stable — status is not part
-        // of RecordOrder), then drive the cursors so each reposition sees the new keys.
+        // Refresh + re-drive ONE part at a time. applyStatusUpdate repositions a row
+        // via lower_bound, which needs the rest of view_index sorted; recomputing ALL
+        // parts' keys first would leave the not-yet-repositioned parts mis-keyed in
+        // their old slots and break that precondition under a Status sort. Interleaving
+        // keeps every untouched part at its consistent prior key/slot. Positions in
+        // m_records are stable across the loop (status is not part of RecordOrder).
         for (std::size_t p : positions) {
             m_records[p].updateStatus(wtx);
             recomputeCacheAt(p);
-        }
-        for (auto& [viewId, cursor] : m_cursors) {
-            for (std::size_t p : positions) {
+            for (auto& [viewId, cursor] : m_cursors) {
                 emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
             }
         }
@@ -741,7 +742,7 @@ std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int
     }
     std::vector<TransactionRecord> out;
     auto it = m_cursors.find(viewId);
-    if (it == m_cursors.end() || first < 0 || count <= 0) {
+    if (it == m_cursors.end() || first < 0 || count == 0) {
         return out;
     }
     const std::size_t served = it->second.servedCount();
@@ -749,7 +750,15 @@ std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int
     if (begin >= served) {
         return out;
     }
-    const std::size_t end = std::min(served, begin + static_cast<std::size_t>(count));
+    // count < 0 means "all served rows from `first`". Reading servedCount HERE,
+    // under this single cs_store hold (together with the rows and the high-water
+    // above), is what makes a Reset refetch atomic: a caller must NOT sample the
+    // count via a separate totalAccepted() call, or a worker insert landing between
+    // the two locks would under-fetch a row while the high-water already covered it
+    // — and the seqno skip would then drop that row permanently (PR4-fix B).
+    const std::size_t end = (count < 0)
+        ? served
+        : std::min(served, begin + static_cast<std::size_t>(count));
     out.reserve(end - begin);
     for (std::size_t i = begin; i < end; ++i) {
         out.push_back(m_records[it->second.rowAt(i)]);

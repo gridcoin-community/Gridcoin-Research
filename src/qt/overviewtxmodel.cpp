@@ -32,8 +32,10 @@ OverviewTxModel::OverviewTxModel(WalletModel* walletModel, int initialLimit, QOb
     // registerView pushed a RowsReset that the next drain will deliver, but also
     // seed synchronously so the list is populated before the first drain tick.
     // Capture the high-water (PR4-fix B): the registration Reset arriving on the
-    // first drain carries this seqno and is skipped as already reflected.
-    m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, m_limit, &m_applied_seqno);
+    // first drain carries this seqno and is skipped as already reflected. count = -1
+    // ("all served") reads rows + served count + high-water in one cs_store hold —
+    // atomic, so a concurrent worker insert can't drop a row the skip would suppress.
+    m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, -1, &m_applied_seqno);
 
     connect(m_walletModel, &WalletModel::walletEventsDrained,
             this, &OverviewTxModel::applyEventBatch);
@@ -95,8 +97,11 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // here exactly once and skipped when its own event arrives.
                 beginResetModel();
                 uint64_t hw = m_applied_seqno;
-                m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0,
-                                       store.totalAccepted(GRC::VIEW_OVERVIEW), &hw);
+                // count = -1: rows + served count + high-water in ONE cs_store hold
+                // (atomic — getRows clamps to the live served window, capped). A
+                // separate totalAccepted() could under-fetch a row the high-water
+                // already covered, dropping it permanently below cap. (PR4-fix B)
+                m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, -1, &hw);
                 endResetModel();
                 m_applied_seqno = std::max(hw, seqno);
             } else if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {

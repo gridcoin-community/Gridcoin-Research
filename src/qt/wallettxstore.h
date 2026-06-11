@@ -155,10 +155,14 @@ public:
 
     //! Qt thread: read [first, first+count) served rows of \p viewId as records
     //! (a copy of the slice). Clamps to the served window; returns fewer rows if
-    //! the window is shorter. Unknown viewId -> empty. If \p out_high_water is
-    //! non-null, it receives the seqno of the last event emitted for \p viewId at
-    //! the moment of the read (same cs_store hold) — the consumer uses it to
-    //! discard events already reflected in this snapshot (PR4-fix B).
+    //! the window is shorter. \p count < 0 means "all served rows from \p first"
+    //! (the served count is read under THIS call's single cs_store hold) — a Reset
+    //! refetch MUST use it rather than a separately-locked totalAccepted(), else a
+    //! worker insert between the two locks drops a row that the seqno skip then
+    //! suppresses permanently (PR4-fix B). Unknown viewId -> empty. If
+    //! \p out_high_water is non-null, it receives the seqno of the last event
+    //! emitted for \p viewId at the moment of the read (same cs_store hold) — the
+    //! consumer uses it to discard events already reflected in this snapshot.
     std::vector<TransactionRecord> getRows(int viewId, int first, int count,
                                            uint64_t* out_high_water = nullptr);
 

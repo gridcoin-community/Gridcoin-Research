@@ -380,4 +380,38 @@ BOOST_AUTO_TEST_CASE(equal_keys_tiebreak_by_native_index)
     BOOST_CHECK_EQUAL(c.viewIndex()[3], 3u);
 }
 
+// ---- ⚠ PR4-fix C/A review follow-up: interleaved reposition to a shared new key ----
+
+BOOST_AUTO_TEST_CASE(interleaved_reposition_to_equal_keys)
+{
+    // The store's applyAddressBookChange / applyChainTipRefresh move several rows to a
+    // NEW (often shared) key. applyStatusUpdate repositions via lower_bound, which needs
+    // the rest of view_index sorted, so the store must recompute+drive ONE row at a time
+    // (NOT recompute-all-then-drive, which transiently de-sorts the index). This verifies
+    // the cursor lands them correctly under that interleaved pattern, including an
+    // intervening row that the relabel crosses. Sort by ADDRESS asc (label is the primary
+    // Address key); the self-syncing test projectors read the live row on each call, so
+    // changing one label then driving it mirrors the store's interleave exactly.
+    Table t;
+    t.rows = { active(0), active(0), active(0), active(0) };
+    t.rows[0].label = "C"; t.rows[1].label = "C"; t.rows[2].label = "C"; t.rows[3].label = "F";
+    Cursor c(1, FilterSpec{}, TXCOL_ADDRESS, TXSORT_ASC, t.fields(), t.keys());
+    c.rebuild(t.rows.size());           // labels C,C,C,F asc -> [0,1,2,3]
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 4u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[3], 3u);
+
+    // Rename the "C" group to "K" (crosses "F"), interleaved: relabel one, drive one.
+    for (std::size_t i : { std::size_t{0}, std::size_t{1}, std::size_t{2} }) {
+        t.rows[i].label = "K";
+        c.applyStatusUpdate(i);
+    }
+    // Correct ADDRESS-asc order: F(3) < K(0) < K(1) < K(2) — the intervening F row is
+    // NOT wedged among the K rows (the recompute-all-first bug produced [0,1,3,2]).
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 4u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[0], 3u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[1], 0u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[2], 1u);
+    BOOST_CHECK_EQUAL(c.viewIndex()[3], 2u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
