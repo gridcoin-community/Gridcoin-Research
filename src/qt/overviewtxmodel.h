@@ -61,6 +61,10 @@ private:
     TransactionTableModel* m_ttm;            //!< formatter source (formatRole)
     int m_limit;
     std::vector<TransactionRecord> m_rows;   //!< served-window replica (VIEW_OVERVIEW)
+    //! Highest store seqno already reflected in m_rows (PR4-fix B): an event whose
+    //! seqno is <= this is already in a getRows refetch and is skipped, so a worker
+    //! delta landing between a Reset emission and the refetch is not double-applied.
+    uint64_t m_applied_seqno = 0;
 };
 
 #endif // BITCOIN_QT_OVERVIEWTXMODEL_H

@@ -150,6 +150,11 @@ public:
     //!
     GRC::WalletTxStore& getTxStore() { return m_txStore; }
 
+    //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
+    //! user-initiated cursor change (a windowed-view filter/sort) is reflected
+    //! without waiting for the periodic drain tick (windowed-model PR4-fix D).
+    void requestEventDrainSoon();
+
 private:
     CWallet *wallet;
 

@@ -289,4 +289,45 @@ BOOST_AUTO_TEST_CASE(less_string_columns_case_insensitive)
     BOOST_CHECK(!Less(aa, ab, TXCOL_ADDRESS, TXSORT_DESC));
 }
 
+// ---- CompareKeys(): 3-way sign, descending flip, and the tie sentinel (PR4-fix E) ----
+BOOST_AUTO_TEST_CASE(compare_keys_three_way_and_tie)
+{
+    SortKey lo; lo.time = 100;
+    SortKey hi; hi.time = 200;
+    BOOST_CHECK(CompareKeys(lo, hi, TXCOL_DATE, TXSORT_ASC) < 0);   // lo before hi
+    BOOST_CHECK(CompareKeys(hi, lo, TXCOL_DATE, TXSORT_ASC) > 0);   // hi after lo
+    BOOST_CHECK(CompareKeys(lo, hi, TXCOL_DATE, TXSORT_DESC) > 0);  // descending flips the sign
+    BOOST_CHECK(CompareKeys(hi, lo, TXCOL_DATE, TXSORT_DESC) < 0);
+    // Equal keys -> 0 in BOTH orders: the sentinel the cursor breaks by native index.
+    SortKey eqa; eqa.time = 100; SortKey eqb; eqb.time = 100;
+    BOOST_CHECK_EQUAL(CompareKeys(eqa, eqb, TXCOL_DATE, TXSORT_ASC), 0);
+    BOOST_CHECK_EQUAL(CompareKeys(eqa, eqb, TXCOL_DATE, TXSORT_DESC), 0);
+}
+
+// ---- Address column: (label, then address), no separator-byte collision (PR4-fix G) ----
+BOOST_AUTO_TEST_CASE(address_sorts_label_then_address)
+{
+    // Label is the primary key: "Alice" sorts before "Bob" regardless of address.
+    SortKey alice; alice.label_string = "Alice"; alice.address_string = "Szzz";
+    SortKey bob;   bob.label_string   = "Bob";   bob.address_string   = "Saaa";
+    BOOST_CHECK( Less(alice, bob, TXCOL_ADDRESS, TXSORT_ASC));
+    BOOST_CHECK(!Less(bob, alice, TXCOL_ADDRESS, TXSORT_ASC));
+
+    // Equal label -> the address breaks the tie.
+    SortKey a1; a1.label_string = "Donations"; a1.address_string = "Saaa";
+    SortKey a2; a2.label_string = "Donations"; a2.address_string = "Szzz";
+    BOOST_CHECK( Less(a1, a2, TXCOL_ADDRESS, TXSORT_ASC));
+    BOOST_CHECK(!Less(a2, a1, TXCOL_ADDRESS, TXSORT_ASC));
+
+    // A control byte in a label cannot cross the (label, address) boundary: "Alice"
+    // is a strict prefix of "Alice\x01Bob", so the shorter label always sorts first
+    // regardless of the addresses. The old '\x01'-joined single key could invert this
+    // (the address bytes leaked past the separator). Split-literal stops the \x01 hex
+    // escape from swallowing 'B'.
+    SortKey shortLabel; shortLabel.label_string = "Alice";              shortLabel.address_string = "Szzz";
+    SortKey longLabel;  longLabel.label_string  = std::string("Alice\x01" "Bob"); longLabel.address_string = "Saaa";
+    BOOST_CHECK( Less(shortLabel, longLabel, TXCOL_ADDRESS, TXSORT_ASC));
+    BOOST_CHECK(!Less(longLabel, shortLabel, TXCOL_ADDRESS, TXSORT_ASC));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

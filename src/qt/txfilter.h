@@ -138,16 +138,20 @@ struct TxFilterFields {
 //! never localizes on a core/worker thread — clean across the eventual
 //! multiprocess split. status_sort_key is rec.status.sortKey. type_string is the
 //! (type, generated_type) enum tuple rendered as fixed-width digits, so the Type
-//! column sorts by transaction category rather than by translated name.
-//! address_string is the address-book label and the address joined by a
-//! separator, so the Address column sorts by label then address.
+//! column sorts by transaction category rather than by translated name. The
+//! Address column sorts by label_string then address_string (a two-level compare
+//! in CompareKeys, not a separator-joined string, so a label containing a control
+//! byte cannot break the field boundary). Equal keys are broken at the cursor
+//! level by the producer's native record order (the absolute record index), which
+//! Less/CompareKeys never see — see GRC::Cursor.
 //!
 struct SortKey {
     int64_t time = 0;
     int64_t net_amount = 0;
     std::string status_sort_key;
     std::string type_string;
-    std::string address_string;
+    std::string label_string;     //!< Address column primary key (address-book label, may be empty)
+    std::string address_string;   //!< Address column secondary key (the address)
 };
 
 //!
@@ -158,15 +162,23 @@ struct SortKey {
 bool Accepts(const TxFilterFields& fields, const FilterSpec& spec);
 
 //!
-//! \brief Sort-key comparison for the cursor's view ordering.
+//! \brief Three-way sort-key comparison in the requested order sense.
 //!
-//! Ported from the proxy's Qt::EditRole comparison (case-insensitive for the
-//! string columns), but the Type/Address keys are now locale-free (see SortKey).
-//! Returns true if \p a sorts strictly before \p b for the given \p column
-//! and \p order. Equal keys return false (a strict weak ordering).
+//! Returns <0 if \p a sorts before \p b, >0 if after, 0 if the keys are equal
+//! for \p column (the sign is already flipped for TXSORT_DESC). The Address
+//! column compares label_string then address_string. Callers break the 0 case
+//! by the producer's native record order (the cursor uses the absolute record
+//! index); the 0 result is what signals "fall back to the tie-breaker".
 //!
 //! \param column One of TxSortColumn.
 //! \param order  One of TxSortOrder.
+//!
+int CompareKeys(const SortKey& a, const SortKey& b, int column, int order);
+
+//!
+//! \brief Strict-less convenience over CompareKeys (true iff a sorts before b).
+//! Equal keys return false. Retained for unit tests and lower_bound on keys
+//! alone; the cursor uses CompareKeys directly so it can add the index tie-break.
 //!
 bool Less(const SortKey& a, const SortKey& b, int column, int order);
 

@@ -64,6 +64,12 @@ private:
     WalletModel* m_walletModel;
     TransactionTableModel* m_ttm;            //!< formatter source (formatRole/headerData)
     std::vector<TransactionRecord> m_rows;   //!< served-window replica (full set in PR4)
+    //! Highest store seqno already reflected in m_rows (PR4-fix B). A getRows
+    //! refetch (initial seed or a Reset) reads the store's high-water; any later
+    //! event whose seqno is <= this is already in m_rows and must be skipped, so a
+    //! worker insert/remove that landed between a Reset emission and the refetch is
+    //! never double-applied.
+    uint64_t m_applied_seqno = 0;
 };
 
 #endif // BITCOIN_QT_DETAILEDTXMODEL_H

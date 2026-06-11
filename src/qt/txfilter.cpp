@@ -67,7 +67,7 @@ bool Accepts(const TxFilterFields& f, const FilterSpec& s)
     return true;
 }
 
-bool Less(const SortKey& a, const SortKey& b, int column, int order)
+int CompareKeys(const SortKey& a, const SortKey& b, int column, int order)
 {
     // Three-way compare in ascending sense (<0 a before b, 0 equal, >0 after).
     int cmp = 0;
@@ -85,15 +85,26 @@ bool Less(const SortKey& a, const SortKey& b, int column, int order)
         cmp = ICompare(a.type_string, b.type_string);
         break;
     case TXCOL_ADDRESS:
-        cmp = ICompare(a.address_string, b.address_string);
+        // Two-level (label, address); no separator byte to collide with a
+        // control character inside a user label.
+        cmp = ICompare(a.label_string, b.label_string);
+        if (cmp == 0) cmp = ICompare(a.address_string, b.address_string);
         break;
     default:
         cmp = 0;
         break;
     }
 
-    // Strict-less in the requested order sense; equal keys -> false.
-    return (order == TXSORT_DESC) ? (cmp > 0) : (cmp < 0);
+    // Normalize to {-1,0,1}, then flip the sense for descending. The 0 result is
+    // preserved (not flipped) so the caller can detect a tie and fall back to its
+    // own deterministic tie-breaker (the cursor uses the native record index).
+    cmp = (cmp < 0) ? -1 : (cmp > 0 ? 1 : 0);
+    return (order == TXSORT_DESC) ? -cmp : cmp;
+}
+
+bool Less(const SortKey& a, const SortKey& b, int column, int order)
+{
+    return CompareKeys(a, b, column, order) < 0;
 }
 
 } // namespace GRC

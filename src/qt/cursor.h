@@ -55,8 +55,13 @@ struct CursorDelta {
 class Cursor
 {
 public:
-    using FieldsFn = std::function<TxFilterFields(std::size_t)>;
-    using KeysFn   = std::function<SortKey(std::size_t)>;
+    // Return by const reference: the store caches the projected fields/keys per
+    // record (computed once at insert/update/refresh), so a sort comparison reads
+    // the cache without re-projecting or re-allocating per comparison (PR4-fix F).
+    // The reference is valid for the duration of the call — the caller holds
+    // cs_store throughout any sort/lower_bound, so the backing cache cannot move.
+    using FieldsFn = std::function<const TxFilterFields&(std::size_t)>;
+    using KeysFn   = std::function<const SortKey&(std::size_t)>;
 
     Cursor(int view_id, FilterSpec filter, int sort_column, int sort_order,
            FieldsFn fields, KeysFn keys);
@@ -102,8 +107,17 @@ public:
     const std::vector<std::size_t>& viewIndex() const { return m_view_index; }
 
 private:
-    //! Sorted insert slot for `absidx` via lower_bound over Less. Used ONLY for
-    //! a row not currently present (never to locate an existing row — Item 1).
+    //! Total order over absolute indices: CompareKeys for the active column/order,
+    //! then the native record index as a deterministic tie-breaker. m_records is
+    //! kept in RecordOrder (time, hash, idx), so a lower absolute index IS the
+    //! earlier native record — this both makes ties reproducible across re-sorts
+    //! and keeps the decomposed parts of one transaction contiguous. The proxy
+    //! got this for free from QSortFilterProxyModel's stable_sort over the native
+    //! source order; the cursor's std::sort needs the explicit total order.
+    bool lessIndexed(std::size_t a, std::size_t b) const;
+
+    //! Sorted insert slot for `absidx` via lower_bound over lessIndexed. Used ONLY
+    //! for a row not currently present (never to locate an existing row — Item 1).
     std::size_t lowerBoundSlot(std::size_t absidx) const;
     //! Identity locate: position of absolute index `absidx` in view_index, or
     //! npos. Linear scan by value (Item 1).
