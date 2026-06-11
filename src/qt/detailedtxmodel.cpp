@@ -1,0 +1,145 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include "qt/detailedtxmodel.h"
+
+#include "qt/transactiontablemodel.h"
+#include "qt/walletmodel.h"
+#include "qt/wallettxstore.h"
+
+#include <type_traits>
+#include <variant>
+
+DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
+    : QAbstractTableModel(parent)
+    , m_walletModel(walletModel)
+    , m_ttm(walletModel->getTransactionTableModel())
+{
+    // Register the server-side view: the full history sorted by Date DESC, the
+    // TransactionView's default ordering. The default FilterSpec is the
+    // "show everything" spec the unfiltered detailed view starts from; PR4-E
+    // confirms the exact show_inactive/show_orphans defaults against the old
+    // TransactionFilterProxy when the filter UI is wired. limit_rows defaults to
+    // unlimited, so the served window is the full filtered+sorted set (PR4);
+    // the viewport-slice cap is PR5.
+    GRC::FilterSpec spec;
+    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    store.registerView(GRC::VIEW_DETAILED, spec, GRC::TXCOL_DATE, GRC::TXSORT_DESC);
+
+    // registerView pushed a RowsReset that the next drain will deliver, but also
+    // seed synchronously so the table is populated before the first drain tick.
+    m_rows = store.getRows(GRC::VIEW_DETAILED, 0, store.totalAccepted(GRC::VIEW_DETAILED));
+
+    connect(m_walletModel, &WalletModel::walletEventsDrained,
+            this, &DetailedTxModel::applyEventBatch);
+}
+
+int DetailedTxModel::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : static_cast<int>(m_rows.size());
+}
+
+int DetailedTxModel::columnCount(const QModelIndex& parent) const
+{
+    // Forward to the formatter model so the column set stays single-sourced.
+    return parent.isValid() ? 0 : m_ttm->columnCount(QModelIndex());
+}
+
+QVariant DetailedTxModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() < 0
+            || static_cast<std::size_t>(index.row()) >= m_rows.size()) {
+        return QVariant();
+    }
+    // Reuse the TransactionTableModel formatters for whichever column the table
+    // asks for. const_cast: formatRole takes a non-const record (legacy
+    // getTxID()/describe() are non-const) but does not mutate it.
+    return m_ttm->formatRole(const_cast<TransactionRecord*>(&m_rows[index.row()]),
+                             index.column(), role);
+}
+
+QVariant DetailedTxModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    return m_ttm->headerData(section, orientation, role);
+}
+
+void DetailedTxModel::sort(int column, Qt::SortOrder order)
+{
+    // Forward to the producer cursor; the resulting RowsReset refills this model
+    // on the next drain. QTableView owns the header sort-indicator display.
+    m_walletModel->getTxStore().setViewSort(
+        GRC::VIEW_DETAILED, column,
+        order == Qt::AscendingOrder ? GRC::TXSORT_ASC : GRC::TXSORT_DESC);
+}
+
+void DetailedTxModel::setFilter(const GRC::FilterSpec& spec)
+{
+    m_walletModel->getTxStore().setViewFilter(GRC::VIEW_DETAILED, spec);
+}
+
+QModelIndex DetailedTxModel::indexForTxid(const uint256& hash) const
+{
+    for (std::size_t i = 0; i < m_rows.size(); ++i) {
+        if (m_rows[i].hash == hash) {
+            return index(static_cast<int>(i), 0);
+        }
+    }
+    return QModelIndex();
+}
+
+void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
+{
+    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    const int lastColumn = columnCount(QModelIndex()) - 1;
+    for (const GRC::WalletEvent& ev : events) {
+        std::visit([&](auto&& payload) {
+            using P = std::decay_t<decltype(payload)>;
+            if constexpr (std::is_same_v<P, GRC::RowsResetPayload>) {
+                if (payload.viewId != GRC::VIEW_DETAILED) return;
+                beginResetModel();
+                m_rows = store.getRows(GRC::VIEW_DETAILED, 0, payload.total);
+                endResetModel();
+            } else if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
+                if (payload.viewId != GRC::VIEW_DETAILED) return;
+                if (payload.records.empty()) return;  // empty insert → invalid beginInsertRows range
+                const int pos = payload.position;
+                if (pos < 0 || static_cast<std::size_t>(pos) > m_rows.size()) return;
+                beginInsertRows(QModelIndex(), pos,
+                                pos + static_cast<int>(payload.records.size()) - 1);
+                m_rows.insert(m_rows.begin() + pos,
+                              payload.records.begin(), payload.records.end());
+                endInsertRows();
+            } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
+                if (payload.viewId != GRC::VIEW_DETAILED) return;
+                const int pos = payload.position;
+                if (pos < 0 || payload.count <= 0
+                        || static_cast<std::size_t>(pos) + static_cast<std::size_t>(payload.count)
+                               > m_rows.size()) return;
+                beginRemoveRows(QModelIndex(), pos, pos + payload.count - 1);
+                m_rows.erase(m_rows.begin() + pos, m_rows.begin() + pos + payload.count);
+                endRemoveRows();
+            } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
+                if (payload.viewId != GRC::VIEW_DETAILED) return;
+                // The payload carries no records (a Change does not move the row),
+                // so re-fetch the changed slice from the cursor and refresh. A
+                // row spans every column, so the dataChanged span is full-width.
+                const std::vector<TransactionRecord> fresh =
+                    store.getRows(GRC::VIEW_DETAILED, payload.first, payload.count);
+                for (std::size_t i = 0; i < fresh.size()
+                        && static_cast<std::size_t>(payload.first) + i < m_rows.size(); ++i) {
+                    m_rows[static_cast<std::size_t>(payload.first) + i] = fresh[i];
+                }
+                if (!fresh.empty()) {
+                    emit dataChanged(index(payload.first, 0),
+                                     index(payload.first + static_cast<int>(fresh.size()) - 1,
+                                           lastColumn));
+                }
+            }
+            // VIEW_FULL/VIEW_OVERVIEW Rows* events and RowCountChanged are not
+            // consumed here. RowCountChanged signals a served-count change under a
+            // finite cap; PR4 holds the full set (unlimited cap) so it never fires.
+            // PR5's windowed cap will consume it to drive the scrollbar extent.
+        }, ev.payload);
+    }
+}

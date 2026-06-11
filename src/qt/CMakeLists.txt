@@ -44,6 +44,7 @@ add_library(gridcoinqt STATIC
     consolidateunspentwizardsendpage.cpp
     csvmodelwriter.cpp
     decoration.cpp
+    detailedtxmodel.cpp
     diagnosticsdialog.cpp
     editaddressdialog.cpp
     editsidestakedialog.cpp
