@@ -406,6 +406,14 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
 {
     LOCK(cs_store);
 
+    if (records.empty()) {
+        return;
+    }
+    // Capture the hash BEFORE the datetime-cutoff erase below: all parts of a tx
+    // share `time`, so the cutoff is all-or-nothing, and on an empty result we
+    // still need the hash to evict any rows the tx previously had.
+    const uint256 hash = records.front().hash;
+
     if (m_limit_enabled) {
         const int64_t limit_time = m_limit_time;
         records.erase(std::remove_if(records.begin(), records.end(),
@@ -413,12 +421,13 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
                       records.end());
     }
     if (records.empty()) {
-        // The whole tx fell outside the datetime cutoff. If it was present, it
-        // must go (its parts are now hidden); a bare hash remove handles that.
+        // The whole tx fell behind the datetime cutoff: if it was present it must
+        // go (its parts are now hidden). removeLocked is a no-op if absent, and
+        // drives the cursors + emits the removal events.
+        removeLocked(hash);
         return;
     }
     std::sort(records.begin(), records.end(), RecordOrder());
-    const uint256 hash = records.front().hash;
 
     auto range = m_by_hash.equal_range(hash);
     if (range.first == range.second) {
@@ -499,7 +508,11 @@ void WalletTxStore::setViewSort(int viewId, int sort_column, int sort_order)
     LOCK(cs_store);
     auto it = m_cursors.find(viewId);
     if (it == m_cursors.end()) return;
-    emitCursorDeltas(viewId, it->second.epoch(), it->second.setSort(sort_column, sort_order));
+    // Sequence the mutation before reading epoch(): setSort() bumps the cursor
+    // epoch, and C++ leaves function-argument evaluation order unspecified, so
+    // computing the deltas first guarantees the emitted events carry the NEW epoch.
+    const auto deltas = it->second.setSort(sort_column, sort_order);
+    emitCursorDeltas(viewId, it->second.epoch(), deltas);
 }
 
 void WalletTxStore::setViewFilter(int viewId, FilterSpec filter)
@@ -507,7 +520,9 @@ void WalletTxStore::setViewFilter(int viewId, FilterSpec filter)
     LOCK(cs_store);
     auto it = m_cursors.find(viewId);
     if (it == m_cursors.end()) return;
-    emitCursorDeltas(viewId, it->second.epoch(), it->second.setFilter(filter, m_records.size()));
+    // setFilter() bumps the epoch (Reset); sequence before reading epoch().
+    const auto deltas = it->second.setFilter(filter, m_records.size());
+    emitCursorDeltas(viewId, it->second.epoch(), deltas);
 }
 
 void WalletTxStore::setViewLimit(int viewId, int limit)
@@ -515,7 +530,9 @@ void WalletTxStore::setViewLimit(int viewId, int limit)
     LOCK(cs_store);
     auto it = m_cursors.find(viewId);
     if (it == m_cursors.end()) return;
-    emitCursorDeltas(viewId, it->second.epoch(), it->second.setLimit(limit));
+    // setLimit() does not bump the epoch, but sequence for consistency/safety.
+    const auto deltas = it->second.setLimit(limit);
+    emitCursorDeltas(viewId, it->second.epoch(), deltas);
 }
 
 std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int count)

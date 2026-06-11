@@ -692,6 +692,12 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
 // is a TransactionTableModel::ColumnIndex.
 QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt, int role) const
 {
+    // Public helper (per-view consumers call it too): validate the column so an
+    // out-of-range value cannot index column_alignments[] out of bounds or land in
+    // an undefined ColumnIndex (asserts are compiled out in release builds).
+    if (!rec || columnInt < Status || columnInt > Amount) {
+        return QVariant();
+    }
     const auto column = static_cast<ColumnIndex>(columnInt);
     switch (role) {
     case Qt::DecorationRole:

@@ -89,6 +89,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 endResetModel();
             } else if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
+                if (payload.records.empty()) return;  // empty insert → invalid beginInsertRows range
                 const int pos = payload.position;
                 if (pos < 0 || static_cast<std::size_t>(pos) > m_rows.size()) return;
                 beginInsertRows(QModelIndex(), pos,
