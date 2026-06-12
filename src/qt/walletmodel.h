@@ -178,6 +178,11 @@ private:
 
     QTimer *eventDrainTimer;
 
+    //! Coalescing guard for requestEventDrainSoon() (PR4-fix D): true while a
+    //! user-requested immediate drain is already scheduled, so a burst of requests
+    //! (e.g. per-keystroke filter changes) collapses to one drain. Qt-thread only.
+    bool m_event_drain_requested = false;
+
     //!
     //! \brief MPSC queue carrying producer-side wallet events to the GUI.
     //! Producers push under the locks they already hold; the consumer is

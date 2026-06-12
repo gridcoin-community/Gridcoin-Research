@@ -558,20 +558,16 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
 void WalletTxStore::applyAddressBookChange(const std::string& address, const std::string& label)
 {
     LOCK(cs_store);
-    // Re-snapshot the label on every stored record for this address, refresh its
-    // cached projector outputs, then re-drive the cursors. The label is the
-    // Address-column sort key and an address-substring filter target, so a record's
-    // membership and/or sort slot can change. Positions in m_records are stable
-    // (the label is not part of RecordOrder), so a single pass is safe; recompute
-    // ALL affected caches BEFORE driving cursors, so each reposition sees every
-    // affected row's new key.
-    // Re-snapshot + re-drive ONE record at a time. applyStatusUpdate repositions a
-    // row via lower_bound, which requires the rest of view_index sorted; recomputing
-    // ALL same-address keys first would leave several rows mis-keyed in their old
-    // slots (view_index transiently unsorted) and break lower_bound under an Address
-    // sort. Interleaving keeps every not-yet-processed row at its consistent prior
-    // key/slot. Positions in m_records are stable (the label is not part of
-    // RecordOrder). (PR4-fix C, review follow-up.)
+    // Re-snapshot the address-book label on every stored record for this address,
+    // refresh its cached projector outputs, and re-drive the cursors — the label is
+    // the Address-column sort key and an address-substring filter target, so a
+    // record's filter membership and/or sort slot can change. Do this ONE record at
+    // a time (recompute its cache, then reposition it in every cursor) rather than
+    // recomputing all affected caches up front: applyStatusUpdate repositions via
+    // lower_bound, which needs the rest of view_index sorted, and recomputing all
+    // same-address keys first would leave several rows mis-keyed in their old slots
+    // (transiently unsorted) and break lower_bound under an Address sort. Positions
+    // in m_records are stable (the label is not part of RecordOrder). (PR4-fix C.)
     for (std::size_t i = 0; i < m_records.size(); ++i) {
         if (m_records[i].address != address) {
             continue;
@@ -592,6 +588,7 @@ void WalletTxStore::applyChainTipRefresh()
     // excludes this from reloadAndSnapshot (which holds cs_main on the Qt thread),
     // and the worker never needs cs_main/cs_wallet, so there is no deadlock with
     // the rebuild park protocol.
+    AssertLockHeld(cs_main);   // fail fast on misuse (this runs off boost::signals2)
     LOCK(m_wallet->cs_wallet);
     LOCK(cs_store);
     if (m_volatile.empty()) {

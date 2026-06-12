@@ -166,6 +166,11 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::drainEventQueue()
 {
+    // Any drain (periodic, backlog re-arm, or a requestEventDrainSoon kick) satisfies
+    // a pending user-requested drain, so clear the coalescing flag up front: a fresh
+    // request that arrives after this point schedules a new kick (PR4-fix D).
+    m_event_drain_requested = false;
+
     // Bound the per-tick batch so a large backlog (reorg flood, IBD catch-up)
     // cannot freeze the Qt main thread in a single apply pass. If the queue
     // still has events after this batch, re-arm immediately (see below)
@@ -240,8 +245,17 @@ void WalletModel::requestEventDrainSoon()
     // Kick a drain on the next event-loop turn so a user-initiated cursor change
     // (filter/sort, which synchronously pushed a Reset to the queue) is reflected
     // immediately instead of waiting up to MODEL_EVENT_DRAIN_INTERVAL for the
-    // periodic tick (windowed-model PR4-fix D). singleShot(0) coalesces — multiple
-    // requests before the next turn collapse to one drain.
+    // periodic tick (windowed-model PR4-fix D).
+    //
+    // QTimer::singleShot does NOT deduplicate — each call schedules its own
+    // callback — so coalesce explicitly with a pending flag, or a burst (e.g. every
+    // keystroke in the filter box) would queue one drain per keystroke. The flag is
+    // cleared at the top of drainEventQueue, so exactly one drain is in flight per
+    // burst; it runs on the Qt thread, so the flag needs no synchronization.
+    if (m_event_drain_requested) {
+        return;
+    }
+    m_event_drain_requested = true;
     QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
 }
 
