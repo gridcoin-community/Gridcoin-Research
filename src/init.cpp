@@ -34,7 +34,6 @@
 #include <thread>
 
 static boost::thread_group threadGroup;
-static CScheduler scheduler;
 
 //! The proof-of-stake miner thread. Launched from AppInit2 Step 12 and joined
 //! in Shutdown() after StopNode(), before the block-file flush, so a block
@@ -68,6 +67,7 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 
 std::unique_ptr<BanMan> g_banman;
+std::unique_ptr<CScheduler> g_scheduler;
 
 /**
  * The PID file facilities.
@@ -158,9 +158,10 @@ void Shutdown(void* parg)
 
         fShutdown = true;
 
-        // Signal to the scheduler to stop.
+        // Signal to the scheduler to stop. Guarded because Shutdown() can run
+        // after an early AppInit2 failure, before the scheduler is constructed.
         LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
-        scheduler.stop();
+        if (g_scheduler) g_scheduler->stop();
 
         // clean up any remaining threads running serviceQueue:
         LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
@@ -1724,22 +1725,24 @@ bool AppInit2(ThreadHandlerPtr threads)
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
     // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    assert(!g_scheduler);
+    g_scheduler = std::make_unique<CScheduler>();
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
 
     // Gather some entropy once per minute.
-    scheduler.scheduleEvery([]{
+    g_scheduler->scheduleEvery([]{
         RandAddPeriodic();
     }, std::chrono::minutes{1});
 
     // TODO: Do we need this? It would require porting the Bitcoin signal handler.
-    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
+    // GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
 
-    scheduler.scheduleEvery([]{
+    g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
-    GRC::ScheduleBackgroundJobs(scheduler);
+    GRC::ScheduleBackgroundJobs(*g_scheduler);
 
     #if HAVE_SYSTEM
         StartupNotify(gArgs);
