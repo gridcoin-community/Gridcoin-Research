@@ -96,7 +96,7 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
         vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
     }
 
-    RelayInventory(inv);
+    if (g_connman) g_connman->RelayInventory(inv);
 }
 
 // Peer misbehavior tracking moved into PeerManagerImpl::m_misbehavior in PR 8b
@@ -386,11 +386,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Ask the first connected node for block updates
         static int nAskedForBlocks = 0;
-        size_t numNodes;
-        {
-            LOCK(cs_vNodes);
-            numNodes = vNodes.size();
-        }
+        size_t numNodes = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
         {
             LOCK(cs_main);
             if (!pfrom->fClient && !pfrom->fOneShot &&
@@ -465,30 +461,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
             if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
             {
-                // Relay to a limited number of other nodes
-                {
-                    LOCK(cs_vNodes);
-                    // Use deterministic randomness to send to the same nodes for 24 hours
-                    // at a time so the setAddrKnowns of the chosen nodes prevent repeats
-                    static arith_uint256 hashSalt;
-                    if (hashSalt == 0)
-                        hashSalt = UintToArith256(GetRandHash());
-                    uint64_t hashAddr = addr.GetHash();
-                    uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr<<32) ^ (( GetAdjustedTime() +hashAddr)/(24*60*60)));
-                    hashRand = Hash(hashRand);
-                    multimap<uint256, CNode*> mapMix;
-                    for (auto const& pnode : vNodes)
-                    {
-                        unsigned int nPointer;
-                        memcpy(&nPointer, &pnode, sizeof(nPointer));
-                        uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
-                        hashKey = Hash(hashKey);
-                        mapMix.insert(make_pair(hashKey, pnode));
-                    }
-                    int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
-                    for (multimap<uint256, CNode*>::iterator mi = mapMix.begin(); mi != mapMix.end() && nRelayNodes-- > 0; ++mi)
-                        (mi->second)->PushAddress(addr);
-                }
+                // Relay to a deterministic, limited subset of nodes (issue #2558
+                // PR 9c: the selection + relay logic moved into CConnman, which
+                // keeps it under cs_vNodes so the chosen CNode* stay valid).
+                if (g_connman) g_connman->RelayAddress(addr, fReachable);
             }
             // Do not store addresses outside our network
             if (fReachable)
@@ -1013,12 +989,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (alert.ProcessAlert())
             {
-                // Relay
+                // Relay (issue #2558 PR 9c: iterate via the node-access API).
                 pfrom->setKnown.insert(alertHash);
-                {
-                    LOCK(cs_vNodes);
-                    for (auto const& pnode : vNodes)
+                if (g_connman) {
+                    g_connman->ForEachNode([&alert](CNode* pnode) {
                         alert.RelayTo(pnode);
+                    });
                 }
             }
             else {

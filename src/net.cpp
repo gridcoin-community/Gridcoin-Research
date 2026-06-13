@@ -14,6 +14,8 @@
 #include "init.h"
 #include "node/ui_interface.h"
 #include "random.h"
+#include "arith_uint256.h"
+#include "hash.h"
 #include "util.h"
 #include "util/threadnames.h"
 
@@ -2125,6 +2127,47 @@ std::vector<std::string> CConnman::GetAddedNodes() const
 {
     LOCK(cs_vAddedNodes);
     return vAddedNodes;
+}
+
+void CConnman::ForEachNodeUnderLock(const std::function<void(CNode*)>& func) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    LOCK(cs_vNodes);
+    for (const auto& pnode : vNodes) {
+        func(pnode);
+    }
+}
+
+void CConnman::RelayInventory(const CInv& inv)
+{
+    ForEachNode([&inv](CNode* pnode) {
+        pnode->PushInventory(inv);
+    });
+}
+
+void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
+{
+    LOCK(cs_vNodes);
+    // Use deterministic randomness to send to the same nodes for 24 hours
+    // at a time so the setAddrKnowns of the chosen nodes prevent repeats.
+    static arith_uint256 hashSalt;
+    if (hashSalt == 0)
+        hashSalt = UintToArith256(GetRandHash());
+    uint64_t hashAddr = addr.GetHash();
+    uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
+    hashRand = Hash(hashRand);
+    multimap<uint256, CNode*> mapMix;
+    for (auto const& pnode : vNodes)
+    {
+        unsigned int nPointer;
+        memcpy(&nPointer, &pnode, sizeof(nPointer));
+        uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
+        hashKey = Hash(hashKey);
+        mapMix.insert(make_pair(hashKey, pnode));
+    }
+    int nRelayNodes = fReachable ? 2 : 1; // limited relaying of addresses outside our network(s)
+    for (multimap<uint256, CNode*>::iterator mi = mapMix.begin(); mi != mapMix.end() && nRelayNodes-- > 0; ++mi)
+        (mi->second)->PushAddress(addr);
 }
 
 bool CConnman::Start()

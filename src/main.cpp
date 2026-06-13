@@ -1402,32 +1402,34 @@ bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
 bool AskForOutstandingBlocks(uint256 hashStart)
 {
-    int iAsked = 0;
-    LOCK2(cs_main, cs_vNodes);
-    for (auto const& pNode : vNodes)
+    LOCK(cs_main);
+
+    // Resolve the start block index once under cs_main (issue #2558 PR 9c);
+    // it does not depend on the peer, so hoist it out of the per-node loop.
+    CBlockIndex* pindexStart = pindexBest;
+    if (hashStart != uint256())
     {
-                if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeight - 144)))
-                {
-                        if (hashStart==uint256())
-                        {
-                            pNode->PushGetBlocks(pindexBest, uint256());
-                        }
-                        else
-                        {
-                            CBlockIndex* pblockindex = mapBlockIndex[hashStart];
-                            if (pblockindex)
-                            {
-                                pNode->PushGetBlocks(pblockindex, uint256());
-                            }
-                            else
-                            {
-                                return error("Unable to find block index %s",hashStart.ToString().c_str());
-                            }
-                        }
-                        LogPrintf("Asked for blocks");
-                        iAsked++;
-                        if (iAsked > 10) break;
-                }
+        const auto it = mapBlockIndex.find(hashStart);
+        if (it == mapBlockIndex.end() || !it->second)
+            return error("Unable to find block index %s", hashStart.ToString().c_str());
+        pindexStart = it->second;
+    }
+
+    // Read the cs_main-guarded height into a local so the iteration callback
+    // touches no cs_main-guarded state (keeps -Werror=thread-safety happy).
+    const int nBestHeightLocal = nBestHeight;
+    int iAsked = 0;
+    if (g_connman)
+    {
+        g_connman->ForEachNodeUnderLock([&](CNode* pNode) {
+            if (iAsked > 10) return;
+            if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeightLocal - 144)))
+            {
+                pNode->PushGetBlocks(pindexStart, uint256());
+                LogPrintf("Asked for blocks");
+                iAsked++;
+            }
+        });
     }
     return true;
 }

@@ -652,16 +652,6 @@ public:
 // EXCLUSIVE_LOCKS_REQUIRED lock-expression can reference pnode->cs_vSend.
 void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend);
 
-inline void RelayInventory(const CInv& inv)
-{
-    // Put on lists to offer to the other nodes
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            pnode->PushInventory(inv);
-    }
-}
-
 //! Interface for message-processing callbacks driven by the connection manager
 //! (issue #2558 PR 8a). PeerManagerImpl implements it; CConnman drives it via
 //! Options::m_msgproc in PR 8c. Kept minimal -- just the per-node message pump
@@ -743,6 +733,19 @@ public:
     bool AddNode(const std::string& strNode);
     bool RemoveAddedNode(const std::string& strNode);
     std::vector<std::string> GetAddedNodes() const;
+
+    //! Like ForEachNode, but for callers that already hold cs_main and whose
+    //! callback reads cs_main-guarded state (issue #2558 PR 9c). Takes cs_vNodes
+    //! internally, preserving the canonical cs_main -> cs_vNodes order.
+    void ForEachNodeUnderLock(const std::function<void(CNode*)>& func) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Relay an inventory item to every node (issue #2558 PR 9c; replaces the
+    //! free RelayInventory shim).
+    void RelayInventory(const CInv& inv);
+
+    //! Relay an address to a deterministic, limited subset of nodes (issue #2558
+    //! PR 9c; moved from net_processing's ADDR handler).
+    void RelayAddress(const CAddress& addr, bool fReachable);
 
     void Interrupt();
     void Stop();
