@@ -7,6 +7,13 @@
 
 #include "net.h"
 
+class CTransaction;
+
+// Relay a transaction to peers, caching its serialized form in mapRelay so it
+// can be served from the getdata loop (moved from net.h, issue #2558 PR 2b).
+void RelayTransaction(const CTransaction& tx, const uint256& hash);
+void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
+
 bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
 // Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
 // cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires
