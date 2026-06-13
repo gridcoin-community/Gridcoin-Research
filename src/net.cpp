@@ -75,7 +75,6 @@ std::unique_ptr<CConnman> g_connman;
 // Listen sockets are RAII Sock wrappers (issue #2558 PR 5b) so they can join
 // the Sock::WaitMany() set uniformly with the per-node sockets.
 static std::vector<std::shared_ptr<Sock>> vhListenSocket;
-AddrMan addrman;
 
 // Initialization of static class variable.
 std::atomic<NodeId> CNode::nLastNodeId {-1};
@@ -341,7 +340,7 @@ CNode* FindNode(const CService& addr)
 
 void AddressCurrentlyConnected(const CService& addr)
 {
-    addrman.Connected(addr);
+    g_connman->GetAddrMan().Connected(addr);
 }
 
 
@@ -365,7 +364,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     SOCKET hSocket;
     if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
     {
-        addrman.Attempt(addrConnect);
+        g_connman->GetAddrMan().Attempt(addrConnect);
         /// debug print
         LogPrint(BCLog::LogFlags::NET, "connected %s", pszDest ? pszDest : addrConnect.ToString());
         // Set to non-blocking
@@ -1361,7 +1360,7 @@ void ThreadDNSAddressSeed2(void* parg)
                 if (!vIPs.empty()) {
                     CService seedSource;
                     Lookup(seed[0], seedSource, 0, true);
-                    addrman.Add(vAdd, seedSource);
+                    g_connman->GetAddrMan().Add(vAdd, seedSource);
                 }
             }
         }
@@ -1387,10 +1386,10 @@ void DumpAddresses()
     int64_t nStart = GetTimeMillis();
 
     CAddrDB adb;
-    adb.Write(addrman);
+    adb.Write(g_connman->GetAddrMan());
 
     LogPrint(BCLog::LogFlags::NET, "Flushed %d addresses to peers.dat  %" PRId64 "ms",
-             addrman.size(), GetTimeMillis() - nStart);
+             g_connman->GetAddrMan().size(), GetTimeMillis() - nStart);
 }
 
 void ThreadDumpAddress2(void* parg)
@@ -1532,7 +1531,7 @@ void ThreadOpenConnections2(void* parg)
             return;
 
         // Add seed nodes
-        if (addrman.size() == 0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
+        if (g_connman->GetAddrMan().size() == 0 && (GetAdjustedTime() - nStart > 60) && !fTestNet)
         {
             std::vector<CAddress> vAdd;
             for (const auto& seed : pnSeed)
@@ -1550,7 +1549,7 @@ void ThreadOpenConnections2(void* parg)
             }
             CNetAddr local;
             LookupHost("127.0.0.1", local, false);
-            addrman.Add(vAdd, local);
+            g_connman->GetAddrMan().Add(vAdd, local);
         }
 
         //
@@ -1575,7 +1574,7 @@ void ThreadOpenConnections2(void* parg)
         int nTries = 0;
         while (true)
         {
-            CAddress addr = addrman.Select();
+            CAddress addr = g_connman->GetAddrMan().Select();
 
             // if we selected an invalid address, restart
             if (!addr.IsValid() || setConnected.count(addr.GetGroup()) || IsLocal(addr))
@@ -2000,9 +1999,8 @@ void static Discover()
 #endif
 }
 
-CConnman::CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrmanIn, bool network_active)
-    : m_addrman(addrmanIn)
-    , nSeed0(seed0)
+CConnman::CConnman(uint64_t seed0, uint64_t seed1, bool network_active)
+    : nSeed0(seed0)
     , nSeed1(seed1)
     , fNetworkActive(network_active)
 {
