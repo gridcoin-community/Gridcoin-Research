@@ -1402,15 +1402,11 @@ bool IsMiningAllowed(CWallet *pwallet)
         g_miner_status.AddError(GRC::MinerStatus::TESTNET_ONLY);
     }
 
-    // vNodes is mutated by ThreadSocketHandler / connection-accept paths
-    // under cs_vNodes; snapshot the size under the lock rather than racing
-    // the writers (TSan G3 at miner.cpp:1379). Mirrors the existing pattern
-    // at net.cpp:889-897.
-    size_t numNodes;
-    {
-        LOCK(cs_vNodes);
-        numNodes = vNodes.size();
-    }
+    // Connection count via the CConnman node-access API (issue #2558 PR 9a);
+    // GetNodeCount takes cs_vNodes internally, avoiding the TSan race with the
+    // ThreadSocketHandler / connection-accept writers. g_connman is null only
+    // before StartNode / after shutdown, where zero peers is the correct gate.
+    size_t numNodes = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
     // On regtest (IsMockableChain) a solo node must be able to stake without peers
     // or a synced tip, so functional tests can drive the background staker
     // deterministically (e.g. the stakelimit height ceiling). Skip the peer-count /
