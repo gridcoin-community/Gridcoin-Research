@@ -13,12 +13,12 @@ using namespace std;
 
 BOOST_AUTO_TEST_SUITE(addrman_tests)
 
-class CAddrManTest : public CAddrMan
+class AddrManTest : public AddrMan
 {
     uint64_t state;
 
 public:
-    CAddrManTest()
+    AddrManTest()
     {
         state = 1;
     }
@@ -38,17 +38,17 @@ public:
 
     CAddrInfo* Find(const CNetAddr& addr, int* pnId = NULL)
     {
-        return CAddrMan::Find(addr, pnId);
+        return AddrMan::Find(addr, pnId);
     }
 
     CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = NULL)
     {
-        return CAddrMan::Create(addr, addrSource, pnId);
+        return AddrMan::Create(addr, addrSource, pnId);
     }
 
     void Delete(int nId)
     {
-        CAddrMan::Delete(nId);
+        AddrMan::Delete(nId);
     }
 };
 
@@ -78,7 +78,7 @@ static CService ResolveService(std::string ip, int port = 0)
 
 BOOST_AUTO_TEST_CASE(addrman_simple)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(addrman_simple)
 
 BOOST_AUTO_TEST_CASE(addrman_ports)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(addrman_ports)
 
 BOOST_AUTO_TEST_CASE(addrman_select)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -214,7 +214,7 @@ BOOST_AUTO_TEST_CASE(addrman_select)
 
 BOOST_AUTO_TEST_CASE(addrman_new_collisions)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(addrman_new_collisions)
 
 BOOST_AUTO_TEST_CASE(addrman_tried_collisions)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(addrman_tried_collisions)
 
 BOOST_AUTO_TEST_CASE(addrman_find)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(addrman_find)
 
 BOOST_AUTO_TEST_CASE(addrman_create)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -336,7 +336,7 @@ BOOST_AUTO_TEST_CASE(addrman_create)
 
 BOOST_AUTO_TEST_CASE(addrman_delete)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -359,7 +359,7 @@ BOOST_AUTO_TEST_CASE(addrman_delete)
 
 BOOST_AUTO_TEST_CASE(addrman_getaddr)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -424,7 +424,7 @@ BOOST_AUTO_TEST_CASE(addrman_getaddr)
 
 BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();
@@ -481,7 +481,7 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 
 BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
 {
-    CAddrManTest addrman;
+    AddrManTest addrman;
 
     // Set addrman addr placement to be deterministic.
     addrman.MakeDeterministic();

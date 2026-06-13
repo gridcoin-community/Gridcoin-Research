@@ -121,7 +121,7 @@ extern std::atomic<uint64_t> nLocalHostNonce;
 //! assignment/copy is not atomic.
 extern CCriticalSection cs_addrSeenByPeer;
 extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
-extern CAddrMan addrman;
+extern AddrMan addrman;
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
 //! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
 //! from ProcessBlock, from SendMessages' getdata loop, and from
@@ -681,7 +681,7 @@ public:
         int nMaxOutbound = 0;
     };
 
-    CConnman(uint64_t seed0, uint64_t seed1, CAddrMan& addrman, bool network_active = true);
+    CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrman, bool network_active = true);
     ~CConnman();
 
     void Init(const Options& opts) { m_options = opts; }
@@ -690,7 +690,7 @@ public:
     void Stop();
 
 private:
-    CAddrMan& m_addrman;
+    AddrMan& m_addrman;
     const uint64_t nSeed0, nSeed1;
     std::atomic<bool> fNetworkActive;
     Options m_options;
