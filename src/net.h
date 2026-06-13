@@ -699,6 +699,10 @@ public:
     {
         int nMaxConnections = 0;
         int nMaxOutbound = 0;
+        //! Message processor the connection manager drives (issue #2558 PR 8c).
+        //! Set to g_peerman in AppInit2; null in contexts that never pump
+        //! messages (e.g. the test fixture).
+        NetEventsInterface* m_msgproc = nullptr;
     };
 
     CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrman, bool network_active = true);
@@ -706,6 +710,11 @@ public:
 
     void Init(const Options& opts) { m_options = opts; }
     bool Start();
+
+    //! The message processor (NetEventsInterface) the net threads drive, or
+    //! null if none is configured (issue #2558 PR 8c).
+    NetEventsInterface* GetMessageProcessor() const { return m_options.m_msgproc; }
+
     void Interrupt();
     void Stop();
 
