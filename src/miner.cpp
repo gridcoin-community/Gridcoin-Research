@@ -42,6 +42,8 @@ using namespace std;
 
 unsigned int nMinerSleep;
 
+std::atomic<int> g_stakelimit_height{0};
+
 namespace {
 class COrphan
 {
@@ -308,8 +310,18 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     mtxCoinbase.vin.resize(1);
     mtxCoinbase.vin[0].prevout.SetNull();
     mtxCoinbase.vout.resize(1);
-    // Height first in coinbase required for block.version=2
-    mtxCoinbase.vin[0].scriptSig = (CScript() << nHeight) + COINBASE_FLAGS;
+    // Height first in coinbase required for block.version=2. CheckTransaction
+    // requires scriptSig size in [2, 100]; for small heights (1..16) the
+    // literal OP_N push is only 1 byte and COINBASE_FLAGS is uninitialized
+    // (empty CScript) outside mining-pool builds, so the scriptSig would be a
+    // single byte. Pad with OP_0 ONLY when the script would otherwise be < 2
+    // bytes; this keeps mainnet/testnet coinbase bytes identical (heights >= 17
+    // already push >= 2 bytes) while satisfying the size rule for low regtest
+    // heights. The BIP34 height check is a prefix match, so the trailing OP_0
+    // does not affect consensus.
+    CScript coinbase_script = CScript() << nHeight;
+    if (coinbase_script.size() + COINBASE_FLAGS.size() < 2) coinbase_script << OP_0;
+    mtxCoinbase.vin[0].scriptSig = coinbase_script + COINBASE_FLAGS;
     assert(mtxCoinbase.vin[0].scriptSig.size() <= 100);
     mtxCoinbase.vout[0].SetEmpty();
 
@@ -1270,6 +1282,14 @@ bool SignStakeBlock(CBlock &block, CKey &key,
 
 void AddSuperblockContractOrVote(CMutableTransaction& mtxCoinbase, int64_t nBlockTime) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    if (Params().IsMockableChain()) {
+        // Under -regtest, the only path to a superblock is the explicit
+        // `generatesuperblock` RPC (Phase 2B). Suppress auto-attach so blocks
+        // produced by the deterministic staker stay free of synthetic quorum
+        // payloads driven by absent scrapers.
+        return;
+    }
+
     if (OutOfSyncByAge()) {
         LogPrintf("AddSuperblockContractOrVote: Out of sync.");
         return;
@@ -1390,7 +1410,13 @@ bool IsMiningAllowed(CWallet *pwallet)
         LOCK(cs_vNodes);
         numNodes = vNodes.size();
     }
-    if (numNodes < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
+    // On regtest (IsMockableChain) a solo node must be able to stake without peers
+    // or a synced tip, so functional tests can drive the background staker
+    // deterministically (e.g. the stakelimit height ceiling). Skip the peer-count /
+    // IBD OFFLINE gate there only; main/testnet keep the full requirement.
+    if (!Params().IsMockableChain()
+            && (numNodes < GetMinimumConnectionsRequiredForStaking()
+                || (!fTestNet && IsInitialBlockDownload()))) {
         g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 
@@ -1477,6 +1503,25 @@ void StakeMiner(CWallet *pwallet)
 
         // wait for next round
         if (!MilliSleep(nMinerSleep)) return;
+
+        // Regtest stakelimit (Particl-analog): pause once chain height reaches the
+        // limit. Keep looping so the thread can resume as soon as the limit is
+        // raised. Only consulted on chains where the RPC is reachable; on
+        // mainnet/testnet the global stays at 0 and this branch is no-op.
+        // nBestHeight is GUARDED_BY(cs_main); read the snapshot under the lock.
+        if (Params().IsMockableChain()) {
+            const int limit = g_stakelimit_height.load(std::memory_order_relaxed);
+            if (limit > 0) {
+                int height_now;
+                {
+                    LOCK(cs_main);
+                    height_now = nBestHeight;
+                }
+                if (height_now >= limit) {
+                    continue;
+                }
+            }
+        }
 
         g_timer.InitTimer("miner", LogInstance().WillLogCategory(BCLog::LogFlags::MISC));
 
@@ -1625,4 +1670,102 @@ void StakeMiner(CWallet *pwallet)
 
         g_timer.GetTimes(function + "ProcessBlock", "miner");
     } //end while(!fShutdown)
+}
+
+// Regtest helper: run one iteration of the staking pipeline and emit the
+// resulting block, or set `err` to the first stage that failed. Called by
+// the `generatetoaddress` / `generatesuperblock` RPCs. The caller is expected
+// to retry on transient failure (no stake found, etc). Refuses on non-mockable
+// chains so it cannot be invoked from network code paths.
+//
+// The pipeline mirrors StakeMiner's inner body. Refactoring StakeMiner to call
+// this helper itself is a follow-up — for now the duplication is intentional
+// to keep the mainnet/testnet staking path untouched.
+bool TryMineRegtestBlock(CWallet* pwallet,
+                         CBlock& blocknew_out,
+                         std::string& err)
+{
+    if (!Params().IsMockableChain()) {
+        err = "TryMineRegtestBlock: only valid on regtest";
+        return false;
+    }
+    if (!pwallet) {
+        err = "no wallet";
+        return false;
+    }
+
+    CBlock StakeBlock;
+    std::map<GRC::Cpid, std::pair<uint256, GRC::MRC>> mrc_map;
+    std::map<GRC::Cpid, uint256> mrc_tx_map;
+
+    LOCK(cs_main);
+
+    CBlockIndex* pindexPrev = pindexBest;
+    if (!pindexPrev) {
+        err = "pindexBest is null";
+        return false;
+    }
+
+    if (!IsV13Enabled(pindexPrev->nHeight + 1)) {
+        StakeBlock.nVersion = 12;
+    } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
+        StakeBlock.nVersion = 13;
+    }
+
+    StakeBlock.nTime = GetAdjustedTime();
+    StakeBlock.nNonce = 0;
+    StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
+    StakeBlock.vtx.resize(2);
+
+    CMutableTransaction mtxCoinstake;
+    CKey BlockKey;
+    std::vector<const CWalletTx*> StakeInputs;
+
+    if (!CreateCoinStake(StakeBlock, mtxCoinstake, BlockKey, StakeInputs, *pwallet, pindexPrev)) {
+        err = "CreateCoinStake: no stake found (need a mature UTXO with sufficient weight)";
+        return false;
+    }
+    StakeBlock.nTime = mtxCoinstake.nTime;
+
+    CMutableTransaction mtxCoinbase;
+    if (!CreateRestOfTheBlock(StakeBlock, mtxCoinbase, mtxCoinstake, pindexPrev, mrc_map)) {
+        err = "CreateRestOfTheBlock failed";
+        return false;
+    }
+
+    int64_t nReward = 0;
+    GRC::Claim claim;
+    if (!CreateGridcoinReward(mtxCoinbase, mtxCoinstake, StakeBlock, pindexPrev, nReward, claim)) {
+        err = "CreateGridcoinReward failed";
+        return false;
+    }
+
+    uint32_t claim_contract_version = IsV13Enabled(pindexPrev->nHeight + 1) ? 3 : 2;
+
+    if (!CreateMRCRewards(mtxCoinbase, mtxCoinstake, StakeBlock, mrc_map, mrc_tx_map,
+                           nReward, claim_contract_version, claim, pwallet)) {
+        err = "CreateMRCRewards failed";
+        return false;
+    }
+
+    AddSuperblockContractOrVote(mtxCoinbase, StakeBlock.nTime);
+
+    StakeBlock.vtx[0] = CTransaction(mtxCoinbase);
+    StakeBlock.vtx[1] = CTransaction(mtxCoinstake);
+
+    if (!SignStakeBlock(StakeBlock, BlockKey, StakeInputs, pwallet)) {
+        err = "SignStakeBlock failed (check beacon / investor mode)";
+        return false;
+    }
+
+    CValidationState stake_state;
+    if (!ProcessBlock(nullptr, &StakeBlock, true, stake_state)) {
+        err = "ProcessBlock rejected the block: " + stake_state.GetRejectReason();
+        return false;
+    }
+
+    g_miner_status.IncrementBlocksCreated();
+    g_miner_status.UpdateLastStake(StakeBlock.vtx[1].GetHash());
+    blocknew_out = StakeBlock;
+    return true;
 }

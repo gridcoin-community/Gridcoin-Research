@@ -435,8 +435,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Do this to pickup -testnet from the command line.
-    SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+    // Do this to pickup -testnet / -regtest from the command line.
+    SelectParams(gArgs.GetChainName());
 
     // Determine availability of data directory and parse gridcoinresearch.conf
     // Do not call GetDataDir(true) before this step finishes

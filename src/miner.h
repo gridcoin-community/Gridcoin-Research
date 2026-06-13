@@ -19,6 +19,11 @@ typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
+// Regtest-only staking-height ceiling. When > 0, ThreadStakeMiner pauses
+// once `nBestHeight >= g_stakelimit_height`. Set via the `stakelimit` RPC
+// (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
+extern std::atomic<int> g_stakelimit_height;
+
 // Note the below constant controls the minimum value allowed for post
 // split UTXO size. It is int64_t but in GRC so that it matches the entry in the config file.
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
@@ -44,5 +49,13 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
                           CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward,
                           GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+// Regtest-only single-iteration of the staking pipeline. Returns true and
+// fills blocknew_out on success; returns false and sets err on failure. Used
+// by `generatetoaddress` / `generatesuperblock` RPCs to advance the chain
+// deterministically.
+bool TryMineRegtestBlock(CWallet* pwallet,
+                         CBlock& blocknew_out,
+                         std::string& err);
 
 #endif // BITCOIN_MINER_H
