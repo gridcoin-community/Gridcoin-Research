@@ -64,6 +64,40 @@ extern std::map<uint256, CAlert> mapAlerts GUARDED_BY(cs_mapAlerts);
 // VERSION handler feeds it peer-claimed heights, so declare it here.
 extern CMedianFilter<int> cPeerBlockCounts GUARDED_BY(cs_main);
 
+// Relay-message cache. Both accessors -- RelayTransaction (below) and the
+// getdata loop in SendMessages -- now live in this TU, so the map is file-local.
+static CCriticalSection cs_mapRelay;
+static map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
+static deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
+
+void RelayTransaction(const CTransaction& tx, const uint256& hash)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss.reserve(10000);
+    ss << tx;
+    RelayTransaction(tx, hash, ss);
+}
+
+void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss)
+{
+    CInv inv(MSG_TX, hash);
+    {
+        LOCK(cs_mapRelay);
+        // Expire old relay messages
+        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
+        {
+            mapRelay.erase(vRelayExpiration.front().second);
+            vRelayExpiration.pop_front();
+        }
+
+        // Save original serialized message so newer versions are preserved
+        mapRelay.insert(std::make_pair(inv, ss));
+        vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
+    }
+
+    RelayInventory(inv);
+}
+
 // Orphan transaction storage. All accesses occur under cs_main from
 // ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
 map<uint256, CTransaction> mapOrphanTransactions GUARDED_BY(cs_main);
