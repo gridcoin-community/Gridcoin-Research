@@ -29,3 +29,4 @@ clen
 siz
 anull
 doas
+som

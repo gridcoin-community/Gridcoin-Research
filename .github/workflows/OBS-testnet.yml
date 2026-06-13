@@ -1,0 +1,24 @@
+name: OBS testnet
+
+# Thin caller: builds the testnet package on OBS. The engine mangles
+# debian-testnet/ -> debian/ (and drops the inactive sibling) before generating
+# the source package, so the renamed gridcointestnetd/-qt binaries are produced.
+# Tag-triggered on *-testnet (deliberate testnet release tags). Real testnet
+# releases build from the testnet source branch; for pipeline bring-up this runs
+# over ci/obs via the TEMPORARY push trigger below.
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - "*-testnet"
+
+jobs:
+  testnet:
+    uses: ./.github/workflows/obs-build.yml
+    with:
+      variant: testnet
+      obs_project: ${{ vars.OBS_PROJECT }}
+      obs_package: gridcointestnet
+    secrets:
+      OBS_USER: ${{ secrets.OBS_USER }}
+      OBS_PASS: ${{ secrets.OBS_PASS }}

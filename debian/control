@@ -1,0 +1,82 @@
+Source: gridcoinresearch
+Section: net
+Priority: optional
+Maintainer: Gridcoin Developers <dev@gridcoin.us>
+Standards-Version: 4.6.2
+Build-Depends:
+ build-essential,
+ libtool,
+ autotools-dev,
+ automake,
+ pkg-config,
+ bsdmainutils,
+ python3,
+ cmake (>= 3.18),
+ ccache,
+ doxygen,
+ graphviz,
+ bison,
+ xxd,
+ dh-exec,
+ libxkbcommon-dev,
+ libssl-dev,
+ libevent-dev,
+ libboost-filesystem-dev (>= 1.63),
+ libboost-iostreams-dev,
+ libboost-thread-dev,
+ libboost-serialization-dev,
+ libboost-date-time-dev,
+ libboost-test-dev,
+ libminiupnpc-dev,
+ libqrencode-dev,
+ libzip-dev,
+ libcurl4-openssl-dev,
+ libgl-dev,
+ zipcmp,
+ zipmerge,
+ ziptool,
+ qt6-base-dev (>= 6.2),
+ qt6-tools-dev,
+ qt6-l10n-tools,
+ qt6-tools-dev-tools,
+ libqt6charts6-dev,
+ libqt6svg6-dev,
+ libqt6core5compat6-dev,
+ dh-exec,
+ debhelper-compat (= 13)
+
+Homepage: https://gridcoin.us
+#Vcs-Git: https://github.com/gridcoin-community/Gridcoin-Research.git
+#Vcs-Browser: https://github.com/gridcoin-community/Gridcoin-Research
+#Rules-Requires-Root: no
+Package: gridcoinresearchd
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ adduser
+Recommends:
+ bash-completion
+Description: Gridcoin Research daemon
+ Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
+ (Berkeley Open Infrastructure for Network Computing) participants
+ for contributing computational power to scientific research.
+ .
+ This package provides the headless daemon (gridcoinresearchd).
+
+Package: gridcoinresearch-qt
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ qt6-qpa-plugins,
+ qt6-svg-plugins | libqt6svg6
+Recommends:
+ bash-completion
+Description: Gridcoin Research Qt GUI
+ Gridcoin is a proof-of-stake cryptocurrency that rewards BOINC
+ (Berkeley Open Infrastructure for Network Computing) participants
+ for contributing computational power to scientific research.
+ .
+ This package provides the Qt-based graphical user interface
+ (gridcoinresearch).

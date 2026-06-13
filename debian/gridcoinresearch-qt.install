@@ -1,0 +1,8 @@
+usr/bin/gridcoinresearch
+usr/share/man/man1/gridcoinresearch.1
+usr/share/applications/gridcoinresearch.desktop
+usr/share/icons/hicolor/*/apps/gridcoinresearch.png
+usr/share/icons/hicolor/*/apps/gridcointestnet.png
+usr/share/icons/hicolor/scalable/apps/gridcoinresearch.svg
+usr/share/bash-completion/completions/gridcoinresearch
+usr/share/metainfo/us.gridcoin.GridcoinResearch.metainfo.xml
