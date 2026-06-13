@@ -1691,17 +1691,20 @@ bool AppInit2(ThreadHandlerPtr threads)
     // launch from StartNode -> g_connman->Start() in Step 12 below.
     assert(!g_connman);
     g_connman = std::make_unique<CConnman>(0, 0, addrman);
+
+    // Message-processing manager (issue #2558 PR 8a/8b). Constructed before the
+    // connection manager is Init'd so it can be wired in as the msgproc the net
+    // threads drive (PR 8c).
+    assert(!g_peerman);
+    g_peerman = PeerManager::make(*g_connman, g_banman.get());
+    if (g_scheduler) g_peerman->StartScheduledTasks(*g_scheduler);
+
     CConnman::Options conn_options;
     conn_options.nMaxOutbound      = (int) gArgs.GetArg("-maxoutboundconnections", 8);
     const int64_t requested_max    = gArgs.GetArg("-maxconnections", 125);
     conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
+    conn_options.m_msgproc         = g_peerman.get(); // issue #2558 PR 8c
     g_connman->Init(conn_options);
-
-    // Message-processing manager (issue #2558 PR 8a). Drives ProcessMessages/
-    // SendMessages from ThreadMessageHandler via g_peerman.
-    assert(!g_peerman);
-    g_peerman = PeerManager::make(*g_connman, g_banman.get());
-    if (g_scheduler) g_peerman->StartScheduledTasks(*g_scheduler);
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
