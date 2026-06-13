@@ -179,6 +179,10 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // Tear down the connection manager once its net threads are joined
+        // (issue #2558 PR 3).
+        if (g_connman) g_connman.reset();
+
         // The stake miner exits via fShutdown plus the g_thread_interrupt()
         // call above, which wakes its MilliSleep.
         LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
@@ -1673,6 +1677,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Let a lifted/cleared/swept ban also reset the peer's misbehavior score,
     // which now lives in net_processing (issue #2558 PR 2c).
     g_banman->SetMisbehaviorClearCallback(ClearMisbehaviorForSubnet);
+
+    // Connection manager (issue #2558 PR 3). Constructed here; its net threads
+    // launch from StartNode -> g_connman->Start() in Step 12 below.
+    assert(!g_connman);
+    g_connman = std::make_unique<CConnman>(0, 0, addrman);
+    CConnman::Options conn_options;
+    conn_options.nMaxOutbound      = (int) gArgs.GetArg("-maxoutboundconnections", 8);
+    const int64_t requested_max    = gArgs.GetArg("-maxconnections", 125);
+    conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
+    g_connman->Init(conn_options);
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
