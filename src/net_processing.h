@@ -7,7 +7,11 @@
 
 #include "net.h"
 
+#include <memory>
+
 class CTransaction;
+class CConnman;
+class CScheduler;
 
 // Relay a transaction to peers, caching its serialized form in mapRelay so it
 // can be served from the getdata loop (moved from net.h, issue #2558 PR 2b).
@@ -17,16 +21,26 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 // Peer-misbehavior tracking (moved from CNode, issue #2558 PR 2c). The score
 // map lives in net_processing.cpp; CNode::Misbehaving/GetMisbehavior forward
 // here. ClearMisbehaviorForSubnet is registered as BanMan's clear callback.
+// (These collapse into PeerManager in PR 8b.)
 int GetMisbehaviorAddr(const CAddress& addr);
 bool MisbehavingAddr(const CAddress& addr, int howmuch);
 unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net);
 
-bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
-// Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
-// cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires
-// cs_main again internally for each section it needs. The current pattern
-// is recursive-safe but TSA cannot model the recursive-acquire correctly,
-// so the function intentionally has no EXCLUSIVE_LOCKS_REQUIRED annotation.
-bool SendMessages(CNode* pto, bool fSendTrickle);
+//! Message-processing manager (issue #2558 PR 8a). Abstract interface; the
+//! implementation (PeerManagerImpl) lives in net_processing.cpp and also
+//! implements NetEventsInterface (ProcessMessages/SendMessages). The peer-level
+//! API (Misbehaving, ...) collapses onto this in PR 8b. ThreadMessageHandler
+//! drives it through g_peerman; CConnman gains a NetEventsInterface* in PR 8c.
+class PeerManager : public NetEventsInterface
+{
+public:
+    static std::unique_ptr<PeerManager> make(CConnman& connman);
+    virtual ~PeerManager() {}
+
+    //! Start the recurring scheduled tasks (shell in PR 8a; populated later).
+    virtual void StartScheduledTasks(CScheduler& scheduler) = 0;
+};
+
+extern std::unique_ptr<PeerManager> g_peerman;
 
 #endif // BITCOIN_NET_PROCESSING_H

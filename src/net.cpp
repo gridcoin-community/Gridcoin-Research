@@ -1841,7 +1841,7 @@ void ThreadMessageHandler2(void* parg)
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
-                    if (!ProcessMessages(pnode))
+                    if (g_peerman && !g_peerman->ProcessMessages(pnode))
                         pnode->CloseSocketDisconnect();
             }
 
@@ -1864,7 +1864,7 @@ void ThreadMessageHandler2(void* parg)
                     TRY_LOCK(pnode->cs_vSend, lockSend);
                     if (lockSend)
                     {
-                        SendMessages(pnode, pnode == pnodeTrickle);
+                        if (g_peerman) g_peerman->SendMessages(pnode, pnode == pnodeTrickle);
                     }
                 }
             }
