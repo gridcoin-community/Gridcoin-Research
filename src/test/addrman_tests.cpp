@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 #include "addrman.h"
+#include "addrman_impl.h"
 #include <string>
 #include <boost/test/unit_test.hpp>
 
@@ -12,45 +13,6 @@
 using namespace std;
 
 BOOST_AUTO_TEST_SUITE(addrman_tests)
-
-class CAddrManTest : public CAddrMan
-{
-    uint64_t state;
-
-public:
-    CAddrManTest()
-    {
-        state = 1;
-    }
-
-    //! Ensure that bucket placement is always the same for testing purposes.
-    void MakeDeterministic()
-    {
-        nKey.SetNull();
-        insecure_rand = FastRandomContext(true);
-    }
-
-    int RandomInt(int nMax)
-    {
-        state = (CHashWriter(SER_GETHASH, 0) << state).GetCheapHash();
-        return (unsigned int)(state % nMax);
-    }
-
-    CAddrInfo* Find(const CNetAddr& addr, int* pnId = NULL)
-    {
-        return CAddrMan::Find(addr, pnId);
-    }
-
-    CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = NULL)
-    {
-        return CAddrMan::Create(addr, addrSource, pnId);
-    }
-
-    void Delete(int nId)
-    {
-        CAddrMan::Delete(nId);
-    }
-};
 
 static CNetAddr ResolveIP(const char* ip)
 {
@@ -78,23 +40,21 @@ static CService ResolveService(std::string ip, int port = 0)
 
 BOOST_AUTO_TEST_CASE(addrman_simple)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     CNetAddr source = ResolveIP("252.2.2.2");
 
     // Test 1: Does Addrman respond correctly when empty.
     BOOST_CHECK(addrman.size() == 0);
-    CAddrInfo addr_null = addrman.Select();
+    CAddress addr_null = addrman.Select();
     BOOST_CHECK(addr_null.ToString() == "[::]:0");
 
     // Test 2: Does Addrman::Add work as expected.
     CService addr1 = ResolveService("250.1.1.1", 8333);
     addrman.Add(CAddress(addr1, NODE_NONE), source);
     BOOST_CHECK(addrman.size() == 1);
-    CAddrInfo addr_ret1 = addrman.Select();
+    CAddress addr_ret1 = addrman.Select();
 
     BOOST_CHECK(addr_ret1.ToString() == "250.1.1.1:8333");
 
@@ -114,16 +74,14 @@ BOOST_AUTO_TEST_CASE(addrman_simple)
     // Test 6: AddrMan::Clear() should empty the new table.
     addrman.Clear();
     BOOST_CHECK(addrman.size() == 0);
-    CAddrInfo addr_null2 = addrman.Select();
+    CAddress addr_null2 = addrman.Select();
     BOOST_CHECK(addr_null2.ToString() == "[::]:0");
 }
 
 BOOST_AUTO_TEST_CASE(addrman_ports)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     CNetAddr source = ResolveIP("252.2.2.2");
 
@@ -137,7 +95,7 @@ BOOST_AUTO_TEST_CASE(addrman_ports)
     CService addr1_port = ResolveService("250.1.1.1", 8334);
     addrman.Add(CAddress(addr1_port, NODE_NONE), source);
     BOOST_CHECK(addrman.size() == 1);
-    CAddrInfo addr_ret2 = addrman.Select();
+    CAddress addr_ret2 = addrman.Select();
     BOOST_CHECK(addr_ret2.ToString() == "250.1.1.1:8333");
 
     // Test 8: Add same IP but diff port to tried table, it doesn't get added.
@@ -145,17 +103,15 @@ BOOST_AUTO_TEST_CASE(addrman_ports)
     addrman.Good(CAddress(addr1_port, NODE_NONE));
     BOOST_CHECK(addrman.size() == 1);
     bool newOnly = true;
-    CAddrInfo addr_ret3 = addrman.Select(newOnly);
+    CAddress addr_ret3 = addrman.Select(newOnly);
     BOOST_CHECK(addr_ret3.ToString() == "250.1.1.1:8333");
 }
 
 
 BOOST_AUTO_TEST_CASE(addrman_select)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     CNetAddr source = ResolveIP("252.2.2.2");
 
@@ -165,16 +121,16 @@ BOOST_AUTO_TEST_CASE(addrman_select)
     BOOST_CHECK(addrman.size() == 1);
 
     bool newOnly = true;
-    CAddrInfo addr_ret1 = addrman.Select(newOnly);
+    CAddress addr_ret1 = addrman.Select(newOnly);
     BOOST_CHECK(addr_ret1.ToString() == "250.1.1.1:8333");
 
     // Test 10: move addr to tried, select from new expected nothing returned.
     addrman.Good(CAddress(addr1, NODE_NONE));
     BOOST_CHECK(addrman.size() == 1);
-    CAddrInfo addr_ret2 = addrman.Select(newOnly);
+    CAddress addr_ret2 = addrman.Select(newOnly);
     BOOST_CHECK(addr_ret2.ToString() == "[::]:0");
 
-    CAddrInfo addr_ret3 = addrman.Select();
+    CAddress addr_ret3 = addrman.Select();
     BOOST_CHECK(addr_ret3.ToString() == "250.1.1.1:8333");
 
     BOOST_CHECK(addrman.size() == 1);
@@ -214,10 +170,8 @@ BOOST_AUTO_TEST_CASE(addrman_select)
 
 BOOST_AUTO_TEST_CASE(addrman_new_collisions)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     CNetAddr source = ResolveIP("252.2.2.2");
 
@@ -243,10 +197,8 @@ BOOST_AUTO_TEST_CASE(addrman_new_collisions)
 
 BOOST_AUTO_TEST_CASE(addrman_tried_collisions)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     CNetAddr source = ResolveIP("252.2.2.2");
 
@@ -274,10 +226,8 @@ BOOST_AUTO_TEST_CASE(addrman_tried_collisions)
 
 BOOST_AUTO_TEST_CASE(addrman_find)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     BOOST_CHECK(addrman.size() == 0);
 
@@ -293,19 +243,19 @@ BOOST_AUTO_TEST_CASE(addrman_find)
     addrman.Add(addr3, source1);
 
     // Test 17: ensure Find returns an IP matching what we searched on.
-    CAddrInfo* info1 = addrman.Find(addr1);
+    AddrInfo* info1 = addrman.Find(addr1);
     BOOST_CHECK(info1);
     if (info1)
         BOOST_CHECK(info1->ToString() == "250.1.2.1:8333");
 
     // Test 18; Find does not discriminate by port number.
-    CAddrInfo* info2 = addrman.Find(addr2);
+    AddrInfo* info2 = addrman.Find(addr2);
     BOOST_CHECK(info2);
     if (info2)
         BOOST_CHECK(info2->ToString() == info1->ToString());
 
     // Test 19: Find returns another IP matching what we searched on.
-    CAddrInfo* info3 = addrman.Find(addr3);
+    AddrInfo* info3 = addrman.Find(addr3);
     BOOST_CHECK(info3);
     if (info3)
         BOOST_CHECK(info3->ToString() == "251.255.2.1:8333");
@@ -313,10 +263,8 @@ BOOST_AUTO_TEST_CASE(addrman_find)
 
 BOOST_AUTO_TEST_CASE(addrman_create)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     BOOST_CHECK(addrman.size() == 0);
 
@@ -324,22 +272,20 @@ BOOST_AUTO_TEST_CASE(addrman_create)
     CNetAddr source1 = ResolveIP("250.1.2.1");
 
     int nId;
-    CAddrInfo* pinfo = addrman.Create(addr1, source1, &nId);
+    AddrInfo* pinfo = addrman.Create(addr1, source1, &nId);
 
     // Test 20: The result should be the same as the input addr.
     BOOST_CHECK(pinfo->ToString() == "250.1.2.1:8333");
 
-    CAddrInfo* info2 = addrman.Find(addr1);
+    AddrInfo* info2 = addrman.Find(addr1);
     BOOST_CHECK(info2->ToString() == "250.1.2.1:8333");
 }
 
 
 BOOST_AUTO_TEST_CASE(addrman_delete)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     BOOST_CHECK(addrman.size() == 0);
 
@@ -353,16 +299,14 @@ BOOST_AUTO_TEST_CASE(addrman_delete)
     BOOST_CHECK(addrman.size() == 1);
     addrman.Delete(nId);
     BOOST_CHECK(addrman.size() == 0);
-    CAddrInfo* info2 = addrman.Find(addr1);
+    AddrInfo* info2 = addrman.Find(addr1);
     BOOST_CHECK(info2 == NULL);
 }
 
 BOOST_AUTO_TEST_CASE(addrman_getaddr)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
+    // Deterministic addr placement for testing.
+    AddrMan addrman{/*deterministic=*/true};
 
     // Test 22: Sanity check, GetAddr should never return anything if addrman
     //  is empty.
@@ -424,18 +368,13 @@ BOOST_AUTO_TEST_CASE(addrman_getaddr)
 
 BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
-
     CAddress addr1 = CAddress(ResolveService("250.1.1.1", 8333), NODE_NONE);
     CAddress addr2 = CAddress(ResolveService("250.1.1.1", 9999), NODE_NONE);
 
     CNetAddr source1 = ResolveIP("250.1.1.1");
 
 
-    CAddrInfo info1 = CAddrInfo(addr1, source1);
+    AddrInfo info1 = AddrInfo(addr1, source1);
 
     uint256 nKey1 = (uint256)(CHashWriter(SER_GETHASH, 0) << 1).GetHash();
     uint256 nKey2 = (uint256)(CHashWriter(SER_GETHASH, 0) << 2).GetHash();
@@ -449,14 +388,14 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 
     // Test 27: Two addresses with same IP but different ports can map to
     //  different buckets because they have different keys.
-    CAddrInfo info2 = CAddrInfo(addr2, source1);
+    AddrInfo info2 = AddrInfo(addr2, source1);
 
     BOOST_CHECK(info1.GetKey() != info2.GetKey());
     BOOST_CHECK(info1.GetTriedBucket(nKey1) != info2.GetTriedBucket(nKey1));
 
     set<int> buckets;
     for (int i = 0; i < 255; i++) {
-        CAddrInfo infoi = CAddrInfo(
+        AddrInfo infoi = AddrInfo(
             CAddress(ResolveService("250.1.1." + boost::to_string(i)), NODE_NONE),
             ResolveIP("250.1.1." + boost::to_string(i)));
         int bucket = infoi.GetTriedBucket(nKey1);
@@ -468,7 +407,7 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 
     buckets.clear();
     for (int j = 0; j < 255; j++) {
-        CAddrInfo infoj = CAddrInfo(
+        AddrInfo infoj = AddrInfo(
             CAddress(ResolveService("250." + boost::to_string(j) + ".1.1"), NODE_NONE),
             ResolveIP("250." + boost::to_string(j) + ".1.1"));
         int bucket = infoj.GetTriedBucket(nKey1);
@@ -481,17 +420,12 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_tried_bucket)
 
 BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
 {
-    CAddrManTest addrman;
-
-    // Set addrman addr placement to be deterministic.
-    addrman.MakeDeterministic();
-
     CAddress addr1 = CAddress(ResolveService("250.1.2.1", 8333), NODE_NONE);
     CAddress addr2 = CAddress(ResolveService("250.1.2.1", 9999), NODE_NONE);
 
     CNetAddr source1 = ResolveIP("250.1.2.1");
 
-    CAddrInfo info1 = CAddrInfo(addr1, source1);
+    AddrInfo info1 = AddrInfo(addr1, source1);
 
     uint256 nKey1 = (uint256)(CHashWriter(SER_GETHASH, 0) << 1).GetHash();
     uint256 nKey2 = (uint256)(CHashWriter(SER_GETHASH, 0) << 2).GetHash();
@@ -503,13 +437,13 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
     BOOST_CHECK(info1.GetNewBucket(nKey1) != info1.GetNewBucket(nKey2));
 
     // Test 31: Ports should not effect bucket placement in the addr
-    CAddrInfo info2 = CAddrInfo(addr2, source1);
+    AddrInfo info2 = AddrInfo(addr2, source1);
     BOOST_CHECK(info1.GetKey() != info2.GetKey());
     BOOST_CHECK(info1.GetNewBucket(nKey1) == info2.GetNewBucket(nKey1));
 
     set<int> buckets;
     for (int i = 0; i < 255; i++) {
-        CAddrInfo infoi = CAddrInfo(
+        AddrInfo infoi = AddrInfo(
             CAddress(ResolveService("250.1.1." + boost::to_string(i)), NODE_NONE),
             ResolveIP("250.1.1." + boost::to_string(i)));
         int bucket = infoi.GetNewBucket(nKey1);
@@ -521,7 +455,7 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
 
     buckets.clear();
     for (int j = 0; j < 4 * 255; j++) {
-        CAddrInfo infoj = CAddrInfo(CAddress(
+        AddrInfo infoj = AddrInfo(CAddress(
                                         ResolveService(
                                             boost::to_string(250 + (j / 255)) + "." + boost::to_string(j % 256) + ".1.1"), NODE_NONE),
             ResolveIP("251.4.1.1"));
@@ -534,7 +468,7 @@ BOOST_AUTO_TEST_CASE(caddrinfo_get_new_bucket)
 
     buckets.clear();
     for (int p = 0; p < 255; p++) {
-        CAddrInfo infoj = CAddrInfo(
+        AddrInfo infoj = AddrInfo(
             CAddress(ResolveService("250.1.1.1"), NODE_NONE),
             ResolveIP("250." + boost::to_string(p) + ".1.1"));
         int bucket = infoj.GetNewBucket(nKey1);
