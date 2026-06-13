@@ -837,7 +837,8 @@ void RPCConsole::banSelectedNode(int bantime)
         const CNodeCombinedStats *stats = clientModel->getPeerTableModel()->getNodeStats(detailNodeRow);
         if (stats) {
             g_banman->Ban(stats->nodeStats.addr, BanReasonManuallyAdded, bantime);
-            CNode::DisconnectNode(stats->nodeStats.addr);
+            // issue #2558 PR 9b: disconnect via the CConnman node-access API.
+            if (g_connman) g_connman->DisconnectNode(stats->nodeStats.addr);
         }
     }
     clearSelectedNode();
@@ -891,8 +892,11 @@ void RPCConsole::disconnectSelectedNode()
     {
         // Get currently selected peer address
         NodeId id = nodes.at(i).data().toLongLong();
-        // Find the node, disconnect it and clear the selected node
-        if(CNode::DisconnectNode(id))
+        // Find the node, disconnect it and clear the selected node (issue #2558
+        // PR 9b: disconnect via the CConnman node-access API). g_connman is live
+        // whenever the peers tab is populated, so the guard only no-ops during
+        // shutdown -- where leaving the selection is harmless.
+        if (g_connman && g_connman->DisconnectNode(id))
             clearSelectedNode();
     }
 }
