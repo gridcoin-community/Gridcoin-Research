@@ -1,10 +1,12 @@
 #ifndef BITCOIN_QT_TRANSACTIONVIEW_H
 #define BITCOIN_QT_TRANSACTIONVIEW_H
 
+#include "qt/txfilter.h"
+
 #include <QFrame>
 
 class WalletModel;
-class TransactionFilterProxy;
+class DetailedTxModel;
 
 QT_BEGIN_NAMESPACE
 class QTableView;
@@ -45,8 +47,16 @@ protected:
 
 private:
     WalletModel *model;
-    TransactionFilterProxy *transactionProxyModel;
+    DetailedTxModel *m_detailedModel;
     QTableView *transactionView;
+
+    //! The accumulated filter state the four filter widgets mutate; pushed to the
+    //! server-side cursor by applyFilter() whenever one of them changes.
+    GRC::FilterSpec m_filterSpec;
+
+    //! Push m_filterSpec to the cursor (the date/type/address/amount handlers
+    //! mutate the relevant field, then call this).
+    void applyFilter();
 
     QComboBox *dateWidget;
     QComboBox *typeWidget;

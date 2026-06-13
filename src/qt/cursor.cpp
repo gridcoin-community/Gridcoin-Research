@@ -34,12 +34,18 @@ std::size_t Cursor::servedCount() const
     return std::min(m_view_index.size(), cap());
 }
 
+bool Cursor::lessIndexed(std::size_t a, std::size_t b) const
+{
+    const int c = CompareKeys(m_keys(a), m_keys(b), m_sort_column, m_sort_order);
+    return c != 0 ? c < 0 : a < b;   // tie -> native record order (lower absidx first)
+}
+
 std::size_t Cursor::lowerBoundSlot(std::size_t absidx) const
 {
     // Sorted insertion slot. Only valid for a row NOT currently present.
     auto it = std::lower_bound(
         m_view_index.begin(), m_view_index.end(), absidx,
-        [&](std::size_t a, std::size_t b) { return Less(m_keys(a), m_keys(b), m_sort_column, m_sort_order); });
+        [&](std::size_t a, std::size_t b) { return lessIndexed(a, b); });
     return static_cast<std::size_t>(it - m_view_index.begin());
 }
 
@@ -57,7 +63,7 @@ std::vector<CursorDelta> Cursor::rebuild(std::size_t n)
         if (Accepts(m_fields(i), m_filter)) m_view_index.push_back(i);
     }
     std::sort(m_view_index.begin(), m_view_index.end(),
-              [&](std::size_t a, std::size_t b) { return Less(m_keys(a), m_keys(b), m_sort_column, m_sort_order); });
+              [&](std::size_t a, std::size_t b) { return lessIndexed(a, b); });
     ++m_epoch;
     return {{CursorDelta::Reset, 0, static_cast<int>(servedCount())}};
 }
@@ -202,7 +208,7 @@ std::vector<CursorDelta> Cursor::setSort(int sort_column, int sort_order)
     m_sort_column = sort_column;
     m_sort_order = sort_order;
     std::sort(m_view_index.begin(), m_view_index.end(),
-              [&](std::size_t a, std::size_t b) { return Less(m_keys(a), m_keys(b), m_sort_column, m_sort_order); });
+              [&](std::size_t a, std::size_t b) { return lessIndexed(a, b); });
     ++m_epoch;
     return {{CursorDelta::Reset, 0, static_cast<int>(servedCount())}};
 }

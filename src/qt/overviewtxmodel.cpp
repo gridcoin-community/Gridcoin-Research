@@ -9,6 +9,7 @@
 #include "qt/walletmodel.h"
 #include "qt/wallettxstore.h"
 
+#include <algorithm>
 #include <type_traits>
 #include <variant>
 
@@ -30,7 +31,11 @@ OverviewTxModel::OverviewTxModel(WalletModel* walletModel, int initialLimit, QOb
 
     // registerView pushed a RowsReset that the next drain will deliver, but also
     // seed synchronously so the list is populated before the first drain tick.
-    m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, m_limit);
+    // Capture the high-water (PR4-fix B): the registration Reset arriving on the
+    // first drain carries this seqno and is skipped as already reflected. count = -1
+    // ("all served") reads rows + served count + high-water in one cs_store hold —
+    // atomic, so a concurrent worker insert can't drop a row the skip would suppress.
+    m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, -1, &m_applied_seqno);
 
     connect(m_walletModel, &WalletModel::walletEventsDrained,
             this, &OverviewTxModel::applyEventBatch);
@@ -80,15 +85,28 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
 {
     GRC::WalletTxStore& store = m_walletModel->getTxStore();
     for (const GRC::WalletEvent& ev : events) {
+        const uint64_t seqno = ev.seqno;
         std::visit([&](auto&& payload) {
             using P = std::decay_t<decltype(payload)>;
             if constexpr (std::is_same_v<P, GRC::RowsResetPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
+                if (seqno <= m_applied_seqno) return;   // already reflected (PR4-fix B)
+                // Refetch the live served window + the store's high-water in one
+                // cs_store hold (getRows clamps the count to the served cap), so any
+                // worker delta that landed after this Reset was emitted is captured
+                // here exactly once and skipped when its own event arrives.
                 beginResetModel();
-                m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, payload.total);
+                uint64_t hw = m_applied_seqno;
+                // count = -1: rows + served count + high-water in ONE cs_store hold
+                // (atomic — getRows clamps to the live served window, capped). A
+                // separate totalAccepted() could under-fetch a row the high-water
+                // already covered, dropping it permanently below cap. (PR4-fix B)
+                m_rows = store.getRows(GRC::VIEW_OVERVIEW, 0, -1, &hw);
                 endResetModel();
+                m_applied_seqno = std::max(hw, seqno);
             } else if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
+                if (seqno <= m_applied_seqno) return;   // already reflected in a refetch
                 if (payload.records.empty()) return;  // empty insert → invalid beginInsertRows range
                 const int pos = payload.position;
                 if (pos < 0 || static_cast<std::size_t>(pos) > m_rows.size()) return;
@@ -97,8 +115,10 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 m_rows.insert(m_rows.begin() + pos,
                               payload.records.begin(), payload.records.end());
                 endInsertRows();
+                m_applied_seqno = seqno;
             } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
+                if (seqno <= m_applied_seqno) return;
                 const int pos = payload.position;
                 if (pos < 0 || payload.count <= 0
                         || static_cast<std::size_t>(pos) + static_cast<std::size_t>(payload.count)
@@ -106,8 +126,10 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 beginRemoveRows(QModelIndex(), pos, pos + payload.count - 1);
                 m_rows.erase(m_rows.begin() + pos, m_rows.begin() + pos + payload.count);
                 endRemoveRows();
+                m_applied_seqno = seqno;
             } else if constexpr (std::is_same_v<P, GRC::RowsChangedPayload>) {
                 if (payload.viewId != GRC::VIEW_OVERVIEW) return;
+                if (seqno <= m_applied_seqno) return;
                 // The payload carries no records (a Change does not move the row),
                 // so re-fetch the changed slice from the cursor and refresh.
                 const std::vector<TransactionRecord> fresh =
@@ -120,6 +142,7 @@ void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                     emit dataChanged(index(payload.first, 0),
                                      index(payload.first + static_cast<int>(fresh.size()) - 1, 0));
                 }
+                m_applied_seqno = seqno;
             }
             // VIEW_FULL Rows* events, RowCountChanged, and ChainTipChanged are
             // not consumed here (RowCountChanged is for the scrolled detailed

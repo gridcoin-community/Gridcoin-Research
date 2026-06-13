@@ -29,19 +29,52 @@ struct RecordOrder {
 //! detailed table's address filter populates it in PR4.
 GRC::TxFilterFields projectFields(const TransactionRecord& r)
 {
+    // label is the address-book label snapshotted producer-side (PR4) — the
+    // address-substring filter matches address OR label.
     return GRC::TxFilterFields{
         r.time, r.credit + r.debit, static_cast<int>(r.type),
-        static_cast<int>(r.status.status), r.address, std::string()};
+        static_cast<int>(r.status.status), r.address, r.label};
 }
 
-//! Project a stored record to the Qt-free sort inputs. type_string /
-//! address_string are left empty: those are the localized Qt formatter strings,
-//! used only when sorting by Type/Address — which the Overview view does not (it
-//! sorts by date/status). PR4 supplies them when the detailed table migrates.
+//! Project a stored record to the Qt-free sort inputs (windowed-model PR4,
+//! decision b — locale-free, so the off-cs_main store sorts these without
+//! localizing, the multiprocess-clean choice):
+//!  - Type sorts by the (type, generated_type) enum tuple — category-grouped and
+//!    language-independent (digits only, so the case-insensitive compare is
+//!    byte-safe).
+//!  - Address sorts by (label_string, address_string) as two separate keys
+//!    (CompareKeys compares label then address); no separator byte to collide with
+//!    a control character inside a user label (PR4-fix G).
 GRC::SortKey projectKeys(const TransactionRecord& r)
 {
     return GRC::SortKey{
-        r.time, r.credit + r.debit, r.status.sortKey, std::string(), std::string()};
+        r.time, r.credit + r.debit, r.status.sortKey,
+        strprintf("%03d.%03d", static_cast<int>(r.type),
+                  static_cast<int>(r.status.generated_type)),
+        r.label,
+        r.address};
+}
+
+//! Per-tip status volatility (PR4-fix A): a record whose displayed status still
+//! advances as blocks connect. Terminal states never re-render, so they are
+//! excluded from the per-block refresh set.
+bool recordStatusIsVolatile(const TransactionRecord& r)
+{
+    switch (r.status.status) {
+    case TransactionStatus::OpenUntilDate:
+    case TransactionStatus::OpenUntilBlock:
+    case TransactionStatus::Unconfirmed:
+    case TransactionStatus::Confirming:
+    case TransactionStatus::Immature:
+    case TransactionStatus::MaturesWarning:
+        return true;
+    case TransactionStatus::Confirmed:
+    case TransactionStatus::Offline:
+    case TransactionStatus::Conflicted:
+    case TransactionStatus::NotAccepted:
+        return false;
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -103,7 +136,16 @@ void WalletTxStore::enqueueUpsert(std::vector<TransactionRecord> records)
     const uint256 hash = records.front().hash;
     {
         LOCK(cs_intake);
-        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash});
+        m_intake.push_back(IntakeItem{IntakeItem::Update, std::move(records), hash, {}, {}});
+    }
+    m_intake_cv.notify_one();
+}
+
+void WalletTxStore::enqueueAddressBookChange(const std::string& address, const std::string& label)
+{
+    {
+        LOCK(cs_intake);
+        m_intake.push_back(IntakeItem{IntakeItem::AddressBook, {}, uint256(), address, label});
     }
     m_intake_cv.notify_one();
 }
@@ -148,11 +190,13 @@ void WalletTxStore::workerLoop()
 
 void WalletTxStore::applyIntake(IntakeItem item)
 {
-    // No lock held here; insert/remove/updateTransaction take cs_store internally.
+    // No lock held here; the apply* methods take cs_store internally.
     if (item.kind == IntakeItem::Insert) {
         insertTransaction(std::move(item.records));
     } else if (item.kind == IntakeItem::Update) {
         updateTransaction(std::move(item.records));
+    } else if (item.kind == IntakeItem::AddressBook) {
+        applyAddressBookChange(item.ab_address, item.ab_label);
     } else {
         removeTransaction(item.hash);
     }
@@ -229,9 +273,23 @@ void WalletTxStore::insertLocked(std::vector<TransactionRecord> records)
     // store (the authoritative full-records table) and then moved into the event.
     shiftIndex(insertIdx, static_cast<std::ptrdiff_t>(count));
     m_records.insert(m_records.begin() + insertIdx, records.begin(), records.end());
+    // Splice the projector caches at the same position/order (PR4-fix F), computed
+    // from `records` before it is moved into the event below. Done BEFORE the
+    // cursor drive, which reads the cache through applyStoreInsert.
+    std::vector<TxFilterFields> new_fields;
+    std::vector<SortKey> new_keys;
+    new_fields.reserve(count);
+    new_keys.reserve(count);
+    for (const TransactionRecord& r : records) {
+        new_fields.push_back(projectFields(r));
+        new_keys.push_back(projectKeys(r));
+    }
+    m_fields_cache.insert(m_fields_cache.begin() + insertIdx, new_fields.begin(), new_fields.end());
+    m_keys_cache.insert(m_keys_cache.begin() + insertIdx, new_keys.begin(), new_keys.end());
     for (std::size_t k = 0; k < count; ++k) {
         m_by_hash.emplace(hash, insertIdx + k);
     }
+    updateVolatileForHash(hash);   // track for the per-tip status refresh (PR4-fix A)
 
     // Push the position-stamped event WHILE cs_store is held so that queue
     // seqno-order equals store-mutation-order across all producer threads.
@@ -293,7 +351,11 @@ void WalletTxStore::removeLocked(const uint256& hash)
     }
 
     m_records.erase(m_records.begin() + minPos, m_records.begin() + maxPos + 1);
+    // Erase the parallel projector caches over the same range (PR4-fix F).
+    m_fields_cache.erase(m_fields_cache.begin() + minPos, m_fields_cache.begin() + maxPos + 1);
+    m_keys_cache.erase(m_keys_cache.begin() + minPos, m_keys_cache.begin() + maxPos + 1);
     m_by_hash.erase(hash);
+    m_volatile.erase(hash);   // no longer present -> not in the per-tip refresh set
     shiftIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(count));
 
     m_queue.push(GRC::RowsRemovedPayload{static_cast<int>(minPos), static_cast<int>(count)});
@@ -353,6 +415,7 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
             // still refreshes status lazily on read; this is a harmless head-start.
             TransactionRecord r = rec;
             r.updateStatus(it->second);
+            r.populateDisplayLabel(*m_wallet);  // address-book label snapshot (PR4)
             built.push_back(std::move(r));
         }
     }
@@ -365,6 +428,18 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
         m_limit_time = limit_time;
         m_records = built;
         rebuildIndex();
+        // Rebuild the projector caches and the volatile set parallel to m_records
+        // (PR4-fix F/A) BEFORE the cursors rebuild — cursor.rebuild() reads the
+        // cache through the projectors.
+        m_fields_cache.assign(m_records.size(), TxFilterFields{});
+        m_keys_cache.assign(m_records.size(), SortKey{});
+        m_volatile.clear();
+        for (std::size_t i = 0; i < m_records.size(); ++i) {
+            recomputeCacheAt(i);
+            if (isVolatile(m_records[i])) {
+                m_volatile.insert(m_records[i].hash);
+            }
+        }
         // Rebuild each registered cursor over the new m_records. Their Reset
         // events are pushed AFTER the drain below (which discards pre-rebuild
         // events), so the windowed consumers refill against the new snapshot.
@@ -384,9 +459,14 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
     // Re-publish the per-view cursor Resets AFTER the drain so they survive it;
     // the windowed consumers (e.g. OverviewTxModel) refill via getRows. Producers
     // are still blocked on cs_wallet, so these are the only queued events until
-    // we return.
-    for (const GRC::RowsResetPayload& reset : cursor_resets) {
-        m_queue.push(reset);
+    // we return. Record each Reset's seqno as the view high-water (PR4-fix B) so a
+    // consumer's reset-refetch knows exactly what it reflects; re-taking cs_store
+    // here is contention-free (producers blocked, worker parked).
+    {
+        LOCK(cs_store);
+        for (const GRC::RowsResetPayload& reset : cursor_resets) {
+            m_view_seqno[reset.viewId] = m_queue.push(reset);
+        }
     }
 
     // Release the store-worker (PR2.5): the rebuilt index is live, so resume
@@ -465,7 +545,9 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
     // first confirmation repositions the row.
     for (std::size_t k = 0; k < records.size(); ++k) {
         m_records[minPos + k] = records[k];
+        recomputeCacheAt(minPos + k);   // refresh F-cache before the cursor drive reads it
     }
+    updateVolatileForHash(hash);        // status may have crossed a maturity threshold (PR4-fix A)
     for (auto& [viewId, cursor] : m_cursors) {
         for (std::size_t p = minPos; p <= maxPos; ++p) {
             emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
@@ -473,20 +555,129 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
     }
 }
 
-TxFilterFields WalletTxStore::projectFieldsAt(std::size_t i) const
+void WalletTxStore::applyAddressBookChange(const std::string& address, const std::string& label)
 {
-    return projectFields(m_records[i]);
+    LOCK(cs_store);
+    // Re-snapshot the address-book label on every stored record for this address,
+    // refresh its cached projector outputs, and re-drive the cursors — the label is
+    // the Address-column sort key and an address-substring filter target, so a
+    // record's filter membership and/or sort slot can change. Do this ONE record at
+    // a time (recompute its cache, then reposition it in every cursor) rather than
+    // recomputing all affected caches up front: applyStatusUpdate repositions via
+    // lower_bound, which needs the rest of view_index sorted, and recomputing all
+    // same-address keys first would leave several rows mis-keyed in their old slots
+    // (transiently unsorted) and break lower_bound under an Address sort. Positions
+    // in m_records are stable (the label is not part of RecordOrder). (PR4-fix C.)
+    for (std::size_t i = 0; i < m_records.size(); ++i) {
+        if (m_records[i].address != address) {
+            continue;
+        }
+        m_records[i].label = label;
+        recomputeCacheAt(i);
+        for (auto& [viewId, cursor] : m_cursors) {
+            emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(i));
+        }
+    }
 }
 
-SortKey WalletTxStore::projectKeysAt(std::size_t i) const
+void WalletTxStore::applyChainTipRefresh()
 {
-    return projectKeys(m_records[i]);
+    // Caller holds cs_main (EXCLUSIVE_LOCKS_REQUIRED). Acquire cs_wallet (recursive
+    // — re-entrant if SetBestChain already holds it) for mapWallet + updateStatus,
+    // then cs_store. Canonical cs_main -> cs_wallet -> cs_store. cs_main mutually
+    // excludes this from reloadAndSnapshot (which holds cs_main on the Qt thread),
+    // and the worker never needs cs_main/cs_wallet, so there is no deadlock with
+    // the rebuild park protocol.
+    AssertLockHeld(cs_main);   // fail fast on misuse (this runs off boost::signals2)
+    LOCK(m_wallet->cs_wallet);
+    LOCK(cs_store);
+    if (m_volatile.empty()) {
+        return;
+    }
+    // Copy the set: updateVolatileForHash() mutates m_volatile as matured txs drop
+    // out, and we must not iterate it while erasing.
+    const std::vector<uint256> hashes(m_volatile.begin(), m_volatile.end());
+    for (const uint256& hash : hashes) {
+        auto range = m_by_hash.equal_range(hash);
+        if (range.first == range.second) {
+            m_volatile.erase(hash);
+            continue;
+        }
+        auto wit = m_wallet->mapWallet.find(hash);
+        if (wit == m_wallet->mapWallet.end()) {
+            // Vanished from the wallet (a CT_DELETED is in flight) — drop it; the
+            // removal event will clean up the rows.
+            m_volatile.erase(hash);
+            continue;
+        }
+        const CWalletTx& wtx = wit->second;
+        // A tx's parts are contiguous in m_records; collect + sort their positions.
+        std::vector<std::size_t> positions;
+        for (auto it = range.first; it != range.second; ++it) {
+            positions.push_back(it->second);
+        }
+        std::sort(positions.begin(), positions.end());
+        // Refresh + re-drive ONE part at a time. applyStatusUpdate repositions a row
+        // via lower_bound, which needs the rest of view_index sorted; recomputing ALL
+        // parts' keys first would leave the not-yet-repositioned parts mis-keyed in
+        // their old slots and break that precondition under a Status sort. Interleaving
+        // keeps every untouched part at its consistent prior key/slot. Positions in
+        // m_records are stable across the loop (status is not part of RecordOrder).
+        for (std::size_t p : positions) {
+            m_records[p].updateStatus(wtx);
+            recomputeCacheAt(p);
+            for (auto& [viewId, cursor] : m_cursors) {
+                emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
+            }
+        }
+        updateVolatileForHash(hash);   // drops the hash once every part is terminal
+    }
+}
+
+const TxFilterFields& WalletTxStore::projectFieldsAt(std::size_t i) const
+{
+    return m_fields_cache[i];
+}
+
+const SortKey& WalletTxStore::projectKeysAt(std::size_t i) const
+{
+    return m_keys_cache[i];
 }
 
 void WalletTxStore::makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysFn& keys)
 {
-    fields = [this](std::size_t i) { return projectFieldsAt(i); };
-    keys = [this](std::size_t i) { return projectKeysAt(i); };
+    // Explicit reference return types: without them the lambda would deduce a
+    // by-value return and copy the cached key on every comparison, defeating F.
+    fields = [this](std::size_t i) -> const TxFilterFields& { return projectFieldsAt(i); };
+    keys = [this](std::size_t i) -> const SortKey& { return projectKeysAt(i); };
+}
+
+void WalletTxStore::recomputeCacheAt(std::size_t i)
+{
+    m_fields_cache[i] = projectFields(m_records[i]);
+    m_keys_cache[i] = projectKeys(m_records[i]);
+}
+
+bool WalletTxStore::isVolatile(const TransactionRecord& r)
+{
+    return recordStatusIsVolatile(r);
+}
+
+void WalletTxStore::updateVolatileForHash(const uint256& hash)
+{
+    auto range = m_by_hash.equal_range(hash);
+    bool volatile_now = false;
+    for (auto it = range.first; it != range.second; ++it) {
+        if (isVolatile(m_records[it->second])) {
+            volatile_now = true;
+            break;
+        }
+    }
+    if (volatile_now) {
+        m_volatile.insert(hash);
+    } else {
+        m_volatile.erase(hash);
+    }
 }
 
 void WalletTxStore::registerView(int viewId, FilterSpec filter, int sort_column, int sort_order)
@@ -535,12 +726,20 @@ void WalletTxStore::setViewLimit(int viewId, int limit)
     emitCursorDeltas(viewId, it->second.epoch(), deltas);
 }
 
-std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int count)
+std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int count,
+                                                      uint64_t* out_high_water)
 {
     LOCK(cs_store);
+    // Report the view's high-water under the SAME lock as the row read, so the two
+    // are mutually consistent: the returned rows reflect exactly the events up to
+    // and including this seqno (PR4-fix B).
+    if (out_high_water) {
+        auto sit = m_view_seqno.find(viewId);
+        *out_high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
+    }
     std::vector<TransactionRecord> out;
     auto it = m_cursors.find(viewId);
-    if (it == m_cursors.end() || first < 0 || count <= 0) {
+    if (it == m_cursors.end() || first < 0 || count == 0) {
         return out;
     }
     const std::size_t served = it->second.servedCount();
@@ -548,7 +747,15 @@ std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int
     if (begin >= served) {
         return out;
     }
-    const std::size_t end = std::min(served, begin + static_cast<std::size_t>(count));
+    // count < 0 means "all served rows from `first`". Reading servedCount HERE,
+    // under this single cs_store hold (together with the rows and the high-water
+    // above), is what makes a Reset refetch atomic: a caller must NOT sample the
+    // count via a separate totalAccepted() call, or a worker insert landing between
+    // the two locks would under-fetch a row while the high-water already covered it
+    // — and the seqno skip would then drop that row permanently (PR4-fix B).
+    const std::size_t end = (count < 0)
+        ? served
+        : std::min(served, begin + static_cast<std::size_t>(count));
     out.reserve(end - begin);
     for (std::size_t i = begin; i < end; ++i) {
         out.push_back(m_records[it->second.rowAt(i)]);
@@ -568,9 +775,13 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
 {
     auto it = m_cursors.find(viewId);
     for (const CursorDelta& d : deltas) {
+        // Record the seqno of every emitted event as the view's high-water (the
+        // last one wins) so getRows can tell a consumer exactly what its refetch
+        // already reflects (PR4-fix B). The push and this update happen under the
+        // caller's cs_store, in lockstep with the cursor mutation.
         switch (d.type) {
         case CursorDelta::Reset:
-            m_queue.push(GRC::RowsResetPayload{viewId, epoch, d.count});
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsResetPayload{viewId, epoch, d.count});
             break;
         case CursorDelta::Insert: {
             std::vector<TransactionRecord> recs;
@@ -580,14 +791,14 @@ void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                     recs.push_back(m_records[it->second.rowAt(static_cast<std::size_t>(d.first + j))]);
                 }
             }
-            m_queue.push(GRC::RowsInsertedPayload{d.first, std::move(recs), viewId, epoch});
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsInsertedPayload{d.first, std::move(recs), viewId, epoch});
             break;
         }
         case CursorDelta::Remove:
-            m_queue.push(GRC::RowsRemovedPayload{d.first, d.count, viewId, epoch});
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsRemovedPayload{d.first, d.count, viewId, epoch});
             break;
         case CursorDelta::Change:
-            m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count});
+            m_view_seqno[viewId] = m_queue.push(GRC::RowsChangedPayload{viewId, epoch, d.first, d.count});
             break;
         }
     }

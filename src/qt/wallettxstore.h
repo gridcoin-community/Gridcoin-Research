@@ -16,11 +16,19 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class CWallet;
+
+//! Forward declaration so applyChainTipRefresh() can carry an
+//! EXCLUSIVE_LOCKS_REQUIRED(cs_main) annotation without pulling in the heavy
+//! main.h here (mirrors the same extern in net.h / validation.h). CCriticalSection
+//! comes from sync.h, included above.
+extern CCriticalSection cs_main;
 
 namespace GRC {
 
@@ -106,6 +114,31 @@ public:
     void enqueueUpsert(std::vector<TransactionRecord> records);
 
     //!
+    //! \brief Producer: an address-book entry changed (label added / renamed /
+    //! removed). Enqueues the address + its new label for the worker (O(1)); the
+    //! worker re-snapshots TransactionRecord::label on every stored record with
+    //! that address and re-evaluates each cursor (the label is the Address-column
+    //! sort key and an address-substring filter target). Restores the live-label
+    //! filter/sort the deleted TransactionFilterProxy had (windowed-model PR4-C).
+    //! \p label is "" when the entry was deleted.
+    //!
+    void enqueueAddressBookChange(const std::string& address, const std::string& label);
+
+    //!
+    //! \brief Producer (core thread, cs_main held): the chain tip advanced.
+    //! Re-runs updateStatus on the bounded set of records whose displayed status
+    //! is still height-dependent (Confirming / Immature / Unconfirmed / ...), then
+    //! drives each cursor so the detailed/overview views show advancing
+    //! confirmation counts and maturity — the per-block refresh the deleted proxy
+    //! got from TransactionTableModel::index()'s lazy updateStatus (windowed-model
+    //! PR4-A). Runs INLINE (not on the store-worker) so it can take cs_wallet +
+    //! cs_store under the caller's cs_main without the worker ever needing
+    //! cs_main/cs_wallet (which would deadlock reloadAndSnapshot's park protocol);
+    //! cs_main also mutually excludes this from reloadAndSnapshot.
+    //!
+    void applyChainTipRefresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //!
     //! \brief Qt thread: register a per-view cursor (server-side filter+sort).
     //! Builds the cursor over the current m_records and pushes a RowsReset so the
     //! consumer bulk-refills via getRows. Re-registering an existing viewId
@@ -122,8 +155,16 @@ public:
 
     //! Qt thread: read [first, first+count) served rows of \p viewId as records
     //! (a copy of the slice). Clamps to the served window; returns fewer rows if
-    //! the window is shorter. Unknown viewId -> empty.
-    std::vector<TransactionRecord> getRows(int viewId, int first, int count);
+    //! the window is shorter. \p count < 0 means "all served rows from \p first"
+    //! (the served count is read under THIS call's single cs_store hold) — a Reset
+    //! refetch MUST use it rather than a separately-locked totalAccepted(), else a
+    //! worker insert between the two locks drops a row that the seqno skip then
+    //! suppresses permanently (PR4-fix B). Unknown viewId -> empty. If
+    //! \p out_high_water is non-null, it receives the seqno of the last event
+    //! emitted for \p viewId at the moment of the read (same cs_store hold) — the
+    //! consumer uses it to discard events already reflected in this snapshot.
+    std::vector<TransactionRecord> getRows(int viewId, int first, int count,
+                                           uint64_t* out_high_water = nullptr);
 
     //! Qt thread: total accepted rows for \p viewId (the virtual rowCount), or 0
     //! if the view is not registered.
@@ -148,9 +189,11 @@ public:
 private:
     //! One unit of deferred store maintenance handed from a producer to the worker.
     struct IntakeItem {
-        enum Kind { Insert, Remove, Update } kind;
+        enum Kind { Insert, Remove, Update, AddressBook } kind;
         std::vector<TransactionRecord> records; //!< Insert/Update: the decomposed parts.
-        uint256 hash;                           //!< Remove: the tx hash.
+        uint256 hash;                           //!< Remove/Update: the tx hash.
+        std::string ab_address;                 //!< AddressBook: the changed address.
+        std::string ab_label;                   //!< AddressBook: its new label ("" if removed).
     };
 
     //! Worker entry point: drain the intake queue and apply each item. Parks
@@ -169,6 +212,12 @@ private:
     //! Worker: a present tx's records changed in place (CT_UPDATED). Replaces the
     //! stored records and re-evaluates each cursor (applyStatusUpdate). Takes cs_store.
     void updateTransaction(std::vector<TransactionRecord> records);
+    //! Worker (cs_store only): re-snapshot TransactionRecord::label on every stored
+    //! record whose address matches, refresh its cached projector outputs, and
+    //! re-evaluate each cursor (the label drives the Address sort + label filter).
+    //! The new label is carried in, so no cs_wallet is needed — keeping the worker
+    //! free of cs_main/cs_wallet (reloadAndSnapshot's park protocol depends on it).
+    void applyAddressBookChange(const std::string& address, const std::string& label);
     //! Lock-free cores (caller already holds cs_store): the actual O(N) maintenance
     //! + cursor drive. insert/removeTransaction are thin lock-taking wrappers;
     //! updateTransaction composes these directly for its not-present /
@@ -190,10 +239,28 @@ private:
     //! indirection, which the Clang thread-safety analyzer cannot see the lock
     //! through — hence NO_THREAD_SAFETY_ANALYSIS. Every call path holds cs_store
     //! (the worker's apply* and the Qt-thread register/getRows all take it).
-    TxFilterFields projectFieldsAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
-    SortKey projectKeysAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    //! Return the CACHED projector outputs for record i by const ref (PR4-fix F):
+    //! the cursor reads these per comparison without re-projecting. The reference
+    //! is into m_fields_cache / m_keys_cache, valid while the caller holds cs_store.
+    const TxFilterFields& projectFieldsAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
+    const SortKey& projectKeysAt(std::size_t i) const NO_THREAD_SAFETY_ANALYSIS;
     //! Build the (Fields, Keys) projector pair bound to this store for a cursor.
     void makeCursorProjectors(Cursor::FieldsFn& fields, Cursor::KeysFn& keys);
+
+    //! (Re)compute the cached projector outputs for record i from m_records[i].
+    //! Call after any insert/in-place mutation of m_records[i]; the parallel cache
+    //! vectors are kept exactly the same size and order as m_records under cs_store.
+    void recomputeCacheAt(std::size_t i) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
+
+    //! True if record r's displayed status is still height-dependent (it will
+    //! change as blocks advance: Unconfirmed / Confirming / Immature / Open* /
+    //! MaturesWarning). Terminal states (Confirmed / Conflicted / NotAccepted /
+    //! Offline) are excluded — applyChainTipRefresh skips them.
+    static bool isVolatile(const TransactionRecord& r);
+
+    //! Re-evaluate whether `hash` belongs in m_volatile from its records' current
+    //! status, inserting or erasing it. Caller holds cs_store.
+    void updateVolatileForHash(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_store);
 
     CWallet* const m_wallet;
     GRC::WalletEventQueue& m_queue;
@@ -207,11 +274,30 @@ private:
     //! tx hash -> positions in m_records. Same-hash records are contiguous.
     std::unordered_multimap<uint256, std::size_t, TxHashHasher> m_by_hash GUARDED_BY(cs_store);
 
+    //! Cached projector outputs, kept exactly parallel to m_records (PR4-fix F):
+    //! computed once per record at insert/update/refresh so a cursor sort or
+    //! lower_bound reads them by const ref — no strprintf / string allocation per
+    //! comparison. Every m_records mutation updates these in lockstep under cs_store.
+    std::vector<TxFilterFields> m_fields_cache GUARDED_BY(cs_store);
+    std::vector<SortKey> m_keys_cache GUARDED_BY(cs_store);
+
+    //! Tx hashes with at least one height-volatile record (Confirming / Immature /
+    //! ...). applyChainTipRefresh() re-runs updateStatus only over this bounded set
+    //! each block, so the per-block cost is O(volatile) rather than O(N) (PR4-fix A).
+    std::unordered_set<uint256, TxHashHasher> m_volatile GUARDED_BY(cs_store);
+
     //! Registered per-view cursors (server-side filter+sort), keyed by VIEW_*.
     //! Each indexes into m_records; maintained on the worker thread (insert/
     //! remove/update) and on the Qt thread (register/setView*/getRows), all under
     //! cs_store. std::map for stable references across insertion.
     std::map<int, Cursor> m_cursors GUARDED_BY(cs_store);
+
+    //! Per-view high-water: the seqno of the last event emitted for each view
+    //! (PR4-fix B). getRows returns it so a consumer can discard any event already
+    //! reflected in a refetched snapshot, closing the reset/delta double-apply race
+    //! (a worker insert/remove landing between a Reset emission and the consumer's
+    //! getRows would otherwise be applied twice).
+    std::map<int, uint64_t> m_view_seqno GUARDED_BY(cs_store);
 
     //! Cached OptionsModel datetime-display cutoff, set by reloadAndSnapshot.
     bool m_limit_enabled GUARDED_BY(cs_store){false};

@@ -150,6 +150,11 @@ public:
     //!
     GRC::WalletTxStore& getTxStore() { return m_txStore; }
 
+    //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
+    //! user-initiated cursor change (a windowed-view filter/sort) is reflected
+    //! without waiting for the periodic drain tick (windowed-model PR4-fix D).
+    void requestEventDrainSoon();
+
 private:
     CWallet *wallet;
 
@@ -172,6 +177,11 @@ private:
     int64_t last_balance_update_time = 0;
 
     QTimer *eventDrainTimer;
+
+    //! Coalescing guard for requestEventDrainSoon() (PR4-fix D): true while a
+    //! user-requested immediate drain is already scheduled, so a burst of requests
+    //! (e.g. per-keystroke filter changes) collapses to one drain. Qt-thread only.
+    bool m_event_drain_requested = false;
 
     //!
     //! \brief MPSC queue carrying producer-side wallet events to the GUI.

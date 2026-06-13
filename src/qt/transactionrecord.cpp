@@ -501,6 +501,17 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUI
     }
 }
 
+void TransactionRecord::populateDisplayLabel(const CWallet& wallet) EXCLUSIVE_LOCKS_REQUIRED(wallet.cs_wallet)
+{
+    // Qt-free address-book lookup (caller holds cs_wallet): snapshot the label for
+    // `address` so the off-cs_wallet cursor can sort/filter without the wallet.
+    label.clear();
+    const auto mi = wallet.mapAddressBook.find(DecodeDestination(address));
+    if (mi != wallet.mapAddressBook.end()) {
+        label = mi->second;
+    }
+}
+
 bool TransactionRecord::statusUpdateNeeded() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);

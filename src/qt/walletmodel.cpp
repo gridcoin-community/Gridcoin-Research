@@ -166,6 +166,11 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::drainEventQueue()
 {
+    // Any drain (periodic, backlog re-arm, or a requestEventDrainSoon kick) satisfies
+    // a pending user-requested drain, so clear the coalescing flag up front: a fresh
+    // request that arrives after this point schedules a new kick (PR4-fix D).
+    m_event_drain_requested = false;
+
     // Bound the per-tick batch so a large backlog (reorg flood, IBD catch-up)
     // cannot freeze the Qt main thread in a single apply pass. If the queue
     // still has events after this batch, re-arm immediately (see below)
@@ -235,10 +240,40 @@ void WalletModel::drainEventQueue()
     }
 }
 
+void WalletModel::requestEventDrainSoon()
+{
+    // Kick a drain on the next event-loop turn so a user-initiated cursor change
+    // (filter/sort, which synchronously pushed a Reset to the queue) is reflected
+    // immediately instead of waiting up to MODEL_EVENT_DRAIN_INTERVAL for the
+    // periodic tick (windowed-model PR4-fix D).
+    //
+    // QTimer::singleShot does NOT deduplicate — each call schedules its own
+    // callback — so coalesce explicitly with a pending flag, or a burst (e.g. every
+    // keystroke in the filter box) would queue one drain per keystroke. The flag is
+    // cleared at the top of drainEventQueue, so exactly one drain is in flight per
+    // burst; it runs on the Qt thread, so the flag needs no synchronization.
+    if (m_event_drain_requested) {
+        return;
+    }
+    m_event_drain_requested = true;
+    QTimer::singleShot(0, this, &WalletModel::drainEventQueue);
+}
+
 void WalletModel::updateAddressBook(const QString &address, const QString &label, bool isMine, int status)
 {
     if(addressTableModel)
         addressTableModel->updateEntry(address, label, isMine, status);
+
+    // Re-snapshot the label on the windowed store's records for this address so
+    // the detailed view's Address-column sort and label substring filter track an
+    // address-book edit live — the behaviour the deleted TransactionFilterProxy
+    // got from reading LabelRole on every filter pass (windowed-model PR4-C). Use
+    // the authoritative current label (empty after a delete) rather than the raw
+    // notification argument. The enqueue is O(1); the store-worker re-snapshots and
+    // re-drives the cursors off the GUI thread.
+    const QString current = addressTableModel
+        ? addressTableModel->labelForAddress(address) : label;
+    getTxStore().enqueueAddressBookChange(address.toStdString(), current.toStdString());
 }
 
 bool WalletModel::validateAddress(const QString &address)
@@ -788,6 +823,7 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
                 std::vector<TransactionRecord> recs(decomposed.begin(), decomposed.end());
                 for (TransactionRecord& rec : recs) {
                     rec.updateStatus(wtx);
+                    rec.populateDisplayLabel(*wallet);  // address-book label snapshot (PR4)
                 }
                 // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
                 // of an existing tx (e.g. a confirmation) — the store updates it in
@@ -817,15 +853,27 @@ static void NotifyBlocksChangedForWallet(WalletModel *walletmodel,
                                          int height,
                                          int64_t best_time,
                                          uint32_t /*target_bits*/)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     // Fired from main.cpp::SetBestChain (under cs_main) after every chain
     // tip advance — connect, disconnect, or reorg. Pushes a lightweight
     // marker into the event queue. The Qt-side drain handler reacts by
-    // refreshing per-row confirmation status and re-running the existing
-    // (rate-limited) balance recompute path. This replaces the 4-second
-    // pollBalanceChanged poll that used to compare nBestHeight to a cached
-    // copy on a timer.
+    // re-running the existing (rate-limited) balance recompute path. This
+    // replaces the 4-second pollBalanceChanged poll that used to compare
+    // nBestHeight to a cached copy on a timer.
     walletmodel->getEventQueue().push(GRC::ChainTipChangedPayload{height, best_time});
+
+    // Refresh per-row confirmation/maturity status for the bounded set of
+    // height-volatile records and re-drive the cursors (windowed-model PR4-A).
+    // Runs INLINE here — we already hold cs_main, so the store can take
+    // cs_wallet (recursive) + cs_store in canonical order with no store-worker
+    // involvement (the worker must stay cs_main/cs_wallet-free or it would
+    // deadlock reloadAndSnapshot's park protocol). The work is O(volatile), so a
+    // per-block refresh on the validation thread is bounded; the cursor
+    // reposition cost is O(volatile × view_index) until PR5 windowing shrinks the
+    // per-view index. Restores the per-block status advance the deleted proxy got
+    // from TransactionTableModel::index()'s lazy updateStatus.
+    walletmodel->getTxStore().applyChainTipRefresh();
 }
 
 void WalletModel::subscribeToCoreSignals()

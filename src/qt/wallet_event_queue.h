@@ -29,6 +29,7 @@ namespace GRC {
 //!
 constexpr int VIEW_FULL = 0;
 constexpr int VIEW_OVERVIEW = 1;
+constexpr int VIEW_DETAILED = 2;   //!< the detailed history view (PR4)
 
 //!
 //! \brief Producer-side payload: rows were inserted into the ordered wallet
@@ -193,10 +194,13 @@ public:
 
     //!
     //! \brief Push an event payload. The queue assigns a fresh monotonic seqno
-    //! and emit timestamp under its own mutex. Safe to call from any thread,
-    //! including while the producer holds cs_main / cs_wallet.
+    //! and emit timestamp under its own mutex, and RETURNS that seqno. Safe to
+    //! call from any thread, including while the producer holds cs_main /
+    //! cs_wallet. The returned seqno is the per-view high-water the store records
+    //! so a consumer can discard events already reflected in a getRows refetch
+    //! (windowed-model PR4-fix B).
     //!
-    void push(WalletEventPayload payload);
+    uint64_t push(WalletEventPayload payload);
 
     //!
     //! \brief Pop up to \p max_batch events in seqno order. Returns an empty
