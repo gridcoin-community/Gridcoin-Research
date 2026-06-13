@@ -544,10 +544,12 @@ bool CNode::Misbehaving(int howmuch)
         return false;
     }
 
-    // Scoring, decay, and the ban decision moved to net_processing
-    // (MisbehavingAddr); the instance method additionally disconnects this node
-    // when its score crosses the ban threshold (issue #2558 PR 2c).
-    if (MisbehavingAddr(addr, howmuch))
+    // Scoring, decay, and the ban decision live in PeerManagerImpl
+    // (g_peerman->Misbehaving, issue #2558 PR 8b); the instance method
+    // additionally disconnects this node when its score crosses the ban
+    // threshold. No g_peerman (early init / tests without the fixture) means no
+    // misbehavior tracking, so treat it as "not banned".
+    if (g_peerman && g_peerman->Misbehaving(addr, howmuch))
     {
         CloseSocketDisconnect();
         return true;
@@ -559,7 +561,7 @@ bool CNode::Misbehaving(int howmuch)
 
 int CNode::GetMisbehavior() const
 {
-    return GetMisbehaviorAddr(addr);
+    return g_peerman ? g_peerman->GetMisbehaviorScore(addr) : 0;
 }
 
 CService CNode::GetAddrLocal() const
@@ -995,7 +997,7 @@ void ThreadSocketHandler2(void* parg)
 
                     if (it != mapInboundLastConnect.end() && nNow - it->second < 5)
                     {
-                        MisbehavingAddr(addr, 10);
+                        if (g_peerman) g_peerman->Misbehaving(addr, 10);
                         closesocket(hSocket);
                         mapInboundLastConnect[addr] = nNow;
                         continue;

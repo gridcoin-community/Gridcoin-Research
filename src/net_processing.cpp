@@ -99,96 +99,9 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     RelayInventory(inv);
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// Peer misbehavior tracking (moved from CNode, issue #2558 PR 2c)
-//
-
-// Per-address misbehavior scores. State and the address-keyed accessors live
-// here; CNode keeps thin Misbehaving()/GetMisbehavior() wrappers that forward
-// to these (the instance Misbehaving() additionally disconnects the node).
-static CCriticalSection cs_mapMisbehavior;
-static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior GUARDED_BY(cs_mapMisbehavior);
-
-int GetMisbehaviorAddr(const CAddress& addr)
-{
-    int nMisbehavior = 0;
-
-    LOCK(cs_mapMisbehavior);
-
-    const auto& iMisbehavior = mapMisbehavior.find(addr);
-
-    if (iMisbehavior != mapMisbehavior.end())
-    {
-        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
-        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
-        // This results in a decay of roughly 100/24 = 4 points per hour.
-        int time_based_decay_correction = std::round(
-                    (double) gArgs.GetArg("-banscore", 100)
-                    * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
-                    );
-
-        // Make sure nMisbehavior doesn't go below zero.
-        nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
-
-        // Delete entry if nMisbehavior is zero.
-        if (!nMisbehavior) mapMisbehavior.erase(iMisbehavior);
-    }
-
-    return nMisbehavior;
-}
-
-bool MisbehavingAddr(const CAddress& addr, int howmuch)
-{
-    if (addr.IsLocal())
-    {
-        LogPrintf("Warning: Local address %s misbehaving (delta: %d)!", addr.ToString(), howmuch);
-        return false;
-    }
-
-    LOCK(cs_mapMisbehavior);
-
-    int nMisbehavior = GetMisbehaviorAddr(addr) + howmuch;
-
-    mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
-
-    if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
-    {
-        LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
-
-        g_banman->Ban(addr, BanReasonNodeMisbehaving);
-        return true;
-    }
-
-    LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d)", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
-    return false;
-}
-
-// Clear all misbehavior entries whose address matches sub_net. Registered with
-// BanMan as its misbehavior-clear callback so a lifted ban also resets scores,
-// without BanMan reaching into this map directly. Returns the count cleared.
-unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net)
-{
-    unsigned int nZeroed = 0;
-
-    LOCK(cs_mapMisbehavior);
-
-    for (auto iMisbehavior = mapMisbehavior.begin(); iMisbehavior != mapMisbehavior.end();)
-    {
-        if (sub_net.Match(iMisbehavior->first))
-        {
-            iMisbehavior = mapMisbehavior.erase(iMisbehavior);
-            ++nZeroed;
-        }
-        else
-        {
-            ++iMisbehavior;
-        }
-    }
-
-    return nZeroed;
-}
+// Peer misbehavior tracking moved into PeerManagerImpl::m_misbehavior in PR 8b
+// (it was file-static here since PR 2c). See PeerManagerImpl at the end of this
+// translation unit; CNode::Misbehaving/GetMisbehavior forward to g_peerman.
 
 // Orphan transaction storage. All accesses occur under cs_main from
 // ProcessMessage / AddOrphanTx / EraseOrphanTx / LimitOrphanTxSize.
@@ -1516,15 +1429,17 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
 }
 
 // ---------------------------------------------------------------------------
-// PeerManager (issue #2558 PR 8a): the message-processing manager. For now a
-// thin shell over the file-static ProcessMessages/SendMessages above; the
-// peer-level API (Misbehaving, ...) and the scheduled tasks land in PR 8b.
+// PeerManager (issue #2558): the message-processing manager. A thin shell over
+// the file-static ProcessMessages/SendMessages (PR 8a) that now also owns the
+// peer-misbehavior state relocated from this TU's file scope (PR 8b).
 // ---------------------------------------------------------------------------
 
 namespace {
 class PeerManagerImpl final : public PeerManager
 {
 public:
+    explicit PeerManagerImpl(BanMan* banman) : m_banman(banman) {}
+
     bool ProcessMessages(CNode* pfrom) override EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
     {
         return ::ProcessMessages(pfrom);
@@ -1539,12 +1454,106 @@ public:
     {
         // No recurring tasks yet (issue #2558 PR 8a shell).
     }
+
+    bool Misbehaving(const CAddress& addr, int howmuch) override
+    {
+        if (addr.IsLocal())
+        {
+            LogPrintf("Warning: Local address %s misbehaving (delta: %d)!", addr.ToString(), howmuch);
+            return false;
+        }
+
+        LOCK(m_misbehavior_cs);
+
+        int nMisbehavior = GetMisbehaviorScore_(addr) + howmuch;
+
+        m_misbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+        if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
+        {
+            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+
+            if (m_banman) m_banman->Ban(addr, BanReasonNodeMisbehaving);
+            return true;
+        }
+
+        LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+        return false;
+    }
+
+    int GetMisbehaviorScore(const CAddress& addr) override
+    {
+        LOCK(m_misbehavior_cs);
+        return GetMisbehaviorScore_(addr);
+    }
+
+    unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net) override
+    {
+        unsigned int nZeroed = 0;
+
+        LOCK(m_misbehavior_cs);
+
+        for (auto it = m_misbehavior.begin(); it != m_misbehavior.end();)
+        {
+            if (sub_net.Match(it->first))
+            {
+                it = m_misbehavior.erase(it);
+                ++nZeroed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        return nZeroed;
+    }
+
+private:
+    //! Current (decayed) misbehavior score for addr; erases a zeroed entry.
+    //! Caller holds m_misbehavior_cs (so Misbehaving/GetMisbehaviorScore share
+    //! one lock acquisition instead of re-locking, as the PR 2c free functions
+    //! did via the recursive cs_mapMisbehavior).
+    int GetMisbehaviorScore_(const CAddress& addr) EXCLUSIVE_LOCKS_REQUIRED(m_misbehavior_cs)
+    {
+        int nMisbehavior = 0;
+
+        const auto& iMisbehavior = m_misbehavior.find(addr);
+
+        if (iMisbehavior != m_misbehavior.end())
+        {
+            // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+            // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+            // This results in a decay of roughly 100/24 = 4 points per hour.
+            int time_based_decay_correction = std::round(
+                        (double) gArgs.GetArg("-banscore", 100)
+                        * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
+                        / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                        );
+
+            // Make sure nMisbehavior doesn't go below zero.
+            nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+
+            // Delete entry if nMisbehavior is zero.
+            if (!nMisbehavior) m_misbehavior.erase(iMisbehavior);
+        }
+
+        return nMisbehavior;
+    }
+
+    BanMan* const m_banman;
+
+    // Per-address misbehavior scores (relocated from net_processing file scope
+    // in PR 8b). Lock order: cs_main -> cs_wallet -> m_misbehavior_cs ->
+    // BanMan::m_cs_banned (Misbehaving locks this then calls m_banman->Ban).
+    mutable CCriticalSection m_misbehavior_cs;
+    std::map<CAddress, std::pair<int, int64_t>> m_misbehavior GUARDED_BY(m_misbehavior_cs);
 };
 } // namespace
 
 std::unique_ptr<PeerManager> g_peerman;
 
-std::unique_ptr<PeerManager> PeerManager::make(CConnman& /*connman*/)
+std::unique_ptr<PeerManager> PeerManager::make(CConnman& /*connman*/, BanMan* banman)
 {
-    return std::make_unique<PeerManagerImpl>();
+    return std::make_unique<PeerManagerImpl>(banman);
 }

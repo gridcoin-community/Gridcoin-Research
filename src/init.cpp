@@ -1680,8 +1680,12 @@ bool AppInit2(ThreadHandlerPtr threads)
                                         gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
     // Let a lifted/cleared/swept ban also reset the peer's misbehavior score,
-    // which now lives in net_processing (issue #2558 PR 2c).
-    g_banman->SetMisbehaviorClearCallback(ClearMisbehaviorForSubnet);
+    // which lives in PeerManagerImpl (issue #2558 PR 8b). Route through
+    // g_peerman, constructed just below; the callback is only invoked once bans
+    // are cleared at runtime, by which point g_peerman exists (null-guarded).
+    g_banman->SetMisbehaviorClearCallback([](const CSubNet& sub_net) -> unsigned int {
+        return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
+    });
 
     // Connection manager (issue #2558 PR 3). Constructed here; its net threads
     // launch from StartNode -> g_connman->Start() in Step 12 below.
@@ -1696,7 +1700,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Message-processing manager (issue #2558 PR 8a). Drives ProcessMessages/
     // SendMessages from ThreadMessageHandler via g_peerman.
     assert(!g_peerman);
-    g_peerman = PeerManager::make(*g_connman);
+    g_peerman = PeerManager::make(*g_connman, g_banman.get());
     if (g_scheduler) g_peerman->StartScheduledTasks(*g_scheduler);
 
     uiInterface.InitMessage(_("Loading addresses..."));
