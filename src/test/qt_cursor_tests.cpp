@@ -414,4 +414,28 @@ BOOST_AUTO_TEST_CASE(interleaved_reposition_to_equal_keys)
     BOOST_CHECK_EQUAL(c.viewIndex()[3], 2u);
 }
 
+// ---- positionOf: public identity-locate (PR5 rowForKey backing) -------------
+
+BOOST_AUTO_TEST_CASE(position_of_maps_absidx_to_accepted_row_or_npos)
+{
+    // The store's rowForKey resolves a (hash, idx) to an absolute record index,
+    // then asks the cursor for its accepted row via positionOf — for click-through
+    // to a row and anchor-on-resort (PR5). It must report the sorted accepted
+    // position, and npos for a row the filter excludes or that is absent.
+    constexpr std::size_t NPOS = static_cast<std::size_t>(-1);
+    Table t;
+    // abs:    0           1           2 (inactive)              3
+    t.rows = { active(100), active(300), Rec{200,0,0,6,"","",""}, active(150) };
+    Cursor c(1, FilterSpec{}, TXCOL_DATE, TXSORT_DESC, t.fields(), t.keys());
+    c.rebuild(t.rows.size());
+    // accepted, time-DESC: 300(abs1), 150(abs3), 100(abs0); abs2 inactive -> out.
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 3u);
+
+    BOOST_CHECK_EQUAL(c.positionOf(1), 0u);   // abs1 -> accepted row 0
+    BOOST_CHECK_EQUAL(c.positionOf(3), 1u);   // abs3 -> accepted row 1
+    BOOST_CHECK_EQUAL(c.positionOf(0), 2u);   // abs0 -> accepted row 2
+    BOOST_CHECK(c.positionOf(2) == NPOS);     // filtered out -> npos
+    BOOST_CHECK(c.positionOf(42) == NPOS);    // absent -> npos
+}
+
 BOOST_AUTO_TEST_SUITE_END()
