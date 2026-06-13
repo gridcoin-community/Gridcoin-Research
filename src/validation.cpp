@@ -1377,6 +1377,7 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
             || (IsV12Enabled(nHeight) && block.nVersion < 12)
             || (IsV13Enabled(nHeight) && block.nVersion < 13)
             || (IsV14Enabled(nHeight) && block.nVersion < 14)
+            || (IsV15Enabled(nHeight) && block.nVersion < 15)
             ) {
         return state.DoS(20, error("%s: reject too old nVersion = %d", __func__, block.nVersion));
     } else if ((!IsProtocolV2(nHeight) && block.nVersion >= 7)
@@ -1387,6 +1388,7 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
                || (!IsV12Enabled(nHeight) && block.nVersion >= 12)
                || (!IsV13Enabled(nHeight) && block.nVersion >= 13)
                || (!IsV14Enabled(nHeight) && block.nVersion >= 14)
+               || (!IsV15Enabled(nHeight) && block.nVersion >= 15)
                ) {
         return state.DoS(100, error("%s: reject too new nVersion = %d", __func__, block.nVersion));
     }

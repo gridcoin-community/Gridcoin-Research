@@ -38,6 +38,24 @@ struct Params {
     int BlockV13Height;
     /** Block height at which v14 blocks are created (CLTV + CSV + BIP68) */
     int BlockV14Height;
+    /** Block height at which v15 blocks are created. Default
+      * std::numeric_limits<int>::max() means the v15 hard-fork machinery
+      * (including on-chain pool registration, issue #1783) is inert until a
+      * follow-up release pins the activation height by maintainer/community
+      * decision. See doc/consensus.md.
+      */
+    int BlockV15Height;
+    /** Retention window (in blocks) after which a PENDING pool registration
+      * or a POOL_APPROVE OPEN pre-authorization is treated as expired for
+      * query and takeover-defense purposes. Pure query-time check, no state
+      * mutation at the expiration boundary — reorg-safe by construction.
+      * 28800 blocks is ~20 days at mainnet ~60s spacing. Consensus-affecting:
+      * nodes with differing values will disagree on POOL_REGISTER admission
+      * across expiration boundaries and fork. Override via the hidden
+      * -pendingpoolretention arg (isolated-testnet / regtest only — see
+      * init.cpp). See doc/consensus.md §11.
+      */
+    int PendingPoolRetention;
     /** Grace period in blocks after BlockV14Height before peers on the old
       * protocol version are disconnected. Network-specific to allow testnet
       * a longer window when the fork has already passed before deployment.

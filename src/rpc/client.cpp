@@ -226,6 +226,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockstats"          , 2 },
     { "inspectaccrualsnapshot" , 0 },
     { "listmanifests"          , 0 },
+    { "listpools"              , 0 },
     { "listprojects"           , 0 },
     { "getautogreylist"        , 0 },
     { "getautogreylist"        , 1 },

@@ -28,10 +28,11 @@ all prior rules unless explicitly changed.
 8. [Block Version 12 — Manual Research Claims](#8-block-version-12)
 9. [Block Version 13 — Mandatory Sidestakes and Configurable Parameters](#9-block-version-13)
 10. [Block Version 14 — Script Timelocks and V3 Beacons](#10-block-version-14)
-11. [Cross-Cutting Consensus Rules](#11-cross-cutting-consensus-rules)
-12. [Coinstake Output Structure Summary](#12-coinstake-output-structure-summary)
-13. [Contract Payload Version Matrix](#13-contract-payload-version-matrix)
-14. [Reward Formula Summary](#14-reward-formula-summary)
+11. [Block Version 15 — On-Chain Pool Registration](#11-block-version-15)
+12. [Cross-Cutting Consensus Rules](#12-cross-cutting-consensus-rules)
+13. [Coinstake Output Structure Summary](#13-coinstake-output-structure-summary)
+14. [Contract Payload Version Matrix](#14-contract-payload-version-matrix)
+15. [Reward Formula Summary](#15-reward-formula-summary)
 
 ---
 
@@ -53,8 +54,9 @@ in `src/chainparams.h`.
 | `BlockV10Height` | 1,420,000 | 629,409 | `IsV10Enabled()` (>= height) |
 | `BlockV11Height` | 2,053,000 | 1,301,500 | `IsV11Enabled()` (>= height) |
 | `BlockV12Height` | 2,671,700 | 1,871,830 | `IsV12Enabled()` (>= height) |
-| `BlockV13Height` | _not yet activated_ | 2,870,000 | `IsV13Enabled()` (>= height) |
-| `BlockV14Height` | _not yet activated_ | 3,126,500 | `IsV14Enabled()` (>= height) |
+| `BlockV13Height` | 3,989,800 | 2,870,000 | `IsV13Enabled()` (>= height) |
+| `BlockV14Height` | 3,990,000 | 3,126,500 | `IsV14Enabled()` (>= height) |
+| `BlockV15Height` | _not yet activated_ | _not yet activated_ | `IsV15Enabled()` (>= height) |
 | `PollV3Height` | 2,671,700 | 1,944,820 | `IsPollV3Enabled()` (>= height) |
 | `ProjectV2Height` | 2,671,700 | 1,944,820 | `IsProjectV2Enabled()` (>= height) |
 | `ProjectV4Height` | _not yet activated_ | 2,870,000 | `IsProjectV4Enabled()` (>= height) |
@@ -85,6 +87,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
+| `PendingPoolRetention` | 28,800 blocks (~20 days) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `src/chainparams.cpp:61-91` (mainnet), `src/chainparams.cpp:184-213`
 > (testnet)
@@ -511,7 +514,7 @@ New compressed master key installed at height 2,671,700 (mainnet) and
 
 ## 9. Block Version 13 — Mandatory Sidestakes and Configurable Parameters
 
-**Activation:** Mainnet _not yet activated_, Testnet >= 2,870,000
+**Activation:** Mainnet >= 3,989,800, Testnet >= 2,870,000
 
 ### 9.1 Mandatory Sidestakes
 
@@ -585,7 +588,7 @@ Via protocol entry `"magnitudeweightfactor"`:
 
 ## 10. Block Version 14 — Script Timelocks and V3 Beacons
 
-**Activation:** Mainnet _not yet activated_, Testnet >= 3,126,500
+**Activation:** Mainnet >= 3,990,000, Testnet >= 3,126,500
 
 ### 10.1 BIP65 — OP_CHECKLOCKTIMEVERIFY
 
@@ -650,9 +653,131 @@ for trustless atomic operations.
 
 ---
 
-## 11. Cross-Cutting Consensus Rules
+## 11. Block Version 15 — On-Chain Pool Registration
 
-### 11.1 Script Verification Flags
+**Activation:** Mainnet _not yet activated_, Testnet _not yet activated_
+
+Issue [#1783](https://github.com/gridcoin-community/Gridcoin-Research/issues/1783) replaces the hardcoded `MiningPools` list with an on-chain registry so pool operators can self-register without a binary release. The V15 hard-fork machinery is present in code from the time of this PR; the activation height itself is a follow-up consensus decision and defaults to `std::numeric_limits<int>::max()` in `CMainParams` / `CTestNetParams` until pinned.
+
+### 11.1 New Contract Types
+
+Two new contract types share a single `PoolRegistry` backed by the standard `RegistryDB` template (history-tracked, reorg-safe). Both are gated by `IsV15Enabled` in `PoolRegistry::ValidateAtHeight` (called from both `Validate` at mempool admission and `BlockValidate` at block validation); pre-V15 they are silently invalid in both paths.
+
+| Contract Type | Authority | Payload | Effect |
+|---|---|---|---|
+| `POOL_REGISTER` | Operator-self-signed (no master key) | CPID, name, URL, operator pubkey, signature | Lands in `PENDING` (or `DELETED` on REMOVE for operator self-withdrawal). The takeover defense applies to **both ADD and REMOVE**: on re-registration of an existing CPID, the signature must verify against the prior operator key on file. Without this, anyone could broadcast REMOVE for any pool and burn the slot. |
+| `POOL_APPROVE` | Master-key (via `Contract::RequiresMasterKey()`) | CPID + (for `OPEN`) authorized operator pubkey | ADD flips to `ACTIVE`. REMOVE flips to `DELETED`. **OPEN** pre-authorizes a specific operator pubkey to claim a builtin pool slot — status is preserved from the prior chained entry; `Pool::m_authorized_operator_key` and `m_authorization_height` are set on the new chained entry. May also pre-stage placeholders for unknown CPIDs (foundation-managed entries; status `ACTIVE` on ADD, `DELETED` on REMOVE/OPEN). |
+
+The `ContractAction` enum gains `OPEN` (parsed/printed as `"O"`); ADD and REMOVE keep their existing wire ordinals (1 and 2). The conditional serialization of `m_authorized_operator_key` only on OPEN means ADD/REMOVE payloads keep the original `(version, cpid) = 20 bytes` wire shape; OPEN extends to `(version, cpid, pubkey) = 53 bytes`.
+
+> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, `src/gridcoin/contract/payload.h`, dispatch in `src/gridcoin/contract/contract.cpp`.
+
+### 11.2 Grandfathered Builtins
+
+To eliminate a flag-day regression of pool-mode detection, `PoolRegistry`'s constructor pre-populates the same 5 CPIDs that the legacy `MiningPools` list carried (`src/gridcoin/researcher.h:88-95`). Each builtin is seeded at `m_height = 0`, status `ACTIVE`, with an invalid operator key (the slot is unclaimed until the foundation explicitly opens it). Synthetic per-CPID sentinel hashes (`Hash("POOL_BUILTIN_SEED:" + cpid)`) anchor the `m_previous_hash` chain so `Revert` of a first-real-contract restores the builtin unchanged.
+
+Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns exactly the legacy list bit-for-bit (verified by the `builtin_pools_match_g_mining_pools_pre_v15` unit test in `pool_tests.cpp`).
+
+> **Source:** `src/gridcoin/pool.cpp` `BuiltinPoolSeeds()` / `SeedBuiltinPools()`.
+
+### 11.3 Builtin Sticky-Claim Protection (Path 1 / Path 2)
+
+Builtin pool slots are **permanently sticky** — every `POOL_REGISTER` on a builtin CPID is gated regardless of whether the slot was ever claimed before. The gate is implemented as a status-driven Path 1 / Path 2 split in `PoolRegistry::VerifyRegisterAuth` (called by both `Validate` and `BlockValidate`):
+
+- **Path 1 — operational claimed builtin** (`m_status != DELETED && m_operator_key.IsValid()`). The slot has a live operator. Signature must verify against the existing operator key (rotation / withdrawal / update / takeover defense).
+- **Path 2 — everything else** (fresh unclaimed seed, post-operator-REMOVE, post-Foundation-REMOVE of a previously-claimed builtin). The slot requires a fresh `POOL_APPROVE OPEN` authorization:
+  1. `existing->m_authorized_operator_key.IsValid()` — Foundation must have OPEN'd; else reject.
+  2. `at_height ≤ existing->m_authorization_height + consensus.PendingPoolRetention` — authorization not expired.
+  3. `existing->m_authorized_operator_key == payload->m_operator_key` — payload key matches the pre-authorization.
+
+If all three hold, the payload's own key authenticates the first claim (the new entry's operator key is set from the payload), and the auth fields are cleared on the chained entry — single-use consumption.
+
+Discriminating on `m_status` rather than on `m_operator_key.IsValid()` closes a regression hole: a previously-claimed builtin that the Foundation later REMOVEs retains `K_real` on the propagated DELETED entry. A key-validity-only check would treat that state as "fall through to standard takeover" but the `!= DELETED` filter would exclude the entry, opening an identity-hijack window. The status-driven split sends that case to Path 2 (sticky), correctly requiring fresh OPEN authorization for re-claim.
+
+#### Legitimate-claim flows for a builtin (e.g. `grcpool.com`)
+
+Both variants are valid; the 3-step flow is preferred for wallet UX (no DELETED window where BOINC mode detection drops the pool).
+
+**4-step flow** (REMOVE first):
+
+1. Pre-V15: builtin seeded `ACTIVE`, empty operator key.
+2. Post-V15: Foundation `POOL_APPROVE REMOVE` → status `DELETED`.
+3. Opportunistic `POOL_REGISTER ADD` → Path 2 rejects (no auth).
+4. Foundation `POOL_APPROVE OPEN` with `K_real` → status stays `DELETED`, auth fields set.
+5. Real operator `POOL_REGISTER ADD` signed by `K_real`, payload key `K_real` → Path 2 accepts; status `PENDING`; auth cleared.
+6. Foundation `POOL_APPROVE ADD` → status `ACTIVE`.
+
+**3-step flow** (skip REMOVE — preferred):
+
+1. Pre-V15: builtin seeded `ACTIVE`, empty operator key.
+2. Post-V15: Foundation `POOL_APPROVE OPEN` with `K_real` directly on the still-`ACTIVE` seed → status stays `ACTIVE`, auth fields set. Wallets continue to see the pool as active during the transition.
+3. Real operator `POOL_REGISTER ADD` signed by `K_real` → Path 2 accepts; status `PENDING`. Wallets briefly see PENDING.
+4. Foundation `POOL_APPROVE ADD` → status `ACTIVE`.
+
+If step 5 (4-step) / step 3 (3-step) doesn't happen within `consensus.PendingPoolRetention` blocks of the OPEN, the authorization expires at query time and the sticky-reject re-engages. Foundation can re-issue OPEN to refresh.
+
+#### Authorization-field propagation
+
+`m_authorized_operator_key` and `m_authorization_height` propagate through chained entries unchanged in `ApplyApprove` ADD/REMOVE. Only `ApplyApprove` OPEN sets them; only a successful `ApplyRegister` ADD that consumed the authorization clears them. This decouples auth validity from `m_height`, so Foundation admin actions between OPEN and the operator's claim don't shift the retention window. `ApplyRegister` constructs a fresh `Pool` from the payload, so the new entry starts with empty auth fields — implicit single-use clearing.
+
+#### Non-builtin OPEN
+
+`POOL_APPROVE OPEN` is admissible on any CPID, but the Path 2 sticky gate fires only on builtins. Foundation OPEN on a non-builtin CPID chains an entry with the auth fields set but no consensus rule treats them as required — non-builtin claims go through the standard first-claim path. Left admissible (rather than rejected) to support future extensions (e.g. curated whitelist mode).
+
+> **Source:** `src/gridcoin/pool.cpp` `VerifyRegisterAuth`, `ValidateAtHeight`; `src/gridcoin/contract/payload.h` `ContractAction::OPEN`.
+
+### 11.3.1 PENDING + OPEN Retention
+
+`Consensus::Params::PendingPoolRetention` (default `28800` blocks ≈ 20 days at ~60s spacing) bounds two things:
+
+- **PENDING entries** become query-time expired once `at_height > entry.m_height + retention`. The chained entry remains in storage but consensus treats it as absent for the takeover-check; a fresh `POOL_REGISTER ADD` from any key can supersede an expired PENDING **on a non-builtin slot**. On a builtin in Path 1 (claimed-operational), expired PENDING is NOT transparent — claimed-builtin protection persists regardless of retention.
+- **OPEN authorizations** become query-time expired once `at_height > entry.m_authorization_height + retention`. Path 2 rejects POOL_REGISTER with an expired auth.
+
+Both checks are pure functions of stored fields — no state mutation at the expiration boundary. Reorg back across the boundary naturally surfaces the entry as live again. This explicitly avoids the beacon-style stateful expiration which mutates state at superblock boundaries and requires reorg-resurrection logic.
+
+#### Hidden `-pendingpoolretention` override
+
+For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~20 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. **CONSENSUS-AFFECTING:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries and **will fork off the network** if used on mainnet / public testnet. Mirrors the existing `-blockv15height` pattern in scope and warning.
+
+> **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
+
+### 11.3.2 Registration Burn — 100 GRC (Issue #5)
+
+`PoolRegisterPayload::RequiredBurnAmount()` returns `100 * COIN`, set as the `REGISTRATION_BURN` constant on the payload. Pool registration is a heavier on-chain commitment than a beacon (0.5 GRC) or a poll (50 GRC + 100K GRC balance attestation): a pool operator is asking the network and the researchers staking through their pool to trust them with honest BOINC aggregation, infrastructure, and reported policy, sustained over time. The 100 GRC burn ranks pools above polls in cost ordering as a deliberate trust-weight signal.
+
+Symmetric for ADD and REMOVE — keeping a single `RequiredBurnAmount()` per payload type matches the framework's existing pattern, and REMOVE's spam control is structural (the existing-key signature check in `VerifyRegisterAuth`, not the burn). The modest "exit fee" trade-off is acceptable vs. the framework cost of asymmetric burns. Constant rather than consensus parameter — no need for administrative adjustability; the fee scale should be stable across releases.
+
+Defense-in-depth interaction with §11.3.1 (PENDING + OPEN retention): a hypothetical race-attack on a builtin slot is bounded to ~1,200 GRC/year per slot at the 100 GRC × retention-cycle rate, instead of the previous "indefinite war of attrition at 0.5 GRC per round."
+
+> **Source:** `src/gridcoin/pool.h` `PoolRegisterPayload::REGISTRATION_BURN`.
+
+### 11.3.3 Operator Handbook (practical guidance)
+
+- **Submit ADD within ~7 days of receiving Foundation OPEN.** A `POOL_REGISTER ADD` held in mempool through unusual block-inclusion delay can land at a height past `auth_height + retention` → rejected by Path 2 → 100 GRC burn for a tx the chain rejects (not actually burned since rejected at mempool / BlockValidate, but operator wastes fee-estimation + signing work). At 28800-block retention the practical risk is low; the guidance is conservative.
+- **Foundation re-OPENs if no claim within ~21 days.** Keeps a comfortable margin before retention expires.
+- **Do not bundle OPEN + operator-ADD + Foundation-ratify in the same block.** Order-dependence within a block is fragile — wrong tx ordering produces invalid blocks. Stage across blocks: OPEN in block N, operator's ADD in N+1, ratify in N+2.
+- **Foundation does not `POOL_APPROVE ADD` before the operator's `POOL_REGISTER ADD` lands.** Doing so creates a zombie ACTIVE-with-no-operator-key state (the protocol doesn't enforce a PENDING precondition on `POOL_APPROVE ADD`); wallets would route BOINC users to a slot with no aggregation service. Order matters; always ratify a real PENDING.
+
+### 11.4 Active Vote Weight Migration
+
+The two consumers of the legacy `g_mining_pools` list in the voting subsystem are migrated to the registry's height-anchored API:
+
+- `src/gridcoin/voting/registry.cpp` `PollReference::GetActiveVoteWeight`
+- `src/gridcoin/voting/result.cpp` `VoteCounter::ProcessVote` (via cached `m_pool_cpids_at_start`)
+
+Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll_start_height` is obtained from `PollReference::GetStartingHeight()`. The set used in AVW is therefore anchored to the poll's start height — every node tallying the same poll computes identical AVW even after post-V15 POOL contracts mutate the registry. Pre-V15 the registry returns the grandfathered builtins, which match the legacy `g_mining_pools` list bit-for-bit (see §11.2).
+
+> **Source:** `src/gridcoin/pool.cpp` `ActivePoolsAtHeight`; consumer sites in `voting/registry.cpp` and `voting/result.cpp`.
+
+### 11.5 Replay-Clamp Special-Case
+
+`RegistryBookmarks::GetLowestRegistryBlockHeight` in `src/gridcoin/contract/registry.h:174` is extended with a POOL block analogous to the existing SIDESTAKE block, guarded on `BlockV15Height != std::numeric_limits<int>::max()`. Without the guard, an unactivated V15 would clamp the replay floor to `::max()` and break the clamp's overall semantics. With V15 activated, the clamp prevents contract replay from descending below `BlockV15Height` when the POOL bookmark height is still 0.
+
+---
+
+## 12. Cross-Cutting Consensus Rules
+
+### 12.1 Script Verification Flags
 
 Script verification flags vary by block version:
 
@@ -666,14 +791,14 @@ Policy-level flags (applied to mempool transactions, not consensus):
 
 > **Source:** `src/validation.cpp:1624-1635`, `src/policy/policy.h:19-21`
 
-### 11.2 Block Version Enforcement
+### 12.2 Block Version Enforcement
 
 Blocks must meet the minimum version required at their height. Blocks below
 the mandatory version for their height are rejected:
 - Version 8 mandatory after `BlockV8Height`
 - Each subsequent version mandatory after its activation height
 
-### 11.3 Difficulty Retargeting
+### 12.3 Difficulty Retargeting
 
 - Target block spacing: **90 seconds** (post-protocol v2), **60 seconds**
   (pre-protocol v2)
@@ -697,7 +822,7 @@ where `nInterval = TARGET_TIMESPAN / nTargetSpacing`
 
 > **Source:** `src/gridcoin/staking/difficulty.cpp:22-90`
 
-### 11.4 Stake Modifier Computation
+### 12.4 Stake Modifier Computation
 
 The stake modifier is a 64-bit value recomputed every `nModifierInterval`
 (10 minutes). It is built by selecting 64 blocks from candidates in a time
@@ -716,7 +841,7 @@ Special case: mainnet height 1,009,994 has a hardcoded modifier reset to
 
 > **Source:** `src/gridcoin/staking/kernel.cpp:20-384`
 
-### 11.5 Stake Timestamp Mask
+### 12.5 Stake Timestamp Mask
 
 The `STAKE_TIMESTAMP_MASK` is 15 (0xF), which means:
 - Stake timestamps have 16-second granularity (bottom 4 bits zeroed)
@@ -737,13 +862,13 @@ The `STAKE_TIMESTAMP_MASK` is 15 (0xF), which means:
 
 > **Source:** `src/gridcoin/staking/kernel.h:15,30-33`, `src/gridcoin/staking/status.cpp`
 
-### 11.6 Transaction Version Requirements
+### 12.6 Transaction Version Requirements
 
 - Transaction version 1: Legacy transactions, no contracts
 - Transaction version 2: Required for binary contracts (v11+); enables
   sequence lock enforcement (BIP68 at v14+)
 
-### 11.7 Contract Burn Fees
+### 12.7 Contract Burn Fees
 
 Every non-administrative contract transaction must include an `OP_RETURN`
 output with a burn amount >= the required burn fee:
@@ -752,7 +877,7 @@ output with a burn amount >= the required burn fee:
 
 > **Source:** `src/gridcoin/contract/contract.h:57`, `src/validation.cpp:163-197`
 
-### 11.8 Superblock Spacing
+### 12.8 Superblock Spacing
 
 Superblocks are produced approximately once per day:
 - Pre-height 364,500 (mainnet): every 43,200 seconds (12 hours)
@@ -761,7 +886,7 @@ Superblocks are produced approximately once per day:
 
 > **Source:** `src/chainparams.h:187-190`
 
-### 11.9 Coinbase Maturity
+### 12.9 Coinbase Maturity
 
 Coinbase and coinstake outputs require a minimum depth before they can be
 spent:
@@ -772,7 +897,7 @@ spent:
 
 ---
 
-## 12. Coinstake Output Structure Summary
+## 13. Coinstake Output Structure Summary
 
 | Block Version | Base Limit | MRC Limit | Mandatory SS Limit | Total Max |
 |---|---|---|---|---|
@@ -797,7 +922,7 @@ Notes:
 
 ---
 
-## 13. Contract Payload Version Matrix
+## 14. Contract Payload Version Matrix
 
 This table shows the current (maximum) payload version for each contract type
 and when each version was introduced:
@@ -860,9 +985,9 @@ Current `CURRENT_VERSION` constants:
 
 ---
 
-## 14. Reward Formula Summary
+## 15. Reward Formula Summary
 
-### 14.1 Pre-v10: Coin-Year Interest
+### 15.1 Pre-v10: Coin-Year Interest
 
 ```
 staking_reward = coin_age * interest_rate * 33 / (365 * 33 + 8)
@@ -877,7 +1002,7 @@ research_reward = accrual_days * avg_magnitude * magnitude_unit * COIN
 
 Capped at `MaxResearchSubsidy * 255 * COIN` per block.
 
-### 14.2 V10+: Constant Block Reward
+### 15.2 V10+: Constant Block Reward
 
 ```
 staking_reward = GetConstantBlockReward(pindexLast)
@@ -890,7 +1015,7 @@ staking_reward = GetConstantBlockReward(pindexLast)
 
 > **Source:** `src/gridcoin/staking/reward.cpp:33-99`
 
-### 14.3 Research Accrual: Snapshot (v11+)
+### 15.3 Research Accrual: Snapshot (v11+)
 
 ```
 accrual = snapshot_balance + delta_accrual
@@ -904,7 +1029,7 @@ Where:
 - `magnitude_unit` = 1/4 (fixed, pre-v13) or configurable (v13+)
 - `elapsed_days` = time since the active superblock, in days
 
-### 14.4 Maximum Research Subsidy Schedule
+### 15.4 Maximum Research Subsidy Schedule
 
 The daily maximum research subsidy per CPID decreased over time (see
 [Section 3.3](#33-research-age-mainnet--364501)). From Nov 20, 2015 onward,
@@ -913,7 +1038,7 @@ the cap is **50 GRC/day** per CPID. Maximum single-block payout:
 
 > **Source:** `src/gridcoin/accrual/research_age.h:24-42`
 
-### 14.5 MRC Fees (v12+)
+### 15.5 MRC Fees (v12+)
 
 When a researcher submits an MRC:
 1. If within the zero-payment interval (14 days mainnet / 10 min testnet since

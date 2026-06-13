@@ -16,6 +16,7 @@
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
 #include "gridcoin/scraper/scraper_registry.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
@@ -276,9 +277,11 @@ protected:
             case ContractType::PROTOCOL:   return GetProtocolRegistry();
             case ContractType::SCRAPER:    return GetScraperRegistry();
             case ContractType::VOTE:       return GetPollRegistry();
-            case ContractType::MRC:        return m_mrc_contract_handler;
-            case ContractType::SIDESTAKE:  return GetSideStakeRegistry();
-            default:                       return m_unknown_handler;
+            case ContractType::MRC:           return m_mrc_contract_handler;
+            case ContractType::SIDESTAKE:     return GetSideStakeRegistry();
+            case ContractType::POOL_REGISTER: return GetPoolRegistry();
+            case ContractType::POOL_APPROVE:  return GetPoolRegistry();
+            default:                          return m_unknown_handler;
         }
     }
 }; // class Dispatcher
@@ -685,6 +688,14 @@ bool Contract::RequiresMasterKey() const
         case ContractType::SCRAPER:   return true;
         case ContractType::VOTE:      return m_action == ContractAction::REMOVE;
         case ContractType::SIDESTAKE: return true;
+
+        // POOL_REGISTER is intentionally NOT here: operators submit it with
+        // a payload-level operator signature (no master key required), and
+        // entries land in PENDING until a POOL_APPROVE follows. Only the
+        // approve/de-list action requires master-key authority.
+        case ContractType::POOL_APPROVE:
+            return true;
+
         default:                      return false;
     }
 }
@@ -778,6 +789,8 @@ Contract::Type Contract::Type::Parse(std::string input)
     if (input == "protocol")       return ContractType::PROTOCOL;
     if (input == "message")        return ContractType::MESSAGE;
     if (input == "sidestake")      return ContractType::SIDESTAKE;
+    if (input == "pool_register")  return ContractType::POOL_REGISTER;
+    if (input == "pool_approve")   return ContractType::POOL_APPROVE;
 
     return ContractType::UNKNOWN;
 }
@@ -794,8 +807,10 @@ std::string Contract::Type::ToString() const
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
-        case ContractType::SIDESTAKE:  return "sidestake";
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return "sidestake";
+        case ContractType::POOL_REGISTER: return "pool_register";
+        case ContractType::POOL_APPROVE:  return "pool_approve";
+        default:                          return "";
     }
 }
 
@@ -811,8 +826,10 @@ std::string Contract::Type::ToString(ContractType contract_type)
         case ContractType::PROTOCOL:   return "protocol";
         case ContractType::SCRAPER:    return "scraper";
         case ContractType::VOTE:       return "vote";
-        case ContractType::SIDESTAKE:  return "sidestake";
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return "sidestake";
+        case ContractType::POOL_REGISTER: return "pool_register";
+        case ContractType::POOL_APPROVE:  return "pool_approve";
+        default:                          return "";
     }
 }
 
@@ -828,8 +845,10 @@ std::string Contract::Type::ToTranslatedString(ContractType contract_type)
         case ContractType::PROTOCOL:   return _("protocol");
         case ContractType::SCRAPER:    return _("scraper");
         case ContractType::VOTE:       return _("vote");
-        case ContractType::SIDESTAKE:  return _("sidestake");
-        default:                       return "";
+        case ContractType::SIDESTAKE:     return _("sidestake");
+        case ContractType::POOL_REGISTER: return _("pool_register");
+        case ContractType::POOL_APPROVE:  return _("pool_approve");
+        default:                          return "";
     }
 }
 
@@ -845,6 +864,7 @@ Contract::Action Contract::Action::Parse(std::string input)
 {
     if (input == "A")  return ContractAction::ADD;
     if (input == "D")  return ContractAction::REMOVE;
+    if (input == "O")  return ContractAction::OPEN;
 
     return ContractAction::UNKNOWN;
 }
@@ -854,6 +874,7 @@ std::string Contract::Action::ToString() const
     switch (m_value) {
         case ContractAction::ADD:    return "A";
         case ContractAction::REMOVE: return "D";
+        case ContractAction::OPEN:   return "O";
         default:                     return "";
     }
 }
@@ -928,6 +949,12 @@ ContractPayload Contract::Body::ConvertFromLegacy(const ContractType type, uint3
         case ContractType::SIDESTAKE:
             // Sidestakes have no legacy representation as a contract.
             assert(false && "Attempted to convert non-existent legacy sidestake contract.");
+        case ContractType::POOL_REGISTER:
+            // Pool registrations have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy pool_register contract.");
+        case ContractType::POOL_APPROVE:
+            // Pool approvals have no legacy representation as a contract.
+            assert(false && "Attempted to convert non-existent legacy pool_approve contract.");
         case ContractType::OUT_OF_BOUND:
             assert(false);
     }
@@ -992,6 +1019,12 @@ void Contract::Body::ResetType(const ContractType type) EXCLUSIVE_LOCKS_REQUIRED
             break;
         case ContractType::SIDESTAKE:
             m_payload.Reset(new SideStakePayload());
+            break;
+        case ContractType::POOL_REGISTER:
+            m_payload.Reset(new PoolRegisterPayload());
+            break;
+        case ContractType::POOL_APPROVE:
+            m_payload.Reset(new PoolApprovePayload());
             break;
         case ContractType::OUT_OF_BOUND:
             assert(false);

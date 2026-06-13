@@ -9,6 +9,7 @@
 #include "gridcoin/contract/message.h"
 #include "gridcoin/magnitude.h"
 #include <gridcoin/md5.h>
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/quorum.h"
@@ -179,12 +180,17 @@ const ProjectEntry* ResolveWhitelistProject(
 //!
 //! \return \c true if the CPID matches a known Gridcoin pool's CPID.
 //!
+//! Issue #1783: the on-chain PoolRegistry is now the source of truth for pool
+//! detection in the local wallet's BOINC-mode display. The hardcoded
+//! g_mining_pools list is retained only because voting/result.cpp and
+//! voting/registry.cpp consume it as part of an active-vote-weight
+//! consensus calculation; migrating that path is a separate, height-gated
+//! change.
+//!
 bool IsPoolCpid(const Cpid cpid)
 {
-    for (const auto& pool : g_mining_pools.GetMiningPools()) {
-        if (pool.m_cpid == cpid) {
-            return true;
-        }
+    if (GetPoolRegistry().IsActivePool(cpid)) {
+        return true;
     }
 
     return false;
@@ -197,12 +203,13 @@ bool IsPoolCpid(const Cpid cpid)
 //!
 //! \return \c true if the username matches a known Gridcoin pool's username.
 //!
+//! See IsPoolCpid() above for the rationale on routing only the local wallet
+//! check (not voting consensus) through the on-chain registry.
+//!
 bool IsPoolUsername(const std::string& username)
 {
-    for (const auto& pool : g_mining_pools.GetMiningPools()) {
-        if (pool.m_name == username) {
-            return true;
-        }
+    if (GetPoolRegistry().IsActivePoolName(username)) {
+        return true;
     }
 
     return false;
