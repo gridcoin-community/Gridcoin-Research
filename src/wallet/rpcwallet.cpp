@@ -144,13 +144,8 @@ UniValue getinfo(const UniValue& params)
     // cs_main + cs_wallet pair, so no new cs_main→cs_vNodes ordering edge.
     int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
-    // Same pattern: snapshot the peer-reported external IP before the
-    // heavier cs_main+cs_wallet acquisition.
-    std::string addr_seen_by_peer_ip;
-    {
-        LOCK(cs_addrSeenByPeer);
-        addr_seen_by_peer_ip = addrSeenByPeer.ToStringIP();
-    }
+    // Peer-reported external IP via the CConnman API (issue #2558 PR 9d).
+    std::string addr_seen_by_peer_ip = g_connman ? g_connman->GetAddrSeenByPeer().ToStringIP() : "";
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 

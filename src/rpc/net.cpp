@@ -873,11 +873,8 @@ UniValue getnetworkinfo(const UniValue& params)
     // Connection count via the CConnman node-access API (issue #2558 PR 9b).
     int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
-    std::string addr_seen_by_peer_ip;
-    {
-        LOCK(cs_addrSeenByPeer);
-        addr_seen_by_peer_ip = addrSeenByPeer.ToStringIP();
-    }
+    // Peer-reported external IP via the CConnman API (issue #2558 PR 9d).
+    std::string addr_seen_by_peer_ip = g_connman ? g_connman->GetAddrSeenByPeer().ToStringIP() : "";
 
     LOCK(cs_main);
 

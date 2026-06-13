@@ -335,18 +335,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             SeenLocal(addrMe);
         }
 
-        // Disconnect if we connected to ourself
-        if (nNonce == nLocalHostNonce && nNonce > 1)
+        // Disconnect if we connected to ourself (issue #2558 PR 9d: the nonce
+        // now lives on CConnman).
+        if (g_connman && nNonce == g_connman->GetLocalHostNonce() && nNonce > 1)
         {
             LogPrint(BCLog::LogFlags::NET, "connected to self at %s, disconnecting", pfrom->addr.ToString());
             pfrom->fDisconnect = true;
             return true;
         }
 
-        // record my external IP reported by peer
-        if (addrMe.IsRoutable()) {
-            LOCK(cs_addrSeenByPeer);
-            addrSeenByPeer = addrMe;
+        // record my external IP reported by peer (issue #2558 PR 9d)
+        if (addrMe.IsRoutable() && g_connman) {
+            g_connman->SetAddrSeenByPeer(addrMe);
         }
 
         // Be shy and don't send version until we hear

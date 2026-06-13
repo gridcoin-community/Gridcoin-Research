@@ -66,9 +66,6 @@ CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
 static bool vfLimited[NET_MAX] GUARDED_BY(cs_mapLocalHost) = {};
 static CNode* pnodeLocalHost = nullptr;
-CCriticalSection cs_addrSeenByPeer;
-CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer)(LookupNumeric("0.0.0.0", 0), nLocalServices);
-std::atomic<uint64_t> nLocalHostNonce{0};
 
 
 std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
@@ -475,7 +472,7 @@ void CNode::PushVersion()
     // is the proper fix; see PR #2957 commit message for context.)
     uint64_t nonce;
     GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
-    nLocalHostNonce.store(nonce);
+    if (g_connman) g_connman->SetLocalHostNonce(nonce);
 
     // Snapshot the chain height under cs_main so this method can be called
     // from CNode construction (socket handler thread, no outer locks held)
@@ -2127,6 +2124,18 @@ std::vector<std::string> CConnman::GetAddedNodes() const
 {
     LOCK(cs_vAddedNodes);
     return vAddedNodes;
+}
+
+CAddress CConnman::GetAddrSeenByPeer() const
+{
+    LOCK(m_addr_seen_by_peer_cs);
+    return m_addr_seen_by_peer;
+}
+
+void CConnman::SetAddrSeenByPeer(const CAddress& addr)
+{
+    LOCK(m_addr_seen_by_peer_cs);
+    m_addr_seen_by_peer = addr;
 }
 
 void CConnman::ForEachNodeUnderLock(const std::function<void(CNode*)>& func) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
