@@ -24,9 +24,11 @@ and adapted to Gridcoin's proof-of-stake wire format. Differences from upstream
   have legacy aliases `gridaddr`/`encrypt`. We map all aliases on receive.
   (src/protocol.cpp:33-39, src/net.cpp:518)
 - The version payload has NO `fRelay` byte and skips the pre-180324 legacy boinc
-  fields (we advertise 180329). Top-level `nServices` is little-endian uint64,
-  but the `nServices` *inside* a CAddress is big-endian (CustomUintFormatter<8>),
-  and the version-message CAddresses include `nTime` because the send stream
+  fields (we advertise 180329). Both the top-level `nServices` and the `nServices`
+  *inside* a CAddress are little-endian uint64 (CustomUintFormatter<8> defaults to
+  BigEndian=false; src/serialize.h:587). Only the CAddress IP and port are
+  big-endian (network order). The version-message CAddresses include `nTime`
+  because the send stream
   serializes at INIT_PROTO_VERSION and Gridcoin gates CAddress.nTime on
   `>= INIT_PROTO_VERSION`. (src/net.cpp:486-527, src/net.h:327, src/protocol.h:78-91)
 """
@@ -166,9 +168,10 @@ class CAddress:
     """A network address.
 
     Gridcoin gates `CAddress.nTime` on `nVersion >= INIT_PROTO_VERSION` and uses
-    a big-endian uint64 for `nServices` (CustomUintFormatter<8>). The version
-    message serializes its embedded addresses at INIT_PROTO_VERSION, so they DO
-    carry nTime — pass with_time=True there (the default).
+    a little-endian uint64 for `nServices` (CustomUintFormatter<8> defaults to
+    BigEndian=false); only the IP and port are big-endian. The version message
+    serializes its embedded addresses at INIT_PROTO_VERSION, so they DO carry
+    nTime — pass with_time=True there (the default).
     """
 
     def __init__(self):
@@ -181,8 +184,8 @@ class CAddress:
         if with_time:
             # nTime is a plain little-endian uint32 (READWRITE(nTime)).
             self.time = struct.unpack("<I", f.read(4))[0]
-        # nServices: big-endian uint64 (CustomUintFormatter<8>).
-        self.nServices = struct.unpack(">Q", f.read(8))[0]
+        # nServices: little-endian uint64 (CustomUintFormatter<8>, default BigEndian=false).
+        self.nServices = struct.unpack("<Q", f.read(8))[0]
         f.read(12)  # IPv4-mapped-IPv6 prefix (10 zero bytes + 0xffff)
         self.ip = struct.unpack(">I", f.read(4))[0]
         # port: big-endian uint16 (WrapBigEndian(port)).
@@ -192,7 +195,7 @@ class CAddress:
         r = b""
         if with_time:
             r += struct.pack("<I", self.time)
-        r += struct.pack(">Q", self.nServices)
+        r += struct.pack("<Q", self.nServices)
         r += b"\x00" * 10 + b"\xff\xff"
         r += struct.pack(">I", self.ip if isinstance(self.ip, int) else _ip_to_int(self.ip))
         r += struct.pack(">H", self.port)
@@ -764,14 +767,16 @@ class msg_headers:
         self.headers = headers if headers is not None else []
 
     def deserialize(self, f):
-        # The wire format is a vector of CBlock-shaped entries, each with a
-        # zero-length vtx (and, in Gridcoin, an empty vchBlockSig).
-        blocks = deser_vector(f, CBlock)
-        self.headers = [CBlockHeader(b) for b in blocks]
+        # The daemon sends a vector of bare CBlockHeader (src/main.cpp builds
+        # vector<CBlockHeader>; CBlockHeader::SerializationOp writes header fields
+        # only — no vtx count, no vchBlockSig). Reading full CBlocks here would
+        # over-read into the next entry.
+        self.headers = deser_vector(f, CBlockHeader)
 
     def serialize(self):
-        blocks = [CBlock(h) for h in self.headers]
-        return ser_vector(blocks)
+        # Emit header-only entries even if a CBlock was stored (ser_vector calls
+        # each element's .serialize()).
+        return ser_vector([CBlockHeader(h) for h in self.headers])
 
     def __repr__(self):
         return "msg_headers(headers=%s)" % repr(self.headers)

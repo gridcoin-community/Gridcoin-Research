@@ -13,7 +13,6 @@ wired into the framework.
 """
 
 from test_framework.test_framework import GridcoinTestFramework
-from test_framework.messages import MY_SUBVERSION
 from test_framework.p2p import P2PInterface
 from test_framework.util import assert_equal
 
@@ -48,8 +47,9 @@ class P2PVersionHandshakeTest(GridcoinTestFramework):
                       peer.last_message["version"].strSubVer)
 
         # The node should now count us as a connected peer with our subversion.
+        # num_test_p2p_connections() filters getpeerinfo() by subver == MY_SUBVERSION,
+        # so == 1 already asserts the node lists our subversion.
         assert_equal(node.num_test_p2p_connections(), 1)
-        assert any(p["subver"] == MY_SUBVERSION for p in node.getpeerinfo())
 
         # A second ping/pong confirms the message pump is healthy both ways.
         peer.sync_with_ping()

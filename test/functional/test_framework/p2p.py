@@ -30,7 +30,6 @@ from .messages import (
     MAGIC_BYTES,
     MAX_LOCATOR_SZ,
     MESSAGEMAP,
-    MY_VERSION,
     NODE_NETWORK,
     msg_block,
     msg_headers,
@@ -49,12 +48,6 @@ logger = logging.getLogger("TestFramework.p2p")
 
 # The lock held while a callback runs / while a test inspects received state.
 p2p_lock = threading.Lock()
-
-# Maximum length of incoming protocol messages we are willing to buffer.
-MAX_P2P_MESSAGE = 4 * 1000 * 1000
-
-# Timeout the connection if no version handshake completes in this many seconds.
-P2P_TIMEOUT = 60
 
 
 class P2PConnection(asyncio.Protocol):
@@ -313,7 +306,7 @@ class P2PInterface(P2PConnection):
         pass
 
     def on_version(self, message):
-        assert message.nVersion >= MY_VERSION or True  # peers may advertise differently; don't hard-fail
+        # Don't assert on the peer's advertised version; just ack and record services.
         self.send_message(msg_verack())
         self.nServices = message.nServices
 

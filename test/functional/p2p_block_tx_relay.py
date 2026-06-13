@@ -61,8 +61,9 @@ class P2PBlockTxRelayTest(GridcoinTestFramework):
         tx.rehash()
         assert_equal(tx.serialize().hex(), rawhex)   # byte-exact tx (de)serialization
 
+        # send_txs_and_test(success=True) already asserts the tx lands in node1's
+        # mempool, so no separate getrawmempool() check is needed here.
         peer.send_txs_and_test([tx], node1, success=True)
-        assert tx.hash in node1.getrawmempool()
         self.log.info("tx relay OK: %s accepted into node1 mempool", tx.hash)
 
         # --- block relay: node0 mines a block; fetch it from node0 over P2P
