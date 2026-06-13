@@ -376,8 +376,11 @@ bool ConnectInputs(CTransaction& tx, CValidationState& state, CTxDB& txdb, MapPr
             if (prevout.n >= txPrev.vout.size() || prevout.n >= txindex.vSpent.size())
                 return state.DoS(100, error("ConnectInputs() : %s prevout.n out of range %d %" PRIszu " %" PRIszu " prev tx %s\n%s", tx.GetHash().ToString().substr(0,10).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size(), prevout.hash.ToString().substr(0,10).c_str(), txPrev.ToString().c_str()));
 
-            // If prev is coinbase or coinstake, check that it's matured
-            if (txPrev.IsCoinBase() || txPrev.IsCoinStake())
+            // If prev is coinbase or coinstake, check that it's matured. Skipped
+            // under -regtest so the genesis premine coinbase outputs can be
+            // staked at height 1; matches the GetBlocksToMaturity() and
+            // AvailableCoinsForStaking() regtest shortcuts.
+            if ((txPrev.IsCoinBase() || txPrev.IsCoinStake()) && !Params().IsMockableChain())
                 for (const CBlockIndex* pindex = pindexBlock; pindex && pindexBlock->nHeight - pindex->nHeight < nCoinbaseMaturity; pindex = pindex->pprev)
                     if (pindex->nBlockPos == txindex.pos.nBlockPos && pindex->nFile == txindex.pos.nFile)
                         return error("ConnectInputs() : tried to spend %s at depth %d", txPrev.IsCoinBase() ? "coinbase" : "coinstake", pindexBlock->nHeight - pindex->nHeight);
@@ -1162,10 +1165,10 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     // Write to disk block index
     CTxDB txdb;
     if (!txdb.TxnBegin())
-        return false;
+        return error("%s: txdb.TxnBegin failed", __func__);
     txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
     if (!txdb.TxnCommit())
-        return false;
+        return error("%s: txdb.TxnCommit failed", __func__);
 
     // cs_main is required on entry (declared EXCLUSIVE_LOCKS_REQUIRED in
     // validation.h). The previous explicit LOCK(cs_main) here was redundant on
@@ -1175,7 +1178,7 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
     // New best
     if (g_chain_trust.Favors(pindexNew))
         if (!SetBestChain(txdb, block, pindexNew))
-            return false;
+            return error("%s: SetBestChain failed", __func__);
 
     if (pindexNew == pindexBest)
     {
@@ -1199,7 +1202,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, int height1, bool 
 
     // Allow the genesis block to pass.
     if(block.hashPrevBlock.IsNull() &&
-       block.GetHash(true) == (fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
+       block.GetHash(true) == (Params().IsMockableChain() ? hashGenesisBlockRegTest : fTestNet ? hashGenesisBlockTestNet : hashGenesisBlock))
         return true;
 
     if (block.fChecked)
