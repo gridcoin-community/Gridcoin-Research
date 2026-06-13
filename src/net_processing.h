@@ -14,6 +14,13 @@ class CTransaction;
 void RelayTransaction(const CTransaction& tx, const uint256& hash);
 void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
+// Peer-misbehavior tracking (moved from CNode, issue #2558 PR 2c). The score
+// map lives in net_processing.cpp; CNode::Misbehaving/GetMisbehavior forward
+// here. ClearMisbehaviorForSubnet is registered as BanMan's clear callback.
+int GetMisbehaviorAddr(const CAddress& addr);
+bool MisbehavingAddr(const CAddress& addr, int howmuch);
+unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net);
+
 bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
 // Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
 // cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires

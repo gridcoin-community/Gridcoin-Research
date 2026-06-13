@@ -277,12 +277,9 @@ public:
     int nRefCount;
 protected:
 
-    // Denial-of-service detection/prevention
-    // ---------- address:port -- misbehavior - time
-    static CCriticalSection cs_mapMisbehavior;
-    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior GUARDED_BY(cs_mapMisbehavior);
-    // See protected GetMisbehavior() below.
-    // int nMisbehavior;
+    // Denial-of-service detection/prevention. The misbehavior score map and its
+    // address-keyed accessors moved to net_processing (issue #2558 PR 2c); the
+    // thin Misbehaving()/GetMisbehavior() wrappers below forward to them.
 
 public:
     uint256 hashContinue;
@@ -615,31 +612,7 @@ public:
     // static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
 
-    //!
-    //! \brief Score misbehavior against an address without requiring a CNode
-    //! instance. Operates on the same static mapMisbehavior used by the
-    //! instance method, so scores are shared — misbehavior accumulated here
-    //! is visible to any CNode with the same address.
-    //!
-    //! \param addr    The address to score against.
-    //! \param howmuch Misbehavior points to add.
-    //!
-    //! \return \c true if the accumulated score triggered a ban.
-    //!
-    static bool MisbehavingAddr(const CAddress& addr, int howmuch);
-
     int GetMisbehavior() const;
-
-    //!
-    //! \brief Get the current misbehavior score for an address without
-    //! requiring a CNode instance. Applies the same time-based decay as
-    //! the instance method.
-    //!
-    //! \param addr The address to query.
-    //!
-    //! \return The decayed misbehavior score.
-    //!
-    static int GetMisbehaviorAddr(const CAddress& addr);
 
     // Thread-safe accessors for addrLocal. See the comment on the field
     // above for the locking rationale.
@@ -656,8 +629,6 @@ public:
 
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
-
-    friend class BanMan;
 
 };
 

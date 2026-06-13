@@ -22,6 +22,7 @@
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
+#include "net_processing.h"
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include <util/syserror.h>
@@ -1668,6 +1669,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Create ban manager instance.
     g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
                                         gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+
+    // Let a lifted/cleared/swept ban also reset the peer's misbehavior score,
+    // which now lives in net_processing (issue #2558 PR 2c).
+    g_banman->SetMisbehaviorClearCallback(ClearMisbehaviorForSubnet);
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");

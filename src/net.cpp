@@ -93,8 +93,8 @@ static deque<string> vOneShots GUARDED_BY(cs_vOneShots);
 CCriticalSection cs_setservAddNodeAddresses;
 set<CNetAddr> setservAddNodeAddresses GUARDED_BY(cs_setservAddNodeAddresses);
 
-std::map<CAddress, std::pair<int, int64_t>> CNode::mapMisbehavior;
-CCriticalSection CNode::cs_mapMisbehavior;
+// CNode misbehavior state (mapMisbehavior / cs_mapMisbehavior) moved to
+// net_processing.cpp (issue #2558 PR 2c).
 
 static CSemaphore* semOutbound = nullptr;
 
@@ -531,87 +531,22 @@ bool CNode::Misbehaving(int howmuch)
         return false;
     }
 
+    // Scoring, decay, and the ban decision moved to net_processing
+    // (MisbehavingAddr); the instance method additionally disconnects this node
+    // when its score crosses the ban threshold (issue #2558 PR 2c).
+    if (MisbehavingAddr(addr, howmuch))
     {
-        int nMisbehavior = 0;
-
-        LOCK(cs_mapMisbehavior);
-
-        nMisbehavior = GetMisbehavior() + howmuch;
-
-        mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
-
-        if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
-        {
-            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d) DISCONNECTING", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-
-            g_banman->Ban(addr, BanReasonNodeMisbehaving);
-            CloseSocketDisconnect();
-            return true;
-        } else
-            LogPrint(BCLog::LogFlags::NET, "Misbehaving: %s (%d -> %d)", addr.ToString(), nMisbehavior-howmuch, nMisbehavior);
-        return false;
+        CloseSocketDisconnect();
+        return true;
     }
+
+    return false;
 }
 
 
 int CNode::GetMisbehavior() const
 {
     return GetMisbehaviorAddr(addr);
-}
-
-int CNode::GetMisbehaviorAddr(const CAddress& addr)
-{
-    int nMisbehavior = 0;
-
-    LOCK(cs_mapMisbehavior);
-
-    const auto& iMisbehavior = mapMisbehavior.find(addr);
-
-    if (iMisbehavior != mapMisbehavior.end())
-    {
-        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
-        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
-        // This results in a decay of roughly 100/24 = 4 points per hour.
-        int time_based_decay_correction = std::round(
-                    (double) gArgs.GetArg("-banscore", 100)
-                    * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
-                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
-                    );
-
-        // Make sure nMisbehavior doesn't go below zero.
-        nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
-
-        // Delete entry if nMisbehavior is zero.
-        if (!nMisbehavior) mapMisbehavior.erase(iMisbehavior);
-    }
-
-    return nMisbehavior;
-}
-
-bool CNode::MisbehavingAddr(const CAddress& addr, int howmuch)
-{
-    if (addr.IsLocal())
-    {
-        LogPrintf("Warning: Local address %s misbehaving (delta: %d)!", addr.ToString(), howmuch);
-        return false;
-    }
-
-    LOCK(cs_mapMisbehavior);
-
-    int nMisbehavior = GetMisbehaviorAddr(addr) + howmuch;
-
-    mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
-
-    if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
-    {
-        LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
-
-        g_banman->Ban(addr, BanReasonNodeMisbehaving);
-        return true;
-    }
-
-    LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d)", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
-    return false;
 }
 
 CService CNode::GetAddrLocal() const
@@ -1056,7 +991,7 @@ void ThreadSocketHandler2(void* parg)
 
                     if (it != mapInboundLastConnect.end() && nNow - it->second < 5)
                     {
-                        CNode::MisbehavingAddr(addr, 10);
+                        MisbehavingAddr(addr, 10);
                         closesocket(hSocket);
                         mapInboundLastConnect[addr] = nNow;
                         continue;

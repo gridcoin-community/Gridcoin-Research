@@ -14,6 +14,7 @@
 #include "net.h"
 #include "streams.h"
 #include "alert.h"
+#include "banman.h"
 #include "checkpoints.h"
 #include "txdb.h"
 #include "init.h"
@@ -96,6 +97,97 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     }
 
     RelayInventory(inv);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Peer misbehavior tracking (moved from CNode, issue #2558 PR 2c)
+//
+
+// Per-address misbehavior scores. State and the address-keyed accessors live
+// here; CNode keeps thin Misbehaving()/GetMisbehavior() wrappers that forward
+// to these (the instance Misbehaving() additionally disconnects the node).
+static CCriticalSection cs_mapMisbehavior;
+static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior GUARDED_BY(cs_mapMisbehavior);
+
+int GetMisbehaviorAddr(const CAddress& addr)
+{
+    int nMisbehavior = 0;
+
+    LOCK(cs_mapMisbehavior);
+
+    const auto& iMisbehavior = mapMisbehavior.find(addr);
+
+    if (iMisbehavior != mapMisbehavior.end())
+    {
+        // This expression results in the misbehavior decaying linearly over a 24 hour period at a rate equal to the default banscore.
+        // The default banscore is normally 100, but can be changed by specifying -banscore on the command line. At the default setting,
+        // This results in a decay of roughly 100/24 = 4 points per hour.
+        int time_based_decay_correction = std::round(
+                    (double) gArgs.GetArg("-banscore", 100)
+                    * (double) std::max((int64_t) 0, GetAdjustedTime() - iMisbehavior->second.second)
+                    / (double) gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME)
+                    );
+
+        // Make sure nMisbehavior doesn't go below zero.
+        nMisbehavior = std::max(0, iMisbehavior->second.first - time_based_decay_correction);
+
+        // Delete entry if nMisbehavior is zero.
+        if (!nMisbehavior) mapMisbehavior.erase(iMisbehavior);
+    }
+
+    return nMisbehavior;
+}
+
+bool MisbehavingAddr(const CAddress& addr, int howmuch)
+{
+    if (addr.IsLocal())
+    {
+        LogPrintf("Warning: Local address %s misbehaving (delta: %d)!", addr.ToString(), howmuch);
+        return false;
+    }
+
+    LOCK(cs_mapMisbehavior);
+
+    int nMisbehavior = GetMisbehaviorAddr(addr) + howmuch;
+
+    mapMisbehavior[addr] = std::make_pair(nMisbehavior, GetAdjustedTime());
+
+    if (nMisbehavior >= gArgs.GetArg("-banscore", 100))
+    {
+        LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d) BANNING", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+
+        g_banman->Ban(addr, BanReasonNodeMisbehaving);
+        return true;
+    }
+
+    LogPrint(BCLog::LogFlags::NET, "MisbehavingAddr: %s (%d -> %d)", addr.ToString(), nMisbehavior - howmuch, nMisbehavior);
+    return false;
+}
+
+// Clear all misbehavior entries whose address matches sub_net. Registered with
+// BanMan as its misbehavior-clear callback so a lifted ban also resets scores,
+// without BanMan reaching into this map directly. Returns the count cleared.
+unsigned int ClearMisbehaviorForSubnet(const CSubNet& sub_net)
+{
+    unsigned int nZeroed = 0;
+
+    LOCK(cs_mapMisbehavior);
+
+    for (auto iMisbehavior = mapMisbehavior.begin(); iMisbehavior != mapMisbehavior.end();)
+    {
+        if (sub_net.Match(iMisbehavior->first))
+        {
+            iMisbehavior = mapMisbehavior.erase(iMisbehavior);
+            ++nZeroed;
+        }
+        else
+        {
+            ++iMisbehavior;
+        }
+    }
+
+    return nZeroed;
 }
 
 // Orphan transaction storage. All accesses occur under cs_main from
