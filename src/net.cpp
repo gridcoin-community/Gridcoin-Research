@@ -10,6 +10,7 @@
 #include "wallet/db.h"
 #include "banman.h"
 #include "net.h"
+#include "net_processing.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "random.h"
@@ -52,7 +53,6 @@ void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOutbound = nullptr, const char* strDest = nullptr, bool fOneShot = false);
-void StakeMiner(CWallet *pwallet);
 
 //
 // Global state variables
@@ -84,9 +84,6 @@ vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 CCriticalSection cs_vAddedNodes;
 vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
-CCriticalSection cs_mapRelay;
-map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
-deque<pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 CCriticalSection cs_mapAlreadyAskedFor;
 map<CInv, int64_t> mapAlreadyAskedFor GUARDED_BY(cs_mapAlreadyAskedFor);
 
@@ -1577,33 +1574,6 @@ void static ProcessOneShot()
     }
 }
 
-void static ThreadStakeMiner(void* parg)
-{
-    RenameThread("grc-stakeminer");
-    util::ThreadSetInternalName("grc-stakeminer");
-
-    LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
-    CWallet* pwallet = (CWallet*)parg;
-    try
-    {
-        StakeMiner(pwallet);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadStakeMiner()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadStakeMiner exited (interrupt)");
-        return;
-    }
-    catch (...)
-    {
-        PrintException(nullptr, "ThreadStakeMiner()");
-    }
-    LogPrintf("ThreadStakeMiner exited");
-}
-
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
@@ -2189,11 +2159,6 @@ void StartNode(void* parg)
     if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
     }
-
-    if (!netThreads->createThread(ThreadStakeMiner, pwalletMain, "ThreadStakeMiner")) {
-        LogPrintf("Error: createThread(ThreadStakeMiner) failed");
-    }
-
 }
 
 bool StopNode()
@@ -2236,31 +2201,4 @@ public:
 }
 instance_of_cnetcleanup;
 
-void RelayTransaction(const CTransaction& tx, const uint256& hash)
-{
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss.reserve(10000);
-    ss << tx;
-    RelayTransaction(tx, hash, ss);
-}
-
-void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss)
-{
-    CInv inv(MSG_TX, hash);
-    {
-        LOCK(cs_mapRelay);
-        // Expire old relay messages
-        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetAdjustedTime())
-        {
-            mapRelay.erase(vRelayExpiration.front().second);
-            vRelayExpiration.pop_front();
-        }
-
-        // Save original serialized message so newer versions are preserved
-        mapRelay.insert(std::make_pair(inv, ss));
-        vRelayExpiration.push_back(std::make_pair(GetAdjustedTime() + 15 * 60, inv));
-    }
-
-    RelayInventory(inv);
-}
 
