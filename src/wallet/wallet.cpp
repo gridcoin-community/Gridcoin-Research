@@ -19,6 +19,7 @@
 #include "rpc/protocol.h"
 #include <script.h>
 #include "main.h"
+#include "net_processing.h"
 #include "util.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"

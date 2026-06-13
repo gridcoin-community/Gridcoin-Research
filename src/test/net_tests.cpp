@@ -17,7 +17,7 @@ using namespace std;
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
-class CAddrManSerializationMock : public CAddrMan
+class AddrManSerializationMock : public AddrMan
 {
 public:
     virtual void Serialize(CDataStream& s) const = 0;
@@ -30,16 +30,16 @@ public:
     }
 };
 
-class CAddrManUncorrupted : public CAddrManSerializationMock
+class AddrManUncorrupted : public AddrManSerializationMock
 {
 public:
     void Serialize(CDataStream& s) const
     {
-        CAddrMan::Serialize(s);
+        AddrMan::Serialize(s);
     }
 };
 
-class CAddrManCorrupted : public CAddrManSerializationMock
+class AddrManCorrupted : public AddrManSerializationMock
 {
 public:
     void Serialize(CDataStream& s) const
@@ -65,7 +65,7 @@ public:
     }
 };
 
-CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
+CDataStream AddrmanToStream(AddrManSerializationMock& addrman)
 {
     CDataStream ssPeersIn(SER_DISK, CLIENT_VERSION);
     ssPeersIn << Params().MessageStart();
@@ -77,7 +77,7 @@ CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
 
 BOOST_AUTO_TEST_CASE(caddrdb_read)
 {
-    CAddrManUncorrupted addrmanUncorrupted;
+    AddrManUncorrupted addrmanUncorrupted;
     addrmanUncorrupted.MakeDeterministic();
 
     CService addr1, addr2, addr3;
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that the de-serialization does not throw an exception.
     CDataStream ssPeers1 = AddrmanToStream(addrmanUncorrupted);
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
 
     BOOST_CHECK(addrman1.size() == 0);
     try {
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that CAddrDB::Read creates an addrman with the correct number of addrs.
     CDataStream ssPeers2 = AddrmanToStream(addrmanUncorrupted);
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
@@ -122,13 +122,13 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
 
 BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
 {
-    CAddrManCorrupted addrmanCorrupted;
+    AddrManCorrupted addrmanCorrupted;
     addrmanCorrupted.MakeDeterministic();
 
     // Test that the de-serialization of corrupted addrman throws an exception.
     CDataStream ssPeers1 = AddrmanToStream(addrmanCorrupted);
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
     BOOST_CHECK(addrman1.size() == 0);
     try {
         unsigned char pchMsgTmp[4];
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
     // Test that CAddrDB::Read leaves addrman in a clean state if de-serialization fails.
     CDataStream ssPeers2 = AddrmanToStream(addrmanCorrupted);
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
