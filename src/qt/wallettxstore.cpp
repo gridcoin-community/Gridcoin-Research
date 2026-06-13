@@ -789,7 +789,10 @@ RowsResult WalletTxStore::getAllRows(int viewId)
     res.high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
     // CAP-INDEPENDENT: iterate the full accepted set, not the served window, so a
     // CSV export is never silently truncated by a finite cap (windowed-model PR5-B).
-    const std::size_t n = cur.totalAccepted();
+    // Bound the row count to the same INT_MAX clamp as total_accepted: a wallet can
+    // never hold 2^31 rows, but keeping records.size() == total_accepted avoids a huge
+    // over-allocation and an int-unrepresentable count if it ever did (Copilot PR5-B).
+    const std::size_t n = static_cast<std::size_t>(res.total_accepted);
     res.records.reserve(n);
     for (std::size_t i = 0; i < n; ++i) {
         res.records.push_back(m_records[cur.rowAt(i)]);
@@ -821,7 +824,12 @@ int WalletTxStore::rowForKey(int viewId, const uint256& hash, int idx)
         const std::size_t pos = cur.positionOf(absidx);
         if (pos != NPOS && pos < best) best = pos;
     }
-    return (best == NPOS) ? -1 : static_cast<int>(best);
+    // Guard the size_t->int cast: a position beyond INT_MAX is not representable as a
+    // Qt row, so treat it as not-found (Copilot PR5-B). Unreachable at real wallet sizes.
+    if (best == NPOS || best > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return -1;
+    }
+    return static_cast<int>(best);
 }
 
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,

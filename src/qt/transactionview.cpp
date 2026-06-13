@@ -14,6 +14,9 @@
 #include "qt/decoration.h"
 #include "util/system.h"
 
+#include <algorithm>
+#include <limits>
+
 #include <QAbstractTableModel>
 #include <QItemSelectionModel>
 #include <QScrollBar>
@@ -243,7 +246,12 @@ public:
         : m_rows(std::move(rows)), m_ttm(ttm) {}
     int rowCount(const QModelIndex& parent = QModelIndex()) const override
     {
-        return parent.isValid() ? 0 : static_cast<int>(m_rows.size());
+        if (parent.isValid()) return 0;
+        // Saturate the size_t->int cast (consistent with getRows/getAllRows): a CSV
+        // export can never exceed 2^31 rows, but a saturating cast keeps the count
+        // well-defined for CSVModelWriter rather than wrapping negative (Copilot PR5-B).
+        return static_cast<int>(std::min<std::size_t>(
+            m_rows.size(), static_cast<std::size_t>(std::numeric_limits<int>::max())));
     }
     int columnCount(const QModelIndex& parent = QModelIndex()) const override
     {
