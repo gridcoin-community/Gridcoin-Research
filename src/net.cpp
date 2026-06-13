@@ -100,25 +100,6 @@ set<CNetAddr> setservAddNodeAddresses GUARDED_BY(cs_setservAddNodeAddresses);
 
 static CSemaphore* semOutbound = nullptr;
 
-// This caches the block locators used to ask for a range of blocks. Due to a
-// sub-optimal workaround in our old net messaging code, a node will ask each
-// peer that advertises a block for the next range. The node generates a sub-
-// set of hashes from the current block chain used as a locator for the block
-// in the chain of the peer. Creating locators is extremely expensive--a node
-// needs to scan the entire chain--so we cache the locators and reuse them if
-// the node sends the same request. For nodes with many connections, this can
-// dramatically improve the performance of the messaging system when it needs
-// to respond to new blocks.
-//
-// This optimization will become unnecessary when we backport newer chain and
-// net messaging code from Bitcoin. For now, this cache can greatly improve a
-// node's ability to serve a higher number of connections.
-//
-namespace {
-    const CBlockIndex* g_getblocks_pindex_begin = nullptr;
-    CBlockLocator g_getblocks_locator;
-}
-
 void AddOneShot(string strDest)
 {
     LOCK(cs_vOneShots);
@@ -137,12 +118,13 @@ void CNode::PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd)
     pindexLastGetBlocksBegin = pindexBegin;
     hashLastGetBlocksEnd = hashEnd;
 
-    if (pindexBegin != g_getblocks_pindex_begin) {
-        g_getblocks_pindex_begin = pindexBegin;
-        g_getblocks_locator = CBlockLocator(pindexBegin);
+    // The shared locator cache lives on CConnman now (issue #2558 PR 9d2); fall
+    // back to building it inline in the unreachable no-connman case.
+    if (g_connman) {
+        PushMessage(NetMsgType::GETBLOCKS, g_connman->GetBlockLocator(pindexBegin), hashEnd);
+    } else {
+        PushMessage(NetMsgType::GETBLOCKS, CBlockLocator(pindexBegin), hashEnd);
     }
-
-    PushMessage(NetMsgType::GETBLOCKS, g_getblocks_locator, hashEnd);
 }
 
 // find 'best' local address for a particular peer
@@ -2124,6 +2106,18 @@ std::vector<std::string> CConnman::GetAddedNodes() const
 {
     LOCK(cs_vAddedNodes);
     return vAddedNodes;
+}
+
+const CBlockLocator& CConnman::GetBlockLocator(const CBlockIndex* pindexBegin)
+{
+    // Building a locator scans the chain, so cache the last one and reuse it
+    // when the same begin index is requested again (issue #2558 PR 9d2; shared
+    // across nodes, as the former net.cpp global was).
+    if (pindexBegin != m_getblocks_pindex_begin || !m_getblocks_locator) {
+        m_getblocks_pindex_begin = pindexBegin;
+        m_getblocks_locator = std::make_unique<CBlockLocator>(pindexBegin);
+    }
+    return *m_getblocks_locator;
 }
 
 CAddress CConnman::GetAddrSeenByPeer() const
