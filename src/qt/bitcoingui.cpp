@@ -18,6 +18,7 @@
 #include "sendcoinsdialog.h"
 #include "favoritespage.h"
 #include "signverifymessagedialog.h"
+#include "multisigndialog.h"
 #include "optionsdialog.h"
 #include "aboutdialog.h"
 #include "voting/polltab.h"
@@ -208,6 +209,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     votingPage = new VotingPage(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
+    multisignDialog = new MultisignPSGTDialog(this);
 
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
@@ -453,6 +455,7 @@ void BitcoinGUI::createActions()
     lockWalletAction->setToolTip(tr("Lock wallet"));
     signMessageAction = new QAction(tr("Sign &message..."), this);
     verifyMessageAction = new QAction(tr("&Verify message..."), this);
+    multisignAction = new QAction(tr("&Multisign (PSGT)..."), this);
 
     exportAction = new QAction(tr("&Export..."), this);
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
@@ -482,6 +485,7 @@ void BitcoinGUI::createActions()
     connect(lockWalletAction, &QAction::triggered, this, &BitcoinGUI::lockWallet);
     connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
     connect(verifyMessageAction, &QAction::triggered, this, [this]{ this->gotoVerifyMessageTab(QString {}); });
+    connect(multisignAction, &QAction::triggered, this, &BitcoinGUI::gotoMultisignDialog);
     connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
     connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
     connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
@@ -557,6 +561,7 @@ void BitcoinGUI::setIcons()
     changePassphraseAction->setIcon(QPixmap(":/icons/key"));
     signMessageAction->setIcon(QPixmap(":/icons/edit"));
     verifyMessageAction->setIcon(QPixmap(":/icons/transaction_0"));
+    multisignAction->setIcon(QPixmap(":/icons/edit"));
     exportAction->setIcon(QPixmap(":/icons/export"));
     openRPCConsoleAction->setIcon(QPixmap(":/icons/debugwindow"));
     snapshotAction->setIcon(QPixmap(":/images/gridcoin"));
@@ -589,8 +594,10 @@ void BitcoinGUI::createMenuBar()
     // Configure the menus
     file->addAction(backupWalletAction);
     file->addAction(exportAction);
-    file->addAction(signMessageAction);
-    file->addAction(verifyMessageAction);
+    QMenu *signMenu = file->addMenu(tr("Sign &message"));
+    signMenu->addAction(signMessageAction);
+    signMenu->addAction(verifyMessageAction);
+    signMenu->addAction(multisignAction);
     file->addSeparator();
 
     // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
@@ -861,6 +868,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         receiveCoinsPage->setAddressTableModel(walletModel->getAddressTableModel());
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
+        multisignDialog->setModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
@@ -1609,6 +1617,13 @@ void BitcoinGUI::gotoVerifyMessageTab(QString addr)
 
     if(!addr.isEmpty())
         signVerifyMessageDialog->setAddress_VM(addr);
+}
+
+void BitcoinGUI::gotoMultisignDialog()
+{
+    multisignDialog->show();
+    multisignDialog->raise();
+    multisignDialog->activateWindow();
 }
 
 void BitcoinGUI::dragEnterEvent(QDragEnterEvent *event)
