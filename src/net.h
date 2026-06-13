@@ -48,8 +48,6 @@ inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer"
 void AddOneShot(std::string strDest);
 bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
-CNode* FindNode(const CNetAddr& ip);
-CNode* FindNode(const CService& ip);
 CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
