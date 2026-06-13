@@ -139,17 +139,17 @@ CAddrDB::CAddrDB()
     pathAddr = GetDataDir() / "peers.dat";
 }
 
-bool CAddrDB::Write(const CAddrMan& addr)
+bool CAddrDB::Write(const AddrMan& addr)
 {
     return SerializeFileDB("peers", pathAddr, addr);
 }
 
-bool CAddrDB::Read(CAddrMan& addr)
+bool CAddrDB::Read(AddrMan& addr)
 {
     return DeserializeFileDB(pathAddr, addr);
 }
 
-bool CAddrDB::Read(CAddrMan& addr, CDataStream& ssPeers)
+bool CAddrDB::Read(AddrMan& addr, CDataStream& ssPeers)
 {
     bool ret = DeserializeDB(ssPeers, addr, false);
     if (!ret) {

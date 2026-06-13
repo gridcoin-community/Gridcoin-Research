@@ -19,7 +19,7 @@
 #include <db_cxx.h>
 
 class CAddress;
-class CAddrMan;
+class AddrMan;
 class CBlockLocator;
 class CDiskBlockIndex;
 class CDiskTxPos;

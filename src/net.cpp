@@ -77,7 +77,7 @@ std::unique_ptr<CConnman> g_connman;
 // Listen sockets are RAII Sock wrappers (issue #2558 PR 5b) so they can join
 // the Sock::WaitMany() set uniformly with the per-node sockets.
 static std::vector<std::shared_ptr<Sock>> vhListenSocket;
-CAddrMan addrman;
+AddrMan addrman;
 
 // Initialization of static class variable.
 std::atomic<NodeId> CNode::nLastNodeId {-1};
@@ -2053,7 +2053,7 @@ void static Discover()
 #endif
 }
 
-CConnman::CConnman(uint64_t seed0, uint64_t seed1, CAddrMan& addrmanIn, bool network_active)
+CConnman::CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrmanIn, bool network_active)
     : m_addrman(addrmanIn)
     , nSeed0(seed0)
     , nSeed1(seed1)
