@@ -34,9 +34,8 @@ const RPCHelpMan& getconnectioncount_helpman() { return getconnectioncount_help;
 
 UniValue getconnectioncount(const UniValue& params)
 {
-    LOCK(cs_vNodes);
-
-    return (int)vNodes.size();
+    // Peer count via the CConnman node-access API (issue #2558 PR 9b).
+    return g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 }
 
 static const RPCHelpMan addnode_help{
@@ -336,10 +335,10 @@ UniValue setban(const UniValue& params)
 
         if (isSubnet) {
             g_banman->Ban(subNet, BanReasonManuallyAdded, banTime, absolute);
-            CNode::DisconnectNode(subNet);
+            if (g_connman) g_connman->DisconnectNode(subNet);
         } else {
             g_banman->Ban(netAddr, BanReasonManuallyAdded, banTime, absolute);
-            CNode::DisconnectNode(netAddr);
+            if (g_connman) g_connman->DisconnectNode(netAddr);
         }
     }
     else if(strCommand == "remove")
@@ -440,9 +439,11 @@ const RPCHelpMan& ping_helpman() { return ping_help; }
 UniValue ping(const UniValue& params)
 {
     // Request that each node send a ping during next message processing pass
-    LOCK(cs_vNodes);
-    for (auto const& pNode : vNodes) {
-        pNode->fPingQueued = true;
+    // (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([](CNode* pNode) {
+            pNode->fPingQueued = true;
+        });
     }
 
     return NullUniValue;
@@ -491,11 +492,9 @@ UniValue getpeerinfo(const UniValue& params)
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
 
-    {
-        LOCK(cs_vNodes);
-
-        CNode::CopyNodeStats(vstats);
-    }
+    // Peer stats via the CConnman node-access API (issue #2558 PR 9b; leaves
+    // vstats empty when g_connman is not up).
+    if (g_connman) g_connman->GetNodeStats(vstats);
 
     for (auto const& stats : vstats) {
         UniValue obj(UniValue::VOBJ);
@@ -723,11 +722,11 @@ UniValue sendalert(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
+    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([&alert](CNode* pnode) {
             alert.RelayTo(pnode);
+        });
     }
 
     UniValue result(UniValue::VOBJ);
@@ -810,11 +809,11 @@ UniValue sendalert2(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
+    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([&alert](CNode* pnode) {
             alert.RelayTo(pnode);
+        });
     }
 
     UniValue result(UniValue::VOBJ);
@@ -862,11 +861,8 @@ UniValue getnetworkinfo(const UniValue& params)
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
 
-    int connections;
-    {
-        LOCK(cs_vNodes);
-        connections = (int)vNodes.size();
-    }
+    // Connection count via the CConnman node-access API (issue #2558 PR 9b).
+    int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
     std::string addr_seen_by_peer_ip;
     {

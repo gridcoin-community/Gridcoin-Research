@@ -9,6 +9,7 @@
 #include <array>
 #include <boost/thread.hpp>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <thread>
 
@@ -609,11 +610,6 @@ public:
         m_sock.reset();
     }
 
-    static bool DisconnectNode(const std::string& strNode);
-    static bool DisconnectNode(const CSubNet& subnet);
-    static bool DisconnectNode(const CNetAddr& addr);
-    static bool DisconnectNode(NodeId id);
-
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
     // badly and disconnect/ban them, but do it in a
@@ -689,10 +685,10 @@ protected:
 //! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
 //! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
 //! Start()/Interrupt()/Stop(). For now it wraps the still-global connection
-//! state (vNodes, addrman, netThreads, ...); the read-only node-access readers
-//! (GetNodeCount/GetNodeStats) land in PR 9a (ForEachNode follows in 9b with
-//! its first caller), storage ownership moves in a later PR, and Options gains
-//! m_msgproc with PeerManager in PR 8.
+//! state (vNodes, addrman, netThreads, ...); the node-access API
+//! (GetNodeCount/GetNodeStats in PR 9a; ForEachNode/DisconnectNode in PR 9b)
+//! reads/operates over it, storage ownership moves in a later PR, and Options
+//! gains m_msgproc with PeerManager in PR 8.
 class CConnman
 {
 public:
@@ -728,6 +724,18 @@ public:
     };
     size_t GetNodeCount(NumConnections flags) const;
     void GetNodeStats(std::vector<CNodeStats>& vstats) const;
+
+    //! Invoke func for every current node under cs_vNodes (issue #2558 PR 9b).
+    //! Iterates all connected nodes (no fDisconnect filter), matching the
+    //! direct vNodes loops it replaces.
+    void ForEachNode(const std::function<void(CNode*)>& func);
+
+    //! Flag the matching node(s) for disconnection (issue #2558 PR 9b; moved
+    //! off CNode's static helpers). Each takes cs_vNodes internally.
+    bool DisconnectNode(const std::string& strNode);
+    bool DisconnectNode(const CSubNet& subnet);
+    bool DisconnectNode(const CNetAddr& addr);
+    bool DisconnectNode(NodeId id);
 
     void Interrupt();
     void Stop();

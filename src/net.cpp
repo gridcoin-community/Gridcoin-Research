@@ -453,46 +453,6 @@ void CNode::CloseSocketDisconnect()
 }
 
 
-bool CNode::DisconnectNode(const std::string& strNode)
-{
-    LOCK(cs_vNodes);
-    if (CNode* pnode = FindNode(strNode)) {
-        pnode->fDisconnect = true;
-        return true;
-    }
-    return false;
-}
-
-bool CNode::DisconnectNode(const CSubNet& subnet)
-{
-    bool disconnected = false;
-    LOCK(cs_vNodes);
-    for (CNode* pnode : vNodes) {
-        if (subnet.Match(pnode->addr)) {
-            pnode->fDisconnect = true;
-            disconnected = true;
-        }
-    }
-    return disconnected;
-}
-
-bool CNode::DisconnectNode(const CNetAddr& addr)
-{
-    return CNode::DisconnectNode(CSubNet(addr));
-}
-
-bool CNode::DisconnectNode(NodeId id)
-{
-    LOCK(cs_vNodes);
-    for(CNode* pnode : vNodes) {
-        if (id == pnode->GetId()) {
-            pnode->fDisconnect = true;
-            return true;
-        }
-    }
-    return false;
-}
-
 void CNode::PushVersion()
 {
     int64_t nTime = GetAdjustedTime();
@@ -2089,6 +2049,54 @@ void CConnman::GetNodeStats(std::vector<CNodeStats>& vstats) const
     // Delegate to the existing snapshot helper (same cs_vNodes lock + per-node
     // copyStats); it folds into this method when storage moves into CConnman.
     CNode::CopyNodeStats(vstats);
+}
+
+void CConnman::ForEachNode(const std::function<void(CNode*)>& func)
+{
+    LOCK(cs_vNodes);
+    for (const auto& pnode : vNodes) {
+        func(pnode);
+    }
+}
+
+bool CConnman::DisconnectNode(const std::string& strNode)
+{
+    LOCK(cs_vNodes);
+    if (CNode* pnode = FindNode(strNode)) {
+        pnode->fDisconnect = true;
+        return true;
+    }
+    return false;
+}
+
+bool CConnman::DisconnectNode(const CSubNet& subnet)
+{
+    bool disconnected = false;
+    LOCK(cs_vNodes);
+    for (CNode* pnode : vNodes) {
+        if (subnet.Match(pnode->addr)) {
+            pnode->fDisconnect = true;
+            disconnected = true;
+        }
+    }
+    return disconnected;
+}
+
+bool CConnman::DisconnectNode(const CNetAddr& addr)
+{
+    return DisconnectNode(CSubNet(addr));
+}
+
+bool CConnman::DisconnectNode(NodeId id)
+{
+    LOCK(cs_vNodes);
+    for (CNode* pnode : vNodes) {
+        if (id == pnode->GetId()) {
+            pnode->fDisconnect = true;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CConnman::Start()
