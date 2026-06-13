@@ -183,6 +183,14 @@ private:
     //! (e.g. per-keystroke filter changes) collapses to one drain. Qt-thread only.
     bool m_event_drain_requested = false;
 
+    //! Reentrancy guard for drainEventQueue() (windowed-model PR5-B): true while a
+    //! drain is applying events. A windowed consumer's synchronous fetch path
+    //! (DetailedTxModel::fetchWindow) calls drainEventQueue(), and applying a Reset
+    //! can synchronously re-enter (viewReset -> restoreAnchor -> setCurrentIndex ->
+    //! ...). A nested call no-ops so the outer drain owns the queue and events are
+    //! never double-processed. Qt-thread only.
+    bool m_draining = false;
+
     //!
     //! \brief MPSC queue carrying producer-side wallet events to the GUI.
     //! Producers push under the locks they already hold; the consumer is

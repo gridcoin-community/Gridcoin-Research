@@ -2,6 +2,7 @@
 #define BITCOIN_QT_TRANSACTIONVIEW_H
 
 #include "qt/txfilter.h"
+#include "uint256.h"
 
 #include <QFrame>
 
@@ -16,6 +17,7 @@ class QModelIndex;
 class QMenu;
 class QFrame;
 class QDateTimeEdit;
+class QShowEvent;
 
 QT_END_NAMESPACE
 
@@ -44,6 +46,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     WalletModel *model;
@@ -55,8 +58,25 @@ private:
     GRC::FilterSpec m_filterSpec;
 
     //! Push m_filterSpec to the cursor (the date/type/address/amount handlers
-    //! mutate the relevant field, then call this).
+    //! mutate the relevant field, then call this). Captures the resort anchor first.
     void applyFilter();
+
+    //! Ensure the currently selected row is cached before a copy / Show details so
+    //! it is never a placeholder under the windowed model (PR5-B GAP #3).
+    void ensureSelectedRowCached();
+
+    //! The resort anchor: the EXACT (hash, idx) of the (current, else
+    //! topmost-visible) row captured before a sort/filter Reset, re-found +
+    //! re-selected by restoreAnchor() after the model's viewReset, so the list
+    //! reorders around the user's row instead of jumping to the top (PR5-B). idx
+    //! (the decomposed-part index) is essential: a tx's parts share the hash but
+    //! scatter under an Amount/Address sort, so a hash-only anchor would restore to
+    //! the wrong part. Multi-row selection is not preserved across a resort (the
+    //! Reset invalidates persistent indexes) — a minor regression vs the old proxy,
+    //! but strictly better than PR4 which lost all selection + scrolled to the top.
+    uint256 m_anchor_hash;
+    int m_anchor_idx = -1;
+    bool m_have_anchor = false;
 
     QComboBox *dateWidget;
     QComboBox *typeWidget;
@@ -86,6 +106,14 @@ private slots:
     void copyTxID();
     void updateIcons(const QString& theme);
     void txnViewSectionResized(int index, int old_size, int new_size);
+
+    //! Report the visible row range [rowAt(0), rowAt(bottom)] to the windowed model
+    //! so it fetches that slice (PR5-B). Bails if the table is not yet laid out
+    //! (rowAt returns -1), so a pre-layout report can never request the whole table.
+    void reportViewport();
+    //! Capture / restore the resort anchor around a sort/filter Reset.
+    void captureAnchor();
+    void restoreAnchor();
 
 signals:
     void doubleClicked(const QModelIndex&);

@@ -438,4 +438,27 @@ BOOST_AUTO_TEST_CASE(position_of_maps_absidx_to_accepted_row_or_npos)
     BOOST_CHECK(c.positionOf(42) == NPOS);    // absent -> npos
 }
 
+BOOST_AUTO_TEST_CASE(position_of_multipart_same_key_distinct_rows)
+{
+    // The store's rowForKey resolves a tx's multiple decomposed parts (same hash,
+    // contiguous absidx) to accepted rows via positionOf, taking the MIN for idx<0.
+    // The GUI-OFF-provable engine behind it: distinct absidx -> distinct accepted
+    // rows, and parts sharing a sort key fall in native-index order (the tie-break).
+    constexpr std::size_t NPOS = static_cast<std::size_t>(-1);
+    Table t;
+    // abs 0,1,2 share time=500 (one tx's three parts); abs 3 is a later-time tx.
+    t.rows = { active(500), active(500), active(500), active(900) };
+    Cursor c(1, FilterSpec{}, TXCOL_DATE, TXSORT_DESC, t.fields(), t.keys());
+    c.rebuild(t.rows.size());
+    // DESC by time: 900(abs3) first, then the three 500-parts in native order 0,1,2.
+    BOOST_REQUIRE_EQUAL(c.viewIndex().size(), 4u);
+    BOOST_CHECK_EQUAL(c.positionOf(3), 0u);
+    BOOST_CHECK_EQUAL(c.positionOf(0), 1u);
+    BOOST_CHECK_EQUAL(c.positionOf(1), 2u);
+    BOOST_CHECK_EQUAL(c.positionOf(2), 3u);
+    // rowForKey(idx<0) takes the MIN accepted position across the parts -> abs0, row 1.
+    BOOST_CHECK_EQUAL(std::min({c.positionOf(0), c.positionOf(1), c.positionOf(2)}), 1u);
+    BOOST_CHECK(c.positionOf(7) == NPOS);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
