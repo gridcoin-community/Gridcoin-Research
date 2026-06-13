@@ -17,6 +17,7 @@
 #include "protocol.h"
 #include "streams.h"
 #include "addrman.h"
+#include "util/sock.h"
 
 #ifndef WIN32
 #include <arpa/inet.h>
@@ -212,7 +213,13 @@ class CNode
 public:
     // socket
     uint64_t nServices;
-    SOCKET hSocket;
+    // RAII socket wrapper (issue #2558 PR 5a), replacing the raw SOCKET
+    // hSocket. The socket-handler thread reads it (to poll/recv/send) while
+    // CloseSocketDisconnect may reset it from another thread, so it is guarded;
+    // callers take a shared_ptr copy under the lock via GetSock() and operate
+    // on that local copy, keeping the fd alive for the duration of a recv/send.
+    mutable Mutex m_sock_mutex;
+    std::shared_ptr<Sock> m_sock GUARDED_BY(m_sock_mutex);
     CCriticalSection cs_vSend;
     CDataStream ssSend GUARDED_BY(cs_vSend);
     size_t nSendSize GUARDED_BY(cs_vSend); // total size of all vSendMsg entries
@@ -319,11 +326,10 @@ public:
     // Whether a ping is requested.
     bool fPingQueued;
 
-    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
+    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : m_sock(std::make_shared<Sock>(hSocketIn)), ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
     {
 
         nServices = 0;
-        hSocket = hSocketIn;
         nRecvVersion = INIT_PROTO_VERSION;
         nLastSend = 0;
         nLastRecv = 0;
@@ -359,17 +365,13 @@ public:
         fPingQueued = false;
 
         // Be shy and don't send version until we hear
-        if (hSocket != INVALID_SOCKET && !fInbound)
+        if (hSocketIn != INVALID_SOCKET && !fInbound)
             PushVersion();
     }
 
     ~CNode()
     {
-        if (hSocket != INVALID_SOCKET)
-        {
-            closesocket(hSocket);
-            hSocket = INVALID_SOCKET;
-        }
+        // m_sock's destructor closes the underlying socket (issue #2558 PR 5a).
     }
 
 private:
@@ -589,6 +591,23 @@ public:
 
     void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
     void CloseSocketDisconnect();
+
+    //! Thread-safe accessor for the socket (issue #2558 PR 5a). Returns a
+    //! shared_ptr copy (possibly null, after disconnect). Hold the returned
+    //! copy across a send/recv so the fd cannot be closed underneath you.
+    std::shared_ptr<Sock> GetSock() const LOCKS_EXCLUDED(m_sock_mutex)
+    {
+        LOCK(m_sock_mutex);
+        return m_sock;
+    }
+
+    //! Close the underlying socket immediately. Used by the shutdown-time
+    //! CNetCleanup sweep; the socket-handler path uses CloseSocketDisconnect.
+    void CloseSocket() LOCKS_EXCLUDED(m_sock_mutex)
+    {
+        LOCK(m_sock_mutex);
+        m_sock.reset();
+    }
 
     static bool DisconnectNode(const std::string& strNode);
     static bool DisconnectNode(const CSubNet& subnet);
