@@ -57,6 +57,10 @@ static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872b
 
 //TestNet Genesis:
 static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
+
+//RegTest Genesis (deterministic; computed from the regtest premine
+//coinbase + nTime=1296688602 + nNonce=0 + nVersion=14 under trivial powLimit):
+static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e02e304767b2ad16f1d18f72efcf0a724efe01e065371");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -1103,7 +1107,7 @@ public:
             if (vHave.size() > 10)
                 nStep *= 2;
         }
-        vHave.push_back((!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+        vHave.push_back((Params().IsMockableChain() ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
     }
 
     int GetDistanceBack() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1156,7 +1160,7 @@ public:
                     return hash;
             }
         }
-        return (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
+        return (Params().IsMockableChain() ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet);
     }
 
     int GetHeight() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
