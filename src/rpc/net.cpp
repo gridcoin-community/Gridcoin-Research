@@ -34,9 +34,8 @@ const RPCHelpMan& getconnectioncount_helpman() { return getconnectioncount_help;
 
 UniValue getconnectioncount(const UniValue& params)
 {
-    LOCK(cs_vNodes);
-
-    return (int)vNodes.size();
+    // Peer count via the CConnman node-access API (issue #2558 PR 9b).
+    return g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 }
 
 static const RPCHelpMan addnode_help{
@@ -80,23 +79,22 @@ UniValue addnode(const UniValue& params)
         return result;
     }
 
-    LOCK(cs_vAddedNodes);
-    vector<string>::iterator it = vAddedNodes.begin();
-    for(; it != vAddedNodes.end(); it++)
-        if (strNode == *it)
-            break;
-
+    // add/remove operate on the CConnman added-node list (issue #2558 PR 9b2).
+    // Report a null connection manager (e.g. the brief shutdown window after
+    // g_connman.reset()) distinctly, so the ADDED / NOT_ADDED codes stay
+    // reserved for genuine list-operation results.
+    if (!g_connman) {
+        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
+    }
     if (strCommand == "add")
     {
-        if (it != vAddedNodes.end())
+        if (!g_connman->AddNode(strNode))
             throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node already added");
-        vAddedNodes.push_back(strNode);
     }
     else if(strCommand == "remove")
     {
-        if (it == vAddedNodes.end())
+        if (!g_connman->RemoveAddedNode(strNode))
             throw JSONRPCError(RPC_CLIENT_NODE_NOT_ADDED, "Error: Node has not been added.");
-        vAddedNodes.erase(it);
     }
 
     UniValue result(UniValue::VOBJ);
@@ -184,18 +182,19 @@ UniValue getaddednodeinfo(const UniValue& params)
 {
     bool fDns = params[0].get_bool();
 
+    // Snapshot the added-node list via the CConnman API (issue #2558 PR 9b2).
+    std::vector<std::string> vAdded = g_connman ? g_connman->GetAddedNodes() : std::vector<std::string>();
+
     list<string> laddedNodes(0);
     if (params.size() == 1)
     {
-        LOCK(cs_vAddedNodes);
-        for (auto const& strAddNode : vAddedNodes)
+        for (auto const& strAddNode : vAdded)
             laddedNodes.push_back(strAddNode);
     }
     else
     {
         string strNode = params[1].get_str();
-        LOCK(cs_vAddedNodes);
-        for (auto const& strAddNode : vAddedNodes)
+        for (auto const& strAddNode : vAdded)
             if (strAddNode == strNode)
             {
                 laddedNodes.push_back(strAddNode);
@@ -231,7 +230,16 @@ UniValue getaddednodeinfo(const UniValue& params)
         }
     }
 
-    LOCK(cs_vNodes);
+    // Snapshot connected peers (address + direction) via the node-access API
+    // (issue #2558 PR 9b2), then match the resolved added-node addresses
+    // against it without holding cs_vNodes across the result build.
+    std::vector<std::pair<CService, bool>> vConnected; // (addr, fInbound)
+    if (g_connman) {
+        g_connman->ForEachNode([&vConnected](CNode* pnode) {
+            vConnected.emplace_back(static_cast<CService>(pnode->addr), pnode->fInbound);
+        });
+    }
+
     for (list<pair<string, vector<CService> > >::iterator it = laddedAddresses.begin(); it != laddedAddresses.end(); it++)
     {
         UniValue obj(UniValue::VOBJ);
@@ -244,12 +252,12 @@ UniValue getaddednodeinfo(const UniValue& params)
             bool fFound = false;
             UniValue node(UniValue::VOBJ);
             node.pushKV("address", addrNode.ToString());
-            for (auto const& pnode : vNodes)
-                if (pnode->addr == addrNode)
+            for (auto const& c : vConnected)
+                if (c.first == addrNode)
                 {
                     fFound = true;
                     fConnected = true;
-                    node.pushKV("connected", pnode->fInbound ? "inbound" : "outbound");
+                    node.pushKV("connected", c.second ? "inbound" : "outbound");
                     break;
                 }
             if (!fFound)
@@ -336,10 +344,10 @@ UniValue setban(const UniValue& params)
 
         if (isSubnet) {
             g_banman->Ban(subNet, BanReasonManuallyAdded, banTime, absolute);
-            CNode::DisconnectNode(subNet);
+            if (g_connman) g_connman->DisconnectNode(subNet);
         } else {
             g_banman->Ban(netAddr, BanReasonManuallyAdded, banTime, absolute);
-            CNode::DisconnectNode(netAddr);
+            if (g_connman) g_connman->DisconnectNode(netAddr);
         }
     }
     else if(strCommand == "remove")
@@ -440,9 +448,11 @@ const RPCHelpMan& ping_helpman() { return ping_help; }
 UniValue ping(const UniValue& params)
 {
     // Request that each node send a ping during next message processing pass
-    LOCK(cs_vNodes);
-    for (auto const& pNode : vNodes) {
-        pNode->fPingQueued = true;
+    // (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([](CNode* pNode) {
+            pNode->fPingQueued = true;
+        });
     }
 
     return NullUniValue;
@@ -491,11 +501,9 @@ UniValue getpeerinfo(const UniValue& params)
     vector<CNodeStats> vstats;
     UniValue ret(UniValue::VARR);
 
-    {
-        LOCK(cs_vNodes);
-
-        CNode::CopyNodeStats(vstats);
-    }
+    // Peer stats via the CConnman node-access API (issue #2558 PR 9b; leaves
+    // vstats empty when g_connman is not up).
+    if (g_connman) g_connman->GetNodeStats(vstats);
 
     for (auto const& stats : vstats) {
         UniValue obj(UniValue::VOBJ);
@@ -723,11 +731,11 @@ UniValue sendalert(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
+    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([&alert](CNode* pnode) {
             alert.RelayTo(pnode);
+        });
     }
 
     UniValue result(UniValue::VOBJ);
@@ -810,11 +818,11 @@ UniValue sendalert2(const UniValue& params)
     if(!alert.ProcessAlert())
         throw runtime_error(
             "Failed to process alert.\n");
-    // Relay alert
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
+    // Relay alert (issue #2558 PR 9b: iterate via the CConnman node-access API).
+    if (g_connman) {
+        g_connman->ForEachNode([&alert](CNode* pnode) {
             alert.RelayTo(pnode);
+        });
     }
 
     UniValue result(UniValue::VOBJ);
@@ -862,11 +870,8 @@ UniValue getnetworkinfo(const UniValue& params)
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
 
-    int connections;
-    {
-        LOCK(cs_vNodes);
-        connections = (int)vNodes.size();
-    }
+    // Connection count via the CConnman node-access API (issue #2558 PR 9b).
+    int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
     std::string addr_seen_by_peer_ip;
     {

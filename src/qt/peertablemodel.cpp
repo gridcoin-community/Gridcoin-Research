@@ -53,14 +53,16 @@ public:
     /** Index of rows by node ID */
     std::map<NodeId, int> mapNodeRows;
 
-    /** Pull a full list of peers from vNodes into our cache */
+    /** Pull a full list of peers from the connection manager into our cache */
     void refreshPeers()
     {
         {
             cachedNodeStats.clear();
 
             std::vector<CNodeStats> vstats;
-            CNode::CopyNodeStats(vstats);
+            // Peer stats via the CConnman node-access API (issue #2558 PR 9a);
+            // leaves vstats empty (no peers) when g_connman is not up.
+            if (g_connman) g_connman->GetNodeStats(vstats);
 
             cachedNodeStats.reserve(vstats.size());
             for (const auto& node_stats : vstats)

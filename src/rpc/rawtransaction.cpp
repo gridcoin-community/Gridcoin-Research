@@ -6,6 +6,7 @@
 #include "chainparams.h"
 #include "init.h"
 #include "main.h"
+#include "net_processing.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/claim.h"
 #include "gridcoin/contract/contract.h"
