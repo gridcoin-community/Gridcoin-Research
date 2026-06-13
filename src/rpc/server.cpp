@@ -992,7 +992,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
 }
 
 
-std::vector<std::string> CRPCTable::listCommands() const
+std::vector<std::string> CRPCTable::listCommands(bool include_deprecated) const
 {
     std::vector<std::string> commandList;
     typedef std::map<std::string, const CRPCCommand*> commandMap;
@@ -1000,9 +1000,11 @@ std::vector<std::string> CRPCTable::listCommands() const
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
                     boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
-    // remove deprecated commands from autocomplete
-    for(auto &command: DEPRECATED_RPCS) {
-        commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+    if (!include_deprecated) {
+        // remove deprecated commands from autocomplete
+        for(auto &command: DEPRECATED_RPCS) {
+            commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+        }
     }
     return commandList;
 }
