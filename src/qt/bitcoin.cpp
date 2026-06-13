@@ -214,7 +214,13 @@ static void UpdateMessageBox(const std::string& version, const int& update_versi
 
 static void QueueShutdown()
 {
-    QMetaObject::invokeMethod(QCoreApplication::instance(), "quit", Qt::QueuedConnection);
+    // Route a core-initiated shutdown through BitcoinGUI::requestQuit() so the
+    // explicit-shutdown flag is set and minimize-on-close doesn't veto the quit
+    // on Qt6 (see BitcoinGUI::closeEvent / issue #2995). The functor overload is
+    // compile-time checked, unlike a string-named invokeMethod.
+    QMetaObject::invokeMethod(QCoreApplication::instance(),
+                              [] { BitcoinGUI::requestQuit(); },
+                              Qt::QueuedConnection);
 }
 
 /*

@@ -1,6 +1,7 @@
 #include "askpassphrasedialog.h"
 #include "ui_askpassphrasedialog.h"
 
+#include "bitcoingui.h"
 #include "guiconstants.h"
 #include "qt/decoration.h"
 #include "walletmodel.h"
@@ -117,7 +118,10 @@ void AskPassphraseDialog::accept()
                                          "For security reasons, previous backups of the unencrypted wallet file "
                                          "will become useless as soon as you start using the new, encrypted wallet.") +
                                          "</b></qt>");
-                    QApplication::quit();
+                    // The wallet must restart to finish encryption; route the
+                    // shutdown through BitcoinGUI::requestQuit() so it can't be
+                    // vetoed by minimize-on-close on Qt6 (issue #2995).
+                    BitcoinGUI::requestQuit();
                 }
                 else {
                     QMessageBox::critical(this, tr("Wallet encryption failed"),
