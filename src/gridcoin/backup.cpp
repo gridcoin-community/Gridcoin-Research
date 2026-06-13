@@ -10,7 +10,7 @@
 #include "util/time.h"
 #include <filesystem>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/version.hpp>
 
 #include <string>
 

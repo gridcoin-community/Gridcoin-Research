@@ -10,13 +10,13 @@
 #include <key_io.h>
 #include "wallet/db.h"
 #include <util.h>
+#include <util/string.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/iostreams/concepts.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/shared_ptr.hpp>
 #include <list>
@@ -131,7 +131,7 @@ bool ReadHTTPRequestLine(std::basic_istream<char>& stream, int &proto,
 
     // HTTP request line is space-delimited
     std::vector<std::string> vWords;
-    boost::split(vWords, str, boost::is_any_of(" "));
+    vWords = SplitString(str, ' ');
     if (vWords.size() < 2)
         return false;
 
@@ -172,7 +172,7 @@ int ReadHTTPStatus(std::basic_istream<char>& stream, int &proto)
     std::string str;
     std::getline(stream, str);
     std::vector<std::string> vWords;
-    boost::split(vWords, str, boost::is_any_of(" "));
+    vWords = SplitString(str, ' ');
     if (vWords.size() < 2)
         return HTTP_INTERNAL_SERVER_ERROR;
     str.pop_back();

@@ -3,10 +3,9 @@
 //
 
 #include <algorithm>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include <map>
+#include <util/string.h>
 
 #include "alert.h"
 #include "chainparams.h"
@@ -276,7 +275,7 @@ bool CAlert::ProcessAlert(bool fThread)
                         safeStatus.push_back(strStatusBar[i]);
                 }
                 safeStatus = singleQuote+safeStatus+singleQuote;
-                boost::replace_all(strCmd, "%s", safeStatus);
+                ReplaceAll(strCmd, "%s", safeStatus);
 
                 if (fThread)
                     boost::thread t(runCommand, strCmd); // thread runs free

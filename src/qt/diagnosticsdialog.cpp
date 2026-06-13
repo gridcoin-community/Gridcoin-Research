@@ -2,9 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include <boost/algorithm/string.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-
 #include "diagnosticsdialog.h"
 #include "qt/forms/ui_diagnosticsdialog.h"
 #include "qt/decoration.h"

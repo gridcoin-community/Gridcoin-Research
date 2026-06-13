@@ -22,8 +22,8 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <optional>
+#include <util/string.h>
 #include <set>
 #include <univalue.h>
 
@@ -94,7 +94,7 @@ bool UpdateRWSettingsForMode(const ResearcherMode mode, const std::string& email
 std::string LowerUnderscore(std::string data)
 {
     data = ToLower(data);
-    boost::replace_all(data, "_", " ");
+    ReplaceAll(data, "_", " ");
 
     return data;
 }
