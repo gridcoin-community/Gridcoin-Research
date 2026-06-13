@@ -60,7 +60,6 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOu
 // Global state variables
 //
 bool fDiscover = true;
-bool fUseUPnP = false;
 ServiceFlags nLocalServices = NODE_NETWORK;
 CCriticalSection cs_mapLocalHost;
 std::map<CNetAddr, LocalServiceInfo> mapLocalHost GUARDED_BY(cs_mapLocalHost);
@@ -1231,7 +1230,7 @@ void ThreadMapPort2(void* parg)
         int i = 1;
         while (true)
         {
-            if (fShutdown || !fUseUPnP)
+            if (fShutdown || !g_connman || !g_connman->GetUseUPnP())
             {
                 r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", nullptr);
                 LogPrintf("UPNP_DeletePortMapping() returned : %d", r);
@@ -1269,7 +1268,7 @@ void ThreadMapPort2(void* parg)
             FreeUPNPUrls(&urls);
         while (true)
         {
-            if (fShutdown || !fUseUPnP) return;
+            if (fShutdown || !g_connman || !g_connman->GetUseUPnP()) return;
             if (!MilliSleep(2000)) return;
         }
     }
@@ -1277,7 +1276,7 @@ void ThreadMapPort2(void* parg)
 
 void MapPort()
 {
-    if (fUseUPnP && !netThreads->threadExists("ThreadMapPort"))
+    if (g_connman && g_connman->GetUseUPnP() && !netThreads->threadExists("ThreadMapPort"))
     {
         if (!netThreads->createThread(ThreadMapPort, nullptr, "ThreadMapPort"))
             LogPrintf("Error: createThread(ThreadMapPort) failed");
@@ -2208,7 +2207,7 @@ bool CConnman::Start()
         m_net_threads.emplace_back(ThreadDNSAddressSeed, nullptr);
     }
     // Map ports with UPnP
-    if (fUseUPnP) {
+    if (m_use_upnp) {
         MapPort();
     }
 

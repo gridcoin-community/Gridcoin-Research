@@ -1274,9 +1274,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     fNoListen = !gArgs.GetBoolArg("-listen", true);
     fDiscover = gArgs.GetBoolArg("-discover", true);
     fNameLookup = gArgs.GetBoolArg("-dns", true);
-#ifdef USE_UPNP
-    fUseUPnP = gArgs.GetBoolArg("-upnp", USE_UPNP);
-#endif
 
     bool fBound = false;
     if (!fNoListen)
@@ -1705,6 +1702,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
     conn_options.m_msgproc         = g_peerman.get(); // issue #2558 PR 8c
     g_connman->Init(conn_options);
+
+    // UPnP preference (issue #2558 PR 9d3): formerly the global fUseUPnP, set
+    // here now that g_connman exists; read by CConnman::Start -> MapPort.
+#ifdef USE_UPNP
+    g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
+#endif
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
