@@ -85,6 +85,7 @@ add_library(gridcoinqt STATIC
     sendcoinsentry.cpp
     sidestaketablemodel.cpp
     signverifymessagedialog.cpp
+    multisigndialog.cpp
     trafficgraphwidget.cpp
     transactiondesc.cpp
     transactiondescdialog.cpp

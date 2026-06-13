@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MultisignPSGTDialog</class>
+ <widget class="QDialog" name="MultisignPSGTDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>720</width>
+    <height>620</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Multisign (PSGT)</string>
+  </property>
+  <property name="modal">
+   <bool>false</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="infoLabel">
+     <property name="text">
+      <string>Load a Partially Signed Gridcoin Transaction (PSGT), inspect it, sign your inputs with this wallet, combine signatures from co-signers, and finalize it to a broadcast-ready raw transaction. Paste the base64 PSGT below.</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::PlainText</enum>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="psgtInLabel">
+     <property name="text">
+      <string>PSGT (base64):</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="psgtInEdit">
+     <property name="toolTip">
+      <string>Paste the base64-encoded PSGT here. Operations below update this working PSGT in place.</string>
+     </property>
+     <property name="placeholderText">
+      <string>Paste a base64 PSGT (e.g. from createpsgt)</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttonRow">
+     <item>
+      <widget class="QPushButton" name="inspectButton">
+       <property name="toolTip">
+        <string>Decode the PSGT and show its inputs, outputs and signing status</string>
+       </property>
+       <property name="text">
+        <string>&amp;Inspect</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="signButton">
+       <property name="toolTip">
+        <string>Sign every input this wallet has keys for, then update the working PSGT</string>
+       </property>
+       <property name="text">
+        <string>&amp;Sign with wallet</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="finalizeButton">
+       <property name="toolTip">
+        <string>If fully signed, extract the completed raw transaction (hex) for broadcast</string>
+       </property>
+       <property name="text">
+        <string>&amp;Finalize &#8594; hex</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="clearButton">
+       <property name="toolTip">
+        <string>Clear all fields</string>
+       </property>
+       <property name="text">
+        <string>Clear &amp;All</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="buttonSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string/>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="decodedLabel">
+     <property name="text">
+      <string>Decoded:</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="decodedView">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+     <property name="placeholderText">
+      <string>Click &quot;Inspect&quot; to decode the PSGT</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="combineLabel">
+     <property name="text">
+      <string>Co-signers' PSGTs to combine (one base64 PSGT per line):</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="combineRow">
+     <item>
+      <widget class="QPlainTextEdit" name="combineInEdit">
+       <property name="toolTip">
+        <string>Paste one or more co-signers' PSGTs (one per line). Combine merges them with the working PSGT above.</string>
+       </property>
+       <property name="placeholderText">
+        <string>One base64 PSGT per line</string>
+       </property>
+       <property name="maximumHeight">
+        <number>80</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="combineButton">
+       <property name="toolTip">
+        <string>Merge the co-signers' PSGTs into the working PSGT</string>
+       </property>
+       <property name="text">
+        <string>&amp;Combine</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="resultLabel">
+     <property name="text">
+      <string>Result (signed PSGT base64, or finalized transaction hex):</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="resultRow">
+     <item>
+      <widget class="QPlainTextEdit" name="resultOutEdit">
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
+       <property name="maximumHeight">
+        <number>90</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="copyResultButton">
+       <property name="toolTip">
+        <string>Copy the result to the clipboard</string>
+       </property>
+       <property name="text">
+        <string>Cop&amp;y</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="../bitcoin.qrc"/>
+ </resources>
+ <connections/>
+</ui>
