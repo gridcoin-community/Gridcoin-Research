@@ -179,6 +179,7 @@ add_library(gridcoin_util STATIC
     main.cpp
     miner.cpp
     net.cpp
+    net_processing.cpp
     netaddress.cpp
     netbase.cpp
     node/blockstorage.cpp
