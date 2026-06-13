@@ -222,6 +222,7 @@ add_library(gridcoin_util STATIC
     util.cpp
     util/bip32.cpp
     util/settings.cpp
+    util/sock.cpp
     util/strencodings.cpp
     util/string.cpp
     util/syserror.cpp
