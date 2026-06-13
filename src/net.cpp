@@ -10,6 +10,7 @@
 #include "wallet/db.h"
 #include "banman.h"
 #include "net.h"
+#include "net_processing.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "random.h"
