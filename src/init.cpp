@@ -31,8 +31,17 @@
 
 #include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
 
+#include <thread>
+
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
+
+//! The proof-of-stake miner thread. Launched from AppInit2 Step 12 and joined
+//! in Shutdown() after StopNode(), before the block-file flush, so a block
+//! staked during shutdown cannot land after the flush (issue #2865). Owned
+//! here rather than by net.cpp's netThreads because it is a staking thread,
+//! not a network thread (issue #2558 PR 0).
+static std::thread g_stake_miner_thread;
 
 extern void ThreadAppInit2(void* parg);
 
@@ -168,6 +177,13 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // The stake miner exits via fShutdown plus the g_thread_interrupt()
+        // call above, which wakes its MilliSleep.
+        LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
+        if (g_stake_miner_thread.joinable()) {
+            g_stake_miner_thread.join();
+        }
+
         // Coordinate block-file and block-index DB state before exit so a
         // clean shutdown never leaves the LevelDB index referencing flat-file
         // data that hasn't been fsynced. The fsync on the active blk*.dat
@@ -176,12 +192,13 @@ void Shutdown(void* parg)
         // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
         // durable. See issue #2865.
         //
-        // This must run after StopNode() so that every thread that can write
-        // a block (ThreadMessageHandler, ThreadStakeMiner, ThreadScraper, and
-        // the rest of the net/peer thread group) has been joined. Running it
-        // earlier leaves a small race window where a block accepted during
-        // shutdown could land after our flush and bypass the coordination
-        // guarantee Phase 2's startup recovery relies on.
+        // This must run after StopNode() and the stake-miner join so that
+        // every thread that can write a block (ThreadMessageHandler,
+        // ThreadStakeMiner, ThreadScraper, and the rest of the net/peer
+        // thread group) has been joined. Running it earlier leaves a small
+        // race window where a block accepted during shutdown could land
+        // after our flush and bypass the coordination guarantee Phase 2's
+        // startup recovery relies on.
         LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
         {
             LOCK(cs_main);
@@ -1685,6 +1702,12 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
+
+    // The stake miner is a staking thread, not a network thread, so it is
+    // launched here rather than from StartNode(). It self-gates each loop
+    // iteration via IsMiningAllowed(), so starting it concurrently with the
+    // net threads is safe.
+    g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
 
     if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
 
