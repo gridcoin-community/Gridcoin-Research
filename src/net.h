@@ -666,6 +666,26 @@ inline void RelayInventory(const CInv& inv)
     }
 }
 
+//! Interface for message-processing callbacks driven by the connection manager
+//! (issue #2558 PR 8a). PeerManagerImpl implements it; CConnman drives it via
+//! Options::m_msgproc in PR 8c. Kept minimal -- just the per-node message pump
+//! that ThreadMessageHandler needs.
+class NetEventsInterface
+{
+public:
+    //! Process the next message from pfrom's receive queue. Returns false if the
+    //! node should be disconnected.
+    virtual bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg) = 0;
+
+    //! Send queued messages / generate periodic ones for pto.
+    virtual bool SendMessages(CNode* pto, bool fSendTrickle) = 0;
+
+protected:
+    //! Instances are owned and deleted through the concrete type (PeerManager),
+    //! never through this interface.
+    ~NetEventsInterface() = default;
+};
+
 //! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
 //! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
 //! Start()/Interrupt()/Stop(). For now it wraps the still-global connection

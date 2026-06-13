@@ -179,6 +179,11 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // Tear down the message processor once the net threads that drove it
+        // are joined, before the connection manager it is associated with
+        // (issue #2558 PR 8a).
+        if (g_peerman) g_peerman.reset();
+
         // Tear down the connection manager once its net threads are joined
         // (issue #2558 PR 3).
         if (g_connman) g_connman.reset();
@@ -1687,6 +1692,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     const int64_t requested_max    = gArgs.GetArg("-maxconnections", 125);
     conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
     g_connman->Init(conn_options);
+
+    // Message-processing manager (issue #2558 PR 8a). Drives ProcessMessages/
+    // SendMessages from ThreadMessageHandler via g_peerman.
+    assert(!g_peerman);
+    g_peerman = PeerManager::make(*g_connman);
+    if (g_scheduler) g_peerman->StartScheduledTasks(*g_scheduler);
 
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");

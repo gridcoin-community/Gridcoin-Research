@@ -1152,7 +1152,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     return true;
 }
 
-bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
+// File-static since PR 8a: the only callers are PeerManagerImpl (below) and,
+// through it, ThreadMessageHandler via g_peerman. Was a net_processing.h export.
+static bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 {
     //
     // Message format
@@ -1275,7 +1277,8 @@ bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
 }
 
 // Note: this function requires a lock on cs_main before calling. (See below comments.)
-bool SendMessages(CNode* pto, bool fSendTrickle)
+// File-static since PR 8a (see ProcessMessages above).
+static bool SendMessages(CNode* pto, bool fSendTrickle)
 {
     // Some comments and TODOs in order...
     // 1. This function never returns anything but true... (try to find a return other than true).
@@ -1510,4 +1513,38 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage(NetMsgType::GETDATA, vGetData);
 
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// PeerManager (issue #2558 PR 8a): the message-processing manager. For now a
+// thin shell over the file-static ProcessMessages/SendMessages above; the
+// peer-level API (Misbehaving, ...) and the scheduled tasks land in PR 8b.
+// ---------------------------------------------------------------------------
+
+namespace {
+class PeerManagerImpl final : public PeerManager
+{
+public:
+    bool ProcessMessages(CNode* pfrom) override EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg)
+    {
+        return ::ProcessMessages(pfrom);
+    }
+
+    bool SendMessages(CNode* pto, bool fSendTrickle) override
+    {
+        return ::SendMessages(pto, fSendTrickle);
+    }
+
+    void StartScheduledTasks(CScheduler& /*scheduler*/) override
+    {
+        // No recurring tasks yet (issue #2558 PR 8a shell).
+    }
+};
+} // namespace
+
+std::unique_ptr<PeerManager> g_peerman;
+
+std::unique_ptr<PeerManager> PeerManager::make(CConnman& /*connman*/)
+{
+    return std::make_unique<PeerManagerImpl>();
 }
