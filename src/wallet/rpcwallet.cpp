@@ -139,14 +139,10 @@ UniValue getinfo(const UniValue& params)
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
 
-    // Snapshot vNodes.size() under cs_vNodes before acquiring the heavier
-    // cs_main + cs_wallet pair so the size read is GUARDED_BY-clean and we
-    // do not introduce a new cs_main→cs_vNodes ordering edge.
-    int connections;
-    {
-        LOCK(cs_vNodes);
-        connections = (int)vNodes.size();
-    }
+    // Connection count via the CConnman node-access API (issue #2558 PR 9a);
+    // GetNodeCount takes cs_vNodes internally before we acquire the heavier
+    // cs_main + cs_wallet pair, so no new cs_main→cs_vNodes ordering edge.
+    int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
     // Same pattern: snapshot the peer-reported external IP before the
     // heavier cs_main+cs_wallet acquisition.

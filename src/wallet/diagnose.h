@@ -243,15 +243,10 @@ public:
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
-        int outbound_connections = 0;
-
-        {
-            LOCK(cs_vNodes);
-
-            for (const auto& vnodes : vNodes) {
-                if (!vnodes->fInbound) ++outbound_connections;
-            }
-        }
+        // Outbound peer count via the CConnman node-access API (issue #2558
+        // PR 9a); GetNodeCount(CONNECTIONS_OUT) counts the non-inbound nodes.
+        int outbound_connections = g_connman
+            ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_OUT) : 0;
 
         if (outbound_connections < 1) {
             m_results_tip = _("Your outbound connection count is critically low. Please check your the config file and "
@@ -297,10 +292,8 @@ public:
         m_results_string_arg.clear();
         m_results_tip_arg.clear();
 
-        {
-            LOCK(cs_vNodes);
-            m_connections = vNodes.size();
-        }
+        // Total peer count via the CConnman node-access API (issue #2558 PR 9a).
+        m_connections = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
         size_t minimum_connections_to_stake = fTestNet ? 1 : 3;
         std::string s_connections = ToString(m_connections);
