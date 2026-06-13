@@ -26,6 +26,7 @@
 
 class CNode;
 class CBlockIndex;
+class CBlockLocator;
 extern CCriticalSection cs_main;
 // Duplicate extern of the main.h:82 declaration; both must carry the
 // GUARDED_BY annotation so cross-TU readers via net.h see the contract.
@@ -741,6 +742,13 @@ public:
     CAddress GetAddrSeenByPeer() const;
     void SetAddrSeenByPeer(const CAddress& addr);
 
+    //! Shared cache of the GETBLOCKS locator (issue #2558 PR 9d2; was a net.cpp
+    //! global). Building a locator scans the chain, so the last one is reused
+    //! when the same begin index is requested again. Returns a COPY: the cache
+    //! is shared and updated under m_getblocks_cs, so a returned reference could
+    //! dangle if another thread reassigned it mid-serialization.
+    CBlockLocator GetBlockLocator(const CBlockIndex* pindexBegin);
+
     void Interrupt();
     void Stop();
 
@@ -759,6 +767,14 @@ private:
     //! copy is not atomic, hence the mutex.
     mutable CCriticalSection m_addr_seen_by_peer_cs;
     CAddress m_addr_seen_by_peer GUARDED_BY(m_addr_seen_by_peer_cs) = CAddress(LookupNumeric("0.0.0.0", 0), nLocalServices);
+
+    //! GETBLOCKS locator cache (issue #2558 PR 9d2). unique_ptr so net.h needs
+    //! only a forward declaration of CBlockLocator (its full definition lives in
+    //! main.h, which net.h must not include). Guarded because PushGetBlocks runs
+    //! on the message-handler thread and from cs_main-holding callers.
+    CCriticalSection m_getblocks_cs;
+    const CBlockIndex* m_getblocks_pindex_begin GUARDED_BY(m_getblocks_cs) = nullptr;
+    std::unique_ptr<CBlockLocator> m_getblocks_locator GUARDED_BY(m_getblocks_cs);
 };
 
 extern std::unique_ptr<CConnman> g_connman;
