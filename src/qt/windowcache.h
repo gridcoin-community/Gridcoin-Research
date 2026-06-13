@@ -186,7 +186,9 @@ public:
     bool applyRemove(WindowCacheSink& sink, uint64_t seqno, int pos, int count)
     {
         if (seqno <= m_structural_seqno) return false;   // already reflected
-        if (count <= 0 || pos < 0 || pos + count > m_total) return false;
+        // Subtraction form, not pos+count > m_total: avoids int wrap on pathological
+        // input (count > 0 holds by short-circuit when the comparison is reached).
+        if (count <= 0 || pos < 0 || pos > m_total - count) return false;
 
         const int base = m_cache_first;
         const int len = static_cast<int>(m_rows.size());
@@ -224,7 +226,9 @@ public:
                      const std::vector<Record>& fresh)
     {
         if (seqno <= m_structural_seqno) return false;   // already reflected
-        if (count <= 0 || pos < 0 || pos + count > m_total) return false;
+        // Subtraction form, not pos+count > m_total: avoids int wrap on pathological
+        // input (count > 0 holds by short-circuit when the comparison is reached).
+        if (count <= 0 || pos < 0 || pos > m_total - count) return false;
 
         const int base = m_cache_first;
         const int len = static_cast<int>(m_rows.size());
@@ -271,8 +275,9 @@ public:
         // <= m_total always holds for a well-formed fetch. A malformed one must not
         // set the slice past the table end, or has()/at() would report rows
         // >= m_total as present, corrupting the [cacheFirst, cacheFirst+cacheSize)
-        // invariant (PR5-A review finding).
-        if (first < 0 || first + count > m_total) return false;
+        // invariant (PR5-A review finding). Subtraction form (count >= 0) avoids the
+        // int wrap a first+count comparison would have on pathological input.
+        if (first < 0 || first > m_total - count) return false;
         m_cache_first = first;
         m_rows = std::move(rows);
         if (count > 0) sink.dataChanged(first, count);

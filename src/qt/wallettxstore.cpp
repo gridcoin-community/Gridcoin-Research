@@ -742,7 +742,12 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
     // via a separate locked call, or a worker insert/remove landing between the
     // two locks could misalign the slice and drop or double-count a row that the
     // seqno skip would then make permanent (PR4-fix B, generalized to PR5 scroll).
-    res.total_accepted = static_cast<int>(cur.totalAccepted());
+    // Clamp to INT_MAX: total_accepted feeds Qt's int-based rowCount downstream. A
+    // wallet can never hold 2^31 rows, but the saturating cast keeps the count
+    // well-defined rather than wrapping negative if it ever did (Copilot PR5-A).
+    res.total_accepted = static_cast<int>(
+        std::min<std::size_t>(cur.totalAccepted(),
+                              static_cast<std::size_t>(std::numeric_limits<int>::max())));
     res.epoch = cur.epoch();
     auto sit = m_view_seqno.find(viewId);
     res.high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
