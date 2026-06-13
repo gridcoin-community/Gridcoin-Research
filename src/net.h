@@ -737,6 +737,13 @@ public:
     bool DisconnectNode(const CNetAddr& addr);
     bool DisconnectNode(NodeId id);
 
+    //! Persistent added-node ("addnode add/remove/getaddednodeinfo") list
+    //! (issue #2558 PR 9b2). Backed by the still-global vAddedNodes. AddNode
+    //! returns false if already present; RemoveAddedNode false if not present.
+    bool AddNode(const std::string& strNode);
+    bool RemoveAddedNode(const std::string& strNode);
+    std::vector<std::string> GetAddedNodes() const;
+
     void Interrupt();
     void Stop();
 

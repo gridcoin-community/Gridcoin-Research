@@ -79,23 +79,22 @@ UniValue addnode(const UniValue& params)
         return result;
     }
 
-    LOCK(cs_vAddedNodes);
-    vector<string>::iterator it = vAddedNodes.begin();
-    for(; it != vAddedNodes.end(); it++)
-        if (strNode == *it)
-            break;
-
+    // add/remove operate on the CConnman added-node list (issue #2558 PR 9b2).
+    // Report a null connection manager (e.g. the brief shutdown window after
+    // g_connman.reset()) distinctly, so the ADDED / NOT_ADDED codes stay
+    // reserved for genuine list-operation results.
+    if (!g_connman) {
+        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
+    }
     if (strCommand == "add")
     {
-        if (it != vAddedNodes.end())
+        if (!g_connman->AddNode(strNode))
             throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node already added");
-        vAddedNodes.push_back(strNode);
     }
     else if(strCommand == "remove")
     {
-        if (it == vAddedNodes.end())
+        if (!g_connman->RemoveAddedNode(strNode))
             throw JSONRPCError(RPC_CLIENT_NODE_NOT_ADDED, "Error: Node has not been added.");
-        vAddedNodes.erase(it);
     }
 
     UniValue result(UniValue::VOBJ);
@@ -183,18 +182,19 @@ UniValue getaddednodeinfo(const UniValue& params)
 {
     bool fDns = params[0].get_bool();
 
+    // Snapshot the added-node list via the CConnman API (issue #2558 PR 9b2).
+    std::vector<std::string> vAdded = g_connman ? g_connman->GetAddedNodes() : std::vector<std::string>();
+
     list<string> laddedNodes(0);
     if (params.size() == 1)
     {
-        LOCK(cs_vAddedNodes);
-        for (auto const& strAddNode : vAddedNodes)
+        for (auto const& strAddNode : vAdded)
             laddedNodes.push_back(strAddNode);
     }
     else
     {
         string strNode = params[1].get_str();
-        LOCK(cs_vAddedNodes);
-        for (auto const& strAddNode : vAddedNodes)
+        for (auto const& strAddNode : vAdded)
             if (strAddNode == strNode)
             {
                 laddedNodes.push_back(strAddNode);
@@ -230,7 +230,16 @@ UniValue getaddednodeinfo(const UniValue& params)
         }
     }
 
-    LOCK(cs_vNodes);
+    // Snapshot connected peers (address + direction) via the node-access API
+    // (issue #2558 PR 9b2), then match the resolved added-node addresses
+    // against it without holding cs_vNodes across the result build.
+    std::vector<std::pair<CService, bool>> vConnected; // (addr, fInbound)
+    if (g_connman) {
+        g_connman->ForEachNode([&vConnected](CNode* pnode) {
+            vConnected.emplace_back(static_cast<CService>(pnode->addr), pnode->fInbound);
+        });
+    }
+
     for (list<pair<string, vector<CService> > >::iterator it = laddedAddresses.begin(); it != laddedAddresses.end(); it++)
     {
         UniValue obj(UniValue::VOBJ);
@@ -243,12 +252,12 @@ UniValue getaddednodeinfo(const UniValue& params)
             bool fFound = false;
             UniValue node(UniValue::VOBJ);
             node.pushKV("address", addrNode.ToString());
-            for (auto const& pnode : vNodes)
-                if (pnode->addr == addrNode)
+            for (auto const& c : vConnected)
+                if (c.first == addrNode)
                 {
                     fFound = true;
                     fConnected = true;
-                    node.pushKV("connected", pnode->fInbound ? "inbound" : "outbound");
+                    node.pushKV("connected", c.second ? "inbound" : "outbound");
                     break;
                 }
             if (!fFound)

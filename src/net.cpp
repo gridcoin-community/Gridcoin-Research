@@ -2099,6 +2099,34 @@ bool CConnman::DisconnectNode(NodeId id)
     return false;
 }
 
+bool CConnman::AddNode(const std::string& strNode)
+{
+    LOCK(cs_vAddedNodes);
+    for (const auto& it : vAddedNodes) {
+        if (strNode == it) return false;
+    }
+    vAddedNodes.push_back(strNode);
+    return true;
+}
+
+bool CConnman::RemoveAddedNode(const std::string& strNode)
+{
+    LOCK(cs_vAddedNodes);
+    for (auto it = vAddedNodes.begin(); it != vAddedNodes.end(); ++it) {
+        if (strNode == *it) {
+            vAddedNodes.erase(it);
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<std::string> CConnman::GetAddedNodes() const
+{
+    LOCK(cs_vAddedNodes);
+    return vAddedNodes;
+}
+
 bool CConnman::Start()
 {
     fShutdown = false;
