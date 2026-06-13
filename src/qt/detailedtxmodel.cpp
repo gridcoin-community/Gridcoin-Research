@@ -49,10 +49,13 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
     // seed synchronously so the table is populated before the first drain tick.
     // Capture the high-water (PR4-fix B): the registration Reset that arrives on
     // the first drain carries this same seqno and is skipped as already reflected.
-    // count = -1 ("all served") reads the rows, the served count AND the high-water
-    // in one cs_store hold — atomic, so a concurrent worker insert can't drop a row
-    // that the seqno skip would then suppress.
-    m_rows = store.getRows(GRC::VIEW_DETAILED, 0, -1, &m_applied_seqno);
+    // count = -1 ("all served") reads the rows + the high-water (RowsResult) in
+    // one cs_store hold — atomic, so a concurrent worker insert can't drop a row
+    // that the seqno skip would then suppress. (PR4 holds the full replica; the
+    // viewport slice + RowsResult.total_accepted/epoch are PR5-B.)
+    GRC::RowsResult seed = store.getRows(GRC::VIEW_DETAILED, 0, -1);
+    m_rows = std::move(seed.records);
+    m_applied_seqno = seed.high_water;
 
     connect(m_walletModel, &WalletModel::walletEventsDrained,
             this, &DetailedTxModel::applyEventBatch);
@@ -125,19 +128,19 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
             if constexpr (std::is_same_v<P, GRC::RowsResetPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
                 if (seqno <= m_applied_seqno) return;   // already reflected (PR4-fix B)
-                // Refetch the FULL current served set and the store's high-water in
-                // one cs_store hold. Using the live totalAccepted (not the possibly
-                // stale payload.total) plus the high-water means any worker insert/
-                // remove that landed after this Reset was emitted is captured here
-                // exactly once and will be skipped when its own event arrives.
+                // Refetch the FULL current served set together with the store's
+                // high-water in one cs_store hold (RowsResult): the slice and the
+                // high-water are mutually consistent, so any worker insert/remove
+                // that landed after this Reset was emitted is captured here exactly
+                // once and is skipped when its own event arrives.
                 beginResetModel();
-                uint64_t hw = m_applied_seqno;
-                // count = -1: rows + served count + high-water in ONE cs_store hold
-                // (atomic — a separate totalAccepted() could under-fetch a row the
+                // count = -1: rows + high-water in ONE cs_store hold (RowsResult,
+                // atomic — a separately-locked count could under-fetch a row the
                 // high-water already covered, dropping it permanently). (PR4-fix B)
-                m_rows = store.getRows(GRC::VIEW_DETAILED, 0, -1, &hw);
+                GRC::RowsResult r = store.getRows(GRC::VIEW_DETAILED, 0, -1);
+                m_rows = std::move(r.records);
                 endResetModel();
-                m_applied_seqno = std::max(hw, seqno);
+                m_applied_seqno = std::max(r.high_water, seqno);
             } else if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
                 if (payload.viewId != GRC::VIEW_DETAILED) return;
                 if (seqno <= m_applied_seqno) return;   // already reflected in a refetch
@@ -168,7 +171,7 @@ void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& event
                 // so re-fetch the changed slice from the cursor and refresh. A
                 // row spans every column, so the dataChanged span is full-width.
                 const std::vector<TransactionRecord> fresh =
-                    store.getRows(GRC::VIEW_DETAILED, payload.first, payload.count);
+                    store.getRows(GRC::VIEW_DETAILED, payload.first, payload.count).records;
                 for (std::size_t i = 0; i < fresh.size()
                         && static_cast<std::size_t>(payload.first) + i < m_rows.size(); ++i) {
                     m_rows[static_cast<std::size_t>(payload.first) + i] = fresh[i];

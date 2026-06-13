@@ -103,6 +103,14 @@ public:
     //! Absolute record index at served position `served_pos` (for getRows).
     std::size_t rowAt(std::size_t served_pos) const { return m_view_index[served_pos]; }
 
+    //! Accepted-row position of absolute record index `absidx` in the sorted
+    //! view, or npos (== static_cast<std::size_t>(-1)) if `absidx` is not
+    //! accepted. The public face of the private identity-locate (findSlot): the
+    //! store's rowForKey maps a (hash, idx) → absolute index → this accepted row
+    //! for click-through to a row and anchor-on-resort (PR5). O(N) linear scan,
+    //! matching findSlot — a discrete user action, not a hot path.
+    std::size_t positionOf(std::size_t absidx) const { return findSlot(absidx); }
+
     //! Test/inspection: the full sorted absolute-index vector.
     const std::vector<std::size_t>& viewIndex() const { return m_view_index; }
 

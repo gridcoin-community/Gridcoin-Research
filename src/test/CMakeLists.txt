@@ -62,6 +62,11 @@ add_executable(test_gridcoin
     # view_index-maintenance arithmetic (windowed-model PR3), tested GUI-OFF.
     ${CMAKE_SOURCE_DIR}/src/qt/cursor.cpp
     qt_cursor_tests.cpp
+    # Qt-free windowed-table reconciliation core (src/qt/windowcache.h, a
+    # header-only template — no .cpp) + its unit suite: the consumer-side
+    # two-channel split (structural deltas vs scroll-driven content fetch) and the
+    # cache-base arithmetic (windowed-model PR5), tested GUI-OFF.
+    qt_windowcache_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

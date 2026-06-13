@@ -726,48 +726,44 @@ void WalletTxStore::setViewLimit(int viewId, int limit)
     emitCursorDeltas(viewId, it->second.epoch(), deltas);
 }
 
-std::vector<TransactionRecord> WalletTxStore::getRows(int viewId, int first, int count,
-                                                      uint64_t* out_high_water)
+RowsResult WalletTxStore::getRows(int viewId, int first, int count)
 {
     LOCK(cs_store);
-    // Report the view's high-water under the SAME lock as the row read, so the two
-    // are mutually consistent: the returned rows reflect exactly the events up to
-    // and including this seqno (PR4-fix B).
-    if (out_high_water) {
-        auto sit = m_view_seqno.find(viewId);
-        *out_high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
-    }
-    std::vector<TransactionRecord> out;
+    RowsResult res;
     auto it = m_cursors.find(viewId);
-    if (it == m_cursors.end() || first < 0 || count == 0) {
-        return out;
+    if (it == m_cursors.end()) {
+        return res;   // unknown view: empty slice, zero metadata
     }
-    const std::size_t served = it->second.servedCount();
+    const Cursor& cur = it->second;
+    // Sample ALL of the view's metadata under THIS single cs_store hold, together
+    // with the row copy below — total_accepted (virtual rowCount), epoch (sort/
+    // filter generation) and high_water (last emitted seqno) are mutually
+    // consistent with the returned rows. A caller must NOT re-sample any of these
+    // via a separate locked call, or a worker insert/remove landing between the
+    // two locks could misalign the slice and drop or double-count a row that the
+    // seqno skip would then make permanent (PR4-fix B, generalized to PR5 scroll).
+    res.total_accepted = static_cast<int>(cur.totalAccepted());
+    res.epoch = cur.epoch();
+    auto sit = m_view_seqno.find(viewId);
+    res.high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
+
+    if (first < 0 || count == 0) {
+        return res;   // metadata valid, slice empty by request
+    }
+    const std::size_t served = cur.servedCount();
     const std::size_t begin = static_cast<std::size_t>(first);
     if (begin >= served) {
-        return out;
+        return res;   // off the served window: metadata valid, slice empty
     }
-    // count < 0 means "all served rows from `first`". Reading servedCount HERE,
-    // under this single cs_store hold (together with the rows and the high-water
-    // above), is what makes a Reset refetch atomic: a caller must NOT sample the
-    // count via a separate totalAccepted() call, or a worker insert landing between
-    // the two locks would under-fetch a row while the high-water already covered it
-    // — and the seqno skip would then drop that row permanently (PR4-fix B).
+    // count < 0 means "all served rows from `first`".
     const std::size_t end = (count < 0)
         ? served
         : std::min(served, begin + static_cast<std::size_t>(count));
-    out.reserve(end - begin);
+    res.records.reserve(end - begin);
     for (std::size_t i = begin; i < end; ++i) {
-        out.push_back(m_records[it->second.rowAt(i)]);
+        res.records.push_back(m_records[cur.rowAt(i)]);
     }
-    return out;
-}
-
-int WalletTxStore::totalAccepted(int viewId)
-{
-    LOCK(cs_store);
-    auto it = m_cursors.find(viewId);
-    return it == m_cursors.end() ? 0 : static_cast<int>(it->second.totalAccepted());
+    return res;
 }
 
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,

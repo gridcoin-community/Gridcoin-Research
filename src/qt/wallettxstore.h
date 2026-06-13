@@ -42,6 +42,30 @@ struct TxHashHasher {
 };
 
 //!
+//! \brief Atomic result of a windowed read (getRows): the requested row slice
+//! plus the view's metadata, all sampled under the SAME cs_store hold.
+//!
+//! Returning the four together is the generalization of PR4-fix B to the PR5
+//! scroll path. A windowed consumer keeps two reconciliation channels: a
+//! STRUCTURAL channel (the virtual rowCount + the ordered Insert/Remove/Change/
+//! Reset delta stream) and a CONTENT channel (the scroll-driven slice fetch).
+//! The content fetch must observe the rowCount (\ref total_accepted), the
+//! cursor's sort/filter generation (\ref epoch) and the view's event high-water
+//! (\ref high_water) at the EXACT instant the rows were copied — a second,
+//! separately-locked call (the removed totalAccepted(viewId)) could observe a
+//! different store state and misalign the slice against the structural channel,
+//! dropping or double-counting a row (the PR4-fix B bug class). The consumer
+//! adopts a content fetch only when its \ref epoch and \ref high_water match the
+//! structural channel's, and NEVER advances the structural seqno from it.
+//!
+struct RowsResult {
+    std::vector<TransactionRecord> records; //!< the [first, first+count) slice (a copy)
+    int total_accepted = 0;                 //!< the view's full accepted count (virtual rowCount)
+    uint64_t epoch = 0;                      //!< cursor sort/filter generation at the read instant
+    uint64_t high_water = 0;                 //!< seqno of the last event emitted for the view at the read
+};
+
+//!
 //! \brief Producer-owned authoritative ordering store for the windowed
 //! transaction-table model (windowed-model PR2).
 //!
@@ -153,22 +177,17 @@ public:
     void setViewFilter(int viewId, FilterSpec filter);
     void setViewLimit(int viewId, int limit);
 
-    //! Qt thread: read [first, first+count) served rows of \p viewId as records
-    //! (a copy of the slice). Clamps to the served window; returns fewer rows if
-    //! the window is shorter. \p count < 0 means "all served rows from \p first"
-    //! (the served count is read under THIS call's single cs_store hold) — a Reset
-    //! refetch MUST use it rather than a separately-locked totalAccepted(), else a
-    //! worker insert between the two locks drops a row that the seqno skip then
-    //! suppresses permanently (PR4-fix B). Unknown viewId -> empty. If
-    //! \p out_high_water is non-null, it receives the seqno of the last event
-    //! emitted for \p viewId at the moment of the read (same cs_store hold) — the
-    //! consumer uses it to discard events already reflected in this snapshot.
-    std::vector<TransactionRecord> getRows(int viewId, int first, int count,
-                                           uint64_t* out_high_water = nullptr);
-
-    //! Qt thread: total accepted rows for \p viewId (the virtual rowCount), or 0
-    //! if the view is not registered.
-    int totalAccepted(int viewId);
+    //! Qt thread: read [first, first+count) served rows of \p viewId, plus the
+    //! view's total_accepted / epoch / high_water, ALL under one cs_store hold
+    //! (\ref RowsResult). Clamps the slice to the served window; returns fewer
+    //! rows if it is shorter. \p count < 0 means "all served rows from \p first".
+    //! Unknown viewId / first < 0 / count == 0 -> empty slice, but the metadata
+    //! fields are still valid for a registered view (total_accepted/epoch/
+    //! high_water reflect the current cursor) so a caller can refresh its
+    //! reconciliation baseline without a slice copy. Returning the metadata
+    //! WITH the slice atomically is what closes the PR4-fix B race for both the
+    //! Reset refetch and the PR5 scroll fetch — see \ref RowsResult.
+    RowsResult getRows(int viewId, int first, int count);
 
     //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full
