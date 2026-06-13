@@ -223,8 +223,10 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             settings.setValue("fDisablePollNotifications", fDisablePollNotifications);
             break;
         case MapPortUPnP:
-            fUseUPnP = value.toBool();
-            settings.setValue("fUseUPnP", fUseUPnP);
+            // issue #2558 PR 9d3: the flag lives on CConnman now; MapPort()
+            // applies the change (starts/stops the UPnP thread).
+            if (g_connman) g_connman->SetUseUPnP(value.toBool());
+            settings.setValue("fUseUPnP", value.toBool());
             MapPort();
             break;
         case MinimizeOnClose:

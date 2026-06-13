@@ -104,7 +104,6 @@ enum
 
 
 extern bool fDiscover;
-extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
 extern AddrMan addrman;
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
@@ -749,6 +748,12 @@ public:
     //! dangle if another thread reassigned it mid-serialization.
     CBlockLocator GetBlockLocator(const CBlockIndex* pindexBegin);
 
+    //! Whether UPnP port mapping is enabled (issue #2558 PR 9d3; was the net
+    //! global fUseUPnP). Set from -upnp at startup and toggled at runtime by the
+    //! Qt options dialog; read by the UPnP thread, so it is atomic.
+    bool GetUseUPnP() const { return m_use_upnp; }
+    void SetUseUPnP(bool use_upnp) { m_use_upnp = use_upnp; }
+
     void Interrupt();
     void Stop();
 
@@ -775,6 +780,10 @@ private:
     CCriticalSection m_getblocks_cs;
     const CBlockIndex* m_getblocks_pindex_begin GUARDED_BY(m_getblocks_cs) = nullptr;
     std::unique_ptr<CBlockLocator> m_getblocks_locator GUARDED_BY(m_getblocks_cs);
+
+    //! UPnP-enabled flag (issue #2558 PR 9d3). Atomic: read by the UPnP thread,
+    //! written from init (startup) and the Qt options dialog (runtime toggle).
+    std::atomic<bool> m_use_upnp{false};
 };
 
 extern std::unique_ptr<CConnman> g_connman;
