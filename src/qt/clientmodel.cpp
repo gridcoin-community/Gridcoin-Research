@@ -53,8 +53,8 @@ ClientModel::~ClientModel()
 
 int ClientModel::getNumConnections() const
 {
-    LOCK(cs_vNodes);
-    return vNodes.size();
+    // Peer count via the CConnman node-access API (issue #2558 PR 9a).
+    return g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 }
 
 int ClientModel::getNumBlocks() const

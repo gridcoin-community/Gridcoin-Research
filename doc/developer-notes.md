@@ -645,7 +645,7 @@ Gridcoin is a multi-threaded application. Key threads include:
 
 | Thread | Source | Description |
 |--------|--------|-------------|
-| `ThreadStakeMiner` | `src/net.cpp` | Proof-of-stake block creation (calls `StakeMiner()` in `src/miner.cpp`) |
+| `ThreadStakeMiner` | `src/miner.cpp` | Proof-of-stake block creation (calls `StakeMiner()`); launched from `AppInit2`, joined in `Shutdown()` before the block-file flush |
 | `ThreadScraper` | `src/gridcoin/gridcoin.cpp` | Active scraper: downloads BOINC project stats and publishes signed manifests (mutually exclusive with subscriber) |
 | `ThreadScraperSubscriber` | `src/gridcoin/gridcoin.cpp` | Subscriber: receives scraper manifests and runs convergence to build superblocks (mutually exclusive with scraper) |
 | `ThreadSocketHandler` | `src/net.cpp` | Low-level socket I/O for P2P connections |
