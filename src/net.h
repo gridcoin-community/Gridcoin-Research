@@ -105,7 +105,6 @@ enum
 
 extern bool fDiscover;
 extern ServiceFlags nLocalServices;
-extern AddrMan addrman;
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
 //! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
 //! from ProcessBlock, from SendMessages' getdata loop, and from
@@ -675,7 +674,7 @@ public:
         NetEventsInterface* m_msgproc = nullptr;
     };
 
-    CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrman, bool network_active = true);
+    CConnman(uint64_t seed0, uint64_t seed1, bool network_active = true);
     ~CConnman();
 
     void Init(const Options& opts) { m_options = opts; }
@@ -753,11 +752,16 @@ public:
     bool GetUseUPnP() const { return m_use_upnp; }
     void SetUseUPnP(bool use_upnp) { m_use_upnp = use_upnp; }
 
+    //! The address manager, now owned by CConnman (issue #2558 PR 9d4; was the
+    //! net global addrman). Loaded from / dumped to peers.dat around the net
+    //! threads' lifetime.
+    AddrMan& GetAddrMan() { return m_addrman; }
+
     void Interrupt();
     void Stop();
 
 private:
-    AddrMan& m_addrman;
+    AddrMan m_addrman;
     const uint64_t nSeed0, nSeed1;
     std::atomic<bool> fNetworkActive;
     Options m_options;

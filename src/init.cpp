@@ -1687,7 +1687,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     // Connection manager (issue #2558 PR 3). Constructed here; its net threads
     // launch from StartNode -> g_connman->Start() in Step 12 below.
     assert(!g_connman);
-    g_connman = std::make_unique<CConnman>(0, 0, addrman);
+    g_connman = std::make_unique<CConnman>(0, 0);
 
     // Message-processing manager (issue #2558 PR 8a/8b). Constructed before the
     // connection manager is Init'd so it can be wired in as the msgproc the net
@@ -1714,11 +1714,11 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     {
         CAddrDB adb;
-        if (!adb.Read(addrman))
+        if (!adb.Read(g_connman->GetAddrMan()))
             LogPrintf("Invalid or missing peers.dat; recreating");
     }
 
-    LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
+    LogPrintf("Loaded %i addresses from peers.dat.", g_connman->GetAddrMan().size());
     g_timer.GetTimes("Load peers complete", "init");
 
     // ********************************************************* Step 12: start node

@@ -380,7 +380,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // Get recent addresses
             pfrom->PushMessage(NetMsgType::GETADDR);
             pfrom->fGetAddr = true;
-            addrman.Good(pfrom->addr);
+            g_connman->GetAddrMan().Good(pfrom->addr);
         }
 
 
@@ -470,7 +470,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (fReachable)
                 vAddrOk.push_back(addr);
         }
-        addrman.Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
+        g_connman->GetAddrMan().Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
         if (vAddr.size() < 1000)
             pfrom->fGetAddr = false;
         if (pfrom->fOneShot)
@@ -883,7 +883,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Don't return addresses older than nCutOff timestamp
         int64_t nCutOff =  GetAdjustedTime() - (nNodeLifespan * 24 * 60 * 60);
         pfrom->vAddrToSend.clear();
-        vector<CAddress> vAddr = addrman.GetAddr();
+        vector<CAddress> vAddr = g_connman->GetAddrMan().GetAddr();
         for (auto const&addr : vAddr)
             if(addr.nTime > nCutOff)
                 pfrom->PushAddress(addr);

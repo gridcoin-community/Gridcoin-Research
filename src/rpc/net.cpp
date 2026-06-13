@@ -136,8 +136,9 @@ UniValue getnodeaddresses(const UniValue& params)
     if (count <= 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Address count out of range");
 
-    // returns a shuffled list of CAddress
-    std::vector<CAddress> vAddr = addrman.GetAddr();
+    // returns a shuffled list of CAddress (issue #2558 PR 9d4: addrman owned by
+    // CConnman now; empty when the connection manager is not up)
+    std::vector<CAddress> vAddr = g_connman ? g_connman->GetAddrMan().GetAddr() : std::vector<CAddress>();
     UniValue ret(UniValue::VARR);
 
     int address_return_count = std::min<int>(count, vAddr.size());
