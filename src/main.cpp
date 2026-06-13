@@ -2003,10 +2003,15 @@ bool LoadBlockIndex(bool fAllowNew)
             assert(block.hashMerkleRoot == merkle_root);
             assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
         } else {
-            LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u (bake hashGenesisBlockRegTest)",
+            // Regtest genesis is deterministic (fixed nVersion/nTime/nNonce and a
+            // fixed premine coinbase), so its hash is stable and assertable. Mirror
+            // the main/testnet assert so a future premine-layout change can't leave
+            // hashGenesisBlockRegTest (main.h) silently stale.
+            LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u",
                       block.GetHash(true).ToString(),
                       block.hashMerkleRoot.ToString(),
                       block.nNonce, block.nTime);
+            assert(block.GetHash(true) == hashGenesisBlockRegTest);
         }
         { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
 

@@ -1484,7 +1484,11 @@ bool AppInit2(ThreadHandlerPtr threads)
         // every -regtest start so the staker can spend the premine. The
         // BDB env is mocked (in-memory) under regtest, so this re-runs each
         // start and the key is never persisted to disk.
-        LOCK(pwalletMain->cs_wallet);
+        //
+        // Acquire cs_main before cs_wallet (canonical order; ScanForWalletTransactions
+        // below also takes LOCK2(cs_main, cs_wallet)). Holding both up front avoids the
+        // cs_wallet -> cs_main inversion that -DENABLE_DEBUG_LOCKORDER would flag.
+        LOCK2(cs_main, pwalletMain->cs_wallet);
         const unsigned char kRegtestSecret[32] = {
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
@@ -1509,13 +1513,10 @@ bool AppInit2(ThreadHandlerPtr threads)
                 // Genesis is loaded before the key is in the wallet, so the
                 // wallet has no record of the premine coinbase outputs. Walk
                 // the chain from genesis to surface them. pindexGenesisBlock
-                // is GUARDED_BY(cs_main); take the lock for the read + scan.
-                {
-                    LOCK(cs_main);
-                    if (pindexGenesisBlock) {
-                        int n = pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
-                        LogPrintf("regtest: scanned %d wallet transactions after premine key plant", n);
-                    }
+                // is GUARDED_BY(cs_main), already held via the LOCK2 above.
+                if (pindexGenesisBlock) {
+                    int n = pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+                    LogPrintf("regtest: scanned %d wallet transactions after premine key plant", n);
                 }
             }
         }

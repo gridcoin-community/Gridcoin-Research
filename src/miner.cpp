@@ -313,9 +313,15 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
     // Height first in coinbase required for block.version=2. CheckTransaction
     // requires scriptSig size in [2, 100]; for small heights (1..16) the
     // literal OP_N push is only 1 byte and COINBASE_FLAGS is uninitialized
-    // (empty CScript) outside mining-pool builds, so append an explicit
-    // OP_0 padding byte to keep the scriptSig at >= 2 bytes.
-    mtxCoinbase.vin[0].scriptSig = (CScript() << nHeight << OP_0) + COINBASE_FLAGS;
+    // (empty CScript) outside mining-pool builds, so the scriptSig would be a
+    // single byte. Pad with OP_0 ONLY when the script would otherwise be < 2
+    // bytes; this keeps mainnet/testnet coinbase bytes identical (heights >= 17
+    // already push >= 2 bytes) while satisfying the size rule for low regtest
+    // heights. The BIP34 height check is a prefix match, so the trailing OP_0
+    // does not affect consensus.
+    CScript coinbase_script = CScript() << nHeight;
+    if (coinbase_script.size() + COINBASE_FLAGS.size() < 2) coinbase_script << OP_0;
+    mtxCoinbase.vin[0].scriptSig = coinbase_script + COINBASE_FLAGS;
     assert(mtxCoinbase.vin[0].scriptSig.size() <= 100);
     mtxCoinbase.vout[0].SetEmpty();
 
