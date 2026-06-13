@@ -1410,7 +1410,13 @@ bool IsMiningAllowed(CWallet *pwallet)
         LOCK(cs_vNodes);
         numNodes = vNodes.size();
     }
-    if (numNodes < GetMinimumConnectionsRequiredForStaking() || (!fTestNet && IsInitialBlockDownload())) {
+    // On regtest (IsMockableChain) a solo node must be able to stake without peers
+    // or a synced tip, so functional tests can drive the background staker
+    // deterministically (e.g. the stakelimit height ceiling). Skip the peer-count /
+    // IBD OFFLINE gate there only; main/testnet keep the full requirement.
+    if (!Params().IsMockableChain()
+            && (numNodes < GetMinimumConnectionsRequiredForStaking()
+                || (!fTestNet && IsInitialBlockDownload()))) {
         g_miner_status.AddError(GRC::MinerStatus::OFFLINE);
     }
 
