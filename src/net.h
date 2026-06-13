@@ -10,6 +10,7 @@
 #include <boost/thread.hpp>
 #include <atomic>
 #include <memory>
+#include <thread>
 
 #include "netbase.h"
 #include "mruset.h"
@@ -101,7 +102,6 @@ enum
 
 
 extern bool fDiscover;
-void Discover(boost::thread_group& threadGroup);
 extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
 // Local-host version nonce, randomised on every outgoing VERSION push and
@@ -675,6 +675,7 @@ private:
     const uint64_t nSeed0, nSeed1;
     std::atomic<bool> fNetworkActive;
     Options m_options;
+    std::vector<std::thread> m_net_threads;
 };
 
 extern std::unique_ptr<CConnman> g_connman;

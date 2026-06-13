@@ -2067,10 +2067,15 @@ bool CConnman::Start()
     // Start threads
     //
 
+    // Net threads now run as std::thread members owned by CConnman (issue
+    // #2558 PR 4). Each loop exits on fShutdown; its interruptible MilliSleep
+    // is woken by the global g_thread_interrupt fired in Shutdown(). The
+    // optional ThreadMapPort still launches on netThreads (on demand, including
+    // the Qt UPnP toggle) and is joined via netThreads->removeAll() in Stop().
     if (!gArgs.GetBoolArg("-dnsseed", true)) {
         LogPrintf("DNS seeding disabled");
-    } else if (!netThreads->createThread(ThreadDNSAddressSeed, nullptr, "ThreadDNSAddressSeed")) {
-        LogPrintf("Error: createThread(ThreadDNSAddressSeed) failed");
+    } else {
+        m_net_threads.emplace_back(ThreadDNSAddressSeed, nullptr);
     }
     // Map ports with UPnP
     if (fUseUPnP) {
@@ -2078,29 +2083,19 @@ bool CConnman::Start()
     }
 
     // Send and receive from sockets, accept connections
-    if (!netThreads->createThread(ThreadSocketHandler, nullptr, "ThreadSocketHandler")) {
-        LogPrintf("Error: createThread(ThreadSocketHandler) failed");
-    }
+    m_net_threads.emplace_back(ThreadSocketHandler, nullptr);
 
     // Initiate outbound connections from -addnode
-    if (!netThreads->createThread(ThreadOpenAddedConnections, nullptr, "ThreadOpenAddedConnections")) {
-        LogPrintf("Error: createThread(ThreadOpenAddedConnections) failed");
-    }
+    m_net_threads.emplace_back(ThreadOpenAddedConnections, nullptr);
 
     // Initiate outbound connections
-    if (!netThreads->createThread(ThreadOpenConnections, nullptr, "ThreadOpenConnections")) {
-        LogPrintf("Error: createThread(ThreadOpenConnections) failed");
-    }
+    m_net_threads.emplace_back(ThreadOpenConnections, nullptr);
 
     // Process messages
-    if (!netThreads->createThread(ThreadMessageHandler, nullptr, "ThreadMessageHandler")) {
-        LogPrintf("Error: createThread(ThreadMessageHandler) failed");
-    }
+    m_net_threads.emplace_back(ThreadMessageHandler, nullptr);
 
     // Dump network addresses
-    if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
-        LogPrintf("Error: createThread(ThreadDumpAddress) failed");
-    }
+    m_net_threads.emplace_back(ThreadDumpAddress, nullptr);
 
     return true;
 }
@@ -2111,13 +2106,21 @@ void CConnman::Interrupt()
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
-
-    netThreads->interruptAll();
 }
 
 void CConnman::Stop()
 {
     Interrupt();
+
+    // Join the std::thread net threads. They wake via fShutdown plus the global
+    // g_thread_interrupt (already fired in Shutdown before StopNode), so the
+    // interruptible MilliSleep loops return promptly.
+    for (auto& thread : m_net_threads) {
+        if (thread.joinable()) thread.join();
+    }
+    m_net_threads.clear();
+
+    // ThreadMapPort (if running) still lives on netThreads; join it here.
     netThreads->removeAll();
     UninterruptibleSleep(std::chrono::milliseconds{50});
     DumpAddresses();
