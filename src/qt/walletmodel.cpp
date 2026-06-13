@@ -166,6 +166,17 @@ void WalletModel::checkBalanceChanged()
 
 void WalletModel::drainEventQueue()
 {
+    // Reentrancy guard (PR5-B): a windowed consumer's fetch path calls this
+    // synchronously, and applying a Reset can re-enter via viewReset ->
+    // restoreAnchor -> setCurrentIndex. A nested call no-ops — the outer drain owns
+    // the queue, so events are applied exactly once and in order. The RAII reset
+    // also keeps an exception in any apply* from wedging the flag.
+    if (m_draining) {
+        return;
+    }
+    m_draining = true;
+    struct DrainGuard { bool& f; ~DrainGuard() { f = false; } } drain_guard{m_draining};
+
     // Any drain (periodic, backlog re-arm, or a requestEventDrainSoon kick) satisfies
     // a pending user-requested drain, so clear the coalescing flag up front: a fresh
     // request that arrives after this point schedules a new kick (PR4-fix D).

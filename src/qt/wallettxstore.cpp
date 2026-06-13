@@ -771,6 +771,67 @@ RowsResult WalletTxStore::getRows(int viewId, int first, int count)
     return res;
 }
 
+RowsResult WalletTxStore::getAllRows(int viewId)
+{
+    LOCK(cs_store);
+    RowsResult res;
+    auto it = m_cursors.find(viewId);
+    if (it == m_cursors.end()) {
+        return res;   // unknown view: empty, zero metadata (matches getRows)
+    }
+    const Cursor& cur = it->second;
+    // Same atomic metadata sampling as getRows (one cs_store hold).
+    res.total_accepted = static_cast<int>(
+        std::min<std::size_t>(cur.totalAccepted(),
+                              static_cast<std::size_t>(std::numeric_limits<int>::max())));
+    res.epoch = cur.epoch();
+    auto sit = m_view_seqno.find(viewId);
+    res.high_water = (sit == m_view_seqno.end()) ? 0 : sit->second;
+    // CAP-INDEPENDENT: iterate the full accepted set, not the served window, so a
+    // CSV export is never silently truncated by a finite cap (windowed-model PR5-B).
+    // Bound the row count to the same INT_MAX clamp as total_accepted: a wallet can
+    // never hold 2^31 rows, but keeping records.size() == total_accepted avoids a huge
+    // over-allocation and an int-unrepresentable count if it ever did (Copilot PR5-B).
+    const std::size_t n = static_cast<std::size_t>(res.total_accepted);
+    res.records.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        res.records.push_back(m_records[cur.rowAt(i)]);
+    }
+    return res;
+}
+
+int WalletTxStore::rowForKey(int viewId, const uint256& hash, int idx)
+{
+    LOCK(cs_store);
+    auto cit = m_cursors.find(viewId);
+    if (cit == m_cursors.end()) {
+        return -1;
+    }
+    const Cursor& cur = cit->second;
+    constexpr std::size_t NPOS = static_cast<std::size_t>(-1);
+    // Resolve hash -> absolute record index(es) via m_by_hash, then the accepted
+    // row via Cursor::positionOf. idx < 0 -> first part: the MIN accepted row across
+    // all parts of the tx (old indexForTxid hash-only semantics). positionOf is a
+    // value scan over view_index, so this tolerates a (defensive) de-clustered index
+    // and triggers no projector evaluation.
+    std::size_t best = NPOS;
+    auto range = m_by_hash.equal_range(hash);
+    for (auto it = range.first; it != range.second; ++it) {
+        const std::size_t absidx = it->second;
+        if (idx >= 0) {
+            if (absidx >= m_records.size() || m_records[absidx].idx != idx) continue;
+        }
+        const std::size_t pos = cur.positionOf(absidx);
+        if (pos != NPOS && pos < best) best = pos;
+    }
+    // Guard the size_t->int cast: a position beyond INT_MAX is not representable as a
+    // Qt row, so treat it as not-found (Copilot PR5-B). Unreachable at real wallet sizes.
+    if (best == NPOS || best > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return -1;
+    }
+    return static_cast<int>(best);
+}
+
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,
                                      const std::vector<CursorDelta>& deltas)
 {

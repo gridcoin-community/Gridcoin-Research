@@ -189,6 +189,23 @@ public:
     //! Reset refetch and the PR5 scroll fetch — see \ref RowsResult.
     RowsResult getRows(int viewId, int first, int count);
 
+    //! Qt thread: ALL accepted rows of \p viewId in view order, plus the same
+    //! metadata as getRows, under ONE cs_store hold. CAP-INDEPENDENT — iterates the
+    //! full accepted set (totalAccepted), not the served window — so a CSV export
+    //! covers every matching row even if a finite served cap is ever introduced
+    //! (windowed-model PR5-B; the detailed view's cap stays unlimited today, so this
+    //! equals getRows(viewId,0,-1), but the contract is the distinction).
+    RowsResult getAllRows(int viewId);
+
+    //! Qt thread: the accepted-view row of the record identified by (\p hash,
+    //! \p idx), or -1 if the key is absent, filtered out, or the view is unknown.
+    //! \p idx < 0 matches the FIRST part of the transaction — the lowest accepted
+    //! row across all parts sharing \p hash — reproducing the old indexForTxid
+    //! hash-only semantics. Resolves \p hash via m_by_hash to absolute record
+    //! indices, then Cursor::positionOf to the accepted row. Backs click-through and
+    //! anchor-on-resort (windowed-model PR5-B). Pure read; no projector calls.
+    int rowForKey(int viewId, const uint256& hash, int idx = -1);
+
     //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full
     //! decomposed snapshot for the consumer's replica.

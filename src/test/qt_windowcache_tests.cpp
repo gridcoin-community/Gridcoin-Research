@@ -477,4 +477,62 @@ BOOST_AUTO_TEST_CASE(change_short_fresh_refreshes_what_it_has_and_advances_seqno
     BOOST_CHECK_EQUAL(s.ops[0].count, 1);                               // only the refreshed row
 }
 
+BOOST_AUTO_TEST_CASE(consumer_routing_scenario)
+{
+    // Mirror DetailedTxModel::applyEventBatch's exact call sequence against the cache
+    // + sink, pinning the windowed consumer's structural/content routing end to end
+    // (the model shell itself is not GUI-OFF-testable; this is its reconcilable core).
+    WindowCache<Rec> c;
+    RecSink s; s.cache = &c;
+
+    // ctor seed: bounded window [0,5) of a 50-row table, epoch 1, high-water 10.
+    c.seedInitial(seq(0, 5), 0, 50, /*epoch*/1, /*high_water*/10);
+    BOOST_CHECK_EQUAL(c.total(), 50);
+    BOOST_CHECK_EQUAL(c.structuralSeqno(), 10u);
+
+    // RowsInserted at the top (a fresh tx): payload carries the record.
+    BOOST_CHECK(c.applyInsert(s, 11, /*pos*/0, recs({100})));
+    BOOST_CHECK_EQUAL(c.total(), 51);
+    BOOST_CHECK_EQUAL(c.structuralSeqno(), 11u);
+    check_slice(c, 0, {100, 0, 1, 2, 3, 4});
+
+    // RowsRemoved off-window (below the cache): total shrinks, window unchanged.
+    BOOST_CHECK(c.applyRemove(s, 12, /*pos*/40, /*count*/2));
+    BOOST_CHECK_EQUAL(c.total(), 49);
+    check_slice(c, 0, {100, 0, 1, 2, 3, 4});
+
+    // RowsChanged in-window: the consumer fetched `fresh`; refresh row 2.
+    BOOST_CHECK(c.applyChange(s, 13, /*pos*/2, /*count*/1, recs({222})));
+    check_slice(c, 0, {100, 0, 222, 2, 3, 4});
+    BOOST_CHECK_EQUAL(c.structuralSeqno(), 13u);
+
+    // Stale / duplicate deltas (seqno <= structural): skipped, no signals.
+    s.clear();
+    BOOST_CHECK(!c.applyInsert(s, 13, 0, recs({999})));
+    BOOST_CHECK(!c.applyRemove(s, 5, 0, 1));
+    BOOST_CHECK_EQUAL(c.total(), 49);
+    BOOST_CHECK(s.ops.empty());
+
+    // CONTENT fetch that raced an insert/remove (high-water 12 != structural 13): drop.
+    BOOST_CHECK(!c.fillContent(s, /*first*/20, seq(20, 6), /*epoch*/1, /*high_water*/12));
+    // CONTENT fetch that raced a resort (epoch 0 != 1): drop.
+    BOOST_CHECK(!c.fillContent(s, 20, seq(20, 6), /*epoch*/0, 13));
+    BOOST_CHECK_EQUAL(c.cacheFirst(), 0);   // still the original window
+    BOOST_CHECK(s.ops.empty());
+
+    // CONTENT fetch that matches (epoch 1, high-water 13): adopted; structural untouched.
+    BOOST_CHECK(c.fillContent(s, /*first*/20, seq(20, 6), /*epoch*/1, /*high_water*/13));
+    check_slice(c, 20, {20, 21, 22, 23, 24, 25});
+    BOOST_CHECK_EQUAL(c.total(), 49);            // content never changes the count
+    BOOST_CHECK_EQUAL(c.structuralSeqno(), 13u); // content never advances the seqno
+
+    // A structural Reset (sort/filter) with a fresh epoch: rebuild + new baseline.
+    BOOST_CHECK(c.applyReset(s, /*seqno*/14, seq(0, 5), 0, /*total*/49, /*epoch*/2, /*hw*/14));
+    BOOST_CHECK_EQUAL(c.epoch(), 2u);
+    BOOST_CHECK_EQUAL(c.structuralSeqno(), 14u);
+    check_slice(c, 0, {0, 1, 2, 3, 4});
+    // A content fetch from the OLD epoch is now rejected.
+    BOOST_CHECK(!c.fillContent(s, 20, seq(20, 6), /*epoch*/1, 14));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
