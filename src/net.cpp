@@ -301,7 +301,11 @@ bool IsLocal(const CService& addr)
     return mapLocalHost.count(addr) > 0;
 }
 
-CNode* FindNode(const CNetAddr& ip)
+// The three FindNode overloads below (CNetAddr / std::string / CService) are
+// now file-static (issue #2558 PR 9d5): all callers are inside net.cpp
+// (ConnectNode / OpenNetworkConnection / DisconnectNode), so the net.h
+// declarations are gone.
+static CNode* FindNode(const CNetAddr& ip)
 {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes) {
@@ -312,7 +316,7 @@ CNode* FindNode(const CNetAddr& ip)
     return nullptr;
 }
 
-CNode* FindNode(const std::string& addrName)
+static CNode* FindNode(const std::string& addrName)
 {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes) {
@@ -323,7 +327,7 @@ CNode* FindNode(const std::string& addrName)
     return nullptr;
 }
 
-CNode* FindNode(const CService& addr)
+static CNode* FindNode(const CService& addr)
 {
     LOCK(cs_vNodes);
     for (auto const& pnode : vNodes) {
