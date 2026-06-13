@@ -66,12 +66,14 @@ class RpcPsgtTest(GridcoinTestFramework):
         processed = node.walletprocesspsgt(updated)
         assert "psgt" in processed and "complete" in processed, processed
         final = node.finalizepsgt(processed["psgt"])
-        assert "complete" in final, final
-        if final["complete"]:
-            assert final.get("hex"), "complete PSGT missing extracted hex"
-            assert_equal(
-                node.decoderawtransaction(final["hex"])["vin"][0]["txid"], utxo["txid"])
-        self.log.info("walletprocesspsgt/finalizepsgt complete=%s", final["complete"])
+        # The input is a wallet-owned UTXO signed by walletprocesspsgt, so finalize
+        # must complete; assert unconditionally so a signing regression can't pass
+        # silently.
+        assert final.get("complete"), final
+        assert final.get("hex"), "complete PSGT missing extracted hex"
+        assert_equal(
+            node.decoderawtransaction(final["hex"])["vin"][0]["txid"], utxo["txid"])
+        self.log.info("walletprocesspsgt/finalizepsgt completed and extracted OK")
 
 
 if __name__ == "__main__":

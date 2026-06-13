@@ -81,19 +81,40 @@ Useful flags: `--jobs=N`, `--tmpdirprefix=DIR`, `--nocleanup`, `--tracerpc`,
 
 ## Test inventory
 
+`test_runner.py` (`BASE_SCRIPTS` / `EXTENDED_SCRIPTS`) is the authoritative list;
+this table mirrors it.
+
+### Default suite (`BASE_SCRIPTS`)
+
 | Test | Exercises |
 |---|---|
 | `feature_hello.py` | framework smoke test (start node, getblockchaininfo) |
-| `rpc_help.py` | RPCHelpMan help-format + arity coverage (auto-discovery; #2922) |
-| `feature_regtest_staking.py` | premine discovery, `generatetoaddress`, `stakelimit` |
+| `feature_regtest_staking.py` | premine discovery, `generatetoaddress`, `stakelimit` get/set |
 | `p2p_version_handshake.py` | version/verack + ping/pong wire handshake |
 | `p2p_block_tx_relay.py` | tx + block relay over P2P (wire serialization) |
+| `p2p_ping.py` | ping/pong keepalive over the P2P wire protocol |
+| `rpc_help.py` | RPCHelpMan help-format + arity coverage (auto-discovery; #2922) |
+| `rpc_signmessage.py` | `signmessage`/`verifymessage`/`validateaddress` |
+| `rpc_rawtransaction.py` | `createrawtransaction`/decode/`decodescript`/sign |
+| `rpc_psgt.py` | PSGT create/decode/convert/combine/process/finalize |
+| `rpc_htlc.py` | `createhtlc` + `decodescript` of the redeem script |
+| `rpc_blockchain.py` | `getblock*`/`getblockchaininfo`/`getdifficulty` |
+| `rpc_netinfo.py` | `getnetworkinfo`/`getnettotals`/`getconnectioncount`/`getpeerinfo` |
+| `rpc_multisig.py` | `addmultisigaddress` -> `validateaddress` |
 | `wallet_basic.py` | raw-tx + `sendtoaddress` spend, balance, confirmations |
 | `wallet_backup.py` | `backupwallet` + `dumpprivkey`/`importprivkey` round-trip |
+| `wallet_keypool.py` | `keypoolrefill`/`getnewaddress`/`dumpprivkey` |
+| `wallet_listtransactions.py` | `listtransactions`/`gettransaction`/`listsinceblock` |
 | `mempool_accept.py` | `sendrawtransaction` accept + double-spend rejection |
 | `rpc_net.py` | two-node `getpeerinfo`/`addnode` + block propagation |
 | `feature_sidestake.py` | local sidestaking config + coinstake reward split |
-| `feature_reorg.py` | two-node divergent chains + reorg on connect |
+
+### Extended suite (opt-in via `--extended`, not in default CI)
+
+| Test | Exercises | Why extended |
+|---|---|---|
+| `feature_stakelimit.py` | background staker honors + resumes the `stakelimit` height ceiling | wall-clock bound (~16s/block via `STAKE_TIMESTAMP_MASK`) |
+| `feature_reorg.py` | two-node divergent chains + reorg on connect | flaky on shared-premine regtest (duplicate coinstake kernel); see note in `test_runner.py` |
 
 ### Deferred to Phase 4B (need the synthetic beacon + RSA trust anchor, 2B.3/2B.4)
 

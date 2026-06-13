@@ -25,8 +25,10 @@ CLI (`gridcoinresearchd -regtest <command>`); there is no separate `gridcoin-cli
 ## What's different from mainnet/testnet
 
 - **Mockable chain.** `IsMockableChain()` is true, which relaxes timing for
-  tests: coinbase/coinstake maturity and `nStakeMinAge` are gated to 0, and the
-  scraper threads and automatic superblock attachment are disabled.
+  tests: `GetBlocksToMaturity()` returns 0 (so coinbase/coinstake outputs are
+  spendable/stakeable immediately — note `nCoinbaseMaturity` itself stays 10,
+  used only by validation) and `nStakeMinAge` is 0, and the scraper threads and
+  automatic superblock attachment are disabled.
 - **Proof-of-stake on demand.** There is no proof-of-work. Mint blocks with
   `generatetoaddress <nblocks> <address>`; every block is a PoS block. The
   background staker can be turned off with `-staking=0` for fully deterministic

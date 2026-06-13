@@ -77,6 +77,12 @@ EXTENDED_SCRIPTS = [
     # These tests are not run by default (only with --extended).
     # Longest test should go first, to favor running tests in parallel.
     #
+    # feature_stakelimit.py drives the background ThreadStakeMiner to verify the
+    # regtest stakelimit height ceiling pauses and resumes staking. It is
+    # wall-clock bound (staked blocks are ~16s apart via STAKE_TIMESTAMP_MASK),
+    # so it takes tens of seconds and is opt-in rather than in the default suite.
+    'feature_stakelimit.py',
+    #
     # feature_reorg.py exercises a competing-proof-of-stake reorg between two
     # nodes. It is intermittently flaky on the current regtest stack and is NOT
     # in the default CI suite: both nodes share the same deterministic, stakeable

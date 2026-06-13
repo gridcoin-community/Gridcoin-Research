@@ -11,6 +11,10 @@ on:
 
 env:
   BUILD_TYPE: Release
+  # Pin ccache's dir to the actions/cache path below. ccache's default dir is
+  # version/state-dependent (~/.ccache vs ~/.cache/ccache), so without this the
+  # cache can silently miss. Mirrors cmake_quality.yml.
+  CCACHE_DIR: /home/runner/.ccache
 
 jobs:
   # ----------------------------------------------------------------------
@@ -24,10 +28,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Guarantee a Python 3 interpreter so the functional_tests CTest case is
+      # registered (CMake only warns, it does not fail, if Python3 is missing).
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Install Dependencies
         run: |
           source ./install_dependencies.sh
-          install_deps native true true
+          # WITH_GUI=false: this is a daemon-only (-DENABLE_GUI=OFF) build, so skip
+          # the Qt/GUI dependency set.
+          install_deps native true false
 
       - name: Setup Concurrency
         run: |
@@ -63,5 +76,7 @@ jobs:
 
       # The functional_tests case carries GRIDCOIND/GRIDCOINCLI env overrides
       # (set in the top-level CMakeLists) pointing at build/bin/gridcoinresearchd.
+      # --no-tests=error fails the job if the functional_tests case never
+      # registered (ctest -R otherwise exits 0 when nothing matches).
       - name: Run functional tests
-        run: ctest --test-dir build -R functional_tests --output-on-failure
+        run: ctest --test-dir build -R functional_tests --output-on-failure --no-tests=error
