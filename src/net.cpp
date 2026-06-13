@@ -74,7 +74,9 @@ std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
 ThreadHandler* netThreads = new ThreadHandler;
 std::unique_ptr<CConnman> g_connman;
-static std::vector<SOCKET> vhListenSocket;
+// Listen sockets are RAII Sock wrappers (issue #2558 PR 5b) so they can join
+// the Sock::WaitMany() set uniformly with the per-node sockets.
+static std::vector<std::shared_ptr<Sock>> vhListenSocket;
 CAddrMan addrman;
 
 // Initialization of static class variable.
@@ -885,23 +887,14 @@ void ThreadSocketHandler2(void* parg)
         //
         // Find which sockets have data to receive
         //
-        struct timeval timeout;
-        timeout.tv_sec  = 0;
-        timeout.tv_usec = 50000; // frequency to poll pnode->vSend
+        // poll(2) on POSIX / select(2) on Windows, via Sock::WaitMany
+        // (issue #2558 PR 5b). 50ms keeps the old pnode->vSend poll cadence.
+        constexpr auto timeout = std::chrono::milliseconds{50};
 
-        fd_set fdsetRecv;
-        fd_set fdsetSend;
-        fd_set fdsetError;
-        FD_ZERO(&fdsetRecv);
-        FD_ZERO(&fdsetSend);
-        FD_ZERO(&fdsetError);
-        SOCKET hSocketMax = 0;
-        bool have_fds = false;
+        Sock::EventsPerSock events_per_sock;
 
         for (auto const& hListenSocket : vhListenSocket) {
-            FD_SET(hListenSocket, &fdsetRecv);
-            hSocketMax = max(hSocketMax, hListenSocket);
-            have_fds = true;
+            events_per_sock.emplace(hListenSocket, Sock::Events{Sock::RECV});
         }
         {
             LOCK(cs_vNodes);
@@ -910,51 +903,44 @@ void ThreadSocketHandler2(void* parg)
                 const std::shared_ptr<Sock> sock = pnode->GetSock();
                 if (!sock || sock->Get() == INVALID_SOCKET)
                     continue;
-                const SOCKET socket_fd = sock->Get();
-                {
-                    TRY_LOCK(pnode->cs_vSend, lockSend);
-                    if (lockSend) {
-                        // do not read, if draining write queue
-                        if (!pnode->vSendMsg.empty())
-                            FD_SET(socket_fd, &fdsetSend);
-                        else
-                            FD_SET(socket_fd, &fdsetRecv);
-                        FD_SET(socket_fd, &fdsetError);
-                        hSocketMax = max(hSocketMax, socket_fd);
-                        have_fds = true;
-                    }
+                TRY_LOCK(pnode->cs_vSend, lockSend);
+                if (lockSend) {
+                    // do not read, if draining write queue
+                    const Sock::Event requested =
+                        (pnode->vSendMsg.empty() ? Sock::RECV : Sock::SEND) | Sock::ERR;
+                    events_per_sock.emplace(sock, Sock::Events{requested});
                 }
+                // A node whose cs_vSend is contended this round is simply left
+                // out of the wait set and serviced next iteration (as before).
             }
         }
 
-        int nSelect = select(have_fds ? hSocketMax + 1 : 0,
-                             &fdsetRecv, &fdsetSend, &fdsetError, &timeout);
+        if (events_per_sock.empty())
+        {
+            // Nothing to wait on this round; keep the poll cadence.
+            if (!MilliSleep(timeout.count())) return;
+        }
+        else if (!Sock::WaitMany(timeout, events_per_sock))
+        {
+            if (fShutdown)
+                return;
+            LogPrint(BCLog::LogFlags::NET, "socket wait error %d", WSAGetLastError());
+            if (!MilliSleep(timeout.count())) return;
+            continue; // rebuild the wait set next iteration
+        }
         if (fShutdown)
             return;
-        if (nSelect == SOCKET_ERROR)
-        {
-            if (have_fds)
-            {
-                int nErr = WSAGetLastError();
-                LogPrint(BCLog::LogFlags::NET, "socket select error %d", nErr);
-                for (unsigned int i = 0; i <= hSocketMax; i++)
-                    FD_SET(i, &fdsetRecv);
-            }
-            FD_ZERO(&fdsetSend);
-            FD_ZERO(&fdsetError);
-            if (!MilliSleep(timeout.tv_usec/1000)) return;
-        }
 
 
         //
         // Accept new connections
         //
         for (auto const& hListenSocket : vhListenSocket)
-        if (hListenSocket != INVALID_SOCKET && FD_ISSET(hListenSocket, &fdsetRecv))
+        if (events_per_sock.at(hListenSocket).occurred & Sock::RECV)
         {
             struct sockaddr_storage sockaddr;
             socklen_t len = sizeof(sockaddr);
-            SOCKET hSocket = accept(hListenSocket, (struct sockaddr*)&sockaddr, &len);
+            SOCKET hSocket = accept(hListenSocket->Get(), (struct sockaddr*)&sockaddr, &len);
             CAddress addr;
             int nInbound = 0;
 
@@ -1066,7 +1052,13 @@ void ThreadSocketHandler2(void* parg)
             std::shared_ptr<Sock> sock = pnode->GetSock();
             if (!sock || sock->Get() == INVALID_SOCKET)
                 continue;
-            if (FD_ISSET(sock->Get(), &fdsetRecv) || FD_ISSET(sock->Get(), &fdsetError))
+            Sock::Event occurred = 0;
+            {
+                const auto it = events_per_sock.find(sock);
+                if (it != events_per_sock.end())
+                    occurred = it->second.occurred;
+            }
+            if (occurred & (Sock::RECV | Sock::ERR))
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
@@ -1120,7 +1112,13 @@ void ThreadSocketHandler2(void* parg)
             sock = pnode->GetSock();
             if (!sock || sock->Get() == INVALID_SOCKET)
                 continue;
-            if (FD_ISSET(sock->Get(), &fdsetSend))
+            occurred = 0;
+            {
+                const auto it = events_per_sock.find(sock);
+                if (it != events_per_sock.end())
+                    occurred = it->second.occurred;
+            }
+            if (occurred & Sock::SEND)
             {
                 TRY_LOCK(pnode->cs_vSend, lockSend);
                 if (lockSend)
@@ -1998,7 +1996,7 @@ bool BindListenPort(const CService &addrBind, string& strError)
         return false;
     }
 
-    vhListenSocket.push_back(hListenSocket);
+    vhListenSocket.push_back(std::make_shared<Sock>(hListenSocket));
 
     if (addrBind.IsRoutable() && fDiscover)
         AddLocal(addrBind, LOCAL_BIND);
@@ -2179,10 +2177,9 @@ public:
         // Close sockets (the Sock destructor closes the fd; issue #2558 PR 5a).
         for (auto const& pnode : vNodes)
             pnode->CloseSocket();
-        for (auto &hListenSocket : vhListenSocket)
-            if (hListenSocket != INVALID_SOCKET)
-                if (closesocket(hListenSocket) == SOCKET_ERROR)
-                    LogPrintf("closesocket(hListenSocket) died with error %d", WSAGetLastError());
+        // Listen sockets are shared_ptr<Sock> now; the Sock destructors close
+        // the fds (issue #2558 PR 5b).
+        vhListenSocket.clear();
 
 #ifdef WIN32
         // Shutdown Windows Sockets
