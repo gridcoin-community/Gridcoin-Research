@@ -144,13 +144,7 @@ bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
-bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg);
-// Self-managed locking: called from ThreadMessageHandler2 in net.cpp with
-// cs_main and pto->cs_vSend held by TRY_LOCK, but the function body acquires
-// cs_main again internally for each section it needs. The current pattern
-// is recursive-safe but TSA cannot model the recursive-acquire correctly,
-// so the function intentionally has no EXCLUSIVE_LOCKS_REQUIRED annotation.
-bool SendMessages(CNode* pto, bool fSendTrickle);
+// ProcessMessages / SendMessages moved to net_processing.h (issue #2558 PR 2a).
 bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
                            unsigned int percent_start = 0, unsigned int percent_end = 100);
 
