@@ -4,6 +4,7 @@
 
 #include "qt/wallettxstore.h"
 
+#include "qt/transactiondesc.h"
 #include "main.h"
 #include "wallet/wallet.h"
 
@@ -411,8 +412,11 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
                 continue;
             }
             // Compute status producer-side (cs_main held here) so the cursors
-            // rebuilt over m_records can filter/sort by it. The VIEW_FULL consumer
-            // still refreshes status lazily on read; this is a harmless head-start.
+            // rebuilt over m_records can filter/sort by it and the served records
+            // carry current status. Consumers no longer refresh status lazily on
+            // read — the TransactionTablePriv::index() lazy path was removed in
+            // windowed-model PR5-C — so this producer-side computation is the
+            // authoritative refresh, not a head-start.
             TransactionRecord r = rec;
             r.updateStatus(it->second);
             r.populateDisplayLabel(*m_wallet);  // address-book label snapshot (PR4)
@@ -539,10 +543,15 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
     }
 
     // In-place overwrite: the status changed but the ordering key (time,hash,idx)
-    // did not, so positions are unchanged. No VIEW_FULL event is emitted — the
-    // detailed table refreshes confirmation status lazily on read (unchanged
-    // behaviour). Re-evaluate each cursor per affected row: under a status sort a
-    // first confirmation repositions the row.
+    // did not, so positions are unchanged. The change is propagated to each
+    // registered cursor below via RowsChanged (the detailed/overview views refetch
+    // the affected rows). No VIEW_FULL event is emitted, so the TransactionTableModel
+    // replica is NOT refreshed for in-place status changes; post-PR5-C there is also
+    // no lazy on-read refresh (TransactionTablePriv::index() no longer touches the
+    // wallet). Acceptable because no view renders TTM and its only readers —
+    // incomingTransaction (fresh inserts), focusTransaction (TxIDRole), indexForTxid
+    // (hash) — do not depend on post-insert status freshness. Re-evaluate each cursor
+    // per affected row: under a status sort a first confirmation repositions the row.
     for (std::size_t k = 0; k < records.size(); ++k) {
         m_records[minPos + k] = records[k];
         recomputeCacheAt(minPos + k);   // refresh F-cache before the cursor drive reads it
@@ -830,6 +839,44 @@ int WalletTxStore::rowForKey(int viewId, const uint256& hash, int idx)
         return -1;
     }
     return static_cast<int>(best);
+}
+
+QString WalletTxStore::getRowDetail(const uint256& hash, int idx)
+{
+    // Resolve (hash, idx) -> the clicked part's vout under cs_store ONLY, then
+    // RELEASE cs_store before taking the wallet locks: the class invariant
+    // (header threading note) is that cs_store is NEVER held while acquiring
+    // cs_main / cs_wallet. mapWallet is authoritative for the formatted detail,
+    // so a worker reordering m_records after we release cs_store is irrelevant —
+    // we already captured the part's identity (hash, vout).
+    unsigned int vout = 0;
+    bool found = false;
+    {
+        LOCK(cs_store);
+        auto range = m_by_hash.equal_range(hash);
+        for (auto it = range.first; it != range.second; ++it) {
+            const std::size_t absidx = it->second;
+            if (absidx >= m_records.size()) continue;   // defensive
+            const TransactionRecord& rec = m_records[absidx];
+            if (idx < 0 || rec.idx == idx) {
+                vout = rec.vout;
+                found = true;
+                if (idx >= 0) break;   // exact part match
+            }
+        }
+    }
+    if (!found) {
+        return QString();
+    }
+    // Heavy detail formatting under the canonical wallet locks, OFF the store
+    // leaf. A future edit MUST NOT hoist this under the cs_store scope above —
+    // that would invert cs_store -> cs_main/cs_wallet and violate the lock order.
+    LOCK2(cs_main, m_wallet->cs_wallet);
+    auto mi = m_wallet->mapWallet.find(hash);
+    if (mi == m_wallet->mapWallet.end()) {
+        return QString();
+    }
+    return TransactionDesc::toHTML(m_wallet, mi->second, vout);
 }
 
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,

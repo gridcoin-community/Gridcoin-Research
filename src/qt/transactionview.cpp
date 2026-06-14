@@ -3,6 +3,7 @@
 #include "detailedtxmodel.h"
 #include "transactionrecord.h"
 #include "walletmodel.h"
+#include "qt/wallettxstore.h"
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 #include "bitcoinunits.h"
@@ -473,13 +474,24 @@ void TransactionView::showDetails()
     if(!transactionView->selectionModel())
         return;
     QModelIndexList selection = transactionView->selectionModel()->selectedRows();
-    if(!selection.isEmpty())
+    if(!selection.isEmpty() && model && m_detailedModel)
     {
-        // Ensure the row is cached so its LongDescriptionRole is the real HTML, not
-        // an off-window placeholder's empty dialog (PR5-B).
-        if (m_detailedModel) m_detailedModel->ensureRowCached(selection.at(0).row());
-        TransactionDescDialog dlg(selection.at(0));
-        dlg.exec();
+        const int row = selection.at(0).row();
+        // Sync the consumer cache to the producer cursor, then read the clicked
+        // row's identity (hash, idx) from our OWN cache — the user-visible truth.
+        // Resolving detail by identity (not by view-relative row) keeps it
+        // drift-free: a row coordinate handed to the producer could map to a
+        // neighbouring tx if our drain queue lagged the cursor, and same-hash
+        // parts scatter under the Amount/Address sorts (windowed-model PR5-C).
+        m_detailedModel->ensureRowCached(row);
+        uint256 hash;
+        int idx = -1;
+        if (m_detailedModel->keyAt(row, hash, idx))
+        {
+            const QString html = model->getTxStore().getRowDetail(hash, idx);
+            TransactionDescDialog dlg(html, this);
+            dlg.exec();
+        }
     }
 }
 

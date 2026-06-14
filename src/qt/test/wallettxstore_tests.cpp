@@ -150,3 +150,36 @@ void WalletTxStoreTests::dtorWithPendingIntakeIsClean()
     } // store dtor here: stop + join. If it hung, this test would never return.
     QVERIFY(true);
 }
+
+void WalletTxStoreTests::getRowDetailUnknownHashReturnsEmpty()
+{
+    WalletEventQueue q;
+    // Null wallet is safe: an unknown hash finds no m_by_hash entry, so
+    // getRowDetail returns under cs_store before reaching the LOCK2(cs_main,
+    // cs_wallet) / mapWallet path that would dereference the wallet (PR5-C).
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    // Empty store, query a hash that was never inserted.
+    QVERIFY(store.getRowDetail(hashOf(99), 0).isEmpty());
+    // idx < 0 (first-part fallback) on an absent hash is equally a miss.
+    QVERIFY(store.getRowDetail(hashOf(99), -1).isEmpty());
+}
+
+void WalletTxStoreTests::getRowDetailWrongIdxReturnsEmpty()
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    // Insert a single-part record (idx 0). After the worker applies it, m_by_hash
+    // holds h, but a query for a DIFFERENT part index matches no record, so
+    // getRowDetail returns empty WITHOUT taking the wallet locks — null-wallet
+    // safe. (A query for the real idx 0 would proceed to toHTML and need a live
+    // wallet, so that path is GUI-soak-only.)
+    const uint256 h = hashOf(7);
+    store.enqueueInsert(std::vector<TransactionRecord>{makeRec(h, 1000, 0)});
+    waitForQueue(q, 1);
+
+    QVERIFY(store.getRowDetail(h, 5).isEmpty());
+}
