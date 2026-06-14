@@ -850,13 +850,19 @@ void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manife
 
     // Notify peers that we have a new manifest
     LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(), (unsigned)vParts.size());
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-        {
-            pnode->PushInventory(CInv{MSG_SCRAPERINDEX, *phash});
-        }
-    }
+    // Relay via the CConnman node-access API instead of a raw cs_vNodes loop, so the
+    // node list can be fully encapsulated into CConnman (#2558 — this is the last
+    // external raw consumer of vNodes/cs_vNodes). RelayInventory is ForEachNode(
+    // PushInventory) over the same node set under the node mutex (innermost), so the
+    // relay is byte-identical and the lock order is unchanged (cs_manifest ->
+    // cs_mapParts -> node mutex). The `phash` guard is load-bearing: the old per-peer
+    // loop dereferenced *phash only while iterating, so a local manifest build that
+    // reaches Complete() with phash still null (CSplitBlob::RecvPart with no source
+    // node) relayed nothing and never touched *phash; RelayInventory constructs the
+    // CInv{*phash} argument unconditionally, so skip when phash is null (there is no
+    // hash to advertise anyway). g_connman is null only in early init / shutdown / unit
+    // tests, when there are no peers.
+    if (g_connman && phash) g_connman->RelayInventory(CInv{MSG_SCRAPERINDEX, *phash});
 
     LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::Complete(): from %s with hash %s",
              sCManifestName, phash->GetHex());
