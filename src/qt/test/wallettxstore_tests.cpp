@@ -180,6 +180,12 @@ void WalletTxStoreTests::getRowDetailWrongIdxReturnsEmpty()
     const uint256 h = hashOf(7);
     store.enqueueInsert(std::vector<TransactionRecord>{makeRec(h, 1000, 0)});
     waitForQueue(q, 1);
+    // The RowsInserted event is pushed AFTER the store mutation, so a queued event
+    // proves h is in m_by_hash. Assert it explicitly: otherwise, if the insert were
+    // never applied, getRowDetail would return empty for the WRONG reason (unknown
+    // hash) and this test would still pass without exercising the wrong-idx path
+    // (Copilot review, PR5-C).
+    QVERIFY(q.size() >= 1);
 
     QVERIFY(store.getRowDetail(h, 5).isEmpty());
 }

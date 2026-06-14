@@ -865,7 +865,10 @@ QString WalletTxStore::getRowDetail(const uint256& hash, int idx)
             }
         }
     }
-    if (!found) {
+    if (!found || !m_wallet) {
+        // !found: no such (hash, idx). !m_wallet: defensive — the live GUI always
+        // constructs the store with a wallet, but the nullptr-wallet unit harness
+        // must not dereference it once a match is found (Copilot review, PR5-C).
         return QString();
     }
     // Heavy detail formatting under the canonical wallet locks, OFF the store

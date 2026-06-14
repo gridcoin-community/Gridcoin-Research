@@ -1,11 +1,6 @@
 #include "qt/decoration.h"
 #include "transactiondescdialog.h"
 #include "ui_transactiondescdialog.h"
-#include "main.h"
-#include "util.h"
-#include <QMessageBox>
-
-QString ToQString(std::string s);
 
 TransactionDescDialog::TransactionDescDialog(const QString& html, QWidget *parent) :
     QDialog(parent),

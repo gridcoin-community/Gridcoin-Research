@@ -486,12 +486,16 @@ void TransactionView::showDetails()
         m_detailedModel->ensureRowCached(row);
         uint256 hash;
         int idx = -1;
+        QString html;
         if (m_detailedModel->keyAt(row, hash, idx))
         {
-            const QString html = model->getTxStore().getRowDetail(hash, idx);
-            TransactionDescDialog dlg(html, this);
-            dlg.exec();
+            html = model->getTxStore().getRowDetail(hash, idx);
         }
+        // Always open the dialog: an empty html renders the "details unavailable"
+        // fallback, so a double-click on an off-window/placeholder row (keyAt false)
+        // still responds rather than silently doing nothing (Copilot review, PR5-C).
+        TransactionDescDialog dlg(html, this);
+        dlg.exec();
     }
 }
 
