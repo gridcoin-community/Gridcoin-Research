@@ -7,6 +7,7 @@
 #include <rpc/client.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
+#include <net.h>
 
 #include <univalue.h>
 
@@ -116,6 +117,28 @@ BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("1.00000000")), 100000000LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.9999999")), 2099999999999990LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.99999999")), 2099999999999999LL);
+}
+
+// Regression guard: getaddednodeinfo dns=true must return an ARRAY of per-node
+// objects. It previously built a UniValue object and populated it with
+// push_back (a no-op on objects), so it always returned {}. g_connman is
+// provided by the global TestingSetup fixture.
+BOOST_AUTO_TEST_CASE(getaddednodeinfo_dns_true_returns_array)
+{
+    BOOST_REQUIRE(g_connman);
+    const std::string node = "192.0.2.10:32749"; // TEST-NET-1, never a live peer
+    BOOST_REQUIRE(g_connman->AddNode(node));
+
+    UniValue params(UniValue::VARR);
+    params.push_back(true); // dns=true
+    UniValue r = tableRPC["getaddednodeinfo"]->actor(params);
+
+    BOOST_CHECK(r.isArray());
+    BOOST_CHECK_EQUAL(r.size(), 1u);
+    BOOST_CHECK_EQUAL(r[0]["addednode"].get_str(), node);
+    BOOST_CHECK_EQUAL(r[0]["connected"].get_bool(), false);
+
+    g_connman->RemoveAddedNode(node); // vAddedNodes is process-global; clean up
 }
 
 BOOST_AUTO_TEST_SUITE_END()
