@@ -28,6 +28,7 @@ class ReceiveCoinsPage;
 class SendCoinsDialog;
 class VotingPage;
 class SignVerifyMessageDialog;
+class MultisignPSGTDialog;
 class Notificator;
 class RPCConsole;
 class DiagnosticsDialog;
@@ -112,6 +113,7 @@ private:
     TransactionView *transactionView;
     VotingPage *votingPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
+    MultisignPSGTDialog *multisignDialog;
     std::unique_ptr<UpdateDialog> updateMessageDialog;
 
     SyncOverlay *m_sync_overlay;
@@ -138,6 +140,7 @@ private:
     QAction *sendCoinsAction;
     QAction *addressBookAction;
     QAction *signMessageAction;
+    QAction *multisignAction;
     QAction *bxAction;
     QAction *websiteAction;
     QAction *boincAction;
@@ -251,6 +254,8 @@ private slots:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
+    /** Show the Multisign (PSGT) dialog */
+    void gotoMultisignDialog();
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */
