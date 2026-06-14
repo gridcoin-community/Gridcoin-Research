@@ -9,12 +9,16 @@
 #include <array>
 #include <boost/thread.hpp>
 #include <atomic>
+#include <functional>
+#include <memory>
+#include <thread>
 
 #include "netbase.h"
 #include "mruset.h"
 #include "protocol.h"
 #include "streams.h"
 #include "addrman.h"
+#include "util/sock.h"
 
 #ifndef WIN32
 #include <arpa/inet.h>
@@ -22,6 +26,7 @@
 
 class CNode;
 class CBlockIndex;
+class CBlockLocator;
 extern CCriticalSection cs_main;
 // Duplicate extern of the main.h:82 declaration; both must carry the
 // GUARDED_BY annotation so cross-TU readers via net.h see the contract.
@@ -41,11 +46,8 @@ inline unsigned int ReceiveFloodSize() { return 1000*gArgs.GetArg("-maxreceivebu
 inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer", 1*1000); }
 
 void AddOneShot(std::string strDest);
-bool RecvLine(SOCKET hSocket, std::string& strLine);
 bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
-CNode* FindNode(const CNetAddr& ip);
-CNode* FindNode(const CService& ip);
 CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
@@ -100,29 +102,7 @@ enum
 
 
 extern bool fDiscover;
-void Discover(boost::thread_group& threadGroup);
-extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
-// Local-host version nonce, randomised on every outgoing VERSION push and
-// compared against incoming VERSIONs to detect self-connection. It is a
-// global -- written on the socket-handler thread (PushVersion) and read on
-// the message-handler thread (ProcessMessage's "connected to ourself"
-// check), so it must be atomic; TSan G11 reports the race via a memcpy
-// into its raw storage from GetRandBytes. Note: the broader design is
-// imperfect (the same global is clobbered for each outbound connection,
-// so the per-connection nonce identity is lost), but that is a separate
-// follow-up; atomicising here just closes the data race.
-extern std::atomic<uint64_t> nLocalHostNonce;
-//! \brief Guards \ref addrSeenByPeer. Written by ProcessMessage's version
-//! handler when a peer reports the address it sees us at, read by RPC
-//! handlers (getinfo in rpc/net.cpp + wallet/rpcwallet.cpp). CAddress
-//! assignment/copy is not atomic.
-extern CCriticalSection cs_addrSeenByPeer;
-extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
-extern CAddrMan addrman;
-extern CCriticalSection cs_mapRelay;
-extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
-extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
 //! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
 //! from ProcessBlock, from SendMessages' getdata loop, and from
@@ -214,7 +194,13 @@ class CNode
 public:
     // socket
     uint64_t nServices;
-    SOCKET hSocket;
+    // RAII socket wrapper (issue #2558 PR 5a), replacing the raw SOCKET
+    // hSocket. The socket-handler thread reads it (to poll/recv/send) while
+    // CloseSocketDisconnect may reset it from another thread, so it is guarded;
+    // callers take a shared_ptr copy under the lock via GetSock() and operate
+    // on that local copy, keeping the fd alive for the duration of a recv/send.
+    mutable Mutex m_sock_mutex;
+    std::shared_ptr<Sock> m_sock GUARDED_BY(m_sock_mutex);
     CCriticalSection cs_vSend;
     CDataStream ssSend GUARDED_BY(cs_vSend);
     size_t nSendSize GUARDED_BY(cs_vSend); // total size of all vSendMsg entries
@@ -280,12 +266,9 @@ public:
     int nRefCount;
 protected:
 
-    // Denial-of-service detection/prevention
-    // ---------- address:port -- misbehavior - time
-    static CCriticalSection cs_mapMisbehavior;
-    static std::map<CAddress, std::pair<int, int64_t>> mapMisbehavior GUARDED_BY(cs_mapMisbehavior);
-    // See protected GetMisbehavior() below.
-    // int nMisbehavior;
+    // Denial-of-service detection/prevention. The misbehavior score map and its
+    // address-keyed accessors moved to net_processing (issue #2558 PR 2c); the
+    // thin Misbehaving()/GetMisbehavior() wrappers below forward to them.
 
 public:
     uint256 hashContinue;
@@ -324,11 +307,10 @@ public:
     // Whether a ping is requested.
     bool fPingQueued;
 
-    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
+    CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn = "", bool fInboundIn=false) : m_sock(std::make_shared<Sock>(hSocketIn)), ssSend(SER_NETWORK, INIT_PROTO_VERSION), setAddrKnown(5000)
     {
 
         nServices = 0;
-        hSocket = hSocketIn;
         nRecvVersion = INIT_PROTO_VERSION;
         nLastSend = 0;
         nLastRecv = 0;
@@ -364,17 +346,13 @@ public:
         fPingQueued = false;
 
         // Be shy and don't send version until we hear
-        if (hSocket != INVALID_SOCKET && !fInbound)
+        if (hSocketIn != INVALID_SOCKET && !fInbound)
             PushVersion();
     }
 
     ~CNode()
     {
-        if (hSocket != INVALID_SOCKET)
-        {
-            closesocket(hSocket);
-            hSocket = INVALID_SOCKET;
-        }
+        // m_sock's destructor closes the underlying socket (issue #2558 PR 5a).
     }
 
 private:
@@ -595,10 +573,22 @@ public:
     void PushGetBlocks(CBlockIndex* pindexBegin, uint256 hashEnd);
     void CloseSocketDisconnect();
 
-    static bool DisconnectNode(const std::string& strNode);
-    static bool DisconnectNode(const CSubNet& subnet);
-    static bool DisconnectNode(const CNetAddr& addr);
-    static bool DisconnectNode(NodeId id);
+    //! Thread-safe accessor for the socket (issue #2558 PR 5a). Returns a
+    //! shared_ptr copy (possibly null, after disconnect). Hold the returned
+    //! copy across a send/recv so the fd cannot be closed underneath you.
+    std::shared_ptr<Sock> GetSock() const LOCKS_EXCLUDED(m_sock_mutex)
+    {
+        LOCK(m_sock_mutex);
+        return m_sock;
+    }
+
+    //! Close the underlying socket immediately. Used by the shutdown-time
+    //! CNetCleanup sweep; the socket-handler path uses CloseSocketDisconnect.
+    void CloseSocket() LOCKS_EXCLUDED(m_sock_mutex)
+    {
+        LOCK(m_sock_mutex);
+        m_sock.reset();
+    }
 
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
@@ -618,31 +608,7 @@ public:
     // static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
 
-    //!
-    //! \brief Score misbehavior against an address without requiring a CNode
-    //! instance. Operates on the same static mapMisbehavior used by the
-    //! instance method, so scores are shared — misbehavior accumulated here
-    //! is visible to any CNode with the same address.
-    //!
-    //! \param addr    The address to score against.
-    //! \param howmuch Misbehavior points to add.
-    //!
-    //! \return \c true if the accumulated score triggered a ban.
-    //!
-    static bool MisbehavingAddr(const CAddress& addr, int howmuch);
-
     int GetMisbehavior() const;
-
-    //!
-    //! \brief Get the current misbehavior score for an address without
-    //! requiring a CNode instance. Applies the same time-based decay as
-    //! the instance method.
-    //!
-    //! \param addr The address to query.
-    //!
-    //! \return The decayed misbehavior score.
-    //!
-    static int GetMisbehaviorAddr(const CAddress& addr);
 
     // Thread-safe accessors for addrLocal. See the comment on the field
     // above for the locking rationale.
@@ -660,27 +626,168 @@ public:
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
 
-    friend class BanMan;
-
 };
 
 // Re-declared here (was forward-declared above CNode) so the
 // EXCLUSIVE_LOCKS_REQUIRED lock-expression can reference pnode->cs_vSend.
 void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend);
 
-inline void RelayInventory(const CInv& inv)
+//! Interface for message-processing callbacks driven by the connection manager
+//! (issue #2558 PR 8a). PeerManagerImpl implements it; CConnman drives it via
+//! Options::m_msgproc in PR 8c. Kept minimal -- just the per-node message pump
+//! that ThreadMessageHandler needs.
+class NetEventsInterface
 {
-    // Put on lists to offer to the other nodes
+public:
+    //! Process the next message from pfrom's receive queue. Returns false if the
+    //! node should be disconnected.
+    virtual bool ProcessMessages(CNode* pfrom) EXCLUSIVE_LOCKS_REQUIRED(pfrom->cs_vRecvMsg) = 0;
+
+    //! Send queued messages / generate periodic ones for pto.
+    virtual bool SendMessages(CNode* pto, bool fSendTrickle) = 0;
+
+protected:
+    //! Instances are owned and deleted through the concrete type (PeerManager),
+    //! never through this interface.
+    ~NetEventsInterface() = default;
+};
+
+//! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
+//! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
+//! Start()/Interrupt()/Stop(). For now it wraps the still-global connection
+//! state (vNodes, addrman, netThreads, ...); the node-access API
+//! (GetNodeCount/GetNodeStats in PR 9a; ForEachNode/DisconnectNode in PR 9b)
+//! reads/operates over it, storage ownership moves in a later PR, and Options
+//! gains m_msgproc with PeerManager in PR 8.
+class CConnman
+{
+public:
+    struct Options
     {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            pnode->PushInventory(inv);
-    }
-}
+        int nMaxConnections = 0;
+        int nMaxOutbound = 0;
+        //! Message processor the connection manager drives (issue #2558 PR 8c).
+        //! Set to g_peerman in AppInit2; null in contexts that never pump
+        //! messages (e.g. the test fixture).
+        NetEventsInterface* m_msgproc = nullptr;
+    };
+
+    CConnman(uint64_t seed0, uint64_t seed1, bool network_active = true);
+    ~CConnman();
+
+    void Init(const Options& opts) { m_options = opts; }
+    bool Start();
+
+    //! The message processor (NetEventsInterface) the net threads drive, or
+    //! null if none is configured (issue #2558 PR 8c).
+    NetEventsInterface* GetMessageProcessor() const { return m_options.m_msgproc; }
+
+    //! Node-access API (issue #2558 PR 9a). Read-only views over the connection
+    //! set so external callers stop touching the vNodes/cs_vNodes globals
+    //! directly. Each method takes cs_vNodes internally. Backed by the still-
+    //! global vNodes for now; storage ownership moves into CConnman in a later PR.
+    enum NumConnections {
+        CONNECTIONS_NONE = 0,
+        CONNECTIONS_IN   = (1U << 0),
+        CONNECTIONS_OUT  = (1U << 1),
+        CONNECTIONS_ALL  = (CONNECTIONS_IN | CONNECTIONS_OUT),
+    };
+    size_t GetNodeCount(NumConnections flags) const;
+    void GetNodeStats(std::vector<CNodeStats>& vstats) const;
+
+    //! Invoke func for every current node under cs_vNodes (issue #2558 PR 9b).
+    //! Iterates all connected nodes (no fDisconnect filter), matching the
+    //! direct vNodes loops it replaces.
+    void ForEachNode(const std::function<void(CNode*)>& func);
+
+    //! Flag the matching node(s) for disconnection (issue #2558 PR 9b; moved
+    //! off CNode's static helpers). Each takes cs_vNodes internally.
+    bool DisconnectNode(const std::string& strNode);
+    bool DisconnectNode(const CSubNet& subnet);
+    bool DisconnectNode(const CNetAddr& addr);
+    bool DisconnectNode(NodeId id);
+
+    //! Persistent added-node ("addnode add/remove/getaddednodeinfo") list
+    //! (issue #2558 PR 9b2). Backed by the still-global vAddedNodes. AddNode
+    //! returns false if already present; RemoveAddedNode false if not present.
+    bool AddNode(const std::string& strNode);
+    bool RemoveAddedNode(const std::string& strNode);
+    std::vector<std::string> GetAddedNodes() const;
+
+    //! Like ForEachNode, but for callers that already hold cs_main and whose
+    //! callback reads cs_main-guarded state (issue #2558 PR 9c). Takes cs_vNodes
+    //! internally, preserving the canonical cs_main -> cs_vNodes order.
+    void ForEachNodeUnderLock(const std::function<void(CNode*)>& func) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Relay an inventory item to every node (issue #2558 PR 9c; replaces the
+    //! free RelayInventory shim).
+    void RelayInventory(const CInv& inv);
+
+    //! Relay an address to a deterministic, limited subset of nodes (issue #2558
+    //! PR 9c; moved from net_processing's ADDR handler).
+    void RelayAddress(const CAddress& addr, bool fReachable);
+
+    //! Local-host version nonce for self-connection detection (issue #2558
+    //! PR 9d; moved off the net global). Set on each outgoing VERSION push,
+    //! compared against incoming VERSIONs.
+    uint64_t GetLocalHostNonce() const { return m_local_host_nonce; }
+    void SetLocalHostNonce(uint64_t nonce) { m_local_host_nonce = nonce; }
+
+    //! The address a peer last reported seeing us at (issue #2558 PR 9d; moved
+    //! off the net global). Surfaced by the getinfo RPCs.
+    CAddress GetAddrSeenByPeer() const;
+    void SetAddrSeenByPeer(const CAddress& addr);
+
+    //! Shared cache of the GETBLOCKS locator (issue #2558 PR 9d2; was a net.cpp
+    //! global). Building a locator scans the chain, so the last one is reused
+    //! when the same begin index is requested again. Returns a reference into
+    //! the cache (callers serialize it immediately on the message thread).
+    const CBlockLocator& GetBlockLocator(const CBlockIndex* pindexBegin);
+
+    //! Whether UPnP port mapping is enabled (issue #2558 PR 9d3; was the net
+    //! global fUseUPnP). Set from -upnp at startup and toggled at runtime by the
+    //! Qt options dialog; read by the UPnP thread, so it is atomic.
+    bool GetUseUPnP() const { return m_use_upnp; }
+    void SetUseUPnP(bool use_upnp) { m_use_upnp = use_upnp; }
+
+    //! The address manager, now owned by CConnman (issue #2558 PR 9d4; was the
+    //! net global addrman). Loaded from / dumped to peers.dat around the net
+    //! threads' lifetime.
+    AddrMan& GetAddrMan() { return m_addrman; }
+
+    void Interrupt();
+    void Stop();
+
+private:
+    AddrMan m_addrman;
+    const uint64_t nSeed0, nSeed1;
+    std::atomic<bool> fNetworkActive;
+    Options m_options;
+    std::vector<std::thread> m_net_threads;
+
+    //! Local-host version nonce (issue #2558 PR 9d). Atomic: written on the
+    //! socket-handler thread (PushVersion), read on the message-handler thread
+    //! (self-connection check).
+    std::atomic<uint64_t> m_local_host_nonce{0};
+    //! The address a peer reports seeing us at (issue #2558 PR 9d). CAddress
+    //! copy is not atomic, hence the mutex.
+    mutable CCriticalSection m_addr_seen_by_peer_cs;
+    CAddress m_addr_seen_by_peer GUARDED_BY(m_addr_seen_by_peer_cs) = CAddress(LookupNumeric("0.0.0.0", 0), nLocalServices);
+
+    //! GETBLOCKS locator cache (issue #2558 PR 9d2). unique_ptr so net.h needs
+    //! only a forward declaration of CBlockLocator (its full definition lives in
+    //! main.h, which net.h must not include).
+    const CBlockIndex* m_getblocks_pindex_begin = nullptr;
+    std::unique_ptr<CBlockLocator> m_getblocks_locator;
+
+    //! UPnP-enabled flag (issue #2558 PR 9d3). Atomic: read by the UPnP thread,
+    //! written from init (startup) and the Qt options dialog (runtime toggle).
+    std::atomic<bool> m_use_upnp{false};
+};
+
+extern std::unique_ptr<CConnman> g_connman;
 
 class CTransaction;
-void RelayTransaction(const CTransaction& tx, const uint256& hash);
-void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
 
 #endif

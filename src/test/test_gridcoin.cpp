@@ -11,6 +11,7 @@
 #include <leveldb/helpers/memenv/memenv.h>
 
 #include "banman.h"
+#include "net_processing.h"
 #include "chainparams.h"
 #include "dbwrapper.h"
 #include "wallet/db.h"
@@ -68,6 +69,20 @@ struct TestingSetup {
         assert(!g_banman);
         // Create ban manager instance.
         g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+        // Mirror AppInit2 (issue #2558 PR 8b): peer-misbehavior scores live in
+        // PeerManagerImpl now, so the fixture must build a (quiescent) g_connman
+        // + g_peerman and register the same clear callback -- otherwise
+        // CNode::Misbehaving (exercised by DoS_tests) would no-op and
+        // ClearBanned()/Unban() would not reset scores, leaking state across
+        // cases.
+        assert(!g_connman);
+        g_connman = std::make_unique<CConnman>(0, 0);
+        g_connman->Init(CConnman::Options{});
+        assert(!g_peerman);
+        g_peerman = PeerManager::make(*g_connman, g_banman.get());
+        g_banman->SetMisbehaviorClearCallback([](const CSubNet& sub_net) -> unsigned int {
+            return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
+        });
         g_mock_deterministic_tests = true;
     }
     ~TestingSetup()
@@ -75,6 +90,10 @@ struct TestingSetup {
         delete pwalletMain;
         pwalletMain = nullptr;
         bitdb.Flush(true);
+        // Tear down in reverse construction order: g_peerman holds a raw
+        // BanMan* and forwards to g_connman-associated state (issue #2558 PR 8b).
+        g_peerman.reset();
+        g_connman.reset();
         g_banman.reset();
         delete txdb;
         delete txdb_env;
