@@ -13,7 +13,7 @@
 #include <map>
 
 class CSubNet;
-class CAddrMan;
+class AddrMan;
 class CDataStream;
 
 typedef enum BanReason
@@ -88,10 +88,10 @@ private:
     fs::path pathAddr;
 public:
     CAddrDB();
-    bool Write(const CAddrMan& addr);
-    bool Read(CAddrMan& addr);
+    bool Write(const AddrMan& addr);
+    bool Read(AddrMan& addr);
 
-    static bool Read(CAddrMan& addr, CDataStream& ssPeers);
+    static bool Read(AddrMan& addr, CDataStream& ssPeers);
 };
 
 /** Access to the banlist database (banlist.dat) */
