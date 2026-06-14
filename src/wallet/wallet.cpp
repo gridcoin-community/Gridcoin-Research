@@ -11,7 +11,6 @@
 #include "crypter.h"
 #include "node/ui_interface.h"
 #include "wallet/coincontrol.h"
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include "random.h"
 #include "rpc/server.h"
@@ -887,7 +886,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
         std::string strCmd = gArgs.GetArg("-walletnotify", "");
         if (!strCmd.empty())
         {
-            boost::replace_all(strCmd, "%s", hash.GetHex());
+            ReplaceAll(strCmd, "%s", hash.GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free
         }
         #endif
