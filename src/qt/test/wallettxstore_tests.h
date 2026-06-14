@@ -24,6 +24,13 @@ private slots:
     void workerHandlesInterleavedInsertRemove();
     void workerPreservesAllUnderConcurrentProducers();
     void dtorWithPendingIntakeIsClean();
+    //! getRowDetail (windowed-model PR5-C): the null-wallet-safe early-return
+    //! paths — an unknown hash and a known hash with a non-matching idx both
+    //! return an empty QString under cs_store BEFORE any wallet dereference. The
+    //! matching-key -> toHTML path needs a live CWallet/cs_main and is covered by
+    //! the GUI mesh soak.
+    void getRowDetailUnknownHashReturnsEmpty();
+    void getRowDetailWrongIdxReturnsEmpty();
 };
 
 #endif // BITCOIN_QT_TEST_WALLETTXSTORE_TESTS_H
