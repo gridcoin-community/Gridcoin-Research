@@ -190,6 +190,7 @@ add_library(gridcoin_util STATIC
     pbkdf2.cpp
     policy/policy.cpp
     primitives/transaction.cpp
+    primitives/block.cpp
     psgt.cpp
     protocol.cpp
     pubkey.cpp
