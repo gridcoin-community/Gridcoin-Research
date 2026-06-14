@@ -175,7 +175,7 @@ bool AppInit(int argc, char* argv[])
             return InitError("Config file cannot be parsed. Cannot continue.\n");
         }
 
-        SelectParams(gArgs.IsArgSet("-testnet") ? CBaseChainParams::TESTNET : CBaseChainParams::MAIN);
+        SelectParams(gArgs.GetChainName());
 
         // reread config file after correct chain is selected
         if (!gArgs.ReadConfigFiles(error_msg, true))

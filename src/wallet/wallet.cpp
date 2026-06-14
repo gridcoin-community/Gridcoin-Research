@@ -2479,8 +2479,10 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             int blocks_to_maturity = 0;
 
             // If coinbase or coinstake, blocks_to_maturity must be 0. (This means a minimum depth of
-            // nCoinbaseMaturity + 10.
-            if (pcoin->IsCoinBase() || pcoin->IsCoinStake())
+            // nCoinbaseMaturity + 10. Skipped under -regtest so the genesis premine can be staked
+            // at height 1 without bootstrap blocks; the same shortcut lives in
+            // CMerkleTx::GetBlocksToMaturity().
+            if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && !Params().IsMockableChain())
             {
                 blocks_to_maturity = std::max(0, (nCoinbaseMaturity + 10) - nDepth);
 

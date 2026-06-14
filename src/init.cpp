@@ -12,6 +12,7 @@
 #include "util/threadnames.h"
 #include "net.h"
 #include "wallet/walletdb.h"
+#include <key_io.h>
 #include "banman.h"
 #include "random.h"
 #include "rpc/server.h"
@@ -1155,7 +1156,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_timer.LogTimer("init", true);
     g_timer.GetTimes("Starting verify of database integrity", "init");
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
          string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1304,7 +1307,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 7: load blockchain
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
         string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1468,6 +1473,52 @@ bool AppInit2(ThreadHandlerPtr threads)
             pwalletMain->SetDefaultKey(newDefaultKey);
             if (!pwalletMain->SetAddressBookName(pwalletMain->vchDefaultKey.GetID(), ""))
                 strErrors << _("Cannot write default address") << "\n";
+        }
+    }
+
+    if (Params().IsMockableChain())
+    {
+        // Regtest premine key. Genesis coinbase pays 10 UTXOs to the P2PKH of
+        // the secp256k1 privkey-scalar=1 compressed pubkey (HASH160
+        // 751e76e8...). Plant the matching private key into the wallet on
+        // every -regtest start so the staker can spend the premine. The
+        // BDB env is mocked (in-memory) under regtest, so this re-runs each
+        // start and the key is never persisted to disk.
+        //
+        // Acquire cs_main before cs_wallet (canonical order; ScanForWalletTransactions
+        // below also takes LOCK2(cs_main, cs_wallet)). Holding both up front avoids the
+        // cs_wallet -> cs_main inversion that -DENABLE_DEBUG_LOCKORDER would flag.
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        const unsigned char kRegtestSecret[32] = {
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        };
+        CKey regtest_key;
+        regtest_key.Set(kRegtestSecret, kRegtestSecret + 32, /*fCompressedIn=*/true);
+        if (!regtest_key.IsValid()) {
+            LogPrintf("ERROR: regtest premine key did not validate");
+        } else if (!pwalletMain->HaveKey(regtest_key.GetPubKey().GetID())) {
+            if (!pwalletMain->AddKeyPubKey(regtest_key, regtest_key.GetPubKey())) {
+                LogPrintf("ERROR: failed to plant regtest premine key");
+            } else {
+                // Force nTimeFirstKey down to before genesis so
+                // ScanForWalletTransactions doesn't skip the genesis block
+                // via its wallet-birthday optimization (regtest genesis nTime
+                // is 1296688602; the wallet was created "now", so without
+                // this nudge the scan would skip all of history).
+                pwalletMain->LoadKeyMetadata(regtest_key.GetPubKey(), CKeyMetadata(1));
+
+                LogPrintf("regtest: planted premine private key, address %s",
+                          EncodeDestination(regtest_key.GetPubKey().GetID()));
+                // Genesis is loaded before the key is in the wallet, so the
+                // wallet has no record of the premine coinbase outputs. Walk
+                // the chain from genesis to surface them. pindexGenesisBlock
+                // is GUARDED_BY(cs_main), already held via the LOCK2 above.
+                if (pindexGenesisBlock) {
+                    int n = pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+                    LogPrintf("regtest: scanned %d wallet transactions after premine key plant", n);
+                }
+            }
         }
     }
 
