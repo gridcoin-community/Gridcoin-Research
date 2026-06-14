@@ -9,6 +9,7 @@
 #include "amount.h"
 #include "consensus/validation.h"
 #include "index/disktxpos.h"
+#include "index/txindex.h"
 #include "primitives/transaction.h"
 #include "sync.h"
 
