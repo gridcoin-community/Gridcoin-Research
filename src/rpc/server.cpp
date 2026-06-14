@@ -384,6 +384,7 @@ static const CRPCCommand vRPCCommands[] =
     { "walletdiagnose",          &walletdiagnose,          cat_wallet, &walletdiagnose_helpman        },
 
   // PSGT commands
+    { "analyzepsgt",             &analyzepsgt,             cat_wallet, &analyzepsgt_helpman        },
     { "createpsgt",              &createpsgt,              cat_wallet, &createpsgt_helpman        },
     { "decodepsgt",              &decodepsgt,              cat_wallet, &decodepsgt_helpman        },
     { "combinepsgt",             &combinepsgt,             cat_wallet, &combinepsgt_helpman        },

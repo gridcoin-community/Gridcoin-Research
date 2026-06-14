@@ -343,6 +343,115 @@ UniValue decodepsgt(const UniValue& params)
     return result;
 }
 
+static const RPCHelpMan analyzepsgt_help{
+    "analyzepsgt",
+    "Analyzes and provides information about the current status of a PSGT and its inputs.",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "A base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::ARR, "inputs", "Per-input analysis.",
+                {
+                    {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::BOOL, "has_utxo",
+                                "Whether a matching non_witness_utxo is provided for this input."},
+                            {RPCResult::Type::BOOL, "is_final",
+                                "Whether the input has a final scriptSig."},
+                            {RPCResult::Type::OBJ, "missing", /*optional=*/true,
+                                "Material still required to complete this input (only present when something is missing).",
+                                {
+                                    {RPCResult::Type::ARR, "pubkeys", /*optional=*/true,
+                                        "Key hashes whose full public key is not in the PSGT.",
+                                        {{RPCResult::Type::STR_HEX, "keyid", "Hash160 of the public key."}}},
+                                    {RPCResult::Type::ARR, "signatures", /*optional=*/true,
+                                        "Key hashes whose signature is still required.",
+                                        {{RPCResult::Type::STR_HEX, "keyid", "Hash160 of the public key."}}},
+                                    {RPCResult::Type::BOOL, "redeemscript", /*optional=*/true,
+                                        "Whether the P2SH redeem script is missing."},
+                                }},
+                            {RPCResult::Type::STR, "next",
+                                "Role of the next person this input needs to go to."},
+                        }},
+                }},
+            {RPCResult::Type::NUM, "estimated_final_size", /*optional=*/true,
+                "Estimated size of the fully-signed transaction in bytes "
+                "(only present when every input's final size can be estimated)."},
+            {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true,
+                "Transaction fee in GRC (only present when all input UTXOs are known)."},
+            {RPCResult::Type::STR_AMOUNT, "min_required_fee", /*optional=*/true,
+                "Minimum fee in GRC required by network policy at the estimated final size."},
+            {RPCResult::Type::STR, "next",
+                "Role of the next person this PSGT needs to go to."},
+            {RPCResult::Type::STR, "error", /*optional=*/true,
+                "Error message (only present when there is an error)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("analyzepsgt", "\"cHNndP8B...\"") +
+        HelpExampleRpc("analyzepsgt", "\"cHNndP8B...\"")},
+};
+const RPCHelpMan& analyzepsgt_helpman() { return analyzepsgt_help; }
+
+UniValue analyzepsgt(const UniValue& params)
+{
+    PartiallySignedTransaction psgt;
+    string error;
+    if (!DecodeRawPSGT(psgt, params[0].get_str(), error))
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, error);
+
+    PSGTAnalysis analysis = AnalyzePSGT(psgt);
+
+    UniValue result(UniValue::VOBJ);
+
+    UniValue inputs_arr(UniValue::VARR);
+    for (const PSGTInputAnalysis& ia : analysis.inputs)
+    {
+        UniValue in_obj(UniValue::VOBJ);
+        in_obj.pushKV("has_utxo", ia.has_utxo);
+        in_obj.pushKV("is_final", ia.is_final);
+
+        if (!ia.missing_pubkeys.empty() || !ia.missing_sigs.empty() || ia.missing_redeem_script)
+        {
+            UniValue missing(UniValue::VOBJ);
+            if (!ia.missing_pubkeys.empty())
+            {
+                UniValue arr(UniValue::VARR);
+                for (const CKeyID& keyid : ia.missing_pubkeys)
+                    arr.push_back(keyid.GetHex());
+                missing.pushKV("pubkeys", arr);
+            }
+            if (!ia.missing_sigs.empty())
+            {
+                UniValue arr(UniValue::VARR);
+                for (const CKeyID& keyid : ia.missing_sigs)
+                    arr.push_back(keyid.GetHex());
+                missing.pushKV("signatures", arr);
+            }
+            if (ia.missing_redeem_script)
+                missing.pushKV("redeemscript", true);
+            in_obj.pushKV("missing", missing);
+        }
+
+        in_obj.pushKV("next", PSGTRoleName(ia.next));
+        inputs_arr.push_back(in_obj);
+    }
+    result.pushKV("inputs", inputs_arr);
+
+    if (analysis.estimated_final_size)
+        result.pushKV("estimated_final_size", (int64_t)*analysis.estimated_final_size);
+    if (analysis.fee)
+        result.pushKV("fee", ValueFromAmount(*analysis.fee));
+    if (analysis.min_required_fee)
+        result.pushKV("min_required_fee", ValueFromAmount(*analysis.min_required_fee));
+    result.pushKV("next", PSGTRoleName(analysis.next));
+    if (!analysis.error.empty())
+        result.pushKV("error", analysis.error);
+
+    return result;
+}
+
 static const RPCHelpMan combinepsgt_help{
     "combinepsgt",
     "Combine multiple PSGTs for the same transaction into one merged PSGT.",

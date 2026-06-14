@@ -830,6 +830,7 @@ BOOST_AUTO_TEST_CASE(wallet_tx_state_debug_help_renders)
 BOOST_AUTO_TEST_CASE(psgt_commands_help_renders)
 {
     check_help_renders({
+        {"analyzepsgt",            &analyzepsgt_helpman},
         {"createpsgt",             &createpsgt_helpman},
         {"decodepsgt",             &decodepsgt_helpman},
         {"combinepsgt",            &combinepsgt_helpman},

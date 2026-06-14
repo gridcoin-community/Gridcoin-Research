@@ -195,6 +195,7 @@ extern UniValue walletpassphrasechange(const UniValue& params);
 extern UniValue walletdiagnose(const UniValue& params);
 
 // PSGT (Partially Signed Gridcoin Transactions)
+extern UniValue analyzepsgt(const UniValue& params);
 extern UniValue createpsgt(const UniValue& params);
 extern UniValue decodepsgt(const UniValue& params);
 extern UniValue combinepsgt(const UniValue& params);
@@ -357,6 +358,7 @@ extern const RPCHelpMan& createhtlc_helpman();
 extern const RPCHelpMan& createmrcrequest_helpman();
 extern const RPCHelpMan& createrawtransaction_helpman();
 extern const RPCHelpMan& currentcontractaverage_helpman();
+extern const RPCHelpMan& analyzepsgt_helpman();
 extern const RPCHelpMan& combinepsgt_helpman();
 extern const RPCHelpMan& converttopsgt_helpman();
 extern const RPCHelpMan& createpsgt_helpman();
