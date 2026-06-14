@@ -351,7 +351,14 @@ void TransactionView::applyFilter()
 {
     if(!m_detailedModel)
         return;
-    captureAnchor();   // preserve the user's row across the filter Reset (PR5-B)
+    // A filter change alters the row SET, not just its order, so re-anchoring to the
+    // prior filter's selected/top row is meaningless — it parks the viewport at a
+    // switch-history-dependent position (e.g. toggling All Types <-> Mined landing on
+    // a different scroll each time: the "sticky filter" bug). Drop any anchor so the
+    // new filtered list shows from the top; the model reset resets the scroll and
+    // applyReset seeds the top window synchronously. Anchor-on-RESORT is unaffected —
+    // it is captured on the header click (QHeaderView::sectionClicked -> captureAnchor).
+    m_have_anchor = false;
     m_detailedModel->setFilter(m_filterSpec);
 }
 
