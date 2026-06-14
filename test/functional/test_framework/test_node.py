@@ -23,8 +23,7 @@ import shlex
 import sys
 
 from .authproxy import JSONRPCException
-# Phase 3 will restore `from .messages import MY_SUBVERSION` once messages.py
-# lands. Until then, the constant is defined locally below.
+from .messages import MY_SUBVERSION
 from .util import (
     MAX_NODES,
     append_config,
@@ -37,8 +36,6 @@ from .util import (
     p2p_port,
     EncodeDecimal,
 )
-
-MY_SUBVERSION = "/python-mininode-tester:0.0.3/"
 
 GRIDCOIND_PROC_WAIT_TIMEOUT = 60
 

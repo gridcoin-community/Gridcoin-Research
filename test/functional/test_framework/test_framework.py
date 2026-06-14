@@ -21,6 +21,7 @@ import time
 
 from .authproxy import JSONRPCException
 from . import coverage
+from .p2p import NetworkThread
 from .test_node import TestNode
 from .util import (
     MAX_NODES,
@@ -33,17 +34,6 @@ from .util import (
     p2p_port,
     wait_until_helper,
 )
-
-
-class NetworkThread:
-    """Placeholder until Phase 3 ports test_framework/p2p.py. No-op start()/close()
-    so tests that don't use P2P (the entire Phase 1 + Phase 2 set) work unchanged."""
-
-    def start(self):
-        pass
-
-    def close(self, timeout=10):
-        pass
 
 
 class TestStatus(Enum):
