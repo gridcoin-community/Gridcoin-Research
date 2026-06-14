@@ -12,6 +12,8 @@
 #include "sync.h"
 #include "uint256.h"
 
+#include <QString>
+
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -205,6 +207,26 @@ public:
     //! indices, then Cursor::positionOf to the accepted row. Backs click-through and
     //! anchor-on-resort (windowed-model PR5-B). Pure read; no projector calls.
     int rowForKey(int viewId, const uint256& hash, int idx = -1);
+
+    //! Qt thread: full HTML transaction-detail for the record identified by
+    //! (\p hash, \p idx) — the double-click detail dialog. The consumer passes a
+    //! self-describing identity (read from its OWN cached record via
+    //! DetailedTxModel::keyAt), NOT a view-relative row, so the result is
+    //! drift-free even if the consumer's drain queue lags the producer cursor
+    //! (the absolute row a stale cursor maps could be a neighbouring tx). \p idx
+    //! < 0 matches SOME part sharing \p hash — the m_by_hash iteration order is
+    //! unspecified — which is fine for this defensive fallback only because the
+    //! real path (keyAt) always supplies a concrete idx. Resolves the part's vout
+    //! under cs_store (the leaf), RELEASES cs_store, then formats under
+    //! LOCK2(cs_main, cs_wallet) — the same lock pair the deleted
+    //! TransactionTablePriv::describe() took on the Qt thread, relocated to the
+    //! authoritative producer so it is the node-side call at the multiprocess
+    //! split (#2937). IMPORTANT: in-process this still takes the wallet locks on
+    //! the Qt thread, so it RELOCATES (does not remove) the detail-path stall;
+    //! only deleting the lazy index() refresh takes the render thread fully off
+    //! cs_main/cs_wallet. Returns an empty QString for an unknown key or a tx no
+    //! longer in the wallet (the dialog then shows a fallback string).
+    QString getRowDetail(const uint256& hash, int idx);
 
     //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full

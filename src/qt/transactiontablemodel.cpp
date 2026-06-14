@@ -2,7 +2,6 @@
 #include "guiutil.h"
 #include "transactionrecord.h"
 #include "guiconstants.h"
-#include "transactiondesc.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -200,52 +199,23 @@ public:
         return static_cast<int>(cachedWallet.size());
     }
 
+    // Returns the cached record for replica row \p idx (backs indexForTxid ->
+    // OverviewPage click-through). NO lazy status refresh: status is computed
+    // producer-side — on insert under cs_main (walletmodel.cpp, before enqueue)
+    // and per-block via WalletTxStore::applyChainTipRefresh — so the Qt render
+    // and click-through threads never touch cs_main / cs_wallet here
+    // (windowed-model PR5-C; the detail dialog now formats via
+    // WalletTxStore::getRowDetail on the producer).
     TransactionRecord *index(int idx)
     {
         if(idx >= 0 && static_cast<std::size_t>(idx) < cachedWallet.size())
         {
-            TransactionRecord *rec = &cachedWallet[idx];
-
-            // Get required locks upfront. This avoids the GUI from getting
-            // stuck if the core is holding the locks for a longer time - for
-            // example, during a wallet rescan.
-            //
-            // If a status update is needed (blocks came in since last check),
-            //  update the status of this transaction from the wallet. Otherwise,
-            // simply reuse the cached status.
-            TRY_LOCK(cs_main, lockMain);
-            if(lockMain)
-            {
-                TRY_LOCK(wallet->cs_wallet, lockWallet);
-                if(lockWallet && rec->statusUpdateNeeded())
-                {
-                    std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-
-                    if(mi != wallet->mapWallet.end())
-                    {
-                        rec->updateStatus(mi->second);
-                    }
-                }
-            }
-            return rec;
+            return &cachedWallet[idx];
         }
         else
         {
             return nullptr;
         }
-    }
-
-    QString describe(TransactionRecord *rec)
-    {
-        {
-            LOCK2(cs_main, wallet->cs_wallet);
-            std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-            if(mi != wallet->mapWallet.end())
-            {
-                return TransactionDesc::toHTML(wallet, mi->second, rec->vout);
-            }
-        }
-        return QString("");
     }
 
 };
@@ -286,10 +256,18 @@ void TransactionTableModel::updateConfirmations()
 {
     LogPrint(BCLog::MISC, "TransactionTableModel::updateConfirmations()");
 
-    // Blocks came in since last poll.
-    // Invalidate status (number of confirmations) and (possibly) description
-    //  for all rows. Qt is smart enough to only actually request the data for the
-    //  visible rows.
+    // Blocks came in since last poll: invalidate the Status (confirmation count)
+    // and ToAddress columns for all rows.
+    //
+    // NOTE (windowed-model PR5-C): this dataChanged is currently OBSERVERLESS — no
+    // view binds TransactionTableModel as its model (the views are DetailedTxModel /
+    // OverviewTxModel, refreshed by their own producer event stream; only
+    // BitcoinGUI consumes TTM's rowsInserted, not dataChanged). It is kept as the
+    // model-correct signal should TTM ever be re-attached as a view model. If it is,
+    // note that index() no longer self-refreshes status from the wallet (the lazy
+    // TRY_LOCK was removed in PR5-C); status is computed producer-side on insert and
+    // refreshed per-block via WalletTxStore::applyChainTipRefresh, so a re-wire must
+    // rely on that producer path, not on a paint-thread refresh.
     emit dataChanged(index(0, Status), index(priv->size()-1, Status));
     emit dataChanged(index(0, ToAddress), index(priv->size()-1, ToAddress));
 }
@@ -787,8 +765,6 @@ QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt
         return rec->type;
     case DateRole:
         return QDateTime::fromSecsSinceEpoch(rec->time);
-    case LongDescriptionRole:
-        return priv->describe(rec);
     case AddressRole:
         return QString::fromStdString(rec->address);
     case LabelRole:
