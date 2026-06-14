@@ -48,7 +48,6 @@ inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer"
 void AddOneShot(std::string strDest);
 bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
-CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 void MapPort();
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError=REF(std::string()));
@@ -57,8 +56,6 @@ bool StopNode();
 // Declared below CNode (the EXCLUSIVE_LOCKS_REQUIRED annotation references
 // pnode->cs_vSend and needs the complete CNode type).
 void SocketSendData(CNode *pnode);
-extern CCriticalSection cs_vNodes;
-extern std::vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 
 struct LocalServiceInfo {
     int nScore;
@@ -229,9 +226,9 @@ public:
     // addrLocal is the local address as seen by this peer (sent by them in
     // their VERSION message). It is written once on the message-handler
     // thread that processes that VERSION, and read concurrently by the GUI
-    // peers-table refresh (under cs_vNodes) and by net.cpp helpers
+    // peers-table refresh (under m_nodes_mutex) and by net.cpp helpers
     // (GetLocalAddress / IsPeerAddrLocalGood). The pre-existing pattern
-    // covered the readers (which hold cs_vNodes) but not the writer (which
+    // covered the readers (which hold m_nodes_mutex) but not the writer (which
     // holds cs_vRecvMsg, a different mutex), surfaced as TSan G4/G5 races
     // in CNetAddr::IsValid via CNode::copyStats.
     //
@@ -624,8 +621,6 @@ public:
 
     void copyStats(CNodeStats &stats);
 
-    static void CopyNodeStats(std::vector<CNodeStats>& vstats);
-
 	// Network stats
     static void RecordBytesRecv(uint64_t bytes);
     static void RecordBytesSent(uint64_t bytes);
@@ -659,13 +654,12 @@ protected:
     ~NetEventsInterface() = default;
 };
 
-//! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
-//! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
-//! Start()/Interrupt()/Stop(). For now it wraps the still-global connection
-//! state (vNodes, addrman, netThreads, ...); the node-access API
-//! (GetNodeCount/GetNodeStats in PR 9a; ForEachNode/DisconnectNode in PR 9b)
-//! reads/operates over it, storage ownership moves in a later PR, and Options
-//! gains m_msgproc with PeerManager in PR 8.
+//! Connection manager (issue #2558). Owns the connection list (m_nodes /
+//! m_nodes_mutex), the address manager, and the net worker threads, and takes
+//! over StartNode/StopNode -- now thin thread-entry forwarders -- via
+//! Start()/Interrupt()/Stop(). The node-access API (GetNodeCount/GetNodeStats/
+//! ForEachNode/DisconnectNode/...) operates over m_nodes under m_nodes_mutex, so
+//! external callers never touch the connection list directly.
 class CConnman
 {
 public:
@@ -689,10 +683,9 @@ public:
     //! null if none is configured (issue #2558 PR 8c).
     NetEventsInterface* GetMessageProcessor() const { return m_options.m_msgproc; }
 
-    //! Node-access API (issue #2558 PR 9a). Read-only views over the connection
-    //! set so external callers stop touching the vNodes/cs_vNodes globals
-    //! directly. Each method takes cs_vNodes internally. Backed by the still-
-    //! global vNodes for now; storage ownership moves into CConnman in a later PR.
+    //! Node-access API (issue #2558). Read-only views over the connection set so
+    //! external callers never touch the connection list directly. Each method
+    //! takes m_nodes_mutex internally.
     enum NumConnections {
         CONNECTIONS_NONE = 0,
         CONNECTIONS_IN   = (1U << 0),
@@ -702,17 +695,23 @@ public:
     size_t GetNodeCount(NumConnections flags) const;
     void GetNodeStats(std::vector<CNodeStats>& vstats) const;
 
-    //! Invoke func for every current node under cs_vNodes (issue #2558 PR 9b).
+    //! Invoke func for every current node under m_nodes_mutex (issue #2558 PR 9b).
     //! Iterates all connected nodes (no fDisconnect filter), matching the
-    //! direct vNodes loops it replaces.
+    //! direct m_nodes loops it replaces.
     void ForEachNode(const std::function<void(CNode*)>& func) const;
 
     //! Flag the matching node(s) for disconnection (issue #2558 PR 9b; moved
-    //! off CNode's static helpers). Each takes cs_vNodes internally.
+    //! off CNode's static helpers). Each takes m_nodes_mutex internally.
     bool DisconnectNode(const std::string& strNode);
     bool DisconnectNode(const CSubNet& subnet);
     bool DisconnectNode(const CNetAddr& addr);
     bool DisconnectNode(NodeId id);
+
+    //! Open an outbound connection (reusing an existing one if already connected)
+    //! and register the new CNode in m_nodes (issue #2558; was a net.cpp free
+    //! function). Public because the addnode "onetry" RPC dials directly; the
+    //! internal outbound machinery goes through OpenNetworkConnection.
+    CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 
     //! Persistent added-node ("addnode add/remove/getaddednodeinfo") list
     //! (issue #2558 PR 9b2). Backed by the still-global vAddedNodes. AddNode
@@ -722,8 +721,8 @@ public:
     std::vector<std::string> GetAddedNodes() const;
 
     //! Like ForEachNode, but for callers that already hold cs_main and whose
-    //! callback reads cs_main-guarded state (issue #2558 PR 9c). Takes cs_vNodes
-    //! internally, preserving the canonical cs_main -> cs_vNodes order.
+    //! callback reads cs_main-guarded state (issue #2558 PR 9c). Takes m_nodes_mutex
+    //! internally, preserving the canonical cs_main -> m_nodes_mutex order.
     void ForEachNodeUnderLock(const std::function<void(CNode*)>& func) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Relay an inventory item to every node (issue #2558 PR 9c; replaces the
@@ -773,6 +772,17 @@ private:
     Options m_options;
     std::vector<std::thread> m_net_threads;
 
+    //! The connection list, owned by CConnman (issue #2558). Replaces the former
+    //! file-global vNodes/cs_vNodes. RecursiveMutex is REQUIRED, not stylistic:
+    //! DisconnectNode(const std::string&) holds m_nodes_mutex and then calls
+    //! FindNode(), which re-acquires it -- a self-re-entry that self-deadlocks on a
+    //! non-recursive Mutex. A future "modernize to Mutex" cleanup must first remove
+    //! that re-entry (e.g. a FindNode_Unlocked helper). The lock occupies the exact
+    //! graph slot the old cs_vNodes held: a leaf among the net locks (after cs_main,
+    //! before the per-CNode cs_vSend/cs_vRecvMsg/cs_inventory leaves).
+    mutable RecursiveMutex m_nodes_mutex;
+    std::vector<CNode*> m_nodes GUARDED_BY(m_nodes_mutex);
+
     //! Local-host version nonce (issue #2558 PR 9d). Atomic: written on the
     //! socket-handler thread (PushVersion), read on the message-handler thread
     //! (self-connection check).
@@ -793,6 +803,39 @@ private:
     //! UPnP-enabled flag (issue #2558 PR 9d3). Atomic: read by the UPnP thread,
     //! written from init (startup) and the Qt options dialog (runtime toggle).
     std::atomic<bool> m_use_upnp{false};
+
+    //! Connection lookups (issue #2558; were net.cpp file-static FindNode). All
+    //! callers are internal (ConnectNode / OpenNetworkConnection / DisconnectNode),
+    //! so these stay private. Each takes m_nodes_mutex internally; the call from
+    //! DisconnectNode(string) -- which already holds it -- is the recursive
+    //! re-entry that requires m_nodes_mutex to be a RecursiveMutex.
+    CNode* FindNode(const CNetAddr& ip);
+    CNode* FindNode(const std::string& addrName);
+    CNode* FindNode(const CService& addr);
+
+    //! Drive an outbound dial (issue #2558; was a net.cpp free function). Internal
+    //! only -- the outbound-connection threads call it; the RPC dials via the
+    //! public ConnectNode.
+    bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOutbound = nullptr, const char* strDest = nullptr, bool fOneShot = false);
+
+    //! Service the pending one-shot (-seednode / addnode oneshot) queue (issue
+    //! #2558; was a net.cpp file-static). Member because it dials via
+    //! OpenNetworkConnection; called from ThreadOpenConnections2.
+    void ProcessOneShot();
+
+    //! Net worker-thread bodies (issue #2558). Now CConnman members so they touch
+    //! m_nodes / m_nodes_mutex directly; launched from Start() as std::thread
+    //! members bound to `this`. The wrapper form (RenameThread + try/catch) calls
+    //! the ...2 worker form. ThreadDNSAddressSeed / ThreadMapPort / ThreadDumpAddress
+    //! never touch the node list and remain free functions.
+    void ThreadSocketHandler();
+    void ThreadSocketHandler2();
+    void ThreadOpenConnections();
+    void ThreadOpenConnections2();
+    void ThreadOpenAddedConnections();
+    void ThreadOpenAddedConnections2();
+    void ThreadMessageHandler();
+    void ThreadMessageHandler2();
 };
 
 extern std::unique_ptr<CConnman> g_connman;

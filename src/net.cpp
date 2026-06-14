@@ -46,15 +46,10 @@ extern int nMaxConnections;
 int MAX_OUTBOUND_CONNECTIONS = 8;
 int PEER_TIMEOUT = 45;
 
-void ThreadMessageHandler2(void* parg);
-void ThreadSocketHandler2(void* parg);
-void ThreadOpenConnections2(void* parg);
-void ThreadOpenAddedConnections2(void* parg);
 #ifdef USE_UPNP
 void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOutbound = nullptr, const char* strDest = nullptr, bool fOneShot = false);
 
 //
 // Global state variables
@@ -79,8 +74,6 @@ static std::vector<std::shared_ptr<Sock>> vhListenSocket;
 // Initialization of static class variable.
 std::atomic<NodeId> CNode::nLastNodeId {-1};
 
-CCriticalSection cs_vNodes;
-vector<CNode*> vNodes GUARDED_BY(cs_vNodes);
 CCriticalSection cs_vAddedNodes;
 vector<std::string> vAddedNodes GUARDED_BY(cs_vAddedNodes);
 
@@ -301,14 +294,13 @@ bool IsLocal(const CService& addr)
     return mapLocalHost.count(addr) > 0;
 }
 
-// The three FindNode overloads below (CNetAddr / std::string / CService) are
-// now file-static (issue #2558 PR 9d5): all callers are inside net.cpp
-// (ConnectNode / OpenNetworkConnection / DisconnectNode), so the net.h
-// declarations are gone.
-static CNode* FindNode(const CNetAddr& ip)
+// The three FindNode overloads (CNetAddr / std::string / CService) are CConnman
+// members (issue #2558): all callers are internal (ConnectNode /
+// OpenNetworkConnection / DisconnectNode) and they read the now-private m_nodes.
+CNode* CConnman::FindNode(const CNetAddr& ip)
 {
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (auto const& pnode : m_nodes) {
         if (static_cast<CNetAddr>(pnode->addr) == ip) {
             return pnode;
         }
@@ -316,10 +308,10 @@ static CNode* FindNode(const CNetAddr& ip)
     return nullptr;
 }
 
-static CNode* FindNode(const std::string& addrName)
+CNode* CConnman::FindNode(const std::string& addrName)
 {
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (auto const& pnode : m_nodes) {
         if (pnode->addrName == addrName) {
             return pnode;
         }
@@ -327,10 +319,10 @@ static CNode* FindNode(const std::string& addrName)
     return nullptr;
 }
 
-static CNode* FindNode(const CService& addr)
+CNode* CConnman::FindNode(const CService& addr)
 {
-    LOCK(cs_vNodes);
-    for (auto const& pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (auto const& pnode : m_nodes) {
         if (static_cast<CService>(pnode->addr) == addr) {
             return pnode;
         }
@@ -348,7 +340,7 @@ void AddressCurrentlyConnected(const CService& addr)
 }
 
 
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
+CNode* CConnman::ConnectNode(CAddress addrConnect, const char *pszDest)
 {
     if (pszDest == nullptr) {
         if (IsLocal(addrConnect))
@@ -386,8 +378,8 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         pnode->AddRef();
 
         {
-            LOCK(cs_vNodes);
-            vNodes.push_back(pnode);
+            LOCK(m_nodes_mutex);
+            m_nodes.push_back(pnode);
         }
 
         pnode->nTimeConnected = GetAdjustedTime();
@@ -566,20 +558,6 @@ void CNode::copyStats(CNodeStats &stats)
 }
 
 
-void CNode::CopyNodeStats(std::vector<CNodeStats>& vstats)
-{
-    vstats.clear();
-
-    LOCK(cs_vNodes);
-    vstats.reserve(vNodes.size());
-    for (auto const& pnode : vNodes) {
-        CNodeStats stats;
-        pnode->copyStats(stats);
-        vstats.push_back(stats);
-    }
-}
-
-
 // requires LOCK(cs_vRecvMsg)
 bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
 {
@@ -714,7 +692,7 @@ void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
     pnode->vSendMsg.erase(pnode->vSendMsg.begin(), it);
 }
 
-void ThreadSocketHandler(void* parg)
+void CConnman::ThreadSocketHandler()
 {
     // Make this thread recognisable as the networking thread
     RenameThread("grc-net");
@@ -722,7 +700,7 @@ void ThreadSocketHandler(void* parg)
 
     try
     {
-        ThreadSocketHandler2(parg);
+        ThreadSocketHandler2();
     }
     catch (std::exception& e)
     {
@@ -740,7 +718,7 @@ void ThreadSocketHandler(void* parg)
     LogPrintf("ThreadSocketHandler exited");
 }
 
-void ThreadSocketHandler2(void* parg)
+void CConnman::ThreadSocketHandler2()
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadSocketHandler started");
     list<CNode*> vNodesDisconnected;
@@ -752,9 +730,9 @@ void ThreadSocketHandler2(void* parg)
         // Disconnect nodes
         //
         {
-            LOCK(cs_vNodes);
+            LOCK(m_nodes_mutex);
             // Disconnect unused nodes
-            vector<CNode*> vNodesCopy = vNodes;
+            vector<CNode*> vNodesCopy = m_nodes;
             for (auto const& pnode : vNodesCopy)
             {
                 // vRecvMsg / nSendSize / ssSend are guarded by per-node locks.
@@ -770,8 +748,8 @@ void ThreadSocketHandler2(void* parg)
                 }
                 if (pnode->fDisconnect || empty_buffers)
                 {
-                    // remove from vNodes
-                    vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
+                    // remove from m_nodes
+                    m_nodes.erase(remove(m_nodes.begin(), m_nodes.end(), pnode), m_nodes.end());
 
                     // release outbound grant (if any)
                     pnode->grantOutbound.Release();
@@ -818,8 +796,8 @@ void ThreadSocketHandler2(void* parg)
 
         size_t vNodesSize;
         {
-            LOCK(cs_vNodes);
-            vNodesSize = vNodes.size();
+            LOCK(m_nodes_mutex);
+            vNodesSize = m_nodes.size();
         }
 
         if(vNodesSize != nPrevNodeCount)
@@ -842,8 +820,8 @@ void ThreadSocketHandler2(void* parg)
             events_per_sock.emplace(hListenSocket, Sock::Events{Sock::RECV});
         }
         {
-            LOCK(cs_vNodes);
-            for (auto const& pnode : vNodes)
+            LOCK(m_nodes_mutex);
+            for (auto const& pnode : m_nodes)
             {
                 const std::shared_ptr<Sock> sock = pnode->GetSock();
                 if (!sock || sock->Get() == INVALID_SOCKET)
@@ -897,8 +875,8 @@ void ThreadSocketHandler2(void* parg)
 
             std::set<CNetAddr> setActiveInbound;
             {
-                LOCK(cs_vNodes);
-                for (auto const& pnode : vNodes)
+                LOCK(m_nodes_mutex);
+                for (auto const& pnode : m_nodes)
                 {
                     if (pnode->fInbound)
                     {
@@ -964,8 +942,8 @@ void ThreadSocketHandler2(void* parg)
                 CNode* pnode = new CNode(hSocket, addr, "", true);
                 pnode->AddRef();
                 {
-                    LOCK(cs_vNodes);
-                    vNodes.push_back(pnode);
+                    LOCK(m_nodes_mutex);
+                    m_nodes.push_back(pnode);
                 }
 
                 // We received a new connection, harvest entropy from the time (and our peer count)
@@ -979,8 +957,8 @@ void ThreadSocketHandler2(void* parg)
         //
         vector<CNode*> vNodesCopy;
         {
-            LOCK(cs_vNodes);
-            vNodesCopy = vNodes;
+            LOCK(m_nodes_mutex);
+            vNodesCopy = m_nodes;
             for (auto const& pnode : vNodesCopy)
                 pnode->AddRef();
         }
@@ -1074,9 +1052,9 @@ void ThreadSocketHandler2(void* parg)
             // Inactivity checking
             //
             // Consider this for future removal as this really is not beneficial nor harmful.
-            // Read vNodesCopy.size() (the snapshot taken under cs_vNodes above
-            // at line 1100) rather than vNodes.size() — vNodes is GUARDED_BY
-            // (cs_vNodes) and the size at iteration time is what this check
+            // Read vNodesCopy.size() (the snapshot taken under m_nodes_mutex earlier
+            // in this loop iteration) rather than m_nodes.size() — m_nodes is
+            // GUARDED_BY(m_nodes_mutex) and the snapshot size is what this check
             // wants anyway.
             if ((GetAdjustedTime() - pnode->nTimeConnected) > (60*60*2) && (vNodesCopy.size() > (MAX_OUTBOUND_CONNECTIONS*.75)))
             {
@@ -1131,7 +1109,7 @@ void ThreadSocketHandler2(void* parg)
             }
         }
         {
-            LOCK(cs_vNodes);
+            LOCK(m_nodes_mutex);
             for (auto const& pnode : vNodesCopy)
                 pnode->Release();
         }
@@ -1431,7 +1409,7 @@ void ThreadDumpAddress(void* parg)
     LogPrintf("ThreadDumpAddress exited");
 }
 
-void ThreadOpenConnections(void* parg)
+void CConnman::ThreadOpenConnections()
 {
     // Make this thread recognisable as the connection opening thread
     RenameThread("grc-opencon");
@@ -1439,7 +1417,7 @@ void ThreadOpenConnections(void* parg)
 
     try
     {
-        ThreadOpenConnections2(parg);
+        ThreadOpenConnections2();
     }
     catch (std::exception& e)
     {
@@ -1457,7 +1435,7 @@ void ThreadOpenConnections(void* parg)
     LogPrintf("ThreadOpenConnections exited");
 }
 
-void static ProcessOneShot()
+void CConnman::ProcessOneShot()
 {
     string strDest;
     {
@@ -1495,7 +1473,7 @@ uint64_t CNode::GetTotalBytesSent()
     return nTotalBytesSent;
 }
 
-void ThreadOpenConnections2(void* parg)
+void CConnman::ThreadOpenConnections2()
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadOpenConnections started");
 
@@ -1562,11 +1540,11 @@ void ThreadOpenConnections2(void* parg)
         CAddress addrConnect;
 
         // Only connect out to one peer per network group (/16 for IPv4).
-        // Do this here so we don't have to critsect vNodes inside mapAddresses critsect.
+        // Do this here so we don't have to critsect m_nodes inside mapAddresses critsect.
         set<vector<unsigned char> > setConnected;
         {
-            LOCK(cs_vNodes);
-            for (auto const& pnode : vNodes) {
+            LOCK(m_nodes_mutex);
+            for (auto const& pnode : m_nodes) {
                 if (!pnode->fInbound) {
                     setConnected.insert(pnode->addr.GetGroup());
                 }
@@ -1611,7 +1589,7 @@ void ThreadOpenConnections2(void* parg)
     }
 }
 
-void ThreadOpenAddedConnections(void* parg)
+void CConnman::ThreadOpenAddedConnections()
 {
     // Make this thread recognisable as the connection opening thread
     RenameThread("grc-openaddedcon");
@@ -1619,7 +1597,7 @@ void ThreadOpenAddedConnections(void* parg)
 
     try
     {
-        ThreadOpenAddedConnections2(parg);
+        ThreadOpenAddedConnections2();
     }
     catch (std::exception& e)
     {
@@ -1637,7 +1615,7 @@ void ThreadOpenAddedConnections(void* parg)
     LogPrintf("ThreadOpenAddedConnections exited");
 }
 
-void ThreadOpenAddedConnections2(void* parg)
+void CConnman::ThreadOpenAddedConnections2()
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadOpenAddedConnections started");
 
@@ -1679,8 +1657,8 @@ void ThreadOpenAddedConnections2(void* parg)
         // Attempt to connect to each IP for each addnode entry until at least one is successful per addnode entry
         // (keeping in mind that addnode entries can have many IPs if fNameLookup)
         {
-            LOCK(cs_vNodes);
-            for (auto const& pnode : vNodes)
+            LOCK(m_nodes_mutex);
+            for (auto const& pnode : m_nodes)
                 for (vector<vector<CService> >::iterator it = vservConnectAddresses.begin(); it != vservConnectAddresses.end(); it++)
                     for (auto const& addrNode : *(it))
                         if (pnode->addr == addrNode)
@@ -1704,7 +1682,7 @@ void ThreadOpenAddedConnections2(void* parg)
 }
 
 // if successful, this moves the passed grant to the constructed node
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *strDest, bool fOneShot)
+bool CConnman::OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *strDest, bool fOneShot)
 {
     //
     // Initiate outbound network connection
@@ -1733,7 +1711,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     return true;
 }
 
-void ThreadMessageHandler(void* parg)
+void CConnman::ThreadMessageHandler()
 {
     // Make this thread recognisable as the message handling thread
     RenameThread("grc-msghand");
@@ -1741,7 +1719,7 @@ void ThreadMessageHandler(void* parg)
 
     try
     {
-        ThreadMessageHandler2(parg);
+        ThreadMessageHandler2();
     }
     catch (std::exception& e)
     {
@@ -1759,7 +1737,7 @@ void ThreadMessageHandler(void* parg)
     LogPrintf("ThreadMessageHandler exited");
 }
 
-void ThreadMessageHandler2(void* parg)
+void CConnman::ThreadMessageHandler2()
 {
     LogPrint(BCLog::LogFlags::NET, "ThreadMessageHandler started");
     while (!fShutdown)
@@ -1771,8 +1749,8 @@ void ThreadMessageHandler2(void* parg)
 
         vector<CNode*> vNodesCopy;
         {
-            LOCK(cs_vNodes);
-            vNodesCopy = vNodes;
+            LOCK(m_nodes_mutex);
+            vNodesCopy = m_nodes;
             for (auto const& pnode : vNodesCopy)
                 pnode->AddRef();
         }
@@ -1824,7 +1802,7 @@ void ThreadMessageHandler2(void* parg)
         }
 
         {
-            LOCK(cs_vNodes);
+            LOCK(m_nodes_mutex);
             for (auto const& pnode : vNodesCopy)
                 pnode->Release();
         }
@@ -2010,17 +1988,31 @@ CConnman::CConnman(uint64_t seed0, uint64_t seed1, bool network_active)
 {
 }
 
-CConnman::~CConnman() = default;
+CConnman::~CConnman()
+{
+    // Close node sockets at connection-manager teardown (issue #2558). This used
+    // to live in CNetCleanup's static destructor, but the node list now lives in
+    // CConnman, so the sweep moves here to run while m_nodes is still valid --
+    // CNetCleanup runs at static destruction, after g_connman.reset() in
+    // Shutdown(), where touching the freed node storage would be a use-after-free.
+    // Stop() has already joined the net threads by this point, so no concurrent
+    // access remains; the lock is taken for annotation correctness. The Sock
+    // destructor closes each fd (issue #2558 PR 5a).
+    LOCK(m_nodes_mutex);
+    for (auto const& pnode : m_nodes) {
+        pnode->CloseSocket();
+    }
+}
 
-// Node-access API (issue #2558 PR 9a). Read-only views over the connection set,
-// backed by the still-global vNodes/cs_vNodes. Each method takes cs_vNodes
-// internally so callers no longer touch the globals directly.
+// Node-access API (issue #2558). Read-only views over the connection set, backed
+// by the CConnman-owned m_nodes/m_nodes_mutex. Each method takes m_nodes_mutex
+// internally so callers never touch the connection list directly.
 size_t CConnman::GetNodeCount(NumConnections flags) const
 {
-    LOCK(cs_vNodes);
-    if (flags == CONNECTIONS_ALL) return vNodes.size();
+    LOCK(m_nodes_mutex);
+    if (flags == CONNECTIONS_ALL) return m_nodes.size();
     size_t nNum = 0;
-    for (const auto& pnode : vNodes) {
+    for (const auto& pnode : m_nodes) {
         if (flags & (pnode->fInbound ? CONNECTIONS_IN : CONNECTIONS_OUT)) ++nNum;
     }
     return nNum;
@@ -2028,22 +2020,29 @@ size_t CConnman::GetNodeCount(NumConnections flags) const
 
 void CConnman::GetNodeStats(std::vector<CNodeStats>& vstats) const
 {
-    // Delegate to the existing snapshot helper (same cs_vNodes lock + per-node
-    // copyStats); it folds into this method when storage moves into CConnman.
-    CNode::CopyNodeStats(vstats);
+    // Snapshot per-node stats under the node mutex (issue #2558: folded in from
+    // the former CNode::CopyNodeStats when storage moved into CConnman).
+    vstats.clear();
+    LOCK(m_nodes_mutex);
+    vstats.reserve(m_nodes.size());
+    for (auto const& pnode : m_nodes) {
+        CNodeStats stats;
+        pnode->copyStats(stats);
+        vstats.push_back(stats);
+    }
 }
 
 void CConnman::ForEachNode(const std::function<void(CNode*)>& func) const
 {
-    LOCK(cs_vNodes);
-    for (const auto& pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (const auto& pnode : m_nodes) {
         func(pnode);
     }
 }
 
 bool CConnman::DisconnectNode(const std::string& strNode)
 {
-    LOCK(cs_vNodes);
+    LOCK(m_nodes_mutex);
     if (CNode* pnode = FindNode(strNode)) {
         pnode->fDisconnect = true;
         return true;
@@ -2054,8 +2053,8 @@ bool CConnman::DisconnectNode(const std::string& strNode)
 bool CConnman::DisconnectNode(const CSubNet& subnet)
 {
     bool disconnected = false;
-    LOCK(cs_vNodes);
-    for (CNode* pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (CNode* pnode : m_nodes) {
         if (subnet.Match(pnode->addr)) {
             pnode->fDisconnect = true;
             disconnected = true;
@@ -2071,8 +2070,8 @@ bool CConnman::DisconnectNode(const CNetAddr& addr)
 
 bool CConnman::DisconnectNode(NodeId id)
 {
-    LOCK(cs_vNodes);
-    for (CNode* pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (CNode* pnode : m_nodes) {
         if (id == pnode->GetId()) {
             pnode->fDisconnect = true;
             return true;
@@ -2138,8 +2137,8 @@ void CConnman::SetAddrSeenByPeer(const CAddress& addr)
 void CConnman::ForEachNodeUnderLock(const std::function<void(CNode*)>& func) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
-    LOCK(cs_vNodes);
-    for (const auto& pnode : vNodes) {
+    LOCK(m_nodes_mutex);
+    for (const auto& pnode : m_nodes) {
         func(pnode);
     }
 }
@@ -2153,7 +2152,7 @@ void CConnman::RelayInventory(const CInv& inv)
 
 void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
 {
-    LOCK(cs_vNodes);
+    LOCK(m_nodes_mutex);
     // Use deterministic randomness to send to the same nodes for 24 hours
     // at a time so the setAddrKnowns of the chosen nodes prevent repeats.
     static arith_uint256 hashSalt;
@@ -2163,7 +2162,7 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
     uint256 hashRand = ArithToUint256(hashSalt ^ (hashAddr << 32) ^ ((GetAdjustedTime() + hashAddr) / (24 * 60 * 60)));
     hashRand = Hash(hashRand);
     multimap<uint256, CNode*> mapMix;
-    for (auto const& pnode : vNodes)
+    for (auto const& pnode : m_nodes)
     {
         unsigned int nPointer;
         memcpy(&nPointer, &pnode, sizeof(nPointer));
@@ -2216,16 +2215,16 @@ bool CConnman::Start()
     }
 
     // Send and receive from sockets, accept connections
-    m_net_threads.emplace_back(ThreadSocketHandler, nullptr);
+    m_net_threads.emplace_back([this] { ThreadSocketHandler(); });
 
     // Initiate outbound connections from -addnode
-    m_net_threads.emplace_back(ThreadOpenAddedConnections, nullptr);
+    m_net_threads.emplace_back([this] { ThreadOpenAddedConnections(); });
 
     // Initiate outbound connections
-    m_net_threads.emplace_back(ThreadOpenConnections, nullptr);
+    m_net_threads.emplace_back([this] { ThreadOpenConnections(); });
 
     // Process messages
-    m_net_threads.emplace_back(ThreadMessageHandler, nullptr);
+    m_net_threads.emplace_back([this] { ThreadMessageHandler(); });
 
     // Dump network addresses
     m_net_threads.emplace_back(ThreadDumpAddress, nullptr);
@@ -2287,11 +2286,11 @@ public:
     }
     ~CNetCleanup()
     {
-        // Close sockets (the Sock destructor closes the fd; issue #2558 PR 5a).
-        for (auto const& pnode : vNodes)
-            pnode->CloseSocket();
-        // Listen sockets are shared_ptr<Sock> now; the Sock destructors close
-        // the fds (issue #2558 PR 5b).
+        // Node sockets are closed by ~CConnman now that the node list lives in
+        // CConnman (issue #2558). This static destructor runs after g_connman.reset()
+        // in Shutdown(), so the former node sweep here would be a use-after-free.
+        // Listen sockets remain file-globals: they are shared_ptr<Sock>, and the
+        // Sock destructors close the fds (issue #2558 PR 5b).
         vhListenSocket.clear();
 
 #ifdef WIN32
