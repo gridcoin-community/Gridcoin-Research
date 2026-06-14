@@ -263,7 +263,14 @@ public:
     bool fSuccessfullyConnected;
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
-    int nRefCount;
+    // Reference count gating the reaper's delete in ThreadSocketHandler2. Atomic
+    // because it is correct only by the convention that every mutation runs under
+    // the node mutex EXCEPT the two pre-publish AddRef()s (ConnectNode / inbound
+    // accept) on a not-yet-listed node. A plain int could not be GUARDED_BY the
+    // node mutex anyway once that mutex becomes a CConnman private member (a CNode
+    // field cannot name CConnman's private lock), so atomic is the analyzer-clean
+    // expression of the existing all-but-two-under-lock discipline (issue #2558).
+    std::atomic<int> nRefCount{0};
 protected:
 
     // Denial-of-service detection/prevention. The misbehavior score map and its
