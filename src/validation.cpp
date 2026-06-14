@@ -1522,10 +1522,17 @@ bool AcceptBlock(CBlock& block, CValidationState& state, bool generated_by_me) E
     int nBlockEstimate = Params().Checkpoints().GetHeight();
     if (hashBestChain == hash)
     {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-            if (nBestHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
-                pnode->PushInventory(CInv(MSG_BLOCK, hash));
+        // Iterate under the already-held cs_main (issue #2558 PR 9c); read the
+        // cs_main-guarded height into a local so the callback stays lock-clean.
+        const int nBestHeightLocal = nBestHeight;
+        const CInv inv(MSG_BLOCK, hash);
+        if (g_connman)
+        {
+            g_connman->ForEachNodeUnderLock([&](CNode* pnode) {
+                if (nBestHeightLocal > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
+                    pnode->PushInventory(inv);
+            });
+        }
     }
 
     return true;
