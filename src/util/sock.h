@@ -7,7 +7,11 @@
 
 #include "compat.h"
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <unordered_map>
 
 /**
  * RAII helper that owns a socket and closes it on destruction.
@@ -43,6 +47,34 @@ public:
 
     /** Close the owned socket now (idempotent); leaves the wrapper empty. */
     void Reset();
+
+    using Event = uint8_t;
+
+    /** Wait for the socket to become readable. */
+    static constexpr Event RECV = 0b001;
+    /** Wait for the socket to become writable. */
+    static constexpr Event SEND = 0b010;
+    /** Wait for an error or other exceptional condition on the socket. */
+    static constexpr Event ERR = 0b100;
+
+    /** Requested/occurred event flags for one socket in a WaitMany() call. */
+    struct Events
+    {
+        Events() : requested{0}, occurred{0} {}
+        explicit Events(Event req) : requested{req}, occurred{0} {}
+        Event requested;
+        Event occurred;
+    };
+
+    /** Map of sockets to wait on (keyed by the shared_ptr that owns each). */
+    using EventsPerSock = std::unordered_map<std::shared_ptr<const Sock>, Events>;
+
+    /**
+     * Wait for one or more events on a set of sockets (issue #2558 PR 5b).
+     * Uses poll(2) on POSIX and select(2) on Windows. On success each entry's
+     * Events::occurred is filled in; returns false on a syscall error.
+     */
+    [[nodiscard]] static bool WaitMany(std::chrono::milliseconds timeout, EventsPerSock& events_per_sock);
 
 private:
     SOCKET m_socket;
