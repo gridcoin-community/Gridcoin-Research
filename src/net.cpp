@@ -52,7 +52,6 @@ void ThreadMapPort2(void* parg);
 #endif
 void ThreadDNSAddressSeed2(void* parg);
 bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant* grantOutbound = nullptr, const char* strDest = nullptr, bool fOneShot = false);
-void StakeMiner(CWallet *pwallet);
 
 //
 // Global state variables
@@ -1577,33 +1576,6 @@ void static ProcessOneShot()
     }
 }
 
-void static ThreadStakeMiner(void* parg)
-{
-    RenameThread("grc-stakeminer");
-    util::ThreadSetInternalName("grc-stakeminer");
-
-    LogPrint(BCLog::LogFlags::NET, "ThreadStakeMiner started");
-    CWallet* pwallet = (CWallet*)parg;
-    try
-    {
-        StakeMiner(pwallet);
-    }
-    catch (std::exception& e)
-    {
-        PrintException(&e, "ThreadStakeMiner()");
-    }
-    catch(boost::thread_interrupted&)
-    {
-        LogPrintf("ThreadStakeMiner exited (interrupt)");
-        return;
-    }
-    catch (...)
-    {
-        PrintException(nullptr, "ThreadStakeMiner()");
-    }
-    LogPrintf("ThreadStakeMiner exited");
-}
-
 void CNode::RecordBytesRecv(uint64_t bytes)
 {
     nTotalBytesRecv += bytes;
@@ -2189,11 +2161,6 @@ void StartNode(void* parg)
     if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
     }
-
-    if (!netThreads->createThread(ThreadStakeMiner, pwalletMain, "ThreadStakeMiner")) {
-        LogPrintf("Error: createThread(ThreadStakeMiner) failed");
-    }
-
 }
 
 bool StopNode()
