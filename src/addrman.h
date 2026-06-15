@@ -41,7 +41,7 @@ private:
     // position in vRandom
     int nRandomPos;
 
-    friend class CAddrMan;
+    friend class AddrMan;
 
 public:
 
@@ -165,7 +165,7 @@ public:
 #define ADDRMAN_GETADDR_MAX 2500
 
 /** Stochastical (IP) address manager */
-class CAddrMan
+class AddrMan
 {
 private:
     // critical section to protect the inner data structures
@@ -456,12 +456,12 @@ public:
     }
 
 
-    CAddrMan()
+    AddrMan()
     {
         Clear();
     }
 
-    ~CAddrMan()
+    ~AddrMan()
     {
         nKey.SetNull();
     }
