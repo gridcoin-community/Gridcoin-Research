@@ -689,9 +689,10 @@ protected:
 //! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
 //! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
 //! Start()/Interrupt()/Stop(). For now it wraps the still-global connection
-//! state (vNodes, addrman, netThreads, ...); storage ownership and the
-//! node-access API (ForEachNode, GetNodeStats, ConnectionType, ...) move in
-//! later PRs, and Options gains m_msgproc with PeerManager in PR 8.
+//! state (vNodes, addrman, netThreads, ...); the read-only node-access readers
+//! (GetNodeCount/GetNodeStats) land in PR 9a (ForEachNode follows in 9b with
+//! its first caller), storage ownership moves in a later PR, and Options gains
+//! m_msgproc with PeerManager in PR 8.
 class CConnman
 {
 public:
@@ -714,6 +715,19 @@ public:
     //! The message processor (NetEventsInterface) the net threads drive, or
     //! null if none is configured (issue #2558 PR 8c).
     NetEventsInterface* GetMessageProcessor() const { return m_options.m_msgproc; }
+
+    //! Node-access API (issue #2558 PR 9a). Read-only views over the connection
+    //! set so external callers stop touching the vNodes/cs_vNodes globals
+    //! directly. Each method takes cs_vNodes internally. Backed by the still-
+    //! global vNodes for now; storage ownership moves into CConnman in a later PR.
+    enum NumConnections {
+        CONNECTIONS_NONE = 0,
+        CONNECTIONS_IN   = (1U << 0),
+        CONNECTIONS_OUT  = (1U << 1),
+        CONNECTIONS_ALL  = (CONNECTIONS_IN | CONNECTIONS_OUT),
+    };
+    size_t GetNodeCount(NumConnections flags) const;
+    void GetNodeStats(std::vector<CNodeStats>& vstats) const;
 
     void Interrupt();
     void Stop();

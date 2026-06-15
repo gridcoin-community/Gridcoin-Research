@@ -2070,6 +2070,27 @@ CConnman::CConnman(uint64_t seed0, uint64_t seed1, AddrMan& addrmanIn, bool netw
 
 CConnman::~CConnman() = default;
 
+// Node-access API (issue #2558 PR 9a). Read-only views over the connection set,
+// backed by the still-global vNodes/cs_vNodes. Each method takes cs_vNodes
+// internally so callers no longer touch the globals directly.
+size_t CConnman::GetNodeCount(NumConnections flags) const
+{
+    LOCK(cs_vNodes);
+    if (flags == CONNECTIONS_ALL) return vNodes.size();
+    size_t nNum = 0;
+    for (const auto& pnode : vNodes) {
+        if (flags & (pnode->fInbound ? CONNECTIONS_IN : CONNECTIONS_OUT)) ++nNum;
+    }
+    return nNum;
+}
+
+void CConnman::GetNodeStats(std::vector<CNodeStats>& vstats) const
+{
+    // Delegate to the existing snapshot helper (same cs_vNodes lock + per-node
+    // copyStats); it folds into this method when storage moves into CConnman.
+    CNode::CopyNodeStats(vstats);
+}
+
 bool CConnman::Start()
 {
     fShutdown = false;
