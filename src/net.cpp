@@ -1821,6 +1821,11 @@ void ThreadMessageHandler2(void* parg)
     LogPrint(BCLog::LogFlags::NET, "ThreadMessageHandler started");
     while (!fShutdown)
     {
+        // Drive message processing through the connection manager's configured
+        // NetEventsInterface (issue #2558 PR 8c) rather than naming g_peerman
+        // here. Null if none is configured (no pumping then).
+        NetEventsInterface* msgproc = g_connman ? g_connman->GetMessageProcessor() : nullptr;
+
         vector<CNode*> vNodesCopy;
         {
             LOCK(cs_vNodes);
@@ -1843,7 +1848,7 @@ void ThreadMessageHandler2(void* parg)
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
-                    if (g_peerman && !g_peerman->ProcessMessages(pnode))
+                    if (msgproc && !msgproc->ProcessMessages(pnode))
                         pnode->CloseSocketDisconnect();
             }
 
@@ -1866,7 +1871,7 @@ void ThreadMessageHandler2(void* parg)
                     TRY_LOCK(pnode->cs_vSend, lockSend);
                     if (lockSend)
                     {
-                        if (g_peerman) g_peerman->SendMessages(pnode, pnode == pnodeTrickle);
+                        if (msgproc) msgproc->SendMessages(pnode, pnode == pnodeTrickle);
                     }
                 }
             }
