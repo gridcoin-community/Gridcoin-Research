@@ -1748,7 +1748,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // threads drive (PR 8c).
     assert(!g_peerman);
     g_peerman = PeerManager::make(*g_connman, g_banman.get());
-    if (g_scheduler) g_peerman->StartScheduledTasks(*g_scheduler);
+    // NOTE: g_peerman->StartScheduledTasks() is intentionally NOT called here --
+    // g_scheduler is not constructed until later in AppInit2, so the previous
+    // `if (g_scheduler) ...` call at this point was always a no-op. It is invoked
+    // below, immediately after the scheduler is created.
 
     CConnman::Options conn_options;
     conn_options.nMaxOutbound      = (int) gArgs.GetArg("-maxoutboundconnections", 8);
@@ -1823,6 +1826,16 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_scheduler = std::make_unique<CScheduler>();
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // Register the PeerManager's recurring tasks now that the scheduler exists
+    // (issue #2558). This call previously sat next to the PeerManager construction
+    // above -- before g_scheduler was created -- so its `if (g_scheduler)` guard was
+    // always false and it never fired. PeerManagerImpl::StartScheduledTasks is an
+    // empty shell today, but wiring it at the correct point ensures any future
+    // recurring task is actually scheduled rather than silently dropped. g_peerman
+    // is constructed unconditionally above, so call it directly (asserting the
+    // wiring explicit -- it can no longer be silently skipped -- rather than re-introducing a guard.
+    g_peerman->StartScheduledTasks(*g_scheduler);
 
     // Gather some entropy once per minute.
     g_scheduler->scheduleEvery([]{
