@@ -6,6 +6,7 @@
 #define BITCOIN_BANMAN_H
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 #include <addrdb.h>
@@ -50,6 +51,15 @@ public:
     void GetBanned(banmap_t& banmap);
     void DumpBanlist();
 
+    //! Register the callback invoked when a ban is lifted, cleared, or swept,
+    //! to reset any misbehavior score for the affected subnet. Set at startup
+    //! so BanMan need not reach into net_processing's misbehavior map directly
+    //! (issue #2558 PR 2c). Returns the number of entries cleared.
+    void SetMisbehaviorClearCallback(std::function<unsigned int(const CSubNet&)> callback)
+    {
+        m_misbehavior_clear_callback = std::move(callback);
+    }
+
 private:
     void SetBanned(const banmap_t& banmap);
     bool BannedSetIsDirty();
@@ -66,6 +76,7 @@ private:
     CClientUIInterface* m_client_interface = nullptr;
     CBanDB m_ban_db;
     const int64_t m_default_ban_time;
+    std::function<unsigned int(const CSubNet&)> m_misbehavior_clear_callback;
 };
 
 extern std::unique_ptr<BanMan> g_banman;

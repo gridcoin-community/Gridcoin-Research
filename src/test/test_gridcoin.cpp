@@ -11,6 +11,7 @@
 #include <leveldb/helpers/memenv/memenv.h>
 
 #include "banman.h"
+#include "net_processing.h"
 #include "chainparams.h"
 #include "dbwrapper.h"
 #include "wallet/db.h"
@@ -68,6 +69,11 @@ struct TestingSetup {
         assert(!g_banman);
         // Create ban manager instance.
         g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface, gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
+        // Mirror AppInit2: peer misbehavior scores live in net_processing
+        // (issue #2558 PR 2c), so register the clear callback here too -- else
+        // ClearBanned()/Unban() in tests would not reset scores and state would
+        // leak across DoS_tests cases.
+        g_banman->SetMisbehaviorClearCallback(ClearMisbehaviorForSubnet);
         g_mock_deterministic_tests = true;
     }
     ~TestingSetup()
