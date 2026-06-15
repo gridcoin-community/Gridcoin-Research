@@ -848,18 +848,30 @@ void CScraperManifest::Complete() EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manife
 {
     m_publish_in_progress = false;
 
+    // phash may legitimately be null here: a manifest built/completed locally can reach
+    // Complete() before it is inserted into mapManifest and has phash repointed at the
+    // map key (e.g. CSplitBlob::RecvPart completing a manifest with no source node, or a
+    // unit-test fixture). Both the log formatting below and the relay therefore handle a
+    // null phash explicitly; the inline ternary keeps GetHex() inside LogPrint's category
+    // guard so it is still only evaluated when the category is enabled.
+
     // Notify peers that we have a new manifest
-    LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts", phash->GetHex(), (unsigned)vParts.size());
-    {
-        LOCK(cs_vNodes);
-        for (auto const& pnode : vNodes)
-        {
-            pnode->PushInventory(CInv{MSG_SCRAPERINDEX, *phash});
-        }
-    }
+    LogPrint(BCLog::LogFlags::MANIFEST, "manifest %s complete with %u parts",
+             phash ? phash->GetHex() : "(none)", (unsigned)vParts.size());
+    // Relay via the CConnman node-access API instead of a raw cs_vNodes loop, so the
+    // node list can be fully encapsulated into CConnman (#2558 — this is the last
+    // external raw consumer of vNodes/cs_vNodes). RelayInventory is ForEachNode(
+    // PushInventory) over the same node set under the node mutex (innermost), so the
+    // relay is byte-identical and the lock order is unchanged (cs_manifest ->
+    // cs_mapParts -> node mutex). The phash guard mirrors the old per-peer loop, which
+    // dereferenced *phash only while iterating: with phash null it relayed nothing and
+    // never touched *phash, whereas RelayInventory constructs the CInv{*phash} argument
+    // unconditionally. g_connman is null only in early init / shutdown / unit tests, when
+    // there are no peers.
+    if (g_connman && phash) g_connman->RelayInventory(CInv{MSG_SCRAPERINDEX, *phash});
 
     LogPrint(BCLog::LogFlags::SCRAPER, "INFO: CScraperManifest::Complete(): from %s with hash %s",
-             sCManifestName, phash->GetHex());
+             sCManifestName, phash ? phash->GetHex() : "(none)");
 }
 
 UniValue CScraperManifest::ToJson() const EXCLUSIVE_LOCKS_REQUIRED(CSplitBlob::cs_manifest, CSplitBlob::cs_mapParts)
