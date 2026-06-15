@@ -13,7 +13,6 @@
 
 #include <chainparamsbase.h>
 
-#include <boost/algorithm/string/replace.hpp>
 #include <stdexcept>
 #include <thread>
 #include <typeinfo>
@@ -1020,6 +1019,7 @@ std::string ArgsManager::GetChainName() const
     if ((int)is_chain_arg_set + (int)fRegTest + (int)fSigNet + (int)fTestNet > 1) {
         throw std::runtime_error("Invalid combination of -regtest, -signet, -testnet and -chain. Can use at most one.");
     }
+    if (fRegTest) return CBaseChainParams::REGTEST;
     if (fTestNet) return CBaseChainParams::TESTNET;
 
     return GetArg("-chain", CBaseChainParams::MAIN);

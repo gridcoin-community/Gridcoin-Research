@@ -645,7 +645,7 @@ Gridcoin is a multi-threaded application. Key threads include:
 
 | Thread | Source | Description |
 |--------|--------|-------------|
-| `ThreadStakeMiner` | `src/net.cpp` | Proof-of-stake block creation (calls `StakeMiner()` in `src/miner.cpp`) |
+| `ThreadStakeMiner` | `src/miner.cpp` | Proof-of-stake block creation (calls `StakeMiner()`); launched from `AppInit2`, joined in `Shutdown()` before the block-file flush |
 | `ThreadScraper` | `src/gridcoin/gridcoin.cpp` | Active scraper: downloads BOINC project stats and publishes signed manifests (mutually exclusive with subscriber) |
 | `ThreadScraperSubscriber` | `src/gridcoin/gridcoin.cpp` | Subscriber: receives scraper manifests and runs convergence to build superblocks (mutually exclusive with scraper) |
 | `ThreadSocketHandler` | `src/net.cpp` | Low-level socket I/O for P2P connections |
@@ -1343,3 +1343,31 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   timestamps in the documentation.
 
   - *Rationale*: User-facing consistency.
+
+Functional tests
+----------------
+
+In addition to the C++ Boost unit tests under `src/test/`, there is a Python
+end-to-end functional-test framework under `test/functional/` that starts real
+`gridcoinresearchd` nodes in `-regtest` mode and drives them over JSON-RPC and
+P2P. It is ported from Bitcoin Core v0.21.2 and adapted for Gridcoin's
+proof-of-stake + premine model.
+
+- How to run, environment variables, and regtest gotchas:
+  [`test/functional/README.md`](../test/functional/README.md).
+- Regtest mode itself (premine, ports, instant staking): [`doc/regtest.md`](regtest.md).
+- Build with `-DENABLE_TESTS=ON` and run `ctest -R functional_tests`, or
+  `cmake --build build --target check-functional`.
+
+Conventions when adding a test:
+
+- Name it by area prefix (`feature_`, `wallet_`, `mempool_`, `rpc_`, `p2p_`) and
+  register it in `BASE_SCRIPTS` in `test/functional/test_runner.py`.
+- Subclass `GridcoinTestFramework`; set `self.chain = "regtest"` and
+  `self.setup_clean_chain = True`, and override `setup_network()` to bypass the
+  base `createwallet` path (Gridcoin has a single default wallet). See
+  `feature_regtest_staking.py` as the canonical template.
+- Keep each test small and deterministic (pass `-staking=0` and advance the
+  chain with explicit `generatetoaddress` calls).
+- Strip unused function parameters/locals: the lint gate runs `vulture
+  --min-confidence 100` over all tracked `*.py` and will fail on dead code.

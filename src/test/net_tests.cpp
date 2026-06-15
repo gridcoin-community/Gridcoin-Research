@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 #include "addrman.h"
+#include "addrman_impl.h"
 #include <string>
 #include <boost/test/unit_test.hpp>
 #include "hash.h"
@@ -17,55 +18,10 @@ using namespace std;
 
 BOOST_AUTO_TEST_SUITE(net_tests)
 
-class CAddrManSerializationMock : public CAddrMan
-{
-public:
-    virtual void Serialize(CDataStream& s) const = 0;
-
-    //! Ensure that bucket placement is always the same for testing purposes.
-    void MakeDeterministic()
-    {
-        nKey.SetNull();
-        insecure_rand = FastRandomContext(true);
-    }
-};
-
-class CAddrManUncorrupted : public CAddrManSerializationMock
-{
-public:
-    void Serialize(CDataStream& s) const
-    {
-        CAddrMan::Serialize(s);
-    }
-};
-
-class CAddrManCorrupted : public CAddrManSerializationMock
-{
-public:
-    void Serialize(CDataStream& s) const
-    {
-        // Produces corrupt output that claims addrman has 20 addrs when it only has one addr.
-        unsigned char nVersion = 1;
-        s << nVersion;
-        s << ((unsigned char)32);
-        s << nKey;
-        s << 10; // nNew
-        s << 10; // nTried
-
-        int nUBuckets = ADDRMAN_NEW_BUCKET_COUNT ^ (1 << 30);
-        s << nUBuckets;
-
-        CService serv;
-        Lookup("252.1.1.1", serv, 7777, false);
-        CAddress addr = CAddress(serv, NODE_NONE);
-        CNetAddr resolved;
-        LookupHost("252.2.2.2", resolved, false);
-        CAddrInfo info = CAddrInfo(addr, resolved);
-        s << info;
-    }
-};
-
-CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
+// Serialize a (deterministic) AddrMan into a peers.dat-style stream, prefixed
+// with the network message-start bytes (issue #2558 PR 6b: the test no longer
+// subclasses AddrMan; it uses the public interface + a deterministic AddrMan).
+static CDataStream AddrmanToStream(const AddrMan& addrman)
 {
     CDataStream ssPeersIn(SER_DISK, CLIENT_VERSION);
     ssPeersIn << Params().MessageStart();
@@ -75,10 +31,41 @@ CDataStream AddrmanToStream(CAddrManSerializationMock& addrman)
     return CDataStream(vchData, SER_DISK, CLIENT_VERSION);
 }
 
+// Build a deliberately corrupt peers.dat-style stream: it claims addrman has
+// 10 "new" and 10 "tried" entries but contains only one addr. Byte-identical to
+// the pre-pimpl AddrManCorrupted serialization mock (null key included).
+static CDataStream MakeCorruptAddrmanStream()
+{
+    CDataStream ssPeersIn(SER_DISK, CLIENT_VERSION);
+    ssPeersIn << Params().MessageStart();
+
+    unsigned char nVersion = 1;
+    ssPeersIn << nVersion;
+    ssPeersIn << ((unsigned char)32);
+    uint256 nKey; // null key (the old mock was MakeDeterministic'd to a null key)
+    ssPeersIn << nKey;
+    ssPeersIn << 10; // nNew
+    ssPeersIn << 10; // nTried
+
+    int nUBuckets = ADDRMAN_NEW_BUCKET_COUNT ^ (1 << 30);
+    ssPeersIn << nUBuckets;
+
+    CService serv;
+    Lookup("252.1.1.1", serv, 7777, false);
+    CAddress addr = CAddress(serv, NODE_NONE);
+    CNetAddr resolved;
+    LookupHost("252.2.2.2", resolved, false);
+    AddrInfo info = AddrInfo(addr, resolved);
+    ssPeersIn << info;
+
+    std::string str = ssPeersIn.str();
+    vector<unsigned char> vchData(str.begin(), str.end());
+    return CDataStream(vchData, SER_DISK, CLIENT_VERSION);
+}
+
 BOOST_AUTO_TEST_CASE(caddrdb_read)
 {
-    CAddrManUncorrupted addrmanUncorrupted;
-    addrmanUncorrupted.MakeDeterministic();
+    AddrMan addrmanUncorrupted{/*deterministic=*/true};
 
     CService addr1, addr2, addr3;
     Lookup("250.7.1.1", addr1, 8333, false);
@@ -95,7 +82,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that the de-serialization does not throw an exception.
     CDataStream ssPeers1 = AddrmanToStream(addrmanUncorrupted);
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
 
     BOOST_CHECK(addrman1.size() == 0);
     try {
@@ -112,7 +99,7 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
     // Test that CAddrDB::Read creates an addrman with the correct number of addrs.
     CDataStream ssPeers2 = AddrmanToStream(addrmanUncorrupted);
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);
@@ -122,13 +109,10 @@ BOOST_AUTO_TEST_CASE(caddrdb_read)
 
 BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
 {
-    CAddrManCorrupted addrmanCorrupted;
-    addrmanCorrupted.MakeDeterministic();
-
     // Test that the de-serialization of corrupted addrman throws an exception.
-    CDataStream ssPeers1 = AddrmanToStream(addrmanCorrupted);
+    CDataStream ssPeers1 = MakeCorruptAddrmanStream();
     bool exceptionThrown = false;
-    CAddrMan addrman1;
+    AddrMan addrman1;
     BOOST_CHECK(addrman1.size() == 0);
     try {
         unsigned char pchMsgTmp[4];
@@ -142,9 +126,9 @@ BOOST_AUTO_TEST_CASE(caddrdb_read_corrupted)
     BOOST_CHECK(exceptionThrown);
 
     // Test that CAddrDB::Read leaves addrman in a clean state if de-serialization fails.
-    CDataStream ssPeers2 = AddrmanToStream(addrmanCorrupted);
+    CDataStream ssPeers2 = MakeCorruptAddrmanStream();
 
-    CAddrMan addrman2;
+    AddrMan addrman2;
     CAddrDB adb;
     BOOST_CHECK(addrman2.size() == 0);
     adb.Read(addrman2, ssPeers2);

@@ -268,6 +268,79 @@ public:
     }
 };
 
+/**
+ * Regression test
+ *
+ * Local development chain in which blocks can be deterministically generated for
+ * functional testing. All version-gate heights are set to 0 so the chain runs at
+ * the latest consensus rules from genesis. `powLimit` is the most permissive
+ * 256-bit value so the genesis nonce and any subsequent kernel-target checks
+ * pass trivially. The `m_is_mockable_chain` flag is the gate consulted by
+ * regtest-only code paths (zero stake-age, no scraper threads, no auto-superblock
+ * attach). Magic bytes match Bitcoin Core's regtest for ergonomic compatibility
+ * with downstream tooling.
+ */
+class CRegTestParams : public CChainParams {
+public:
+    CRegTestParams() {
+        strNetworkID = CBaseChainParams::REGTEST;
+        consensus.ProtocolV2Height = 0;
+        consensus.ResearchAgeHeight = 0;
+        consensus.BlockV8Height = 0;
+        consensus.BlockV9Height = 0;
+        consensus.BlockV9TallyHeight = 0;
+        consensus.BlockV10Height = 0;
+        consensus.BlockV11Height = 0;
+        consensus.BlockV12Height = 0;
+        consensus.BlockV13Height = 0;
+        consensus.BlockV14Height = 0;
+        consensus.ProtocolVersionGracePeriod = 900 * 7;
+        consensus.PollV3Height = 0;
+        consensus.ProjectV2Height = 0;
+        consensus.PollMultiAddressHeight = 0;
+        consensus.AutoGreylistAuditHeight = 0;
+        consensus.DefaultConstantBlockReward = 10 * COIN;
+        consensus.ConstantBlockRewardFloor = 0;
+        consensus.ConstantBlockRewardCeiling = 500 * COIN;
+        consensus.ProjectV4Height = 0;
+        consensus.SuperblockV3Height = 0;
+        consensus.InitialMRCFeeFractionPostZeroInterval = Fraction(2, 5);
+        consensus.MRCZeroPaymentInterval = 10 * 60;
+        consensus.MaxMandatorySideStakeTotalAlloc = Fraction(1, 4);
+        consensus.DefaultMagnitudeUnit = Fraction(1, 4);
+        consensus.MaxMagnitudeUnit = Fraction(5, 1);
+        consensus.MinMagnitudeWeightFactor = Fraction(1, 10);
+        consensus.DefaultMagnitudeWeightFactor = Fraction(100, 567);
+        consensus.MaxMagnitudeWeightFactor = Fraction(1);
+        consensus.StandardContractReplayLookback = 180 * 24 * 60 * 60;
+        consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        pchMessageStart[0] = 0xfa;
+        pchMessageStart[1] = 0xbf;
+        pchMessageStart[2] = 0xb5;
+        pchMessageStart[3] = 0xda;
+        nDefaultPort = 32747;
+        m_assumed_blockchain_size = 1;
+
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1,239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+
+        m_is_test_chain = true;
+        m_is_mockable_chain = true;
+
+        checkpointData = { {} };
+
+        vAlertPubKey = ParseHex("02bf4aa6330f525ab91a25cd5c1362481d16d8c039b3d27cb48ac0870176202462");
+
+        masterkeys = {
+            {0, ParseHex("049ac003b3318d9fe28b2830f6a95a2624ce2a69fb0c0c7ac0b513efcc1e93a6a6e8eba84481155dd82f2f1104e0ff62c69d662b0094639b7106abc5d84f948c0a")}
+        };
+    }
+};
+
 static std::unique_ptr<const CChainParams> globalChainParams;
 
 const CChainParams &Params() {
@@ -281,6 +354,8 @@ std::unique_ptr<const CChainParams> CreateChainParams(const std::string& chain)
         return std::unique_ptr<CChainParams>(new CMainParams());
     else if (chain == CBaseChainParams::TESTNET)
         return std::unique_ptr<CChainParams>(new CTestNetParams());
+    else if (chain == CBaseChainParams::REGTEST)
+        return std::unique_ptr<CChainParams>(new CRegTestParams());
     throw std::runtime_error(strprintf("%s: Unknown chain %s.", __func__, chain));
 }
 

@@ -118,6 +118,17 @@ bool CDBEnv::Open(fs::path pathEnv_)
     return true;
 }
 
+// Route BerkeleyDB error text for the mock (regtest) environment to the debug
+// log. The on-disk Open() path sets an errfile; MakeMock() historically left the
+// error stream at libdb's default (stderr), so benign mock-env messages (e.g.
+// "wallet.dat: No such file or directory" during a shutdown flush) leaked to
+// stderr and intermittently tripped the functional framework's clean-shutdown
+// stderr check. Regtest-only (MakeMock is the mock-wallet path).
+static void MockDbErrcall(const DbEnv*, const char* errpfx, const char* msg)
+{
+    LogPrintf("BerkeleyDB(mock): %s%s", errpfx ? errpfx : "", msg ? msg : "");
+}
+
 void CDBEnv::MakeMock()
 {
     if (fDbEnvInit)
@@ -134,6 +145,7 @@ void CDBEnv::MakeMock()
     dbenv.set_lk_max_locks(10000);
     dbenv.set_lk_max_objects(10000);
     dbenv.set_flags(DB_AUTO_COMMIT, 1);
+    dbenv.set_errcall(MockDbErrcall);
 #ifdef DB_LOG_IN_MEMORY
     dbenv.log_set_config(DB_LOG_IN_MEMORY, 1);
 #endif

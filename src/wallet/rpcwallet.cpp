@@ -10,6 +10,7 @@
 #include "rpc/protocol.h"
 #include "rpc/util.h"
 #include "init.h"
+#include "miner.h"
 #include "streams.h"
 #include "util.h"
 #include "gridcoin/backup.h"
@@ -139,22 +140,13 @@ UniValue getinfo(const UniValue& params)
     UniValue obj(UniValue::VOBJ);
     UniValue diff(UniValue::VOBJ);
 
-    // Snapshot vNodes.size() under cs_vNodes before acquiring the heavier
-    // cs_main + cs_wallet pair so the size read is GUARDED_BY-clean and we
-    // do not introduce a new cs_main→cs_vNodes ordering edge.
-    int connections;
-    {
-        LOCK(cs_vNodes);
-        connections = (int)vNodes.size();
-    }
+    // Connection count via the CConnman node-access API (issue #2558 PR 9a);
+    // GetNodeCount takes m_nodes_mutex internally before we acquire the heavier
+    // cs_main + cs_wallet pair, so no new cs_main→m_nodes_mutex ordering edge.
+    int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
-    // Same pattern: snapshot the peer-reported external IP before the
-    // heavier cs_main+cs_wallet acquisition.
-    std::string addr_seen_by_peer_ip;
-    {
-        LOCK(cs_addrSeenByPeer);
-        addr_seen_by_peer_ip = addrSeenByPeer.ToStringIP();
-    }
+    // Peer-reported external IP via the CConnman API (issue #2558 PR 9d).
+    std::string addr_seen_by_peer_ip = g_connman ? g_connman->GetAddrSeenByPeer().ToStringIP() : "";
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -3295,6 +3287,48 @@ UniValue reservebalance(const UniValue& params)
     UniValue result(UniValue::VOBJ);
     result.pushKV("reserve", (nReserveBalance > 0));
     result.pushKV("amount", ValueFromAmount(nReserveBalance));
+    return result;
+}
+
+
+// Regtest-only: pause ThreadStakeMiner at a chosen chain height. Particl-analog
+// of `walletsettings stakelimit`. Refuses on non-mockable chains so it cannot
+// be accidentally invoked on mainnet/testnet. With no argument, reports the
+// current limit. Limit of 0 disables the cap.
+static const RPCHelpMan stakelimit_help{
+    "stakelimit",
+    "Pause ThreadStakeMiner once the chain height reaches <height> (regtest only).\n"
+    "0 disables the cap. With no argument, reports the current cap.",
+    {
+        {"height", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Chain height at which to pause staking; 0 disables the cap."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::NUM, "height", "The current stake-limit height (0 = no cap)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("stakelimit", "10") +
+        HelpExampleRpc("stakelimit", "10")},
+};
+const RPCHelpMan& stakelimit_helpman() { return stakelimit_help; }
+
+UniValue stakelimit(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "stakelimit is only available on regtest");
+    }
+
+    if (params.size() == 1) {
+        int new_limit = params[0].get_int();
+        if (new_limit < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "stakelimit height must be >= 0");
+        }
+        g_stakelimit_height.store(new_limit, std::memory_order_relaxed);
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("height", g_stakelimit_height.load(std::memory_order_relaxed));
     return result;
 }
 

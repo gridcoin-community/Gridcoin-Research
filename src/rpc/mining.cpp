@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "init.h"
+#include <key_io.h>
 #include "main.h"
 #include "miner.h"
 #include "gridcoin/accrual/snapshot.h"
@@ -870,6 +871,141 @@ UniValue inspectaccrualsnapshot(const UniValue& params)
     result.pushKV("records", records_out);
 
     return result;
+}
+
+// Regtest-only block-production RPCs. Refuse on mainnet / testnet so the
+// names cannot be invoked accidentally in non-test contexts.
+
+namespace {
+UniValue MineNBlocks(int nblocks, const std::string& dest_address /*advisory*/)
+{
+    if (!Params().IsMockableChain()) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "generate/generatetoaddress only available on -regtest");
+    }
+    if (nblocks < 1 || nblocks > 1000) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "nblocks out of range (1..1000)");
+    }
+    if (!pwalletMain) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not loaded");
+    }
+
+    // Best-effort decode for address-shape validation; we don't currently
+    // route the reward to it (PoS coinstake destination is wallet-controlled),
+    // but malformed input should surface as an error before we start mining.
+    if (!dest_address.empty()) {
+        CTxDestination dest = DecodeDestination(dest_address);
+        if (!IsValidDestination(dest)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+        }
+    }
+
+    UniValue hashes(UniValue::VARR);
+    for (int i = 0; i < nblocks; ++i) {
+        CBlock block;
+        std::string err;
+        // Retry transient CreateCoinStake failures (kernel hash too high, etc.)
+        // a few times before giving up. Under trivial powLimit + nStakeMinAge=0
+        // the kernel passes on first try, but UTXO selection can race with
+        // mempool / wallet flushes briefly.
+        bool ok = false;
+        for (int attempt = 0; attempt < 5 && !ok; ++attempt) {
+            err.clear();
+            ok = TryMineRegtestBlock(pwalletMain, block, err);
+            if (!ok) {
+                LogPrintf("generatetoaddress: attempt %d failed: %s", attempt, err);
+            }
+        }
+        if (!ok) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR,
+                strprintf("Failed to mine block %d of %d: %s", i + 1, nblocks, err));
+        }
+        hashes.push_back(block.GetHash(true).ToString());
+    }
+    return hashes;
+}
+} // namespace
+
+static const RPCHelpMan generatetoaddress_help{
+    "generatetoaddress",
+    "Mine blocks immediately (regtest only).\n"
+    "The address is currently only shape-checked; the PoS coinstake reward\n"
+    "goes to wallet-controlled keys (Gridcoin has no direct PoW-style\n"
+    "coinbase payout).",
+    {
+        {"nblocks", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Number of blocks to generate (1..1000)."},
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Address to shape-check (advisory; reward routing is wallet-controlled)."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "Hashes of the blocks generated",
+        {{RPCResult::Type::STR_HEX, "", "Block hash."}}},
+    RPCExamples{
+        HelpExampleCli("generatetoaddress", "11 \"myaddress\"") +
+        HelpExampleRpc("generatetoaddress", "11, \"myaddress\"")},
+};
+const RPCHelpMan& generatetoaddress_helpman() { return generatetoaddress_help; }
+
+UniValue generatetoaddress(const UniValue& params)
+{
+    const int nblocks = params[0].get_int();
+    const std::string addr = params[1].get_str();
+    return MineNBlocks(nblocks, addr);
+}
+
+static const RPCHelpMan generate_help{
+    "generate",
+    "Mine blocks immediately (regtest only).\n"
+    "Convenience wrapper around generatetoaddress with the address check\n"
+    "skipped; the PoS coinstake reward goes to wallet-controlled keys.",
+    {
+        {"nblocks", RPCArg::Type::NUM, RPCArg::Optional::NO,
+            "Number of blocks to generate (1..1000)."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "Hashes of the blocks generated",
+        {{RPCResult::Type::STR_HEX, "", "Block hash."}}},
+    RPCExamples{
+        HelpExampleCli("generate", "11") +
+        HelpExampleRpc("generate", "11")},
+};
+const RPCHelpMan& generate_helpman() { return generate_help; }
+
+UniValue generate(const UniValue& params)
+{
+    const int nblocks = params[0].get_int();
+    return MineNBlocks(nblocks, /*dest_address=*/"");
+}
+
+static const RPCHelpMan generatesuperblock_help{
+    "generatesuperblock",
+    "Mine one regtest block carrying the current local superblock contract\n"
+    "(built from scraper convergence or, on -regtest where scrapers are\n"
+    "disabled, from any local quorum state). Auto-attach is disabled under\n"
+    "-regtest; this RPC is the only path.\n"
+    "\n"
+    "TODO: accept JSON params to construct a synthetic superblock directly\n"
+    "rather than relying on Quorum::CreateSuperblock() state. For now, this\n"
+    "mines one block and the regtest miner code path skips superblock attach\n"
+    "(Phase 2A gate) -- so this is a stub until the 2B follow-up wires the\n"
+    "explicit-attach path.",
+    {},
+    RPCResult{RPCResult::Type::ARR, "", "Hashes of the blocks generated",
+        {{RPCResult::Type::STR_HEX, "", "Block hash."}}},
+    RPCExamples{
+        HelpExampleCli("generatesuperblock", "") +
+        HelpExampleRpc("generatesuperblock", "")},
+};
+const RPCHelpMan& generatesuperblock_helpman() { return generatesuperblock_help; }
+
+UniValue generatesuperblock(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "generatesuperblock only available on -regtest");
+    }
+    // TODO(2B): Construct a GRC::Superblock from caller-supplied JSON, bypass
+    // the IsMockableChain() short-circuit in AddSuperblockContractOrVote for
+    // this one call, and attach. For now, just mines a plain block so the
+    // RPC surface is reachable.
+    return MineNBlocks(1, "");
 }
 
 static const RPCHelpMan parseaccrualsnapshotfile_help{

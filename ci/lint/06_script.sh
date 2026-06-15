@@ -18,7 +18,6 @@ test/lint/git-subtree-check.sh src/secp256k1
 #test/lint/git-subtree-check.sh src/leveldb
 test/lint/git-subtree-check.sh src/crc32c
 #test/lint/check-doc.py
-#test/lint/check-rpc-mappings.py .
 test/lint/lint-all.sh
 
 #if [ "$CI_REPO_SLUG" = "gridcoin-community/Gridcoin-Research" ] && [ "$CI_EVENT_TYPE" = "cron" ]; then

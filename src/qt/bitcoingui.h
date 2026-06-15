@@ -89,6 +89,20 @@ public:
      */
     bool isPrivacyModeActivated() const;
 
+    /**
+     * Begin an explicit application shutdown: the menu Exit / Ctrl-Q / tray
+     * Exit, a snapshot or reset-blockchain restart, the post-encryption
+     * restart, or a core-initiated QueueShutdown. Sets a flag so closeEvent()
+     * lets the close through instead of honoring "minimize on close", then calls
+     * QApplication::quit() -- which still runs the normal closeAllWindows() /
+     * closeEvent() / aboutToQuit() shutdown sequence, unlike a blunt exit().
+     *
+     * On Qt6 quit() routes through closeAllWindows(); our closeEvent()'s
+     * minimize-on-close handling would otherwise ignore that close and veto the
+     * quit, so an explicit Exit only minimized the window. See issue #2995.
+     */
+    static void requestQuit();
+
 protected:
     void changeEvent(QEvent *e);
     void closeEvent(QCloseEvent *event);
@@ -116,6 +130,14 @@ private:
 
     SyncOverlay *m_sync_overlay;
     bool m_in_sync;
+
+    //! Set by requestQuit() so closeEvent() accepts the close on an explicit
+    //! shutdown instead of minimizing; closeEvent() clears it as it reads it.
+    //! Static so the core-initiated QueueShutdown and the post-encryption
+    //! restart can set it without a BitcoinGUI instance. Only ever touched on
+    //! the GUI thread (QueueShutdown marshals through a queued connection), so a
+    //! plain bool is sufficient. See requestQuit() / issue #2995.
+    static bool m_quit_requested;
 
     QLabel *statusbarAlertsLabel;
     QLabel *labelEncryptionIcon;

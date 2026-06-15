@@ -11,7 +11,7 @@
 
 namespace GRC {
 
-void WalletEventQueue::push(WalletEventPayload payload)
+uint64_t WalletEventQueue::push(WalletEventPayload payload)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -20,7 +20,9 @@ void WalletEventQueue::push(WalletEventPayload payload)
     ev.emit_time_us = GetTimeMicros();
     ev.payload      = std::move(payload);
 
+    const uint64_t seqno = ev.seqno;
     m_queue.push_back(std::move(ev));
+    return seqno;
 }
 
 std::vector<WalletEvent> WalletEventQueue::drain(std::size_t max_batch)

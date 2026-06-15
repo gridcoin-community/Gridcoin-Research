@@ -20,28 +20,95 @@
 namespace GRC {
 
 //!
-//! \brief Producer-side payload: a transaction was added to the wallet, with its
-//! pre-decomposed display records.
+//! \brief View identifiers stamped on per-view events (PR3).
 //!
-//! The producer thread (the one firing CWallet::NotifyTransactionChanged) runs
-//! TransactionRecord::decomposeTransaction under the cs_wallet lock it already
-//! holds and ships the resulting list of records to the consumer. The consumer
-//! never touches the wallet.
+//! VIEW_FULL is the native unfiltered/unsorted stream the TransactionTableModel
+//! consumes today (PR2/PR2.5 behaviour, epoch 0). Registered cursors (server-side
+//! filter/sort) use VIEW_OVERVIEW and up. The consumer ignores events whose viewId
+//! it does not own.
 //!
-struct TxAddedPayload
+constexpr int VIEW_FULL = 0;
+constexpr int VIEW_OVERVIEW = 1;
+constexpr int VIEW_DETAILED = 2;   //!< the detailed history view (PR4)
+
+//!
+//! \brief Producer-side payload: rows were inserted into the ordered wallet
+//! view at a producer-computed position.
+//!
+//! Windowed-model PR2 moved the ORDERING to the producer-side GRC::WalletTxStore:
+//! the producer runs TransactionRecord::decomposeTransaction under the locks it
+//! already holds, the store computes the TxOrderLess insert position, and this
+//! payload carries that position plus the records. The consumer inserts the
+//! records into its replica at exactly \p position inside a single
+//! beginInsertRows/endInsertRows bracket — it reads ONLY this payload, never the
+//! live store, so its replica tracks the begin/end replay even when a drain
+//! batch contains several inserts that reorder rows.
+//!
+//! \p records are all the decomposed parts of one transaction; under TxOrderLess
+//! they occupy a contiguous range, so one payload == one bracket.
+//!
+struct RowsInsertedPayload
 {
-    QList<TransactionRecord> records;
+    int position;
+    std::vector<TransactionRecord> records;
+    int viewId = VIEW_FULL;   //!< which view this insert belongs to (PR3)
+    uint64_t epoch = 0;       //!< source cursor epoch, for stale-fetch reconciliation (PR3)
 };
 
 //!
-//! \brief Producer-side payload: an existing transaction was removed from the
-//! wallet, or is no longer visible (e.g. an orphaned coinstake). The consumer
-//! drops the matching rows from its model; it is a no-op if the tx isn't
-//! currently in the cached list.
+//! \brief Producer-side payload: a contiguous run of rows was removed at a
+//! producer-computed position. Carries position + count (resolved from the tx
+//! hash by the store, where same-hash rows are guaranteed contiguous). The
+//! consumer erases [position, position + count) inside one
+//! beginRemoveRows/endRemoveRows bracket. A removal that matched nothing emits
+//! no event at all, so this payload always denotes a real, non-empty erase.
 //!
-struct TxRemovedPayload
+struct RowsRemovedPayload
 {
-    uint256 hash;
+    int position;
+    int count;
+    int viewId = VIEW_FULL;   //!< which view this removal belongs to (PR3)
+    uint64_t epoch = 0;       //!< source cursor epoch, for stale-fetch reconciliation (PR3)
+};
+
+//!
+//! \brief Producer-side payload (PR3): a per-view cursor was rebuilt wholesale
+//! (filter or sort change) — the consumer must drop its replica for \p viewId
+//! and bulk-refill \p total served rows via the store's getRows. Carries the
+//! new \p epoch so any in-flight pre-rebuild fetch can be discarded on arrival.
+//!
+struct RowsResetPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int total;       //!< served-window row count after the rebuild
+};
+
+//!
+//! \brief Producer-side payload (PR3): the TOTAL accepted row count for a view
+//! changed (e.g. a row entered/left the filter off-window, so the scrollbar
+//! extent moves but no served row was inserted/removed). The consumer resizes
+//! its virtual rowCount to \p total_accepted without touching cached rows.
+//! Decision 4 (RowCountChanged not deferred — OverviewPage is the windowed testbed).
+//!
+struct RowCountChangedPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int total_accepted;
+};
+
+//!
+//! \brief Producer-side payload (PR3): rows [first, first+count) of \p viewId
+//! changed in place (a status/field update that did NOT move them) — the
+//! consumer re-reads them (dataChanged), re-fetching from the store if windowed.
+//!
+struct RowsChangedPayload
+{
+    int viewId;
+    uint64_t epoch;
+    int first;
+    int count;
 };
 
 //!
@@ -68,9 +135,12 @@ struct ChainTipChangedPayload
 };
 
 using WalletEventPayload = std::variant<
-    TxAddedPayload,
-    TxRemovedPayload,
-    ChainTipChangedPayload>;
+    RowsInsertedPayload,
+    RowsRemovedPayload,
+    ChainTipChangedPayload,
+    RowsResetPayload,
+    RowCountChangedPayload,
+    RowsChangedPayload>;
 
 //!
 //! \brief A single event in the wallet→GUI event channel.
@@ -124,10 +194,13 @@ public:
 
     //!
     //! \brief Push an event payload. The queue assigns a fresh monotonic seqno
-    //! and emit timestamp under its own mutex. Safe to call from any thread,
-    //! including while the producer holds cs_main / cs_wallet.
+    //! and emit timestamp under its own mutex, and RETURNS that seqno. Safe to
+    //! call from any thread, including while the producer holds cs_main /
+    //! cs_wallet. The returned seqno is the per-view high-water the store records
+    //! so a consumer can discard events already reflected in a getRows refetch
+    //! (windowed-model PR4-fix B).
     //!
-    void push(WalletEventPayload payload);
+    uint64_t push(WalletEventPayload payload);
 
     //!
     //! \brief Pop up to \p max_batch events in seqno order. Returns an empty

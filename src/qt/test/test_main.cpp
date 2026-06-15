@@ -4,6 +4,7 @@
 #include "bitcoinunitstests.h"
 #include "uritests.h"
 #include "wallet_event_queue_tests.h"
+#include "wallettxstore_tests.h"
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
@@ -35,6 +36,10 @@ int main(int argc, char *argv[])
 
     WalletEventQueueTests test3;
     if (QTest::qExec(&test3) != 0)
+        fInvalid = true;
+
+    WalletTxStoreTests test4;
+    if (QTest::qExec(&test4) != 0)
         fInvalid = true;
 
     return fInvalid;

@@ -155,9 +155,22 @@ public:
      */
     void updateStatus(const CWalletTx &wtx);
 
+    /** Populate `label` from the wallet address book (Qt-free; caller must hold
+     *  cs_wallet). Called producer-side at the fill points after updateStatus()
+     *  so the off-cs_wallet cursor can sort the Address column and filter by
+     *  label without re-touching the wallet (windowed-model PR4).
+     */
+    void populateDisplayLabel(const CWallet& wallet);
+
     /** Return whether a status update is needed.
      */
     bool statusUpdateNeeded();
+
+    /** Cached address-book label for `address`, snapshotted producer-side at fill
+     *  time (windowed-model PR4). Empty if `address` has no address-book entry.
+     *  Used for the Address sort key and the address/label substring filter.
+     */
+    std::string label;
 };
 
 #endif // BITCOIN_QT_TRANSACTIONRECORD_H

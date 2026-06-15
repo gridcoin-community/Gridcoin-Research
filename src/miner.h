@@ -19,6 +19,11 @@ typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
+// Regtest-only staking-height ceiling. When > 0, ThreadStakeMiner pauses
+// once `nBestHeight >= g_stakelimit_height`. Set via the `stakelimit` RPC
+// (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
+extern std::atomic<int> g_stakelimit_height;
+
 // Note the below constant controls the minimum value allowed for post
 // split UTXO size. It is int64_t but in GRC so that it matches the entry in the config file.
 // It will be converted to Halfords in GetNumberOfStakeOutputs by multiplying by COIN.
@@ -44,5 +49,22 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction& mtxCoinstake,
                           CBlock &blocknew, CBlockIndex* pindexPrev, int64_t &nReward,
                           GRC::Claim& claim) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+// Regtest-only single-iteration of the staking pipeline. Returns true and
+// fills blocknew_out on success; returns false and sets err on failure. Used
+// by `generatetoaddress` / `generatesuperblock` RPCs to advance the chain
+// deterministically.
+bool TryMineRegtestBlock(CWallet* pwallet,
+                         CBlock& blocknew_out,
+                         std::string& err);
+
+//! \brief The proof-of-stake miner loop. Runs until \ref fShutdown is set.
+void StakeMiner(CWallet* pwallet);
+
+//! \brief Thread entry point wrapping StakeMiner. \p parg is the CWallet to
+//! stake with. Launched from AppInit2 and joined in Shutdown() before the
+//! block-file flush, so a block staked during shutdown cannot land after the
+//! flush (see issue #2865).
+void ThreadStakeMiner(void* parg);
 
 #endif // BITCOIN_MINER_H

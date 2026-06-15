@@ -93,6 +93,16 @@ existing `updateStatus(wtx)` under `cs_main`+`cs_wallet`. It is guarded by a
 *before* taking `cs_store`; where both are needed the order is
 `cs_main → cs_wallet → cs_store`.
 
+This describes the store once it *serves reads*. In the relocation step (step 2
+below) the store does not yet serve reads — the consumer keeps its own full
+replica and the producer only stamps positions — so the store holds **ordering
+keys only** (`TxOrderKey` + the hash index), not full records; materializing
+records there would merely double resident memory. It grows to the full
+`records[]` + `TransactionStatus` form above in the windowing step (step 5),
+when the consumer drops its replica for a viewport slice and begins reading the
+store. The status-correctness rationale below is precisely what dictates *full
+records once the store serves reads*.
+
 Two alternatives were considered and rejected as the primary store:
 
 - **Reduced order-key store + lazy per-window decompose** would yield an
@@ -240,15 +250,17 @@ working on its own.
 | PR | Scope | Risk |
 |----|-------|------|
 | **1** | Qt-free `txfilter.{h,cpp}` (`FilterSpec` / `Accepts` / `Less`, exact ports) + GUI-OFF unit suite; `TransactionFilterProxy` collapses its members into one `FilterSpec` and delegates `filterAcceptsRow` to `Accepts()`. Sort still via Qt `EditRole`. **Zero GUI behavior change.** | Low |
-| **2** | Relocate the cached wallet into a producer-owned `GRC::WalletTxStore` (`cs_store` leaf lock); `TransactionTableModel` becomes a thin full passthrough; the proxy is unchanged on top. The producer emits `RowsInserted`/`RowsRemoved` with producer-computed positions. `rowCount` becomes event-driven. | Med-high (new lock) |
+| **2** | Relocate the cached-wallet **ordering** into a producer-owned `GRC::WalletTxStore` (key-only; `cs_store` leaf lock). The producer computes positions and emits `RowsInserted{position,records}`/`RowsRemoved{position,count}`; `TransactionTableModel` keeps its own Qt-thread-exclusive replica and applies the events at the stamped position in lockstep — it never reads the store on the render path, which keeps the unchanged proxy consistent across a multi-insert batch. `rowCount` is the replica's size (event-driven). | Med-high (new lock) |
 | **3** | Per-view `Cursor` infrastructure + `Rows*`/`RowsReset` events; producer-side O(viewport) status refresh on tip-advance and the `CT_UPDATED` reposition/membership-flip correctness. Migrate **OverviewPage** off its proxy to a cursor-bound model (the easy consumer — limit ≈ viewport, no scroll path). | Med |
 | **4** | Migrate **TransactionView** off its proxy to a cursor-bound model; **delete `TransactionFilterProxy`**; wire header-click sort → `setSort`, the filter widgets → `setFilter`, `focusTransaction` → `rowForKey`, CSV export + select-all → `getAllRows`, selection re-resolution by `(hash, idx)`. Remove the `updateConfirmations` sledgehammer. Still full-materialized. | Med-high |
 | **5** | Windowing: the model holds only a slice cache + margin; `data()` on a miss returns a placeholder and schedules `setViewport` + async `getRows`; status refresh moves fully producer-side; delete `index()`'s Qt-thread `TRY_LOCK`+`updateStatus` and `describe()`'s `LOCK2` (replaced by `getRowDetail`). | **High** (the irreducible multithreaded-GUI concentration) |
 | **6** | Off-Qt-thread progressive startup decompose: the `O(N)` decompose moves to a chunked background core task; the table opens at row count 0 and paints progressively. Order-flexible after PR 2. | Med |
 
-PR 2's full-passthrough model mode is the one mild staging artifact (a thin
-`rowCount`/`data` forwarding superseded by cursor binding in PR 4); it is
-justified to isolate the store relocation from the cursor change.
+PR 2's consumer-side replica is the one transient: a full replica fed by
+position-stamped events, kept (rather than reading the store directly) so the
+unchanged proxy stays consistent during a multi-insert drain. It shrinks to a
+viewport slice in the windowing step (PR 5); nothing is discarded, only
+narrowed.
 
 ## Deliberate divergences
 
@@ -346,3 +358,191 @@ explicitly deferred to that work (tracked under the multiprocess RFC, #2937);
 this effort deliberately does not build the abstraction shell, because what
 matters for a clean split is the **shape of the calls underneath**, which this
 contract establishes.
+
+---
+
+## Addendum: the per-view cursor `view_index`-maintenance algorithm (PR3)
+
+This pins down the cursor arithmetic before any wiring (the PR1 risk-control move:
+get the trickiest logic into the GUI-OFF unit suite first). A cursor is a Qt-free
+object (`src/qt/cursor.{h,cpp}`) maintaining one filtered+sorted view over the
+producer's record table, using PR1's `GRC::Accepts` / `GRC::Less` / `SortKey` /
+`TxFilterFields` / `FilterSpec`. It never holds records; it is parameterized on two
+projector callables supplied by the caller (the store in production, a synthetic
+table in the unit tests):
+
+- `Fields(absidx) -> TxFilterFields` — the filter inputs for record `absidx`.
+- `Keys(absidx)   -> SortKey`        — the sort inputs for record `absidx`.
+
+### State + invariant
+
+```
+std::vector<std::size_t> view_index;   // accepted ABSOLUTE indices into the record
+                                       // table, kept sorted by Less(Keys(a),Keys(b),col,order)
+```
+
+**Invariant (I):** at every observable point, `view_index` contains *exactly* the
+absolute indices `i` with `Accepts(Fields(i), filter) == true`, in `Less`-sorted
+order for the current `(sort_column, sort_order)`, and every stored value equals the
+record's *current* absolute index in the table.
+
+The **served window** the consumer sees is `view_index[0 .. served)`, where
+`served = (limit < 0) ? view_index.size() : min(view_index.size(), limit)`. All
+emitted `CursorDelta`s are in **served-window-local** coordinates.
+
+```
+struct CursorDelta { enum {Reset, Insert, Remove, Change} type; int first; int count; };
+```
+
+### ⚠ Item 1 — locate existing rows by identity, never by sort-key
+
+To find an *existing* record's slot in `view_index` (for remove/update), search for
+its **absolute index value** (the `(hash,idx)` identity maps 1:1 to it), NOT a
+`lower_bound` over `Less`. Sort-keys are **not unique** — every Unconfirmed row
+shares the `INT_MAX`-height `status_sort_key`, so a `lower_bound` on a captured key
+lands anywhere in that band and can evict/reposition a *sibling*. Locating an
+existing row is therefore an identity scan (or a reverse map); `lower_bound`/`Less`
+is used **only** to choose the insertion slot for a row not currently present.
+
+### ⚠ Item 2 — reposition = erase, THEN lower_bound
+
+When a row that is present moves (its `SortKey` changed): **erase it from its old
+slot first, then compute the insert slot via `lower_bound` over the post-erase
+`view_index`.** A `new_pos` computed against the pre-erase vector is off-by-one
+whenever `old_pos <= new_pos`. Erase-then-`lower_bound` is exact by construction.
+
+### ⚠ Item 3 — off-window rows are still maintained; only emission is gated
+
+Membership/position changes update `view_index` for **all** rows, in-window or not
+(else an off-window row renders out of order when the window later grows/scrolls —
+Invariant I must always hold over the *whole* vector). Only the *delta emission* is
+gated by the served boundary (below). First confirmations on a Status-DESC Overview
+cross the served boundary constantly, so this path is hot.
+
+### ⚠ Item 4 — reindex/splice discipline (composes across a batch drain)
+
+The store-worker drains a batch of intake ops; each must leave Invariant I intact
+before the next:
+
+- `applyStoreInsert(P, count)`: the table inserted `count` records at absolute
+  `[P, P+count)`, shifting every later absolute index by `+count`. **(a)** for each
+  entry `e` in `view_index`, `if (e >= P) e += count` (fixes the stored absolute
+  indices); **(b)** for each new `i` in `[P, P+count)`, `if (Accepts(Fields(i)))`
+  insert `i` at its `lower_bound`-by-`Less` slot. Shift-before-insert so the new
+  entries are placed against an already-consistent vector.
+- `applyStoreRemove(P, count)`: the table removed absolute `[P, P+count)`, shifting
+  later indices by `-count`. **(a)** erase the entries whose value is in
+  `[P, P+count)` (located by identity, Item 1); **(b)** for each remaining entry
+  `e`, `if (e >= P+count) e -= count`. Remove-before-shift, mirror of insert.
+
+Both end with Invariant I, so a sequence of ops composes.
+
+### CT_UPDATED / applyStatusUpdate(P) — the membership/reposition cases
+
+Record `P`'s status (and thus `Accepts`/`SortKey`) changed. Let `old_in =` (P found
+in `view_index` at `old_pos`, Item 1), `new_in = Accepts(Fields(P))`:
+
+| old_in | new_in | action | emission |
+|--------|--------|--------|----------|
+| no  | no  | nothing | — |
+| no  | yes | `lower_bound`-insert P at `new_pos` | Insert (+ eviction) if `new_pos < served` |
+| yes | no  | erase P at `old_pos` | Remove (+ promotion) if `old_pos < served` |
+| yes | yes, slot unchanged | none (keys re-read) | Change at `old_pos` if `< served` |
+| yes | yes, slot moved | erase `old_pos`, then `lower_bound`-insert (Item 2) | translate (`old_pos`,`new_pos`) below |
+
+### Served-window translation (eviction / promotion at the boundary)
+
+With `served_old`/`served_new` computed before/after, and `cap = (limit<0)?∞:limit`:
+
+- **Insert at `view_index` slot `p`:**
+  - `p >= served_old` → off-window, no emission.
+  - `p < served_old` → emit `Insert(first=p, 1)`; **if the window was full**
+    (`view_index.size()-1 >= cap`, i.e. `served_old == cap`) the old last visible row
+    is pushed out → also emit `Remove(first=cap-1 [post-insert: served_new... =cap], 1)`
+    (eviction). Net visible count stays `cap`.
+- **Remove at slot `p`:**
+  - `p >= served_old` → off-window, no emission (served may shrink if unlimited).
+  - `p < served_old` → emit `Remove(first=p, 1)`; **if a row existed just past the
+    boundary** (`view_index.size() (pre-remove) > cap`, i.e. there was an off-window
+    row at `cap`) it promotes into view → also emit `Insert(first=served_new-1, 1)`
+    (promotion).
+- **Reposition (`old_pos`→`new_pos`, both relative to the same vector state):** apply
+  the Remove translation for `old_pos` then the Insert translation for `new_pos`
+  against the post-erase vector, collapsing a same-visible-slot move to a `Change`.
+
+### setLimit(new_limit)
+
+Recompute `served`. If it grows by `k`, emit `Insert(first=served_old, k)` (rows
+`view_index[served_old .. served_new)` promote in). If it shrinks by `k`, emit
+`Remove(first=served_new, k)`. `view_index` itself is untouched (Item 3) — only the
+window boundary moved. This is the cheap stairstep-resize op (decision 1).
+
+### setFilter / setSort
+
+A wholesale change to membership or order: rebuild `view_index` from scratch and emit
+a single `Reset(total = served_new)`; the consumer bulk-refills via `getRows`. (An
+incremental diff is possible but not worth the complexity for an interactive
+filter/sort change.)
+
+### Complexity
+
+Per store op / status update: O(N) over `view_index` (the absolute-index shift and/or
+the identity scan) — which is exactly why PR2.5 moved this onto the off-`cs_main`
+store-worker. An order-statistics structure to reach O(log N) is tracked separately;
+the contract here is correctness, not asymptotics.
+
+---
+
+## Addendum: scrollbar + resort contract for the detailed view (PR5)
+
+The detailed `TransactionView` is a scrolling `QTableView` over the full filtered
+list (up to ~300k rows). PR3 (OverviewPage) does not scroll — its `limit ≈ viewport`
+— so this contract lands with PR5's virtual model, but the primitives it relies on
+(epoch, identity-locate) are established by the PR3-A cursor core.
+
+### The model reports the TOTAL count, never the cached slice
+
+`rowCount()` returns the cursor's `totalAccepted()` — the whole filtered count — NOT
+the size of the materialized viewport slice. Consequences:
+
+- The scrollbar is sized for the full list (correct thumb size + position), and the
+  user can drag to **any** absolute position, including the middle and the end.
+- The viewport slice (~visible rows + a prefetch margin) is a **cache the view never
+  observes**. A `data(row)` for a row outside the slice returns a placeholder and
+  triggers an async `getRows(first,last)`; the returned slice is applied with a
+  `dataChanged`, and the placeholder rows fill in. A fast drag to an un-cached region
+  shows placeholders for a frame, then resolves — standard virtual-scroll behaviour.
+
+This is the **"full rowCount + placeholder-on-miss, NOT `canFetchMore`"** decision.
+`canFetchMore`/`fetchMore` is rejected precisely because it makes the scrollbar
+misbehave: the row count would grow as you scroll, the thumb would misreport the
+total, and you could not drag to the middle or end (append-only). The full-rowCount
+model is what makes random-access scrolling and a correctly-sized scrollbar possible
+— the slice underneath does NOT make the scrollbar act weird, because it is invisible
+to it.
+
+### Resort while scrolled into the middle — anchor on the SELECTED row
+
+A header-click resort is a cursor `setSort` → a `Reset` (the whole `view_index`
+reorders) that bumps the **epoch**. `rowCount` is unchanged, so the scrollbar does not
+resize or jump; only content reorders. The position policy (decided 2026-06-10):
+
+1. **Capture the anchor before the resort:** the `(hash,idx)` identity of the
+   currently **selected** row. If there is no selection, fall back to the identity of
+   the **topmost visible** row, so there is always a stable anchor.
+2. **Resort** (`setSort` → `Reset`, epoch bumped).
+3. **Scroll to the anchor's new position:** `cursor.findSlot(anchor_absidx)` (the
+   PR3-A identity-locate) gives the anchor's row index in the new order; scroll so it
+   is back in view (re-selected if it was the selection). The list reorders *around*
+   the user's anchor instead of throwing them to row 0 or to an unrelated row.
+
+The windowing interaction is only a **re-fetch**: after the `Reset` the cached slice
+holds the wrong transactions for those indices, so the model fetches the slice for the
+post-resort viewport. The **epoch** is the reconciliation token — any async
+`getRows` issued before the resort that arrives late carries the stale epoch and is
+discarded, so pre-resort rows are never painted into the post-resort window. No
+scrollbar weirdness, just a guarded re-fetch.
+
+Net: the scrollbar stays correctly sized and positioned across both fast scrolling and
+resort; the only moving parts are a transient placeholder fill and an anchor-preserving
+scroll, both supported by the cursor's `epoch` + identity-locate from PR3-A.

@@ -53,6 +53,20 @@ add_executable(test_gridcoin
     # one configuration CI exercises.
     ${CMAKE_SOURCE_DIR}/src/qt/txfilter.cpp
     qt_txfilter_tests.cpp
+    # Qt-free transaction ordering core (src/qt/txorder.cpp) + its unit suite:
+    # the position/clustering logic the producer-side WalletTxStore relies on,
+    # tested in the GUI-OFF configuration CI exercises.
+    ${CMAKE_SOURCE_DIR}/src/qt/txorder.cpp
+    qt_txorder_tests.cpp
+    # Qt-free per-view cursor (src/qt/cursor.cpp) + its unit suite: the
+    # view_index-maintenance arithmetic (windowed-model PR3), tested GUI-OFF.
+    ${CMAKE_SOURCE_DIR}/src/qt/cursor.cpp
+    qt_cursor_tests.cpp
+    # Qt-free windowed-table reconciliation core (src/qt/windowcache.h, a
+    # header-only template — no .cpp) + its unit suite: the consumer-side
+    # two-channel split (structural deltas vs scroll-driven content fetch) and the
+    # cache-base arithmetic (windowed-model PR5), tested GUI-OFF.
+    qt_windowcache_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

@@ -6,7 +6,6 @@
 #include "banman.h"
 
 #include "netbase.h"
-#include "net.h"
 #include "node/ui_interface.h"
 #include "util.h"
 
@@ -239,26 +238,11 @@ unsigned int BanMan::ZeroMisbehavior(CNetAddr net_addr)
 
 unsigned int BanMan::ZeroMisbehavior(CSubNet sub_net)
 {
-    unsigned int nZeroed = 0;
-
-    LOCK(CNode::cs_mapMisbehavior);
-
-    std::map<CAddress, std::pair<int, int64_t>>::iterator iMisbehavior;
-    for (iMisbehavior = CNode::mapMisbehavior.begin(); iMisbehavior != CNode::mapMisbehavior.end();)
-    {
-        CAddress addr = iMisbehavior->first;
-
-        if (sub_net.Match(addr))
-        {
-            iMisbehavior = CNode::mapMisbehavior.erase(iMisbehavior);
-
-            ++nZeroed;
-        }
-        else
-        {
-            ++iMisbehavior;
-        }
+    // Misbehavior scores live in net_processing (issue #2558 PR 2c). Clear them
+    // through the registered callback rather than reaching into the map here.
+    if (m_misbehavior_clear_callback) {
+        return m_misbehavior_clear_callback(sub_net);
     }
 
-    return nZeroed;
+    return 0;
 }

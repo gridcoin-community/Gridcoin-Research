@@ -44,6 +44,7 @@ add_library(gridcoinqt STATIC
     consolidateunspentwizardsendpage.cpp
     csvmodelwriter.cpp
     decoration.cpp
+    detailedtxmodel.cpp
     diagnosticsdialog.cpp
     editaddressdialog.cpp
     editsidestakedialog.cpp
@@ -58,6 +59,7 @@ add_library(gridcoinqt STATIC
     optionsdialog.cpp
     optionsmodel.cpp
     overviewpage.cpp
+    overviewtxmodel.cpp
     peertablemodel.cpp
     qtipcserver.cpp
     qvalidatedlineedit.cpp
@@ -86,12 +88,14 @@ add_library(gridcoinqt STATIC
     trafficgraphwidget.cpp
     transactiondesc.cpp
     transactiondescdialog.cpp
-    transactionfilterproxy.cpp
     txfilter.cpp
+    txorder.cpp
+    cursor.cpp
     transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
     wallet_event_queue.cpp
+    wallettxstore.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp

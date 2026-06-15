@@ -3,6 +3,7 @@ add_executable(test_gridcoin-qt
     bitcoinunitstests.cpp
     uritests.cpp
     wallet_event_queue_tests.cpp
+    wallettxstore_tests.cpp
 )
 
 set_target_properties(test_gridcoin-qt PROPERTIES

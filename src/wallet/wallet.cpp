@@ -11,7 +11,6 @@
 #include "crypter.h"
 #include "node/ui_interface.h"
 #include "wallet/coincontrol.h"
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/thread.hpp>
 #include "random.h"
 #include "rpc/server.h"
@@ -19,6 +18,7 @@
 #include "rpc/protocol.h"
 #include <script.h>
 #include "main.h"
+#include "net_processing.h"
 #include "util.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
@@ -887,7 +887,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, CWalletDB* pwalletdb) EXCLUSIV
         std::string strCmd = gArgs.GetArg("-walletnotify", "");
         if (!strCmd.empty())
         {
-            boost::replace_all(strCmd, "%s", hash.GetHex());
+            ReplaceAll(strCmd, "%s", hash.GetHex());
             boost::thread t(runCommand, strCmd); // thread runs free
         }
         #endif
@@ -2479,8 +2479,10 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins, unsigned int nSp
             int blocks_to_maturity = 0;
 
             // If coinbase or coinstake, blocks_to_maturity must be 0. (This means a minimum depth of
-            // nCoinbaseMaturity + 10.
-            if (pcoin->IsCoinBase() || pcoin->IsCoinStake())
+            // nCoinbaseMaturity + 10. Skipped under -regtest so the genesis premine can be staked
+            // at height 1 without bootstrap blocks; the same shortcut lives in
+            // CMerkleTx::GetBlocksToMaturity().
+            if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && !Params().IsMockableChain())
             {
                 blocks_to_maturity = std::max(0, (nCoinbaseMaturity + 10) - nDepth);
 

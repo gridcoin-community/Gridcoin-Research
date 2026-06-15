@@ -95,9 +95,11 @@ public:
 
     /**
     * Returns a list of registered commands
+    * @param include_deprecated   Also list commands in DEPRECATED_RPCS
+    *                             (hidden from autocomplete but still callable).
     * @returns List of registered commands.
     */
-    std::vector<std::string> listCommands() const;
+    std::vector<std::string> listCommands(bool include_deprecated = false) const;
 
 };
 extern const CRPCTable tableRPC;
@@ -179,6 +181,7 @@ extern UniValue sendtoaddress(const UniValue& params);
 extern UniValue setaccount(const UniValue& params);
 extern UniValue sethdseed(const UniValue& params);
 extern UniValue settxfee(const UniValue& params);
+extern UniValue stakelimit(const UniValue& params);
 extern UniValue signmessage(const UniValue& params);
 extern UniValue signrawtransaction(const UniValue& params);
 extern UniValue signrawtransactionwithkey(const UniValue& params);
@@ -193,6 +196,7 @@ extern UniValue walletpassphrasechange(const UniValue& params);
 extern UniValue walletdiagnose(const UniValue& params);
 
 // PSGT (Partially Signed Gridcoin Transactions)
+extern UniValue analyzepsgt(const UniValue& params);
 extern UniValue createpsgt(const UniValue& params);
 extern UniValue decodepsgt(const UniValue& params);
 extern UniValue combinepsgt(const UniValue& params);
@@ -211,6 +215,9 @@ extern UniValue beaconconvergence(const UniValue& params);
 extern UniValue beaconstatus(const UniValue& params);
 extern UniValue createmrcrequest(const UniValue& params);
 extern UniValue explainmagnitude(const UniValue& params);
+extern UniValue generate(const UniValue& params);
+extern UniValue generatetoaddress(const UniValue& params);
+extern UniValue generatesuperblock(const UniValue& params);
 extern UniValue getlaststake(const UniValue& params);
 extern UniValue getmrcinfo(const UniValue& params);
 extern UniValue getstakinginfo(const UniValue& params);
@@ -355,6 +362,7 @@ extern const RPCHelpMan& createhtlc_helpman();
 extern const RPCHelpMan& createmrcrequest_helpman();
 extern const RPCHelpMan& createrawtransaction_helpman();
 extern const RPCHelpMan& currentcontractaverage_helpman();
+extern const RPCHelpMan& analyzepsgt_helpman();
 extern const RPCHelpMan& combinepsgt_helpman();
 extern const RPCHelpMan& converttopsgt_helpman();
 extern const RPCHelpMan& createpsgt_helpman();
@@ -375,6 +383,9 @@ extern const RPCHelpMan& dumpwallet_helpman();
 extern const RPCHelpMan& encryptwallet_helpman();
 extern const RPCHelpMan& explainmagnitude_helpman();
 extern const RPCHelpMan& fundrawtransaction_helpman();
+extern const RPCHelpMan& generate_helpman();
+extern const RPCHelpMan& generatesuperblock_helpman();
+extern const RPCHelpMan& generatetoaddress_helpman();
 extern const RPCHelpMan& getaccount_helpman();
 extern const RPCHelpMan& getaccountaddress_helpman();
 extern const RPCHelpMan& getaddednodeinfo_helpman();
@@ -485,6 +496,7 @@ extern const RPCHelpMan& signmessage_helpman();
 extern const RPCHelpMan& signrawtransaction_helpman();
 extern const RPCHelpMan& signrawtransactionwithkey_helpman();
 extern const RPCHelpMan& signrawtransactionwithwallet_helpman();
+extern const RPCHelpMan& stakelimit_helpman();
 extern const RPCHelpMan& stop_helpman();
 extern const RPCHelpMan& superblockage_helpman();
 extern const RPCHelpMan& superblockaverage_helpman();

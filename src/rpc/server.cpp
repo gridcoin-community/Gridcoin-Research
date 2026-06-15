@@ -370,6 +370,7 @@ static const CRPCCommand vRPCCommands[] =
     { "setaccount",              &setaccount,              cat_wallet, &setaccount_helpman        },
     { "sethdseed",               &sethdseed,               cat_wallet, &sethdseed_helpman        },
     { "settxfee",                &settxfee,                cat_wallet, &settxfee_helpman        },
+    { "stakelimit",              &stakelimit,              cat_wallet, &stakelimit_helpman        },
     { "signmessage",             &signmessage,             cat_wallet, &signmessage_helpman        },
     { "signrawtransaction",      &signrawtransaction,      cat_wallet, &signrawtransaction_helpman        },
     { "signrawtransactionwithkey",    &signrawtransactionwithkey,    cat_wallet, &signrawtransactionwithkey_helpman },
@@ -384,6 +385,7 @@ static const CRPCCommand vRPCCommands[] =
     { "walletdiagnose",          &walletdiagnose,          cat_wallet, &walletdiagnose_helpman        },
 
   // PSGT commands
+    { "analyzepsgt",             &analyzepsgt,             cat_wallet, &analyzepsgt_helpman        },
     { "createpsgt",              &createpsgt,              cat_wallet, &createpsgt_helpman        },
     { "decodepsgt",              &decodepsgt,              cat_wallet, &decodepsgt_helpman        },
     { "combinepsgt",             &combinepsgt,             cat_wallet, &combinepsgt_helpman        },
@@ -402,6 +404,9 @@ static const CRPCCommand vRPCCommands[] =
     { "beaconstatus",            &beaconstatus,            cat_staking, &beaconstatus_helpman        },
     { "createmrcrequest",        &createmrcrequest,        cat_staking, &createmrcrequest_helpman        },
     { "explainmagnitude",        &explainmagnitude,        cat_staking, &explainmagnitude_helpman        },
+    { "generate",                &generate,                cat_staking, &generate_helpman        },
+    { "generatetoaddress",       &generatetoaddress,       cat_staking, &generatetoaddress_helpman        },
+    { "generatesuperblock",      &generatesuperblock,      cat_staking, &generatesuperblock_helpman        },
     { "getlaststake",            &getlaststake,            cat_staking, &getlaststake_helpman        },
     { "getmrcinfo",              &getmrcinfo,              cat_staking, &getmrcinfo_helpman        },
     { "getstakinginfo",          &getstakinginfo,          cat_staking, &getstakinginfo_helpman        },
@@ -992,7 +997,7 @@ UniValue CRPCTable::execute(const std::string& strMethod, const UniValue& params
 }
 
 
-std::vector<std::string> CRPCTable::listCommands() const
+std::vector<std::string> CRPCTable::listCommands(bool include_deprecated) const
 {
     std::vector<std::string> commandList;
     typedef std::map<std::string, const CRPCCommand*> commandMap;
@@ -1000,9 +1005,11 @@ std::vector<std::string> CRPCTable::listCommands() const
     std::transform( mapCommands.begin(), mapCommands.end(),
                     std::back_inserter(commandList),
                     boost::bind(&commandMap::value_type::first,boost::placeholders::_1) );
-    // remove deprecated commands from autocomplete
-    for(auto &command: DEPRECATED_RPCS) {
-        commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+    if (!include_deprecated) {
+        // remove deprecated commands from autocomplete
+        for(auto &command: DEPRECATED_RPCS) {
+            commandList.erase(std::remove(commandList.begin(), commandList.end(), command), commandList.end());
+        }
     }
     return commandList;
 }

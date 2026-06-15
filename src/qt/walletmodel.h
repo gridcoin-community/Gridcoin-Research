@@ -6,6 +6,7 @@
 #include <map>
 
 #include "qt/wallet_event_queue.h"
+#include "qt/wallettxstore.h"
 #include "support/allocators/secure.h" /* for SecureString */
 #include "wallet/ismine.h"
 
@@ -142,6 +143,18 @@ public:
     //!
     GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
 
+    //!
+    //! \brief Accessor for the producer-owned transaction ordering store. The
+    //! producer (NotifyTransactionChanged) mutates it; TransactionTableModel
+    //! reads it only at reset time (reloadAndSnapshot).
+    //!
+    GRC::WalletTxStore& getTxStore() { return m_txStore; }
+
+    //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
+    //! user-initiated cursor change (a windowed-view filter/sort) is reflected
+    //! without waiting for the periodic drain tick (windowed-model PR4-fix D).
+    void requestEventDrainSoon();
+
 private:
     CWallet *wallet;
 
@@ -165,12 +178,32 @@ private:
 
     QTimer *eventDrainTimer;
 
+    //! Coalescing guard for requestEventDrainSoon() (PR4-fix D): true while a
+    //! user-requested immediate drain is already scheduled, so a burst of requests
+    //! (e.g. per-keystroke filter changes) collapses to one drain. Qt-thread only.
+    bool m_event_drain_requested = false;
+
+    //! Reentrancy guard for drainEventQueue() (windowed-model PR5-B): true while a
+    //! drain is applying events. A windowed consumer's synchronous fetch path
+    //! (DetailedTxModel::fetchWindow) calls drainEventQueue(), and applying a Reset
+    //! can synchronously re-enter (viewReset -> restoreAnchor -> setCurrentIndex ->
+    //! ...). A nested call no-ops so the outer drain owns the queue and events are
+    //! never double-processed. Qt-thread only.
+    bool m_draining = false;
+
     //!
     //! \brief MPSC queue carrying producer-side wallet events to the GUI.
     //! Producers push under the locks they already hold; the consumer is
     //! drainEventQueue(), fired by eventDrainTimer every 500ms.
     //!
     GRC::WalletEventQueue m_event_queue;
+
+    //!
+    //! \brief Producer-owned transaction ordering store. Declared AFTER
+    //! m_event_queue so the WalletEventQueue& it holds is bound to a fully
+    //! constructed object (member init order == declaration order).
+    //!
+    GRC::WalletTxStore m_txStore;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -197,6 +230,13 @@ signals:
     // the numTransactionsChanged signal will not be emitted, and therefore the overpage transaction list
     // needs this signal instead.
     void transactionUpdated();
+
+    //! Fan-out of a drained wallet-event batch to per-view windowed consumers
+    //! (PR3: OverviewTxModel). WalletModel drains the queue once and applies the
+    //! VIEW_FULL stream to its TransactionTableModel; this delivers the same batch
+    //! to the per-view consumers, which filter to their own viewId. Same-thread
+    //! (DirectConnection), so the const-ref is passed without a copy.
+    void walletEventsDrained(const std::vector<GRC::WalletEvent>& events);
 
     // Signal that balance in wallet changed
     void balanceChanged(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance);

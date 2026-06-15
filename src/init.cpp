@@ -12,6 +12,7 @@
 #include "util/threadnames.h"
 #include "net.h"
 #include "wallet/walletdb.h"
+#include <key_io.h>
 #include "banman.h"
 #include "random.h"
 #include "rpc/server.h"
@@ -22,17 +23,23 @@
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
+#include "net_processing.h"
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include <util/syserror.h>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
-#include <boost/algorithm/string/predicate.hpp> // for startswith() and endswith()
+#include <thread>
 
 static boost::thread_group threadGroup;
-static CScheduler scheduler;
+
+//! The proof-of-stake miner thread. Launched from AppInit2 Step 12 and joined
+//! in Shutdown() after StopNode(), before the block-file flush, so a block
+//! staked during shutdown cannot land after the flush (issue #2865). Owned
+//! here rather than by net.cpp's netThreads because it is a staking thread,
+//! not a network thread (issue #2558 PR 0).
+static std::thread g_stake_miner_thread;
 
 extern void ThreadAppInit2(void* parg);
 
@@ -59,6 +66,7 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 
 std::unique_ptr<BanMan> g_banman;
+std::unique_ptr<CScheduler> g_scheduler;
 
 /**
  * The PID file facilities.
@@ -149,9 +157,10 @@ void Shutdown(void* parg)
 
         fShutdown = true;
 
-        // Signal to the scheduler to stop.
+        // Signal to the scheduler to stop. Guarded because Shutdown() can run
+        // after an early AppInit2 failure, before the scheduler is constructed.
         LogPrintf("INFO: %s: Stopping the scheduler.", __func__);
-        scheduler.stop();
+        if (g_scheduler) g_scheduler->stop();
 
         // clean up any remaining threads running serviceQueue:
         LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
@@ -168,6 +177,13 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
+        // The stake miner exits via fShutdown plus the g_thread_interrupt()
+        // call above, which wakes its MilliSleep.
+        LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
+        if (g_stake_miner_thread.joinable()) {
+            g_stake_miner_thread.join();
+        }
+
         // Coordinate block-file and block-index DB state before exit so a
         // clean shutdown never leaves the LevelDB index referencing flat-file
         // data that hasn't been fsynced. The fsync on the active blk*.dat
@@ -176,12 +192,13 @@ void Shutdown(void* parg)
         // the LevelDB WAL to disk so any pending CDiskBlockIndex entries are
         // durable. See issue #2865.
         //
-        // This must run after StopNode() so that every thread that can write
-        // a block (ThreadMessageHandler, ThreadStakeMiner, ThreadScraper, and
-        // the rest of the net/peer thread group) has been joined. Running it
-        // earlier leaves a small race window where a block accepted during
-        // shutdown could land after our flush and bypass the coordination
-        // guarantee Phase 2's startup recovery relies on.
+        // This must run after StopNode() and the stake-miner join so that
+        // every thread that can write a block (ThreadMessageHandler,
+        // ThreadStakeMiner, ThreadScraper, and the rest of the net/peer
+        // thread group) has been joined. Running it earlier leaves a small
+        // race window where a block accepted during shutdown could land
+        // after our flush and bypass the coordination guarantee Phase 2's
+        // startup recovery relies on.
         LogPrintf("INFO: %s: Flushing block files and index DB.", __func__);
         {
             LOCK(cs_main);
@@ -212,6 +229,21 @@ void Shutdown(void* parg)
 
         LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
+
+        // Tear down the message processor and connection manager only AFTER the RPC
+        // worker threads are stopped (issue #2558). RPC handlers
+        // (getpeerinfo/getconnectioncount/disconnectnode/addnode) call into
+        // g_connman/g_peerman, which now OWN the node list (m_nodes/m_nodes_mutex);
+        // destroying them while an RPC call is in flight would lock a destroyed mutex
+        // and read freed node storage -- a use-after-free. (When the list was a file
+        // global with static lifetime this window was benign; the storage move makes
+        // it dangerous, so the reset moves below StopRPCThreads.) The net threads that
+        // drove the message processor were already joined by StopNode() above, and the
+        // stake miner above too, so this is the first point at which no thread -- net,
+        // RPC, or miner -- can still touch either. Reset the peer manager before the
+        // connection manager it is associated with (PR 8a).
+        if (g_peerman) g_peerman.reset();
+        if (g_connman) g_connman.reset();
 
         // This is necessary here to prevent a snapshot download from failing at the cleanup
         // step because of a write lock on accrual/registry.dat.
@@ -1155,7 +1187,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_timer.LogTimer("init", true);
     g_timer.GetTimes("Starting verify of database integrity", "init");
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
          string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1246,9 +1280,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     fNoListen = !gArgs.GetBoolArg("-listen", true);
     fDiscover = gArgs.GetBoolArg("-discover", true);
     fNameLookup = gArgs.GetBoolArg("-dns", true);
-#ifdef USE_UPNP
-    fUseUPnP = gArgs.GetBoolArg("-upnp", USE_UPNP);
-#endif
 
     bool fBound = false;
     if (!fNoListen)
@@ -1304,7 +1335,9 @@ bool AppInit2(ThreadHandlerPtr threads)
 
     // ********************************************************* Step 7: load blockchain
 
-    if (!bitdb.Open(GetDataDir()))
+    if (Params().IsMockableChain()) {
+        if (!bitdb.IsMock()) bitdb.MakeMock();
+    } else if (!bitdb.Open(GetDataDir()))
     {
         string msg = strprintf(_("Error initializing database environment %s!"
                                  " To recover, BACKUP THAT DIRECTORY, then remove"
@@ -1468,6 +1501,52 @@ bool AppInit2(ThreadHandlerPtr threads)
             pwalletMain->SetDefaultKey(newDefaultKey);
             if (!pwalletMain->SetAddressBookName(pwalletMain->vchDefaultKey.GetID(), ""))
                 strErrors << _("Cannot write default address") << "\n";
+        }
+    }
+
+    if (Params().IsMockableChain())
+    {
+        // Regtest premine key. Genesis coinbase pays 10 UTXOs to the P2PKH of
+        // the secp256k1 privkey-scalar=1 compressed pubkey (HASH160
+        // 751e76e8...). Plant the matching private key into the wallet on
+        // every -regtest start so the staker can spend the premine. The
+        // BDB env is mocked (in-memory) under regtest, so this re-runs each
+        // start and the key is never persisted to disk.
+        //
+        // Acquire cs_main before cs_wallet (canonical order; ScanForWalletTransactions
+        // below also takes LOCK2(cs_main, cs_wallet)). Holding both up front avoids the
+        // cs_wallet -> cs_main inversion that -DENABLE_DEBUG_LOCKORDER would flag.
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        const unsigned char kRegtestSecret[32] = {
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        };
+        CKey regtest_key;
+        regtest_key.Set(kRegtestSecret, kRegtestSecret + 32, /*fCompressedIn=*/true);
+        if (!regtest_key.IsValid()) {
+            LogPrintf("ERROR: regtest premine key did not validate");
+        } else if (!pwalletMain->HaveKey(regtest_key.GetPubKey().GetID())) {
+            if (!pwalletMain->AddKeyPubKey(regtest_key, regtest_key.GetPubKey())) {
+                LogPrintf("ERROR: failed to plant regtest premine key");
+            } else {
+                // Force nTimeFirstKey down to before genesis so
+                // ScanForWalletTransactions doesn't skip the genesis block
+                // via its wallet-birthday optimization (regtest genesis nTime
+                // is 1296688602; the wallet was created "now", so without
+                // this nudge the scan would skip all of history).
+                pwalletMain->LoadKeyMetadata(regtest_key.GetPubKey(), CKeyMetadata(1));
+
+                LogPrintf("regtest: planted premine private key, address %s",
+                          EncodeDestination(regtest_key.GetPubKey().GetID()));
+                // Genesis is loaded before the key is in the wallet, so the
+                // wallet has no record of the premine coinbase outputs. Walk
+                // the chain from genesis to surface them. pindexGenesisBlock
+                // is GUARDED_BY(cs_main), already held via the LOCK2 above.
+                if (pindexGenesisBlock) {
+                    int n = pwalletMain->ScanForWalletTransactions(pindexGenesisBlock, /*fUpdate=*/true);
+                    LogPrintf("regtest: scanned %d wallet transactions after premine key plant", n);
+                }
+            }
         }
     }
 
@@ -1651,16 +1730,52 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_banman = std::make_unique<BanMan>(GetDataDir() / "banlist.dat", &uiInterface,
                                         gArgs.GetArg("-bantime", DEFAULT_MISBEHAVING_BANTIME));
 
+    // Let a lifted/cleared/swept ban also reset the peer's misbehavior score,
+    // which lives in PeerManagerImpl (issue #2558 PR 8b). Route through
+    // g_peerman, constructed just below; the callback is only invoked once bans
+    // are cleared at runtime, by which point g_peerman exists (null-guarded).
+    g_banman->SetMisbehaviorClearCallback([](const CSubNet& sub_net) -> unsigned int {
+        return g_peerman ? g_peerman->ClearMisbehaviorForSubnet(sub_net) : 0u;
+    });
+
+    // Connection manager (issue #2558 PR 3). Constructed here; its net threads
+    // launch from StartNode -> g_connman->Start() in Step 12 below.
+    assert(!g_connman);
+    g_connman = std::make_unique<CConnman>(0, 0);
+
+    // Message-processing manager (issue #2558 PR 8a/8b). Constructed before the
+    // connection manager is Init'd so it can be wired in as the msgproc the net
+    // threads drive (PR 8c).
+    assert(!g_peerman);
+    g_peerman = PeerManager::make(*g_connman, g_banman.get());
+    // NOTE: g_peerman->StartScheduledTasks() is intentionally NOT called here --
+    // g_scheduler is not constructed until later in AppInit2, so the previous
+    // `if (g_scheduler) ...` call at this point was always a no-op. It is invoked
+    // below, immediately after the scheduler is created.
+
+    CConnman::Options conn_options;
+    conn_options.nMaxOutbound      = (int) gArgs.GetArg("-maxoutboundconnections", 8);
+    const int64_t requested_max    = gArgs.GetArg("-maxconnections", 125);
+    conn_options.nMaxConnections   = requested_max < 950 ? (int) requested_max : 950;
+    conn_options.m_msgproc         = g_peerman.get(); // issue #2558 PR 8c
+    g_connman->Init(conn_options);
+
+    // UPnP preference (issue #2558 PR 9d3): formerly the global fUseUPnP, set
+    // here now that g_connman exists; read by CConnman::Start -> MapPort.
+#ifdef USE_UPNP
+    g_connman->SetUseUPnP(gArgs.GetBoolArg("-upnp", USE_UPNP));
+#endif
+
     uiInterface.InitMessage(_("Loading addresses..."));
     LogPrint(BCLog::LogFlags::NOISY, "Loading addresses...");
 
     {
         CAddrDB adb;
-        if (!adb.Read(addrman))
+        if (!adb.Read(g_connman->GetAddrMan()))
             LogPrintf("Invalid or missing peers.dat; recreating");
     }
 
-    LogPrintf("Loaded %i addresses from peers.dat.", addrman.size());
+    LogPrintf("Loaded %i addresses from peers.dat.", g_connman->GetAddrMan().size());
     g_timer.GetTimes("Load peers complete", "init");
 
     // ********************************************************* Step 12: start node
@@ -1686,6 +1801,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     if (!threads->createThread(StartNode, nullptr, "Start Thread"))
         InitError(_("Error: could not start node"));
 
+    // The stake miner is a staking thread, not a network thread, so it is
+    // launched here rather than from StartNode(). It self-gates each loop
+    // iteration via IsMiningAllowed(), so starting it concurrently with the
+    // net threads is safe.
+    g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
+
     if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
 
     // ********************************************************* Step 13: finished
@@ -1701,22 +1822,34 @@ bool AppInit2(ThreadHandlerPtr threads)
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
     // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
+    assert(!g_scheduler);
+    g_scheduler = std::make_unique<CScheduler>();
+    CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
 
+    // Register the PeerManager's recurring tasks now that the scheduler exists
+    // (issue #2558). This call previously sat next to the PeerManager construction
+    // above -- before g_scheduler was created -- so its `if (g_scheduler)` guard was
+    // always false and it never fired. PeerManagerImpl::StartScheduledTasks is an
+    // empty shell today, but wiring it at the correct point ensures any future
+    // recurring task is actually scheduled rather than silently dropped. g_peerman
+    // is constructed unconditionally above, so call it directly (asserting the
+    // wiring explicit -- it can no longer be silently skipped -- rather than re-introducing a guard.
+    g_peerman->StartScheduledTasks(*g_scheduler);
+
     // Gather some entropy once per minute.
-    scheduler.scheduleEvery([]{
+    g_scheduler->scheduleEvery([]{
         RandAddPeriodic();
     }, std::chrono::minutes{1});
 
     // TODO: Do we need this? It would require porting the Bitcoin signal handler.
-    // GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
+    // GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
 
-    scheduler.scheduleEvery([]{
+    g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
-    GRC::ScheduleBackgroundJobs(scheduler);
+    GRC::ScheduleBackgroundJobs(*g_scheduler);
 
     #if HAVE_SYSTEM
         StartupNotify(gArgs);

@@ -1244,6 +1244,25 @@ void BitcoinGUI::changeEvent(QEvent *e)
 void BitcoinGUI::closeEvent(QCloseEvent *event)
 {
 #ifndef Q_OS_MAC // Ignored on Mac
+    // An explicit shutdown -- requestQuit(): menu Exit / Ctrl-Q / tray Exit, a
+    // snapshot or reset-blockchain restart, the post-encryption restart, or a
+    // core-initiated QueueShutdown -- calls qApp->quit(), which on Qt6 lands
+    // here via closeAllWindows(). Accept the close so the application actually
+    // exits, rather than honoring "minimize on close" and vetoing the quit.
+    // The X window button leaves m_quit_requested false and still minimizes.
+    // See issue #2995.
+    if (m_quit_requested)
+    {
+        // Consume the latch as it is read. A requestQuit() always terminates the
+        // process today, but clearing it here keeps the design self-healing: if a
+        // quit were ever vetoed (e.g. a future close-vetoing dialog left the app
+        // alive), the flag would not stay stuck true and silently disable
+        // minimize-on-close for the next X-button close.
+        m_quit_requested = false;
+        QMainWindow::closeEvent(event);
+        return;
+    }
+
     if(clientModel && clientModel->getOptionsModel())
     {
         if(!clientModel->getOptionsModel()->getMinimizeOnClose())
@@ -1361,7 +1380,7 @@ void BitcoinGUI::snapshotClicked()
     {
         fSnapshotRequest = true;
 
-        qApp->quit();
+        requestQuit();
     }
 }
 
@@ -1396,7 +1415,7 @@ void BitcoinGUI::resetblockchainClicked()
     {
         fResetBlockchainRequest = true;
 
-        qApp->quit();
+        requestQuit();
     }
 }
 
@@ -1428,8 +1447,22 @@ bool BitcoinGUI::tryQuit()
         return false;
     }
 
-    qApp->quit();
+    requestQuit();
     return true;
+}
+
+bool BitcoinGUI::m_quit_requested = false;
+
+void BitcoinGUI::requestQuit()
+{
+    // Mark the shutdown as explicit so closeEvent() accepts the close instead of
+    // minimizing, then quit() the normal way. On Qt6 quit() runs the full
+    // closeAllWindows() / closeEvent() / aboutToQuit() sequence -- unlike a blunt
+    // exit() that would short-circuit it; on Qt5 quit() is exit(0) and skips that
+    // sequence, which is fine because Qt5 never hits the minimize-on-close veto.
+    // See the requestQuit() doc and issue #2995.
+    m_quit_requested = true;
+    QApplication::quit();
 }
 
 void BitcoinGUI::diagnosticsClicked()

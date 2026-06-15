@@ -2,7 +2,6 @@
 #include "guiutil.h"
 #include "transactionrecord.h"
 #include "guiconstants.h"
-#include "transactiondesc.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
@@ -18,12 +17,8 @@
 #include <QIcon>
 #include <QDateTime>
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
-#include <iterator>
-#include <limits>
-#include <unordered_map>
 #include <vector>
 
 // Amount column is right-aligned it contains numbers
@@ -35,28 +30,12 @@ static int column_alignments[] = {
         Qt::AlignRight|Qt::AlignVCenter
     };
 
-// Composite-key ordering for the cached transaction list. Three-level key:
-//
-//   1. time DESCENDING — newest first; matches the default user-facing
-//      ordering for the table.
-//   2. hash ASCENDING  — clusters all decomposed records of one tx into a
-//      contiguous range. Without this, two txs that share a wall-clock
-//      second AND have overlapping decomposition indices would interleave
-//      (A0, B0, A1, B1), forcing insert/remove to handle disjoint ranges.
-//      With hash at second level, each tx is always a coherent block.
-//   3. idx ASCENDING   — within a single tx (same time, same hash), preserves
-//      the order produced by TransactionRecord::decomposeTransaction. idx
-//      values are unique within a tx, so this is a true total order: no two
-//      records ever compare equal.
-struct TxRecordOrder
-{
-    bool operator()(const TransactionRecord &a, const TransactionRecord &b) const
-    {
-        if (a.time != b.time) return a.time > b.time;
-        if (a.hash != b.hash) return a.hash < b.hash;
-        return a.idx < b.idx;
-    }
-};
+// The cached-wallet ORDERING (time DESC, hash ASC, idx ASC) and the position /
+// contiguous-range computation now live producer-side in GRC::WalletTxStore
+// (src/qt/wallettxstore.{h,cpp}), built on the Qt-free GRC::TxOrderLess
+// (src/qt/txorder.h). This model is a thin consumer: it keeps a replica that
+// it mutates in lockstep from the producer's position-stamped RowsInserted /
+// RowsRemoved events — it never computes positions itself.
 
 // Private implementation
 class TransactionTablePriv
@@ -73,92 +52,28 @@ public:
     TransactionTableModel *parent;
 
     //!
-    //! \brief Local cache of wallet transactions, sorted by TxRecordOrder
-    //! (time DESC, hash ASC, idx ASC). Each entry is one row of the table.
-    //!
-    //! Companion `hashIndex` maps tx-hash → vector positions for O(1)
-    //! lookup. Records with the same hash are always contiguous in the
-    //! vector (the second-level hash tiebreaker in TxRecordOrder
-    //! guarantees this).
+    //! \brief Consumer-side replica of the ordered wallet view, kept in
+    //! lockstep with the producer-owned GRC::WalletTxStore by replaying its
+    //! position-stamped RowsInserted / RowsRemoved events. Each entry is one
+    //! row of the table. This is Qt-thread-exclusive (only data(),
+    //! applyEventBatch, and loadWallet touch it, all on the Qt main thread),
+    //! so it needs no lock. The producer's authoritative ordering store is a
+    //! separate object guarded by cs_store; the consumer never reads it on the
+    //! render path. (The replica shrinks to a viewport slice in the windowing
+    //! step, PR5.)
     //!
     std::vector<TransactionRecord> cachedWallet;
-    std::unordered_multimap<uint256, std::size_t, BlockHasher> hashIndex;
 
-    //!
-    //! \brief Rebuild hashIndex from cachedWallet from scratch. Used after
-    //! loadWallet() and any bulk operation where it's cheaper to rebuild
-    //! than to maintain incrementally.
-    //!
-    void rebuildHashIndex()
-    {
-        hashIndex.clear();
-        // Reserve with headroom so the default max_load_factor=1.0 doesn't
-        // trigger an immediate rehash on the first emplace.
-        hashIndex.reserve(cachedWallet.size() * 2 + 1);
-        for (std::size_t i = 0; i < cachedWallet.size(); ++i) {
-            hashIndex.emplace(cachedWallet[i].hash, i);
-        }
-    }
-
-    //!
-    //! \brief Bump every hashIndex value whose position is >= `from` by
-    //! `delta`. Used to maintain the index after a vector insert (positive
-    //! delta) or erase (negative delta).
-    //!
-    //! O(M) where M = total hashIndex entries. Acceptable per design
-    //! (the typical insert/remove is rare and pays this only once).
-    //!
-    void shiftHashIndex(std::size_t from, std::ptrdiff_t delta)
-    {
-        for (auto& kv : hashIndex) {
-            if (kv.second >= from) {
-                kv.second = static_cast<std::size_t>(
-                    static_cast<std::ptrdiff_t>(kv.second) + delta);
-            }
-        }
-    }
-
-    /* Query entire wallet anew from core.
-     */
+    /* Query entire wallet anew from core, via the producer store. */
     void loadWallet()
     {
-        cachedWallet.clear();
-        // hashIndex is reset by rebuildHashIndex() below.
-        {
-            LOCK2(cs_main, wallet->cs_wallet);
-
-            const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
-            const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
-
-            // Reserve a reasonable upper bound up front to avoid the
-            // ~18 reallocations a 300k-tx wallet would otherwise pay.
-            // Each wtx typically decomposes to 1-3 records; double the
-            // wtx count as a safe lower estimate.
-            cachedWallet.reserve(wallet->mapWallet.size() * 2);
-
-            for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
-            {
-                if (!TransactionRecord::showTransaction(it->second)) continue;
-
-                const QList<TransactionRecord> decomposed =
-                    TransactionRecord::decomposeTransaction(wallet, it->second);
-
-                // Apply the datetime-limit filter at the RECORD level on
-                // rec.time (= CWalletTx::GetTxTime), matching the Date
-                // column shown in the GUI and the cutoff applied in
-                // applyTxAdded. showTransaction's wtx-level cutoff
-                // compares wtx.nTime (signing time), which can drift
-                // from GetTxTime for confirmed txs and produces a
-                // visibly inconsistent filter on initial load vs
-                // incremental adds.
-                for (const TransactionRecord& rec : decomposed) {
-                    if (fLimitTxnDisplay && rec.time < limitTxnDateTime) continue;
-                    cachedWallet.push_back(rec);
-                }
-            }
-        }
-        std::sort(cachedWallet.begin(), cachedWallet.end(), TxRecordOrder());
-        rebuildHashIndex();
+        // reloadAndSnapshot rebuilds the producer-side ordering store (under
+        // cs_main + cs_wallet, blocking producers and discarding any stale
+        // queued events) and returns a fresh, fully decomposed, sorted snapshot
+        // for this replica. The datetime-display cutoff is applied store-side.
+        const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
+        const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
+        cachedWallet = walletModel->getTxStore().reloadAndSnapshot(fLimitTxnDisplay, limitTxnDateTime);
     }
 
 
@@ -180,160 +95,102 @@ public:
     //! queue. This is the new incremental update path; it runs on the Qt
     //! main thread and does NOT take cs_main or cs_wallet.
     //!
-    //! - TxAdded payloads carry records that were already decomposed at the
-    //!   producer side, so no wallet lookup is needed. The consumer applies
-    //!   the user's datetime-limit filter (a record-level predicate on
-    //!   record.time) and inserts the surviving records as a contiguous
-    //!   range at the TxRecordOrder lower_bound position. Same-hash records
-    //!   cluster naturally under that ordering, so a single beginInsertRows
-    //!   covers the whole tx.
+    //! - RowsInserted payloads carry a producer-computed position and the
+    //!   decomposed records (already datetime-filtered and de-duped store-side).
+    //!   The consumer splices them into its replica at exactly that position
+    //!   inside one beginInsertRows/endInsertRows bracket. It reads ONLY the
+    //!   payload, never the producer store, so the replica tracks the begin/end
+    //!   replay even when a drain batch contains several inserts that reorder
+    //!   rows — which keeps the QSortFilterProxyModel on top consistent.
     //!
-    //! - TxRemoved payloads carry just the hash. The consumer locates the
-    //!   matching range via hashIndex (O(1) average) and removes it as a
-    //!   single contiguous block.
+    //! - RowsRemoved payloads carry a producer-computed position + count for a
+    //!   contiguous run; the consumer erases that range in one
+    //!   beginRemoveRows/endRemoveRows bracket.
     //!
-    //! - TxUpdated payloads carry hash + status. No row mutation is needed:
-    //!   per-row status (depth, Confirmed/Confirming/etc.) is refreshed
-    //!   lazily on read inside index(), and updateConfirmations() drives
-    //!   a per-block table-wide dataChanged that refreshes the visible
-    //!   rows. The event is acknowledged via verbose logging only.
+    //! - ChainTipChanged: no row mutation. Per-row status (confirmations) is
+    //!   refreshed lazily on read in index(), driven once per batch by
+    //!   updateConfirmations() at the WalletModel drain level.
     //!
     void applyEventBatch(const std::vector<GRC::WalletEvent>& events)
     {
-        const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
-        const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
-
         for (const auto& ev : events) {
             std::visit([&](auto&& payload) {
                 using P = std::decay_t<decltype(payload)>;
-                if constexpr (std::is_same_v<P, GRC::TxAddedPayload>) {
-                    applyTxAdded(payload, fLimitTxnDisplay, limitTxnDateTime);
-                } else if constexpr (std::is_same_v<P, GRC::TxRemovedPayload>) {
-                    applyTxRemoved(payload);
+                if constexpr (std::is_same_v<P, GRC::RowsInsertedPayload>) {
+                    applyRowsInserted(payload);
+                } else if constexpr (std::is_same_v<P, GRC::RowsRemovedPayload>) {
+                    applyRowsRemoved(payload);
                 } else if constexpr (std::is_same_v<P, GRC::ChainTipChangedPayload>) {
-                    // ChainTipChanged is handled at the WalletModel drain
-                    // level (triggers updateConfirmations + checkBalanceChanged
-                    // once per batch). No per-event row mutation here.
+                    // Handled at the WalletModel drain level (updateConfirmations
+                    // + checkBalanceChanged once per batch). No row mutation.
                 }
             }, ev.payload);
         }
     }
 
-    void applyTxAdded(const GRC::TxAddedPayload& payload,
-                      bool fLimitTxnDisplay,
-                      int64_t limitTxnDateTime)
+    void applyRowsInserted(const GRC::RowsInsertedPayload& payload)
     {
-        // Apply the consumer-side datetime filter. The producer has already
-        // applied the wtx-level visibility checks (orphan coinstake/coinbase,
-        // legacy OP_RETURN) under the locks it held at notification time.
-        //
-        // All records in a payload share `time` and `hash`, so the datetime
-        // filter is all-or-nothing: either every record clears the cutoff
-        // or none do.
-        std::vector<TransactionRecord> toInsert;
-        toInsert.reserve(payload.records.size());
-        for (const TransactionRecord& rec : payload.records) {
-            if (fLimitTxnDisplay && rec.time < limitTxnDateTime) {
-                continue;
-            }
-            toInsert.push_back(rec);
+        // This consumer owns only the native, unfiltered VIEW_FULL stream;
+        // per-view cursor events (OverviewPage etc.) belong to other consumers.
+        if (payload.viewId != GRC::VIEW_FULL) {
+            return;
         }
-        if (toInsert.empty()) {
+        if (payload.records.empty()) {
             return;
         }
 
-        // Sort the new records by TxRecordOrder. decomposeTransaction
-        // already produces them in idx order (which is the third-level
-        // tiebreaker, with same time + same hash), so this is normally
-        // a no-op — but enforce defensively against any future producer
-        // change.
-        std::sort(toInsert.begin(), toInsert.end(), TxRecordOrder());
-
-        // Skip duplicate insert: hashIndex.find() is O(1) average and
-        // tells us whether ANY record of this tx is already cached.
-        // Because the producer sends all records of a tx as one payload,
-        // a present hash means the full set is already there.
-        const uint256& hash = toInsert.front().hash;
-        if (hashIndex.find(hash) != hashIndex.end()) {
-            LogPrint(BCLog::LogFlags::VERBOSE,
-                     "applyTxAdded: %s already in model — skipping duplicate insert", hash.GetHex());
+        // The store computes `position` against an ordering that mirrors this
+        // replica (both start identical and replay the same position-stamped
+        // events in seqno order), so position is provably in range for the
+        // current producer. Validate it explicitly anyway: the DEPLOYED build
+        // is -DNDEBUG, so an assert here would vanish and a bad position would
+        // become a huge size_t -> out-of-bounds insert (heap corruption). If a
+        // future producer regression ever emits a bad position, degrade safely
+        // — log and skip — rather than corrupt the heap.
+        if (payload.position < 0
+                || static_cast<std::size_t>(payload.position) > cachedWallet.size()) {
+            LogPrintf("ERROR: %s: RowsInserted position %d out of range [0, %u] — skipping",
+                      __func__, payload.position,
+                      static_cast<unsigned int>(cachedWallet.size()));
             return;
         }
-
-        // All records in toInsert share `time` and `hash` and differ only
-        // in `idx`. Under TxRecordOrder they sort to a contiguous range
-        // and slot into cachedWallet at the lower_bound position of the
-        // first record.
-        auto pos = std::lower_bound(cachedWallet.begin(), cachedWallet.end(),
-                                    toInsert.front(), TxRecordOrder());
-        const std::size_t insertIdx = static_cast<std::size_t>(pos - cachedWallet.begin());
-        const std::size_t insertCount = toInsert.size();
+        const std::size_t insertIdx = static_cast<std::size_t>(payload.position);
+        const std::size_t insertCount = payload.records.size();
 
         parent->beginInsertRows(QModelIndex(),
                                 static_cast<int>(insertIdx),
                                 static_cast<int>(insertIdx + insertCount - 1));
-
-        // Order matters: shift the index BEFORE the vector insert (the
-        // shift uses logical positions, not iterators, so the vector's
-        // unshifted state doesn't matter), then do the insert, then add
-        // the new index entries for the inserted range. Doing it in this
-        // order keeps the index consistent at every observable point.
-        shiftHashIndex(insertIdx, static_cast<std::ptrdiff_t>(insertCount));
-        cachedWallet.insert(pos, toInsert.begin(), toInsert.end());
-        for (std::size_t k = 0; k < insertCount; ++k) {
-            hashIndex.emplace(hash, insertIdx + k);
-        }
-
+        cachedWallet.insert(cachedWallet.begin() + insertIdx,
+                            payload.records.begin(), payload.records.end());
         parent->endInsertRows();
     }
 
-    void applyTxRemoved(const GRC::TxRemovedPayload& payload)
+    void applyRowsRemoved(const GRC::RowsRemovedPayload& payload)
     {
-        auto range = hashIndex.equal_range(payload.hash);
-        if (range.first == range.second) {
-            // Not in cachedWallet — may have been filtered out at insert time,
-            // or never inserted (e.g. an orphan caught by the producer-side
-            // showTransaction check). No row work needed.
+        if (payload.viewId != GRC::VIEW_FULL) {
+            return;  // per-view cursor event — not this consumer's
+        }
+        // A RowsRemoved is emitted only for a real, non-empty erase the store
+        // located, so the range is provably in this replica. Validate anyway —
+        // the deployed -DNDEBUG build drops asserts, and a bad position/count
+        // would become a huge size_t -> out-of-bounds erase (heap corruption).
+        // Degrade safely on a future producer regression.
+        if (payload.position < 0 || payload.count <= 0
+                || static_cast<std::size_t>(payload.position)
+                       + static_cast<std::size_t>(payload.count) > cachedWallet.size()) {
+            LogPrintf("ERROR: %s: RowsRemoved range [%d, +%d) out of bounds for %u rows — skipping",
+                      __func__, payload.position, payload.count,
+                      static_cast<unsigned int>(cachedWallet.size()));
             return;
         }
-
-        // Collect the positions for this hash. Same-hash records are
-        // contiguous in the vector under TxRecordOrder (the second-level
-        // hash tiebreaker guarantees clustering), so the min and max
-        // bound a single range.
-        std::size_t minPos = std::numeric_limits<std::size_t>::max();
-        std::size_t maxPos = 0;
-        for (auto it = range.first; it != range.second; ++it) {
-            if (it->second < minPos) minPos = it->second;
-            if (it->second > maxPos) maxPos = it->second;
-        }
-        const std::size_t removeCount = maxPos - minPos + 1;
-
-        // Defensive checks for the contiguity invariant the erase relies
-        // on. If a future change ever lets same-hash records de-cluster
-        // (e.g. switching the comparator to (time, idx, hash), or a
-        // post-decomposition mutation of `time`), these asserts surface
-        // it before the erase silently drops unrelated rows.
-        //
-        // Bounds checks come first so a corrupted hashIndex (positions
-        // past the end of cachedWallet) trips an assert rather than
-        // running the cachedWallet[minPos] / cachedWallet[maxPos]
-        // subscripts below into undefined behavior.
-        assert(minPos < cachedWallet.size());
-        assert(maxPos < cachedWallet.size());
-        assert(removeCount == static_cast<std::size_t>(std::distance(range.first, range.second)));
-        assert(cachedWallet[minPos].hash == payload.hash);
-        assert(cachedWallet[maxPos].hash == payload.hash);
+        const std::size_t pos = static_cast<std::size_t>(payload.position);
+        const std::size_t count = static_cast<std::size_t>(payload.count);
 
         parent->beginRemoveRows(QModelIndex(),
-                                static_cast<int>(minPos),
-                                static_cast<int>(maxPos));
-
-        cachedWallet.erase(cachedWallet.begin() + minPos,
-                           cachedWallet.begin() + maxPos + 1);
-        hashIndex.erase(payload.hash);
-        shiftHashIndex(maxPos + 1, -static_cast<std::ptrdiff_t>(removeCount));
-
+                                static_cast<int>(pos),
+                                static_cast<int>(pos + count - 1));
+        cachedWallet.erase(cachedWallet.begin() + pos,
+                           cachedWallet.begin() + pos + count);
         parent->endRemoveRows();
     }
 
@@ -342,52 +199,23 @@ public:
         return static_cast<int>(cachedWallet.size());
     }
 
+    // Returns the cached record for replica row \p idx (backs indexForTxid ->
+    // OverviewPage click-through). NO lazy status refresh: status is computed
+    // producer-side — on insert under cs_main (walletmodel.cpp, before enqueue)
+    // and per-block via WalletTxStore::applyChainTipRefresh — so the Qt render
+    // and click-through threads never touch cs_main / cs_wallet here
+    // (windowed-model PR5-C; the detail dialog now formats via
+    // WalletTxStore::getRowDetail on the producer).
     TransactionRecord *index(int idx)
     {
         if(idx >= 0 && static_cast<std::size_t>(idx) < cachedWallet.size())
         {
-            TransactionRecord *rec = &cachedWallet[idx];
-
-            // Get required locks upfront. This avoids the GUI from getting
-            // stuck if the core is holding the locks for a longer time - for
-            // example, during a wallet rescan.
-            //
-            // If a status update is needed (blocks came in since last check),
-            //  update the status of this transaction from the wallet. Otherwise,
-            // simply reuse the cached status.
-            TRY_LOCK(cs_main, lockMain);
-            if(lockMain)
-            {
-                TRY_LOCK(wallet->cs_wallet, lockWallet);
-                if(lockWallet && rec->statusUpdateNeeded())
-                {
-                    std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-
-                    if(mi != wallet->mapWallet.end())
-                    {
-                        rec->updateStatus(mi->second);
-                    }
-                }
-            }
-            return rec;
+            return &cachedWallet[idx];
         }
         else
         {
             return nullptr;
         }
-    }
-
-    QString describe(TransactionRecord *rec)
-    {
-        {
-            LOCK2(cs_main, wallet->cs_wallet);
-            std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-            if(mi != wallet->mapWallet.end())
-            {
-                return TransactionDesc::toHTML(wallet, mi->second, rec->vout);
-            }
-        }
-        return QString("");
     }
 
 };
@@ -428,10 +256,18 @@ void TransactionTableModel::updateConfirmations()
 {
     LogPrint(BCLog::MISC, "TransactionTableModel::updateConfirmations()");
 
-    // Blocks came in since last poll.
-    // Invalidate status (number of confirmations) and (possibly) description
-    //  for all rows. Qt is smart enough to only actually request the data for the
-    //  visible rows.
+    // Blocks came in since last poll: invalidate the Status (confirmation count)
+    // and ToAddress columns for all rows.
+    //
+    // NOTE (windowed-model PR5-C): this dataChanged is currently OBSERVERLESS — no
+    // view binds TransactionTableModel as its model (the views are DetailedTxModel /
+    // OverviewTxModel, refreshed by their own producer event stream; only
+    // BitcoinGUI consumes TTM's rowsInserted, not dataChanged). It is kept as the
+    // model-correct signal should TTM ever be re-attached as a view model. If it is,
+    // note that index() no longer self-refreshes status from the wallet (the lazy
+    // TRY_LOCK was removed in PR5-C); status is computed producer-side on insert and
+    // refreshed per-block via WalletTxStore::applyChainTipRefresh, so a re-wire must
+    // rely on that producer path, not on a paint-thread refresh.
     emit dataChanged(index(0, Status), index(priv->size()-1, Status));
     emit dataChanged(index(0, ToAddress), index(priv->size()-1, ToAddress));
 }
@@ -442,6 +278,21 @@ int TransactionTableModel::rowCount(const QModelIndex &parent) const
         return 0;
     }
     return priv->size();
+}
+
+QModelIndex TransactionTableModel::indexForTxid(const uint256& hash) const
+{
+    // First replica row whose tx hash matches (same-hash parts are contiguous;
+    // the first is a fine click-through anchor). Linear scan — off the hot path
+    // (runs only on a recent-transaction click).
+    const int rows = priv->size();
+    for (int row = 0; row < rows; ++row) {
+        TransactionRecord* rec = priv->index(row);
+        if (rec && rec->hash == hash) {
+            return index(row, 0);
+        }
+    }
+    return QModelIndex();
 }
 
 int TransactionTableModel::columnCount(const QModelIndex &parent) const
@@ -809,7 +660,23 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     TransactionRecord *rec = priv->index(index.row());
     if (!rec) return QVariant();
 
-    const auto column = static_cast<ColumnIndex>(index.column());
+    return formatRole(rec, index.column(), role);
+}
+
+// Role-formatting core, factored out of data() so the per-view consumers
+// (OverviewPage's OverviewTxModel — windowed-model PR3) render their own served
+// records through the identical formatters instead of duplicating them. `rec`
+// is any record (this model's replica row or a cursor's served row); `columnInt`
+// is a TransactionTableModel::ColumnIndex.
+QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt, int role) const
+{
+    // Public helper (per-view consumers call it too): validate the column so an
+    // out-of-range value cannot index column_alignments[] out of bounds or land in
+    // an undefined ColumnIndex (asserts are compiled out in release builds).
+    if (!rec || columnInt < Status || columnInt > Amount) {
+        return QVariant();
+    }
+    const auto column = static_cast<ColumnIndex>(columnInt);
     switch (role) {
     case Qt::DecorationRole:
         switch (column) {
@@ -878,18 +745,18 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         } // no default case, so the compiler can warn about missing cases
         assert(false);
     case Qt::TextAlignmentRole:
-        return column_alignments[index.column()];
+        return column_alignments[columnInt];
     case Qt::ForegroundRole:
         // Non-confirmed (but not immature) as transactions are grey
         if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature)
         {
             return COLOR_UNCONFIRMED;
         }
-        if(index.column() == Amount && (rec->credit+rec->debit) < 0)
+        if(columnInt == Amount && (rec->credit+rec->debit) < 0)
         {
             return COLOR_NEGATIVE;
         }
-        if(index.column() == ToAddress)
+        if(columnInt == ToAddress)
         {
             return addressColor(rec);
         }
@@ -898,8 +765,6 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return rec->type;
     case DateRole:
         return QDateTime::fromSecsSinceEpoch(rec->time);
-    case LongDescriptionRole:
-        return priv->describe(rec);
     case AddressRole:
         return QString::fromStdString(rec->address);
     case LabelRole:

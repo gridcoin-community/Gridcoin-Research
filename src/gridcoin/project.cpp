@@ -441,6 +441,20 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
     // now impossible -- Refresh fires explicitly at the chain handler points, not from inside Snapshot).
     const WhitelistSnapshot whitelist = GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED, false);
 
+    // Capture the Whitelist first-actives by value BEFORE taking autogreylist_lock. GetProjectsFirstActive()
+    // self-acquires cs_lock; calling it while holding autogreylist_lock (as the post-PR2997 code did) formed the
+    // reverse lock edge autogreylist_lock -> cs_lock -- an ABBA deadlock against the canonical cs_lock ->
+    // autogreylist_lock taken by Whitelist::Snapshot -> IsDeepCopyActive/Contains (Snapshot is not cs_main-gated,
+    // so the two run concurrently). Taking the by-value copy here, with no autogreylist_lock held, removes that
+    // edge. It is safe without autogreylist_lock: the copy bumps the entries' shared_ptr refcounts (so they
+    // outlive any concurrent slot replace/erase under cs_lock), and the only field the loop reads, m_timestamp,
+    // is write-once (set on the local payload before insertion). Guarded by the lock-free Populated() to preserve
+    // the original short-circuit (the getter ran only on the populated path).
+    Whitelist::ProjectEntryMap project_first_actives;
+    if (whitelist.Populated()) {
+        project_first_actives = GetWhitelist().GetProjectsFirstActive();
+    }
+
     LOCK(autogreylist_lock);
 
     // Gate: is the non-mutating deep-copy overlay active at this superblock's height? Stored under
@@ -454,8 +468,6 @@ void AutoGreylist::RefreshWithSuperblock(SuperblockPtr superblock_ptr_in,
     if (!whitelist.Populated()) {
         return;
     }
-
-    const Whitelist::ProjectEntryMap& project_first_actives = GetWhitelist().GetProjectsFirstActive();
 
     // If this superblock version is less than 3, then all prior ones must also be less than 3, so bail.
     if (superblock_ptr_in->m_version < 3) {

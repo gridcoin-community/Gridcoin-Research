@@ -18,6 +18,7 @@
 #include "txdb.h"
 #include "node/ui_interface.h"
 #include "validation.h"
+#include <util/string.h>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
@@ -833,8 +834,8 @@ std::string PollReference::Notify(const PollNotificationType& notify_type) const
     if (!Expired(GetAdjustedTime())) {
         if (!strCmd.empty()) {
             // The placeholders %s1 and %s2 are replaced with the txid and the notification type.
-            boost::replace_all(strCmd, "%s1", m_txid.ToString());
-            boost::replace_all(strCmd, "%s2", NotifyTypeToString(notify_type));
+            ReplaceAll(strCmd, "%s1", m_txid.ToString());
+            ReplaceAll(strCmd, "%s2", NotifyTypeToString(notify_type));
             boost::thread t(runCommand, strCmd); // thread runs free
 
             LogPrint(BCLog::LogFlags::MISC, "INFO: %s: poll notify command: %s", __func__, strCmd);

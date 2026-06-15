@@ -338,6 +338,10 @@ public:
     bool IsValidNumArgs(size_t num_args) const;
     //! Return list of arguments and whether they are named-only.
     std::vector<std::pair<std::string, bool>> GetArgNames() const;
+    //! Return the declared positional arguments. Used by tests to cross-check
+    //! each argument's declared type against the CLI client's string->JSON
+    //! parameter-conversion table (rpc/client.cpp).
+    const std::vector<RPCArg>& GetArgs() const { return m_args; }
 
     //! Mark this command as accepting any number of trailing args beyond the declared
     //! signature (i.e. the dispatcher should NOT enforce IsValidNumArgs as an upper bound).

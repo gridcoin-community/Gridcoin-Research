@@ -28,85 +28,154 @@ This guide provides step-by-step workflows for common development scenarios in t
 ### Scenario
 You want to add a new RPC command for users to query or modify wallet/blockchain state.
 
+### Convention notes (post-#2922)
+
+Every RPC in this codebase follows the `RPCHelpMan` pattern as of issue #2922
+(completed June 2026). Help text is a declarative file-scope `RPCHelpMan`
+object, not a runtime-thrown string. The dispatcher (`CRPCTable::execute` in
+`src/rpc/server.cpp`) renders help via `pcmd->helpman().ToString()` directly
+and pre-checks `IsValidNumArgs(n)` before invoking the body, so bodies do not
+contain `if (fHelp || …) throw runtime_error(…)` gates. The actor signature is
+`UniValue <name>(const UniValue& params)` — no `bool fHelp` parameter.
+
+A few commands opt out of the dispatcher's upper-bound arity pre-check via
+`RPCHelpMan::MarkVariadic()` because they accept a variable number of arguments
+(`changesettings`, `votebyid`, `sendalert`, `parselegacysb`); `addpoll`
+additionally uses a *dynamic* helpman accessor whose `RPCHelpMan` varies by
+poll-payload version. Both mechanisms live in `src/rpc/util.h`. New commands
+should not need either unless they truly take variable arity. (Commands that
+take a fixed arity but want a custom error — e.g. `scanforunspent`'s body-side
+`params.size()` check — are ordinary non-variadic helpmans, not exceptions.)
+
 ### Steps
 
 #### 1.1 Choose the Appropriate File
-Determine which category your command belongs to:
-- **Blockchain queries**: `src/rpc/blockchain.cpp`
-- **Wallet operations**: `src/rpc/wallet.cpp`
-- **Network info**: `src/rpc/net.cpp`
-- **Research/BOINC**: `src/rpc/researcher.cpp`
-- **Staking**: `src/rpc/mining.cpp`
-- **Contracts**: `src/rpc/contract.cpp`
+Determine which category your command belongs to (these are the actual
+`src/rpc/*.cpp` files; wallet RPCs live under `src/wallet/`):
 
-#### 1.2 Implement the Command Function
+- **Blockchain queries / projects / researcher / beacon / MRC**: `src/rpc/blockchain.cpp`
+- **Wallet operations**: `src/wallet/rpcwallet.cpp`
+- **Wallet key dump/import**: `src/wallet/rpcdump.cpp`
+- **Network / peers / banlist**: `src/rpc/net.cpp`
+- **Staking / mining info / accrual**: `src/rpc/mining.cpp`
+- **Voting / polls**: `src/rpc/voting.cpp`
+- **Scrapers / manifests / convergence**: `src/rpc/dataacq.cpp` (some in `src/gridcoin/scraper/scraper.cpp`)
+- **Raw transactions / signing**: `src/rpc/rawtransaction.cpp`
+- **HTLC**: `src/rpc/htlc.cpp`
+- **PSGT (Partially Signed Gridcoin Transactions)**: `src/rpc/psgt.cpp`
+- **Server / misc / control**: `src/rpc/server.cpp` or `src/rpc/misc.cpp`
+
+#### 1.2 Declare the file-scope RPCHelpMan and accessor
+
 ```cpp
-// Example: src/rpc/researcher.cpp
+// Example: src/rpc/blockchain.cpp
 
-UniValue mycommand(const JSONRPCRequest& request)
+static const RPCHelpMan mycommand_help{
+    "mycommand",
+    "Description of what the command does.",
+    {
+        {"param", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Description of the required string parameter."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "result", "Description of the returned string field."},
+        }},
+    RPCExamples{
+        HelpExampleCli("mycommand", "\"example_value\"")
+      + HelpExampleRpc("mycommand", "\"example_value\"")},
+};
+const RPCHelpMan& mycommand_helpman() { return mycommand_help; }
+```
+
+`RPCArg::Optional` values: `NO` (required), `OMITTED` (optional, may be absent).
+`RPCResult::Type` values include `STR`, `STR_HEX`, `NUM`, `BOOL`, `OBJ`, `OBJ_DYN`, `ARR`, `NONE`,
+`ELISION`. See `src/rpc/util.h` for the full vocabulary.
+
+#### 1.3 Implement the Command Body
+
+```cpp
+UniValue mycommand(const UniValue& params)
 {
-    // 1. Define help text
-    if (request.fHelp || request.params.size() != 1) {
-        throw std::runtime_error(
-            "mycommand \"param\"\n"
-            "\nDescription of what the command does.\n"
-            "\nArguments:\n"
-            "1. param    (string, required) Description of parameter\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"result\": \"value\"    (string) Description of result\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("mycommand", "\"example_value\"")
-            + HelpExampleRpc("mycommand", "\"example_value\"")
-        );
-    }
+    // 1. Parse parameters — arity has already been checked by the
+    //    dispatcher; params[N] is guaranteed in-bounds.
+    const std::string param = params[0].get_str();
 
-    // 2. Parse parameters
-    std::string param = request.params[0].get_str();
+    // 2. Acquire locks if needed (see doc/developer-notes.md for ordering).
+    LOCK(cs_main);
+    // LOCK2(cs_main, pwalletMain->cs_wallet);  // for wallet state
 
-    // 3. Acquire locks if needed
-    LOCK(cs_main);  // For blockchain state
-    // LOCK2(cs_main, pwalletMain->cs_wallet);  // For wallet state
+    // 3. Perform operation
+    const std::string result = PerformOperation(param);
 
-    // 4. Perform operation
-    std::string result = PerformOperation(param);
-
-    // 5. Build JSON response
+    // 4. Build JSON response
     UniValue response(UniValue::VOBJ);
     response.pushKV("result", result);
-
     return response;
 }
 ```
 
-#### 1.3 Register the Command
-In the same file, add to the `CRPCCommand` array:
+#### 1.4 Forward-declare both in `src/rpc/server.h`
+
+Add an `extern` for the actor and an `extern` for the helpman accessor in
+the alphabetical block matching the rpccategory the command belongs to:
+
 ```cpp
-static const CRPCCommand commands[] = {
-    // ... existing commands ...
-    { "category", "mycommand", &mycommand, {"param"} },
-};
+// Wallet (or whichever category)
+extern UniValue mycommand(const UniValue& params);
+// ...alphabetical helpman block...
+extern const RPCHelpMan& mycommand_helpman();
 ```
 
-Categories: `"blockchain"`, `"wallet"`, `"network"`, `"mining"`, `"research"`, `"contract"`, `"util"`
+#### 1.5 Register the Command
 
-#### 1.4 Test the Command
+In `src/rpc/server.cpp`, add a row to the `vRPCCommands[]` table in the
+correct category section (alphabetical within section). The four fields are
+`{ name, actor, category, helpman }`:
+
+```cpp
+{ "mycommand",  &mycommand,  cat_wallet,  &mycommand_helpman  },
+```
+
+Valid `rpccategory` enum values (`src/rpc/server.h`): `cat_wallet`,
+`cat_staking`, `cat_developer`, `cat_network`, `cat_voting`. `cat_null`
+is used for internal entries and excludes the command from the
+categorized `help` output.
+
+#### 1.6 Add a help-render test
+
+Every dispatched RPC should have help-render coverage. The standard pattern
+in `src/test/rpchelpman_tests.cpp` is to add an entry to the appropriate
+tier-level `check_help_renders({...})` block:
+
+```cpp
+// In whichever tier-level BOOST_AUTO_TEST_CASE the command belongs to:
+{"mycommand",            &mycommand_helpman},
+```
+
+For a one-off command not fitting any tier, write a dedicated
+`BOOST_AUTO_TEST_CASE(mycommand_help_renders)` that calls
+`mycommand_helpman().ToString()` and asserts on the rendered string.
+
+#### 1.7 Build and test the command
+
 ```bash
-# Start the wallet in testnet mode
-./gridcoinresearchd -testnet -daemon
+cmake --build build -j $(nproc)
 
-# Test the command
-./gridcoinresearch-cli -testnet mycommand "test_value"
+# Run the help-render test
+./build/src/test/test_gridcoin --run_test=rpchelpman_tests/mycommand_help_renders
+
+# Or smoke test against a live testnet daemon. The daemon (built to build/bin/)
+# doubles as the RPC client when given a command — there is no separate -cli
+# binary, and the Qt GUI binary (build/bin/gridcoinresearch, built only with
+# -DENABLE_GUI=ON) is not a CLI.
+./build/bin/gridcoinresearchd -testnet -daemon
+./build/bin/gridcoinresearchd -testnet help mycommand
+./build/bin/gridcoinresearchd -testnet mycommand "test_value"
 
 # Check debug.log for errors
 tail -f ~/.GridcoinResearch/testnet/debug.log
 ```
-
-#### 1.5 Add Documentation
-Update relevant documentation:
-- Add to `src/rpc/server.h` if it needs external declaration
-- Document in user guides if public-facing
 
 ### Common Patterns
 
