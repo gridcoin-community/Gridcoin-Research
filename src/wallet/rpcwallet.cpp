@@ -141,8 +141,8 @@ UniValue getinfo(const UniValue& params)
     UniValue diff(UniValue::VOBJ);
 
     // Connection count via the CConnman node-access API (issue #2558 PR 9a);
-    // GetNodeCount takes cs_vNodes internally before we acquire the heavier
-    // cs_main + cs_wallet pair, so no new cs_main→cs_vNodes ordering edge.
+    // GetNodeCount takes m_nodes_mutex internally before we acquire the heavier
+    // cs_main + cs_wallet pair, so no new cs_main→m_nodes_mutex ordering edge.
     int connections = g_connman ? (int)g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
 
     // Peer-reported external IP via the CConnman API (issue #2558 PR 9d).
