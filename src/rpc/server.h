@@ -63,13 +63,40 @@ enum rpccategory
     cat_voting,
 };
 
+// RPC heritage bucket: how this command relates to upstream Bitcoin, for backport
+// hygiene (issue #3069). Enforced by test/lint/lint-rpc-heritage.py, which reads these
+// values straight off vRPCCommands[] and re-checks the surface fingerprint.
+//   pure_upstream    -- behaviorally faithful to current upstream; backport-safe.
+//   mixed            -- shares upstream's name/surface but diverges; port carefully.
+//   removed_upstream -- upstream-derived but deleted from current upstream (frozen fork);
+//                       the backport target is the last valid pre-removal version.
+//   pure_gridcoin    -- no upstream analogue; not fingerprinted.
+enum rpcheritage
+{
+    heritage_pure_upstream,
+    heritage_mixed,
+    heritage_removed_upstream,
+    heritage_pure_gridcoin,
+};
+
 class CRPCCommand
 {
 public:
+    // All fields are required at construction, so a command cannot be added to
+    // vRPCCommands[] without a heritage classification (classify-at-birth).
+    CRPCCommand(std::string _name, rpcfn_type _actor, rpccategory _category,
+                rpchelpman_fn _helpman, rpcheritage _heritage, std::string _heritage_fp)
+        : name(std::move(_name)), actor(_actor), category(_category), helpman(_helpman),
+          heritage(_heritage), heritage_fp(std::move(_heritage_fp)) {}
+
     std::string name;
     rpcfn_type actor;
     rpccategory category;
     rpchelpman_fn helpman; // required for all commands; see typedef above.
+    rpcheritage heritage;  // backport-heritage bucket; see rpcheritage above.
+    // Surface-fingerprint baseline (args + result-keys), 12 hex chars; "manual" when the
+    // output isn't literal-key-trackable; empty for pure_gridcoin (not fingerprinted).
+    std::string heritage_fp;
 };
 
 /**

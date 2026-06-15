@@ -45,6 +45,7 @@ Developer Notes
         - [Suggestions and examples](#suggestions-and-examples)
     - [Release notes](#release-notes)
     - [RPC interface guidelines](#rpc-interface-guidelines)
+      - [RPC heritage ledger (backport hygiene)](#rpc-heritage-ledger-backport-hygiene)
 
 <!-- markdown-toc end -->
 
@@ -1343,6 +1344,102 @@ A few guidelines for introducing and reviewing new RPC interfaces:
   timestamps in the documentation.
 
   - *Rationale*: User-facing consistency.
+
+### RPC heritage ledger (backport hygiene)
+
+Gridcoin's RPC layer began as a port of Bitcoin Core's. Years of divergence later,
+"is this RPC the same as upstream?" no longer has a yes/no answer at the folder level —
+some RPCs are faithful ports, some share upstream's name and argument list but have a
+Gridcoin-specific wrinkle inside, and many have no upstream analogue at all. To make that
+relationship explicit and *enforced* (rather than a comforting fiction of separation),
+every registered RPC carries its classification as a **column on its `vRPCCommands[]` row**
+in `src/rpc/server.cpp` — `{ "name", &impl, cat, &help, heritage_<bucket>, "<fp>" }`. The
+`CRPCCommand` constructor makes all fields mandatory, so a command cannot be registered
+without a bucket (classify-at-birth, compiler-enforced). `test/lint/lint-rpc-heritage.py`
+(run by `lint-all.sh`) reads that column — the same table the dispatcher reads — and
+re-checks the surface fingerprint. The human-readable roll-up is
+[`doc/rpc-heritage.md`](rpc-heritage.md) (issue #3069; this supersedes the folder-isolation
+goal of the old issue #1142, which was found to be artificial and to provide false comfort).
+
+**Four buckets:**
+
+- `pure-upstream` — behaviorally faithful to current upstream; an upstream change can be
+  taken with normal care. Any difference is a *rote* Gridcoin substitution (e.g.
+  `GRC::BlockFinder::FindByHeight(h)` where upstream writes `active_chain[h]`) or purely
+  cosmetic (e.g. `getblockhash`'s arg is named `index`, upstream's `height` — same
+  contract). Fingerprint-tracked.
+- `mixed` — shares upstream's name/surface but has a real divergence a naive backport will
+  trip over: a retained API upstream deleted, a Gridcoin-only output field, a forked helper.
+  Carries a prose `-- diverges:` note describing the hazard. Fingerprint-tracked. Example:
+  `setban` keeps the `BanReason` enum upstream removed (and serializes it to `banlist.dat`),
+  so copying an upstream `setban` patch verbatim won't compile and would change the on-disk
+  format.
+- `removed-upstream` — upstream-derived, but current upstream has **deleted** the RPC
+  (legacy/BDB-wallet sunset: `dumpprivkey`/`importwallet`/`sethdseed`/…; the `CAlert` system;
+  the legacy account family; the `signrawtransaction` split). No *current* backport target
+  exists, so it isn't `mixed` — but it's a frozen Bitcoin-lineage fork, not Gridcoin-native, so
+  it isn't `pure-gridcoin` either. **Fingerprint-tracked**, a sibling of `mixed`: the point is
+  that we may still be *behind* the last valid pre-removal upstream version, and a deliberate
+  pull up to that version (if we choose to keep maintaining the RPC rather than retire it as
+  upstream did) must be a **controlled, re-confirmed** change — exactly what the tripwire
+  enforces. Carries a `-- diverges:` note (e.g. `dumpprivkey` is *extended* beyond its legacy
+  upstream: extra `dump_hex` arg + object output vs upstream's bare WIF string).
+- `pure-gridcoin` — no current upstream analogue *by function* (beacon, superblock, scraper,
+  MRC, voting, sidestake, …). **Not** fingerprinted — there is nothing upstream to drift from.
+  A pure-gridcoin RPC whose *name* nonetheless collides with an unrelated upstream RPC (e.g.
+  `getblockstats`, `generate`, the `getmininginfo` alias) carries a prominent "do NOT port"
+  name-collision note, so a same-named upstream change is never mistakenly applied here.
+
+**The classification rule — rote substitution vs. decision:** an RPC is `pure-upstream` if
+porting an upstream change to it requires only substitutions a Gridcoin dev makes
+reflexively; it is `mixed` if the divergence forces a *non-obvious decision* (what to do
+with a retained enum, a forked formatter, an extra output key). When in doubt, `mixed` —
+under-stating a divergence is the dangerous direction.
+
+**The surface fingerprint:** `fp = sha256("ARGS:" + args[in RPCHelpMan declaration order] +
+"|KEYS:" + sorted(result pushKV keys, gathered by cycle-safe recursive descent through
+called result-builder helpers))[:12]`. The recursive descent means **nested schemas are
+captured**: a transaction RPC that renders a Gridcoin contract payload inherits the
+contract's keys (`cpid`, `magnitude`, `choices`, …), so the fingerprint reflects the full
+observable surface, not just the top level. Any fingerprinted RPC (pure-upstream, mixed, or
+removed-upstream) whose output the literal-key capture cannot represent — a dynamically-keyed object (e.g.
+`logging`'s `pushKV(category, active)`) or a positional array of scalars (e.g.
+`getrawmempool`) — uses `fp=manual` instead, and its drift is reviewed by hand. The
+JSON-RPC error envelope (`JSONRPCError`'s `code`/`message`) is deliberately excluded from
+the captured surface — it is reached from nearly every RPC via `throw` and is not part of
+any success result.
+
+**Why we "freeze-dry" the `pure-upstream` bucket.** We are *not* continuously chasing
+upstream. A `pure-upstream` RPC is deliberately pinned in its current — often stale —
+state, and the fingerprint freeze-dries that surface as it stands today. The value is
+realized the moment someone *modernizes* one toward upstream: the surface changes, the
+fingerprint drifts, and the heritage lint fails. **That failure is the point.** It forces
+the modernizer through a mindful re-classification: is the RPC still a faithful port (just
+re-stamp the fp), or did the act of modernizing introduce a Gridcoin-specific wrinkle that
+makes it `mixed` (re-bucket and write a `diverges` note)? Without the freeze-dry, an RPC
+could silently slide from "faithful port" to "quietly forked" with nobody noticing until a
+future backport broke in a surprising way. The lint converts that silent drift into a
+required, documented decision.
+
+**Responding to a heritage-lint failure:**
+
+- *"surface fingerprint drift (row heritage_fp=X, recomputed Y)"* — you changed an RPC's
+  input args or output keys. **Do not** just paste `Y` over `X` to silence it; that throws
+  away the whole mechanism. Instead: (1) re-confirm the bucket — did the change keep the RPC
+  faithful to upstream, or introduce/remove a Gridcoin divergence? (2) if the bucket changed,
+  update the row's `heritage_<bucket>` and, for `mixed`/`removed-upstream`, refresh the
+  `diverges` note in `doc/rpc-heritage.md`. (3) update the row's `heritage_fp` to the
+  recomputed value **and** the matching row in `doc/rpc-heritage.md` (the lint checks the two
+  agree, per-row).
+- *new RPC won't compile* — `CRPCCommand` requires a `heritage_<bucket>` and `heritage_fp` on
+  the row; that's classify-at-birth. Pick the bucket, run the lint to get the fingerprint, fill
+  both in, and add a `doc/rpc-heritage.md` row (`pure-gridcoin` takes an empty `heritage_fp`).
+- *"result-builder reachable from an RPC only at depth N > MAX_DESCENT"* — a contract-payload
+  builder chain grew deeper than the descent cap; raise `MAX_DESCENT` in the lint so the
+  fingerprint stops truncating that surface.
+- *"command row did not parse into the heritage table"* — a `vRPCCommands[]` row's shape
+  doesn't match `ROW_RE` (e.g. a malformed `heritage_fp`); fix the row, or update `ROW_RE` in
+  the lint if the table format itself changed, so no RPC is silently unenforced.
 
 Functional tests
 ----------------
