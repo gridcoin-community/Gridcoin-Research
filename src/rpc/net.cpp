@@ -70,8 +70,13 @@ UniValue addnode(const UniValue& params)
 
     if (strCommand == "onetry")
     {
+        // ConnectNode is a CConnman member now (issue #2558); guard g_connman, which
+        // can be null in the brief shutdown window after g_connman.reset().
+        if (!g_connman) {
+            throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
+        }
         CAddress addr;
-        CNode* pnode= ConnectNode(addr, strNode.c_str());
+        CNode* pnode = g_connman->ConnectNode(addr, strNode.c_str());
         if(!pnode)
             throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node connection failed");
         UniValue result(UniValue::VOBJ);
@@ -233,7 +238,7 @@ UniValue getaddednodeinfo(const UniValue& params)
 
     // Snapshot connected peers (address + direction) via the node-access API
     // (issue #2558 PR 9b2), then match the resolved added-node addresses
-    // against it without holding cs_vNodes across the result build.
+    // against it without holding m_nodes_mutex across the result build.
     std::vector<std::pair<CService, bool>> vConnected; // (addr, fInbound)
     if (g_connman) {
         g_connman->ForEachNode([&vConnected](CNode* pnode) {

@@ -462,7 +462,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 // Relay to a deterministic, limited subset of nodes (issue #2558
                 // PR 9c: the selection + relay logic moved into CConnman, which
-                // keeps it under cs_vNodes so the chosen CNode* stay valid).
+                // keeps it under m_nodes_mutex so the chosen CNode* stay valid).
                 if (g_connman) g_connman->RelayAddress(addr, fReachable);
             }
             // Do not store addresses outside our network

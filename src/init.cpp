@@ -177,15 +177,6 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping net (node) threads.", __func__);
         StopNode();
 
-        // Tear down the message processor once the net threads that drove it
-        // are joined, before the connection manager it is associated with
-        // (issue #2558 PR 8a).
-        if (g_peerman) g_peerman.reset();
-
-        // Tear down the connection manager once its net threads are joined
-        // (issue #2558 PR 3).
-        if (g_connman) g_connman.reset();
-
         // The stake miner exits via fShutdown plus the g_thread_interrupt()
         // call above, which wakes its MilliSleep.
         LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
@@ -238,6 +229,21 @@ void Shutdown(void* parg)
 
         LogPrintf("INFO: %s: Stopping RPC threads.", __func__);
         StopRPCThreads();
+
+        // Tear down the message processor and connection manager only AFTER the RPC
+        // worker threads are stopped (issue #2558). RPC handlers
+        // (getpeerinfo/getconnectioncount/disconnectnode/addnode) call into
+        // g_connman/g_peerman, which now OWN the node list (m_nodes/m_nodes_mutex);
+        // destroying them while an RPC call is in flight would lock a destroyed mutex
+        // and read freed node storage -- a use-after-free. (When the list was a file
+        // global with static lifetime this window was benign; the storage move makes
+        // it dangerous, so the reset moves below StopRPCThreads.) The net threads that
+        // drove the message processor were already joined by StopNode() above, and the
+        // stake miner above too, so this is the first point at which no thread -- net,
+        // RPC, or miner -- can still touch either. Reset the peer manager before the
+        // connection manager it is associated with (PR 8a).
+        if (g_peerman) g_peerman.reset();
+        if (g_connman) g_connman.reset();
 
         // This is necessary here to prevent a snapshot download from failing at the cleanup
         // step because of a write lock on accrual/registry.dat.

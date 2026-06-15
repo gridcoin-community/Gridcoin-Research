@@ -1403,7 +1403,7 @@ bool IsMiningAllowed(CWallet *pwallet)
     }
 
     // Connection count via the CConnman node-access API (issue #2558 PR 9a);
-    // GetNodeCount takes cs_vNodes internally, avoiding the TSan race with the
+    // GetNodeCount takes m_nodes_mutex internally, avoiding the TSan race with the
     // ThreadSocketHandler / connection-accept writers. g_connman is null only
     // before StartNode / after shutdown, where zero peers is the correct gate.
     size_t numNodes = g_connman ? g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) : 0;
