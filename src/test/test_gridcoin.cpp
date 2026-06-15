@@ -76,7 +76,7 @@ struct TestingSetup {
         // ClearBanned()/Unban() would not reset scores, leaking state across
         // cases.
         assert(!g_connman);
-        g_connman = std::make_unique<CConnman>(0, 0, addrman);
+        g_connman = std::make_unique<CConnman>(0, 0);
         g_connman->Init(CConnman::Options{});
         assert(!g_peerman);
         g_peerman = PeerManager::make(*g_connman, g_banman.get());
