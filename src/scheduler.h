@@ -9,6 +9,7 @@
 #include <functional>
 #include <list>
 #include <map>
+#include <memory>
 #include <thread>
 
 #include <sync.h>
@@ -103,6 +104,12 @@ private:
     bool stopWhenEmpty GUARDED_BY(newTaskMutex){false};
     bool shouldStop() const EXCLUSIVE_LOCKS_REQUIRED(newTaskMutex) { return stopRequested || (stopWhenEmpty && taskQueue.empty()); }
 };
+
+//! The process-wide background task scheduler. Constructed in AppInit2 before
+//! its serviceQueue thread is launched and destroyed at shutdown after that
+//! thread is joined. Owned via unique_ptr (mirroring g_banman) so it can be
+//! injected into PeerManager::StartScheduledTasks() once that lands.
+extern std::unique_ptr<CScheduler> g_scheduler;
 
 /**
  * Class used by CScheduler clients which may schedule multiple jobs
