@@ -45,7 +45,6 @@ inline unsigned int ReceiveFloodSize() { return 1000*gArgs.GetArg("-maxreceivebu
 inline unsigned int SendBufferSize() { return 1000*gArgs.GetArg("-maxsendbuffer", 1*1000); }
 
 void AddOneShot(std::string strDest);
-bool RecvLine(SOCKET hSocket, std::string& strLine);
 bool GetMyExternalIP(CNetAddr& ipRet);
 void AddressCurrentlyConnected(const CService& addr);
 CNode* FindNode(const CNetAddr& ip);
@@ -106,22 +105,6 @@ enum
 extern bool fDiscover;
 extern bool fUseUPnP;
 extern ServiceFlags nLocalServices;
-// Local-host version nonce, randomised on every outgoing VERSION push and
-// compared against incoming VERSIONs to detect self-connection. It is a
-// global -- written on the socket-handler thread (PushVersion) and read on
-// the message-handler thread (ProcessMessage's "connected to ourself"
-// check), so it must be atomic; TSan G11 reports the race via a memcpy
-// into its raw storage from GetRandBytes. Note: the broader design is
-// imperfect (the same global is clobbered for each outbound connection,
-// so the per-connection nonce identity is lost), but that is a separate
-// follow-up; atomicising here just closes the data race.
-extern std::atomic<uint64_t> nLocalHostNonce;
-//! \brief Guards \ref addrSeenByPeer. Written by ProcessMessage's version
-//! handler when a peer reports the address it sees us at, read by RPC
-//! handlers (getinfo in rpc/net.cpp + wallet/rpcwallet.cpp). CAddress
-//! assignment/copy is not atomic.
-extern CCriticalSection cs_addrSeenByPeer;
-extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
 extern AddrMan addrman;
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
 //! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
@@ -747,6 +730,17 @@ public:
     //! PR 9c; moved from net_processing's ADDR handler).
     void RelayAddress(const CAddress& addr, bool fReachable);
 
+    //! Local-host version nonce for self-connection detection (issue #2558
+    //! PR 9d; moved off the net global). Set on each outgoing VERSION push,
+    //! compared against incoming VERSIONs.
+    uint64_t GetLocalHostNonce() const { return m_local_host_nonce; }
+    void SetLocalHostNonce(uint64_t nonce) { m_local_host_nonce = nonce; }
+
+    //! The address a peer last reported seeing us at (issue #2558 PR 9d; moved
+    //! off the net global). Surfaced by the getinfo RPCs.
+    CAddress GetAddrSeenByPeer() const;
+    void SetAddrSeenByPeer(const CAddress& addr);
+
     void Interrupt();
     void Stop();
 
@@ -756,6 +750,15 @@ private:
     std::atomic<bool> fNetworkActive;
     Options m_options;
     std::vector<std::thread> m_net_threads;
+
+    //! Local-host version nonce (issue #2558 PR 9d). Atomic: written on the
+    //! socket-handler thread (PushVersion), read on the message-handler thread
+    //! (self-connection check).
+    std::atomic<uint64_t> m_local_host_nonce{0};
+    //! The address a peer reports seeing us at (issue #2558 PR 9d). CAddress
+    //! copy is not atomic, hence the mutex.
+    mutable CCriticalSection m_addr_seen_by_peer_cs;
+    CAddress m_addr_seen_by_peer GUARDED_BY(m_addr_seen_by_peer_cs) = CAddress(LookupNumeric("0.0.0.0", 0), nLocalServices);
 };
 
 extern std::unique_ptr<CConnman> g_connman;
