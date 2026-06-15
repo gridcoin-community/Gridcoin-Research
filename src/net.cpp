@@ -73,6 +73,7 @@ std::atomic<uint64_t> CNode::nTotalBytesRecv{ 0 };
 std::atomic<uint64_t> CNode::nTotalBytesSent{ 0 };
 
 ThreadHandler* netThreads = new ThreadHandler;
+std::unique_ptr<CConnman> g_connman;
 static std::vector<SOCKET> vhListenSocket;
 CAddrMan addrman;
 
@@ -2032,15 +2033,21 @@ void static Discover()
 #endif
 }
 
-void StartNode(void* parg)
+CConnman::CConnman(uint64_t seed0, uint64_t seed1, CAddrMan& addrmanIn, bool network_active)
+    : m_addrman(addrmanIn)
+    , nSeed0(seed0)
+    , nSeed1(seed1)
+    , fNetworkActive(network_active)
 {
-    // Make this thread recognisable as the startup thread
-    RenameThread("grc-nodestart");
-    util::ThreadSetInternalName("grc-nodestart");
+}
 
+CConnman::~CConnman() = default;
+
+bool CConnman::Start()
+{
     fShutdown = false;
-    MAX_OUTBOUND_CONNECTIONS = (int) gArgs.GetArg("-maxoutboundconnections", 8);
-    int max_connections = std::min<int>(gArgs.GetArg("-maxconnections", 125), 950);
+    MAX_OUTBOUND_CONNECTIONS = m_options.nMaxOutbound;
+    int max_connections = m_options.nMaxConnections;
     int nMaxOutbound = 0;
     if (semOutbound == nullptr) {
         // initialize semaphore
@@ -2094,20 +2101,45 @@ void StartNode(void* parg)
     if (!netThreads->createThread(ThreadDumpAddress, nullptr, "ThreadDumpAddress")) {
         LogPrintf("Error: createThread(ThreadDumpAddress) failed");
     }
+
+    return true;
 }
 
-bool StopNode()
+void CConnman::Interrupt()
 {
-    LogPrintf("StopNode()");
     fShutdown = true;
     if (semOutbound)
         for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
 
     netThreads->interruptAll();
+}
+
+void CConnman::Stop()
+{
+    Interrupt();
     netThreads->removeAll();
     UninterruptibleSleep(std::chrono::milliseconds{50});
     DumpAddresses();
+}
+
+// Thread entry point launched from AppInit2 Step 12. Thin forwarder to
+// CConnman::Start() (issue #2558 PR 3).
+void StartNode(void* parg)
+{
+    // Make this thread recognisable as the startup thread
+    RenameThread("grc-nodestart");
+    util::ThreadSetInternalName("grc-nodestart");
+
+    if (g_connman) g_connman->Start();
+}
+
+bool StopNode()
+{
+    LogPrintf("StopNode()");
+    // Guarded: Shutdown() can run after an early AppInit2 failure, before
+    // g_connman is constructed.
+    if (g_connman) g_connman->Stop();
     return true;
 }
 

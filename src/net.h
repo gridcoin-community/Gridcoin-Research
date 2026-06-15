@@ -9,6 +9,7 @@
 #include <array>
 #include <boost/thread.hpp>
 #include <atomic>
+#include <memory>
 
 #include "netbase.h"
 #include "mruset.h"
@@ -645,6 +646,38 @@ inline void RelayInventory(const CInv& inv)
             pnode->PushInventory(inv);
     }
 }
+
+//! Connection manager. PR 3 (issue #2558) introduces the lifecycle skeleton:
+//! it takes over StartNode/StopNode -- now thin thread-entry forwarders -- via
+//! Start()/Interrupt()/Stop(). For now it wraps the still-global connection
+//! state (vNodes, addrman, netThreads, ...); storage ownership and the
+//! node-access API (ForEachNode, GetNodeStats, ConnectionType, ...) move in
+//! later PRs, and Options gains m_msgproc with PeerManager in PR 8.
+class CConnman
+{
+public:
+    struct Options
+    {
+        int nMaxConnections = 0;
+        int nMaxOutbound = 0;
+    };
+
+    CConnman(uint64_t seed0, uint64_t seed1, CAddrMan& addrman, bool network_active = true);
+    ~CConnman();
+
+    void Init(const Options& opts) { m_options = opts; }
+    bool Start();
+    void Interrupt();
+    void Stop();
+
+private:
+    CAddrMan& m_addrman;
+    const uint64_t nSeed0, nSeed1;
+    std::atomic<bool> fNetworkActive;
+    Options m_options;
+};
+
+extern std::unique_ptr<CConnman> g_connman;
 
 class CTransaction;
 
