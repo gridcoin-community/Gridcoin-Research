@@ -426,13 +426,23 @@ NodeId CNode::GetNewNodeId()
 void CNode::CloseSocketDisconnect()
 {
     fDisconnect = true;
-//    LOCK(cs_hSocket);
-    if (hSocket != INVALID_SOCKET)
-    {
-        LogPrint(BCLog::LogFlags::NET, "disconnecting node %s", addrName);
-        closesocket(hSocket);
-        hSocket = INVALID_SOCKET;
 
+    // Reset the socket under m_sock_mutex (the Sock destructor closes the fd),
+    // then release it before taking cs_vRecvMsg to keep m_sock_mutex an inner
+    // leaf lock (issue #2558 PR 5a).
+    bool was_open;
+    {
+        LOCK(m_sock_mutex);
+        was_open = (bool)m_sock;
+        if (m_sock)
+        {
+            LogPrint(BCLog::LogFlags::NET, "disconnecting node %s", addrName);
+            m_sock.reset();
+        }
+    }
+
+    if (was_open)
+    {
         // in case this fails, we'll empty the recv buffer when the CNode is deleted
         TRY_LOCK(cs_vRecvMsg, lockRecv);
         if (lockRecv)
@@ -708,13 +718,18 @@ int CNetMessage::readData(const char *pch, unsigned int nBytes)
 
 void SocketSendData(CNode *pnode) EXCLUSIVE_LOCKS_REQUIRED(pnode->cs_vSend)
 {
+    // Hold a shared_ptr copy of the socket for the duration of the send so it
+    // cannot be closed underneath us (issue #2558 PR 5a).
+    const std::shared_ptr<Sock> sock = pnode->GetSock();
+    if (!sock) return;
+
     std::deque<SerializeData>::iterator it = pnode->vSendMsg.begin();
 
     while (it != pnode->vSendMsg.end())
     {
         const SerializeData &data = *it;
         assert(data.size() > pnode->nSendOffset);
-        int nBytes = send(pnode->hSocket, (const char*)&data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
+        int nBytes = sock->Send(&data[pnode->nSendOffset], data.size() - pnode->nSendOffset, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (nBytes > 0) {
             pnode->nLastSend = GetAdjustedTime();
             pnode->nSendBytes += nBytes;
@@ -892,18 +907,20 @@ void ThreadSocketHandler2(void* parg)
             LOCK(cs_vNodes);
             for (auto const& pnode : vNodes)
             {
-                if (pnode->hSocket == INVALID_SOCKET)
+                const std::shared_ptr<Sock> sock = pnode->GetSock();
+                if (!sock || sock->Get() == INVALID_SOCKET)
                     continue;
+                const SOCKET socket_fd = sock->Get();
                 {
                     TRY_LOCK(pnode->cs_vSend, lockSend);
                     if (lockSend) {
                         // do not read, if draining write queue
                         if (!pnode->vSendMsg.empty())
-                            FD_SET(pnode->hSocket, &fdsetSend);
+                            FD_SET(socket_fd, &fdsetSend);
                         else
-                            FD_SET(pnode->hSocket, &fdsetRecv);
-                        FD_SET(pnode->hSocket, &fdsetError);
-                        hSocketMax = max(hSocketMax, pnode->hSocket);
+                            FD_SET(socket_fd, &fdsetRecv);
+                        FD_SET(socket_fd, &fdsetError);
+                        hSocketMax = max(hSocketMax, socket_fd);
                         have_fds = true;
                     }
                 }
@@ -1044,9 +1061,12 @@ void ThreadSocketHandler2(void* parg)
             //
             // Receive
             //
-            if (pnode->hSocket == INVALID_SOCKET)
+            // Hold a shared_ptr copy of the socket across the recv so the fd
+            // cannot be closed underneath us (issue #2558 PR 5a).
+            std::shared_ptr<Sock> sock = pnode->GetSock();
+            if (!sock || sock->Get() == INVALID_SOCKET)
                 continue;
-            if (FD_ISSET(pnode->hSocket, &fdsetRecv) || FD_ISSET(pnode->hSocket, &fdsetError))
+            if (FD_ISSET(sock->Get(), &fdsetRecv) || FD_ISSET(sock->Get(), &fdsetError))
             {
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
@@ -1059,7 +1079,7 @@ void ThreadSocketHandler2(void* parg)
                     else {
                         // typical socket buffer is 8K-64K
                         char pchBuf[0x10000];
-                        int nBytes = recv(pnode->hSocket, pchBuf, sizeof(pchBuf), MSG_DONTWAIT);
+                        int nBytes = sock->Recv(pchBuf, sizeof(pchBuf), MSG_DONTWAIT);
                         if (nBytes > 0)
                         {
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
@@ -1096,9 +1116,11 @@ void ThreadSocketHandler2(void* parg)
             //
             // Send
             //
-            if (pnode->hSocket == INVALID_SOCKET)
+            // Re-fetch: the recv path above may have closed the socket.
+            sock = pnode->GetSock();
+            if (!sock || sock->Get() == INVALID_SOCKET)
                 continue;
-            if (FD_ISSET(pnode->hSocket, &fdsetSend))
+            if (FD_ISSET(sock->Get(), &fdsetSend))
             {
                 TRY_LOCK(pnode->cs_vSend, lockSend);
                 if (lockSend)
@@ -2154,10 +2176,9 @@ public:
     }
     ~CNetCleanup()
     {
-        // Close sockets
+        // Close sockets (the Sock destructor closes the fd; issue #2558 PR 5a).
         for (auto const& pnode : vNodes)
-            if (pnode->hSocket != INVALID_SOCKET)
-                closesocket(pnode->hSocket);
+            pnode->CloseSocket();
         for (auto &hListenSocket : vhListenSocket)
             if (hListenSocket != INVALID_SOCKET)
                 if (closesocket(hListenSocket) == SOCKET_ERROR)
