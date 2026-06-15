@@ -120,9 +120,6 @@ extern std::atomic<uint64_t> nLocalHostNonce;
 extern CCriticalSection cs_addrSeenByPeer;
 extern CAddress addrSeenByPeer GUARDED_BY(cs_addrSeenByPeer);
 extern CAddrMan addrman;
-extern CCriticalSection cs_mapRelay;
-extern std::map<CInv, CDataStream> mapRelay GUARDED_BY(cs_mapRelay);
-extern std::deque<std::pair<int64_t, CInv> > vRelayExpiration GUARDED_BY(cs_mapRelay);
 //! \brief Guards \ref mapAlreadyAskedFor. Written and read from
 //! ProcessMessage handlers (under cs_main) for the TX / BLOCK paths,
 //! from ProcessBlock, from SendMessages' getdata loop, and from
@@ -679,8 +676,6 @@ inline void RelayInventory(const CInv& inv)
 }
 
 class CTransaction;
-void RelayTransaction(const CTransaction& tx, const uint256& hash);
-void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
 
 #endif
