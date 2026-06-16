@@ -21,15 +21,30 @@ namespace {
 PoolRegistry g_pool_registry;
 
 //!
-//! \brief Hash the serialized payload bytes with the contract action neutralised,
-//! matching the BeaconPayload convention. The signature field is excluded from
-//! the hash via SER_GETHASH (see PoolRegisterPayload::SerializationOp), so the
-//! operator can sign after constructing the payload without changing its hash.
+//! \brief Hash the operator-signed bytes for a POOL_REGISTER payload.
 //!
-uint256 HashPoolRegisterPayload(const PoolRegisterPayload& payload)
+//! The signature field is excluded from the hash via SER_GETHASH (see
+//! PoolRegisterPayload::SerializationOp), so the operator can sign after
+//! constructing the payload without changing its contract hash.
+//!
+//! The contract action and the predecessor hash (the superseded entry's hash —
+//! i.e. what becomes this contract's m_previous_hash; null for a fresh first
+//! registration) are bound into the digest. Without that binding the signed
+//! bytes were identical for ADD and REMOVE with no freshness element, so a
+//! third party could replay a captured payload+signature with the action
+//! flipped (REMOVE to de-list an active pool, or ADD to knock it back to
+//! PENDING) and mutate consensus pool state — and thus AVW / BOINC detection —
+//! without the operator key. Binding both makes each signature valid for
+//! exactly one action against one predecessor state.
+//!
+uint256 HashPoolRegisterPayload(const PoolRegisterPayload& payload,
+                                const ContractAction action,
+                                const uint256& previous_hash)
 {
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-    payload.Serialize(hasher, ContractAction::UNKNOWN);
+    payload.Serialize(hasher, action);
+    hasher << static_cast<uint8_t>(action);
+    hasher << previous_hash;
     return hasher.GetHash();
 }
 
@@ -249,21 +264,26 @@ std::string PoolRegisterPayload::LegacyValueString() const
     return m_name + "|" + m_url;
 }
 
-bool PoolRegisterPayload::Sign(CKey& operator_private_key)
+bool PoolRegisterPayload::Sign(CKey& operator_private_key,
+                              const ContractAction action,
+                              const uint256& previous_hash)
 {
-    if (!operator_private_key.Sign(HashPoolRegisterPayload(*this), m_signature)) {
+    if (!operator_private_key.Sign(HashPoolRegisterPayload(*this, action, previous_hash),
+                                   m_signature)) {
         m_signature.clear();
         return false;
     }
     return true;
 }
 
-bool PoolRegisterPayload::VerifySignature(const CPubKey& expected_key) const
+bool PoolRegisterPayload::VerifySignature(const CPubKey& expected_key,
+                                          const ContractAction action,
+                                          const uint256& previous_hash) const
 {
     if (!expected_key.IsValid()) {
         return false;
     }
-    return expected_key.Verify(HashPoolRegisterPayload(*this), m_signature);
+    return expected_key.Verify(HashPoolRegisterPayload(*this, action, previous_hash), m_signature);
 }
 
 // -----------------------------------------------------------------------------
@@ -428,6 +448,15 @@ bool PoolRegistry::IsActivePool(const Cpid& cpid) const
 
 bool PoolRegistry::IsActivePoolName(const std::string& name) const
 {
+    // Never match the empty name. A POOL_APPROVE ADD that activated an
+    // otherwise-unknown CPID used to be able to create an ACTIVE entry with an
+    // empty m_name (now rejected at validation, see ValidateAtHeight); this
+    // guard is defense-in-depth so a BOINC username of "" can't spuriously
+    // resolve to "is a pool" against any such entry.
+    if (name.empty()) {
+        return false;
+    }
+
     LOCK(cs_lock);
 
     for (const auto& iter : m_pool_entries) {
@@ -440,9 +469,24 @@ bool PoolRegistry::IsActivePoolName(const std::string& name) const
 
 void PoolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    LOCK(cs_lock);
-    m_pool_entries.clear();
-    m_pool_db.clear();
+    {
+        LOCK(cs_lock);
+        m_pool_entries.clear();
+        m_pool_db.clear();
+        // Clear the builtin pins too — SeedBuiltinPools re-installs fresh
+        // seed entries and re-pins them below; leaving the old shared_ptrs
+        // here would dangle against the just-cleared m_pool_db.
+        m_builtin_seeds.clear();
+    }
+
+    // Re-seed the grandfathered builtins, mirroring ClearForTests and the
+    // constructor. Without this, a node started with -clearallregistryhistory
+    // / -clearpool_*history runs the entire session with an EMPTY registry:
+    // IsActivePool* regress to "no pools" and ActivePoolsAtHeight returns
+    // empty, so the node's AVW pool-magnitude correction diverges from every
+    // peer that didn't clear. SeedBuiltinPools takes cs_lock internally, so it
+    // runs after the scoped clear above (matching ClearForTests).
+    SeedBuiltinPools();
 }
 
 bool PoolRegistry::IsPendingExpired(const Pool& entry, int at_height)
@@ -468,6 +512,7 @@ bool PoolRegistry::IsAuthorizationExpired(const Pool& entry, int at_height)
 }
 
 bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
+                                      const ContractAction action,
                                       int at_height,
                                       int& DoS) const
 {
@@ -481,6 +526,14 @@ bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
             existing_is_builtin = (m_builtin_seeds.find(payload.m_cpid) != m_builtin_seeds.end());
         }
     }
+
+    // Predecessor this contract chains onto, bound into the operator signature
+    // for replay resistance. This is exactly the m_previous_hash ApplyRegister
+    // will record (the unfiltered existing entry's hash, regardless of its
+    // status), and null for a fresh first registration. Using the unfiltered
+    // `existing` keeps it consistent across the builtin / takeover / first-claim
+    // paths below — and matches what the registerpool RPC signs.
+    const uint256 prev_hash = existing ? existing->m_hash : uint256{};
 
     // Findings B + K + M: IsBuiltin guard runs first, with status-driven
     // Path 1 / Path 2 split. Every builtin always has a chained entry
@@ -525,7 +578,7 @@ bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
             // Auth matches. Authenticate against the payload's own key —
             // builtin claim is structurally a first-claim against an
             // entry whose m_operator_key is empty/invalid.
-            if (!payload.VerifySignature(payload.m_operator_key)) {
+            if (!payload.VerifySignature(payload.m_operator_key, action, prev_hash)) {
                 DoS = 25;
                 LogPrint(LogFlags::CONTRACT, "ERROR: %s: bad operator signature on POOL_REGISTER "
                                              "for builtin cpid %s (Path 2 claim)",
@@ -557,7 +610,7 @@ bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
     }
 
     if (existing_for_takeover && existing_for_takeover->m_operator_key.IsValid()) {
-        if (!payload.VerifySignature(existing_for_takeover->m_operator_key)) {
+        if (!payload.VerifySignature(existing_for_takeover->m_operator_key, action, prev_hash)) {
             DoS = 25;
             LogPrint(LogFlags::CONTRACT, "ERROR: %s: POOL_REGISTER on existing cpid %s "
                                          "did not match the prior operator key",
@@ -570,7 +623,7 @@ bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
     // First-claim path: no existing valid key (or expired PENDING /
     // DELETED treated as absent above). Authenticate against the
     // payload's own key.
-    if (!payload.VerifySignature(payload.m_operator_key)) {
+    if (!payload.VerifySignature(payload.m_operator_key, action, prev_hash)) {
         DoS = 25;
         LogPrint(LogFlags::CONTRACT, "ERROR: %s: bad operator signature on POOL_REGISTER",
                  __func__);
@@ -601,7 +654,7 @@ bool PoolRegistry::ValidateAtHeight(const Contract& contract, int at_height, int
             return false;
         }
 
-        return VerifyRegisterAuth(*payload, at_height, DoS);
+        return VerifyRegisterAuth(*payload, contract.m_action.Value(), at_height, DoS);
     }
 
     if (type == ContractType::POOL_APPROVE) {
@@ -613,8 +666,34 @@ bool PoolRegistry::ValidateAtHeight(const Contract& contract, int at_height, int
             return false;
         }
 
+        // A POOL_APPROVE ADD must flip an EXISTING, descriptively-populated
+        // registration to ACTIVE. Reject activating an unknown CPID (or one
+        // whose entry has an empty name / invalid operator key): that would
+        // otherwise create an ACTIVE entry with no operator key and an empty
+        // name that counts immediately for AVW / BOINC detection and that
+        // IsActivePoolName("") could match, while its invalid key would route a
+        // later POOL_REGISTER onto the open first-claim path. Pre-staging via
+        // POOL_APPROVE on an unknown CPID is obsolete now that the builtins are
+        // grandfathered in the constructor. OPEN/REMOVE on an unknown CPID stay
+        // admissible (OPEN records a pre-authorization; REMOVE is a harmless
+        // no-op), so this guard is scoped to ADD.
+        if (contract.m_action.Value() == ContractAction::ADD) {
+            LOCK(cs_lock);
+            auto it = m_pool_entries.find(payload->m_cpid);
+            if (it == m_pool_entries.end()
+                || it->second->m_name.empty()
+                || !it->second->m_operator_key.IsValid())
+            {
+                DoS = 25;
+                LogPrint(LogFlags::CONTRACT, "ERROR: %s: POOL_APPROVE ADD on cpid %s rejected; "
+                                             "no existing operator-claimed registration to activate",
+                         __func__, payload->m_cpid.ToString());
+                return false;
+            }
+        }
+
         // Master-key authority is enforced upstream in CheckContracts via
-        // HasMasterKeyInput; nothing to verify here beyond well-formedness.
+        // HasMasterKeyInput; nothing else to verify here.
         return true;
     }
 
@@ -835,6 +914,20 @@ void PoolRegistry::ApplyApprove(const ContractContext& ctx)
     }
 
     m_pool_entries[payload.m_cpid] = m_pool_db.find(ctx.m_tx.GetHash())->second;
+}
+
+void PoolRegistry::Open(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // OPEN is only valid on POOL_APPROVE (POOL_REGISTER has no OPEN action;
+    // PoolApprovePayload is the only payload whose WellFormed accepts OPEN).
+    // ApplyApprove branches on ctx->m_action internally and handles the OPEN
+    // case (records m_authorized_operator_key / m_authorization_height).
+    if (ctx->m_type.Value() != ContractType::POOL_APPROVE) {
+        LogPrint(LogFlags::CONTRACT, "ERROR: %s: PoolRegistry::Open called with non-approve type",
+                 __func__);
+        return;
+    }
+    ApplyApprove(ctx);
 }
 
 void PoolRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

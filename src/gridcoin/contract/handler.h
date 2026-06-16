@@ -134,6 +134,21 @@ struct IContractHandler
     virtual void Delete(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) = 0;
 
     //!
+    //! \brief Handle a contract OPEN (pre-authorization) action.
+    //!
+    //! Symmetric counterpart to Add/Delete for the ContractAction::OPEN action.
+    //! Only POOL_APPROVE consumes OPEN today (it records a Foundation
+    //! pre-authorization for a builtin pool slot); every other handler ignores
+    //! it via this no-op default. The default MUST stay a real applied step for
+    //! POOL so that Apply and Revert are symmetric — Revert unconditionally
+    //! forwards OPEN-carrying contexts to the handler, so an OPEN that Apply
+    //! dropped would let Revert pop an entry that was never pushed.
+    //!
+    //! \param ctx References the contract and associated context.
+    //!
+    virtual void Open(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {}
+
+    //!
     //! \brief Revert a contract found in a disconnected block.
     //!
     //! The application calls this method for each contract in the disconnected

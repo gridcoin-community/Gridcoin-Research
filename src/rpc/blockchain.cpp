@@ -3231,6 +3231,39 @@ UniValue addkey(const UniValue& params)
 
 namespace {
 
+//!
+//! \brief Reject pool-mutating RPCs before V15 activation.
+//!
+//! Pre-V15 every POOL contract is rejected by ValidateAtHeight, but the
+//! register/approve/remove/authorize RPCs would still build, sign, and
+//! broadcast a transaction that the mempool then bounces with a generic
+//! "coins already spent" — confusing, and it leaves a dead tx in the wallet.
+//! Fail early with a precise message instead.
+//!
+void EnsurePoolRegistrationActive()
+{
+    int tip_height = 0;
+    {
+        LOCK(cs_main);
+        tip_height = nBestHeight;
+    }
+
+    if (IsV15Enabled(tip_height)) {
+        return;
+    }
+
+    const int v15_height = GetBlockV15Height();
+    if (v15_height == std::numeric_limits<int>::max()) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "On-chain pool registration (block version 15) is not active on this "
+            "network yet; no activation height has been scheduled.");
+    }
+
+    throw JSONRPCError(RPC_INVALID_REQUEST,
+        strprintf("On-chain pool registration (block version 15) is not active until "
+                  "block %d (current height %d).", v15_height, tip_height));
+}
+
 GRC::Cpid ParseCpidArg(const UniValue& v)
 {
     const std::string cpid_str = v.get_str();
@@ -3331,6 +3364,7 @@ const RPCHelpMan& registerpool_helpman() { return registerpool_help; }
 
 UniValue registerpool(const UniValue& params)
 {
+    EnsurePoolRegistrationActive();
     EnsureWalletIsUnlocked();
 
     const GRC::Cpid cpid = ParseCpidArg(params[0]);
@@ -3426,7 +3460,21 @@ UniValue registerpool(const UniValue& params)
 
     GRC::PoolRegisterPayload payload(cpid, name, url, operator_pubkey);
 
-    if (!payload.Sign(operator_privkey)) {
+    // Bind the action (ADD) and the predecessor hash into the operator
+    // signature so it can't be replayed with the action flipped or against a
+    // different predecessor state. The predecessor is the current entry's hash
+    // (the seed hash for a builtin claim, the prior entry for a rotation /
+    // re-registration) or null for a brand-new CPID — matching exactly what
+    // ApplyRegister records as m_previous_hash and what VerifyRegisterAuth
+    // recomputes at validation. (If a competing contract for this CPID lands
+    // between here and block validation, the predecessor moves and this tx is
+    // rejected — the operator simply re-issues; that is the intended freshness.)
+    uint256 register_prev_hash;
+    if (GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid)) {
+        register_prev_hash = existing->m_hash;
+    }
+
+    if (!payload.Sign(operator_privkey, GRC::ContractAction::ADD, register_prev_hash)) {
         throw JSONRPCError(RPC_WALLET_ERROR,
             "Failed to sign the pool registration payload with the operator key.");
     }
@@ -3471,6 +3519,8 @@ UniValue SendPoolApprove(const GRC::Cpid& cpid,
                          const GRC::ContractAction action,
                          CPubKey authorized_operator_key = CPubKey{})
 {
+    EnsurePoolRegistrationActive();
+
     if (pwalletMain->IsLocked()) {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED,
             "Please enter the wallet passphrase with walletpassphrase first.");

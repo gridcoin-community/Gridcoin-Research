@@ -4,10 +4,14 @@
 
 #include "gridcoin/pool.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/contract/registry.h"
 #include "gridcoin/researcher.h"
 #include "chainparams.h"
 #include "key.h"
+#include "main.h"
+#include "primitives/transaction.h"
 #include "streams.h"
+#include "sync.h"
 
 #include <boost/test/unit_test.hpp>
 #include <map>
@@ -42,6 +46,48 @@ struct PoolTestKey
     {
         return GRC::Cpid::Parse("00010203040506070809101112131415");
     }
+};
+
+//!
+//! \brief Wrap a pool contract in a CTransaction with a unique hash.
+//!
+//! `nonce` differentiates the txid (via the input prevout index) so a chain of
+//! contracts on the same CPID gets distinct m_hash / m_previous_hash links,
+//! exactly as real on-chain contracts would.
+//!
+CTransaction MakePoolTx(GRC::Contract contract, uint32_t nonce)
+{
+    CMutableTransaction mtx;
+    mtx.nTime = 1500000000 + nonce;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256(), nonce);
+    mtx.vContracts.push_back(std::move(contract));
+    return CTransaction(mtx);
+}
+
+//!
+//! \brief Drive a single pool-contract transaction through the real contract
+//! dispatcher (GRC::ApplyContracts -> Dispatcher::Apply), the same path
+//! ConnectBlock uses. This is what exercises the OPEN dispatch wiring — calling
+//! PoolRegistry::Open directly would bypass the Dispatcher and miss the bug the
+//! blocker fix targets.
+//!
+void DispatchApply(const CTransaction& tx, const CBlockIndex* pindex)
+{
+    GRC::RegistryBookmarks bookmarks;
+    bool found_contract = false;
+    GRC::ApplyContracts(tx, pindex, bookmarks, found_contract);
+}
+
+//!
+//! \brief Fixture that leaves the global PoolRegistry in its clean booted
+//! (builtins-only) state before and after each lifecycle test, so a failure
+//! mid-test can't pollute the shared singleton for later cases.
+//!
+struct PoolLifecycleFixture
+{
+    PoolLifecycleFixture()  { LOCK(cs_main); GRC::GetPoolRegistry().Reset(); }
+    ~PoolLifecycleFixture() { LOCK(cs_main); GRC::GetPoolRegistry().Reset(); }
 };
 
 } // anonymous namespace
@@ -83,7 +129,7 @@ BOOST_AUTO_TEST_CASE(register_payload_serialization_round_trip)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(original.Sign(private_key));
+    BOOST_REQUIRE(original.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
     original.Serialize(stream, GRC::ContractAction::ADD);
@@ -109,7 +155,7 @@ BOOST_AUTO_TEST_CASE(register_payload_well_formed_accepts_valid_add)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     BOOST_CHECK(payload.WellFormed(GRC::ContractAction::ADD));
 }
@@ -124,7 +170,7 @@ BOOST_AUTO_TEST_CASE(register_payload_well_formed_rejects_empty_name)
         "",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::ADD));
 }
@@ -139,7 +185,7 @@ BOOST_AUTO_TEST_CASE(register_payload_well_formed_rejects_empty_url_on_add)
         "grcpool.com",
         "",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::ADD));
 }
@@ -154,7 +200,7 @@ BOOST_AUTO_TEST_CASE(register_payload_well_formed_allows_empty_url_on_remove)
         "grcpool.com",
         "",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     BOOST_CHECK(payload.WellFormed(GRC::ContractAction::REMOVE));
 }
@@ -203,9 +249,9 @@ BOOST_AUTO_TEST_CASE(register_payload_verify_signature_round_trip)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
-    BOOST_CHECK(payload.VerifySignature(public_key));
+    BOOST_CHECK(payload.VerifySignature(public_key, GRC::ContractAction::ADD, uint256{}));
 }
 
 BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_tampered_field)
@@ -218,10 +264,10 @@ BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_tampered_field)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     payload.m_url = "https://evil-pool-takeover.example/";
-    BOOST_CHECK(!payload.VerifySignature(public_key));
+    BOOST_CHECK(!payload.VerifySignature(public_key, GRC::ContractAction::ADD, uint256{}));
 }
 
 BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_other_key)
@@ -236,9 +282,9 @@ BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_other_key)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
-    BOOST_CHECK(!payload.VerifySignature(other_pubkey));
+    BOOST_CHECK(!payload.VerifySignature(other_pubkey, GRC::ContractAction::ADD, uint256{}));
 }
 
 BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_default_key)
@@ -251,11 +297,40 @@ BOOST_AUTO_TEST_CASE(register_payload_verify_signature_rejects_default_key)
         "grcpool.com",
         "https://grcpool.com/",
         public_key);
-    BOOST_REQUIRE(payload.Sign(private_key));
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
 
     // Pass a default-constructed (invalid) public key — VerifySignature
     // must reject without crashing.
-    BOOST_CHECK(!payload.VerifySignature(CPubKey{}));
+    BOOST_CHECK(!payload.VerifySignature(CPubKey{}, GRC::ContractAction::ADD, uint256{}));
+}
+
+BOOST_AUTO_TEST_CASE(register_payload_signature_binds_action_and_previous_hash)
+{
+    // Replay defense: the operator signature must commit to the contract action
+    // AND the predecessor state, so a captured payload+signature can't be
+    // replayed with the action flipped (REMOVE to de-list an active pool) or
+    // against a different predecessor (a stale ADD knocking a pool to PENDING).
+    CKey private_key = PoolTestKey::Private();
+    const CPubKey public_key = private_key.GetPubKey();
+
+    GRC::PoolRegisterPayload payload(
+        PoolTestKey::Cpid(),
+        "grcpool.com",
+        "https://grcpool.com/",
+        public_key);
+
+    const uint256 prev = GRC::PoolRegistry::BuiltinSeedHash(PoolTestKey::Cpid());
+
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, prev));
+
+    // Verifies only against the exact (action, predecessor) it was signed for.
+    BOOST_CHECK(payload.VerifySignature(public_key, GRC::ContractAction::ADD, prev));
+
+    // Action flipped to REMOVE → reject.
+    BOOST_CHECK(!payload.VerifySignature(public_key, GRC::ContractAction::REMOVE, prev));
+
+    // Different predecessor state → reject.
+    BOOST_CHECK(!payload.VerifySignature(public_key, GRC::ContractAction::ADD, uint256{}));
 }
 
 BOOST_AUTO_TEST_CASE(register_payload_contract_type_is_pool_register)
@@ -623,6 +698,183 @@ BOOST_AUTO_TEST_CASE(pending_pool_retention_default_is_28800)
     // GetPendingPoolRetention() reads the -pendingpoolretention override
     // when set; in the unit-test harness no override is in play.
     BOOST_CHECK_EQUAL(GetPendingPoolRetention(), 28800);
+}
+
+// -----------------------------------------------------------------------------
+// Lifecycle: apply / revert through the real contract dispatcher
+//
+// These drive contracts through GRC::ApplyContracts / GRC::RevertContracts (the
+// ConnectBlock / DisconnectBlock path) rather than poking the registry directly,
+// so they exercise Dispatcher::Apply / Dispatcher::Revert — including the OPEN
+// dispatch wiring whose absence was the blocker on the 2026-06-14 review.
+// -----------------------------------------------------------------------------
+
+BOOST_FIXTURE_TEST_CASE(open_apply_revert_round_trips_a_builtin, PoolLifecycleFixture)
+{
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+
+    // Booted state: ACTIVE builtin seed, no operator key, no authorization.
+    {
+        GRC::Pool_ptr seed = registry.Try(cpid);
+        BOOST_REQUIRE(seed);
+        BOOST_REQUIRE(registry.IsBuiltin(cpid));
+        BOOST_CHECK(seed->m_status == GRC::PoolStatus::ACTIVE);
+        BOOST_CHECK(!seed->m_authorized_operator_key.IsValid());
+    }
+
+    const CKey operator_key = PoolTestKey::Private();
+    const CPubKey authorized = operator_key.GetPubKey();
+
+    CBlockIndex pindex;
+    pindex.nHeight = 5'000'000;
+
+    GRC::Contract open = GRC::MakeContract<GRC::PoolApprovePayload>(
+        GRC::ContractAction::OPEN, cpid, authorized);
+    const CTransaction open_tx = MakePoolTx(std::move(open), 1);
+
+    // Apply OPEN through the dispatcher. BEFORE the blocker fix, Dispatcher::Apply
+    // dropped OPEN entirely, so the authorization below was never recorded.
+    DispatchApply(open_tx, &pindex);
+
+    {
+        GRC::Pool_ptr opened = registry.Try(cpid);
+        BOOST_REQUIRE(opened);
+        BOOST_CHECK(opened->m_authorized_operator_key == authorized);
+        BOOST_CHECK_EQUAL(opened->m_authorization_height, pindex.nHeight);
+        // OPEN preserves status and builtin-ness.
+        BOOST_CHECK(opened->m_status == GRC::PoolStatus::ACTIVE);
+        BOOST_CHECK(registry.IsBuiltin(cpid));
+    }
+
+    // Revert the OPEN block (reorg). Apply/Revert must be symmetric: the seed
+    // must be restored, NOT erased. BEFORE the fix, Revert popped an entry Apply
+    // never pushed and the null-previous-hash builtin seed was lost.
+    GRC::RevertContracts(open_tx, &pindex);
+
+    {
+        GRC::Pool_ptr restored = registry.Try(cpid);
+        BOOST_REQUIRE(restored); // seed survived the reorg
+        BOOST_CHECK(registry.IsBuiltin(cpid));
+        BOOST_CHECK(restored->m_status == GRC::PoolStatus::ACTIVE);
+        BOOST_CHECK(!restored->m_authorized_operator_key.IsValid());
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(approve_remove_on_builtin_reverts_to_active_seed, PoolLifecycleFixture)
+{
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+
+    CBlockIndex pindex;
+    pindex.nHeight = 5'000'000;
+
+    GRC::Contract remove = GRC::MakeContract<GRC::PoolApprovePayload>(
+        GRC::ContractAction::REMOVE, cpid);
+    const CTransaction remove_tx = MakePoolTx(std::move(remove), 7);
+
+    DispatchApply(remove_tx, &pindex);
+
+    {
+        GRC::Pool_ptr deleted = registry.Try(cpid);
+        BOOST_REQUIRE(deleted);
+        BOOST_CHECK(deleted->m_status == GRC::PoolStatus::DELETED);
+        BOOST_CHECK(registry.IsBuiltin(cpid)); // builtin-ness is permanent
+    }
+
+    GRC::RevertContracts(remove_tx, &pindex);
+
+    {
+        GRC::Pool_ptr restored = registry.Try(cpid);
+        BOOST_REQUIRE(restored);
+        BOOST_CHECK(restored->m_status == GRC::PoolStatus::ACTIVE);
+        BOOST_CHECK(registry.IsBuiltin(cpid));
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(register_on_nonbuiltin_reverts_cleanly_without_touching_builtins,
+                        PoolLifecycleFixture)
+{
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid nonbuiltin = PoolTestKey::Cpid();
+    BOOST_REQUIRE(!registry.IsBuiltin(nonbuiltin));
+    BOOST_REQUIRE(!registry.Try(nonbuiltin)); // not present at boot
+
+    const GRC::Cpid builtin =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+    const size_t builtin_count = GRC::PoolRegistry::BuiltinPoolSeeds().size();
+
+    CBlockIndex pindex;
+    pindex.nHeight = 5'000'000;
+
+    CKey operator_key = PoolTestKey::Private();
+    GRC::PoolRegisterPayload payload(
+        nonbuiltin, "testpool", "https://test.example/", operator_key.GetPubKey());
+    payload.Sign(operator_key, GRC::ContractAction::ADD, uint256{});
+
+    GRC::Contract reg = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+    const CTransaction reg_tx = MakePoolTx(std::move(reg), 3);
+
+    DispatchApply(reg_tx, &pindex);
+
+    {
+        GRC::Pool_ptr pending = registry.Try(nonbuiltin);
+        BOOST_REQUIRE(pending);
+        BOOST_CHECK(pending->m_status == GRC::PoolStatus::PENDING);
+        // Builtins untouched.
+        BOOST_CHECK_EQUAL(registry.ActivePools().size(), builtin_count);
+        BOOST_CHECK(registry.IsActivePool(builtin));
+    }
+
+    GRC::RevertContracts(reg_tx, &pindex);
+
+    {
+        // First contract for this CPID had a null previous hash → revert erases
+        // the CPID outright, leaving only the grandfathered builtins.
+        BOOST_CHECK(!registry.Try(nonbuiltin));
+        BOOST_CHECK(registry.IsActivePool(builtin));
+        BOOST_CHECK_EQUAL(registry.ActivePools().size(), builtin_count);
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(reset_reseeds_builtins, PoolLifecycleFixture)
+{
+    LOCK(cs_main);
+
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+    const size_t builtin_count = GRC::PoolRegistry::BuiltinPoolSeeds().size();
+
+    // Seed an extra non-builtin entry so we can confirm Reset clears real state.
+    GRC::Pool extra;
+    extra.m_cpid = PoolTestKey::Cpid();
+    extra.m_name = "ephemeral";
+    extra.m_status = GRC::PoolStatus::ACTIVE;
+    extra.m_height = 4'000'000;
+    registry.SeedForTests(extra);
+    BOOST_REQUIRE(registry.Try(PoolTestKey::Cpid()));
+
+    registry.Reset();
+
+    // The non-builtin entry is gone; the grandfathered builtins are back. Before
+    // the Major-2 fix, Reset left the registry EMPTY (no reseed), which would
+    // regress IsActivePool* and diverge AVW for a -clearallregistryhistory node.
+    BOOST_CHECK(!registry.Try(PoolTestKey::Cpid()));
+    BOOST_CHECK_EQUAL(registry.ActivePools().size(), builtin_count);
+
+    const GRC::Cpid builtin =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+    BOOST_CHECK(registry.IsActivePool(builtin));
+    BOOST_CHECK(registry.IsBuiltin(builtin));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

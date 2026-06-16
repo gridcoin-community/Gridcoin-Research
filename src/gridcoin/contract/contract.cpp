@@ -189,6 +189,18 @@ public:
             return;
         }
 
+        if (ctx->m_action == ContractAction::OPEN) {
+            // OPEN must be applied symmetrically with Revert (which forwards
+            // every action to the handler). Without this branch a POOL_APPROVE
+            // OPEN was silently dropped here yet still reverted on a reorg —
+            // popping an entry Apply never pushed and, for a builtin CPID,
+            // erasing the grandfathered seed (null m_previous_hash → no
+            // resurrection). See PoolRegistry::Open / Revert.
+            ctx.Log("INFO: Open contract");
+            GetHandler(ctx->m_type.Value()).Open(ctx);
+            return;
+        }
+
         ctx.Log("WARNING: Unknown contract action ignored");
     }
 

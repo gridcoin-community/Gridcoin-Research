@@ -233,17 +233,27 @@ public:
     //!
     //! \brief Sign the payload bytes with the operator's private key.
     //!
+    //! The signed digest binds \p action and \p previous_hash (the hash of the
+    //! entry this contract supersedes, or null for a fresh first registration)
+    //! so the signature is valid for exactly one action against one predecessor
+    //! state — see HashPoolRegisterPayload in pool.cpp for the replay rationale.
+    //!
     //! \return false if signing failed.
     //!
-    bool Sign(CKey& operator_private_key);
+    bool Sign(CKey& operator_private_key,
+              ContractAction action,
+              const uint256& previous_hash);
 
     //!
     //! \brief Verify m_signature against the supplied pubkey.
     //!
     //! Callers pass either this payload's m_operator_key (new CPID) or the
-    //! existing entry's m_operator_key (CPID renewal / withdrawal).
+    //! existing entry's m_operator_key (CPID renewal / withdrawal). \p action
+    //! and \p previous_hash must match what was signed (see Sign).
     //!
-    bool VerifySignature(const CPubKey& expected_key) const;
+    bool VerifySignature(const CPubKey& expected_key,
+                         ContractAction action,
+                         const uint256& previous_hash) const;
 
     ADD_CONTRACT_PAYLOAD_SERIALIZE_METHODS;
 
@@ -499,6 +509,8 @@ public:
 
     void Delete(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    void Open(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
     void Revert(const ContractContext& ctx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     int Initialize() override;
@@ -612,6 +624,7 @@ private:
     //! and the non-builtin expired-PENDING transparency.
     //!
     bool VerifyRegisterAuth(const PoolRegisterPayload& payload,
+                            ContractAction action,
                             int at_height,
                             int& DoS) const;
 };
