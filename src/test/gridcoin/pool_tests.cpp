@@ -12,6 +12,7 @@
 #include "primitives/transaction.h"
 #include "streams.h"
 #include "sync.h"
+#include "util/system.h"
 
 #include <boost/test/unit_test.hpp>
 #include <map>
@@ -86,8 +87,21 @@ void DispatchApply(const CTransaction& tx, const CBlockIndex* pindex)
 //!
 struct PoolLifecycleFixture
 {
-    PoolLifecycleFixture()  { LOCK(cs_main); GRC::GetPoolRegistry().Reset(); }
-    ~PoolLifecycleFixture() { LOCK(cs_main); GRC::GetPoolRegistry().Reset(); }
+    PoolLifecycleFixture()  { Restore(); }
+    ~PoolLifecycleFixture() { Restore(); }
+
+    // Leave the registry booted-clean and V15 inert (some tests force
+    // -blockv15height=0 to exercise the validation gate; reset it so the
+    // override never leaks into another case via the global gArgs).
+    static void Restore()
+    {
+        // "2147483647" == INT_MAX, the same V15-inert sentinel the chainparams
+        // default uses. A string literal avoids the locale-dependent
+        // integer-to-string conversion flagged by lint-locale-dependence.sh.
+        gArgs.ForceSetArg("-blockv15height", "2147483647");
+        LOCK(cs_main);
+        GRC::GetPoolRegistry().Reset();
+    }
 };
 
 } // anonymous namespace
@@ -844,6 +858,68 @@ BOOST_FIXTURE_TEST_CASE(register_on_nonbuiltin_reverts_cleanly_without_touching_
         BOOST_CHECK(!registry.Try(nonbuiltin));
         BOOST_CHECK(registry.IsActivePool(builtin));
         BOOST_CHECK_EQUAL(registry.ActivePools().size(), builtin_count);
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(takeover_register_rejected_operator_register_accepted, PoolLifecycleFixture)
+{
+    // Drives the takeover defense through the authoritative consensus path
+    // (GRC::BlockValidateContracts -> Dispatcher::BlockValidate ->
+    // ValidateAtHeight -> VerifyRegisterAuth) with V15 forced active. An
+    // interloper's POOL_REGISTER on a CPID already held by a valid operator key
+    // must be rejected; a payload signed by the existing operator key must be
+    // accepted. Also exercises the action+predecessor signature binding inside
+    // the verifier. BlockValidateContracts is used (not ValidateContracts) so
+    // the activation height comes from the block index we control rather than
+    // the global nBestHeight, which is unset under the test harness.
+    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid cpid = PoolTestKey::Cpid(); // non-builtin
+    BOOST_REQUIRE(!registry.IsBuiltin(cpid));
+
+    CBlockIndex pindex;
+    pindex.nHeight = 100; // >= BlockV15Height(0), so the V15 gate passes
+
+    // Establish a live, operator-claimed entry (ACTIVE, valid key).
+    CKey operator_key = PoolTestKey::Private();
+    GRC::Pool entry(cpid, "legitpool", "https://legit.example/", operator_key.GetPubKey());
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = 50;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid); // any deterministic non-null hash
+    registry.SeedForTests(entry);
+
+    const uint256 prev_hash = entry.m_hash; // predecessor the new contract chains onto
+
+    // Interloper: signs with their OWN key (the takeover attempt), even using
+    // the correct action + predecessor so only the key differs.
+    {
+        CKey attacker = PoolTestKey::Private();
+        GRC::PoolRegisterPayload payload(cpid, "evilpool", "https://evil.example/",
+                                         attacker.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(attacker, GRC::ContractAction::ADD, prev_hash));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 21);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&pindex, tx, dos)); // rejected: sig != existing key
+    }
+
+    // Legitimate operator: signs with the existing operator key -> accepted
+    // (routine update / rotation).
+    {
+        GRC::PoolRegisterPayload payload(cpid, "legitpool", "https://legit.example/",
+                                         operator_key.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev_hash));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 22);
+
+        int dos = 0;
+        BOOST_CHECK(GRC::BlockValidateContracts(&pindex, tx, dos)); // accepted: operator-signed
     }
 }
 

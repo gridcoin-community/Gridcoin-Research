@@ -400,7 +400,7 @@ int GetPendingPoolRetention()
 {
     // Hidden `-pendingpoolretention` arg shortens the PENDING / OPEN
     // expiration window so isolated-testnet / regtest runs can exercise
-    // expiration boundaries without waiting ~20 days of mainnet-paced
+    // expiration boundaries without waiting ~30 days of mainnet-paced
     // blocks. Consensus-affecting on shared networks: nodes with different
     // values will disagree on POOL_REGISTER admission across expiration
     // boundaries and fork. Defaults to the chainparams value (28800).
