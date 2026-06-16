@@ -87,7 +87,7 @@ consensus-critical at a specific block version activation height. The
 | `DefaultMagnitudeWeightFactor` | 100/567 (~0.1764) | `BlockV11Height` | Voting weight conversion factor; configurable from `BlockV13Height` |
 | `MaxMagnitudeWeightFactor` | 1 | `BlockV13Height` | Upper clamp for voting magnitude weight factor |
 | `StandardContractReplayLookback` | 180 days | `BlockV11Height` | Contract validity window for types without registry DB (not applicable v13+ for protocol entries) |
-| `PendingPoolRetention` | 28,800 blocks (~20 days) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
+| `PendingPoolRetention` | 28,800 blocks (~30 days at ~90s spacing) | `BlockV15Height` | PENDING pool registrations and POOL_APPROVE OPEN authorizations are query-time expired after this many blocks (issue #1783). Overridable for isolated-testnet via hidden `-pendingpoolretention`; consensus-affecting. See §11.3.1. |
 
 > **Source:** `src/chainparams.cpp:61-91` (mainnet), `src/chainparams.cpp:184-213`
 > (testnet)
@@ -728,7 +728,7 @@ If step 5 (4-step) / step 3 (3-step) doesn't happen within `consensus.PendingPoo
 
 ### 11.3.1 PENDING + OPEN Retention
 
-`Consensus::Params::PendingPoolRetention` (default `28800` blocks ≈ 20 days at ~60s spacing) bounds two things:
+`Consensus::Params::PendingPoolRetention` (default `28800` blocks ≈ 30 days at ~90s mainnet spacing) bounds two things:
 
 - **PENDING entries** become query-time expired once `at_height > entry.m_height + retention`. The chained entry remains in storage but consensus treats it as absent for the takeover-check; a fresh `POOL_REGISTER ADD` from any key can supersede an expired PENDING **on a non-builtin slot**. On a builtin in Path 1 (claimed-operational), expired PENDING is NOT transparent — claimed-builtin protection persists regardless of retention.
 - **OPEN authorizations** become query-time expired once `at_height > entry.m_authorization_height + retention`. Path 2 rejects POOL_REGISTER with an expired auth.
@@ -737,11 +737,11 @@ Both checks are pure functions of stored fields — no state mutation at the exp
 
 #### Hidden `-pendingpoolretention` override
 
-For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~20 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. **CONSENSUS-AFFECTING:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries and **will fork off the network** if used on mainnet / public testnet. Mirrors the existing `-blockv15height` pattern in scope and warning.
+For isolated-testnet / regtest runs that need to exercise expiration boundaries without waiting ~30 days of mainnet-paced blocks, the hidden `-pendingpoolretention=N` arg (registered in `init.cpp`) shortens the window. **CONSENSUS-AFFECTING:** nodes with differing values disagree on POOL_REGISTER admission across expiration boundaries and **will fork off the network** if used on mainnet / public testnet. Mirrors the existing `-blockv15height` pattern in scope and warning.
 
 > **Source:** `src/gridcoin/pool.cpp` `IsPendingExpired` / `IsAuthorizationExpired`; `src/chainparams.cpp` `GetPendingPoolRetention`; `src/init.cpp` hidden_args registration.
 
-### 11.3.2 Registration Burn — 100 GRC (Issue #5)
+### 11.3.2 Registration Burn — 100 GRC
 
 `PoolRegisterPayload::RequiredBurnAmount()` returns `100 * COIN`, set as the `REGISTRATION_BURN` constant on the payload. Pool registration is a heavier on-chain commitment than a beacon (0.5 GRC) or a poll (50 GRC + 100K GRC balance attestation): a pool operator is asking the network and the researchers staking through their pool to trust them with honest BOINC aggregation, infrastructure, and reported policy, sustained over time. The 100 GRC burn ranks pools above polls in cost ordering as a deliberate trust-weight signal.
 

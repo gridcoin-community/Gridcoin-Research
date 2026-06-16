@@ -181,11 +181,16 @@ const ProjectEntry* ResolveWhitelistProject(
 //! \return \c true if the CPID matches a known Gridcoin pool's CPID.
 //!
 //! Issue #1783: the on-chain PoolRegistry is now the source of truth for pool
-//! detection in the local wallet's BOINC-mode display. The hardcoded
-//! g_mining_pools list is retained only because voting/result.cpp and
-//! voting/registry.cpp consume it as part of an active-vote-weight
-//! consensus calculation; migrating that path is a separate, height-gated
-//! change.
+//! detection in the local wallet's BOINC-mode display AND for the voting
+//! active-vote-weight calculation (voting/result.cpp and voting/registry.cpp
+//! were migrated to GetPoolRegistry().ActivePoolsAtHeight in this PR).
+//!
+//! The hardcoded g_mining_pools list is intentionally retained as the
+//! shadow-test oracle for pool_tests.cpp::builtin_pools_match_g_mining_pools_pre_v15,
+//! which asserts the grandfathered builtin seeds match the legacy list
+//! bit-for-bit. It is the ONLY guard against the two builtin lists silently
+//! diverging (a typo there would fork the chain on the next pre-V15 poll's
+//! AVW), so do NOT delete it as dead code.
 //!
 bool IsPoolCpid(const Cpid cpid)
 {

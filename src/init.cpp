@@ -825,7 +825,7 @@ void SetupServerArgs()
 
     // Isolated-testnet / regtest override for the PENDING / OPEN expiration
     // window on POOL contracts (issue #1783). Default chainparams value is
-    // 28800 blocks (~20 days at mainnet ~60s spacing); this arg shortens
+    // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
     // the window so dev runs can exercise expiration boundaries without
     // waiting weeks. CONSENSUS-AFFECTING — nodes with differing values
     // disagree on POOL_REGISTER admission across expiration boundaries
@@ -1219,6 +1219,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 13 hard fork configured for block %d", Params().GetConsensus().BlockV13Height);
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
     LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
+
+    // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
+    // -pendingpoolretention override is visible in the log and an accidental
+    // mismatch across nodes is diagnosable (the value is consensus-affecting).
+    LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");
