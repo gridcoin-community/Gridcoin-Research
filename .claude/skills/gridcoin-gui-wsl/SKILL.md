@@ -27,12 +27,17 @@ this skill does not apply.
 - Run shell steps in the user's **default** WSL distro: `wsl bash -lc '<cmd>'`
   (or `wsl -d <distro> …` if they name one — discover with `wsl -l -q`). Never
   hardcode a distro name.
+- **Single-quote the `bash -lc` payload.** Snippets wrapped in `wsl bash -lc '…'`
+  are launched from the Windows host (PowerShell/cmd); single quotes stop the host
+  shell from expanding `$HOME`, `$REPO`, `$(nproc)` etc. — they're resolved by bash
+  inside WSL. Bare snippets below (Setup, Optional) are meant to be run from inside
+  a WSL terminal.
 - **Repo path:** default `$HOME/Gridcoin-Research`; if the user's clone is
   elsewhere, take the path as an argument and substitute. Always use `$HOME` /
   `$USER` — never a hardcoded username.
 - **Editing GUI source from a Windows editor:** derive the Windows path with
-  `wslpath -w "$REPO/src/qt"` (gives the `\\wsl.localhost\<distro>\…` UNC path).
-  Don't hardcode it.
+  `wslpath -w "$HOME/Gridcoin-Research/src/qt"` (gives the `\\wsl.localhost\<distro>\…`
+  UNC path). Don't hardcode it.
 - **Build dir:** `build-gui/` (kept separate from any `build/` the user uses for
   tests). **Binary:** `build-gui/bin/gridcoinresearch` (CMake emits to `bin/`).
 
@@ -57,31 +62,39 @@ this skill does not apply.
 Configure `build-gui/` once (GUI on, tests off, ccache); then incremental rebuilds
 are seconds. Reconfigure only if it's not already a GUI build:
 ```bash
-REPO=$HOME/Gridcoin-Research   # or the user's clone path
-wsl bash -lc "cd $REPO && grep -q '^ENABLE_GUI:BOOL=ON' build-gui/CMakeCache.txt 2>/dev/null || \
+wsl bash -lc 'REPO="$HOME/Gridcoin-Research"; cd "$REPO" && \
+  grep -q "^ENABLE_GUI:BOOL=ON" build-gui/CMakeCache.txt 2>/dev/null || \
   cmake -B build-gui -DENABLE_GUI=ON -DUSE_QT6=ON -DENABLE_TESTS=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
-wsl bash -lc "cd $REPO && cmake --build build-gui -j\$(nproc)"
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+wsl bash -lc 'cd "$HOME/Gridcoin-Research" && cmake --build build-gui -j$(nproc)'
 ```
-Run the build in the background — a cold build is several minutes; incremental
-builds (after editing `src/qt/...`) are seconds thanks to ccache.
+Replace `$HOME/Gridcoin-Research` with the clone path if it differs. The payload is
+single-quoted so the Windows host shell leaves `$HOME`/`$REPO`/`$(nproc)` for bash
+inside WSL to expand (see Conventions). Run the build in the background — a cold
+build is several minutes; incremental builds (after editing `src/qt/...`) are
+seconds thanks to ccache.
 
 ## Run (WSLg)
 
-Launch as the **foreground (`exec`) process of a background task** so the command
-returns immediately while the GUI keeps running. Use native Wayland + an isolated
-datadir + regtest so the window comes up instantly and offline:
+Launch with native Wayland + an isolated datadir + regtest so the window comes up
+instantly and offline:
 ```bash
-wsl bash -lc "cd $REPO && mkdir -p ~/gc-devdata && \
-  exec env QT_QPA_PLATFORM=wayland ./build-gui/bin/gridcoinresearch -datadir=\$HOME/gc-devdata -regtest"
+wsl bash -lc 'cd "$HOME/Gridcoin-Research" && mkdir -p "$HOME/gc-devdata" && \
+  exec env QT_QPA_PLATFORM=wayland ./build-gui/bin/gridcoinresearch -datadir="$HOME/gc-devdata" -regtest'
 ```
+- This **blocks the terminal while the GUI runs.** `exec` makes the GUI the
+  foreground process, so the `wsl` call stays attached until you close the window —
+  it does *not* return immediately. To keep working, launch it from a **second WSL
+  terminal**, or background the whole `wsl` call from the **Windows side** (e.g.
+  PowerShell `Start-Process wsl -ArgumentList 'bash','-lc','<the payload>'`).
+- Don't background it from *inside* WSL with `nohup … &` and then let the `wsl`
+  invocation exit — WSL reaps the GUI when the distro goes idle. Keep at least one
+  live `wsl` invocation holding it (the attached terminal, or the Windows-side
+  `Start-Process`).
 - `QT_QPA_PLATFORM=wayland` is REQUIRED (see Rendering note).
 - `-regtest` gives a private, offline chain (no sync → instant idle UI); `-datadir`
   keeps it off your real wallet. For real-network behaviour use `-testnet`. Plain
   mainnet will sync ~4M blocks and starve the UI — avoid it for dev.
-- Don't use `nohup … &` and let the command return — WSL reaps the backgrounded
-  GUI when the `wsl` invocation exits. The foreground-`exec`-of-a-background-task
-  pattern keeps it alive for the session.
 
 ## Rendering note (WSLg quirks — read if the window is blank)
 
