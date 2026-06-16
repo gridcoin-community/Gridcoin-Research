@@ -73,7 +73,7 @@ public:
         consensus.BlockV13Height = 3989800;
         consensus.BlockV14Height = 3990000;
         consensus.BlockV15Height = std::numeric_limits<int>::max();
-        consensus.PendingPoolRetention = 28800; // ~20 days at ~60s spacing (issue #1783)
+        consensus.PendingPoolRetention = 28800; // ~30 days at ~90s spacing (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 7; // ~6.5 days
         consensus.PollV3Height = 2671700;
         consensus.ProjectV2Height = 2671700;
@@ -206,7 +206,7 @@ public:
         consensus.BlockV13Height = 2870000;
         consensus.BlockV14Height = 3126500;
         consensus.BlockV15Height = std::numeric_limits<int>::max();
-        consensus.PendingPoolRetention = 28800; // identical to mainnet; override via -pendingpoolretention for isolated-testnet runs (issue #1783)
+        consensus.PendingPoolRetention = 28800; // identical to mainnet (~30 days at ~90s); override via -pendingpoolretention for isolated-testnet runs (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 21; // ~19.6 days — extended because v14 fork preceded deployment
         consensus.PollV3Height = 1944820;
         consensus.ProjectV2Height = 1944820;
@@ -306,6 +306,15 @@ public:
         consensus.BlockV12Height = 0;
         consensus.BlockV13Height = 0;
         consensus.BlockV14Height = 0;
+        // V15 stays inert on regtest by default (matching CMainParams /
+        // CTestNetParams) so the functional-test suite, which mines v14 blocks,
+        // is accepted. Without this the member is left at 0 and IsV15Enabled
+        // would be true from genesis, rejecting every v14 block with
+        // "AcceptBlock: reject too old nVersion = 14". Activate early in an
+        // isolated regtest run with -blockv15height=N to exercise POOL
+        // contracts (issue #1783).
+        consensus.BlockV15Height = std::numeric_limits<int>::max();
+        consensus.PendingPoolRetention = 28800; // shorten via -pendingpoolretention for POOL regtest runs (issue #1783)
         consensus.ProtocolVersionGracePeriod = 900 * 7;
         consensus.PollV3Height = 0;
         consensus.ProjectV2Height = 0;
