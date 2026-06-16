@@ -21,6 +21,7 @@
 #include "sync.h"
 #include "script.h"
 #include "scrypt.h"
+#include "txmempool.h"
 #include "validation.h"
 
 #include <map>
@@ -36,7 +37,6 @@ class COutPoint;
 class CAddress;
 class CInv;
 class CNode;
-class CTxMemPool;
 
 namespace GRC {
 class Claim;
@@ -112,19 +112,6 @@ extern int nGrandfather;
 class CReserveKey;
 class CTxDB;
 class CTxIndex;
-
-/** Reason why transaction was removed from mempool */
-// TODO: Consider moving MemPoolRemovalReason to a shared header (e.g. txmempool.h)
-// so that both main.cpp and wallet code can reference it without pulling in all of main.h.
-enum class MemPoolRemovalReason {
-    UNKNOWN = 0,      //!< Manually removed or unknown reason
-    EXPIRY = 1,       //!< Expired from mempool
-    SIZELIMIT = 2,    //!< Removed due to size limit
-    REORG = 3,        //!< Removed for reorganization
-    BLOCK = 4,        //!< Removed because included in block
-    CONFLICT = 5,     //!< Removed due to conflict
-    REPLACED = 6      //!< Removed due to replacement (RBF)
-};
 
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
@@ -255,50 +242,4 @@ public:
     bool AcceptToMemoryPool();
 };
 
-
-
-
-
-
-
-
-
-class CTxMemPool
-{
-public:
-    mutable CCriticalSection cs;
-    std::map<uint256, CTransaction> mapTx;
-    std::map<COutPoint, CInPoint> mapNextTx;
-    uint64_t m_mrc_bloom{0};
-    bool m_mrc_bloom_dirty{false};
-
-    bool addUnchecked(const uint256& hash, CTransaction &tx);
-    bool remove(const CTransaction &tx, bool fRecursive = false);
-    bool removeConflicts(const CTransaction &tx);
-    void clear();
-    void queryHashes(std::vector<uint256>& vtxid);
-
-    unsigned long size() const
-    {
-        LOCK(cs);
-        return mapTx.size();
-    }
-
-    bool exists(uint256 hash) const
-    {
-        LOCK(cs);
-        return (mapTx.count(hash) != 0);
-    }
-
-    bool lookup(uint256 hash, CTransaction& result) const
-    {
-        LOCK(cs);
-        std::map<uint256, CTransaction>::const_iterator i = mapTx.find(hash);
-        if (i == mapTx.end()) return false;
-        result = i->second;
-        return true;
-    }
-};
-
-extern CTxMemPool mempool;
 #endif
