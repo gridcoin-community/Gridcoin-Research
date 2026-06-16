@@ -7,7 +7,12 @@
 # Check for specified flake8 warnings in python files.
 
 export LC_ALL=C
-export MYPY_CACHE_DIR="${BASE_ROOT_DIR}/test/.mypy_cache"
+# MYPY_CACHE_DIR must resolve to a writable path, or the mypyc-compiled mypy SIGSEGVs
+# instead of reporting a usable error. BASE_ROOT_DIR is an optional override (a Bitcoin Core
+# lint convention) that a CI job or caller may export -- it is not set anywhere in this tree,
+# so when unset the path previously resolved to the unwritable "/test/.mypy_cache". Fall back
+# to the repo root so the cache path is always writable, whether run via a harness or standalone.
+export MYPY_CACHE_DIR="${BASE_ROOT_DIR:-$(git rev-parse --show-toplevel)}/test/.mypy_cache"
 
 enabled=(
     E101 # indentation contains mixed spaces and tabs

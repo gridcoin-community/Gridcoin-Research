@@ -92,3 +92,6 @@ flatpak-build/
 flatpak-repo/
 .flatpak-builder/
 *.flatpak
+
+# mypy cache (lint-python.sh writes here)
+test/.mypy_cache/
