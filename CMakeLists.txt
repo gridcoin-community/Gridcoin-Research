@@ -467,7 +467,9 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
         set(PACKAGE_NAME "${PROJECT_NAME}")
         set(PACKAGE_BUGREPORT "https://github.com/gridcoin-community/Gridcoin-Research/issues")
         set(ENABLE_GRIDCOIND_CONF "true")
-        set(ENABLE_CLI_CONF "false")     # no separate gridcoin-cli; daemon answers RPC
+        set(ENABLE_CLI_CONF "true")      # no separate gridcoin-cli, but the daemon
+                                         # doubles as the RPC client (GRIDCOINCLI below
+                                         # points at it), so CLI tests can run.
         set(ENABLE_WALLET_CONF "true")   # Gridcoin always builds the BDB wallet
         set(ENABLE_ZMQ_CONF "false")     # Gridcoin has no ZMQ support
 

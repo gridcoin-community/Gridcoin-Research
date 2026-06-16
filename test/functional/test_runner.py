@@ -130,6 +130,10 @@ BASE_SCRIPTS = [
     #   - rpc_netinfo.py: getnetworkinfo/getnettotals/getconnectioncount/getpeerinfo
     #   - rpc_multisig.py: addmultisigaddress -> validateaddress
     #   - wallet_listtransactions.py: listtransactions/gettransaction/listsinceblock
+    # Phase 4A.3 adds the CLI client-path test (#3018):
+    #   - interface_cli.py: drives gridcoinresearchd in client mode and asserts
+    #     string->JSON arg conversion (RPCConvertValues) round-trips for int/
+    #     bool/array/object args plus the dual-mode `logging <category>` form
     'feature_hello.py',
     'feature_regtest_staking.py',
     'p2p_version_handshake.py',
@@ -147,6 +151,7 @@ BASE_SCRIPTS = [
     'wallet_backup.py',
     'wallet_keypool.py',
     'wallet_listtransactions.py',
+    'interface_cli.py',
     'mempool_accept.py',
     'rpc_net.py',
     'feature_sidestake.py',
