@@ -178,24 +178,26 @@ public:
 
             //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
             //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
-            //! the clamp. Unlike the SIDESTAKE branch above, this is guarded on
-            //! `effective_v15_height != std::numeric_limits<int>::max()` because the default
-            //! consensus value is ::max() until a follow-up release pins a real activation height
-            //! — without the guard, an unactivated V15 would clamp the replay floor to ::max()
-            //! and break the overall replay semantics. The SIDESTAKE branch doesn't need the
-            //! guard because V13 has a real height baked into chainparams.cpp.
+            //! the clamp. The clamp is UNCONDITIONAL — POOL's effective floor is always
+            //! GetBlockV15Height(). Pre-activation that value is std::numeric_limits<int>::max(),
+            //! which can never lower `lowest_height` (the comparison below never assigns it), so
+            //! POOL simply doesn't participate in the floor until V15 is pinned. Post-activation it
+            //! raises the floor to the V15 height the same way SIDESTAKE raises it to V13.
+            //!
+            //! NB: an earlier `!= ::max()` guard form was WRONG — it suppressed the clamp
+            //! pre-activation and let POOL's raw bookmark (0) drag the replay floor down to ~V11 on
+            //! every startup. Clamping to ::max() unconditionally is the correct inert behavior.
             //!
             //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
             //! honored consistently with IsV15Enabled and the startup log line.
             if (iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE) {
-                const int effective_v15_height = GetBlockV15Height();
-                if (effective_v15_height != std::numeric_limits<int>::max()
-                    and db_height < effective_v15_height) {
-                    db_height = effective_v15_height;
-                }
+                db_height = GetBlockV15Height();
             }
 
-            if (iter.second < lowest_height) {
+            //! Compare and assign the *clamped* db_height. (The prior form compared the unclamped
+            //! iter.second but assigned db_height, so a clamped SIDESTAKE/POOL entry could lower the
+            //! floor below its own clamp when another registry was present.)
+            if (db_height < lowest_height) {
                 lowest_height = db_height;
             }
         }
