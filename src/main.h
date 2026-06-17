@@ -81,6 +81,10 @@ extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
 extern uint256 hashBestChain GUARDED_BY(cs_main);
 extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
 extern std::atomic<bool> g_reorg_in_progress;
+// Sync clocks updated by UpdateSyncTime() (node/chainman.cpp) and read by
+// OutOfSyncByAge() (main.cpp).
+extern std::atomic<int64_t> g_previous_block_time;
+extern std::atomic<int64_t> g_nTimeBestReceived;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
@@ -177,12 +181,14 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
+// Persists the best-block locator to registered wallets. Now also called from
+// node/chainman.cpp's SetBestChain, so it has external linkage (issue #3030 A4).
+void SetBestChain(const CBlockLocator& loc) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 /** A transaction with a merkle branch linking it to the block chain. */

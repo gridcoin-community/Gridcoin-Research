@@ -11,6 +11,7 @@
 #include "gridcoin/scraper/scraper_registry.h"
 #include "gridcoin/sidestake.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include <util/string.h>
 #include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
@@ -26,7 +27,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 using namespace std;
 
 bool AskForOutstandingBlocks(uint256 hashStart);
-bool ForceReorganizeToHash(uint256 NewHash);
 extern UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "") EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false,
