@@ -7,6 +7,7 @@
 
 #include "amount.h"
 #include "arith_uint256.h"
+#include "chain.h"
 #include "chainparams.h"
 #include "consensus/consensus.h"
 #include "index/disktxpos.h"
@@ -64,27 +65,17 @@ static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e0
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
+// BlockHasher, BlockMap, cs_main and the active-chain-state globals
+// (mapBlockIndex, pindexBest, hashBestChain, nBestHeight, ...) now live in
+// chain.h, included above (issue #3030, workstream A6). FutureDrift and
+// GetTargetSpacing live in primitives/block.h (extracted in #3060).
 
 extern CScript COINBASE_FLAGS;
-extern CCriticalSection cs_main;
 extern CCriticalSection cs_tx_val_commit_to_disk;
-extern BlockMap mapBlockIndex GUARDED_BY(cs_main);
-extern CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main);
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
-extern int nBestHeight GUARDED_BY(cs_main);
-extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
-extern uint256 hashBestChain GUARDED_BY(cs_main);
-extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
-extern std::atomic<bool> g_reorg_in_progress;
-// Sync clocks updated by UpdateSyncTime() (node/chainman.cpp) and read by
-// OutOfSyncByAge() (main.cpp).
-extern std::atomic<int64_t> g_previous_block_time;
-extern std::atomic<int64_t> g_nTimeBestReceived;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
