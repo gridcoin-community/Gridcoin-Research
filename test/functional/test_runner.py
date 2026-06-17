@@ -149,6 +149,7 @@ BASE_SCRIPTS = [
     'wallet_listtransactions.py',
     'mempool_accept.py',
     'rpc_net.py',
+    'rpc_net_connman.py',
     'feature_sidestake.py',
 ]
 
