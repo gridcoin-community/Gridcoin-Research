@@ -308,6 +308,14 @@ public:
     // Best measured round-trip time.
     std::atomic<int64_t> nMinPingUsecTime{std::numeric_limits<int64_t>::max()};
 
+    // The random nonce this connection puts in its outgoing VERSION message
+    // (issue #3067). Carried per-CNode so self-connection detection compares an
+    // incoming VERSION's nonce against the nonce WE sent on each connection
+    // (CConnman::CheckIncomingNonce), rather than a single process-global nonce
+    // that concurrent outbound handshakes could overwrite. Set in PushVersion;
+    // read on the message-handler thread under m_nodes_mutex, hence atomic.
+    std::atomic<uint64_t> nLocalHostNonce{0};
+
     // Whether a ping is requested.
     bool fPingQueued;
 
@@ -347,6 +355,7 @@ public:
         setInventoryKnown.max_size(SendBufferSize() / 1000);
         nPingNonceSent = 0;
         nPingUsecStart = 0;
+        nLocalHostNonce = 0; // overwritten by PushVersion (issue #3067)
         fPingQueued = false;
 
         // Be shy and don't send version until we hear
@@ -733,11 +742,12 @@ public:
     //! PR 9c; moved from net_processing's ADDR handler).
     void RelayAddress(const CAddress& addr, bool fReachable);
 
-    //! Local-host version nonce for self-connection detection (issue #2558
-    //! PR 9d; moved off the net global). Set on each outgoing VERSION push,
-    //! compared against incoming VERSIONs.
-    uint64_t GetLocalHostNonce() const { return m_local_host_nonce; }
-    void SetLocalHostNonce(uint64_t nonce) { m_local_host_nonce = nonce; }
+    //! Self-connection check (issue #3067; replaces the single process-global
+    //! nonce that was racy across simultaneous outbound handshakes). Returns
+    //! false if `nonce` matches the nonce one of our own still-handshaking
+    //! outbound connections sent -- i.e. the peer echoing it is ourselves --
+    //! and true otherwise. Takes m_nodes_mutex internally.
+    bool CheckIncomingNonce(uint64_t nonce);
 
     //! The address a peer last reported seeing us at (issue #2558 PR 9d; moved
     //! off the net global). Surfaced by the getinfo RPCs.
@@ -783,10 +793,6 @@ private:
     mutable RecursiveMutex m_nodes_mutex;
     std::vector<CNode*> m_nodes GUARDED_BY(m_nodes_mutex);
 
-    //! Local-host version nonce (issue #2558 PR 9d). Atomic: written on the
-    //! socket-handler thread (PushVersion), read on the message-handler thread
-    //! (self-connection check).
-    std::atomic<uint64_t> m_local_host_nonce{0};
     //! The address a peer reports seeing us at (issue #2558 PR 9d). CAddress
     //! copy is not atomic, hence the mutex.
     mutable CCriticalSection m_addr_seen_by_peer_cs;
