@@ -19,6 +19,7 @@
 #include "init.h"
 #include "node/ui_interface.h"
 #include "scheduler.h"
+#include "validationinterface.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/upgrade.h"
 #include "gridcoin/contract/registry.h"
@@ -166,6 +167,13 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Cleaning up any remaining threads in scheduler.", __func__);
         threadGroup.interrupt_all();
         threadGroup.join_all();
+
+        // The scheduler thread is now stopped; drain any remaining background
+        // validation-interface callbacks on this thread, then detach the
+        // scheduler from CMainSignals (issue #3030, workstream B).
+        LogPrintf("INFO: %s: Flushing background validation callbacks.", __func__);
+        GetMainSignals().FlushBackgroundCallbacks();
+        GetMainSignals().UnregisterBackgroundSignalScheduler();
 
         LogPrintf("INFO: %s: Flushing wallet database.", __func__);
         bitdb.Flush(false);
@@ -1842,8 +1850,13 @@ bool AppInit2(ThreadHandlerPtr threads)
         RandAddPeriodic();
     }, std::chrono::minutes{1});
 
-    // TODO: Do we need this? It would require porting the Bitcoin signal handler.
-    // GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
+    // Wire the validation-signal layer (CValidationInterface / CMainSignals)
+    // to the background scheduler now that g_scheduler exists, resolving the
+    // long-standing TODO here (issue #3030, workstream B). Subscribers register
+    // via RegisterValidationInterface; block/tx signals are emitted
+    // synchronously today, but CallFunctionInValidationInterfaceQueue runs on
+    // this scheduler thread.
+    GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
 
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();

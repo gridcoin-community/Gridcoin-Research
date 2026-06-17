@@ -232,6 +232,7 @@ add_library(gridcoin_util STATIC
     util/time.cpp
     util/tokenpipe.cpp
     validation.cpp
+    validationinterface.cpp
     wallet/db.cpp
     wallet/diagnose.cpp
     wallet/rpcdump.cpp
