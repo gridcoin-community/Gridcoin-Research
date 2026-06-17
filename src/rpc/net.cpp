@@ -76,7 +76,7 @@ UniValue addnode(const UniValue& params)
             throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
         }
         CAddress addr;
-        CNode* pnode = g_connman->ConnectNode(addr, strNode.c_str());
+        std::shared_ptr<CNode> pnode = g_connman->ConnectNode(addr, strNode.c_str());
         if(!pnode)
             throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node connection failed");
         UniValue result(UniValue::VOBJ);

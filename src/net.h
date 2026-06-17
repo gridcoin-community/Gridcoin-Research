@@ -260,14 +260,6 @@ public:
     bool fSuccessfullyConnected;
     std::atomic_bool fDisconnect;
     CSemaphoreGrant grantOutbound;
-    // Reference count gating the reaper's delete in ThreadSocketHandler2. Atomic
-    // because it is correct only by the convention that every mutation runs under
-    // the node mutex EXCEPT the two pre-publish AddRef()s (ConnectNode / inbound
-    // accept) on a not-yet-listed node. A plain int could not be GUARDED_BY the
-    // node mutex anyway once that mutex becomes a CConnman private member (a CNode
-    // field cannot name CConnman's private lock), so atomic is the analyzer-clean
-    // expression of the existing all-but-two-under-lock discipline (issue #2558).
-    std::atomic<int> nRefCount{0};
 protected:
 
     // Denial-of-service detection/prevention. The misbehavior score map and its
@@ -330,7 +322,6 @@ public:
         fNetworkNode = false;
         fSuccessfullyConnected = false;
         fDisconnect = false;
-        nRefCount = 0;
         nSendSize = 0;
         nSendOffset = 0;
         hashContinue.SetNull();
@@ -382,12 +373,6 @@ public:
         return id;
     }
 
-    int GetRefCount()
-    {
-        assert(nRefCount >= 0);
-        return nRefCount;
-    }
-
     unsigned int GetTotalRecvSize() EXCLUSIVE_LOCKS_REQUIRED(cs_vRecvMsg)
     {
         unsigned int total = 0;
@@ -404,19 +389,6 @@ public:
         for (auto &msg : vRecvMsg)
             msg.SetVersion(nVersionIn);
     }
-
-    CNode* AddRef()
-    {
-        nRefCount++;
-        return this;
-    }
-
-    void Release()
-    {
-        nRefCount--;
-    }
-
-
 
     void AddAddressKnown(const CAddress& addr)
     {
@@ -710,8 +682,10 @@ public:
     //! Open an outbound connection (reusing an existing one if already connected)
     //! and register the new CNode in m_nodes (issue #2558; was a net.cpp free
     //! function). Public because the addnode "onetry" RPC dials directly; the
-    //! internal outbound machinery goes through OpenNetworkConnection.
-    CNode* ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
+    //! internal outbound machinery goes through OpenNetworkConnection. Returns a
+    //! shared_ptr so the caller keeps the node alive while it finishes wiring it
+    //! up, even if the reaper races to disconnect it (issue #3066).
+    std::shared_ptr<CNode> ConnectNode(CAddress addrConnect, const char* strDest = nullptr);
 
     //! Persistent added-node ("addnode add/remove/getaddednodeinfo") list
     //! (issue #2558 PR 9b2). Backed by the still-global vAddedNodes. AddNode
@@ -781,7 +755,12 @@ private:
     //! graph slot the old cs_vNodes held: a leaf among the net locks (after cs_main,
     //! before the per-CNode cs_vSend/cs_vRecvMsg/cs_inventory leaves).
     mutable RecursiveMutex m_nodes_mutex;
-    std::vector<CNode*> m_nodes GUARDED_BY(m_nodes_mutex);
+    //! Connections are owned via shared_ptr (issue #3066): m_nodes holds the sole
+    //! persistent owning reference, transient snapshots and the ConnectNode return
+    //! value are shared_ptr copies, and the reaper deletes a node once it has been
+    //! moved out of m_nodes and no other reference remains (use_count() == 1). This
+    //! retires the manual AddRef/Release refcount and the explicit `delete pnode`.
+    std::vector<std::shared_ptr<CNode>> m_nodes GUARDED_BY(m_nodes_mutex);
 
     //! Local-host version nonce (issue #2558 PR 9d). Atomic: written on the
     //! socket-handler thread (PushVersion), read on the message-handler thread
