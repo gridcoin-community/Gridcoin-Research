@@ -1249,11 +1249,12 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     }
     #endif
 
-    uiInterface.NotifyBlocksChanged(
-        fIsInitialDownload,
-        pindexNew->nHeight,
-        pindexNew->GetBlockTime(),
-        blockNew.nBits);
+    // Notify the validation-signal layer that the chain tip advanced. The UI
+    // bridge registered in init.cpp re-emits uiInterface.NotifyBlocksChanged()
+    // for the Qt models, so GUI block notifications now flow through the
+    // validation interface (issue #3030, workstream B3). origBestIndex is the
+    // previous tip / fork point.
+    GetMainSignals().UpdatedBlockTip(pindexNew, origBestIndex, fIsInitialDownload);
 
     return GridcoinServices();
 }
