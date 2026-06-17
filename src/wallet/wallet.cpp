@@ -1180,24 +1180,24 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransactionRef& ptx,
 
 // Validation Interface Implementation
 
-void CWallet::transactionAddedToMempool(const CTransactionRef& tx)
+void CWallet::TransactionAddedToMempool(const CTransactionRef& tx)
 {
     LOCK(cs_wallet);
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::transactionAddedToMempool: %s\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionAddedToMempool: %s\n",
              tx->GetHash().ToString());
 
     // Sync with mempool state
     SyncTransaction(tx, TxStateInMempool{});
 }
 
-void CWallet::blockConnected(const CBlock& block, int height)
+void CWallet::BlockConnected(const CBlock& block, int height)
 {
     LOCK(cs_wallet);
 
     const uint256& block_hash = block.GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::blockConnected: %s at height %d\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockConnected: %s at height %d\n",
              block_hash.ToString(), height);
 
     // Sync each transaction in the block that involves this wallet.
@@ -1222,14 +1222,14 @@ void CWallet::blockConnected(const CBlock& block, int height)
     m_last_block_processed_height = height;
 }
 
-void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx,
+void CWallet::TransactionRemovedFromMempool(const CTransactionRef& tx,
                                             MemPoolRemovalReason reason)
 {
     LOCK(cs_wallet);
 
     const uint256& hash = tx->GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::transactionRemovedFromMempool: %s (reason: %d)\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::TransactionRemovedFromMempool: %s (reason: %d)\n",
              hash.ToString(), static_cast<int>(reason));
 
     // If removed because it was included in a block, blockConnected handles it
@@ -1265,7 +1265,7 @@ void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx,
             // Don't mark as conflicted — ReacceptWalletTransactions will
             // attempt to re-accept it on the next pass.
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "CWallet::transactionRemovedFromMempool: tx %s evicted (reason: %d), "
+                    "CWallet::TransactionRemovedFromMempool: tx %s evicted (reason: %d), "
                     "not marking conflicted — eligible for re-acceptance\n",
                     hash.ToString(), static_cast<int>(reason));
             break;
@@ -1274,7 +1274,7 @@ void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx,
             // Reorganization — blockDisconnected should handle state transitions
             // for reorged transactions. Don't duplicate the state change here.
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "CWallet::transactionRemovedFromMempool: tx %s removed due to reorg, "
+                    "CWallet::TransactionRemovedFromMempool: tx %s removed due to reorg, "
                     "deferring to blockDisconnected\n",
                     hash.ToString());
             break;
@@ -1283,7 +1283,7 @@ void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx,
         default:
             // Unknown or manual removal — conservatively mark as inactive
             LogPrint(BCLog::LogFlags::VERBOSE,
-                    "CWallet::transactionRemovedFromMempool: tx %s removed for unknown reason (%d), "
+                    "CWallet::TransactionRemovedFromMempool: tx %s removed for unknown reason (%d), "
                     "marking inactive\n",
                     hash.ToString(), static_cast<int>(reason));
             SyncTransaction(tx, TxStateInactive{false});
@@ -1291,13 +1291,13 @@ void CWallet::transactionRemovedFromMempool(const CTransactionRef& tx,
     }
 }
 
-void CWallet::blockDisconnected(const CBlock& block, int height)
+void CWallet::BlockDisconnected(const CBlock& block, int height)
 {
     LOCK(cs_wallet);
 
     const uint256& block_hash = block.GetHash();
 
-    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::blockDisconnected: %s at height %d\n",
+    LogPrint(BCLog::LogFlags::VERBOSE, "CWallet::BlockDisconnected: %s at height %d\n",
              block_hash.ToString(), height);
 
     /**

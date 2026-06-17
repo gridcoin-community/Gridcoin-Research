@@ -258,6 +258,7 @@ void Shutdown(void* parg)
         GRC::CloseResearcherRegistryFile();
 
         fs::remove(GetPidFile(gArgs));
+        UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
@@ -1857,6 +1858,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // synchronously today, but CallFunctionInValidationInterfaceQueue runs on
     // this scheduler thread.
     GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
+
+    // Subscribe the wallet to validation/mempool events now that the signal
+    // layer is wired (issue #3030, workstream B). The wallet also stays in
+    // setpwalletRegistered for the legacy notifications not yet migrated.
+    RegisterValidationInterface(pwalletMain);
 
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();

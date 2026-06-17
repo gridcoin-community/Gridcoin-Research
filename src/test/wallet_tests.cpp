@@ -811,8 +811,8 @@ BOOST_AUTO_TEST_CASE(transaction_added_to_mempool_preserves_inmempool_state)
         BOOST_REQUIRE(test_wallet.mapWallet[hash].isInMempool());
         BOOST_REQUIRE(test_wallet.IsMine(tx) != ISMINE_NO);
 
-        // The callback that AcceptToMemoryPool fires at main.cpp:576.
-        test_wallet.transactionAddedToMempool(ptx);
+        // The callback that AcceptToMemoryPool fires via GetMainSignals().
+        test_wallet.TransactionAddedToMempool(ptx);
 
         BOOST_CHECK(test_wallet.mapWallet[hash].isInMempool());
         BOOST_CHECK(test_wallet.mapWallet[hash].state<TxStateInMempool>() != nullptr);
