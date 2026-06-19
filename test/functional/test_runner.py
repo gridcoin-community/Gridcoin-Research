@@ -132,6 +132,7 @@ BASE_SCRIPTS = [
     #   - rpc_rawtransaction.py: createrawtransaction/decode/decodescript/sign
     #   - rpc_psgt.py: PSGT create/decode/convert/combine/process/finalize
     #   - rpc_htlc.py: createhtlc + decodescript of the redeem script
+    #   - rpc_txoutproof.py: gettxoutproof/verifytxoutproof Merkle inclusion proofs
     #   - wallet_keypool.py: keypoolrefill/getnewaddress/dumpprivkey
     #   - rpc_blockchain.py: getblock*/getblockchaininfo/getdifficulty
     #   - p2p_ping.py: ping/pong keepalive over the P2P wire protocol
@@ -152,6 +153,7 @@ BASE_SCRIPTS = [
     'rpc_rawtransaction.py',
     'rpc_psgt.py',
     'rpc_htlc.py',
+    'rpc_txoutproof.py',
     'rpc_blockchain.py',
     'rpc_audit_snapshot_accrual.py',
     'rpc_netinfo.py',
