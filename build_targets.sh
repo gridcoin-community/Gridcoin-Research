@@ -346,7 +346,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "native" ]] && [[ "$(uname -s)" == "Lin
         cmake --build build -j $CORES
 
         # Test
-        ctest --test-dir build -j $CORES
+        ctest --test-dir build -j $CORES --output-on-failure
 
         # Write state file (Only if build and test succeeded)
         write_build_state "build"
@@ -433,7 +433,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "depends" ]] && [[ "$(uname -s)" == "Li
         cmake --build build_linux_depends -j $CORES
 
         # Test
-        ctest --test-dir build_linux_depends -j $CORES
+        ctest --test-dir build_linux_depends -j $CORES --output-on-failure
 
         # Write state file
         write_build_state "build_linux_depends"
@@ -523,7 +523,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "win64" ]] && [[ "$(uname -s)" == "Linu
         cmake --build build_win64 -j $CORES
 
         # Test
-        ctest --test-dir build_win64 -j $CORES
+        ctest --test-dir build_win64 -j $CORES --output-on-failure
 
         # Write state file
         write_build_state "build_win64"
@@ -618,7 +618,7 @@ if [[ "$TARGET" == "all" || "$TARGET" == "macos" ]] && [[ "$(uname -s)" == "Darw
         cmake --build build_macos -j $CORES
 
         # Test
-        ctest --test-dir build_macos -j $CORES
+        ctest --test-dir build_macos -j $CORES --output-on-failure
 
         # Write state file
         write_build_state "build_macos"
