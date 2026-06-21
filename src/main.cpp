@@ -272,7 +272,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs
 }
 
 
-bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs, int64_t entry_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs, int64_t entry_time, bool test_only, CAmount* fee_out, size_t* vsize_out) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
@@ -280,7 +280,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
 
     // Mandatory switch to binary contracts (tx version 2):
     if (tx.nVersion < 2) {
-        return state.DoS(100, error("AcceptToMemoryPool : legacy transaction"));
+        return state.DoS(100, error("AcceptToMemoryPool : legacy transaction"), "bad-txns-version");
     }
 
     if (!CheckTransaction(tx, state))
@@ -288,15 +288,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
 
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
-        return state.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinbase as individual tx"), "coinbase");
 
     // ppcoin: coinstake is also only valid in a block, not as a loose transaction
     if (tx.IsCoinStake())
-        return state.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"));
+        return state.DoS(100, error("AcceptToMemoryPool : coinstake as individual tx"), "coinstake");
 
     // Rather not work on nonstandard transactions
     if (!IsStandardTx(tx))
-        return error("AcceptToMemoryPool : nonstandard transaction type");
+        return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction type"), "tx-nonstandard");
 
     // Perform contextual validation for any contracts:
 
@@ -305,7 +305,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         return state.DoS(DoS, error("%s: invalid contract in tx %s, assigning DoS misbehavior of %i",
                                  __func__,
                                  tx.GetHash().ToString(),
-                                 DoS));
+                                 DoS),
+                         "invalid-contract");
     }
 
     // is it already in the memory pool?
@@ -330,7 +331,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
                                            "in the memory pool, %s.",
                                            __func__,
                                            tx.GetHash().ToString(),
-                                           existing.ToString()));
+                                           existing.ToString()),
+                                 "mrc-duplicate-cpid");
             }
 
             tx_contains_valid_mrc = true;
@@ -394,7 +396,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
 
         // Check for non-standard pay-to-script-hash in inputs
         if (!AreInputsStandard(tx, mapInputs) && !fTestNet)
-            return error("AcceptToMemoryPool : nonstandard transaction input");
+            return state.Invalid(error("AcceptToMemoryPool : nonstandard transaction input"),
+                                 "bad-txns-nonstandard-inputs");
 
         // Note: if you modify this code to accept non-standard transactions, then
         // you should add code here to check that the transaction does a
@@ -403,12 +406,17 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         nFees = GetValueIn(tx, mapInputs) - tx.GetValueOut();
         nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
+        // Expose the computed fee/size for callers like testmempoolaccept.
+        if (fee_out) *fee_out = nFees;
+        if (vsize_out) *vsize_out = nSize;
+
         // Don't accept it if it can't get into a block
         CAmount txMinFee = GetMinFee(tx, 1000, GMF_RELAY, nSize);
         if (nFees < txMinFee)
-            return error("AcceptToMemoryPool : not enough fees %s, %" PRId64 " < %" PRId64 ", nSize %" PRId64,
-                         hash.ToString().c_str(),
-                         nFees, txMinFee, nSize);
+            return state.Invalid(error("AcceptToMemoryPool : not enough fees %s, %" PRId64 " < %" PRId64 ", nSize %" PRId64,
+                                       hash.ToString().c_str(),
+                                       nFees, txMinFee, nSize),
+                                 "insufficient-fee");
 
         // Validate any contracts published in the transaction:
         if (!tx.GetContracts().empty() && !CheckContracts(tx, state, mapInputs, pindexBest->nHeight)) {
@@ -418,8 +426,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         // BIP68: Check relative lock-time (sequence locks) when v14 is active.
         if (IsV14Enabled(nBestHeight + 1)) {
             if (!CheckSequenceLocks(tx, 0, pindexBest)) {
-                return error("AcceptToMemoryPool : sequence locks not satisfied for tx %s",
-                             hash.ToString().substr(0, 10).c_str());
+                return state.Invalid(error("AcceptToMemoryPool : sequence locks not satisfied for tx %s",
+                                           hash.ToString().substr(0, 10).c_str()),
+                                     "non-BIP68-final");
             }
         }
 
@@ -435,9 +444,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
 
         // If we accepted a transaction with a valid mrc contract, then signal MRC changed.
-        if (tx_contains_valid_mrc) {
+        if (tx_contains_valid_mrc && !test_only) {
             uiInterface.MRCChanged();
         }
+    }
+
+    // testmempoolaccept: all checks have passed; report acceptance without
+    // mutating the pool or notifying wallets.
+    if (test_only) {
+        return true;
     }
 
     // Store transaction in memory
@@ -467,8 +482,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         // as a "mempool full" rejection.
         pool.TrimToSize(pool.GetMaxSize(), /*removed=*/nullptr, /*protect=*/&hash);
         if (!pool.exists(hash)) {
-            return error("AcceptToMemoryPool : transaction %s rejected, mempool full",
-                         hash.ToString());
+            return state.Invalid(error("AcceptToMemoryPool : transaction %s rejected, mempool full",
+                                       hash.ToString()),
+                                 "mempool-full");
         }
     }
 

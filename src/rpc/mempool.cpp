@@ -6,6 +6,8 @@
 #include "server.h"
 #include "txmempool.h"
 #include "gridcoin/contract/contract.h"
+#include "streams.h"
+#include "util/strencodings.h"
 
 #include <rpc/util.h>
 #include <univalue.h>
@@ -169,4 +171,101 @@ UniValue getmempoolinfo(const UniValue& params)
     obj.pushKV("mandatory_sidestake_count", (int64_t)info.mandatory_sidestake_count);
 
     return obj;
+}
+
+static const RPCHelpMan testmempoolaccept_help{
+    "testmempoolaccept",
+    "Returns whether each raw transaction would be accepted by the mempool, "
+    "without submitting it. Reject reasons are best-effort: Gridcoin-specific "
+    "rejections (e.g. invalid-contract, mrc-duplicate-cpid) and the standard "
+    "checks report a reason; some paths report a generic \"rejected\".",
+    {
+        {"rawtxs", RPCArg::Type::ARR, RPCArg::Optional::NO, "An array of hex-encoded raw transactions.",
+            {
+                {"rawtx", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, ""},
+            }},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "txid", "The transaction id."},
+                    {RPCResult::Type::BOOL, "allowed", "Whether this transaction would be accepted."},
+                    {RPCResult::Type::STR, "reject-reason", /*optional=*/true, "Rejection reason (only when not allowed)."},
+                    {RPCResult::Type::NUM, "vsize", /*optional=*/true, "Serialized size (only when allowed)."},
+                    {RPCResult::Type::OBJ, "fees", /*optional=*/true, "Transaction fees (only when allowed).",
+                        {
+                            {RPCResult::Type::STR_AMOUNT, "base", "The base fee."},
+                        }},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("testmempoolaccept", "'[\"rawtxhex\"]'") +
+        HelpExampleRpc("testmempoolaccept", "[\"rawtxhex\"]")},
+};
+const RPCHelpMan& testmempoolaccept_helpman() { return testmempoolaccept_help; }
+
+UniValue testmempoolaccept(const UniValue& params)
+{
+    const UniValue raw_txs = params[0].get_array();
+
+    // Decode every raw transaction first: hex parsing / deserialization needs no
+    // chain state, so it is done before cs_main is taken. The lock is then held
+    // only for the mempool + ATMP validation below (and once for the whole batch,
+    // so every tx is judged against the same chain tip).
+    std::vector<CTransaction> txs;
+    txs.reserve(raw_txs.size());
+    for (size_t i = 0; i < raw_txs.size(); ++i) {
+        std::vector<unsigned char> tx_data(ParseHex(raw_txs[i].get_str()));
+        CDataStream ss(tx_data, SER_NETWORK, PROTOCOL_VERSION);
+        CTransaction tx;
+        try {
+            ss >> tx;
+        } catch (const std::exception&) {
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+        }
+        txs.push_back(tx);
+    }
+
+    UniValue results(UniValue::VARR);
+
+    LOCK(cs_main);
+
+    for (CTransaction& tx : txs) {
+        const uint256 hash = tx.GetHash();
+
+        UniValue result(UniValue::VOBJ);
+        result.pushKV("txid", hash.ToString());
+
+        // A transaction already in the pool would not be accepted again.
+        if (mempool.exists(hash)) {
+            result.pushKV("allowed", false);
+            result.pushKV("reject-reason", "txn-already-in-mempool");
+            results.push_back(result);
+            continue;
+        }
+
+        CValidationState state;
+        bool missing_inputs = false;
+        CAmount fee = 0;
+        size_t vsize = 0;
+        const bool allowed = AcceptToMemoryPool(mempool, tx, state, &missing_inputs,
+                                                /*entry_time=*/0, /*test_only=*/true, &fee, &vsize);
+
+        result.pushKV("allowed", allowed);
+        if (allowed) {
+            result.pushKV("vsize", (int64_t)vsize);
+            UniValue fees(UniValue::VOBJ);
+            fees.pushKV("base", ValueFromAmount(fee));
+            result.pushKV("fees", fees);
+        } else {
+            std::string reason = state.GetRejectReason();
+            if (reason.empty()) reason = missing_inputs ? "missing-inputs" : "rejected";
+            result.pushKV("reject-reason", reason);
+        }
+
+        results.push_back(result);
+    }
+
+    return results;
 }
