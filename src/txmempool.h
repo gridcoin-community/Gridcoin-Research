@@ -97,6 +97,16 @@ public:
     bool HasMandatorySidestake() const { return m_has_mandatory_sidestake; }
 };
 
+//! Aggregate mempool statistics, collected under a single lock for getmempoolinfo.
+struct CTxMemPoolInfo
+{
+    size_t tx_count{0};
+    size_t bytes{0};
+    size_t mrc_count{0};
+    size_t beacon_count{0};
+    size_t mandatory_sidestake_count{0};
+};
+
 class CTxMemPool
 {
 public:
@@ -163,6 +173,19 @@ public:
         queue.reserve(m_mrc_by_fee.size());
         for (const auto& [fee, cpid] : m_mrc_by_fee) queue.emplace_back(fee, cpid);
         return queue;
+    }
+
+    //! \brief Aggregate counts/size for getmempoolinfo, collected in one locked pass.
+    CTxMemPoolInfo GetMempoolInfo() const
+    {
+        LOCK(cs);
+        CTxMemPoolInfo info;
+        info.tx_count = mapTx.size();
+        for (const auto& [hash, entry] : mapTx) info.bytes += entry.GetTxSize();
+        info.mrc_count = m_mrc_by_cpid.size();
+        info.beacon_count = m_beacon_by_cpid.size();
+        info.mandatory_sidestake_count = m_mandatory_sidestake_count;
+        return info;
     }
 
     //! \brief Hashes of pooled MRCs whose anchor block is not \p best_block_hash.

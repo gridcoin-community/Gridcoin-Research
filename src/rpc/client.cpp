@@ -252,6 +252,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "versionreport"          , 1 },
 
     // Network
+    { "getrawmempool"          , 0 },
     { "getaddednodeinfo"       , 0 },
     { "getnodeaddresses"       , 0 },
     { "getblock"               , 1 },

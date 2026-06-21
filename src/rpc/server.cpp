@@ -496,6 +496,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getnettotals",            &getnettotals,            cat_network, &getnettotals_helpman       },
     { "getpeerinfo",             &getpeerinfo,             cat_network, &getpeerinfo_helpman       },
     { "getrawmempool",           &getrawmempool,           cat_network, &getrawmempool_helpman       },
+    { "getmempoolentry",         &getmempoolentry,         cat_network, &getmempoolentry_helpman       },
+    { "getmempoolinfo",          &getmempoolinfo,          cat_network, &getmempoolinfo_helpman       },
     { "listbanned",              &listbanned,              cat_network, &listbanned_helpman       },
     { "networktime",             &networktime,             cat_network, &networktime_helpman       },
     { "ping",                    &ping,                    cat_network, &ping_helpman       },

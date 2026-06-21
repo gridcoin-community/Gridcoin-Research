@@ -917,36 +917,7 @@ UniValue settxfee(const UniValue& params)
     return true;
 }
 
-static const RPCHelpMan getrawmempool_help{
-    "getrawmempool",
-    "Returns all transaction ids in the memory pool.",
-    {},
-    RPCResult{RPCResult::Type::ARR, "", "",
-        {
-            {RPCResult::Type::STR_HEX, "", "Transaction id, hex-encoded."},
-        }},
-    RPCExamples{
-        HelpExampleCli("getrawmempool", "") +
-        HelpExampleRpc("getrawmempool", "")},
-};
-const RPCHelpMan& getrawmempool_helpman() { return getrawmempool_help; }
-
-UniValue getrawmempool(const UniValue& params)
-{
-    vector<uint256> vtxid;
-
-    {
-        LOCK(mempool.cs);
-
-        mempool.queryHashes(vtxid);
-    }
-
-    UniValue a(UniValue::VARR);
-    for (auto const& hash : vtxid)
-        a.push_back(hash.ToString());
-
-    return a;
-}
+// getrawmempool moved to rpc/mempool.cpp (mempool diagnostics, #3029 Phase 3).
 
 static const RPCHelpMan getblockhash_help{
     "getblockhash",
