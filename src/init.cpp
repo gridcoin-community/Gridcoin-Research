@@ -27,6 +27,7 @@
 #include "net_processing.h"
 #include "txmempool.h"
 #include "node/blockstorage.h"
+#include "node/mempool_persist.h"
 #include "node/coherence.h"
 #include <util/syserror.h>
 
@@ -210,6 +211,14 @@ void Shutdown(void* parg)
         LogPrintf("INFO: %s: Stopping the stake miner thread.", __func__);
         if (g_stake_miner_thread.joinable()) {
             g_stake_miner_thread.join();
+        }
+
+        // Persist the mempool to disk so unconfirmed transactions survive a
+        // restart (#3029 Phase 5). Done after StopNode() and the stake-miner
+        // join so nothing is still mutating the pool.
+        if (gArgs.GetBoolArg("-persistmempool", true)) {
+            LogPrintf("INFO: %s: Dumping mempool to disk.", __func__);
+            node::DumpMempool(mempool, GetDataDir() / "mempool.dat");
         }
 
         // Coordinate block-file and block-index DB state before exit so a
@@ -652,6 +661,8 @@ void SetupServerArgs()
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
+    argsman.AddArg("-persistmempool", "Whether to save the mempool on shutdown and load it on startup (default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -1877,6 +1888,13 @@ bool AppInit2(ThreadHandlerPtr threads)
     int nMismatchSpent;
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
+
+    // Reload the persisted mempool now that the chain and wallet are ready
+    // (#3029 Phase 5). Each transaction is re-validated, so stale ones are dropped.
+    if (gArgs.GetBoolArg("-persistmempool", true)) {
+        uiInterface.InitMessage(_("Loading mempool..."));
+        node::LoadMempool(mempool, GetDataDir() / "mempool.dat");
+    }
 
     // Start the lightweight task scheduler thread
     assert(!g_scheduler);

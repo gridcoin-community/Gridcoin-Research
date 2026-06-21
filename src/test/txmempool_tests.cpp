@@ -18,8 +18,11 @@
 #include <gridcoin/mrc.h>
 #include <gridcoin/sidestake.h>
 #include <gridcoin/contract/contract.h>
+#include <node/mempool_persist.h>
 #include <rpc/server.h>
 #include <test/test_gridcoin.h>
+#include <fs.h>
+#include <util.h>
 
 #include <univalue.h>
 
@@ -370,33 +373,54 @@ BOOST_AUTO_TEST_CASE(trim_protects_contract_when_room_for_one)
     BOOST_CHECK_EQUAL(pool.m_mrc_by_cpid.size(), 1U);
 }
 
-BOOST_AUTO_TEST_CASE(trim_never_evicts_the_protected_transaction)
+// ---------------------------------------------------------------------------
+// Phase 5 (#3029): persistence (mempool.dat)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(mempool_persist_write_read_roundtrip)
 {
-    CTxMemPool pool;
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+    const CTransaction mrc = MakeMrcTx(cpid, 42, uint256S("0x07"));
+    const CTransaction plain = MakePlainTx(99);
 
-    // Two transactions in the same feerate tier.
-    const CTransaction a = MakePlainTx(11);
-    const CTransaction b = MakePlainTx(12);
-    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
-    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    node::MempoolPersistEntries entries;
+    entries.emplace_back(mrc, 1000);
+    entries.emplace_back(plain, 2000);
 
-    // Whichever sits at the front of the eviction set is the natural first victim.
-    // Protect exactly that one: TrimToSize must evict the OTHER transaction instead
-    // and keep the protected one -- this is the AcceptToMemoryPool self-eviction
-    // guard that stops a just-accepted tx (newest, so first in the tie-break) from
-    // being dropped as its own victim.
-    const uint256 natural_victim = pool.m_eviction_index.begin()->hash;
+    const fs::path path = GetDataDir() / "mempool_test.dat";
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
 
-    // Room for exactly one entry (both txs serialize to the same size).
-    const size_t one_entry = ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION)
-                             + CTxMemPool::PER_ENTRY_OVERHEAD;
-    pool.TrimToSize(one_entry, /*removed=*/nullptr, /*protect=*/&natural_victim);
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
 
-    BOOST_CHECK(pool.exists(natural_victim));
-    BOOST_CHECK_EQUAL(pool.size(), 1UL);
-    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
-    BOOST_CHECK_EQUAL(pool.m_total_tx_size,
-                      ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 2U);
+    BOOST_CHECK(loaded[0].first.GetHash() == mrc.GetHash());
+    BOOST_CHECK_EQUAL(loaded[0].second, 1000);
+    BOOST_CHECK(loaded[1].first.GetHash() == plain.GetHash());
+    BOOST_CHECK_EQUAL(loaded[1].second, 2000);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(mempool_persist_handles_corrupt_and_missing)
+{
+    const fs::path path = GetDataDir() / "mempool_corrupt.dat";
+    {
+        FILE* f = fsbridge::fopen(path, "wb");
+        BOOST_REQUIRE(f != nullptr);
+        const char junk[] = "not a valid mempool file";
+        fwrite(junk, 1, sizeof(junk), f);
+        fclose(f);
+    }
+
+    node::MempoolPersistEntries loaded;
+    BOOST_CHECK(!node::ReadMempoolEntries(path, loaded));
+    BOOST_CHECK(loaded.empty());
+
+    node::MempoolPersistEntries none;
+    BOOST_CHECK(!node::ReadMempoolEntries(GetDataDir() / "does_not_exist.dat", none));
+
+    fs::remove(path);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

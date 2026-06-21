@@ -6,6 +6,8 @@
 #include "server.h"
 #include "txmempool.h"
 #include "gridcoin/contract/contract.h"
+#include "node/mempool_persist.h"
+#include "util.h"
 
 #include <rpc/util.h>
 #include <univalue.h>
@@ -169,4 +171,55 @@ UniValue getmempoolinfo(const UniValue& params)
     obj.pushKV("mandatory_sidestake_count", (int64_t)info.mandatory_sidestake_count);
 
     return obj;
+}
+
+static const RPCHelpMan savemempool_help{
+    "savemempool",
+    "Dumps the mempool to disk (<datadir>/mempool.dat).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "filename", "The file the mempool was dumped to."},
+        }},
+    RPCExamples{
+        HelpExampleCli("savemempool", "") +
+        HelpExampleRpc("savemempool", "")},
+};
+const RPCHelpMan& savemempool_helpman() { return savemempool_help; }
+
+UniValue savemempool(const UniValue& params)
+{
+    const fs::path dump_path = GetDataDir() / "mempool.dat";
+    if (!node::DumpMempool(mempool, dump_path)) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Unable to dump mempool to disk");
+    }
+
+    UniValue ret(UniValue::VOBJ);
+    ret.pushKV("filename", dump_path.string());
+    return ret;
+}
+
+static const RPCHelpMan importmempool_help{
+    "importmempool",
+    "Imports and re-validates transactions from a mempool.dat file, merging them "
+    "into the current mempool. Each transaction is re-checked, so stale or invalid "
+    "ones are dropped.",
+    {
+        {"filepath", RPCArg::Type::STR, RPCArg::Optional::NO, "Path to the mempool.dat file."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "Whether the file was read successfully."},
+    RPCExamples{
+        HelpExampleCli("importmempool", "\"/path/to/mempool.dat\"") +
+        HelpExampleRpc("importmempool", "\"/path/to/mempool.dat\"")},
+};
+const RPCHelpMan& importmempool_helpman() { return importmempool_help; }
+
+UniValue importmempool(const UniValue& params)
+{
+    const fs::path load_path = fs::path(params[0].get_str());
+    if (!node::LoadMempool(mempool, load_path)) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Unable to import mempool from file");
+    }
+
+    return true;
 }
