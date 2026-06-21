@@ -696,19 +696,10 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCL
         return BeaconError::INSUFFICIENT_FUNDS;
     }
 
-    for (const auto& [_, pool_entry] : mempool.mapTx) {
-        const CTransaction& pool_tx = pool_entry.GetTx();
-        for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
-            if (pool_tx_contract.m_type == GRC::ContractType::BEACON) {
-                GRC::BeaconPayload pool_tx_beacon = pool_tx_contract.CopyPayloadAs<GRC::BeaconPayload>();
-
-                GRC::Cpid other_cpid = pool_tx_beacon.m_cpid;
-
-                if (cpid == other_cpid) {
-                   return BeaconError::ALEADY_IN_MEMPOOL;
-                }
-            }
-        }
+    // An O(log n) lookup against the m_beacon_by_cpid index (replaced a full
+    // mempool scan) prevents a second pending beacon advertisement for this CPID.
+    if (mempool.HasBeaconForCpid(cpid)) {
+        return BeaconError::ALEADY_IN_MEMPOOL;
     }
 
     return BeaconError::NONE;

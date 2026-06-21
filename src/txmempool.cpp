@@ -72,19 +72,48 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
         CTransaction& stored_tx = it->second.GetTxMutable();
         for (unsigned int i = 0; i < stored_tx.vin.size(); i++)
             mapNextTx[stored_tx.vin[i].prevout] = CInPoint(&stored_tx, i);
+
+        // Maintain the secondary contract indexes from the cached tags.
+        const CTxMemPoolEntry& e = it->second;
+        if (e.HasMRC()) {
+            m_mrc_by_cpid.insert_or_assign(e.GetMRCCpid(), hash);
+            m_mrc_by_fee.emplace(e.GetMRCFee(), e.GetMRCCpid());
+        }
+        if (e.HasBeacon())
+            m_beacon_by_cpid.insert_or_assign(e.GetBeaconCpid(), hash);
+        if (e.HasMandatorySidestake())
+            ++m_mandatory_sidestake_count;
     }
     return true;
+}
+
+void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
+{
+    if (entry.HasMRC()) {
+        m_mrc_by_cpid.erase(entry.GetMRCCpid());
+        auto range = m_mrc_by_fee.equal_range(entry.GetMRCFee());
+        for (auto it = range.first; it != range.second; ++it) {
+            if (it->second == entry.GetMRCCpid()) {
+                m_mrc_by_fee.erase(it);
+                break;
+            }
+        }
+    }
+    if (entry.HasBeacon())
+        m_beacon_by_cpid.erase(entry.GetBeaconCpid());
+    if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
+        --m_mandatory_sidestake_count;
 }
 
 
 bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 {
-    m_mrc_bloom_dirty = true;
     // Remove transaction from memory pool
     {
         LOCK(cs);
         uint256 hash = tx.GetHash();
-        if (mapTx.count(hash))
+        auto entry_it = mapTx.find(hash);
+        if (entry_it != mapTx.end())
         {
             if (fRecursive) {
                 for (unsigned int i = 0; i < tx.vout.size(); i++) {
@@ -93,9 +122,11 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
                         remove(*it->second.ptx, true);
                 }
             }
+            // Tear down the secondary indexes before erasing the entry.
+            eraseIndexes(entry_it->second);
             for (auto const& txin : tx.vin)
                 mapNextTx.erase(txin.prevout);
-            mapTx.erase(hash);
+            mapTx.erase(entry_it);
         }
     }
     return true;
@@ -103,7 +134,6 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
 
 bool CTxMemPool::removeConflicts(const CTransaction &tx)
 {
-    m_mrc_bloom_dirty = true;
     // Remove transactions which depend on inputs of tx, recursively
     LOCK(cs);
     for (auto const &txin : tx.vin)
@@ -123,6 +153,10 @@ void CTxMemPool::clear()
     LOCK(cs);
     mapTx.clear();
     mapNextTx.clear();
+    m_mrc_by_cpid.clear();
+    m_beacon_by_cpid.clear();
+    m_mandatory_sidestake_count = 0;
+    m_mrc_by_fee.clear();
 }
 
 void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
