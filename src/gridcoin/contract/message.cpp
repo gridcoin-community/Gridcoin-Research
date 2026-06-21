@@ -155,7 +155,7 @@ std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     for (const auto& pool_tx : mempool.mapTx) {
-        for (const auto& pool_tx_contract : pool_tx.second.GetContracts()) {
+        for (const auto& pool_tx_contract : pool_tx.second.GetTx().GetContracts()) {
             if (pool_tx_contract.m_type == GRC::ContractType::SIDESTAKE) {
                 std::string strError = _(
                     "Error: The mandatory sidestake transaction was rejected. "

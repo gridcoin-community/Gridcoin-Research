@@ -374,8 +374,9 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
 
         Fraction foundation_fee_fraction = FoundationSideStakeAllocation();
 
-        for (auto& [_, tx] : mempool.mapTx)
+        for (auto& [_, entry] : mempool.mapTx)
         {
+            CTransaction& tx = entry.GetTxMutable();
             if (tx.IsCoinBase() || tx.IsCoinStake() || !IsFinalTx(tx, nHeight))
                 continue;
 
@@ -434,7 +435,7 @@ bool CreateRestOfTheBlock(CBlock &block, CMutableTransaction& mtxCoinbase,
                     }
                     mapDependers[txin.prevout.hash].push_back(porphan);
                     porphan->setDependsOn.insert(txin.prevout.hash);
-                    nTotalIn += mempool.mapTx[txin.prevout.hash].vout[txin.prevout.n].nValue;
+                    nTotalIn += mempool.mapTx.at(txin.prevout.hash).GetTx().vout[txin.prevout.n].nValue;
 
                     continue;
                 }

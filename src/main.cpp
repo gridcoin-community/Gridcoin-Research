@@ -345,7 +345,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             }
 
             bool found{false};
-            for (const auto& [_, pool_tx] : mempool.mapTx) {
+            for (const auto& [_, pool_entry] : mempool.mapTx) {
+                const CTransaction& pool_tx = pool_entry.GetTx();
                 for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
                     if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
                         GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
@@ -408,6 +409,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
     }
 
+    // Computed inside the CTxDB scope below and reused when building the
+    // mempool entry after acceptance.
+    CAmount nFees = 0;
+    unsigned int nSize = 0;
+
     {
         CTxDB txdb("r");
 
@@ -435,8 +441,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         // you should add code here to check that the transaction does a
         // reasonable number of ECDSA signature verifications.
 
-        CAmount nFees = GetValueIn(tx, mapInputs) - tx.GetValueOut();
-        unsigned int nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
+        nFees = GetValueIn(tx, mapInputs) - tx.GetValueOut();
+        nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
         // Don't accept it if it can't get into a block
         CAmount txMinFee = GetMinFee(tx, 1000, GMF_RELAY, nSize);
@@ -483,7 +489,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
-        pool.addUnchecked(hash, tx);
+        CTxMemPoolEntry entry(tx, nFees, GetAdjustedTime(), nBestHeight, nSize);
+        pool.addUnchecked(hash, entry);
     }
 
     // Notify the validation-signal layer that the transaction was added to

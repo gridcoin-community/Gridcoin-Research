@@ -4549,7 +4549,8 @@ UniValue createmrcrequest(const UniValue& params) {
     // ---------- mrc fee --- mrc ------ descending order
     std::multimap<CAmount, GRC::MRC, std::greater<CAmount>> mrc_multimap;
 
-    for (const auto& [_, tx] : mempool.mapTx) {
+    for (const auto& [_, entry] : mempool.mapTx) {
+        const CTransaction& tx = entry.GetTx();
         if (!tx.GetContracts().empty()) {
             // By protocol the MRC contract MUST be the only one in the transaction.
             const GRC::Contract& contract = tx.GetContracts()[0];
