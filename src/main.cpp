@@ -450,6 +450,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         }
         CTxMemPoolEntry entry(tx, nFees, GetAdjustedTime(), nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
+
+        // Enforce the -maxmempool cap. If this transaction is itself the lowest
+        // priority (and not a protected contract tx), it may be evicted again;
+        // treat that as a "mempool full" rejection.
+        pool.TrimToSize(pool.GetMaxSize());
+        if (!pool.exists(hash)) {
+            return error("AcceptToMemoryPool : transaction %s rejected, mempool full",
+                         hash.ToString());
+        }
     }
 
     // Notify the validation-signal layer that the transaction was added to

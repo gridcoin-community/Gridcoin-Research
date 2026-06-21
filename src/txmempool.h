@@ -32,6 +32,31 @@ enum class MemPoolRemovalReason {
 };
 
 //!
+//! \brief Ordering key for size-based eviction (#3029 Phase 4).
+//!
+//! The eviction set's first element is always the next victim. Gridcoin's flat,
+//! size-scaled fee makes feerate nearly identical across transactions, so the
+//! order is: non-contract transactions before contract transactions (contracts
+//! are evicted last so reward-bearing MRCs survive), then lowest feerate, then
+//! newest-first among ties, then hash for uniqueness.
+//!
+struct CTxMemPoolEvictionKey
+{
+    bool is_contract;
+    CAmount feerate;
+    int64_t time;
+    uint256 hash;
+
+    bool operator<(const CTxMemPoolEvictionKey& other) const
+    {
+        if (is_contract != other.is_contract) return is_contract < other.is_contract;
+        if (feerate != other.feerate) return feerate < other.feerate;
+        if (time != other.time) return time > other.time;
+        return hash < other.hash;
+    }
+};
+
+//!
 //! \brief A transaction stored in the memory pool together with the metadata
 //! computed once when it was accepted.
 //!
@@ -102,6 +127,8 @@ struct CTxMemPoolInfo
 {
     size_t tx_count{0};
     size_t bytes{0};
+    size_t usage{0};
+    size_t max_size{0};
     size_t mrc_count{0};
     size_t beacon_count{0};
     size_t mandatory_sidestake_count{0};
@@ -136,11 +163,36 @@ public:
     //! MRCs in fee-descending order, for the GUI/RPC queue ranking.
     std::multimap<CAmount, GRC::Cpid, std::greater<CAmount>> m_mrc_by_fee;
 
+    // Size accounting + eviction (#3029 Phase 4).
+    size_t m_total_tx_size{0};                        //!< Running sum of entry serialized sizes.
+    std::set<CTxMemPoolEvictionKey> m_eviction_index; //!< Victim ordering; begin() is evicted first.
+    size_t m_max_size_bytes{300 * 1000 * 1000};       //!< -maxmempool cap in bytes (default 300 MB).
+
+    //! Estimated per-entry bookkeeping overhead (CTxMemPoolEntry + map/index nodes)
+    //! added on top of the serialized size in DynamicMemoryUsage().
+    static constexpr size_t PER_ENTRY_OVERHEAD = 256;
+
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
-    bool remove(const CTransaction &tx, bool fRecursive = false);
+    bool remove(const CTransaction &tx, bool fRecursive = false,
+                MemPoolRemovalReason reason = MemPoolRemovalReason::UNKNOWN);
     bool removeConflicts(const CTransaction &tx);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
+
+    //! \brief Estimated dynamic memory used by the pool and its indexes.
+    size_t DynamicMemoryUsage() const
+    {
+        LOCK(cs);
+        return m_total_tx_size + mapTx.size() * PER_ENTRY_OVERHEAD;
+    }
+
+    //! \brief Evict transactions until DynamicMemoryUsage() is at or below \p limit,
+    //! lowest-priority first (see CTxMemPoolEvictionKey). Routes every eviction
+    //! through remove() so all indexes stay consistent.
+    void TrimToSize(size_t limit, std::vector<CTransaction>* removed = nullptr);
+
+    size_t GetMaxSize() const { LOCK(cs); return m_max_size_bytes; }
+    void SetMaxSize(size_t bytes) { LOCK(cs); m_max_size_bytes = bytes; }
 
     //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
     //! \p existing is non-null, the colliding transaction hash is written there.
@@ -181,7 +233,9 @@ public:
         LOCK(cs);
         CTxMemPoolInfo info;
         info.tx_count = mapTx.size();
-        for (const auto& [_, entry] : mapTx) info.bytes += entry.GetTxSize();
+        info.bytes = m_total_tx_size;
+        info.usage = m_total_tx_size + mapTx.size() * PER_ENTRY_OVERHEAD;
+        info.max_size = m_max_size_bytes;
         info.mrc_count = m_mrc_by_cpid.size();
         info.beacon_count = m_beacon_by_cpid.size();
         info.mandatory_sidestake_count = m_mandatory_sidestake_count;
@@ -223,8 +277,16 @@ public:
     }
 
 private:
-    //! Remove an entry's contributions from the secondary indexes. Caller holds cs.
+    //! Remove an entry's contributions from the secondary indexes, the running
+    //! size total, and the eviction index. Caller holds cs.
     void eraseIndexes(const CTxMemPoolEntry& entry);
+
+    //! Build the eviction-ordering key for an entry.
+    static CTxMemPoolEvictionKey EvictionKeyFor(const CTxMemPoolEntry& entry)
+    {
+        return {!entry.GetContractTypes().empty(), entry.GetFeeRate(),
+                entry.GetTime(), entry.GetTx().GetHash()};
+    }
 };
 
 extern CTxMemPool mempool;

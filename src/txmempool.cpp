@@ -87,6 +87,10 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
             m_beacon_by_cpid.insert_or_assign(e.GetBeaconCpid(), hash);
         if (e.HasMandatorySidestake())
             ++m_mandatory_sidestake_count;
+
+        // Size accounting + eviction ordering.
+        m_total_tx_size += e.GetTxSize();
+        m_eviction_index.insert(EvictionKeyFor(e));
     }
     return true;
 }
@@ -107,10 +111,14 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
         m_beacon_by_cpid.erase(entry.GetBeaconCpid());
     if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
         --m_mandatory_sidestake_count;
+
+    // Size accounting + eviction ordering.
+    if (m_total_tx_size >= entry.GetTxSize()) m_total_tx_size -= entry.GetTxSize();
+    m_eviction_index.erase(EvictionKeyFor(entry));
 }
 
 
-bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
+bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalReason reason)
 {
     // Remove transaction from memory pool
     {
@@ -123,7 +131,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
                 for (unsigned int i = 0; i < tx.vout.size(); i++) {
                     std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(COutPoint(hash, i));
                     if (it != mapNextTx.end())
-                        remove(*it->second.ptx, true);
+                        remove(*it->second.ptx, true, reason);
                 }
             }
             // Tear down the secondary indexes before erasing the entry.
@@ -161,6 +169,31 @@ void CTxMemPool::clear()
     m_beacon_by_cpid.clear();
     m_mandatory_sidestake_count = 0;
     m_mrc_by_fee.clear();
+    m_total_tx_size = 0;
+    m_eviction_index.clear();
+}
+
+void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed)
+{
+    LOCK(cs);
+
+    while (DynamicMemoryUsage() > limit && !m_eviction_index.empty()) {
+        const uint256 victim_hash = m_eviction_index.begin()->hash;
+
+        auto it = mapTx.find(victim_hash);
+        if (it == mapTx.end()) {
+            // Defensive: drop a stale key that has no backing entry.
+            m_eviction_index.erase(m_eviction_index.begin());
+            continue;
+        }
+
+        const CTransaction victim = it->second.GetTx();
+        if (removed) removed->push_back(victim);
+
+        // Route through remove() so every index (and the running size total)
+        // stays consistent. Recursive so dependents go too.
+        remove(victim, /*fRecursive=*/true, MemPoolRemovalReason::SIZELIMIT);
+    }
 }
 
 void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)

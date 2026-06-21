@@ -143,6 +143,8 @@ static const RPCHelpMan getmempoolinfo_help{
         {
             {RPCResult::Type::NUM, "size", "Current transaction count."},
             {RPCResult::Type::NUM, "bytes", "Sum of all transaction serialized sizes."},
+            {RPCResult::Type::NUM, "usage", "Total estimated memory usage of the mempool."},
+            {RPCResult::Type::NUM, "maxmempool", "Maximum memory usage for the mempool, in bytes."},
             {RPCResult::Type::NUM, "mrc_count", "Number of MRC contract transactions in the pool."},
             {RPCResult::Type::NUM, "beacon_count", "Number of distinct CPIDs with a pending beacon advertisement in the pool (duplicate same-CPID advertisements collapse to one)."},
             {RPCResult::Type::NUM, "mandatory_sidestake_count", "Number of mandatory sidestake transactions in the pool."},
@@ -160,6 +162,8 @@ UniValue getmempoolinfo(const UniValue& params)
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("size", (int64_t)info.tx_count);
     obj.pushKV("bytes", (int64_t)info.bytes);
+    obj.pushKV("usage", (int64_t)info.usage);
+    obj.pushKV("maxmempool", (int64_t)info.max_size);
     obj.pushKV("mrc_count", (int64_t)info.mrc_count);
     obj.pushKV("beacon_count", (int64_t)info.beacon_count);
     obj.pushKV("mandatory_sidestake_count", (int64_t)info.mandatory_sidestake_count);

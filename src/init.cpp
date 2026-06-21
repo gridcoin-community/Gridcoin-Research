@@ -25,6 +25,7 @@
 #include "gridcoin/contract/registry.h"
 #include "miner.h"
 #include "net_processing.h"
+#include "txmempool.h"
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include <util/syserror.h>
@@ -650,6 +651,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxoutboundconnections=<n>", "Maximum number of outbound connections (default: 8)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
+    argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
+                   ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-connect=<ip>", "Connect only to the specified node(s)",
@@ -1039,6 +1042,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     fUseFastIndex = gArgs.GetBoolArg("-fastindex", false);
 
     nMinerSleep = gArgs.GetArg("-minersleep", 8000);
+
+    // Cap the transaction memory pool size (#3029 Phase 4). Value is in MB.
+    int64_t nMaxMempoolMB = std::max<int64_t>(0, gArgs.GetArg("-maxmempool", 300));
+    mempool.SetMaxSize(static_cast<size_t>(nMaxMempoolMB) * 1000 * 1000);
 
     nDerivationMethodIndex = 0;
     fTestNet = gArgs.GetBoolArg("-testnet");
