@@ -344,6 +344,17 @@ class TestNode():
                 except Exception:
                     pass
 
+            # If the stop RPC never landed (e.g. the node never finished
+            # starting, so we never had an RPC connection), the daemon is still
+            # running and nothing has told it to exit. Send SIGTERM so
+            # wait_until_stopped() doesn't burn the full timeout and we don't
+            # leak a daemon that would starve the next parallel test. SIGTERM is
+            # graceful (the daemon's signal handler exits 0, keeping
+            # is_node_stopped()'s return-code assertion valid); we never kill -9.
+            # stop_exc is still re-raised below, so the failure stays visible.
+            if stop_exc is not None and self.process is not None and self.process.poll() is None:
+                self.process.terminate()
+
             # If there are any running perf processes, stop them. Per-process
             # try/except so one perf failure doesn't strand the rest.
             for profile_name in tuple(self.perf_subprocesses.keys()):
