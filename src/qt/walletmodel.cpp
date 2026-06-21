@@ -203,9 +203,13 @@ void WalletModel::drainEventQueue()
     // a single block.
     bool chain_tip_advanced = false;
     for (const auto& ev : events) {
-        if (std::holds_alternative<GRC::ChainTipChangedPayload>(ev.payload)) {
+        if (const auto* tip = std::get_if<GRC::ChainTipChangedPayload>(&ev.payload)) {
             chain_tip_advanced = true;
-            break;
+            // Cache the pushed tip height (GUI-thread-owned) so the transaction
+            // table can derive live confirmation counts on read — no cs_main, no
+            // reach-through to core state, wallet model self-contained for the
+            // eventual process split. Last tip event in the batch wins.
+            cachedNumBlocks = tip->height;
         }
     }
 
