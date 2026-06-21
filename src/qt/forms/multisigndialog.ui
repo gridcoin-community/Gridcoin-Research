@@ -146,7 +146,7 @@
    <item>
     <widget class="QLabel" name="combineLabel">
      <property name="text">
-      <string>Co-signers' PSGTs to combine (one base64 PSGT per line):</string>
+      <string>Out-of-band: co-signers' PSGTs to combine (one base64 PSGT per line):</string>
      </property>
     </widget>
    </item>
@@ -155,7 +155,7 @@
      <item>
       <widget class="QPlainTextEdit" name="combineInEdit">
        <property name="toolTip">
-        <string>Paste one or more co-signers' PSGTs (one per line). Combine merges them with the working PSGT above.</string>
+        <string>Out-of-band combine: paste one or more co-signers' PSGTs (one per line). Combine merges them with the working PSGT above. This is the manual path, distinct from the future network PSGT pool.</string>
        </property>
        <property name="placeholderText">
         <string>One base64 PSGT per line</string>
@@ -168,7 +168,7 @@
      <item>
       <widget class="QPushButton" name="combineButton">
        <property name="toolTip">
-        <string>Merge the co-signers' PSGTs into the working PSGT</string>
+        <string>Merge the co-signers' PSGTs into the working PSGT (out-of-band)</string>
        </property>
        <property name="text">
         <string>&amp;Combine</string>

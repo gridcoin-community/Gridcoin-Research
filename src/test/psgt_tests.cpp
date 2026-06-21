@@ -477,6 +477,85 @@ BOOST_AUTO_TEST_CASE(multisig_combine_partial)
 }
 
 // ---------------------------------------------------------------------------
+// Test 12b: P2SH-wrapped 2-of-3 multisig — two signers, each holding only one
+// key, sign independently; combine, finalize, extract, and verify the script.
+// This is the end-to-end path the Multisign (PSGT) GUI dialog drives: a P2SH
+// multisig address (as addmultisigaddress produces) where no single wallet can
+// complete the spend, so the combine step is genuinely exercised.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(multisig_p2sh_combine_roundtrip)
+{
+    CKey key1 = MakeKey();
+    CKey key2 = MakeKey();
+    CKey key3 = MakeKey();
+
+    // 2-of-3 redeem script wrapped in P2SH.
+    CScript redeem;
+    redeem << OP_2
+           << key1.GetPubKey() << key2.GetPubKey() << key3.GetPubKey()
+           << OP_3 << OP_CHECKMULTISIG;
+    CScript scriptPubKey;
+    scriptPubKey << OP_HASH160 << CScriptID(redeem) << OP_EQUAL;
+
+    // Previous tx pays to the P2SH address.
+    CMutableTransaction prevMtx;
+    prevMtx.nVersion = 2;
+    prevMtx.nTime = 1700001600;
+    prevMtx.vin.resize(1);
+    prevMtx.vin[0].prevout.SetNull();
+    prevMtx.vin[0].scriptSig = CScript() << 0;
+    prevMtx.vout.push_back(CTxOut(10 * COIN, scriptPubKey));
+    CTransaction prevTx(prevMtx);
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nTime = 1700001700;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(prevTx.GetHash(), 0);
+    mtx.vout.push_back(CTxOut(9 * COIN, P2PKH(MakeKey().GetPubKey().GetID())));
+
+    // Signer 1 holds only key1.
+    PartiallySignedTransaction psgt1(mtx);
+    psgt1.inputs[0].non_witness_utxo = prevTx;
+    psgt1.inputs[0].redeem_script = redeem;
+    CBasicKeyStore ks1;
+    ks1.AddKey(key1);
+    BOOST_CHECK(SignPSGTInput(ks1, psgt1, 0));
+    BOOST_CHECK_EQUAL(psgt1.inputs[0].partial_sigs.size(), 1u);
+
+    // Signer 2 holds only key3 (any 2 of the 3 keys suffice).
+    PartiallySignedTransaction psgt2(mtx);
+    psgt2.inputs[0].non_witness_utxo = prevTx;
+    psgt2.inputs[0].redeem_script = redeem;
+    CBasicKeyStore ks2;
+    ks2.AddKey(key3);
+    BOOST_CHECK(SignPSGTInput(ks2, psgt2, 0));
+    BOOST_CHECK_EQUAL(psgt2.inputs[0].partial_sigs.size(), 1u);
+
+    // Neither single signer's PSGT can finalize on its own (1 of 2 required).
+    {
+        PartiallySignedTransaction lone = psgt1;
+        CMutableTransaction tmp;
+        BOOST_CHECK(!FinalizeAndExtractPSGT(lone, tmp));
+    }
+
+    // Combine the two independently-signed PSGTs, then finalize and extract.
+    PartiallySignedTransaction merged;
+    BOOST_CHECK(CombinePSGTs(merged, {psgt1, psgt2}));
+    BOOST_CHECK_EQUAL(merged.inputs[0].partial_sigs.size(), 2u);
+
+    CMutableTransaction result;
+    BOOST_CHECK(FinalizeAndExtractPSGT(merged, result));
+
+    // The extracted scriptSig (OP_0 <sig> <sig> <redeemScript>) must satisfy the
+    // P2SH output under standard flags (which include SCRIPT_VERIFY_P2SH).
+    CTransaction signedTx(result);
+    BOOST_CHECK(VerifyScript(
+        signedTx.vin[0].scriptSig, scriptPubKey,
+        STANDARD_SCRIPT_VERIFY_FLAGS, signedTx, 0));
+}
+
+// ---------------------------------------------------------------------------
 // Test 13: Incomplete multisig — only 1 of 2 required sigs, finalize fails.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(multisig_incomplete_fails)

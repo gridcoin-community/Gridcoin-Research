@@ -5,6 +5,8 @@
 #ifndef BITCOIN_QT_MULTISIGNDIALOG_H
 #define BITCOIN_QT_MULTISIGNDIALOG_H
 
+#include <psgt.h>
+
 #include <QDialog>
 
 namespace Ui {
@@ -35,9 +37,32 @@ private:
     Ui::MultisignPSGTDialog *ui;
     WalletModel *model;
 
-    //! Decode the working PSGT from the input box. Reports errors to the
-    //! status label and returns false on failure.
-    bool loadWorkingPSGT(struct PartiallySignedTransaction& psgt);
+    //! The PSGT the dialog currently operates on. The base64 text box stays the
+    //! user-editable source of truth: every handler refreshes this from the box
+    //! via syncWorkingFromInput() before acting, and the operations that produce
+    //! a new PSGT (sign/combine) push the result back via setWorking(). Holding
+    //! it as a member is also the seam a future Phase II PSGT-pool source (#2910)
+    //! can populate without a base64 text round-trip.
+    PartiallySignedTransaction m_working;
+
+    //! Decode the input box into m_working. On failure, reports the error to the
+    //! status label and leaves m_working untouched (decodes into a temporary and
+    //! only assigns on success). Returns false on failure.
+    bool syncWorkingFromInput();
+
+    //! Adopt psgt as the working PSGT and write its base64 back to the input and
+    //! result boxes. Used by the operations that produce a new PSGT, and the
+    //! entry point a future pool source would call.
+    void setWorking(const PartiallySignedTransaction& psgt);
+
+    //! True iff some input carries a partial signature from a key this wallet
+    //! owns -- the ">=1 of my signatures present" precondition a future Phase II
+    //! "submit to pool" action (#2910) will gate on.
+    bool walletHasSignature(const PartiallySignedTransaction& psgt) const;
+
+    //! Render psgt into the read-only decoded view (decode plus, when the wallet
+    //! is available, the "wallet's signature present" line).
+    void showDecoded(const PartiallySignedTransaction& psgt);
 
     void setStatus(const QString& text, bool error);
 
