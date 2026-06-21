@@ -1,0 +1,3 @@
+#!/usr/bin/dh-exec
+usr/bin/gridcoinresearch => usr/bin/gridcointestnet
+usr/share/man/man1/gridcoinresearch.1 => usr/share/man/man1/gridcointestnet.1

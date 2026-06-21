@@ -1,0 +1,96 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/architecture.mk
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=-lto
+
+# Parallelism left to the builder (dpkg-buildpackage -j / DEB_BUILD_OPTIONS / OBS
+# job limits) rather than hardcoded, so each build host uses its own capacity.
+
+# ARM SHA-NI intrinsics compiled for armhf (AArch32) produce incorrect SHA256
+# results when the build host is aarch64 on Launchpad. The cmake detection check only tests
+# whether -march=armv8-a+crc+crypto compiles, not whether it runs correctly.
+ifeq ($(DEB_HOST_ARCH),armhf)
+CMAKE_ARCH_FLAGS = -DENABLE_ARM_SHANI=OFF
+endif
+
+# arm64 (aarch64): disable x86-only SIMD feature probes that aarch64-linux-gnu-g++
+# rejects (-msse4.1/-mavx2/-msha are not valid flags on this architecture).
+#
+# cmake 3.25's find_library() fails to locate multiarch libraries under
+# /usr/lib/aarch64-linux-gnu/ when the dpkg hardening CFLAGS are present in the
+# environment. CMAKE_LIBRARY_PATH was attempted but is unreliable in this
+# combination. Explicitly pre-seeding the library cache variables bypasses
+# find_library() entirely (FindCURL/FindOpenSSL/FindZLIB each guard their
+# find_library() call with "if(NOT <VAR>)"). --fresh ensures no stale NOTFOUND
+# values from a previous failed run survive into the new configure.
+#
+# --fresh requires cmake >= 3.24; jammy ships 3.22.1 and errors with "Unknown
+# argument --fresh". Gate it on the build host's cmake version so jammy arm64
+# still configures while newer distros (noble/trixie) keep --fresh.
+CMAKE_VERSION := $(shell cmake --version | sed -n 's/^cmake version //p')
+CMAKE_FRESH := $(shell dpkg --compare-versions "$(CMAKE_VERSION)" ge 3.24 && echo --fresh)
+ifeq ($(DEB_HOST_ARCH),arm64)
+CMAKE_ARCH_FLAGS = \
+	$(CMAKE_FRESH) \
+	-DENABLE_SSE41=OFF \
+	-DENABLE_AVX2=OFF \
+	-DENABLE_X86_SHANI=OFF \
+	-DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so \
+	-DOPENSSL_SSL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so \
+	-DCURL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcurl.so \
+	-DZLIB_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libz.so
+endif
+
+%:
+	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DENABLE_DAEMON=ON \
+		-DENABLE_GUI=ON \
+		-DUSE_QT6=ON \
+		-DENABLE_TESTS=ON \
+		-DENABLE_QRENCODE=ON \
+		-DENABLE_UPNP=ON \
+		-DDEFAULT_UPNP=ON \
+		-DUSE_DBUS=ON \
+		-DENABLE_PIE=ON \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		$(CMAKE_ARCH_FLAGS)
+
+ifeq ($(DEB_HOST_ARCH),armhf)
+override_dh_auto_test:
+	: # Tests skipped on armhf: sha256::TransformD64 (scalar, fully unrolled) produces
+	: # wrong results when cross-compiled for armhf on an aarch64 Launchpad builder.
+	: # Root cause: GCC 11 register-allocation bug in very large unrolled functions
+	: # under -O2 on the aarch64-to-armhf cross toolchain. The binary is correct on
+	: # native armhf hardware; this is a builder-environment false-positive.
+else
+
+override_dh_auto_test:
+	dh_auto_test -- ARGS="--output-on-failure"
+endif
+
+override_dh_install:
+	dh_install
+	install -D -m 644 debian/gridcointestnet-qt.desktop \
+		debian/gridcointestnet-qt/usr/share/applications/gridcointestnet-qt.desktop
+	install -D -m 644 debian/gridcointestnet-qt.png \
+	    debian/gridcointestnet-qt/usr/share/icons/hicolor/48x48/apps/gridcointestnet-qt.png
+	install -d debian/gridcointestnetd/usr/share/bash-completion/completions
+	sed 's/gridcoinresearchd/gridcointestnetd/g' \
+		contrib/completions/bash/gridcoinresearchd.bash \
+		> debian/gridcointestnetd/usr/share/bash-completion/completions/gridcointestnetd
+	install -d debian/gridcointestnet-qt/usr/share/bash-completion/completions
+	sed 's/gridcoinresearch/gridcointestnet/g' \
+		contrib/completions/bash/gridcoinresearch.bash \
+		> debian/gridcointestnet-qt/usr/share/bash-completion/completions/gridcointestnet
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
+# No automatic -dbgsym packages: they clutter the user-facing repo and almost
+# nobody runs gdb against these; insiders rebuild locally with symbols when needed.
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym
