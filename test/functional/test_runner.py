@@ -67,6 +67,14 @@ if os.name != 'nt' or sys.getwindowsversion() >= (10, 0, 14393):  # type: ignore
 TEST_EXIT_PASSED = 0
 TEST_EXIT_SKIPPED = 77
 
+# Under --ci the suite runs several daemons in parallel on machines that are
+# often slow and heavily loaded (e.g. a full distro build job), so the default
+# 60 s rpc_timeout / wait_until_* budgets are too tight and produce spurious
+# "Unable to connect to gridcoinresearchd after 60s" flakes. Scale them up by
+# this factor for CI runs (Bitcoin Core's --ci does the same). Callers can still
+# override by passing an explicit --timeout-factor.
+CI_TIMEOUT_FACTOR = 4
+
 TEST_FRAMEWORK_MODULES = [
     # Phase 1 only has util.py. Phase 3 will add address / blocktools / key /
     # script / messages once messages.py and p2p.py land.
@@ -206,6 +214,13 @@ def main():
     config.read_file(open(configfile, encoding="utf8"))
 
     passon_args.append("--configfile=%s" % configfile)
+
+    # On CI, scale per-test timeouts (rpc_timeout, wait_until_*) so slow daemon
+    # startup under heavy parallel load doesn't fail spuriously. --timeout-factor
+    # is consumed by the test framework (test_framework.py) and reaches each
+    # script via passon_args. Skip if a caller already set one explicitly.
+    if args.ci and not any(a.startswith("--timeout-factor") for a in passon_args):
+        passon_args.append("--timeout-factor=%s" % CI_TIMEOUT_FACTOR)
 
     # Set up logging
     logging_level = logging.INFO if args.quiet else logging.DEBUG
