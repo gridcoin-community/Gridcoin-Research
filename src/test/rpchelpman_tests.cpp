@@ -752,6 +752,17 @@ BOOST_AUTO_TEST_CASE(tier1_f2_wallet_keys_help_renders)
     });
 }
 
+// Tier 1 — wallet label commands (the 0.17 label surface; replaces the deprecated
+// account RPCs).
+BOOST_AUTO_TEST_CASE(tier1_label_help_renders)
+{
+    check_help_renders({
+        {"setlabel",             &setlabel_helpman},
+        {"getaddressesbylabel",  &getaddressesbylabel_helpman},
+        {"listlabels",           &listlabels_helpman},
+    });
+}
+
 // Tier 1b — researcher/beacon/MRC (17 commands).
 BOOST_AUTO_TEST_CASE(tier1b_researcher_help_renders)
 {

@@ -4,12 +4,17 @@
 
 #include "key.h"
 #include "key_io.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+
+#include <univalue.h>
 
 #include <boost/test/unit_test.hpp>
 
 #include <string>
+#include <vector>
 
 extern CWallet* pwalletMain;
 
@@ -146,6 +151,80 @@ BOOST_AUTO_TEST_CASE(notify_carries_purpose)
     BOOST_CHECK_EQUAL(calls, 1);
     BOOST_CHECK_EQUAL(captured_purpose, "receive");
     BOOST_CHECK(captured_status == CT_NEW);
+}
+
+// ----- Phase B: label RPC surface -----
+
+namespace {
+UniValue ArgArray(const std::vector<std::string>& args)
+{
+    UniValue v(UniValue::VARR);
+    for (const std::string& a : args) {
+        v.push_back(a);
+    }
+    return v;
+}
+
+bool LabelsContain(const UniValue& arr, const std::string& want)
+{
+    for (size_t i = 0; i < arr.size(); ++i) {
+        if (arr[i].get_str() == want) return true;
+    }
+    return false;
+}
+} // namespace
+
+// setlabel on an owned address tags it "receive"; getaddressesbylabel returns it with that
+// purpose; listlabels lists it; re-setlabel moves the address to the new label.
+BOOST_AUTO_TEST_CASE(label_rpcs_roundtrip)
+{
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    const std::string addr = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+
+    setlabel(ArgArray({addr, "tabby"}));
+
+    UniValue got = getaddressesbylabel(ArgArray({"tabby"}));
+    BOOST_REQUIRE(got.exists(addr));
+    BOOST_CHECK_EQUAL(got[addr]["purpose"].get_str(), "receive");
+
+    BOOST_CHECK(LabelsContain(listlabels(UniValue(UniValue::VARR)), "tabby"));
+
+    // Re-label: the address moves to "renamed"; "tabby" then has no addresses.
+    setlabel(ArgArray({addr, "renamed"}));
+    UniValue moved = getaddressesbylabel(ArgArray({"renamed"}));
+    BOOST_CHECK(moved.exists(addr));
+    BOOST_CHECK_THROW(getaddressesbylabel(ArgArray({"tabby"})), UniValue);
+}
+
+// An unknown label throws RPC_WALLET_INVALID_LABEL_NAME rather than returning an empty object.
+BOOST_AUTO_TEST_CASE(getaddressesbylabel_unknown_throws)
+{
+    BOOST_CHECK_THROW(getaddressesbylabel(ArgArray({"no-such-label-xyz"})), UniValue);
+}
+
+// listlabels excludes the empty default label (A.6 stubs) and filters by purpose.
+BOOST_AUTO_TEST_CASE(listlabels_excludes_empty_and_filters_purpose)
+{
+    // An empty-name stub, as GetAccountAddress / default-key init would create.
+    CKey kStub;
+    kStub.MakeNewKey(false);
+    pwalletMain->SetAddressBookName(CTxDestination(kStub.GetPubKey().GetID()), "");
+
+    // A non-owned (sending) address with a real label.
+    CKey kSend;
+    kSend.MakeNewKey(false);
+    const std::string sendAddr = EncodeDestination(CTxDestination(kSend.GetPubKey().GetID()));
+    setlabel(ArgArray({sendAddr, "sendlabel"}));   // not owned -> purpose "send"
+
+    UniValue all = listlabels(UniValue(UniValue::VARR));
+    BOOST_CHECK(!LabelsContain(all, ""));            // empty label never surfaces
+    BOOST_CHECK(LabelsContain(all, "sendlabel"));
+
+    // Filtering by "receive" must exclude the send-purpose label.
+    UniValue recv = listlabels(ArgArray({"receive"}));
+    BOOST_CHECK(!LabelsContain(recv, "sendlabel"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
