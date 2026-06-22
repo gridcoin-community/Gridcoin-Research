@@ -178,19 +178,27 @@ public:
 
             //! Analogous treatment for POOL contracts (issue #1783) gated behind V15. Both contract
             //! types share the same PoolRegistry/RegistryDB instance, so both bookmark entries get
-            //! the clamp. The clamp is UNCONDITIONAL — POOL's effective floor is always
-            //! GetBlockV15Height(). Pre-activation that value is std::numeric_limits<int>::max(),
-            //! which can never lower `lowest_height` (the comparison below never assigns it), so
-            //! POOL simply doesn't participate in the floor until V15 is pinned. Post-activation it
-            //! raises the floor to the V15 height the same way SIDESTAKE raises it to V13.
+            //! the clamp. This is a conditional MAX — exactly the shape of the SIDESTAKE/V13 line
+            //! above (`if (db_height < V13) db_height = V13;`), just keyed to the V15 height.
             //!
-            //! NB: an earlier `!= ::max()` guard form was WRONG — it suppressed the clamp
-            //! pre-activation and let POOL's raw bookmark (0) drag the replay floor down to ~V11 on
-            //! every startup. Clamping to ::max() unconditionally is the correct inert behavior.
+            //! Pre-activation GetBlockV15Height() is std::numeric_limits<int>::max(), so the
+            //! comparison `db_height < ::max()` is true for any real bookmark (including the
+            //! initialization-reported 0) and clamps db_height up to ::max(). That can never lower
+            //! `lowest_height` (the comparison below never assigns it), so POOL stays out of the
+            //! floor entirely until V15 is pinned — and crucially POOL's raw bookmark (0) cannot
+            //! drag the replay floor down to ~V11.
+            //!
+            //! Post-activation it raises a too-low bookmark up to the V15 height the same way
+            //! SIDESTAKE raises it to V13, but PRESERVES the real near-tip bookmark once it has
+            //! advanced past V15. An unconditional `db_height = GetBlockV15Height()` would instead
+            //! pin the floor to the V15 height forever, discarding the real bookmark and forcing a
+            //! full V15->tip contract replay on every startup — the very regression this clamp
+            //! exists to prevent.
             //!
             //! Uses GetBlockV15Height() so the `-blockv15height` isolated-testnet override is
             //! honored consistently with IsV15Enabled and the startup log line.
-            if (iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE) {
+            if ((iter.first == GRC::ContractType::POOL_REGISTER || iter.first == GRC::ContractType::POOL_APPROVE)
+                and db_height < GetBlockV15Height()) {
                 db_height = GetBlockV15Height();
             }
 

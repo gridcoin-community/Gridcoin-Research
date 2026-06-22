@@ -49,7 +49,7 @@ struct Params {
       * or a POOL_APPROVE OPEN pre-authorization is treated as expired for
       * query and takeover-defense purposes. Pure query-time check, no state
       * mutation at the expiration boundary — reorg-safe by construction.
-      * 28800 blocks is ~20 days at mainnet ~60s spacing. Consensus-affecting:
+      * 28800 blocks is ~30 days at mainnet ~90s spacing. Consensus-affecting:
       * nodes with differing values will disagree on POOL_REGISTER admission
       * across expiration boundaries and fork. Override via the hidden
       * -pendingpoolretention arg (isolated-testnet / regtest only — see

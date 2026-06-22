@@ -670,13 +670,15 @@ Two new contract types share a single `PoolRegistry` backed by the standard `Reg
 
 The `ContractAction` enum gains `OPEN` (parsed/printed as `"O"`); ADD and REMOVE keep their existing wire ordinals (1 and 2). The conditional serialization of `m_authorized_operator_key` only on OPEN means ADD/REMOVE payloads keep the original `(version, cpid) = 20 bytes` wire shape; OPEN extends to `(version, cpid, pubkey) = 53 bytes`.
 
-> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, `src/gridcoin/contract/payload.h`, dispatch in `src/gridcoin/contract/contract.cpp`.
+RPC surface emitting these contracts: `registerpool` (operator `POOL_REGISTER` ADD) and `withdrawpool` (operator `POOL_REGISTER` REMOVE — the self-withdrawal path, signed by the operator's own key and verified against the prior operator key on file); `approvepool` / `removepool` / `authorizepool` (Foundation master-key `POOL_APPROVE` ADD / REMOVE / OPEN). The operator `withdrawpool` and the Foundation `removepool` are distinct authorities that both land the entry in `DELETED`.
+
+> **Source:** `src/gridcoin/pool.h`, `src/gridcoin/pool.cpp`, `src/gridcoin/contract/payload.h`, dispatch in `src/gridcoin/contract/contract.cpp`, RPC in `src/rpc/blockchain.cpp`.
 
 ### 11.2 Grandfathered Builtins
 
 To eliminate a flag-day regression of pool-mode detection, `PoolRegistry`'s constructor pre-populates the same 5 CPIDs that the legacy `MiningPools` list carried (`src/gridcoin/researcher.h:88-95`). Each builtin is seeded at `m_height = 0`, status `ACTIVE`, with an invalid operator key (the slot is unclaimed until the foundation explicitly opens it). Synthetic per-CPID sentinel hashes (`Hash("POOL_BUILTIN_SEED:" + cpid)`) anchor the `m_previous_hash` chain so `Revert` of a first-real-contract restores the builtin unchanged.
 
-Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns exactly the legacy list bit-for-bit (verified by the `builtin_pools_match_g_mining_pools_pre_v15` unit test in `pool_tests.cpp`).
+Pre-V15, `ActivePoolsAtHeight(height < BlockV15Height)` returns the same set of CPIDs/names/URLs as the legacy list (membership, not order — AVW consumes the set, not a sequence; verified by the `builtin_pools_match_g_mining_pools_pre_v15` unit test in `pool_tests.cpp`).
 
 > **Source:** `src/gridcoin/pool.cpp` `BuiltinPoolSeeds()` / `SeedBuiltinPools()`.
 
@@ -765,7 +767,7 @@ The two consumers of the legacy `g_mining_pools` list in the voting subsystem ar
 - `src/gridcoin/voting/registry.cpp` `PollReference::GetActiveVoteWeight`
 - `src/gridcoin/voting/result.cpp` `VoteCounter::ProcessVote` (via cached `m_pool_cpids_at_start`)
 
-Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll_start_height` is obtained from `PollReference::GetStartingHeight()`. The set used in AVW is therefore anchored to the poll's start height — every node tallying the same poll computes identical AVW even after post-V15 POOL contracts mutate the registry. Pre-V15 the registry returns the grandfathered builtins, which match the legacy `g_mining_pools` list bit-for-bit (see §11.2).
+Both call `GetPoolRegistry().ActivePoolsAtHeight(poll_start_height)` where `poll_start_height` is obtained from `PollReference::GetStartingHeight()`. The set used in AVW is therefore anchored to the poll's start height — every node tallying the same poll computes identical AVW even after post-V15 POOL contracts mutate the registry. Pre-V15 the registry returns the grandfathered builtins, whose CPID/name/URL set matches the legacy `g_mining_pools` list (membership, not order — see §11.2).
 
 > **Source:** `src/gridcoin/pool.cpp` `ActivePoolsAtHeight`; consumer sites in `voting/registry.cpp` and `voting/result.cpp`.
 

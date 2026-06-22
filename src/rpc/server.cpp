@@ -430,6 +430,7 @@ static const CRPCCommand vRPCCommands[] =
     { "auditsnapshotaccruals",   &auditsnapshotaccruals,   cat_developer, &auditsnapshotaccruals_helpman     },
     { "addkey",                  &addkey,                  cat_developer, &addkey_helpman     },
     { "registerpool",            &registerpool,            cat_staking, &registerpool_helpman     },
+    { "withdrawpool",            &withdrawpool,            cat_staking, &withdrawpool_helpman     },
     { "approvepool",             &approvepool,             cat_developer, &approvepool_helpman     },
     { "authorizepool",           &authorizepool,           cat_developer, &authorizepool_helpman     },
     { "removepool",              &removepool,              cat_developer, &removepool_helpman     },

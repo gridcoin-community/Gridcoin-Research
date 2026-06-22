@@ -530,10 +530,12 @@ BOOST_AUTO_TEST_CASE(pool_registry_active_pools_contains_grandfathered_builtins)
 
 BOOST_AUTO_TEST_CASE(builtin_pools_match_g_mining_pools_pre_v15)
 {
-    // Q3 shadow check: pre-V15, ActivePoolsAtHeight must yield exactly the
-    // same set of pool CPIDs as the legacy g_mining_pools list, in the same
-    // order. If this assertion fires, grandfathering has diverged from the
-    // hardcoded list and AVW will fork the chain on the next pre-V15 poll.
+    // Q3 shadow check: pre-V15, ActivePoolsAtHeight must yield the same SET of
+    // (CPID, name, URL) as the legacy g_mining_pools list. Order is incidental —
+    // membership is what AVW consumes (the consumer drops the result into an
+    // unordered_set), so this compares as a set, not a sequence. If this
+    // assertion fires, grandfathering has diverged from the hardcoded list and
+    // AVW will fork the chain on the next pre-V15 poll.
     GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
 
     // height 0 is sufficient: the seeds are all at m_height == 0, so the
@@ -833,7 +835,7 @@ BOOST_FIXTURE_TEST_CASE(register_on_nonbuiltin_reverts_cleanly_without_touching_
     CKey operator_key = PoolTestKey::Private();
     GRC::PoolRegisterPayload payload(
         nonbuiltin, "testpool", "https://test.example/", operator_key.GetPubKey());
-    payload.Sign(operator_key, GRC::ContractAction::ADD, uint256{});
+    BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, uint256{}));
 
     GRC::Contract reg = GRC::MakeContract<GRC::PoolRegisterPayload>(
         GRC::ContractAction::ADD, std::move(payload));
@@ -951,6 +953,252 @@ BOOST_FIXTURE_TEST_CASE(reset_reseeds_builtins, PoolLifecycleFixture)
         GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
     BOOST_CHECK(registry.IsActivePool(builtin));
     BOOST_CHECK(registry.IsBuiltin(builtin));
+}
+
+BOOST_AUTO_TEST_CASE(register_payload_well_formed_rejects_open)
+{
+    // BLOCKER (2026-06-22): POOL_REGISTER has no OPEN semantics. PoolRegistry::Open
+    // no-ops for POOL_REGISTER while PoolRegistry::Revert processes it
+    // unconditionally, so a valid REGISTER+OPEN would apply as a no-op but revert
+    // as a mutation and diverge nodes on a reorg. WellFormed must reject OPEN
+    // (and UNKNOWN), mirroring PoolApprovePayload::WellFormed's default branch,
+    // while still accepting ADD and REMOVE.
+    CKey private_key = PoolTestKey::Private();
+
+    GRC::PoolRegisterPayload payload(
+        PoolTestKey::Cpid(),
+        "grcpool.com",
+        "https://grcpool.com/",
+        private_key.GetPubKey());
+
+    // Signature size only needs to land in the accepted band; the digest's
+    // action doesn't affect WellFormed.
+    BOOST_REQUIRE(payload.Sign(private_key, GRC::ContractAction::ADD, uint256{}));
+
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::ADD));
+    BOOST_CHECK(payload.WellFormed(GRC::ContractAction::REMOVE));
+    BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::OPEN));
+    BOOST_CHECK(!payload.WellFormed(GRC::ContractAction::UNKNOWN));
+}
+
+BOOST_FIXTURE_TEST_CASE(captured_register_add_replayed_as_remove_rejected, PoolLifecycleFixture)
+{
+    // 2026-06-22 review (test-gap): assert the action binding END-TO-END through
+    // the consensus path (BlockValidateContracts -> Dispatcher::BlockValidate ->
+    // ValidateAtHeight -> VerifyRegisterAuth), not just the VerifySignature
+    // primitive. A capture of a valid operator-signed POOL_REGISTER ADD, replayed
+    // with the action byte flipped to REMOVE without re-signing, must be rejected
+    // because the signature is bound to the action; and a correctly REMOVE-signed
+    // withdrawal by the same operator must be accepted (the path the new
+    // withdrawpool RPC drives).
+    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid cpid = PoolTestKey::Cpid(); // non-builtin
+    BOOST_REQUIRE(!registry.IsBuiltin(cpid));
+
+    CBlockIndex pindex;
+    pindex.nHeight = 100; // >= BlockV15Height(0), so the V15 gate passes
+
+    // Establish a live, operator-claimed entry (ACTIVE, valid key).
+    CKey operator_key = PoolTestKey::Private();
+    GRC::Pool entry(cpid, "legitpool", "https://legit.example/", operator_key.GetPubKey());
+    entry.m_status = GRC::PoolStatus::ACTIVE;
+    entry.m_height = 50;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid); // deterministic non-null hash
+    registry.SeedForTests(entry);
+
+    const uint256 prev_hash = entry.m_hash; // predecessor the contract chains onto
+
+    // Capture a valid ADD signed by the operator, then ship it as REMOVE without
+    // re-signing. The signature covers the ADD digest, so the REMOVE digest
+    // VerifyRegisterAuth recomputes won't match -> rejected at consensus. (A
+    // pure VerifySignature assertion would catch the primitive; this proves the
+    // dispatch/validate layer actually enforces it.)
+    {
+        GRC::PoolRegisterPayload captured(cpid, "legitpool", "https://legit.example/",
+                                          operator_key.GetPubKey());
+        BOOST_REQUIRE(captured.Sign(operator_key, GRC::ContractAction::ADD, prev_hash));
+
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::REMOVE, std::move(captured)); // action flipped, sig unchanged
+        const CTransaction tx = MakePoolTx(std::move(c), 31);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&pindex, tx, dos)); // action binding holds
+    }
+
+    // The legitimate operator self-withdrawal: signs REMOVE over the same
+    // predecessor with the registered operator key -> accepted.
+    {
+        GRC::PoolRegisterPayload payload(cpid, "legitpool", "https://legit.example/",
+                                         operator_key.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::REMOVE, prev_hash));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::REMOVE, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 32);
+
+        int dos = 0;
+        BOOST_CHECK(GRC::BlockValidateContracts(&pindex, tx, dos)); // operator withdrawal accepted
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(builtin_path2_claim_requires_matching_open_authorization, PoolLifecycleFixture)
+{
+    // R1 (adversarial pre-review): drive a GRANDFATHERED BUILTIN slot through the
+    // consensus path (BlockValidateContracts -> ValidateAtHeight ->
+    // VerifyRegisterAuth Path 2) — the sticky takeover defense that governs who
+    // may claim the 5 builtin grcpool CPIDs (real magnitude / AVW). The existing
+    // takeover test uses a NON-builtin CPID and so never exercises Path 2.
+    gArgs.ForceSetArg("-blockv15height", "0"); // V15 active at every height >= 0
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid cpid =
+        GRC::Cpid::Parse(GRC::PoolRegistry::BuiltinPoolSeeds().front().cpid_hex);
+    BOOST_REQUIRE(registry.IsBuiltin(cpid));
+
+    CBlockIndex pindex;
+    pindex.nHeight = 100; // >= BlockV15Height(0), so the V15 gate passes
+
+    CKey operator_key = PoolTestKey::Private();
+    const CPubKey authorized = operator_key.GetPubKey();
+
+    // (a) No OPEN authorization yet: an unauthorized POOL_REGISTER ADD on a
+    // builtin slot must be rejected (the core sticky guard).
+    {
+        const uint256 prev = registry.Try(cpid)->m_hash; // current seed hash
+        GRC::PoolRegisterPayload payload(cpid, "claimer", "https://claimer.example/", authorized);
+        BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 41);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&pindex, tx, dos)); // no OPEN -> rejected
+    }
+
+    // Foundation issues a POOL_APPROVE OPEN authorizing `authorized`.
+    {
+        GRC::Contract open = GRC::MakeContract<GRC::PoolApprovePayload>(
+            GRC::ContractAction::OPEN, cpid, authorized);
+        const CTransaction open_tx = MakePoolTx(std::move(open), 42);
+        DispatchApply(open_tx, &pindex);
+        GRC::Pool_ptr opened = registry.Try(cpid);
+        BOOST_REQUIRE(opened);
+        BOOST_REQUIRE(opened->m_authorized_operator_key == authorized);
+    }
+
+    const uint256 prev_after_open = registry.Try(cpid)->m_hash;
+
+    // (b) OPEN exists but a DIFFERENT key tries to claim -> rejected.
+    {
+        CKey wrong = PoolTestKey::Private();
+        GRC::PoolRegisterPayload payload(cpid, "imposter", "https://imposter.example/",
+                                         wrong.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(wrong, GRC::ContractAction::ADD, prev_after_open));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 43);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&pindex, tx, dos)); // key != OPEN auth -> rejected
+    }
+
+    // (c) The authorized key claims -> accepted.
+    {
+        GRC::PoolRegisterPayload payload(cpid, "claimer", "https://claimer.example/", authorized);
+        BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev_after_open));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 44);
+
+        int dos = 0;
+        BOOST_CHECK(GRC::BlockValidateContracts(&pindex, tx, dos)); // authorized -> accepted
+    }
+
+    // (d) Expired OPEN: validate the same authorized claim at a height past the
+    // retention window -> rejected (authorization no longer live). State was
+    // never mutated above (BlockValidateContracts only validates), so the OPEN
+    // authorization recorded at pindex.nHeight is still present.
+    {
+        CBlockIndex late;
+        late.nHeight = registry.Try(cpid)->m_authorization_height + GetPendingPoolRetention() + 1;
+
+        GRC::PoolRegisterPayload payload(cpid, "claimer", "https://claimer.example/", authorized);
+        BOOST_REQUIRE(payload.Sign(operator_key, GRC::ContractAction::ADD, prev_after_open));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 45);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&late, tx, dos)); // OPEN expired -> rejected
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(expired_pending_nonbuiltin_superseded_by_fresh_key, PoolLifecycleFixture)
+{
+    // R5 (adversarial pre-review): doc/consensus.md §11.3.1 promises a fresh
+    // POOL_REGISTER ADD from ANY key may supersede an EXPIRED PENDING on a
+    // NON-builtin slot (one the Foundation never ratified), while a still-fresh
+    // PENDING stays protected by takeover defense. Exercise that documented
+    // consensus consequence through BlockValidateContracts, not just the
+    // IsPendingExpired predicate in isolation.
+    gArgs.ForceSetArg("-blockv15height", "0");
+
+    LOCK(cs_main);
+    GRC::PoolRegistry& registry = GRC::GetPoolRegistry();
+
+    const GRC::Cpid cpid = PoolTestKey::Cpid(); // non-builtin
+    BOOST_REQUIRE(!registry.IsBuiltin(cpid));
+
+    // A PENDING entry held by an incumbent operator key, recorded at height H.
+    const int H = 1000;
+    CKey incumbent = PoolTestKey::Private();
+    GRC::Pool entry(cpid, "pendingpool", "https://pending.example/", incumbent.GetPubKey());
+    entry.m_status = GRC::PoolStatus::PENDING;
+    entry.m_height = H;
+    entry.m_hash = GRC::PoolRegistry::BuiltinSeedHash(cpid); // deterministic non-null hash
+    registry.SeedForTests(entry);
+
+    const uint256 prev = entry.m_hash;
+    const int retention = GetPendingPoolRetention();
+    CKey newcomer = PoolTestKey::Private(); // a DIFFERENT operator
+
+    // Still-fresh PENDING (height H+1): the foreign key is rejected — takeover
+    // defense protects the unexpired PENDING.
+    {
+        CBlockIndex fresh;
+        fresh.nHeight = H + 1;
+        GRC::PoolRegisterPayload payload(cpid, "newpool", "https://new.example/",
+                                         newcomer.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(newcomer, GRC::ContractAction::ADD, prev));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 51);
+
+        int dos = 0;
+        BOOST_CHECK(!GRC::BlockValidateContracts(&fresh, tx, dos)); // fresh PENDING protected
+    }
+
+    // Past the retention window (height H+retention+1): the expired PENDING is
+    // treated as absent, so the foreign key is accepted on the first-claim path.
+    {
+        CBlockIndex expired;
+        expired.nHeight = H + retention + 1;
+        GRC::PoolRegisterPayload payload(cpid, "newpool", "https://new.example/",
+                                         newcomer.GetPubKey());
+        BOOST_REQUIRE(payload.Sign(newcomer, GRC::ContractAction::ADD, prev));
+        GRC::Contract c = GRC::MakeContract<GRC::PoolRegisterPayload>(
+            GRC::ContractAction::ADD, std::move(payload));
+        const CTransaction tx = MakePoolTx(std::move(c), 52);
+
+        int dos = 0;
+        BOOST_CHECK(GRC::BlockValidateContracts(&expired, tx, dos)); // expired PENDING superseded
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

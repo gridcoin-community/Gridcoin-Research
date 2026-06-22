@@ -42,6 +42,13 @@ uint256 HashPoolRegisterPayload(const PoolRegisterPayload& payload,
                                 const uint256& previous_hash)
 {
     CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+    // NB: PoolRegisterPayload::SerializationOp IGNORES the `action` argument it
+    // is handed here — the action is bound into the digest solely by the
+    // explicit `hasher << static_cast<uint8_t>(action)` byte below. The arg is
+    // passed only to satisfy the Serialize(action) overload signature. If a
+    // future change to SerializationOp starts consuming `action`, the action
+    // would be double-bound and every post-V15 POOL_REGISTER digest would shift
+    // (a consensus break). Keep the single explicit byte as the sole binding.
     payload.Serialize(hasher, action);
     hasher << static_cast<uint8_t>(action);
     hasher << previous_hash;
@@ -239,10 +246,27 @@ bool PoolRegisterPayload::WellFormed(const ContractAction action) const
         return false;
     }
 
-    if (action == ContractAction::ADD) {
+    switch (action) {
+    case ContractAction::ADD:
+        // A fresh/renewed registration must carry a URL.
         if (m_url.empty() || m_url.size() > MAX_URL_SIZE) {
             return false;
         }
+        break;
+
+    case ContractAction::REMOVE:
+        // Operator-self-withdrawal. URL is not required (the entry is being
+        // de-listed), but the operator key + signature checks above still apply.
+        break;
+
+    default:
+        // OPEN (and UNKNOWN) must be rejected for POOL_REGISTER. POOL_REGISTER
+        // has no OPEN semantics: PoolRegistry::Open() no-ops for this type while
+        // PoolRegistry::Revert() processes it unconditionally, so a valid
+        // REGISTER+OPEN would apply as a no-op but revert as a mutation and
+        // diverge nodes on a reorg. Mirror PoolApprovePayload::WellFormed's
+        // default: return false. (OPEN is only meaningful on POOL_APPROVE.)
+        return false;
     }
 
     // DER-encoded ECDSA signatures are typically 70-71 bytes but the framework
@@ -469,23 +493,27 @@ bool PoolRegistry::IsActivePoolName(const std::string& name) const
 
 void PoolRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    {
-        LOCK(cs_lock);
-        m_pool_entries.clear();
-        m_pool_db.clear();
-        // Clear the builtin pins too — SeedBuiltinPools re-installs fresh
-        // seed entries and re-pins them below; leaving the old shared_ptrs
-        // here would dangle against the just-cleared m_pool_db.
-        m_builtin_seeds.clear();
-    }
+    // Hold cs_lock across BOTH the clear and the re-seed so there is never a
+    // transient empty-registry window. Splitting these into two scopes let a
+    // cs_lock-only reader (an RPC/query during -clearallregistryhistory
+    // startup) observe an empty registry in the gap. cs_lock is a recursive
+    // CCriticalSection, so SeedBuiltinPools()'s own nested LOCK(cs_lock) is a
+    // safe re-entry under this scope.
+    LOCK(cs_lock);
+
+    m_pool_entries.clear();
+    m_pool_db.clear();
+    // Clear the builtin pins too — SeedBuiltinPools re-installs fresh
+    // seed entries and re-pins them below; leaving the old shared_ptrs
+    // here would dangle against the just-cleared m_pool_db.
+    m_builtin_seeds.clear();
 
     // Re-seed the grandfathered builtins, mirroring ClearForTests and the
     // constructor. Without this, a node started with -clearallregistryhistory
     // / -clearpool_*history runs the entire session with an EMPTY registry:
     // IsActivePool* regress to "no pools" and ActivePoolsAtHeight returns
     // empty, so the node's AVW pool-magnitude correction diverges from every
-    // peer that didn't clear. SeedBuiltinPools takes cs_lock internally, so it
-    // runs after the scoped clear above (matching ClearForTests).
+    // peer that didn't clear.
     SeedBuiltinPools();
 }
 

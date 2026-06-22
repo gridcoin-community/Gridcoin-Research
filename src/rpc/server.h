@@ -234,6 +234,7 @@ extern UniValue auditsnapshotaccrual(const UniValue& params);
 extern UniValue auditsnapshotaccruals(const UniValue& params);
 extern UniValue addkey(const UniValue& params);
 extern UniValue registerpool(const UniValue& params);
+extern UniValue withdrawpool(const UniValue& params);
 extern UniValue approvepool(const UniValue& params);
 extern UniValue authorizepool(const UniValue& params);
 extern UniValue removepool(const UniValue& params);
@@ -531,6 +532,7 @@ extern const RPCHelpMan& walletdiagnose_helpman();
 extern const RPCHelpMan& walletlock_helpman();
 extern const RPCHelpMan& walletpassphrase_helpman();
 extern const RPCHelpMan& walletpassphrasechange_helpman();
+extern const RPCHelpMan& withdrawpool_helpman();
 extern const RPCHelpMan& writedata_helpman();
 
 #endif // BITCOIN_RPC_SERVER_H
