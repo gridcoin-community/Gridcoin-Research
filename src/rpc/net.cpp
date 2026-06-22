@@ -171,12 +171,10 @@ static const RPCHelpMan getaddednodeinfo_help{
         {"node", RPCArg::Type::STR, RPCArg::Optional::OMITTED,
             "If provided, return information about this specific added node, otherwise all are returned."},
     },
-    RPCResult{RPCResult::Type::OBJ, "", "",
-        {
-            {RPCResult::Type::ELISION, "",
-                "Shape depends on the 'dns' argument: a map of \"addednode\" -> node string when dns=false, "
-                "or nested per-node connection detail when dns=true."},
-        }},
+    RPCResult{RPCResult::Type::ANY, "",
+        "Shape depends on the 'dns' argument: an object mapping \"addednode\" -> "
+        "node string when dns=false, or an ARRAY of per-added-node objects "
+        "(addednode / connected / addresses) when dns=true."},
     RPCExamples{
         HelpExampleCli("getaddednodeinfo", "true") +
         HelpExampleCli("getaddednodeinfo", "true \"192.168.0.6:32749\"") +
@@ -218,7 +216,11 @@ UniValue getaddednodeinfo(const UniValue& params)
         return ret;
     }
 
-    UniValue ret(UniValue::VOBJ);
+    // dns=true returns an ARRAY of per-added-node objects. (Fix: this was a
+    // VOBJ, but UniValue::push_back is a no-op on objects, so the handler always
+    // returned {}; and the Lookup-failure branch built an object it never
+    // pushed, dropping unresolvable nodes. Both are corrected here.)
+    UniValue ret(UniValue::VARR);
 
     list<pair<string, vector<CService> > > laddedAddresses(0);
     for (auto const& strAddNode : laddedNodes)
@@ -233,6 +235,7 @@ UniValue getaddednodeinfo(const UniValue& params)
             obj.pushKV("connected", false);
             UniValue addresses(UniValue::VARR);
             obj.pushKV("addresses", addresses);
+            ret.push_back(obj);
         }
     }
 

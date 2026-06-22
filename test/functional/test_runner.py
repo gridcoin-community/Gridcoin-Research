@@ -142,6 +142,7 @@ BASE_SCRIPTS = [
     'rpc_htlc.py',
     'rpc_blockchain.py',
     'rpc_netinfo.py',
+    'rpc_getaddednodeinfo.py',
     'rpc_multisig.py',
     'wallet_basic.py',
     'wallet_backup.py',
