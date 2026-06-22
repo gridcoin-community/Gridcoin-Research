@@ -163,6 +163,7 @@ BASE_SCRIPTS = [
     'interface_cli.py',
     'mempool_accept.py',
     'rpc_net.py',
+    'rpc_net_connman.py',
     'feature_sidestake.py',
 ]
 
