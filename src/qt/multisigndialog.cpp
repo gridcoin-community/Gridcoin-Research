@@ -5,8 +5,9 @@
 #include "multisigndialog.h"
 #include "ui_multisigndialog.h"
 
-#include "guiutil.h"
 #include "bitcoinunits.h"
+#include "guiutil.h"
+#include "optionsmodel.h"
 #include "qt/decoration.h"
 #include "walletmodel.h"
 
@@ -46,36 +47,43 @@ std::string CleanBase64(const QString& in)
     return out;
 }
 
-//! Format a satoshi amount as "<value> GRC".
-QString FormatAmount(int64_t nValue)
+} // namespace
+
+QString MultisignPSGTDialog::FormatAmount(int64_t nValue) const
 {
-    return QString::fromStdString(FormatMoney(nValue)) + " GRC";
+    // Match the rest of the GUI: format in the wallet's selected display unit
+    // (GRC/mGRC/uBTC) with thin-space grouping, rather than core FormatMoney().
+    int unit = BitcoinUnits::BTC; // BTC == GRC display
+    if (model && model->getOptionsModel())
+        unit = model->getOptionsModel()->getDisplayUnit();
+
+    return BitcoinUnits::formatWithUnit(unit, nValue);
 }
 
 //! Build a human-readable description of a decoded PSGT (mirrors the data
 //! surfaced by the decodepsgt RPC, formatted for display).
-QString DescribePSGT(const PartiallySignedTransaction& psgt)
+QString MultisignPSGTDialog::DescribePSGT(const PartiallySignedTransaction& psgt) const
 {
     QString out;
     CTransaction ctx(psgt.tx);
 
-    out += QString("Transaction id: %1\n").arg(QString::fromStdString(ctx.GetHash().GetHex()));
-    out += QString("Version: %1   Time: %2   Locktime: %3\n")
+    out += tr("Transaction id: %1\n").arg(QString::fromStdString(ctx.GetHash().GetHex()));
+    out += tr("Version: %1   Time: %2   Locktime: %3\n")
                .arg(psgt.tx.nVersion)
                .arg((qlonglong)psgt.tx.nTime)
                .arg((qlonglong)psgt.tx.nLockTime);
-    out += QString("Inputs: %1   Outputs: %2\n\n")
+    out += tr("Inputs: %1   Outputs: %2\n\n")
                .arg(psgt.tx.vin.size())
                .arg(psgt.tx.vout.size());
 
     unsigned int signed_inputs = 0;
 
-    out += "Inputs:\n";
+    out += tr("Inputs:\n");
     for (unsigned int i = 0; i < psgt.tx.vin.size(); ++i)
     {
         const CTxIn& txin = psgt.tx.vin[i];
         QString status;
-        QString amount = "(prev tx not loaded)";
+        QString amount = tr("(prev tx not loaded)");
 
         if (i < psgt.inputs.size())
         {
@@ -89,21 +97,21 @@ QString DescribePSGT(const PartiallySignedTransaction& psgt)
 
             if (PSGTInputSigned(input))
             {
-                status = "finalized";
+                status = tr("finalized");
                 ++signed_inputs;
             }
             else if (!input.partial_sigs.empty())
             {
-                status = QString("%1 partial sig(s)").arg(input.partial_sigs.size());
+                status = tr("%n partial sig(s)", nullptr, (int)input.partial_sigs.size());
             }
             else
             {
-                status = "unsigned";
+                status = tr("unsigned");
             }
         }
         else
         {
-            status = "no metadata";
+            status = tr("no metadata");
         }
 
         out += QString("  [%1] %2:%3   %4   %5\n")
@@ -125,23 +133,23 @@ QString DescribePSGT(const PartiallySignedTransaction& psgt)
             std::vector<std::vector<unsigned char>> rsols;
             if (Solver(redeem, rtype, rsols) && rtype == TX_MULTISIG && rsols.size() >= 3)
             {
-                out += QString("        multisig %1-of-%2   image P2SH:%3\n")
+                out += tr("        multisig %1-of-%2   image P2SH:%3\n")
                            .arg((int)rsols.front()[0])
                            .arg((int)rsols.size() - 2)
                            .arg(image);
             }
             else
             {
-                out += QString("        image P2SH:%1\n").arg(image);
+                out += tr("        image P2SH:%1\n").arg(image);
             }
         }
     }
 
-    out += "\nOutputs:\n";
+    out += tr("\nOutputs:\n");
     for (unsigned int i = 0; i < psgt.tx.vout.size(); ++i)
     {
         const CTxOut& txout = psgt.tx.vout[i];
-        QString dest = "(non-standard)";
+        QString dest = tr("(non-standard)");
 
         txnouttype type;
         std::vector<CTxDestination> addresses;
@@ -163,15 +171,13 @@ QString DescribePSGT(const PartiallySignedTransaction& psgt)
     PartiallySignedTransaction copy = psgt;
     bool complete = FinalizePSGT(copy);
 
-    out += QString("\nSigned inputs: %1/%2   Complete: %3\n")
+    out += tr("\nSigned inputs: %1/%2   Complete: %3\n")
                .arg(signed_inputs)
                .arg(psgt.tx.vin.size())
-               .arg(complete ? "yes" : "no");
+               .arg(complete ? tr("yes") : tr("no"));
 
     return out;
 }
-
-} // namespace
 
 MultisignPSGTDialog::MultisignPSGTDialog(QWidget* parent)
     : QDialog(parent)
@@ -263,7 +269,7 @@ void MultisignPSGTDialog::showDecoded(const PartiallySignedTransaction& psgt)
     // contributed at least one signature; surface the precondition now.
     if (pwalletMain)
     {
-        text += QString("This wallet's signature present: %1\n")
+        text += tr("This wallet's signature present: %1\n")
                     .arg(walletHasSignature(psgt) ? tr("yes") : tr("no"));
     }
 

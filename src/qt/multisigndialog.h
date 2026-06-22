@@ -64,6 +64,13 @@ private:
     //! is available, the "wallet's signature present" line).
     void showDecoded(const PartiallySignedTransaction& psgt);
 
+    //! Format a satoshi amount with BitcoinUnits in the wallet's selected display
+    //! unit (consistent with the rest of the GUI), falling back to GRC.
+    QString FormatAmount(int64_t nValue) const;
+
+    //! Build the human-readable decoded-PSGT description shown in the decoded view.
+    QString DescribePSGT(const PartiallySignedTransaction& psgt) const;
+
     void setStatus(const QString& text, bool error);
 
 private slots:
