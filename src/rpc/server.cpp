@@ -364,6 +364,7 @@ static const CRPCCommand vRPCCommands[] =
     { "consolidateunspent",      &consolidateunspent,      cat_wallet, &consolidateunspent_helpman        },
     { "makekeypair",             &makekeypair,             cat_wallet, &makekeypair_helpman        },
     { "maintainbackups",         &maintainbackups,         cat_wallet, &maintainbackups_helpman        },
+    { "migratelabels",           &migratelabels,           cat_wallet, &migratelabels_helpman        },
     { "move",                    &movecmd,                 cat_wallet, &movecmd_helpman        },
     { "rainbymagnitude",         &rainbymagnitude,         cat_wallet, &rainbymagnitude_helpman        },
     { "refundhtlc",             &refundhtlc,              cat_wallet, &refundhtlc_helpman        },

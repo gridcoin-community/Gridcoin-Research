@@ -268,4 +268,39 @@ BOOST_AUTO_TEST_CASE(account_only_rpcs_gated_without_flag)
     BOOST_CHECK_THROW(sendfrom(ArgArray({"someaccount", "dummy", "1.0"})), std::runtime_error);
 }
 
+// migratelabels backfills purpose on entries that loaded as "unknown" (owned -> "receive"),
+// reports a non-zero updated count, and is idempotent (a second run updates nothing).
+BOOST_AUTO_TEST_CASE(migratelabels_backfills_purpose)
+{
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> should become "receive"
+    const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
+
+    // Simulate a pre-label entry: a name with the default "unknown" purpose.
+    pwalletMain->SetAddressBookName(dest, "legacy-acct");
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_REQUIRE_EQUAL(pwalletMain->mapAddressBook[dest].purpose, "unknown");
+    }
+
+    UniValue res = migratelabels(UniValue(UniValue::VARR));
+    BOOST_CHECK(res["updated"].get_int() >= 1);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook[dest].purpose, "receive");
+    }
+
+    // Idempotent: the first run backfills EVERY "unknown" entry in the (shared) wallet, so a
+    // second back-to-back run must find nothing left to do and report updated == 0. Asserting
+    // the count -- not just the target's purpose -- is what actually catches a non-idempotent
+    // implementation (e.g. one that re-tagged already-classified entries).
+    UniValue res2 = migratelabels(UniValue(UniValue::VARR));
+    BOOST_CHECK_EQUAL(res2["updated"].get_int(), 0);
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook[dest].purpose, "receive");
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
