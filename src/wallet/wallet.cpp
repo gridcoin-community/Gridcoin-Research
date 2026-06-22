@@ -1800,7 +1800,7 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, int64_t& nReceived,
             if (pwallet->mapAddressBook.count(r.destination))
             {
                 const auto mi = pwallet->mapAddressBook.find(r.destination);
-                if (mi != pwallet->mapAddressBook.end() && mi->second == strAccount) {
+                if (mi != pwallet->mapAddressBook.end() && mi->second.name == strAccount) {
                     nReceived += r.amount;
                 }
             }
@@ -3460,17 +3460,34 @@ DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
 bool CWallet::SetAddressBookName(const CTxDestination& address, const string& strName)
 {
     bool fUpdated = false;
+    std::string strPurpose;
     {
         LOCK(cs_wallet); // mapAddressBook
-        std::map<CTxDestination, std::string>::iterator mi = mapAddressBook.find(address);
+        auto mi = mapAddressBook.find(address);
         fUpdated = mi != mapAddressBook.end();
-        mapAddressBook[address] = strName;
+        mapAddressBook[address].name = strName;
+        strPurpose = mapAddressBook[address].purpose;
     }
     NotifyAddressBookChanged(this, address, strName, (::IsMine(*this, address) != ISMINE_NO),
-                             (fUpdated ? CT_UPDATED : CT_NEW) );
+                             strPurpose, (fUpdated ? CT_UPDATED : CT_NEW) );
     if (!fFileBacked)
         return false;
     return CWalletDB(strWalletFile).WriteName(EncodeDestination(address), strName);
+}
+
+bool CWallet::SetAddressBookPurpose(const CTxDestination& address, const string& strPurpose)
+{
+    std::string strName;
+    {
+        LOCK(cs_wallet); // mapAddressBook
+        mapAddressBook[address].purpose = strPurpose;
+        strName = mapAddressBook[address].name;
+    }
+    NotifyAddressBookChanged(this, address, strName, (::IsMine(*this, address) != ISMINE_NO),
+                             strPurpose, CT_UPDATED);
+    if (!fFileBacked)
+        return false;
+    return CWalletDB(strWalletFile).WritePurpose(EncodeDestination(address), strPurpose);
 }
 
 bool CWallet::DelAddressBookName(const CTxDestination& address)
@@ -3481,11 +3498,19 @@ bool CWallet::DelAddressBookName(const CTxDestination& address)
         mapAddressBook.erase(address);
     }
 
-    NotifyAddressBookChanged(this, address, "", (::IsMine(*this, address) != ISMINE_NO), CT_DELETED);
+    NotifyAddressBookChanged(this, address, "", (::IsMine(*this, address) != ISMINE_NO), "", CT_DELETED);
 
     if (!fFileBacked)
         return false;
-    return CWalletDB(strWalletFile).EraseName(EncodeDestination(address));
+
+    // Erase both records with a single CWalletDB instance and no short-circuit, so a failed
+    // purpose-erase can never skip the load-bearing name-erase (which would leave a ghost
+    // label on disk after the in-memory entry is already gone). Erasing an absent record is
+    // safe -- CDB::Erase returns true on DB_NOTFOUND.
+    CWalletDB walletdb(strWalletFile);
+    bool fErasedPurpose = walletdb.ErasePurpose(EncodeDestination(address));
+    bool fErasedName = walletdb.EraseName(EncodeDestination(address));
+    return fErasedPurpose && fErasedName;
 }
 
 bool CWallet::GetTransaction(const uint256 &hashTx, CWalletTx& wtx)

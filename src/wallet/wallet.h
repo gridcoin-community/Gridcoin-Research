@@ -88,6 +88,25 @@ public:
     }
 };
 
+/** Address book data for a destination: the user-facing label plus a purpose tag.
+ *
+ * Mirrors Bitcoin 0.17's CAddressBookData. The two fields persist as two separate
+ * walletdb records ("name" and "purpose") keyed by address and are assembled in memory at
+ * load, so this struct is intentionally not serialized as a unit (no SERIALIZE_METHODS).
+ *
+ * No implicit conversion to std::string is provided: every consumer must read .name
+ * explicitly, so the account/label disentanglement surfaces at compile time rather than
+ * silently converting.
+ */
+class CAddressBookData
+{
+public:
+    std::string name;
+    std::string purpose;
+
+    CAddressBookData() : purpose("unknown") {}
+};
+
 /** A CWallet is an extension of a keystore, which also maintains a set of transactions and balances,
  * and provides the ability to create new transactions.
  */
@@ -190,7 +209,7 @@ public:
     int64_t nOrderPosNext GUARDED_BY(cs_wallet);
     std::map<uint256, int> mapRequestCount GUARDED_BY(cs_wallet);
 
-    std::map<CTxDestination, std::string> mapAddressBook GUARDED_BY(cs_wallet);
+    std::map<CTxDestination, CAddressBookData> mapAddressBook GUARDED_BY(cs_wallet);
 
     //! Maps spent outpoints to the transaction that spends them.
     //! Multimap because reorgs can temporarily create duplicates.
@@ -461,6 +480,8 @@ public:
 
     bool SetAddressBookName(const CTxDestination& address, const std::string& strName);
 
+    bool SetAddressBookPurpose(const CTxDestination& address, const std::string& strPurpose);
+
     bool DelAddressBookName(const CTxDestination& address);
 
     void Inventory(const uint256 &hash)
@@ -508,9 +529,11 @@ public:
     void StoreLastBackupTime(const int64_t backup_time);
 
     /** Address book entry changed.
-     * @note called with lock cs_wallet held.
+     * @note Emitted with cs_wallet NOT held: the emitters snapshot name/purpose into locals
+     *       inside the lock scope and fire the signal after releasing it, so all arguments are
+     *       passed by value. A subscriber must not assume cs_wallet is held in its handler.
      */
-    boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, ChangeType status)> NotifyAddressBookChanged;
+    boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)> NotifyAddressBookChanged;
 
     /** Wallet transaction added, removed or updated.
      * @note called with lock cs_wallet held.

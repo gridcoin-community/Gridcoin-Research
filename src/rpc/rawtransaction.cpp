@@ -597,10 +597,10 @@ UniValue listunspent(const UniValue& params)
 
             if (item != pwalletMain->mapAddressBook.end())
             {
-                entry.pushKV("label", item->second);
+                entry.pushKV("label", item->second.name);
 
                 if (gArgs.GetBoolArg("-enableaccounts", false))
-                    entry.pushKV("account", item->second);
+                    entry.pushKV("account", item->second.name);
             }
         }
         entry.pushKV("scriptPubKey", HexStr(pk));

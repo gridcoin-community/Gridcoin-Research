@@ -407,7 +407,7 @@ UniValue setaccount(const UniValue& params)
     // Detect when changing the account of an address that is the 'unused current key' of another account:
     if (pwalletMain->mapAddressBook.count(address))
     {
-        string strOldAccount = pwalletMain->mapAddressBook[address];
+        string strOldAccount = pwalletMain->mapAddressBook[address].name;
         if (address == GetAccountAddress(strOldAccount))
             GetAccountAddress(strOldAccount, true);
     }
@@ -442,9 +442,9 @@ UniValue getaccount(const UniValue& params)
 
     string strAccount;
 
-    map<CTxDestination, string>::iterator mi = pwalletMain->mapAddressBook.find(address);
-    if (mi != pwalletMain->mapAddressBook.end() && !mi->second.empty()) {
-        strAccount = mi->second;
+    auto mi = pwalletMain->mapAddressBook.find(address);
+    if (mi != pwalletMain->mapAddressBook.end() && !mi->second.name.empty()) {
+        strAccount = mi->second.name;
     }
     return strAccount;
 }
@@ -477,7 +477,7 @@ UniValue getaddressesbyaccount(const UniValue& params)
     for (auto const& item : pwalletMain->mapAddressBook)
     {
         const CTxDestination& address = item.first;
-        const string& strName = item.second;
+        const string& strName = item.second.name;
         if (strName == strAccount)
             ret.push_back(EncodeDestination(address));
     }
@@ -581,7 +581,7 @@ UniValue listaddressgroupings(const UniValue& params)
             addressInfo.push_back(ValueFromAmount(balances[address]));
             {
                 if (pwalletMain->mapAddressBook.find(address) != pwalletMain->mapAddressBook.end())
-                    addressInfo.push_back(pwalletMain->mapAddressBook.find(address)->second);
+                    addressInfo.push_back(pwalletMain->mapAddressBook.find(address)->second.name);
             }
             jsonGrouping.push_back(addressInfo);
         }
@@ -754,7 +754,7 @@ void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXC
     for (auto const& item : pwalletMain->mapAddressBook)
     {
         const CTxDestination& address = item.first;
-        const string& strName = item.second;
+        const string& strName = item.second.name;
         if (strName == strAccount)
             setAddress.insert(address);
     }
@@ -1562,7 +1562,7 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
     for (auto const& item : pwalletMain->mapAddressBook)
     {
         const CTxDestination& address = item.first;
-        const string& strAccount = item.second;
+        const string& strAccount = item.second.name;
         map<CTxDestination, tallyitem>::iterator it = mapTally.find(address);
         if (it == mapTally.end() && !fIncludeEmpty)
             continue;
@@ -1779,7 +1779,7 @@ UniValue listreceivedbyaccount(const UniValue& params)
             string account;
 
             if (pwalletMain->mapAddressBook.count(r.destination))
-                account = pwalletMain->mapAddressBook[r.destination];
+                account = pwalletMain->mapAddressBook[r.destination].name;
 
             if (fAllAccounts || (account == strAccount))
             {
@@ -2073,7 +2073,7 @@ UniValue listaccounts(const UniValue& params)
     map<string, int64_t> mapAccountBalances;
     for (auto const& entry : pwalletMain->mapAddressBook) {
        if (IsMine(*pwalletMain, entry.first) & includeWatchonly) // This address belongs to me
-            mapAccountBalances[entry.second] = 0;
+            mapAccountBalances[entry.second.name] = 0;
     }
 
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
@@ -2094,7 +2094,7 @@ UniValue listaccounts(const UniValue& params)
         {
             for (auto const& r : listReceived)
                 if (pwalletMain->mapAddressBook.count(r.destination))
-                    mapAccountBalances[pwalletMain->mapAddressBook[r.destination]] += r.amount;
+                    mapAccountBalances[pwalletMain->mapAddressBook[r.destination].name] += r.amount;
                 else
                     mapAccountBalances[""] += r.amount;
         }
@@ -3166,7 +3166,7 @@ UniValue validateaddress(const UniValue& params)
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))
-            ret.pushKV("account", pwalletMain->mapAddressBook[dest]);
+            ret.pushKV("account", pwalletMain->mapAddressBook[dest].name);
         CKeyID* keyID = std::get_if<CKeyID>(&dest);
         if (pwalletMain && keyID && pwalletMain->mapKeyMetadata.count(*keyID) && !pwalletMain->mapKeyMetadata[*keyID].hdKeypath.empty())
         {
@@ -3231,7 +3231,7 @@ UniValue validatepubkey(const UniValue& params)
             ret.pushKVs(detail);
         }
         if (pwalletMain->mapAddressBook.count(dest))
-            ret.pushKV("account", pwalletMain->mapAddressBook[dest]);
+            ret.pushKV("account", pwalletMain->mapAddressBook[dest].name);
     }
     return ret;
 }
