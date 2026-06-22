@@ -216,10 +216,14 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
             "bin",
             "gridcoinresearchd" + config["environment"]["EXEEXT"],
         )
+        # Gridcoin has no separate gridcoin-cli binary; gridcoinresearchd doubles
+        # as the RPC client (it runs CommandLineRPC when given a non-switch argv).
+        # Default the "cli" binary to the daemon so direct invocations work; the
+        # CMake suite also exports GRIDCOINCLI pointing at the same binary.
         fname_gridcoincli = os.path.join(
             config["environment"]["BUILDDIR"],
             "bin",
-            "gridcoin-cli" + config["environment"]["EXEEXT"],
+            "gridcoinresearchd" + config["environment"]["EXEEXT"],
         )
         self.options.gridcoind = os.getenv("GRIDCOIND", default=fname_gridcoind)
         self.options.gridcoincli = os.getenv("GRIDCOINCLI", default=fname_gridcoincli)
