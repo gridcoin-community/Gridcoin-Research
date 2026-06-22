@@ -6,6 +6,7 @@
 #include "ui_multisigndialog.h"
 
 #include "guiutil.h"
+#include "bitcoinunits.h"
 #include "qt/decoration.h"
 #include "walletmodel.h"
 
