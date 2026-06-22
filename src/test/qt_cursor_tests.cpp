@@ -414,6 +414,61 @@ BOOST_AUTO_TEST_CASE(interleaved_reposition_to_equal_keys)
     BOOST_CHECK_EQUAL(c.viewIndex()[3], 2u);
 }
 
+// ---- ⚠ multi-part status reposition: store MUST drive one part at a time -----
+
+BOOST_AUTO_TEST_CASE(multipart_status_reposition_requires_interleaved_drive)
+{
+    // Regression for the windowed-model duplicate (mainnet, 2026-06-21): a multi-part
+    // tx whose Status sort key changes on confirmation. WalletTxStore::updateTransaction
+    // overwrites the parts in m_records and re-drives the cursors; it MUST overwrite +
+    // drive ONE part at a time. Recompute-all-keys-then-drive-all transiently de-sorts
+    // view_index (siblings sit at old slots while reading new keys), so applyStatusUpdate's
+    // lower_bound misplaces — yielding a view_index that diverges from ground truth (a
+    // fresh rebuild) and inconsistent Insert/Change deltas that DUPLICATE a row in the
+    // consumer caches. Same contract as interleaved_reposition_to_equal_keys, here for a
+    // multi-part Status-sort confirmation. Single-part txs are immune (the loop runs once).
+    auto make = [] {
+        Table t;
+        // 3-part tx (abs 0,1,2) status_sort "5"; neighbours abs3 "3", abs4 "7".
+        t.rows = { active(500, "5"), active(500, "5"), active(500, "5"),
+                   active(400, "3"), active(600, "7") };
+        return t;
+    };
+
+    // Ground truth after the tx confirms ("5" -> "9", crossing past "7"): rebuild.
+    Table gt = make();
+    for (int i = 0; i < 3; ++i) gt.rows[i].status_sort = "9";
+    Cursor truth(1, FilterSpec{}, TXCOL_STATUS, TXSORT_ASC, gt.fields(), gt.keys());
+    truth.rebuild(gt.rows.size());                       // [3,4,0,1,2]
+
+    // (a) THE BUG: recompute ALL parts' keys, THEN drive all (the old updateTransaction).
+    {
+        Table t = make();
+        Cursor c(1, FilterSpec{}, TXCOL_STATUS, TXSORT_ASC, t.fields(), t.keys());
+        c.rebuild(t.rows.size());                        // [3,0,1,2,4]
+        for (int i = 0; i < 3; ++i) t.rows[i].status_sort = "9";    // all keys up front
+        for (std::size_t p = 0; p < 3; ++p) c.applyStatusUpdate(p); // then drive all
+        BOOST_CHECK(c.viewIndex() != truth.viewIndex());            // de-sorted -> WRONG
+    }
+
+    // (b) THE FIX: change one part's key, drive it, repeat (interleaved).
+    {
+        Table t = make();
+        Cursor c(1, FilterSpec{}, TXCOL_STATUS, TXSORT_ASC, t.fields(), t.keys());
+        c.rebuild(t.rows.size());
+        for (std::size_t p = 0; p < 3; ++p) {
+            t.rows[p].status_sort = "9";
+            c.applyStatusUpdate(p);
+        }
+        BOOST_CHECK(c.viewIndex() == truth.viewIndex());            // matches ground truth
+        // And every accepted row appears exactly once (no duplicate absidx).
+        std::vector<std::size_t> vi(c.viewIndex().begin(), c.viewIndex().end());
+        std::sort(vi.begin(), vi.end());
+        BOOST_CHECK(std::unique(vi.begin(), vi.end()) == vi.end());
+        BOOST_CHECK_EQUAL(vi.size(), 5u);
+    }
+}
+
 // ---- positionOf: public identity-locate (PR5 rowForKey backing) -------------
 
 BOOST_AUTO_TEST_CASE(position_of_maps_absidx_to_accepted_row_or_npos)

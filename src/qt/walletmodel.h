@@ -69,6 +69,14 @@ public:
     AddressTableModel *getAddressTableModel();
     TransactionTableModel *getTransactionTableModel();
 
+    //! Last chain-tip height pushed to the GUI via the wallet event stream
+    //! (ChainTipChangedPayload), cached on the GUI thread. Lets the transaction
+    //! table derive live confirmation counts on read without reaching into core
+    //! state or taking cs_main — GUI-thread-owned, no lock, process-separation safe.
+    //! 0 until the first chain-tip event drains (callers must guard, as the count
+    //! derivation does); never blocks.
+    int getChainHeight() const { return cachedNumBlocks; }
+
     qint64 getBalance() const;
     qint64 getStake() const;
     qint64 getUnconfirmedBalance() const;

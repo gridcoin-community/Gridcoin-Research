@@ -325,8 +325,29 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
         status = tr("Confirming (%1 of %2 recommended confirmations)<br>").arg(wtx->status.depth).arg(TransactionRecord::RecommendedNumConfirmations);
         break;
     case TransactionStatus::Confirmed:
-        status = tr("Confirmed (%1 confirmations)").arg(wtx->status.depth);
+    {
+        // Derive the displayed count from the current chain height rather than the
+        // cached snapshot. status.depth was captured when the tip was
+        // status.cur_num_blocks, but a Confirmed tx is no longer in the per-tip
+        // refresh set (PR4-fix A only re-snapshots volatile rows), so the raw
+        // snapshot would freeze at the recommended-confirmations threshold. Adding
+        // how far the tip has advanced since the snapshot keeps the tooltip live with
+        // no per-row refresh — O(1) on read, the windowed model's whole point
+        // preserved. The tip height comes from WalletModel::getChainHeight(), the
+        // height PUSHED to the GUI via the wallet event stream (ChainTipChangedPayload)
+        // and cached on the GUI thread — NOT a read of the cs_main-guarded core
+        // nBestHeight: the render path must never take a core lock (process-separation
+        // invariant). Guards: the cached height is 0 until the first chain-tip event
+        // drains, and cur_num_blocks is -1 when unset — in both the delta is skipped
+        // and the snapshot stands. confirmations is int64_t to match status.depth.
+        int64_t confirmations = wtx->status.depth;
+        const int chain_height = walletModel->getChainHeight();
+        if (wtx->status.cur_num_blocks >= 0 && chain_height >= wtx->status.cur_num_blocks) {
+            confirmations += chain_height - wtx->status.cur_num_blocks;
+        }
+        status = tr("Confirmed (%1 confirmations)").arg(confirmations);
         break;
+    }
     case TransactionStatus::Conflicted:
         status = tr("Conflicted");
         break;

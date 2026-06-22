@@ -552,16 +552,27 @@ void WalletTxStore::updateTransaction(std::vector<TransactionRecord> records)
     // incomingTransaction (fresh inserts), focusTransaction (TxIDRole), indexForTxid
     // (hash) — do not depend on post-insert status freshness. Re-evaluate each cursor
     // per affected row: under a status sort a first confirmation repositions the row.
+    //
+    // Overwrite + re-drive ONE part at a time. applyStatusUpdate repositions a row
+    // via lower_bound, which needs the rest of view_index sorted; for a multi-part
+    // tx, recomputing ALL parts' keys first (then driving) would leave the
+    // not-yet-repositioned siblings mis-keyed in their old slots and break that
+    // precondition under a Status sort — producing a mis-sorted view_index and
+    // inconsistent deltas that duplicate a row in the consumer caches. Interleave to
+    // keep every untouched part at its consistent prior key/slot, exactly as
+    // applyChainTipRefresh (PR4-fix A) and applyAddressBookChange (PR4-fix C) do, and
+    // as the interleaved_reposition_to_equal_keys cursor test pins. Positions in
+    // m_records are stable across the loop (status is not part of RecordOrder).
+    // (Single-part txs are unaffected: the loop body runs once either way.)
+    //
     for (std::size_t k = 0; k < records.size(); ++k) {
         m_records[minPos + k] = records[k];
         recomputeCacheAt(minPos + k);   // refresh F-cache before the cursor drive reads it
-    }
-    updateVolatileForHash(hash);        // status may have crossed a maturity threshold (PR4-fix A)
-    for (auto& [viewId, cursor] : m_cursors) {
-        for (std::size_t p = minPos; p <= maxPos; ++p) {
-            emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(p));
+        for (auto& [viewId, cursor] : m_cursors) {
+            emitCursorDeltas(viewId, cursor.epoch(), cursor.applyStatusUpdate(minPos + k));
         }
     }
+    updateVolatileForHash(hash);        // status may have crossed a maturity threshold (PR4-fix A)
 }
 
 void WalletTxStore::applyAddressBookChange(const std::string& address, const std::string& label)
