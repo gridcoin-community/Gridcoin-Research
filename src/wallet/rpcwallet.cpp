@@ -48,6 +48,43 @@ static void accountingDeprecationCheck()
         throw runtime_error("If you want to use accounting API, staking must be disabled, add to your config file staking=0\n");
 }
 
+//!
+//! \brief Emit a one-time-per-process log warning that an account RPC is deprecated.
+//!
+//! The accounts subsystem is being retired (see issue #3086); the label RPCs
+//! (setlabel/getaddressesbylabel/listlabels) are the replacement. Used by the account RPCs
+//! that remain callable so operators get a heads-up without log spam on every call.
+//!
+static void warnAccountRpcDeprecated(const std::string& strRpc)
+{
+    static std::set<std::string> setWarned;
+    static RecursiveMutex cs_warned;
+
+    LOCK(cs_warned);
+    if (setWarned.insert(strRpc).second)
+        LogPrintf("WARNING: RPC '%s' is deprecated: the accounts subsystem is being retired. "
+                  "Use the label RPCs (setlabel/getaddressesbylabel/listlabels) instead.", strRpc);
+}
+
+//!
+//! \brief Gate an account RPC that has no balance-ledger involvement behind -enableaccounts.
+//!
+//! Unlike accountingDeprecationCheck(), this does NOT require staking to be disabled -- it is
+//! for account RPCs that only touch the address book (e.g. getaccountaddress), not the
+//! double-entry balance ledger. Always emits the deprecation warning first.
+//!
+static void accountAddressDeprecationCheck(const std::string& strRpc)
+{
+    warnAccountRpcDeprecated(strRpc);
+
+    if (!gArgs.GetBoolArg("-enableaccounts", false))
+        throw runtime_error(strprintf(
+            "The '%s' RPC is deprecated (the accounts subsystem is being retired).\n"
+            "Use getnewaddress together with setlabel instead.\n"
+            "To keep using it during the deprecation window, add enableaccounts=1 to your config file.\n",
+            strRpc));
+}
+
 std::string HelpRequiringPassphrase()
 {
     return pwalletMain->IsCrypted()
@@ -373,6 +410,8 @@ const RPCHelpMan& getaccountaddress_helpman() { return getaccountaddress_help; }
 
 UniValue getaccountaddress(const UniValue& params)
 {
+    accountAddressDeprecationCheck("getaccountaddress");
+
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
 
@@ -402,6 +441,8 @@ const RPCHelpMan& setaccount_helpman() { return setaccount_help; }
 
 UniValue setaccount(const UniValue& params)
 {
+    warnAccountRpcDeprecated("setaccount");
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -412,8 +453,10 @@ UniValue setaccount(const UniValue& params)
     if (params.size() > 1)
         strAccount = AccountFromValue(params[1]);
 
-    // Detect when changing the account of an address that is the 'unused current key' of another account:
-    if (pwalletMain->mapAddressBook.count(address))
+    // The 'unused current key' fixup below is an account-only concept (it detaches another
+    // account's current key) with no label analogue, so it only runs when accounts are
+    // explicitly enabled. Without -enableaccounts, setaccount behaves like setlabel.
+    if (gArgs.GetBoolArg("-enableaccounts", false) && pwalletMain->mapAddressBook.count(address))
     {
         string strOldAccount = pwalletMain->mapAddressBook[address].name;
         if (address == GetAccountAddress(strOldAccount))
@@ -421,6 +464,8 @@ UniValue setaccount(const UniValue& params)
     }
 
     pwalletMain->SetAddressBookName(address, strAccount);
+    pwalletMain->SetAddressBookPurpose(address,
+        (IsMine(*pwalletMain, address) != ISMINE_NO) ? "receive" : "send");
 
     return NullUniValue;
 }
@@ -442,6 +487,8 @@ const RPCHelpMan& getaccount_helpman() { return getaccount_help; }
 
 UniValue getaccount(const UniValue& params)
 {
+    warnAccountRpcDeprecated("getaccount");
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     CTxDestination address = DecodeDestination(params[0].get_str());
@@ -475,6 +522,8 @@ const RPCHelpMan& getaddressesbyaccount_helpman() { return getaddressesbyaccount
 
 UniValue getaddressesbyaccount(const UniValue& params)
 {
+    warnAccountRpcDeprecated("getaddressesbyaccount");
+
     string strAccount = AccountFromValue(params[0]);
 
     // Find all addresses that have the given account
@@ -1325,6 +1374,10 @@ const RPCHelpMan& sendfrom_helpman() { return sendfrom_help; }
 
 UniValue sendfrom(const UniValue& params)
 {
+    // sendfrom always spends against an account's ledger balance (GetAccountBalance below),
+    // so it is gated like the rest of the accounting API. Use sendtoaddress instead.
+    accountingDeprecationCheck();
+
     string strAccount = AccountFromValue(params[0]);
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -1401,6 +1454,11 @@ UniValue sendmany(const UniValue& params)
 
     if (!strAccount.empty())
         bFromAccount = true;
+
+    // `sendmany "" {...}` is the normal whole-wallet send and stays ungated. Only a real
+    // named fromaccount draws on the deprecated account-balance ledger.
+    if (bFromAccount)
+        accountingDeprecationCheck();
 
     UniValue sendTo = params[1].get_obj();
     int nMinDepth = 1;

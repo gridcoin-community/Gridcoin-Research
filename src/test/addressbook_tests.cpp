@@ -13,6 +13,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -225,6 +226,46 @@ BOOST_AUTO_TEST_CASE(listlabels_excludes_empty_and_filters_purpose)
     // Filtering by "receive" must exclude the send-purpose label.
     UniValue recv = listlabels(ArgArray({"receive"}));
     BOOST_CHECK(!LabelsContain(recv, "sendlabel"));
+}
+
+// ----- Phase C: account RPC deprecation -----
+
+// The account RPCs that have a label analogue keep working WITHOUT -enableaccounts: setaccount
+// bridges to a label (and tags purpose), getaccount returns the label, getaddressesbyaccount
+// lists the addresses. (-enableaccounts defaults off in the test fixture.)
+BOOST_AUTO_TEST_CASE(account_bridge_rpcs_still_work)
+{
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
+    const std::string addr = EncodeDestination(dest);
+
+    BOOST_CHECK_NO_THROW(setaccount(ArgArray({addr, "acct-x"})));
+    {
+        LOCK(pwalletMain->cs_wallet);
+        BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook[dest].name, "acct-x");
+        BOOST_CHECK_EQUAL(pwalletMain->mapAddressBook[dest].purpose, "receive");
+    }
+
+    BOOST_CHECK_EQUAL(getaccount(ArgArray({addr})).get_str(), "acct-x");
+
+    UniValue addrs = getaddressesbyaccount(ArgArray({"acct-x"}));
+    BOOST_REQUIRE(addrs.isArray());
+    bool found = false;
+    for (size_t i = 0; i < addrs.size(); ++i) {
+        if (addrs[i].get_str() == addr) found = true;
+    }
+    BOOST_CHECK(found);
+}
+
+// The account RPCs with no label analogue are hard-gated behind -enableaccounts, which is off
+// by default in the fixture, so they must throw. getaccountaddress uses the lighter address
+// gate; sendfrom uses the full accounting gate -- both reject before touching their params.
+BOOST_AUTO_TEST_CASE(account_only_rpcs_gated_without_flag)
+{
+    BOOST_CHECK_THROW(getaccountaddress(ArgArray({""})), std::runtime_error);
+    BOOST_CHECK_THROW(sendfrom(ArgArray({"someaccount", "dummy", "1.0"})), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
