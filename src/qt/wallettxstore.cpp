@@ -56,9 +56,24 @@ GRC::SortKey projectKeys(const TransactionRecord& r)
         r.address};
 }
 
-//! Per-tip status volatility (PR4-fix A): a record whose displayed status still
-//! advances as blocks connect. Terminal states never re-render, so they are
-//! excluded from the per-block refresh set.
+//! Per-tip status volatility (PR4-fix A): a record whose displayed status can
+//! still change as blocks connect, so it must stay in the per-block refresh set
+//! until it reaches a terminal state. Only Confirmed and Offline are terminal.
+//!
+//! Conflicted and NotAccepted are NOT terminal — a record can land in one of
+//! these states transiently and later resolve to an accepted/active state (a
+//! coinstake whose block depth/acceptance is not yet established, or a tx that
+//! briefly conflicts after a large send consumes overlapping UTXOs). The default
+//! detailed/overview filter masks inactive (Conflicted/NotAccepted) rows
+//! (show_orphans=false), so such a record is excluded from the view while in that
+//! state. If it were ALSO excluded from the refresh set, its cached status would
+//! never be re-evaluated and it could never reappear once it resolved — the row
+//! would stay hidden permanently. This surfaced as the transaction list
+//! "freezing" after a send: staking/sidestake rows show normally until a send,
+//! after which the send and the coinstakes that follow it land
+//! Conflicted/NotAccepted, get masked, and (without this) never come back.
+//! Keeping them volatile lets applyChainTipRefresh -> applyStatusUpdate flip
+//! them back into the view once they resolve.
 bool recordStatusIsVolatile(const TransactionRecord& r)
 {
     switch (r.status.status) {
@@ -68,11 +83,11 @@ bool recordStatusIsVolatile(const TransactionRecord& r)
     case TransactionStatus::Confirming:
     case TransactionStatus::Immature:
     case TransactionStatus::MaturesWarning:
+    case TransactionStatus::Conflicted:
+    case TransactionStatus::NotAccepted:
         return true;
     case TransactionStatus::Confirmed:
     case TransactionStatus::Offline:
-    case TransactionStatus::Conflicted:
-    case TransactionStatus::NotAccepted:
         return false;
     }
     return false;
