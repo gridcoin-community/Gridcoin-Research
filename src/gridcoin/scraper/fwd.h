@@ -277,6 +277,10 @@ typedef std::map<std::string, ScraperPendingBeaconEntry> ScraperPendingBeaconMap
 struct BeaconConsensus
 {
     uint256 nBlockHash;
+    //! Height of the consensus block (nBlockHash). Carried alongside the hash so the scraper can
+    //! evaluate height-gated emit behavior (e.g. IsAutoGreylistTotalCreditFixEnabled) at manifest
+    //! construction time without re-acquiring cs_main. Not serialized; in-memory only.
+    int nBlockHeight {0};
     ScraperBeaconMap mBeaconMap;
     ScraperPendingBeaconMap mPendingMap;
 

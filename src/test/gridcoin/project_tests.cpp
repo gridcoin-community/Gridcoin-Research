@@ -1484,6 +1484,114 @@ BOOST_AUTO_TEST_CASE(it_auto_greylists_correctly)
 }
 
 //!
+//! \brief Consumer-side proof of the scraper "no_records" total-credit fix (v15,
+//! IsAutoGreylistTotalCreditFixEnabled).
+//!
+//! A whitelisted project with a long, healthy, steadily-increasing total-credit history is given a single
+//! head/baseline superblock in two shapes that the scraper produces for a project whose user-statistics
+//! export returned no usable records that cycle:
+//!
+//!   * PRESENT-WITH-ZERO (pre-fix emit): the project appears in the superblock's ProjectsAllCpidTotalCredits
+//!     map with total credit 0. The auto-greylist baseline bookmark becomes 0, which is never greater than any
+//!     historical total credit, so every WAS delta is skipped and WAS collapses to 0 -> the project spuriously
+//!     meets the greylist criteria.
+//!
+//!   * ABSENT (post-fix emit): the project is omitted from the map entirely. The baseline records nullopt
+//!     (benefit-of-doubt) and WAS is computed from the real history -> the project does NOT meet the criteria.
+//!
+//! The only difference between the two runs is present-with-0 vs absent for the head superblock -- exactly the
+//! distinction the scraper gate controls. A legitimately scraped zero (no_records == false) is unaffected by
+//! the fix and is out of scope here; this test isolates the no-records pathology and its remedy.
+//!
+BOOST_AUTO_TEST_CASE(no_records_zero_baseline_does_not_collapse_was)
+{
+    // Drive the auto-greylist over a total-credit sequence (oldest first; the last entry is the baseline/head).
+    // A nullopt entry models a project omitted from ProjectsAllCpidTotalCredits; a value models a present entry.
+    // Returns {WAS as double, meets_greylist_criteria} for the head/baseline.
+    auto run = [](const std::vector<std::optional<uint64_t>>& tc_sequence) {
+        GRC::Whitelist& whitelist = GRC::GetWhitelist();
+        std::shared_ptr<GRC::AutoGreylist> auto_greylist = GRC::GetAutoGreylistCache();
+
+        whitelist.Reset();
+
+        int height = 0;
+        int64_t time = 0;
+
+        auto unit_test_blocks = std::make_shared<std::map<int, std::pair<CBlockIndex*, GRC::SuperblockPtr>>>();
+
+        AddProjectEntry(3, "autogreylist_test", "http://autogreylist.test", false, height, time, true);
+
+        CBlockIndex* whitelist_index_entry = new CBlockIndex;
+        ++height;
+        ++time;
+
+        CBlockIndex* index_ptr = whitelist_index_entry;
+        CBlockIndex* index_ptr_prev = nullptr;
+
+        for (const auto& tc : tc_sequence) {
+            auto_greylist->Reset();
+
+            index_ptr_prev = index_ptr;
+            index_ptr = new CBlockIndex;
+            index_ptr->nHeight = height;
+            index_ptr->nTime = time;
+            index_ptr->MarkAsSuperblock();
+            index_ptr->pprev = index_ptr_prev;
+
+            GRC::Superblock superblock = GRC::Superblock();
+
+            // nullopt -> omitted from the map (post-fix); a value (including 0) -> present (pre-fix when 0).
+            if (tc) {
+                superblock.m_projects_all_cpids_total_credits.m_projects_all_cpid_total_credits
+                    .insert(std::make_pair("autogreylist_test", *tc));
+            }
+
+            GRC::SuperblockPtr superblock_ptr = GRC::SuperblockPtr();
+            superblock_ptr.Replace(superblock);
+            superblock_ptr.Rebind(index_ptr);
+
+            unit_test_blocks->insert(std::make_pair(height, std::make_pair(index_ptr, superblock_ptr)));
+            auto_greylist->RefreshWithSuperblock(superblock_ptr, unit_test_blocks);
+
+            ++height;
+            ++time;
+        }
+
+        auto candidate = auto_greylist->begin()->second;
+        std::pair<double, bool> result(candidate.GetWAS().ToDouble(), candidate.m_meets_greylisting_crit);
+
+        for (auto& it : *unit_test_blocks) delete it.second.first;
+        unit_test_blocks->clear();
+        delete whitelist_index_entry;
+
+        return result;
+    };
+
+    // A healthy, steadily-increasing total-credit history: no zero-credit days, strong WAS, well past the
+    // 7-superblock grace period.
+    std::vector<std::optional<uint64_t>> healthy;
+    for (uint64_t i = 1; i <= 12; ++i) healthy.push_back(i * 1000);
+
+    // Variant A -- PRESENT-WITH-ZERO head (pre-fix): WAS collapses to 0 and the project spuriously meets the
+    // greylist criteria.
+    auto with_zero_head = healthy;
+    with_zero_head.push_back(std::optional<uint64_t>(0));
+    const auto zero_head = run(with_zero_head);
+
+    BOOST_CHECK(zero_head.first == 0.0);
+    BOOST_CHECK(zero_head.second == true);
+
+    // Variant B -- ABSENT head (post-fix): WAS is computed from the real history and the project does NOT meet
+    // the greylist criteria.
+    auto with_absent_head = healthy;
+    with_absent_head.push_back(std::optional<uint64_t>());
+    const auto absent_head = run(with_absent_head);
+
+    BOOST_CHECK(absent_head.first > 0.0);
+    BOOST_CHECK(absent_head.second == false);
+}
+
+//!
 //! \brief Snapshot's auto-greylist overlay must NOT mutate the underlying registry entries.
 //!
 //! Reproduces the consensus bug in Whitelist::Snapshot(): the override working copy at

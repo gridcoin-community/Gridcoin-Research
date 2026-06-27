@@ -627,6 +627,7 @@ BeaconConsensus GetConsensusBeaconList()
         const CBlockIndex* pMaxConsensusLadder = GetBeaconConsensusHeight();
 
         consensus.nBlockHash = pMaxConsensusLadder->GetBlockHash();
+        consensus.nBlockHeight = pMaxConsensusLadder->nHeight;
         max_time = pMaxConsensusLadder->nTime;
 
         const auto& beacon_registry = GetBeaconRegistry();
@@ -3274,6 +3275,7 @@ bool StoreBeaconList(const fs::path& file)
         LOCK(cs_StructScraperFileManifest);
 
         StructScraperFileManifest.nConsensusBlockHash = Consensus.nBlockHash;
+        StructScraperFileManifest.nConsensusBlockHeight = Consensus.nBlockHeight;
     }
 
     if (fs::exists(file))
@@ -4900,14 +4902,30 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_StructScraperFileManifest, CScraperManifest::cs_mapM
         std::map<std::string, double> total_credit_map;
         int64_t total_credit_map_timestamp = 0;
 
+        // v15 gate (consensus-block-height anchored so all scrapers flip together): at/after the activation
+        // height, exclude a project whose user-statistics export had no usable records this cycle (no_records)
+        // from the ProjectsAllCpidTotalCredits map. Such a project's all_cpid_total_credit is a spurious zero
+        // (the user-stats part itself is already excluded below at the no_records check), and emitting it as a
+        // zero total-credit entry poisons the auto-greylist WAS baseline (a zero baseline bookmark is never
+        // greater than any historical total credit, so all deltas are skipped and WAS collapses to 0). Omitting
+        // it makes the superblock carry no entry for the project, so the auto-greylist records nullopt at the
+        // baseline (benefit-of-doubt) and computes WAS from real history. Before the gate the legacy behavior
+        // is preserved so historical superblocks remain bit-identical. NOTE: a legitimately scraped zero
+        // (no_records == false) is still emitted — only the no-records case is suppressed.
+        const bool exclude_no_records_tc =
+                IsAutoGreylistTotalCreditFixEnabled(StructScraperFileManifest.nConsensusBlockHeight);
+
         for (auto const& entry : StructScraperFileManifest.mScraperFileManifest)
         {
             auto scraper_cmanifest_include_noncurrent_proj_files =
                     []() { LOCK(cs_ScraperGlobals); return SCRAPER_CMANIFEST_INCLUDE_NONCURRENT_PROJ_FILES; };
 
             // Populate the all cpid total credit map from current entries only. Keep track of the timestamps and assign
-            // the latest manifest file entry timestamp to the total_credit_map_timestamp.
-            if (entry.second.current && !entry.second.excludefromcsmanifest) {
+            // the latest manifest file entry timestamp to the total_credit_map_timestamp. Past the v15 gate, a
+            // no_records project is excluded here too (see exclude_no_records_tc above), matching the user-stats
+            // file-part exclusion in the no_records check below.
+            if (entry.second.current && !entry.second.excludefromcsmanifest
+                    && !(exclude_no_records_tc && entry.second.no_records)) {
                 total_credit_map.insert(std::make_pair(entry.second.project, entry.second.all_cpid_total_credit));
 
                 total_credit_map_timestamp = std::max(entry.second.timestamp, total_credit_map_timestamp);
@@ -6595,6 +6613,32 @@ UniValue convergencereport(const UniValue& params)
         }
 
         result.pushKV("scrapers_not_publishing", ScrapersNotPublishing);
+
+        // The list of projects that actually have a converged user-statistics part in the current convergence.
+        // This is the part-pointer map keyed by project, MINUS the four special side-channel parts (BeaconList,
+        // VerifiedBeacons, ProjectsAllCpidTotalCredits, ProjectPublicKeys), which are not BOINC projects.
+        //
+        // This is the airtight discriminator for the auto-greylist "no records" condition: a project that appears
+        // in the superblock's ProjectsAllCpidTotalCredits map (i.e. has a total-credit entry) but is ABSENT from
+        // this list had its user-statistics export come back with no usable records this cycle. Such a project's
+        // total credit is a spurious zero (its part was excluded from the manifest, but the total-credit entry was
+        // still emitted), and the greylist mitigation service uses the (PACTC-present, part-absent) signature to
+        // distinguish it from a legitimately scraped zero and pin it Active-by-Override.
+        UniValue ConvergedProjects(UniValue::VARR);
+
+        for (const auto& entry : ConvergedScraperStatsCache.Convergence.ConvergedManifestPartPtrsMap)
+        {
+            if (entry.first == "BeaconList"
+                || entry.first == "VerifiedBeacons"
+                || entry.first == "ProjectsAllCpidTotalCredits"
+                || entry.first == "ProjectPublicKeys") {
+                continue;
+            }
+
+            ConvergedProjects.push_back(entry.first);
+        }
+
+        result.pushKV("converged_projects", ConvergedProjects);
     }
 
     return result;
