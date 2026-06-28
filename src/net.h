@@ -747,7 +747,7 @@ public:
     //! false if `nonce` matches the nonce one of our own still-handshaking
     //! outbound connections sent -- i.e. the peer echoing it is ourselves --
     //! and true otherwise. Takes m_nodes_mutex internally.
-    bool CheckIncomingNonce(uint64_t nonce);
+    bool CheckIncomingNonce(uint64_t nonce) const;
 
     //! The address a peer last reported seeing us at (issue #2558 PR 9d; moved
     //! off the net global). Surfaced by the getinfo RPCs.

@@ -440,8 +440,13 @@ void CNode::PushVersion()
     // concurrent PushVersion() on another outbound connection could overwrite.
     // GetRandBytes() can't write into a std::atomic's storage directly, so go
     // through a local: it is both what we send on the wire and what we store.
+    // ProcessMessage's self-connection sentinel only fires for an incoming nonce > 1
+    // (nNonce defaults to 1 when the field is absent), so re-roll the rare {0,1} draw to
+    // keep the invariant explicit: our own nonce is always detectable as a self-connect.
     uint64_t nonce;
-    GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    do {
+        GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    } while (nonce <= 1);
     nLocalHostNonce = nonce;
 
     // Snapshot the chain height under cs_main so this method can be called
@@ -2034,7 +2039,7 @@ void CConnman::ForEachNode(const std::function<void(CNode*)>& func) const
     }
 }
 
-bool CConnman::CheckIncomingNonce(uint64_t nonce)
+bool CConnman::CheckIncomingNonce(uint64_t nonce) const
 {
     // Self-connection detection (issue #3067). The nonce is one of ours only if
     // a still-handshaking OUTBOUND connection sent it (an inbound peer echoing
