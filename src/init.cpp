@@ -1821,7 +1821,9 @@ bool AppInit2(ThreadHandlerPtr threads)
     // net threads is safe.
     g_stake_miner_thread = std::thread(ThreadStakeMiner, pwalletMain);
 
-    if (gArgs.GetBoolArg("-server", false)) StartRPCThreads();
+    const bool fStartRPC = gArgs.GetBoolArg("-server", false);
+    LogPrintf("init: -server=%d, %s RPC server\n", fStartRPC, fStartRPC ? "starting" : "skipping");
+    if (fStartRPC) StartRPCThreads();
 
     // ********************************************************* Step 13: finished
 

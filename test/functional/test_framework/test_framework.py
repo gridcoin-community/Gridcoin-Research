@@ -504,6 +504,11 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
                 start_perf=self.options.perf,
                 use_valgrind=self.options.valgrind,
             )
+            # Regression guard: every node must inherit the (already
+            # timeout_factor-scaled) self.rpc_timeout. A historical flake had nodes
+            # starting with the unscaled 60s default under --ci, so RPC-startup
+            # timeouts fired 4x too early; assert the scaled value reaches the node.
+            assert_equal(test_node_i.rpc_timeout, self.rpc_timeout)
             self.nodes.append(test_node_i)
             if not test_node_i.version_is_at_least(170000):
                 # adjust conf for pre 17

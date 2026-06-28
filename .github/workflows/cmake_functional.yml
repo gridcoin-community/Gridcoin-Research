@@ -80,3 +80,17 @@ jobs:
       # registered (ctest -R otherwise exits 0 when nothing matches).
       - name: Run functional tests
         run: ctest --test-dir build -R functional_tests --output-on-failure --no-tests=error
+
+      # On failure, keep the per-node datadirs (each holds <chain>/debug.log) so an
+      # intermittent flake -- which often vanishes on the next run -- leaves a
+      # debuggable artifact instead of only the truncated console log. test_runner.py
+      # leaves failed-test datadirs under $TMPDIR/test_runner_* (it only removes them
+      # on success).
+      - name: Upload functional test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-test-logs-${{ github.run_id }}
+          path: /tmp/test_runner_*/**/debug.log
+          if-no-files-found: ignore
+          retention-days: 7
