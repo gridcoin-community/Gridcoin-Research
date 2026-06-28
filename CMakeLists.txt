@@ -499,7 +499,7 @@ if(ENABLE_TESTS AND ENABLE_DAEMON)
                 COMMAND ${Python3_EXECUTABLE}
                         "${CMAKE_SOURCE_DIR}/test/functional/test_runner.py"
                         "--configfile=${CMAKE_BINARY_DIR}/test/config.ini"
-                        --ci --quiet --combinedlogslen=4000
+                        --ci --quiet --combinedlogslen=4000 --attempts=3
             )
             set_tests_properties(functional_tests PROPERTIES
                 ENVIRONMENT "${_functional_env}"

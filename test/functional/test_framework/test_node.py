@@ -225,6 +225,12 @@ class TestNode():
         """Sets up an RPC connection to the gridcoinresearchd process. Returns False if unable to connect."""
         # Poll at a rate of four times per second
         poll_per_s = 4
+        # Track the most recent connection failure so that, if we time out, the
+        # assertion reports *why* the daemon never answered. The decisive datum
+        # for the RPC-startup flake is ECONNREFUSED (nothing listening on the RPC
+        # port) vs a connect that succeeds but never returns (listening but not
+        # serving) vs -28 in-warmup. See test_runner.py / the hardening notes.
+        last_failure = None
         for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
                 raise FailedToStartError(self._node_msg(
@@ -254,13 +260,15 @@ class TestNode():
             except JSONRPCException as e:  # Initialization phase
                 # -28 RPC in warmup
                 # -342 Service unavailable, RPC server started but is shutting down due to error
+                last_failure = "JSONRPC code {}".format(e.error['code'])
                 if e.error['code'] != -28 and e.error['code'] != -342:
                     raise  # unknown JSON RPC exception
             except ConnectionResetError:
                 # This might happen when the RPC server is in warmup, but shut down before the call to getblockcount
                 # succeeds. Try again to properly raise the FailedToStartError
-                pass
+                last_failure = "ConnectionResetError"
             except OSError as e:
+                last_failure = "OSError errno {} ({})".format(e.errno, errno.errorcode.get(e.errno, "?"))
                 if e.errno == errno.ETIMEDOUT:
                     pass  # Treat identical to ConnectionResetError
                 elif e.errno == errno.ECONNREFUSED:
@@ -268,10 +276,13 @@ class TestNode():
                 else:
                     raise  # unknown OS error
             except ValueError as e:  # cookie file not found and no rpcuser or rpcpassword; gridcoinresearchd is still starting
+                last_failure = "ValueError: {}".format(e)
                 if "No RPC credentials" not in str(e):
                     raise
             time.sleep(1.0 / poll_per_s)
-        self._raise_assertion_error("Unable to connect to gridcoinresearchd after {}s".format(self.rpc_timeout))
+        self._raise_assertion_error(
+            "Unable to connect to gridcoinresearchd after {}s (last failure: {})".format(
+                self.rpc_timeout, last_failure))
 
     def wait_for_cookie_credentials(self):
         """Ensures auth cookie credentials can be read, e.g. for testing CLI with -rpcwait before RPC connection is up."""

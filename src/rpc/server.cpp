@@ -44,6 +44,11 @@ static std::string strRPCUserColonPass;
 static ioContext* rpc_io_service = nullptr;
 static ssl::context* rpc_ssl_context = nullptr;
 static boost::thread_group* rpc_worker_group = nullptr;
+// Acceptors created by StartRPCThreads. Retained so (a) startup can log the
+// bound endpoints and (b) StopRPCThreads can close() them before tearing down
+// the io_service, which prevents the shutdown hang on an open keep-alive socket
+// that authproxy.py works around on the client side.
+static std::vector<boost::shared_ptr<boost::asio::ip::tcp::acceptor>> rpc_acceptors;
 
 const UniValue emptyobj(UniValue::VOBJ);
 
@@ -648,6 +653,11 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
 
 void StartRPCThreads()
 {
+    // Logged unconditionally: the absence of this line in a node's debug.log
+    // distinguishes "RPC server never started" from "started but not serving"
+    // when diagnosing functional-test RPC-startup timeouts.
+    LogPrintf("StartRPCThreads: entered\n");
+
     strRPCUserColonPass = gArgs.GetArg("-rpcuser", "") + ":" + gArgs.GetArg("-rpcpassword", "");
 
     if ((gArgs.GetArg("-rpcpassword", "") == "" ||
@@ -723,6 +733,8 @@ void StartRPCThreads()
         acceptor->listen(socket_base::max_listen_connections);
 
         RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+        rpc_acceptors.push_back(acceptor);
+        LogPrintf("RPC: bound and listening on [%s]:%u\n", endpoint.address().to_string(), endpoint.port());
 
         fListening = true;
     }
@@ -746,6 +758,8 @@ void StartRPCThreads()
             acceptor->listen(socket_base::max_listen_connections);
 
             RPCListen(acceptor, *rpc_ssl_context, fUseSSL);
+            rpc_acceptors.push_back(acceptor);
+            LogPrintf("RPC: bound and listening on %s:%u\n", endpoint.address().to_string(), endpoint.port());
 
             fListening = true;
         }
@@ -757,14 +771,22 @@ void StartRPCThreads()
 
     if (!fListening)
     {
+        // Log before the message box: ThreadSafeMessageBox has no UI in daemon
+        // mode, so without this the failure reason never reaches debug.log and
+        // the node exits (via StartShutdown) with no diagnosable cause.
+        LogPrintf("ERROR: StartRPCThreads: RPC server failed to listen: %s\n", strerr);
         uiInterface.ThreadSafeMessageBox(strerr, _("Error"), CClientUIInterface::BTN_OK | CClientUIInterface::MODAL);
         StartShutdown();
         return;
     }
 
+    const int nRPCThreads = gArgs.GetArg("-rpcthreads", 4);
     rpc_worker_group = new boost::thread_group();
-    for (int i = 0; i < gArgs.GetArg("-rpcthreads", 4); i++)
+    for (int i = 0; i < nRPCThreads; i++)
         rpc_worker_group->create_thread(boost::bind(&ioContext::run, rpc_io_service));
+
+    LogPrintf("RPC server started: %u acceptor(s), %d worker thread(s)\n",
+              static_cast<unsigned>(rpc_acceptors.size()), nRPCThreads);
 }
 
 void StopRPCThreads()
@@ -775,6 +797,19 @@ void StopRPCThreads()
         LogPrintf("RPC IO server not started\n");
         return;
     }
+
+    // Close the listening acceptors before stopping the io_service. This makes
+    // any pending async_accept complete with operation_aborted (RPCAcceptHandler
+    // then sees !is_open() and does not re-arm), so no newly-accepted connection
+    // can wedge the join_all() below. Without this, an open keep-alive socket can
+    // hang shutdown -- the exact failure authproxy.py works around client-side.
+    for (auto& acc : rpc_acceptors) {
+        if (acc && acc->is_open()) {
+            boost::system::error_code ec;
+            acc->close(ec);
+        }
+    }
+    rpc_acceptors.clear();
 
     rpc_io_service->stop();
     if (rpc_worker_group != nullptr) {

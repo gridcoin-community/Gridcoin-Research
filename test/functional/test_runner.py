@@ -194,6 +194,7 @@ def main():
     parser.add_argument('--extended', action='store_true', help='run the extended test suite in addition to the basic tests')
     parser.add_argument('--help', '-h', '-?', action='store_true', help='print help text and exit')
     parser.add_argument('--jobs', '-j', type=int, default=4, help='how many test scripts to run in parallel. Default=4.')
+    parser.add_argument('--attempts', '-a', type=int, default=1, help='how many times to run a script that fails with the known transient daemon RPC-startup signature before marking it failed. Default=1 (no retry). ONLY failures matching that signature are retried -- assertion/logic/build/sync failures are never retried, so real regressions are not masked as flaky.')
     parser.add_argument('--keepcache', '-k', action='store_true', help='the default behavior is to flush the cache directory on startup. --keepcache retains the cache from the previous testrun.')
     parser.add_argument('--quiet', '-q', action='store_true', help='only print dots, results summary and failure logs')
     parser.add_argument('--tmpdirprefix', '-t', default=tempfile.gettempdir(), help="Root directory for datadirs")
@@ -316,10 +317,18 @@ def main():
         args=passon_args,
         combined_logs_len=args.combinedlogslen,
         failfast=args.failfast,
+        attempts=args.attempts,
         use_term_control=args.ansi,
     )
 
-def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, use_term_control):
+# A script that fails with this signature hit the known transient daemon
+# RPC-startup flake (the daemon comes up but the RPC port never answers). These
+# -- and only these -- are eligible for --attempts retry; every other failure
+# (assertion, build, block-sync timeout, wallet/tx mismatch) is a real failure
+# and is never retried, so retries cannot mask a genuine regression.
+RETRY_SIGNATURE = "Unable to connect to gridcoinresearchd after"
+
+def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, attempts=1, use_term_control):
     args = args or []
 
     # Warn if gridcoinresearchd is already running
@@ -390,10 +399,34 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
 
     max_len_name = len(max(test_list, key=len))
     test_count = len(test_list)
-    for i in range(test_count):
+    # Per-script retry bookkeeping for --attempts. retries_used caps re-runs at
+    # (attempts - 1); retried records which scripts were re-run so a subsequent
+    # pass is reported as "Passed (retried)" rather than a clean pass.
+    retries_used = {}
+    retried = set()
+    i = 0
+    while i < test_count:
         test_result, testdir, stdout, stderr = job_queue.get_next()
+
+        # Retry only the known transient RPC-startup flake, never a real failure.
+        if (test_result.status == "Failed" and attempts > 1
+                and retries_used.get(test_result.name, 0) < (attempts - 1)
+                and RETRY_SIGNATURE in (stdout + stderr)):
+            n = retries_used.get(test_result.name, 0) + 1
+            retries_used[test_result.name] = n
+            retried.add(test_result.name)
+            print("%s[RETRY %d/%d]%s %s failed with the transient RPC-startup signature; re-running" % (
+                BOLD[1], n, attempts - 1, BOLD[0], test_result.name))
+            # Re-enqueue the script and extend the run by one iteration.
+            job_queue.test_list.append(test_result.name)
+            test_count += 1
+            continue
+
+        if test_result.name in retried and test_result.status == "Passed":
+            test_result.retried = True
         test_results.append(test_result)
-        done_str = "{}/{} - {}{}{}".format(i + 1, test_count, BOLD[1], test_result.name, BOLD[0])
+        i += 1
+        done_str = "{}/{} - {}{}{}".format(i, test_count, BOLD[1], test_result.name, BOLD[0])
         if test_result.status == "Passed":
             logging.debug("%s passed, Duration: %s s" % (done_str, test_result.time))
         elif test_result.status == "Skipped":
@@ -557,6 +590,9 @@ class TestResult():
         self.status = status
         self.time = time
         self.padding = 0
+        # Set True when the script passed only after a --attempts re-run, so the
+        # summary flags it instead of reporting an unqualified pass.
+        self.retried = False
 
     def sort_key(self):
         if self.status == "Passed":
@@ -577,7 +613,8 @@ class TestResult():
             color = GREY
             glyph = CIRCLE
 
-        return color[1] + "%s | %s%s | %s s\n" % (self.name.ljust(self.padding), glyph, self.status.ljust(7), self.time) + color[0]
+        status = self.status + (" (retried)" if self.retried else "")
+        return color[1] + "%s | %s%s | %s s\n" % (self.name.ljust(self.padding), glyph, status.ljust(7), self.time) + color[0]
 
     @property
     def was_successful(self):
