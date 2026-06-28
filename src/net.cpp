@@ -2153,8 +2153,11 @@ void CConnman::RelayAddress(const CAddress& addr, bool fReachable)
     for (auto const& pnode : m_nodes)
     {
         CNode* pnodeRaw = pnode.get();
-        unsigned int nPointer;
-        memcpy(&nPointer, &pnodeRaw, sizeof(nPointer));
+        // Mix node identity into the relay selection. Cast the pointer value to an
+        // integer rather than memcpy'ing its object representation: well-defined, and
+        // (intentionally) the same low-order value as the old memcpy on this platform,
+        // so relay-node selection is unchanged.
+        unsigned int nPointer = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(pnodeRaw));
         uint256 hashKey = ArithToUint256(UintToArith256(hashRand) ^ nPointer);
         hashKey = Hash(hashKey);
         mapMix.insert(make_pair(hashKey, pnodeRaw));
