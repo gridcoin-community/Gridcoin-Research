@@ -305,6 +305,7 @@ public:
         consensus.ProjectV2Height = 0;
         consensus.PollMultiAddressHeight = 0;
         consensus.AutoGreylistAuditHeight = 0;
+        consensus.AutoGreylistDeepCopyHeight = 0;
         consensus.AutoGreylistTotalCreditFixHeight = 0;
         consensus.DefaultConstantBlockReward = 10 * COIN;
         consensus.ConstantBlockRewardFloor = 0;

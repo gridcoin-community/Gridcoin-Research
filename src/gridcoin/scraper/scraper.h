@@ -107,8 +107,9 @@ struct ScraperFileManifest
     uint256 nFileManifestMapHash;
     uint256 nConsensusBlockHash;
     //! Height of nConsensusBlockHash. In-memory only (refreshed each cycle in StoreBeaconList alongside
-    //! nConsensusBlockHash); not part of the persisted file-manifest CSV. Read lock-free under
-    //! cs_StructScraperFileManifest at manifest emit time to drive height-gated emit behavior.
+    //! nConsensusBlockHash); not part of the persisted file-manifest CSV. Read under
+    //! cs_StructScraperFileManifest at manifest emit time -- no cs_main reacquire needed -- to drive
+    //! height-gated emit behavior.
     int nConsensusBlockHeight {0};
     int64_t timestamp = 0;
 };
