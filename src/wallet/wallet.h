@@ -16,6 +16,7 @@
 #include "consensus/tx_verify.h"
 #include "gridcoin/staking/status.h"
 #include "main.h"
+#include "validationinterface.h"
 #include "key.h"
 #include "keystore.h"
 #include "primitives/transaction.h"
@@ -90,7 +91,7 @@ public:
 /** A CWallet is an extension of a keystore, which also maintains a set of transactions and balances,
  * and provides the ability to create new transactions.
  */
-class CWallet : public CCryptoKeyStore
+class CWallet : public CCryptoKeyStore, public CValidationInterface
 {
 private:
     bool SelectCoins(int64_t nTargetValue, unsigned int nSpendTime,
@@ -293,14 +294,16 @@ public:
         return SyncTransaction(MakeTransactionRef(tx), state, update_tx, false);
     }
 
-    // -- Validation interface callbacks ---------------------------------------
-    // Invoked by the validation/mempool layer with cs_main held; each acquires
-    // cs_wallet internally, so callers must hold cs_main but not cs_wallet.
-    void transactionAddedToMempool(const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
-    void blockConnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
-    void transactionRemovedFromMempool(const CTransactionRef& tx,
-                                      MemPoolRemovalReason reason) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
-    void blockDisconnected(const CBlock& block, int height) EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    // -- CValidationInterface callbacks ---------------------------------------
+    // Invoked by the validation/mempool layer through GetMainSignals() with
+    // cs_main held; each acquires cs_wallet internally, so callers must hold
+    // cs_main but not cs_wallet. Override the (UpperCamelCase) CValidationInterface
+    // virtuals.
+    void TransactionAddedToMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void BlockConnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void TransactionRemovedFromMempool(const CTransactionRef& tx,
+                                      MemPoolRemovalReason reason) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    void BlockDisconnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
 
     // -- Conflict tracking & abandonment -------------------------------------
     /** Return txids that spend the same inputs as @p txid. */
@@ -315,7 +318,7 @@ public:
      *  reads mapBlockIndex / pindexBest via decomposeTransaction. */
     bool AbandonTransaction(const uint256& txid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-    /** @deprecated Use SyncTransaction or blockConnected/transactionAddedToMempool instead.
+    /** @deprecated Use SyncTransaction or BlockConnected/TransactionAddedToMempool instead.
      *  Public compatibility wrapper with the legacy signature. */
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock,
                                   bool fUpdate = false, bool fFindBlock = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

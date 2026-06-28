@@ -258,6 +258,12 @@ void Shutdown(void* parg)
         GRC::CloseResearcherRegistryFile();
 
         fs::remove(GetPidFile(gArgs));
+        // Defensive/idiomatic: a subscriber unregisters itself before deletion. In the
+        // current teardown order this is a no-op -- GetMainSignals().UnregisterBackground-
+        // SignalScheduler() earlier in Shutdown() already reset CMainSignals' internals and
+        // disconnected every subscriber -- but keeping it makes the wallet's lifetime
+        // self-contained and load-bearing again if that ordering is ever changed.
+        UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // close transaction database to prevent lock issue on restart
@@ -1857,6 +1863,11 @@ bool AppInit2(ThreadHandlerPtr threads)
     // synchronously today, but CallFunctionInValidationInterfaceQueue runs on
     // this scheduler thread.
     GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
+
+    // Subscribe the wallet to validation/mempool events now that the signal
+    // layer is wired (issue #3030, workstream B). The wallet also stays in
+    // setpwalletRegistered for the legacy notifications not yet migrated.
+    RegisterValidationInterface(pwalletMain);
 
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();

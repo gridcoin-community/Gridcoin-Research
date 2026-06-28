@@ -5,6 +5,7 @@
 
 #include "amount.h"
 #include "chainparams.h"
+#include "validationinterface.h"
 #include "consensus/merkle.h"
 #include "consensus/tx_verify.h"
 #include "gridcoin/voting/registry.h"
@@ -483,16 +484,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         pool.addUnchecked(hash, tx);
     }
 
-    // Notify registered wallets that transaction was added to mempool
-    // This enables incoming transactions to appear immediately with 0 confirmations
-    {
-        LOCK(cs_setpwalletRegistered);
-        CTransactionRef ptx = MakeTransactionRef(tx);
-        for (auto const& pwallet : setpwalletRegistered)
-        {
-            pwallet->transactionAddedToMempool(ptx);
-        }
-    }
+    // Notify the validation-signal layer that the transaction was added to
+    // mempool, so subscribers (e.g. the wallet) can show it immediately with
+    // 0 confirmations. Emitted synchronously under cs_main (held on entry),
+    // preserving the cs_main -> signals -> cs_wallet order.
+    GetMainSignals().TransactionAddedToMempool(MakeTransactionRef(tx));
 
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
