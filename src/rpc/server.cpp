@@ -31,6 +31,7 @@
 #include <stdexcept>
 
 #include <memory>
+#include <vector>
 
 using namespace std;
 using namespace boost;

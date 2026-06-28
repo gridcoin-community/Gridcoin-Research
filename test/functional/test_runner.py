@@ -517,13 +517,22 @@ class TestHandler:
         self.num_running = 0
         self.jobs = []
         self.use_term_control = use_term_control
+        # Monotonic per-spawn portseed source. A --attempts retry re-enqueues the
+        # script name; deriving portseed from len(self.test_list) could then hand the
+        # retry the same portseed its failed run used, colliding with that run's kept
+        # testdir (created with exist_ok=False) and risking a port clash with a still-
+        # running job. A never-reused counter avoids both. util.p2p_port takes portseed
+        # modulo the port range, so an unbounded counter stays in range, and consecutive
+        # values keep concurrent jobs' port blocks non-overlapping just as before.
+        self.next_portseed = 0
 
     def get_next(self):
         while self.num_running < self.num_jobs and self.test_list:
             # Add tests
             self.num_running += 1
             test = self.test_list.pop(0)
-            portseed = len(self.test_list)
+            portseed = self.next_portseed
+            self.next_portseed += 1
             portseed_arg = ["--portseed={}".format(portseed)]
             log_stdout = tempfile.SpooledTemporaryFile(max_size=2**16)
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
