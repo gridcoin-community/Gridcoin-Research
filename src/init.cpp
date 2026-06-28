@@ -258,6 +258,11 @@ void Shutdown(void* parg)
         GRC::CloseResearcherRegistryFile();
 
         fs::remove(GetPidFile(gArgs));
+        // Defensive/idiomatic: a subscriber unregisters itself before deletion. In the
+        // current teardown order this is a no-op -- GetMainSignals().UnregisterBackground-
+        // SignalScheduler() earlier in Shutdown() already reset CMainSignals' internals and
+        // disconnected every subscriber -- but keeping it makes the wallet's lifetime
+        // self-contained and load-bearing again if that ordering is ever changed.
         UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
