@@ -135,6 +135,15 @@ void UnregisterAllValidationInterfaces()
 
 void CallFunctionInValidationInterfaceQueue(std::function<void()> func)
 {
+    // The background scheduler is only present between RegisterBackgroundSignalScheduler()
+    // (AppInit2) and UnregisterBackgroundSignalScheduler() (shutdown). Outside that window
+    // -- early init, unit tests, or late shutdown -- there is no queue and therefore no prior
+    // background callbacks to order against, so run synchronously rather than dereferencing a
+    // null m_internals (which would crash).
+    if (!g_signals.m_internals) {
+        func();
+        return;
+    }
     g_signals.m_internals->m_schedulerClient.AddToProcessQueue(std::move(func));
 }
 

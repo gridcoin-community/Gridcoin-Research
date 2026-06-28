@@ -19,7 +19,14 @@ class CValidationInterface;
 struct MainSignalsInstance;
 enum class MemPoolRemovalReason;
 
-/** Register subscriber to receive updates from validation and mempool. */
+/** Register subscriber to receive updates from validation and mempool.
+ *
+ * Ordering requirement: the CMainSignals internals are created by
+ * GetMainSignals().RegisterBackgroundSignalScheduler(), called once in AppInit2 after
+ * g_scheduler exists. Registering (or unregistering) a subscriber BEFORE that call -- or
+ * AFTER UnregisterBackgroundSignalScheduler() at shutdown -- is a silent no-op: the
+ * subscriber is never connected and receives no callbacks. Always register subscribers
+ * after the background signal scheduler has been wired. */
 void RegisterValidationInterface(CValidationInterface* callbacks);
 /** Unregister a subscriber previously registered with RegisterValidationInterface. */
 void UnregisterValidationInterface(CValidationInterface* callbacks);
