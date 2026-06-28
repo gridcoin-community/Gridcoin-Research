@@ -13,6 +13,7 @@
 #include "index/txindex.h"
 #include "util.h"
 #include "net.h"
+#include "node/blockstorage.h"
 #include "gridcoin/block_index.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/cpid.h"
@@ -95,9 +96,6 @@ extern unsigned int nDerivationMethodIndex;
 
 extern bool fEnforceCanonical;
 
-// Minimum disk space required - used in CheckDiskSpace()
-static const uint64_t nMinDiskSpace = 52428800;
-
 //! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
 //! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
 //! model on their respective threads. std::string assignment / copy is not
@@ -117,9 +115,8 @@ void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
-FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
-FILE* AppendBlockFile(unsigned int& nFileRet);
+// Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
+// LoadExternalBlockFile) live in node/blockstorage.h, included above.
 // Takes cs_main internally; callers MUST NOT hold cs_main when calling
 // (the internal LOCK would deadlock under non-recursive locking; cs_main
 // is currently recursive but the annotation contract documents the intent).
@@ -128,8 +125,6 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
 // ProcessMessages / SendMessages moved to net_processing.h (issue #2558 PR 2a).
-bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
-                           unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 //! Abandonment-style rewind of the chain to `pindex_target`. Updates the in-memory chain
 //! globals (pindexBest, nBestHeight, hashBestChain, g_chain_trust, sync time) and persists
