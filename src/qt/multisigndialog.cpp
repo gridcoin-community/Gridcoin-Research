@@ -14,6 +14,7 @@
 #include <psgt.h>
 #include <key_io.h>
 #include <main.h>
+#include <script/interpreter.h>
 #include <script/standard.h>
 #include <streams.h>
 #include <sync.h>
@@ -89,10 +90,19 @@ QString MultisignPSGTDialog::DescribePSGT(const PartiallySignedTransaction& psgt
         {
             const PSGTInput& input = psgt.inputs[i];
 
+            // Only trust the amount if the provided previous transaction actually
+            // matches this input's prevout (the same guard AnalyzePSGT uses); a
+            // mismatched non_witness_utxo would otherwise show a bogus value at
+            // the exact moment the user is deciding what to sign.
             if (!input.non_witness_utxo.IsNull()
-                && txin.prevout.n < input.non_witness_utxo.vout.size())
+                && txin.prevout.n < input.non_witness_utxo.vout.size()
+                && input.non_witness_utxo.GetHash() == txin.prevout.hash)
             {
                 amount = FormatAmount(input.non_witness_utxo.vout[txin.prevout.n].nValue);
+            }
+            else if (!input.non_witness_utxo.IsNull())
+            {
+                amount = tr("(prev tx mismatch)");
             }
 
             if (PSGTInputSigned(input))
@@ -127,20 +137,25 @@ QString MultisignPSGTDialog::DescribePSGT(const PartiallySignedTransaction& psgt
         if (i < psgt.inputs.size() && !psgt.inputs[i].redeem_script.empty())
         {
             const CScript& redeem = psgt.inputs[i].redeem_script;
-            const QString image = QString::fromStdString(EncodeDestination(CScriptID(redeem)));
+            const CScriptID scriptID(redeem);
+            const QString image = QString::fromStdString(EncodeDestination(scriptID));
+            // Raw Hash160 is what a Phase II pool keys on; show it next to the
+            // friendlier P2SH address so the two are directly comparable.
+            const QString imageHash = QString::fromStdString(scriptID.ToString());
 
             txnouttype rtype;
             std::vector<std::vector<unsigned char>> rsols;
             if (Solver(redeem, rtype, rsols) && rtype == TX_MULTISIG && rsols.size() >= 3)
             {
-                out += tr("        multisig %1-of-%2   image P2SH:%3\n")
+                out += tr("        multisig %1-of-%2   image P2SH:%3 (hash %4)\n")
                            .arg((int)rsols.front()[0])
                            .arg((int)rsols.size() - 2)
-                           .arg(image);
+                           .arg(image)
+                           .arg(imageHash);
             }
             else
             {
-                out += tr("        image P2SH:%1\n").arg(image);
+                out += tr("        image P2SH:%1 (hash %2)\n").arg(image).arg(imageHash);
             }
         }
     }
@@ -250,11 +265,50 @@ bool MultisignPSGTDialog::walletHasSignature(const PartiallySignedTransaction& p
     if (!pwalletMain)
         return false;
 
-    for (const PSGTInput& input : psgt.inputs)
+    for (unsigned int i = 0; i < psgt.inputs.size() && i < psgt.tx.vin.size(); ++i)
     {
-        for (const auto& sig : input.partial_sigs)
+        const PSGTInput& input = psgt.inputs[i];
+        if (input.partial_sigs.empty())
+            continue;
+
+        // We must know what was signed, so require the provided previous
+        // transaction to actually match the prevout (the AnalyzePSGT guard) and
+        // verify against the real scriptPubKey.
+        const COutPoint& prevout = psgt.tx.vin[i].prevout;
+        if (input.non_witness_utxo.IsNull()
+            || prevout.n >= input.non_witness_utxo.vout.size()
+            || input.non_witness_utxo.GetHash() != prevout.hash)
+            continue;
+
+        // P2SH multisig signatures are made over the redeem script.
+        CScript signScript = input.non_witness_utxo.vout[prevout.n].scriptPubKey;
+        if (signScript.IsPayToScriptHash())
         {
-            if (pwalletMain->HaveKey(sig.first))
+            if (input.redeem_script.empty())
+                continue;
+            signScript = input.redeem_script;
+        }
+
+        // Map each partial signature back to its multisig pubkey and verify the
+        // bytes cryptographically. Presence under an owned CKeyID is not enough:
+        // a crafted or combined PSGT could carry arbitrary bytes under our key id,
+        // and Phase II's pool-acceptance precondition (#2910) is >=1 *valid* sig.
+        txnouttype scriptType;
+        std::vector<std::vector<unsigned char>> vSolutions;
+        if (!Solver(signScript, scriptType, vSolutions) || scriptType != TX_MULTISIG)
+            continue;
+
+        for (unsigned int j = 1; j + 1 < vSolutions.size(); ++j)
+        {
+            const CPubKey pubkey(vSolutions[j]);
+            if (!pubkey.IsValid() || !pwalletMain->HaveKey(pubkey.GetID()))
+                continue;
+
+            auto it = input.partial_sigs.find(pubkey.GetID());
+            if (it == input.partial_sigs.end())
+                continue;
+
+            if (CheckSig(it->second, vSolutions[j], signScript, CTransaction(psgt.tx), i))
                 return true;
         }
     }
@@ -401,6 +455,16 @@ void MultisignPSGTDialog::on_signButton_clicked()
         }
     }
 
+    // Inputs that cannot be signed yet because they still lack updater data
+    // (the previous transaction or a P2SH redeem script). Distinct from both
+    // "no key" and a genuine signing failure, so call them out separately.
+    unsigned int needs_data = 0;
+    for (const PSGTInputAnalysis& ia : analysis.inputs)
+    {
+        if (!ia.is_final && (!ia.has_utxo || ia.missing_redeem_script))
+            ++needs_data;
+    }
+
     // The signed PSGT becomes the new working PSGT so it can be combined/finalized.
     setWorking(psgt);
     showDecoded(psgt);
@@ -408,16 +472,17 @@ void MultisignPSGTDialog::on_signButton_clicked()
     QString msg = tr("Signed %1 input(s) with this wallet. Complete: %2.")
                       .arg(signed_now)
                       .arg(complete ? tr("yes") : tr("no"));
+    if (needs_data > 0)
+    {
+        msg += " " + tr("%n input(s) still need a previous transaction or redeem "
+                        "script before they can be signed.", nullptr, needs_data);
+    }
     if (could_not_sign > 0)
     {
         msg += " " + tr("%n input(s) the wallet holds keys for could not be signed.",
                         nullptr, could_not_sign);
-        setStatus(msg, true);
     }
-    else
-    {
-        setStatus(msg, !complete);
-    }
+    setStatus(msg, could_not_sign > 0 || !complete);
 }
 
 void MultisignPSGTDialog::on_combineButton_clicked()

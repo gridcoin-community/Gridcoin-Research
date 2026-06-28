@@ -55,9 +55,10 @@ private:
     //! entry point a future pool source would call.
     void setWorking(const PartiallySignedTransaction& psgt);
 
-    //! True iff some input carries a partial signature from a key this wallet
-    //! owns -- the ">=1 of my signatures present" precondition a future Phase II
-    //! "submit to pool" action (#2910) will gate on.
+    //! True iff some input carries a cryptographically valid partial signature
+    //! from a key this wallet owns -- verified against the input's sighash, not
+    //! merely present under an owned key id. This is the ">=1 valid signature"
+    //! precondition a future Phase II "submit to pool" action (#2910) will gate on.
     bool walletHasSignature(const PartiallySignedTransaction& psgt) const;
 
     //! Render psgt into the read-only decoded view (decode plus, when the wallet

@@ -532,6 +532,21 @@ BOOST_AUTO_TEST_CASE(multisig_p2sh_combine_roundtrip)
     BOOST_CHECK(SignPSGTInput(ks2, psgt2, 0));
     BOOST_CHECK_EQUAL(psgt2.inputs[0].partial_sigs.size(), 1u);
 
+    // The real GUI flow exchanges PSGTs as base64 between co-signers, so a
+    // co-signer's redeem_script (auto-filled from their wallet) must survive
+    // serialization for the combining party to finalize. Round-trip signer 2's
+    // PSGT through base64 before combining and confirm the field is preserved.
+    {
+        std::vector<unsigned char> ser = SerializePSGT(psgt2);
+        std::string b64 = EncodeBase64(ser.data(), ser.size());
+        PartiallySignedTransaction psgt2_decoded;
+        std::string error;
+        BOOST_REQUIRE(DecodeRawPSGT(psgt2_decoded, b64, error));
+        BOOST_CHECK(psgt2_decoded.inputs[0].redeem_script == redeem);
+        BOOST_CHECK_EQUAL(psgt2_decoded.inputs[0].partial_sigs.size(), 1u);
+        psgt2 = psgt2_decoded;
+    }
+
     // Neither single signer's PSGT can finalize on its own (1 of 2 required).
     {
         PartiallySignedTransaction lone = psgt1;
@@ -541,11 +556,11 @@ BOOST_AUTO_TEST_CASE(multisig_p2sh_combine_roundtrip)
 
     // Combine the two independently-signed PSGTs, then finalize and extract.
     PartiallySignedTransaction merged;
-    BOOST_CHECK(CombinePSGTs(merged, {psgt1, psgt2}));
-    BOOST_CHECK_EQUAL(merged.inputs[0].partial_sigs.size(), 2u);
+    BOOST_REQUIRE(CombinePSGTs(merged, {psgt1, psgt2}));
+    BOOST_REQUIRE_EQUAL(merged.inputs[0].partial_sigs.size(), 2u);
 
     CMutableTransaction result;
-    BOOST_CHECK(FinalizeAndExtractPSGT(merged, result));
+    BOOST_REQUIRE(FinalizeAndExtractPSGT(merged, result));
 
     // The extracted scriptSig (OP_0 <sig> <sig> <redeemScript>) must satisfy the
     // P2SH output under standard flags (which include SCRIPT_VERIFY_P2SH).
