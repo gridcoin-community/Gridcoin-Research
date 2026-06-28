@@ -433,22 +433,21 @@ void CNode::PushVersion()
     int64_t nTime = GetAdjustedTime();
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(LookupNumeric("0.0.0.0", 0)));
     CAddress addrMe = CAddress(CService(), nLocalServices);
-    // GetRandBytes() writes raw bytes into the provided buffer; that's
-    // incompatible with memcpy'ing into a std::atomic's storage directly,
-    // so go through a local and store atomically.
-    //
-    // The local `nonce` is what we send on the wire below -- the atomic
-    // store is only to publish it to ProcessMessage's self-connection
-    // sentinel check. Reading the atomic back here for the PushMessage
-    // payload would lose the value to a concurrent PushVersion() on
-    // another outbound connection that ran between our store() and
-    // load(). (The single-global-nonce design is still racy across
-    // multiple simultaneous outbound connections versus their respective
-    // self-connection echoes -- a separate per-connection-nonce follow-up
-    // is the proper fix; see PR #2957 commit message for context.)
+    // Generate this connection's VERSION nonce once and remember it on the
+    // CNode (issue #3067). Self-connection detection (CheckIncomingNonce)
+    // compares an incoming VERSION's nonce against every connection's own nonce,
+    // so each connection carries its own rather than sharing one global that a
+    // concurrent PushVersion() on another outbound connection could overwrite.
+    // GetRandBytes() can't write into a std::atomic's storage directly, so go
+    // through a local: it is both what we send on the wire and what we store.
+    // ProcessMessage's self-connection sentinel only fires for an incoming nonce > 1
+    // (nNonce defaults to 1 when the field is absent), so re-roll the rare {0,1} draw to
+    // keep the invariant explicit: our own nonce is always detectable as a self-connect.
     uint64_t nonce;
-    GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
-    if (g_connman) g_connman->SetLocalHostNonce(nonce);
+    do {
+        GetRandBytes({(unsigned char*)&nonce, sizeof(nonce)});
+    } while (nonce <= 1);
+    nLocalHostNonce = nonce;
 
     // Snapshot the chain height under cs_main so this method can be called
     // from CNode construction (socket handler thread, no outer locks held)
@@ -2038,6 +2037,21 @@ void CConnman::ForEachNode(const std::function<void(CNode*)>& func) const
     for (const auto& pnode : m_nodes) {
         func(pnode);
     }
+}
+
+bool CConnman::CheckIncomingNonce(uint64_t nonce) const
+{
+    // Self-connection detection (issue #3067). The nonce is one of ours only if
+    // a still-handshaking OUTBOUND connection sent it (an inbound peer echoing
+    // our nonce is the loopback we want to catch; established connections have
+    // moved past the handshake). Restricting to !fInbound && !fSuccessfullyConnected
+    // also makes a 1-in-2^64 collision with a genuine peer's nonce harmless.
+    LOCK(m_nodes_mutex);
+    for (const auto& pnode : m_nodes) {
+        if (!pnode->fSuccessfullyConnected && !pnode->fInbound && pnode->nLocalHostNonce == nonce)
+            return false;
+    }
+    return true;
 }
 
 bool CConnman::DisconnectNode(const std::string& strNode)

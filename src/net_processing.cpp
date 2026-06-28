@@ -334,9 +334,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             SeenLocal(addrMe);
         }
 
-        // Disconnect if we connected to ourself (issue #2558 PR 9d: the nonce
-        // now lives on CConnman).
-        if (g_connman && nNonce == g_connman->GetLocalHostNonce() && nNonce > 1)
+        // Disconnect if we connected to ourself (issue #3067: the nonce is now
+        // per-connection; CheckIncomingNonce scans our outgoing handshakes).
+        if (g_connman && nNonce > 1 && !g_connman->CheckIncomingNonce(nNonce))
         {
             LogPrint(BCLog::LogFlags::NET, "connected to self at %s, disconnecting", pfrom->addr.ToString());
             pfrom->fDisconnect = true;
