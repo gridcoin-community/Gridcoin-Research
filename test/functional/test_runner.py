@@ -153,6 +153,7 @@ BASE_SCRIPTS = [
     'rpc_psgt.py',
     'rpc_htlc.py',
     'rpc_blockchain.py',
+    'rpc_audit_snapshot_accrual.py',
     'rpc_netinfo.py',
     'rpc_getaddednodeinfo.py',
     'rpc_multisig.py',

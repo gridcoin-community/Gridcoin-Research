@@ -20,6 +20,7 @@
 #include "server.h"
 #include <rpc/util.h>
 
+#include <map>
 #include <stdexcept>
 
 using namespace std;
@@ -330,6 +331,182 @@ static const RPCHelpMan auditsnapshotaccrual_help{
 };
 const RPCHelpMan& auditsnapshotaccrual_helpman() { return auditsnapshotaccrual_help; }
 
+namespace {
+//!
+//! \brief One chain block captured during an accrual audit walk.
+//!
+//! Captured under cs_main; consumed lock-free. CBlockIndex* pointers are
+//! pool-allocated and never freed, so they remain valid after the lock is
+//! released and across reorgs. Only pnext is mutated under cs_main, and it is
+//! followed only during the (locked) capture phase.
+//!
+struct AuditBlockRecord
+{
+    //!
+    //! \brief How the block contributes to the audit.
+    //!
+    //! Mirrors the original else-if short-circuit: a non-empty m_mrc_researchers
+    //! consumes the block whether or not it contains an entry for the audited
+    //! CPID, so a block carrying only other CPIDs' MRCs (MRC_NO_MATCH) must NOT
+    //! fall through to the superblock branch. The superblock flip that selects the
+    //! governing magnitude is tracked independently of this classification.
+    //!
+    enum class Kind { NONE, STAKE, MRC_PAYMENT, MRC_NO_MATCH, SUPERBLOCK };
+
+    const CBlockIndex* pindex = nullptr;
+    int64_t time = 0;       //!< pindex->nTime
+    int64_t prev_time = 0;  //!< pindex->pprev->nTime (mrc period high_time)
+    uint32_t height = 0;
+    bool is_superblock = false;
+    Kind kind = Kind::NONE;
+    int64_t claimed = 0;    //!< ResearchSubsidy (stake) or mrc->m_research_subsidy
+    const CBlockIndex* governing_superblock = nullptr; //!< superblock for MagnitudeOf
+};
+
+//!
+//! \brief A captured, lock-free-replayable plan for one audit pass.
+//!
+struct AuditPassPlan
+{
+    const CBlockIndex* pindex_start_superblock = nullptr; //!< first in-scope superblock
+    int64_t seeded_accrual = 0;                           //!< accrual from the snapshot file
+    bool have_result = false;                             //!< false => return empty for this CPID
+    const CBlockIndex* tip_governing_superblock = nullptr;//!< governing superblock at the tip
+    std::vector<AuditBlockRecord> records;
+};
+
+//!
+//! \brief Walk the chain for one audit pass and capture everything the lock-free
+//! compute phase needs.
+//!
+//! Performs no superblock block-file reads (those happen lock-free in the compute
+//! phase against immutable, append-only block files). The single small accrual
+//! snapshot .dat file IS read here, under the lock, because it is deleted or
+//! truncated under cs_main during reorgs.
+//!
+//! \param retry_from_baseline Start at the first superblock after the Fern
+//! baseline rather than the first within the beacon chain's scope.
+//!
+AuditPassPlan CaptureAuditPass(
+    const bool retry_from_baseline,
+    const GRC::Cpid& cpid,
+    const GRC::Beacon_ptr& beacon_ptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AuditPassPlan plan;
+
+    const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
+
+    if (!pindex_baseline) {
+        // No baseline yet; degrade to "no result" rather than dereferencing null.
+        return plan;
+    }
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
+
+    const CBlockIndex* pindex_superblock = nullptr;
+
+    // Find the first superblock after the baseline within scope of the beacon chain for the given CPID as the starting
+    // point for the audit. If the second pass, where a difference was found because someone may have missed a renewal and
+    // therefore have multiple beacon chains, then start from the first superblock after the baseline. This is much more
+    // time-consuming, and so is only done if there is a difference found in the first pass. Even in the second pass, the starting
+    // point of the first superblock after the transition height doesn't allow us to verify the accrual between the actual
+    // transition height and the first snapshot afterwards, but it drastically reduces the complexity of the audit.
+    for (const CBlockIndex* p = pindex_baseline; p; p = p->pnext) {
+        if (p->IsSuperblock()
+                && (retry_from_baseline || p->nTime >= beacon_ptr->m_timestamp)) {
+            pindex_superblock = p;
+            break;
+        }
+    }
+
+    if (!pindex_superblock) {
+        // No in-scope superblock found; degrade to "no result" rather than crashing.
+        return plan;
+    }
+
+    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: First in scope superblock nHeight = %i", __func__,
+             pindex_superblock->nHeight);
+
+    plan.pindex_start_superblock = pindex_superblock;
+
+    // The governing superblock mirrors the original `superblock` variable: it is
+    // pre-loaded to the starting superblock and flipped to each subsequent
+    // superblock AFTER that block's accrual period would be recorded.
+    const CBlockIndex* governing = pindex_superblock;
+
+    for (const CBlockIndex* pindex = pindex_superblock; pindex; pindex = pindex->pnext) {
+        AuditBlockRecord rec;
+        rec.pindex = pindex;
+        rec.height = pindex->nHeight;
+        rec.time = pindex->nTime;
+        rec.prev_time = pindex->pprev ? pindex->pprev->nTime : 0;
+        rec.is_superblock = pindex->IsSuperblock();
+        rec.governing_superblock = governing;
+
+        if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == cpid) {
+            rec.kind = AuditBlockRecord::Kind::STAKE;
+            rec.claimed = pindex->ResearchSubsidy();
+        } else if (!pindex->m_mrc_researchers.empty()) {
+            // A non-empty MRC list consumes this block whether or not it pays the audited CPID. Because
+            // m_mrc_researchers is derived from a map that is keyed by CPID, the CPID must be unique (i.e. there
+            // will only be one match). A block paying only other CPIDs must NOT fall through to the superblock branch.
+            rec.kind = AuditBlockRecord::Kind::MRC_NO_MATCH;
+
+            for (const auto& mrc : pindex->m_mrc_researchers) {
+                if (mrc->m_cpid == cpid) {
+                    rec.kind = AuditBlockRecord::Kind::MRC_PAYMENT;
+                    rec.claimed = mrc->m_research_subsidy;
+                    break;
+                }
+            }
+        } else if (pindex->IsSuperblock()) {
+            rec.kind = AuditBlockRecord::Kind::SUPERBLOCK;
+        }
+
+        // NONE and MRC_NO_MATCH are no-ops in compute_pass (they neither tally an accrual period nor
+        // advance pindex_low), and the governing-superblock flip below is driven by the running 'governing'
+        // variable rather than by these records, so omitting them is value-identical to capturing them. On a
+        // long chain this keeps the captured vector to the CPID's actual events and shortens the cs_main hold.
+        if (rec.kind != AuditBlockRecord::Kind::NONE && rec.kind != AuditBlockRecord::Kind::MRC_NO_MATCH) {
+            plan.records.push_back(rec);
+        }
+
+        // The superblock flip is orthogonal to the classification above (the original updates it in a
+        // separate if after the else-if chain), so a staked/MRC block that is also a superblock still flips it.
+        if (pindex->IsSuperblock()) {
+            governing = pindex;
+        }
+    }
+
+    plan.tip_governing_superblock = governing;
+
+    // The accrual snapshot .dat file is deleted/truncated under cs_main on reorg, so read it here under the
+    // lock rather than in the lock-free compute phase. This is a single small file, not the per-block reads.
+    const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
+    AccrualSnapshotReader reader(snapshot_path);
+
+    // The governing superblock was found above, so its accrual snapshot is expected to exist and be
+    // readable. A missing/unreadable or corrupt snapshot is a genuine error, not a "no result" case (a
+    // CPID simply absent from a readable snapshot is handled by GetAccrual() returning 0), so surface it
+    // to the caller rather than silently returning an empty result that would mask disk/FS corruption.
+    if (reader.IsNull()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            strprintf("Failed to open accrual snapshot at height %i", pindex_superblock->nHeight));
+    }
+
+    try {
+        const AccrualSnapshot snapshot = reader.Read();
+        plan.seeded_accrual = snapshot.GetAccrual(cpid);
+        plan.have_result = true;
+    } catch (const std::exception& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            strprintf("Failed to read accrual snapshot at height %i: %s", pindex_superblock->nHeight, e.what()));
+    }
+
+    return plan;
+}
+} // anonymous namespace
+
 UniValue auditsnapshotaccrual(const UniValue& params)
 {
     const GRC::MiningId mining_id = params.size() > 0
@@ -355,119 +532,125 @@ UniValue auditsnapshotaccrual(const UniValue& params)
     UniValue result(UniValue::VOBJ);
     UniValue audit(UniValue::VARR);
 
-    LOCK(cs_main);
-
-    if (!pindexBest) {
-        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Invalid chain.");
-    }
-
-    if (!IsV11Enabled(nBestHeight + 1)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
-    }
-
+    // --- Snapshot phase: capture a consistent slice of chain state under a brief
+    // cs_main, then release the lock before performing per-superblock block-file
+    // reads and accrual arithmetic. Holding cs_main across that I/O froze the node
+    // for minutes, especially via the auditsnapshotaccruals (plural) caller. See
+    // GH #2978.
     const int64_t now = GetAdjustedTime();
-    const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
-    const int64_t computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
-    const int64_t newbie_correction = Tally::GetNewbieSuperblockAccrualCorrection(*cpid, GRC::Quorum::CurrentSuperblock());
-
     bool accrual_account_exists = true;
+    int64_t computed = 0;
+    int64_t newbie_correction = 0;
+    int64_t renewals = 0;
+    double magnitude_unit = 0.0;
+    CAmount max_reward = 0;
+    UniValue beacon_chain(UniValue::VARR);
+    GRC::Beacon_ptr beacon_ptr;
+    AuditPassPlan plan;
 
-    //This indicates the account actually points to m_new_account.
-    if (account.m_accrual == 0
-            && account.m_total_research_subsidy == 0
-            && account.m_total_magnitude== 0
-            && account.m_accuracy == 0
-            && account.m_first_block_ptr == nullptr
-            && account.m_last_block_ptr == nullptr
-            )
     {
-        // The account effectively does not really exist.
-        accrual_account_exists = false;
-    }
+        LOCK(cs_main);
 
-    GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+        if (!pindexBest) {
+            throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Invalid chain.");
+        }
 
-    LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: Number of beacons in registry = %u", __func__, beacons.Beacons().size());
+        if (!IsV11Enabled(nBestHeight + 1)) {
+            throw JSONRPCError(RPC_INVALID_REQUEST, "Wait for block v11 protocol");
+        }
 
-    GRC::BeaconOption beacon_try = beacons.Try(*cpid);
+        const GRC::ResearchAccount& account = GRC::Tally::GetAccount(*cpid);
+        computed = GRC::Tally::GetAccrual(*cpid, now, pindexBest);
+        newbie_correction = Tally::GetNewbieSuperblockAccrualCorrection(*cpid, GRC::Quorum::CurrentSuperblock());
 
-    if (!beacon_try)
-    {
-        LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: No beacon present for cpid = %s.", __func__, cpid->ToString());
+        //This indicates the account actually points to m_new_account.
+        if (account.m_accrual == 0
+                && account.m_total_research_subsidy == 0
+                && account.m_total_magnitude== 0
+                && account.m_accuracy == 0
+                && account.m_first_block_ptr == nullptr
+                && account.m_last_block_ptr == nullptr
+                )
+        {
+            // The account effectively does not really exist.
+            accrual_account_exists = false;
+        }
+
+        GRC::BeaconRegistry& beacons = GRC::GetBeaconRegistry();
+
+        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: Number of beacons in registry = %u", __func__, beacons.Beacons().size());
+
+        GRC::BeaconOption beacon_try = beacons.Try(*cpid);
+
+        if (!beacon_try)
+        {
+            LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: No beacon present for cpid = %s.", __func__, cpid->ToString());
+            return result;
+        }
+
+        beacon_ptr = beacon_try;
+
+        auto beacon_chain_out_ptr
+            = std::make_shared<std::vector<std::pair<uint256, int64_t>>>();
+
+        try {
+            beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
+        } catch (std::runtime_error& e) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
+        }
+
+        for (const auto& iter : *beacon_chain_out_ptr) {
+            UniValue beacon_chain_entry(UniValue::VOBJ);
+
+            beacon_chain_entry.pushKV("ctx_hash", iter.first.GetHex());
+            beacon_chain_entry.pushKV("timestamp",  iter.second);
+            beacon_chain.push_back(beacon_chain_entry);
+        }
+
+        renewals = beacon_chain_out_ptr->size() - 1;
+
+        // MaxReward() and MagnitudeUnit() depend only on the current superblock, so they are constant for the
+        // entire audit (across both passes, every block, and the tip). Resolve them once here rather than
+        // reconstructing a snapshot computer per block under the lock.
+        const AccrualComputer computer = GRC::Tally::GetSnapshotComputer(
+            *cpid, pindexBest->GetBlockTime(), pindexBest);
+        magnitude_unit = computer->MagnitudeUnit();
+        max_reward = computer->MaxReward();
+
+        plan = CaptureAuditPass(false, *cpid, beacon_ptr);
+    } // cs_main released
+
+    if (!plan.have_result) {
         return result;
     }
 
-    GRC::Beacon_ptr beacon_ptr = beacon_try;
-
-    std::vector<std::pair<uint256, int64_t>> beacon_chain_out {};
-
-    std::shared_ptr<std::vector<std::pair<uint256, int64_t>>> beacon_chain_out_ptr
-        = std::make_shared<std::vector<std::pair<uint256, int64_t>>>(beacon_chain_out);
-
-    UniValue beacon_chain(UniValue::VARR);
-
-    try {
-        beacon_ptr = beacons.GetBeaconChainletRoot(beacon_ptr, beacon_chain_out_ptr);
-    } catch (std::runtime_error& e) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
-    }
-
-    for (const auto& iter : *beacon_chain_out_ptr) {
-        UniValue beacon_chain_entry(UniValue::VOBJ);
-
-        beacon_chain_entry.pushKV("ctx_hash", iter.first.GetHex());
-        beacon_chain_entry.pushKV("timestamp",  iter.second);
-        beacon_chain.push_back(beacon_chain_entry);
-    }
-
-    int64_t renewals = beacon_chain_out_ptr->size() - 1;
-
-    bool retry_from_baseline = false;
-
-    // Up to two passes. The first is from the start of the current beacon chain for the CPID, the second from the Fern baseline.
-    for (unsigned int i = 0; i < 2; ++i) {
-        GRC::SuperblockPtr superblock;
-
-        const CBlockIndex* pindex_baseline = GRC::Tally::GetBaseline();
-
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: pindex_baseline->nHeight = %i", __func__, pindex_baseline->nHeight);
-
-        const CBlockIndex* pindex_superblock;
-
-        // Find the first superblock after the baseline within scope of the beacon chain for the given CPID as the starting
-        // point for the audit. If the second pass, where a difference was found because someone may have missed a renewal and
-        // therefore have multiple beacon chains, then start from the first superblock after the baseline. This is much more
-        // time-consuming, and so is only done if there is a difference found in the first pass. Even in the second pass, the starting
-        // point of the first superblock after the transition height doesn't allow us to verify the accrual between the actual
-        // transition height and the first snapshot afterwards, but it drastically reduces the complexity of the audit.
-        for (pindex_superblock = pindex_baseline;
-             pindex_superblock;
-             pindex_superblock = pindex_superblock->pnext)
-        {
-            if (pindex_superblock->IsSuperblock()
-                    && (retry_from_baseline || pindex_superblock->nTime >= beacon_ptr->m_timestamp)) {
-                superblock = SuperblockPtr::ReadFromDisk(pindex_superblock);
-                break;
-            }
-        }
-
-        LogPrint(BCLog::LogFlags::ACCRUAL, "INFO %s: First in scope superblock nHeight = %i", __func__,
-                 pindex_superblock->nHeight);
-
-        // Set the pindex_low to the pindex_superblock.
-        const CBlockIndex* pindex = pindex_superblock;
-        const CBlockIndex* pindex_low = pindex_superblock;
-
-        const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
-        const AccrualSnapshot snapshot = AccrualSnapshotReader(snapshot_path).Read();
-
+    // --- Compute phase: replay a captured pass lock-free. The per-superblock
+    // block-file reads (for MagnitudeOf) and the accrual arithmetic happen here
+    // with no lock held.
+    struct ComputeOutput {
         int64_t accrual = 0;
-        auto entry = snapshot.m_records.find(cpid.value());
+        int64_t period = 0;
+        UniValue result{UniValue::VOBJ};
+    };
 
-        if (entry != snapshot.m_records.end())
-        {
-            accrual = entry->second;
-        }
+    const auto compute_pass = [&](const AuditPassPlan& pass) -> ComputeOutput {
+        ComputeOutput out;
+
+        // Read each governing superblock from disk at most once per pass. Block files are append-only and
+        // immutable, so these reads are safe without cs_main.
+        std::map<const CBlockIndex*, SuperblockPtr> sb_cache;
+
+        const auto magnitude_of = [&](const CBlockIndex* sb_index) -> GRC::Magnitude {
+            auto it = sb_cache.find(sb_index);
+
+            if (it == sb_cache.end()) {
+                it = sb_cache.emplace(sb_index, SuperblockPtr::ReadFromDisk(sb_index)).first;
+            }
+
+            return it->second->m_cpids.MagnitudeOf(*cpid);
+        };
+
+        int64_t accrual = pass.seeded_accrual;
 
         const auto tally_accrual_period = [&](
                 const std::string& boundary,
@@ -476,9 +659,10 @@ UniValue auditsnapshotaccrual(const UniValue& params)
                 const int64_t high_time,
                 const int64_t claimed,
                 const Allocation magnitude_unit,
-                CAmount max_reward)
+                const CAmount max_reward,
+                const CBlockIndex* governing)
         {
-            const GRC::Magnitude magnitude = superblock->m_cpids.MagnitudeOf(*cpid);
+            const GRC::Magnitude magnitude = magnitude_of(governing);
 
             int64_t time_interval = high_time - low_time;
             int64_t abs_time_interval = time_interval;
@@ -547,106 +731,115 @@ UniValue auditsnapshotaccrual(const UniValue& params)
             return period;
         };
 
-        for (; pindex; pindex = pindex->pnext) {
-            // We are only going to use the accrual computer here for the magnitude unit and max_reward.
-            AccrualComputer computer = GRC::Tally::GetSnapshotComputer(*cpid, pindex->GetBlockTime(), pindex);
+        const CBlockIndex* pindex_low = pass.pindex_start_superblock;
 
-            int64_t max_reward = computer->MaxReward();
-
-            if (pindex->ResearchSubsidy() > 0 && pindex->GetMiningId() == *cpid) {
-
+        for (const auto& rec : pass.records) {
+            switch (rec.kind) {
+            case AuditBlockRecord::Kind::STAKE:
                 tally_accrual_period(
                             "stake",
-                            pindex->nHeight,
+                            rec.height,
                             pindex_low->nTime,
-                            pindex->nTime,
-                            pindex->ResearchSubsidy(),
-                            computer->MagnitudeUnit(),
-                            max_reward);
+                            rec.time,
+                            rec.claimed,
+                            magnitude_unit,
+                            max_reward,
+                            rec.governing_superblock);
 
                 accrual = 0;
-                pindex_low = pindex;
-            } else if (!pindex->m_mrc_researchers.empty()) {
-                // Because m_mrc_researchers is derived from a map that is keyed by CPID, the CPID must exist, and it
-                // must be unique (i.e. there will only be one match).
-                for (const auto& mrc : pindex->m_mrc_researchers) {
-                    // mrc payments are on the block previous to the staked block (the head of the chain when the mrc
-                    // was submitted.
+                pindex_low = rec.pindex;
+                break;
+            case AuditBlockRecord::Kind::MRC_PAYMENT:
+                // mrc payments are on the block previous to the staked block (the head of the chain when the
+                // mrc was submitted).
+                tally_accrual_period(
+                            "mrc payment",
+                            rec.height,
+                            pindex_low->nTime,
+                            rec.prev_time,
+                            rec.claimed,
+                            magnitude_unit,
+                            max_reward,
+                            rec.governing_superblock);
 
-                    if (mrc->m_cpid == *cpid) {
-                        tally_accrual_period(
-                                    "mrc payment",
-                                    pindex->nHeight,
-                                    pindex_low->nTime,
-                                    pindex->pprev->nTime,
-                                    mrc->m_research_subsidy,
-                                    computer->MagnitudeUnit(),
-                                    max_reward);
-
-                        accrual = 0;
-                        pindex_low = pindex->pprev;
-
-                        // Once the one match is processed, no need to continue iterating.
-                        break;
-                    }
-                }
-            } else if (pindex->IsSuperblock()) {
+                accrual = 0;
+                pindex_low = rec.pindex->pprev;
+                break;
+            case AuditBlockRecord::Kind::SUPERBLOCK:
                 tally_accrual_period(
                             "superblock",
-                            pindex->nHeight,
+                            rec.height,
                             pindex_low->nTime,
-                            pindex->nTime,
+                            rec.time,
                             0,
-                            computer->MagnitudeUnit(),
-                            max_reward);
+                            magnitude_unit,
+                            max_reward,
+                            rec.governing_superblock);
 
-                pindex_low = pindex;
-            }
-
-            if (pindex->IsSuperblock()) {
-                superblock = SuperblockPtr::ReadFromDisk(pindex);
+                pindex_low = rec.pindex;
+                break;
+            case AuditBlockRecord::Kind::MRC_NO_MATCH:
+            case AuditBlockRecord::Kind::NONE:
+                // No accrual period: no reset, no pindex_low advance (the governing superblock flip already
+                // happened during capture).
+                break;
             }
         }
-
-        // We are only going to use the accrual computer here for the magnitude unit and max_reward.
-        AccrualComputer computer = GRC::Tally::GetSnapshotComputer(*cpid, pindex_low->GetBlockTime(), pindex_low);
-
-        int64_t max_reward = computer->MaxReward();
 
         // The final period is from the last event till "now".
-        int64_t period = tally_accrual_period("tip", 0, pindex_low->nTime, now, 0, computer->MagnitudeUnit(), max_reward);
+        int64_t period = tally_accrual_period(
+            "tip", 0, pindex_low->nTime, now, 0, magnitude_unit, max_reward, pass.tip_governing_superblock);
 
-        result.pushKV("cpid", cpid->ToString());
-        result.pushKV("accrual_account_exists", accrual_account_exists);
-        result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
-        result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
-        result.pushKV("renewals", renewals);
-        result.pushKV("accrual_by_audit", accrual);
-        result.pushKV("accrual_by_GetAccrual", computed);
-        result.pushKV("newbie_correction", newbie_correction);
-        result.pushKV("accrual_last_period", period);
+        out.result.pushKV("cpid", cpid->ToString());
+        out.result.pushKV("accrual_account_exists", accrual_account_exists);
+        out.result.pushKV("latest_beacon_timestamp", beacon_chain[0]);
+        out.result.pushKV("original_beacon_timestamp", beacon_chain[beacon_chain.size() - 1]);
+        out.result.pushKV("renewals", renewals);
+        out.result.pushKV("accrual_by_audit", accrual);
+        out.result.pushKV("accrual_by_GetAccrual", computed);
+        out.result.pushKV("newbie_correction", newbie_correction);
+        out.result.pushKV("accrual_last_period", period);
 
         if (report_details) {
-            result.pushKV("beacon_chain", beacon_chain);
-            result.pushKV("audit", audit);
+            out.result.pushKV("beacon_chain", beacon_chain);
+            out.result.pushKV("audit", audit);
         }
 
-        // The second part of this if statement condition is to deal with the 1 Halford difference that crops up between
-        // this audit calculation and the newbie_correction. The two calculations are very similar, but the newbie correction
-        // goes backwards in the chain, and this one goes forward. Somewhere there is a 1 Halford difference. Not worth tracking
-        // down, and the consensus critical newbie correction algorithm gives consistent values across all nodes.
-        if (accrual == computed || accrual - (newbie_correction + period) <= 1) {
-            break;
-        } else {
-            result.clear();
-            retry_from_baseline = true;
-            LogPrintf("WARNING: %s: Doing second pass on auditsnapshotaccrual loop because of mismatch after the first pass. "
-                      "This can be expected if someone let their beacon expire and there are multiple beacon chains with the "
-                      "same CPID since the Fern baseline.", __func__);
-        }
-    } //retry from baseline for loop.
+        out.accrual = accrual;
+        out.period = period;
 
-    return result;
+        return out;
+    };
+
+    const ComputeOutput first_pass = compute_pass(plan);
+
+    // The second part of this if statement condition is to deal with the 1 Halford difference that crops up between
+    // this audit calculation and the newbie_correction. The two calculations are very similar, but the newbie correction
+    // goes backwards in the chain, and this one goes forward. Somewhere there is a 1 Halford difference. Not worth tracking
+    // down, and the consensus critical newbie correction algorithm gives consistent values across all nodes.
+    if (first_pass.accrual == computed
+            || first_pass.accrual - (newbie_correction + first_pass.period) <= 1) {
+        return first_pass.result;
+    }
+
+    LogPrintf("WARNING: %s: Doing second pass on auditsnapshotaccrual loop because of mismatch after the first pass. "
+              "This can be expected if someone let their beacon expire and there are multiple beacon chains with the "
+              "same CPID since the Fern baseline.", __func__);
+
+    // Second pass from the Fern baseline. Re-acquire cs_main only for the (rare) re-capture; the previously
+    // captured pointers remain valid because the block index pool never frees entries. The accumulated `audit`
+    // array is intentionally NOT cleared, so the report concatenates both passes exactly as before.
+    AuditPassPlan baseline_plan;
+    {
+        LOCK(cs_main);
+        baseline_plan = CaptureAuditPass(true, *cpid, beacon_ptr);
+    }
+
+    if (!baseline_plan.have_result) {
+        return result;
+    }
+
+    return compute_pass(baseline_plan).result;
 }
 
 static const RPCHelpMan auditsnapshotaccruals_help{
