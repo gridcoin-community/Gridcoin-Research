@@ -418,9 +418,16 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
             retried.add(test_result.name)
             print("%s[RETRY %d/%d]%s %s failed with the transient RPC-startup signature; re-running" % (
                 BOLD[1], n, attempts - 1, BOLD[0], test_result.name))
-            # Re-enqueue the script and extend the run by one iteration.
+            # Re-enqueue the script (test_count += 1 schedules the extra run) AND
+            # advance i: this branch has already consumed one get_next() result, and
+            # the loop is `while i < test_count`. Bumping only test_count would leave
+            # the loop expecting one more result than there are jobs once everything
+            # drains, so it would call get_next() with no jobs left and hit the
+            # "pop from empty list" guard. i and test_count must both advance so the
+            # loop counts every consumed result against every scheduled job.
             job_queue.test_list.append(test_result.name)
             test_count += 1
+            i += 1
             continue
 
         if test_result.name in retried and test_result.status == "Passed":
