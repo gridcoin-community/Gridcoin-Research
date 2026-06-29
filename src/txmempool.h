@@ -35,8 +35,9 @@ enum class MemPoolRemovalReason {
 //!
 //! Phase 1 of the mempool modernization (#3029). The entry caches the fee, size,
 //! time, and entry height that callers previously recomputed, plus lightweight
-//! Gridcoin contract tags (contract type(s); CPID and fee for MRC/BEACON; the
-//! mandatory-sidestake flag) derived from a single pass over the transaction's
+//! Gridcoin contract tags (contract type(s); the BEACON CPID; the MRC CPID, fee,
+//! and last-block-hash; the mandatory-sidestake flag) derived from a single pass
+//! over the transaction's
 //! contracts. The tags are populated here but not yet consumed -- the O(n)
 //! contract scans they will replace remain in place until Phase 2 swaps them for
 //! index lookups.
@@ -66,8 +67,13 @@ public:
                     int height, size_t tx_size);
 
     const CTransaction& GetTx() const { return tx; }
-    //! Non-const access for addUnchecked() to wire mapNextTx pointers into the
-    //! pool's stable map node. Not for general use.
+    //! Non-const access to the stored transaction, used ONLY to obtain a stable
+    //! CTransaction* for legacy non-const APIs: addUnchecked()'s mapNextTx wiring
+    //! and the miner's COrphan / vecPriority structures (which hold CTransaction*).
+    //! Callers MUST NOT mutate the transaction -- doing so would silently
+    //! invalidate this entry's cached fee/size/sigops/contract-tag metadata.
+    //! (Making those legacy consumers const-correct so this can be removed is a
+    //! tracked follow-up.)
     CTransaction& GetTxMutable() { return tx; }
 
     CAmount GetFee() const { return nFee; }

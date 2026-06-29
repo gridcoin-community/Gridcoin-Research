@@ -59,7 +59,13 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
     // Add to memory pool without checking anything.  Don't call this directly,
     // call AcceptToMemoryPool to properly check the transaction first.
     {
-        auto [it, inserted] = mapTx.insert_or_assign(hash, entry);
+        // Caller contract: AcceptToMemoryPool holds cs and has already rejected a
+        // tx that exists() in the pool, so this is a fresh txid. insert_or_assign
+        // would only "overwrite" on a duplicate txid -- and an identical txid
+        // implies identical vins, so re-pointing mapNextTx below to the new node
+        // is still correct. (Other mutators lock internally; this one relies on
+        // the caller holding cs, matching the "unchecked = caller-locked" idiom.)
+        auto it = mapTx.insert_or_assign(hash, entry).first;
         // Point mapNextTx at the transaction stored inside the pool's own map
         // node (std::map never relocates nodes, so the pointer stays valid until
         // the entry is removed).
