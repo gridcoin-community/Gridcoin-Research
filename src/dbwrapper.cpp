@@ -19,6 +19,7 @@
 #include "txdb.h"
 #include "main.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include "node/ui_interface.h"
 #include "util.h"
 #include "validation.h"

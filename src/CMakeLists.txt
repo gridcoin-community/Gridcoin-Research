@@ -183,6 +183,7 @@ add_library(gridcoin_util STATIC
     netaddress.cpp
     netbase.cpp
     node/blockstorage.cpp
+    node/chainman.cpp
     node/coherence.cpp
     node/orphan_blocks.cpp
     node/ui_interface.cpp

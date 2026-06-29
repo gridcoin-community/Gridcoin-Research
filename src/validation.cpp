@@ -24,6 +24,7 @@
 #include "gridcoin/staking/spam.h"
 #include "gridcoin/tally.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include "node/orphan_blocks.h"
 #include "policy/fees.h"
 #include "serialize.h"
