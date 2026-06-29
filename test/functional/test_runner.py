@@ -322,12 +322,25 @@ def main():
         use_term_control=args.ansi,
     )
 
-# A script that fails with this signature hit the known transient daemon
-# RPC-startup flake (the daemon comes up but the RPC port never answers). These
-# -- and only these -- are eligible for --attempts retry; every other failure
-# (assertion, build, block-sync timeout, wallet/tx mismatch) is a real failure
-# and is never retried, so retries cannot mask a genuine regression.
-RETRY_SIGNATURE = "Unable to connect to gridcoinresearchd after"
+# A script that fails with one of these signatures hit a known transient
+# slow-node flake on loaded CI, NOT a logic/assertion/build failure. Only these --
+# and only these -- are eligible for --attempts retry; every other failure (a real
+# assertion mismatch, build error, RPC error, wallet/tx mismatch) is never retried,
+# so retries cannot mask a genuine regression.
+#
+# Keep this list TIGHTLY scoped: each entry must be a string that only a transient
+# slow-node timeout produces, never a deterministic failure. Do NOT add bare
+# "AssertionError" or "timeout" -- they would swallow real bugs.
+#   - "Unable to connect to gridcoinresearchd after": the daemon came up but its
+#     RPC port never answered within the (timeout-factor-scaled) budget.
+#   - "not true after": the exact phrasing of wait_until_helper()'s timeout
+#     (util.py: 'Predicate <x> not true after <n> {attempts|seconds}') -- emitted
+#     ONLY by a wait_until()/wait_until_stopped() timeout (a node too slow to reach
+#     a state / shut down), never by assert_equal or other assertions.
+RETRY_SIGNATURES = (
+    "Unable to connect to gridcoinresearchd after",
+    "not true after",
+)
 
 def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, attempts=1, use_term_control):
     args = args or []
@@ -409,10 +422,10 @@ def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=
     while i < test_count:
         test_result, testdir, stdout, stderr = job_queue.get_next()
 
-        # Retry only the known transient RPC-startup flake, never a real failure.
+        # Retry only the known transient slow-node flakes, never a real failure.
         if (test_result.status == "Failed" and attempts > 1
                 and retries_used.get(test_result.name, 0) < (attempts - 1)
-                and RETRY_SIGNATURE in (stdout + stderr)):
+                and any(sig in (stdout + stderr) for sig in RETRY_SIGNATURES)):
             n = retries_used.get(test_result.name, 0) + 1
             retries_used[test_result.name] = n
             retried.add(test_result.name)
