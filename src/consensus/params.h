@@ -58,6 +58,14 @@ struct Params {
       * activation is scheduled; overridable via -autogreylistdeepcopyheight for testnet
       * rollout. */
     int AutoGreylistDeepCopyHeight;
+    /** Height at which the scraper stops emitting a (spurious zero) total-credit entry for a project
+      * whose user-statistics export returned no usable records this cycle (the "no_records" condition).
+      * Before this height the legacy behavior is preserved (a no_records project still gets a zero entry
+      * in ProjectsAllCpidTotalCredits) so historical superblocks remain bit-identical; at/after it the
+      * entry is omitted, so the auto-greylist baseline records nullopt (benefit-of-doubt) instead of a
+      * hard zero that collapses WAS. Set to std::numeric_limits<int>::max() on main/testnet until
+      * activation is scheduled; overridable via -autogreylisttotalcreditfixheight for testnet rollout. */
+    int AutoGreylistTotalCreditFixHeight;
     /**
       * @brief The default GRC paid for a constant block reward.
       *
