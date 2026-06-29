@@ -463,7 +463,13 @@ AuditPassPlan CaptureAuditPass(
             rec.kind = AuditBlockRecord::Kind::SUPERBLOCK;
         }
 
-        plan.records.push_back(rec);
+        // NONE and MRC_NO_MATCH are no-ops in compute_pass (they neither tally an accrual period nor
+        // advance pindex_low), and the governing-superblock flip below is driven by the running 'governing'
+        // variable rather than by these records, so omitting them is value-identical to capturing them. On a
+        // long chain this keeps the captured vector to the CPID's actual events and shortens the cs_main hold.
+        if (rec.kind != AuditBlockRecord::Kind::NONE && rec.kind != AuditBlockRecord::Kind::MRC_NO_MATCH) {
+            plan.records.push_back(rec);
+        }
 
         // The superblock flip is orthogonal to the classification above (the original updates it in a
         // separate if after the else-if chain), so a staked/MRC block that is also a superblock still flips it.
@@ -479,8 +485,13 @@ AuditPassPlan CaptureAuditPass(
     const fs::path snapshot_path = SnapshotPath(pindex_superblock->nHeight);
     AccrualSnapshotReader reader(snapshot_path);
 
+    // The governing superblock was found above, so its accrual snapshot is expected to exist and be
+    // readable. A missing/unreadable or corrupt snapshot is a genuine error, not a "no result" case (a
+    // CPID simply absent from a readable snapshot is handled by GetAccrual() returning 0), so surface it
+    // to the caller rather than silently returning an empty result that would mask disk/FS corruption.
     if (reader.IsNull()) {
-        return plan;
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            strprintf("Failed to open accrual snapshot at height %i", pindex_superblock->nHeight));
     }
 
     try {
@@ -488,8 +499,8 @@ AuditPassPlan CaptureAuditPass(
         plan.seeded_accrual = snapshot.GetAccrual(cpid);
         plan.have_result = true;
     } catch (const std::exception& e) {
-        LogPrint(BCLog::LogFlags::ACCRUAL, "ERROR: %s: failed to read accrual snapshot at height %i: %s",
-                 __func__, pindex_superblock->nHeight, e.what());
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            strprintf("Failed to read accrual snapshot at height %i: %s", pindex_superblock->nHeight, e.what()));
     }
 
     return plan;
