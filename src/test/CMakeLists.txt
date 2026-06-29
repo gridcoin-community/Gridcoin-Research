@@ -80,6 +80,7 @@ add_executable(test_gridcoin
     test_gridcoin.cpp
     transaction_identity_tests.cpp
     transaction_tests.cpp
+    txmempool_tests.cpp
     uint256_tests.cpp
     util_tests.cpp
     wallet_tests.cpp

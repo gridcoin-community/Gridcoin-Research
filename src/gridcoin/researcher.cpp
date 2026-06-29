@@ -696,7 +696,8 @@ BeaconError CheckBeaconTransactionViable(CWallet* wallet, const Cpid& cpid) EXCL
         return BeaconError::INSUFFICIENT_FUNDS;
     }
 
-    for (const auto& [_, pool_tx] : mempool.mapTx) {
+    for (const auto& [_, pool_entry] : mempool.mapTx) {
+        const CTransaction& pool_tx = pool_entry.GetTx();
         for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
             if (pool_tx_contract.m_type == GRC::ContractType::BEACON) {
                 GRC::BeaconPayload pool_tx_beacon = pool_tx_contract.CopyPayloadAs<GRC::BeaconPayload>();

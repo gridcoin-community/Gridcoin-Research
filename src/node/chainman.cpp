@@ -401,7 +401,8 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // AcceptToMemoryPool. Here we just need to do a staleness check.
             std::vector<CTransaction> to_be_erased;
 
-            for (const auto& [_, pool_tx] : mempool.mapTx) {
+            for (const auto& [_, pool_entry] : mempool.mapTx) {
+                const CTransaction& pool_tx = pool_entry.GetTx();
                 for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
                     if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
                         GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
