@@ -69,6 +69,25 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 std::unique_ptr<BanMan> g_banman;
 std::unique_ptr<CScheduler> g_scheduler;
 
+namespace {
+//! Bridges the validation-signal layer to the legacy ui_interface block
+//! notification. Routing GUI tip updates through CValidationInterface (issue
+//! #3030, workstream B3) keeps the Qt models subscribing to
+//! uiInterface.NotifyBlocksChanged unchanged while letting any future
+//! subscriber (e.g. a PeerManager) hook UpdatedBlockTip as well.
+class UINotificationBridge : public CValidationInterface
+{
+protected:
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* /*pindexFork*/, bool fInitialDownload) override
+    {
+        if (pindexNew == nullptr) return;
+        uiInterface.NotifyBlocksChanged(fInitialDownload, pindexNew->nHeight,
+                                        pindexNew->GetBlockTime(), pindexNew->nBits);
+    }
+};
+UINotificationBridge g_ui_notification_bridge;
+} // namespace
+
 /**
  * The PID file facilities.
  */
@@ -259,10 +278,11 @@ void Shutdown(void* parg)
 
         fs::remove(GetPidFile(gArgs));
         // Defensive/idiomatic: a subscriber unregisters itself before deletion. In the
-        // current teardown order this is a no-op -- GetMainSignals().UnregisterBackground-
+        // current teardown order these are no-ops -- GetMainSignals().UnregisterBackground-
         // SignalScheduler() earlier in Shutdown() already reset CMainSignals' internals and
-        // disconnected every subscriber -- but keeping it makes the wallet's lifetime
+        // disconnected every subscriber -- but keeping them makes the subscribers' lifetimes
         // self-contained and load-bearing again if that ordering is ever changed.
+        UnregisterValidationInterface(&g_ui_notification_bridge);
         UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
@@ -1871,6 +1891,10 @@ bool AppInit2(ThreadHandlerPtr threads)
     // layer is wired (issue #3030, workstream B). The wallet also stays in
     // setpwalletRegistered for the legacy notifications not yet migrated.
     RegisterValidationInterface(pwalletMain);
+
+    // Bridge chain-tip updates to the legacy ui_interface block notification so
+    // the Qt models keep receiving them (issue #3030, workstream B3).
+    RegisterValidationInterface(&g_ui_notification_bridge);
 
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();

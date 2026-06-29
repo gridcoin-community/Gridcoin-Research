@@ -1249,11 +1249,20 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     }
     #endif
 
-    uiInterface.NotifyBlocksChanged(
-        fIsInitialDownload,
-        pindexNew->nHeight,
-        pindexNew->GetBlockTime(),
-        blockNew.nBits);
+    // Notify the validation-signal layer that the chain tip advanced. The UI
+    // bridge registered in init.cpp re-emits uiInterface.NotifyBlocksChanged()
+    // for the Qt models, so GUI block notifications now flow through the
+    // validation interface (issue #3030, workstream B3).
+    //
+    // pindexFork is passed as nullptr: the true reorg fork point is the common
+    // ancestor (pcommon, computed in ReorganizeChain) and is not plumbed up to
+    // this layer, so origBestIndex (the previous tip) would be wrong for any
+    // non-trivial reorg. No current subscriber reads pindexFork (the UI bridge
+    // ignores it), so nullptr is an honest "not supplied" rather than a
+    // misleading value; a future fork-point-dependent subscriber (e.g. the
+    // deferred PeerManager) should thread pcommon through instead. Tracked in
+    // issue #3104.
+    GetMainSignals().UpdatedBlockTip(pindexNew, nullptr, fIsInitialDownload);
 
     return GridcoinServices();
 }
