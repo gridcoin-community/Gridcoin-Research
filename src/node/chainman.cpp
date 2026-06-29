@@ -401,16 +401,13 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             // AcceptToMemoryPool. Here we just need to do a staleness check.
             std::vector<CTransaction> to_be_erased;
 
-            for (const auto& [_, pool_entry] : mempool.mapTx) {
-                const CTransaction& pool_tx = pool_entry.GetTx();
-                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
-                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
-                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
-
-                        if (pool_tx_mrc.m_last_block_hash != hashBestChain) {
-                            to_be_erased.push_back(pool_tx);
-                        }
-                    }
+            // Only the MRC entries are inspected (via the m_mrc_by_cpid index),
+            // not the entire pool. An MRC is stale when its anchor block is no
+            // longer the chain head.
+            for (const uint256& stale_hash : mempool.GetStaleMRCs(hashBestChain)) {
+                CTransaction stale_tx;
+                if (mempool.lookup(stale_hash, stale_tx)) {
+                    to_be_erased.push_back(stale_tx);
                 }
             }
 

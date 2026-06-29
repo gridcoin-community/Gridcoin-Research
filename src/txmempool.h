@@ -14,8 +14,10 @@
 #include "uint256.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <set>
+#include <utility>
 #include <vector>
 
 /** Reason why transaction was removed from mempool */
@@ -101,14 +103,80 @@ public:
     mutable CCriticalSection cs;
     std::map<uint256, CTxMemPoolEntry> mapTx;
     std::map<COutPoint, CInPoint> mapNextTx;
-    uint64_t m_mrc_bloom{0};
-    bool m_mrc_bloom_dirty{false};
+
+    // Secondary indexes maintained in the single add/remove/clear paths (#3029
+    // Phase 2). They replace the former O(n) full-pool contract scans. Keyed off
+    // the contract tags cached on CTxMemPoolEntry.
+    //! One MRC per CPID; value is the tx hash. Sound as a CPID-keyed map because
+    //! AcceptToMemoryPool DoS-rejects a second MRC for a CPID already in the pool,
+    //! so mapTx never holds two same-CPID MRCs.
+    std::map<GRC::Cpid, uint256> m_mrc_by_cpid;
+    //! Beacon advertisement by CPID. EXISTENCE-ONLY index (queried via
+    //! HasBeaconForCpid()'s count(); the stored hash is never read). Unlike MRCs,
+    //! duplicate PENDING beacons for one CPID are NOT rejected at acceptance (only
+    //! a wallet-side viability check guards locally), so two same-CPID beacons can
+    //! coexist in mapTx; this map then holds only the last (insert_or_assign) and
+    //! erase(cpid) drops the entry while a sibling may remain. That desync is
+    //! harmless here -- the worst case is HasBeaconForCpid() letting the wallet-side
+    //! guard pass a duplicate that the protocol already permits. Do NOT add a
+    //! consumer that reads the stored hash or treats this as 1:1 without switching
+    //! to a multimap.
+    std::map<GRC::Cpid, uint256> m_beacon_by_cpid;
+    size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
+    //! MRCs in fee-descending order, for the GUI/RPC queue ranking.
+    std::multimap<CAmount, GRC::Cpid, std::greater<CAmount>> m_mrc_by_fee;
 
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
     bool remove(const CTransaction &tx, bool fRecursive = false);
     bool removeConflicts(const CTransaction &tx);
     void clear();
     void queryHashes(std::vector<uint256>& vtxid);
+
+    //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
+    //! \p existing is non-null, the colliding transaction hash is written there.
+    bool HasMRCForCpid(const GRC::Cpid& cpid, uint256* existing = nullptr) const
+    {
+        LOCK(cs);
+        auto it = m_mrc_by_cpid.find(cpid);
+        if (it == m_mrc_by_cpid.end()) return false;
+        if (existing) *existing = it->second;
+        return true;
+    }
+
+    bool HasBeaconForCpid(const GRC::Cpid& cpid) const
+    {
+        LOCK(cs);
+        return m_beacon_by_cpid.count(cpid) != 0;
+    }
+
+    bool HasMandatorySidestake() const
+    {
+        LOCK(cs);
+        return m_mandatory_sidestake_count != 0;
+    }
+
+    //! \brief A fee-descending snapshot of the pooled MRCs as (fee, cpid) pairs.
+    std::vector<std::pair<CAmount, GRC::Cpid>> GetMRCQueue() const
+    {
+        LOCK(cs);
+        std::vector<std::pair<CAmount, GRC::Cpid>> queue;
+        queue.reserve(m_mrc_by_fee.size());
+        for (const auto& [fee, cpid] : m_mrc_by_fee) queue.emplace_back(fee, cpid);
+        return queue;
+    }
+
+    //! \brief Hashes of pooled MRCs whose anchor block is not \p best_block_hash.
+    std::vector<uint256> GetStaleMRCs(const uint256& best_block_hash) const
+    {
+        LOCK(cs);
+        std::vector<uint256> stale;
+        for (const auto& [cpid, hash] : m_mrc_by_cpid) {
+            auto it = mapTx.find(hash);
+            if (it != mapTx.end() && it->second.GetMRCLastBlockHash() != best_block_hash)
+                stale.push_back(hash);
+        }
+        return stale;
+    }
 
     unsigned long size() const
     {
@@ -130,6 +198,10 @@ public:
         result = i->second.GetTx();
         return true;
     }
+
+private:
+    //! Remove an entry's contributions from the secondary indexes. Caller holds cs.
+    void eraseIndexes(const CTxMemPoolEntry& entry);
 };
 
 extern CTxMemPool mempool;

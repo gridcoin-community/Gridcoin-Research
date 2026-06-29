@@ -341,29 +341,20 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
 
-    // ---------- mrc fee --- mrc ------ descending order
-    std::multimap<CAmount, GRC::MRC, std::greater<CAmount>> mrc_multimap;
+    // ---------- mrc fee --- cpid ------ descending order
+    // The fee-ordered MRC view comes straight from the mempool's m_mrc_by_fee
+    // index (it replaced a full mempool scan + local multimap build).
+    const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
 
-    for (const auto& [_, entry] : mempool.mapTx) {
-        const CTransaction& tx = entry.GetTx();
-        if (!tx.GetContracts().empty()) {
-            // By protocol the MRC contract MUST be the only one in the transaction.
-            const GRC::Contract& contract = tx.GetContracts()[0];
+    GRC::Cpid m_mrc_cpid;
+    if (auto cpid = m_mrc.m_mining_id.TryCpid()) m_mrc_cpid = *cpid;
 
-            if (contract.m_type == GRC::ContractType::MRC) {
-                GRC::MRC mempool_mrc = contract.CopyPayloadAs<GRC::MRC>();
+    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
+        found |= mempool_cpid == m_mrc_cpid;
 
-                mrc_multimap.insert(std::make_pair(mempool_mrc.m_fee, mempool_mrc));
-            } // match to mrc contract type
-        } // contract present in transaction?
-    }
-
-    for (const auto& [_, mempool_mrc] : mrc_multimap) {
-        found |= m_mrc.m_mining_id == mempool_mrc.m_mining_id;
-
-        if (!found && mempool_mrc.m_fee >= m_mrc.m_fee) ++m_mrc_pos;
-        m_mrc_queue_head_fee = std::max(m_mrc_queue_head_fee, mempool_mrc.m_fee);
-        m_mrc_queue_tail_fee = std::min(m_mrc_queue_tail_fee, mempool_mrc.m_fee);
+        if (!found && mempool_fee >= m_mrc.m_fee) ++m_mrc_pos;
+        m_mrc_queue_head_fee = std::max(m_mrc_queue_head_fee, mempool_fee);
+        m_mrc_queue_tail_fee = std::min(m_mrc_queue_tail_fee, mempool_fee);
 
         ++m_mrc_queue_length;
     }
@@ -373,17 +364,13 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     // in the loop.
     m_mrc_queue_tail_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_tail_fee);
 
-    // Here we select the minimum of the mrc_multimap.size() - 1 in the case where the multimap does not reach the
-    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the multimap indicates the queue is (over)full,
+    // Here we select the minimum of the queue size - 1 in the case where the queue does not reach the
+    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the queue is (over)full,
     // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
-    int pay_limit_fee_pos = std::min<int>(mrc_multimap.size(), m_mrc_output_limit) - 1;
+    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), m_mrc_output_limit) - 1;
 
     if (pay_limit_fee_pos >= 0) {
-        std::multimap<CAmount, GRC::MRC, std::greater<CAmount>>::iterator iter = mrc_multimap.begin();
-
-        std::advance(iter, pay_limit_fee_pos);
-
-        m_mrc_queue_pay_limit_fee = iter->first;
+        m_mrc_queue_pay_limit_fee = mrc_queue[pay_limit_fee_pos].first;
     }
 
     m_mrc_queue_pay_limit_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_pay_limit_fee);

@@ -313,66 +313,25 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     if (pool.exists(hash))
         return false;
 
-    // is there already a transaction in the mempool that has a MRC contract with the same CPID?
-    //
-    // Note: I really hate this check because it has to iterate over the entire mempool to look for an offender,
-    // but I am sufficiently concerned about MRC DoS that it is necessary to stop duplicate MRC request transactions
-    // from the same CPID in the accept to memory pool stage.
-    //
-    // We have implemented a bloom filter to help with the overhead.
+    // Reject a second MRC for a CPID that already has one in the mempool. This
+    // is an O(log n) lookup against the m_mrc_by_cpid index (it replaced a full
+    // mempool scan + bloom filter). MRC DoS protection: a duplicate earns a
+    // stiff penalty.
     bool tx_contains_valid_mrc = false;
 
     for (const auto& contract : tx.GetContracts()) {
         if (contract.m_type == GRC::ContractType::MRC) {
             GRC::MRC mrc = contract.CopyPayloadAs<GRC::MRC>();
-
             GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
-            // A small bloom filter based on the last and first byte of CPID.
-            uint64_t k = 1 << (cpid.Raw().front() & 0x3F);
-            k |= 1 << (cpid.Raw().back() & 0x3F);
 
-            if ((mempool.m_mrc_bloom & k) != k) {
-                // The cpid definitely does not exist in the mempool.
-                mempool.m_mrc_bloom |= k;
-                tx_contains_valid_mrc = true;
-
-                continue;
+            uint256 existing;
+            if (pool.HasMRCForCpid(cpid, &existing)) {
+                return state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
+                                           "in the memory pool, %s.",
+                                           __func__,
+                                           tx.GetHash().ToString(),
+                                           existing.ToString()));
             }
-            // The cpid might exist in the mempool.
-
-            if (mempool.m_mrc_bloom_dirty) {
-                mempool.m_mrc_bloom = 0;
-            }
-
-            bool found{false};
-            for (const auto& [_, pool_entry] : mempool.mapTx) {
-                const CTransaction& pool_tx = pool_entry.GetTx();
-                for (const auto& pool_tx_contract : pool_tx.GetContracts()) {
-                    if (pool_tx_contract.m_type == GRC::ContractType::MRC) {
-                        GRC::MRC pool_tx_mrc = pool_tx_contract.CopyPayloadAs<GRC::MRC>();
-
-                        GRC::Cpid other_cpid = *(pool_tx_mrc.m_mining_id.TryCpid());
-                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().front() & 0x3F);
-                        mempool.m_mrc_bloom |= 1 << (other_cpid.Raw().back() & 0x3F);
-
-                        // A transaction already in the mempool already has the same CPID as the incoming transaction.
-                        // Reject and put a stiff DoS...
-                        if (!found && cpid == other_cpid) {
-                            found = true;
-                            state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
-                                             "in the memory pool, %s.",
-                                             __func__,
-                                             tx.GetHash().ToString(),
-                                             pool_tx.GetHash().ToString()));
-
-                            if (!mempool.m_mrc_bloom_dirty) return false;
-                        }
-                    }
-                }
-            }
-
-            mempool.m_mrc_bloom_dirty = false;
-            if (found) return false;
 
             tx_contains_valid_mrc = true;
         }

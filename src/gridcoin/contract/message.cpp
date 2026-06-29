@@ -154,17 +154,15 @@ std::string SendContractTx(CWalletTx& wtx_new) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return strError;
     }
 
-    for (const auto& pool_tx : mempool.mapTx) {
-        for (const auto& pool_tx_contract : pool_tx.second.GetTx().GetContracts()) {
-            if (pool_tx_contract.m_type == GRC::ContractType::SIDESTAKE) {
-                std::string strError = _(
-                    "Error: The mandatory sidestake transaction was rejected. "
-                    "There is already a mandatory sidestake transaction in the mempool. "
-                    "Wait until that transaction is bound in a block.");
-                error("%s: %s", __func__, strError);
-                return strError;
-            }
-        }
+    // An O(1) index check (replaced a full mempool scan) enforces at most one
+    // mandatory sidestake transaction in the pool at a time.
+    if (mempool.HasMandatorySidestake()) {
+        std::string strError = _(
+            "Error: The mandatory sidestake transaction was rejected. "
+            "There is already a mandatory sidestake transaction in the mempool. "
+            "Wait until that transaction is bound in a block.");
+        error("%s: %s", __func__, strError);
+        return strError;
     }
 
     if (!pwalletMain->CommitTransaction(wtx_new, reserve_key)) {
