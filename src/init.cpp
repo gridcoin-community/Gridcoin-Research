@@ -78,7 +78,7 @@ namespace {
 class UINotificationBridge : public CValidationInterface
 {
 protected:
-    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* pindexFork, bool fInitialDownload) override
+    void UpdatedBlockTip(const CBlockIndex* pindexNew, const CBlockIndex* /*pindexFork*/, bool fInitialDownload) override
     {
         if (pindexNew == nullptr) return;
         uiInterface.NotifyBlocksChanged(fInitialDownload, pindexNew->nHeight,
