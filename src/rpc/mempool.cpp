@@ -63,6 +63,9 @@ static const RPCHelpMan getrawmempool_help{
                         {RPCResult::Type::NUM, "height", "Block height when the transaction entered the pool."},
                         {RPCResult::Type::ARR, "contract_types", "Gridcoin contract types in the transaction.",
                             {{RPCResult::Type::STR, "", "Contract type."}}},
+                        {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
+                        {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
+                        {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
                     }},
             }},
     },
@@ -108,6 +111,9 @@ static const RPCHelpMan getmempoolentry_help{
             {RPCResult::Type::NUM, "height", "Block height when the transaction entered the pool."},
             {RPCResult::Type::ARR, "contract_types", "Gridcoin contract types in the transaction.",
                 {{RPCResult::Type::STR, "", "Contract type."}}},
+            {RPCResult::Type::STR, "mrc_cpid", /*optional=*/true, "CPID of the MRC contract (MRC transactions only)."},
+            {RPCResult::Type::STR_AMOUNT, "mrc_fee", /*optional=*/true, "Fee burned by the MRC contract (MRC transactions only)."},
+            {RPCResult::Type::STR, "beacon_cpid", /*optional=*/true, "CPID of the beacon advertisement (beacon transactions only)."},
         }},
     RPCExamples{
         HelpExampleCli("getmempoolentry", "\"mytxid\"") +
@@ -138,7 +144,7 @@ static const RPCHelpMan getmempoolinfo_help{
             {RPCResult::Type::NUM, "size", "Current transaction count."},
             {RPCResult::Type::NUM, "bytes", "Sum of all transaction serialized sizes."},
             {RPCResult::Type::NUM, "mrc_count", "Number of MRC contract transactions in the pool."},
-            {RPCResult::Type::NUM, "beacon_count", "Number of beacon advertisement transactions in the pool."},
+            {RPCResult::Type::NUM, "beacon_count", "Number of distinct CPIDs with a pending beacon advertisement in the pool (duplicate same-CPID advertisements collapse to one)."},
             {RPCResult::Type::NUM, "mandatory_sidestake_count", "Number of mandatory sidestake transactions in the pool."},
         }},
     RPCExamples{

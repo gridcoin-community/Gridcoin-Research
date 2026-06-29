@@ -181,7 +181,7 @@ public:
         LOCK(cs);
         CTxMemPoolInfo info;
         info.tx_count = mapTx.size();
-        for (const auto& [hash, entry] : mapTx) info.bytes += entry.GetTxSize();
+        for (const auto& [_, entry] : mapTx) info.bytes += entry.GetTxSize();
         info.mrc_count = m_mrc_by_cpid.size();
         info.beacon_count = m_beacon_by_cpid.size();
         info.mandatory_sidestake_count = m_mandatory_sidestake_count;
