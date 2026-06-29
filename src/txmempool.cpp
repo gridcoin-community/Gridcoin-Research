@@ -73,7 +73,11 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
         for (unsigned int i = 0; i < stored_tx.vin.size(); i++)
             mapNextTx[stored_tx.vin[i].prevout] = CInPoint(&stored_tx, i);
 
-        // Maintain the secondary contract indexes from the cached tags.
+        // Maintain the secondary contract indexes from the cached tags. These rely
+        // on the same fresh-txid contract as above: the CPID-keyed maps overwrite
+        // harmlessly on a same-txid re-add (identical CPID), but m_mrc_by_fee is a
+        // multimap whose emplace would double-insert -- the upstream exists() guard
+        // is what prevents a duplicate add from leaving a stale fee row.
         const CTxMemPoolEntry& e = it->second;
         if (e.HasMRC()) {
             m_mrc_by_cpid.insert_or_assign(e.GetMRCCpid(), hash);

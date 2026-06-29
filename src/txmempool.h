@@ -107,8 +107,21 @@ public:
     // Secondary indexes maintained in the single add/remove/clear paths (#3029
     // Phase 2). They replace the former O(n) full-pool contract scans. Keyed off
     // the contract tags cached on CTxMemPoolEntry.
-    std::map<GRC::Cpid, uint256> m_mrc_by_cpid;    //!< One MRC per CPID; value is the tx hash.
-    std::map<GRC::Cpid, uint256> m_beacon_by_cpid; //!< One beacon advertisement per CPID.
+    //! One MRC per CPID; value is the tx hash. Sound as a CPID-keyed map because
+    //! AcceptToMemoryPool DoS-rejects a second MRC for a CPID already in the pool,
+    //! so mapTx never holds two same-CPID MRCs.
+    std::map<GRC::Cpid, uint256> m_mrc_by_cpid;
+    //! Beacon advertisement by CPID. EXISTENCE-ONLY index (queried via
+    //! HasBeaconForCpid()'s count(); the stored hash is never read). Unlike MRCs,
+    //! duplicate PENDING beacons for one CPID are NOT rejected at acceptance (only
+    //! a wallet-side viability check guards locally), so two same-CPID beacons can
+    //! coexist in mapTx; this map then holds only the last (insert_or_assign) and
+    //! erase(cpid) drops the entry while a sibling may remain. That desync is
+    //! harmless here -- the worst case is HasBeaconForCpid() letting the wallet-side
+    //! guard pass a duplicate that the protocol already permits. Do NOT add a
+    //! consumer that reads the stored hash or treats this as 1:1 without switching
+    //! to a multimap.
+    std::map<GRC::Cpid, uint256> m_beacon_by_cpid;
     size_t m_mandatory_sidestake_count{0};         //!< Mandatory-sidestake txs in the pool.
     //! MRCs in fee-descending order, for the GUI/RPC queue ranking.
     std::multimap<CAmount, GRC::Cpid, std::greater<CAmount>> m_mrc_by_fee;

@@ -325,7 +325,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             GRC::Cpid cpid = *(mrc.m_mining_id.TryCpid());
 
             uint256 existing;
-            if (mempool.HasMRCForCpid(cpid, &existing)) {
+            if (pool.HasMRCForCpid(cpid, &existing)) {
                 return state.DoS(25, error("%s: MRC contract in tx %s has the same CPID as an existing transaction "
                                            "in the memory pool, %s.",
                                            __func__,
