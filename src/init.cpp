@@ -1044,7 +1044,15 @@ bool AppInit2(ThreadHandlerPtr threads)
     nMinerSleep = gArgs.GetArg("-minersleep", 8000);
 
     // Cap the transaction memory pool size (#3029 Phase 4). Value is in MB.
-    int64_t nMaxMempoolMB = std::max<int64_t>(0, gArgs.GetArg("-maxmempool", 300));
+    // Enforce a small floor: a tiny (or zero/negative) cap would evict
+    // transactions as fast as they arrive -- including the node's own sends --
+    // effectively disabling tx relay. Reject the misconfiguration rather than
+    // silently clamping it, so the operator sees what happened.
+    static const int64_t nMaxMempoolMinMB = 5;
+    int64_t nMaxMempoolMB = gArgs.GetArg("-maxmempool", 300);
+    if (nMaxMempoolMB < nMaxMempoolMinMB) {
+        return InitError(strprintf(_("-maxmempool must be at least %d MB."), nMaxMempoolMinMB));
+    }
     mempool.SetMaxSize(static_cast<size_t>(nMaxMempoolMB) * 1000 * 1000);
 
     nDerivationMethodIndex = 0;

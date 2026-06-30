@@ -40,6 +40,13 @@ enum class MemPoolRemovalReason {
 //! are evicted last so reward-bearing MRCs survive), then lowest feerate, then
 //! newest-first among ties, then hash for uniqueness.
 //!
+//! Caveat: eviction ranks by INDIVIDUAL transaction, not by ancestor/descendant
+//! package (this tree has no package-feerate accounting). When the chosen victim
+//! is removed recursively, an unconfirmed contract child spending a cheaper
+//! non-contract parent can be dropped as collateral, so the "contracts last"
+//! guarantee is best-effort for such chains. Acceptable given low tx volume and
+//! the non-consensus nature of the pool; revisit if package relay is added.
+//!
 struct CTxMemPoolEvictionKey
 {
     bool is_contract;
