@@ -18,7 +18,10 @@
 #include <gridcoin/mrc.h>
 #include <gridcoin/sidestake.h>
 #include <gridcoin/contract/contract.h>
+#include <rpc/server.h>
 #include <test/test_gridcoin.h>
+
+#include <univalue.h>
 
 namespace {
 //! Build a v2 transaction carrying the supplied contracts (if any).
@@ -244,6 +247,52 @@ BOOST_AUTO_TEST_CASE(getstalemrcs_selects_by_anchor_block)
     const auto stale = pool.GetStaleMRCs(best);
     BOOST_REQUIRE_EQUAL(stale.size(), 1U);
     BOOST_CHECK(stale[0] == stale_tx.GetHash());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 (#3029): diagnostic RPCs
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(rpc_mempool_diagnostics)
+{
+    const GRC::Cpid cpid(InsecureRandBytes(16));
+    const CTransaction mrc_tx = MakeMrcTx(cpid, 777);
+    const std::string txid = mrc_tx.GetHash().ToString();
+
+    mempool.clear();
+    mempool.addUnchecked(mrc_tx.GetHash(), MakeEntry(mrc_tx));
+
+    // getmempoolinfo
+    const UniValue info = getmempoolinfo(UniValue(UniValue::VARR));
+    BOOST_CHECK_EQUAL(info["size"].get_int(), 1);
+    BOOST_CHECK_EQUAL(info["mrc_count"].get_int(), 1);
+    BOOST_CHECK_EQUAL(info["beacon_count"].get_int(), 0);
+
+    // getrawmempool (non-verbose) -> array of txids
+    const UniValue ids = getrawmempool(UniValue(UniValue::VARR));
+    BOOST_REQUIRE_EQUAL(ids.size(), 1U);
+    BOOST_CHECK_EQUAL(ids[0].get_str(), txid);
+
+    // getrawmempool (verbose) -> object keyed by txid with metadata
+    UniValue vparams(UniValue::VARR);
+    vparams.push_back(UniValue(true));
+    const UniValue verbose = getrawmempool(vparams);
+    BOOST_REQUIRE(verbose.exists(txid));
+    BOOST_CHECK_EQUAL(verbose[txid]["mrc_cpid"].get_str(), cpid.ToString());
+
+    // getmempoolentry
+    UniValue eparams(UniValue::VARR);
+    eparams.push_back(UniValue(txid));
+    const UniValue entry = getmempoolentry(eparams);
+    BOOST_CHECK_EQUAL(entry["height"].get_int(), 0);
+    BOOST_CHECK_EQUAL(entry["mrc_cpid"].get_str(), cpid.ToString());
+
+    // getmempoolentry on a missing hash throws.
+    UniValue mparams(UniValue::VARR);
+    mparams.push_back(UniValue(uint256().ToString()));
+    BOOST_CHECK_THROW(getmempoolentry(mparams), UniValue);
+
+    mempool.clear();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
