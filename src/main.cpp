@@ -199,14 +199,6 @@ void UpdatedTransaction(const uint256& hashTx)
         pwallet->UpdatedTransaction(hashTx);
 }
 
-// dump all wallets
-void static PrintWallets(const CBlock& block)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->PrintWallet(block);
-}
-
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
@@ -1304,13 +1296,6 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                   block.nBits,
                   DateTimeStrFormat("%x %H:%M:%S", block.GetBlockTime()).c_str(),
                   block.vtx.size());
-
-        {
-            // PrintBlockTree is EXCLUSIVE_LOCKS_REQUIRED(cs_main); add the
-            // wallet-registry lock here in the canonical order before dispatch.
-            LOCK(cs_setpwalletRegistered);
-            PrintWallets(block);
-        }
 
         // put the main time-chain first
         vector<CBlockIndex*>& vNext = mapNext[pindex];
