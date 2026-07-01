@@ -171,9 +171,6 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
-// Persists the best-block locator to registered wallets. Now also called from
-// node/chainman.cpp's SetBestChain, so it has external linkage (issue #3030 A4).
-void SetBestChain(const CBlockLocator& loc) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/

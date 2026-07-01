@@ -24,6 +24,7 @@ struct ValidationInterfaceConnections {
     boost::signals2::scoped_connection TransactionRemovedFromMempool;
     boost::signals2::scoped_connection BlockConnected;
     boost::signals2::scoped_connection BlockDisconnected;
+    boost::signals2::scoped_connection ChainStateFlushed;
 };
 
 struct MainSignalsInstance {
@@ -38,6 +39,7 @@ public:
     boost::signals2::signal<void (const CTransactionRef&, MemPoolRemovalReason)> TransactionRemovedFromMempool;
     boost::signals2::signal<void (const CBlock&, int height)> BlockConnected;
     boost::signals2::signal<void (const CBlock&, int height)> BlockDisconnected;
+    boost::signals2::signal<void (const CBlockLocator&)> ChainStateFlushed;
 
     //! Serializes background callbacks on the g_scheduler thread.
     SingleThreadedSchedulerClient m_schedulerClient;
@@ -63,6 +65,8 @@ public:
         inserted.first->second.BlockDisconnected = BlockDisconnected.connect(
             std::bind(&CValidationInterface::BlockDisconnected, callbacks,
                       std::placeholders::_1, std::placeholders::_2));
+        inserted.first->second.ChainStateFlushed = ChainStateFlushed.connect(
+            std::bind(&CValidationInterface::ChainStateFlushed, callbacks, std::placeholders::_1));
     }
 
     void Unregister(CValidationInterface* callbacks)
@@ -190,4 +194,10 @@ void CMainSignals::BlockDisconnected(const CBlock& block, int height)
 {
     if (!m_internals) return;
     m_internals->BlockDisconnected(block, height);
+}
+
+void CMainSignals::ChainStateFlushed(const CBlockLocator& locator)
+{
+    if (!m_internals) return;
+    m_internals->ChainStateFlushed(locator);
 }

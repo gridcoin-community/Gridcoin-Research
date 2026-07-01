@@ -531,7 +531,7 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
     return false;
 }
 
-void CWallet::SetBestChain(const CBlockLocator& loc)
+void CWallet::ChainStateFlushed(const CBlockLocator& loc)
 {
     CWalletDB walletdb(strWalletFile);
     walletdb.WriteBestBlock(loc);

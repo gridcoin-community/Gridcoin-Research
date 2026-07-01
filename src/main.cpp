@@ -182,15 +182,6 @@ void static EraseFromWallets(uint256 hash)
         pwallet->EraseFromWallet(hash);
 }
 
-// notify wallets about a new best chain. External linkage: also called from
-// node/chainman.cpp's SetBestChain after the chain-management move (issue #3030 A4).
-void SetBestChain(const CBlockLocator& loc)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->SetBestChain(loc);
-}
-
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
