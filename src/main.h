@@ -108,7 +108,6 @@ class CTxIndex;
 
 void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
-void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 // Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
 // LoadExternalBlockFile) live in node/blockstorage.h, included above.

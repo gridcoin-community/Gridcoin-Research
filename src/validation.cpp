@@ -1172,17 +1172,11 @@ bool AddToBlockIndex(CBlock& block, unsigned int nFile, unsigned int nBlockPos, 
         if (!SetBestChain(txdb, block, pindexNew))
             return error("%s: SetBestChain failed", __func__);
 
-    if (pindexNew == pindexBest)
-    {
-        // Notify UI to display prev block's coinbase if it was ours.
-        // Canonical order: cs_main (required on entry) -> cs_setpwalletRegistered.
-        static uint256 hashPrevBestCoinBase;
-        {
-            LOCK(cs_setpwalletRegistered);
-            UpdatedTransaction(hashPrevBestCoinBase);
-        }
-        hashPrevBestCoinBase = block.vtx[0].GetHash();
-    }
+    // The previous-best coinbase's confirmation display is refreshed by the
+    // per-tip Qt refresh (UpdatedBlockTip -> NotifyBlocksChanged ->
+    // applyChainTipRefresh, which re-scans all height-volatile records), so the
+    // legacy UpdatedTransaction(hashPrevBestCoinBase) wallet-registry notify is
+    // redundant and has been dropped (issue #3030 setpwalletRegistered retirement).
 
     return true;
 }
