@@ -1191,6 +1191,15 @@ void CWallet::TransactionAddedToMempool(const CTransactionRef& tx)
     SyncTransaction(tx, TxStateInMempool{});
 }
 
+void CWallet::TransactionReplacedInMempool(const CTransactionRef& tx)
+{
+    // The transaction was superseded by a conflicting one accepted to the
+    // mempool. Preserve the legacy EraseFromWallets behavior: drop the defunct
+    // copy entirely (EraseFromWallet takes cs_wallet internally). This replaces
+    // the setpwalletRegistered EraseFromWallets wrapper (issue #3030).
+    EraseFromWallet(tx->GetHash());
+}
+
 void CWallet::BlockConnected(const CBlock& block, int height)
 {
     LOCK(cs_wallet);

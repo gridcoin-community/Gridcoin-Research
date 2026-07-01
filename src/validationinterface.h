@@ -83,6 +83,13 @@ protected:
     /** Notifies listeners of a transaction leaving mempool. */
     virtual void TransactionRemovedFromMempool(const CTransactionRef& tx, MemPoolRemovalReason reason) {}
 
+    /**
+     * Notifies listeners that a mempool transaction was replaced by a newer
+     * conflicting transaction and should be discarded (the wallet erases its
+     * now-defunct copy).
+     */
+    virtual void TransactionReplacedInMempool(const CTransactionRef& tx) {}
+
     /** Notifies listeners of a block being connected to the active chain. */
     virtual void BlockConnected(const CBlock& block, int height) {}
 
@@ -124,6 +131,7 @@ public:
     void UpdatedBlockTip(const CBlockIndex*, const CBlockIndex*, bool fInitialDownload);
     void TransactionAddedToMempool(const CTransactionRef&);
     void TransactionRemovedFromMempool(const CTransactionRef&, MemPoolRemovalReason);
+    void TransactionReplacedInMempool(const CTransactionRef&);
     void BlockConnected(const CBlock&, int height);
     void BlockDisconnected(const CBlock&, int height);
     void ChainStateFlushed(const CBlockLocator&);

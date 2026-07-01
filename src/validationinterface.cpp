@@ -22,6 +22,7 @@ struct ValidationInterfaceConnections {
     boost::signals2::scoped_connection UpdatedBlockTip;
     boost::signals2::scoped_connection TransactionAddedToMempool;
     boost::signals2::scoped_connection TransactionRemovedFromMempool;
+    boost::signals2::scoped_connection TransactionReplacedInMempool;
     boost::signals2::scoped_connection BlockConnected;
     boost::signals2::scoped_connection BlockDisconnected;
     boost::signals2::scoped_connection ChainStateFlushed;
@@ -37,6 +38,7 @@ public:
     boost::signals2::signal<void (const CBlockIndex*, const CBlockIndex*, bool fInitialDownload)> UpdatedBlockTip;
     boost::signals2::signal<void (const CTransactionRef&)> TransactionAddedToMempool;
     boost::signals2::signal<void (const CTransactionRef&, MemPoolRemovalReason)> TransactionRemovedFromMempool;
+    boost::signals2::signal<void (const CTransactionRef&)> TransactionReplacedInMempool;
     boost::signals2::signal<void (const CBlock&, int height)> BlockConnected;
     boost::signals2::signal<void (const CBlock&, int height)> BlockDisconnected;
     boost::signals2::signal<void (const CBlockLocator&)> ChainStateFlushed;
@@ -59,6 +61,8 @@ public:
         inserted.first->second.TransactionRemovedFromMempool = TransactionRemovedFromMempool.connect(
             std::bind(&CValidationInterface::TransactionRemovedFromMempool, callbacks,
                       std::placeholders::_1, std::placeholders::_2));
+        inserted.first->second.TransactionReplacedInMempool = TransactionReplacedInMempool.connect(
+            std::bind(&CValidationInterface::TransactionReplacedInMempool, callbacks, std::placeholders::_1));
         inserted.first->second.BlockConnected = BlockConnected.connect(
             std::bind(&CValidationInterface::BlockConnected, callbacks,
                       std::placeholders::_1, std::placeholders::_2));
@@ -182,6 +186,12 @@ void CMainSignals::TransactionRemovedFromMempool(const CTransactionRef& tx, MemP
 {
     if (!m_internals) return;
     m_internals->TransactionRemovedFromMempool(tx, reason);
+}
+
+void CMainSignals::TransactionReplacedInMempool(const CTransactionRef& tx)
+{
+    if (!m_internals) return;
+    m_internals->TransactionReplacedInMempool(tx);
 }
 
 void CMainSignals::BlockConnected(const CBlock& block, int height)

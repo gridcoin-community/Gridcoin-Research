@@ -305,6 +305,8 @@ public:
     void BlockConnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void TransactionRemovedFromMempool(const CTransactionRef& tx,
                                       MemPoolRemovalReason reason) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    //! A conflicting tx replaced this one in the mempool; erase the defunct copy.
+    void TransactionReplacedInMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void BlockDisconnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     //! Persist the best-block locator so a restored wallet can detect its
     //! position. Writes wallet DB only; takes no cs_wallet.
