@@ -3421,8 +3421,8 @@ const RPCHelpMan& resendtx_helpman() { return resendtx_help; }
 UniValue resendtx(const UniValue& params)
 {
     {
-        LOCK2(cs_main, cs_setpwalletRegistered);
-        ResendWalletTransactions(true);
+        LOCK(cs_main);
+        pwalletMain->ResendWalletTransactions(true);
     }
 
     return NullUniValue;

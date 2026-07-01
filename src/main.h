@@ -170,7 +170,6 @@ int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
-void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/

@@ -163,24 +163,13 @@ void UnregisterWallet(CWallet* pwalletIn)
     }
 }
 
-// Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-// Each wrapper iterates setpwalletRegistered (GUARDED_BY cs_setpwalletRegistered)
-// and dispatches into pwallet methods that take pwallet->cs_wallet. Callers
-// MUST hold cs_setpwalletRegistered before invoking these wrappers; this is
-// enforced by EXCLUSIVE_LOCKS_REQUIRED. Holding the lock at the call site
-// (rather than taking it inside the wrapper) lets callers that also hold
-// cs_wallet establish the canonical order at acquisition time and avoids
-// the cs_setpwalletRegistered <-> cs_wallet inversion the inside-lock
-// pattern would otherwise create.
-
-
-// ask wallets to resend their transactions
-void ResendWalletTransactions(bool fForce)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->ResendWalletTransactions(fForce);
-}
+// The setpwalletRegistered dispatch wrappers (EraseFromWallets, SetBestChain,
+// UpdatedTransaction, PrintWallets, ResendWalletTransactions) have been retired
+// under issue #3030: wallet notifications now flow through CMainSignals and the
+// wallet rebroadcast self-schedules on g_scheduler. cs_setpwalletRegistered now
+// guards only the registry set itself (RegisterWallet/UnregisterWallet above) and
+// the net-half Inventory/GetTransaction wrappers (tracked separately). The
+// canonical lock order remains cs_main -> cs_setpwalletRegistered -> cs_wallet.
 
 
 double CoinToDouble(double surrogate)
