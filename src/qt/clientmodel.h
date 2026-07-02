@@ -85,6 +85,11 @@ signals:
     void updateScraperLog(QString message);
     void updateScraperStatus(int ScraperEventtype, int status);
 
+    //! The PSGT pool (#2910) changed. change_type is a ui_interface ChangeType
+    //! (CT_NEW / CT_UPDATED / CT_DELETED) narrowed to quint8 for the queued
+    //! connection; the affected revision hash is carried for reference.
+    void psgtPoolChanged(QString revision_hash, quint8 change_type);
+
     //! Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);
 
@@ -96,6 +101,7 @@ public slots:
     void updateAlert(const QString &hash, int status);
     void updateMinerStatus(bool staking, double coin_weight);
     void updateScraper(int scraperEventtype, int status, const QString message);
+    void updatePSGTPool(const QString &revision_hash, int status);
 };
 
 #endif // BITCOIN_QT_CLIENTMODEL_H
