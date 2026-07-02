@@ -30,6 +30,7 @@
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
 #include "node/psgt_pool.h"
+#include <util/string.h>
 #include <util/syserror.h>
 
 #include <openssl/crypto.h>
@@ -495,6 +496,10 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
     argsman.AddArg("-pollexpirewarningtime=<hours>", "Hours before poll expiration to execute notification command. Default is "
                                                      "7 days (168 hours)",
+                   ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
+    argsman.AddArg("-psgtnotify=<cmd>", "Execute command when the PSGT pool changes (%s1 in cmd is replaced by the multisig "
+                                        "image hash, %s2 by the event: added, updated, expired, replaced, completed, "
+                                        "conflict-mempool, conflict-block, removed; %s3 by the unsigned transaction id)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
 #endif
     argsman.AddArg("-confchange", "Require confirmations for change (default: 0)",
@@ -1975,6 +1980,35 @@ bool AppInit2(ThreadHandlerPtr threads)
     // whose inputs get spent are evicted on mempool admission (fast) and on
     // block connection (authoritative).
     RegisterValidationInterface(&g_psgt_pool);
+
+    // Three-layer PSGT pool notification (#2910), the -pollnotify pattern:
+    // the pool fires this hook outside its lock for every mutation; it fans
+    // out to the uiInterface signal (Qt models/toasts) and the -psgtnotify
+    // external command (headless workflows: email, SMS, webhook).
+    g_psgt_pool.m_notify_hook = [](const PSGTPoolEntry& entry, PSGTPoolChangeType change,
+                                   std::optional<PSGTRemovalReason> reason) {
+        const ChangeType status =
+            change == PSGTPoolChangeType::ADDED ? CT_NEW :
+            change == PSGTPoolChangeType::UPDATED ? CT_UPDATED : CT_DELETED;
+
+        uiInterface.PSGTPoolChanged(entry.revision_hash, status);
+
+#if HAVE_SYSTEM
+        std::string strCmd = gArgs.GetArg("-psgtnotify", std::string{});
+
+        if (!strCmd.empty()) {
+            const std::string event =
+                change == PSGTPoolChangeType::ADDED ? "added" :
+                change == PSGTPoolChangeType::UPDATED ? "updated" :
+                PSGTRemovalReasonToString(reason.value_or(PSGTRemovalReason::LOCAL_REMOVE));
+
+            ReplaceAll(strCmd, "%s1", entry.image.ToString());
+            ReplaceAll(strCmd, "%s2", event);
+            ReplaceAll(strCmd, "%s3", entry.tx_hash.ToString());
+            boost::thread t(runCommand, strCmd); // thread runs free
+        }
+#endif
+    };
 
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();

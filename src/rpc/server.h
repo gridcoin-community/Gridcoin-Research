@@ -212,6 +212,13 @@ extern UniValue utxoupdatepsgt(const UniValue& params);
 extern UniValue converttopsgt(const UniValue& params);
 extern UniValue walletcreatefundedpsgt(const UniValue& params);
 
+// PSGT pool (#2910 Phase II)
+extern UniValue submitpsgt(const UniValue& params);
+extern UniValue listpsgtpool(const UniValue& params);
+extern UniValue signpsgtinpool(const UniValue& params);
+extern UniValue removepsgtfrompool(const UniValue& params);
+extern UniValue getpsgtpoolinfo(const UniValue& params);
+
 // Staking
 extern UniValue advertisebeacon(const UniValue& params);
 extern UniValue advertisebeaconv3(const UniValue& params);
@@ -389,6 +396,11 @@ extern const RPCHelpMan& inspectwalletstate_helpman();
 extern const RPCHelpMan& utxoupdatepsgt_helpman();
 extern const RPCHelpMan& walletcreatefundedpsgt_helpman();
 extern const RPCHelpMan& walletprocesspsgt_helpman();
+extern const RPCHelpMan& submitpsgt_helpman();
+extern const RPCHelpMan& listpsgtpool_helpman();
+extern const RPCHelpMan& signpsgtinpool_helpman();
+extern const RPCHelpMan& removepsgtfrompool_helpman();
+extern const RPCHelpMan& getpsgtpoolinfo_helpman();
 extern const RPCHelpMan& currenttime_helpman();
 extern const RPCHelpMan& debug_helpman();
 extern const RPCHelpMan& decoderawtransaction_helpman();

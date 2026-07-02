@@ -311,4 +311,31 @@ private:
 //! Global PSGT pool. Registered as a validation-interface subscriber in init.
 extern PSGTPool g_psgt_pool;
 
+//! What SignAndAdvancePSGT did.
+enum class PSGTSignResult
+{
+    SIGNED_AND_RELAYED,      //!< Added signature(s); still incomplete; new revision pooled and relayed.
+    COMPLETED_AND_BROADCAST, //!< Signature(s) completed the PSGT; final transaction broadcast; pool slot freed.
+    NO_NEW_SIGNATURES,       //!< The wallet holds no key that could add a signature.
+    FAILED,                  //!< See error.
+};
+
+//!
+//! \brief Sign a pooled PSGT with the local wallet and advance the workflow
+//! (#2910 lifecycle steps 6-9): if the added signature(s) complete it,
+//! finalize, broadcast the extracted transaction through the normal relay
+//! path and free the image slot (peers' pools clean themselves up when the
+//! transaction reaches their mempools); otherwise pool and relay the
+//! signature-superset revision.
+//!
+//! Shared by the signpsgtinpool RPC and the GUI Sign action. Takes cs_main
+//! and the wallet lock internally; the wallet must be unlocked.
+//!
+//! On COMPLETED_AND_BROADCAST, txid_out receives the FINAL transaction id
+//! (signing changes the id: the hash covers scriptSigs); on
+//! SIGNED_AND_RELAYED it receives the unchanged unsigned transaction id.
+//!
+PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
+                                  uint256* txid_out = nullptr);
+
 #endif // GRIDCOIN_NODE_PSGT_POOL_H

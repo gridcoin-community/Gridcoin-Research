@@ -205,6 +205,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "walletcreatefundedpsgt"          , 1 },
     { "walletcreatefundedpsgt"          , 2 },
     { "walletcreatefundedpsgt"          , 3 },
+    { "listpsgtpool"                    , 0 },
     { "upgradewallet"          , 0 },
     { "walletpassphrase"       , 1 },
     { "walletpassphrase"       , 2 },
