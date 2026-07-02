@@ -2145,10 +2145,12 @@ void CConnman::ForEachNodeUnderLock(const std::function<void(CNode*)>& func) con
     }
 }
 
-void CConnman::RelayInventory(const CInv& inv)
+void CConnman::RelayInventory(const CInv& inv, int min_proto_version)
 {
-    ForEachNode([&inv](CNode* pnode) {
-        pnode->PushInventory(inv);
+    ForEachNode([&inv, min_proto_version](CNode* pnode) {
+        if (pnode->nVersion >= min_proto_version) {
+            pnode->PushInventory(inv);
+        }
     });
 }
 

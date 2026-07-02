@@ -43,9 +43,10 @@ MAX_BLOCK_BASE_SIZE = 1000000
 COIN = 100000000  # 1 GRC in halflings
 
 # Protocol constants (src/version.h)
-MY_VERSION = 180329          # PROTOCOL_VERSION
+MY_VERSION = 180330          # PROTOCOL_VERSION
 MIN_PEER_PROTO_VERSION = 180327
 INIT_PROTO_VERSION = 180275
+PSGT_PROTO_VERSION = 180330  # peers below this never receive MSG_PSGT invs
 
 MY_SUBVERSION = "/python-mininode-tester:0.0.3/"
 MY_RELAY = 1  # placeholder; Gridcoin's version message has no relay field
@@ -59,9 +60,12 @@ MAGIC_BYTES = {
     "regtest": b"\xfa\xbf\xb5\xda",
 }
 
-# Inv/getdata type codes (src/protocol.h GetDataMsg). No witness variants.
+# Inv/getdata type codes (src/net.h inv-type enum). No witness variants.
 MSG_TX = 1
 MSG_BLOCK = 2
+MSG_PART = 3
+MSG_SCRAPERINDEX = 4
+MSG_PSGT = 5
 
 
 # Serialization/deserialization tools
@@ -210,7 +214,8 @@ def _ip_to_int(ip):
 
 
 class CInv:
-    typemap = {0: "Error", MSG_TX: "TX", MSG_BLOCK: "Block"}
+    typemap = {0: "Error", MSG_TX: "TX", MSG_BLOCK: "Block", MSG_PART: "Part",
+               MSG_SCRAPERINDEX: "ScraperIndex", MSG_PSGT: "PSGT"}
 
     def __init__(self, t=0, h=0):
         self.type = t
@@ -880,6 +885,31 @@ class msg_pong:
         return "msg_pong(nonce=%08x)" % self.nonce
 
 
+class msg_psgt:
+    """A PSGT pool message (#2910): CompactSize-prefixed raw PSGT wire bytes.
+
+    The inv identity of a revision is hash256 of the raw bytes (the
+    "revision hash"), NOT the unsigned transaction's hash.
+    """
+    __slots__ = ("psgt_bytes",)
+    command = b"psgt"
+
+    def __init__(self, psgt_bytes=b""):
+        self.psgt_bytes = psgt_bytes
+
+    def deserialize(self, f):
+        self.psgt_bytes = deser_string(f)
+
+    def serialize(self):
+        return ser_string(self.psgt_bytes)
+
+    def revision_hash(self):
+        return uint256_from_str(hash256(self.psgt_bytes))
+
+    def __repr__(self):
+        return "msg_psgt(len=%i)" % len(self.psgt_bytes)
+
+
 class msg_notfound:
     __slots__ = ("vec",)
     command = b"notfound"
@@ -917,5 +947,6 @@ MESSAGEMAP = {
     b"mempool": msg_mempool,
     b"ping": msg_ping,
     b"pong": msg_pong,
+    b"psgt": msg_psgt,
     b"notfound": msg_notfound,
 }

@@ -296,6 +296,9 @@ class P2PInterface(P2PConnection):
     def on_notfound(self, message):
         pass
 
+    def on_psgt(self, message):
+        pass
+
     def on_tx(self, message):
         pass
 

@@ -24,6 +24,10 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
 //! see the definition for the lock-order rationale).
 void ResendUnbroadcastTransactions();
 
+//! Relay a pooled PSGT revision (#2910) to peers on PSGT_PROTO_VERSION or
+//! later. The object itself is served from the PSGT pool by the getdata loop.
+void RelayPSGT(const uint256& revision_hash);
+
 //! Message-processing manager (issue #2558 PR 8a). Abstract interface; the
 //! implementation (PeerManagerImpl) lives in net_processing.cpp and also
 //! implements NetEventsInterface (ProcessMessages/SendMessages). The

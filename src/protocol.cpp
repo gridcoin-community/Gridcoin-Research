@@ -37,8 +37,10 @@ namespace NetMsgType {
     // Gridcoin specific
     const char *SCRAPERINDEX="scraperindex";
     const char *PART="part";
+    const char *PSGT="psgt";
 }
 
+// Index-aligned with the inv-type enum in net.h (MSG_TX = 1, ...).
 static const char* ppszTypeName[] =
 {
     "ERROR", // Should never occur
@@ -46,6 +48,7 @@ static const char* ppszTypeName[] =
     NetMsgType::BLOCK,
     NetMsgType::PART,
     NetMsgType::SCRAPERINDEX,
+    NetMsgType::PSGT,
 };
 
 /** All known message types. Keep this in the same order as the list of
@@ -76,6 +79,7 @@ const static std::string allNetMessageTypes[] = {
     // Gridcoin specific
     NetMsgType::SCRAPERINDEX,
     NetMsgType::PART,
+    NetMsgType::PSGT,
 };
 
 const static std::vector<std::string> allNetMessageTypesVec(std::begin(allNetMessageTypes), std::end(allNetMessageTypes));

@@ -42,7 +42,9 @@
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include "node/orphan_blocks.h"
+#include "node/psgt_pool.h"
 #include "policy/fees.h"
+#include "scheduler.h"
 #include "policy/policy.h"
 #include "random.h"
 #include "validation.h"
@@ -226,9 +228,115 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(c
     case MSG_BLOCK:
         return mapBlockIndex.count(inv.hash) ||
                g_orphan_blocks.Contains(inv.hash);
+
+    case MSG_PSGT:
+        // Recently removed revisions read as "have": a completed, superseded
+        // or evicted PSGT must not be re-fetched from lagging peers (#2910).
+        return g_psgt_pool.HaveRevision(inv.hash);
     }
     // Don't know what it is, just say we already got one
     return true;
+}
+
+//! Relay a pooled PSGT revision to peers that can handle it (#2910). Served
+//! from the PSGT pool in the getdata loop, NOT from mapRelay: pooled PSGTs
+//! live up to 7 days, far beyond mapRelay's 15-minute expiry.
+void RelayPSGT(const uint256& revision_hash)
+{
+    if (!g_connman) return;
+
+    g_connman->RelayInventory(CInv(MSG_PSGT, revision_hash), PSGT_PROTO_VERSION);
+}
+
+//! Handle an incoming "psgt" message (#2910): validate against the pool
+//! admission rules and, on acceptance, pool and relay the new revision.
+//!
+//! Misbehavior policy: rejects no compliant node would have relayed
+//! (undecodable, oversize, structural, invalid or missing signatures) score
+//! 20 -- a buggy peer survives a couple of slips, a flooder is banned at
+//! five. Policy rejects honest nodes can disagree on (UTXO races around
+//! confirmation, fee bounds, pool-full, replacement races, completeness)
+//! score 0.
+static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
+{
+    std::vector<unsigned char> wire_bytes;
+    try {
+        vRecv >> wire_bytes;
+    } catch (const std::exception&) {
+        pfrom->Misbehaving(20);
+        error("%s: undecodable psgt message from %s", __func__, pfrom->addr.ToString());
+        return;
+    }
+
+    const CInv inv(MSG_PSGT, Hash(wire_bytes));
+
+    // The sender obviously has this revision: suppress the inv echo.
+    pfrom->AddInventoryKnown(inv);
+
+    // The request is satisfied (or abandoned); stop re-asking either way.
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(inv);
+    }
+
+    LOCK(cs_main);
+
+    // Not active, or unable to validate against a current UTXO view yet:
+    // ignore silently, as a pre-v15 node would ignore the unknown message.
+    if (!IsV15Enabled(nBestHeight) || OutOfSyncByAge()) return;
+
+    PSGTPoolEntry entry;
+    std::string reason;
+    const PSGTPoolReject reject =
+        ValidatePSGTForPool(wire_bytes, GetAdjustedTime(), entry, reason);
+
+    switch (reject) {
+    case PSGTPoolReject::NONE:
+        break;
+
+    // Rejects no compliant node would have relayed.
+    case PSGTPoolReject::TOO_LARGE:
+    case PSGTPoolReject::MALFORMED:
+    case PSGTPoolReject::STRUCTURAL:
+    case PSGTPoolReject::INVALID_SIG:
+    case PSGTPoolReject::NO_VALID_SIG:
+        pfrom->Misbehaving(20);
+        error("%s: invalid psgt from %s: %s (%s)", __func__,
+              pfrom->addr.ToString(), PSGTPoolRejectToString(reject), reason);
+        return;
+
+    // Policy rejects honest nodes can disagree on: no penalty, no relay.
+    case PSGTPoolReject::COMPLETE:
+    case PSGTPoolReject::UTXO_MISSING:
+    case PSGTPoolReject::UTXO_SPENT:
+    case PSGTPoolReject::FEE_TOO_LOW:
+    case PSGTPoolReject::FEE_ABSURD:
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt from %s not accepted: %s (%s)",
+                 __func__, pfrom->addr.ToString(),
+                 PSGTPoolRejectToString(reject), reason);
+        return;
+    }
+
+    const uint256 revision_hash = entry.revision_hash;
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        // Normal gossip and replacement races.
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt %s from %s not pooled: %s",
+                 __func__, revision_hash.ToString(), pfrom->addr.ToString(),
+                 reject_reason);
+        break;
+    }
 }
 
 
@@ -442,6 +550,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 item.second.RelayTo(pfrom);
         }
 
+        // Notify the peer about pooled PSGTs (#2910): only peers that
+        // understand MSG_PSGT, and only when the fork is active and this
+        // node is in sync enough to serve what it advertises.
+        if (pfrom->nVersion >= PSGT_PROTO_VERSION
+            && WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge()))
+        {
+            for (const auto& entry : g_psgt_pool.GetAll())
+            {
+                pfrom->PushInventory(CInv(MSG_PSGT, entry.revision_hash));
+            }
+        }
+
         /* Notify the peer about statsscraper blobs we have */
         LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
@@ -563,7 +683,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 LOCK(cs_main);
 
-                if (!fAlreadyHave)
+                // PSGTs (#2910) are only fetched once the v15 gate is active
+                // and this node is in sync -- validation needs a current UTXO
+                // view, and the pool does not operate pre-activation.
+                const bool skip_psgt = inv.type == MSG_PSGT
+                    && (!IsV15Enabled(nBestHeight) || OutOfSyncByAge());
+
+                if (!fAlreadyHave && !skip_psgt)
                     pfrom->AskFor(inv);
                 else if (inv.type == MSG_BLOCK && g_orphan_blocks.Contains(inv.hash)) {
                     const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(inv.hash);
@@ -674,6 +800,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(CSplitBlob::cs_mapParts);
 
                     CSplitBlob::SendPartTo(pfrom, inv.hash);
+                }
+                else if (!pushed && inv.type == MSG_PSGT) {
+                    // Serve from the PSGT pool, not mapRelay: pooled PSGTs
+                    // live up to 7 days, far beyond mapRelay's 15-minute
+                    // expiry. Do not serve while out of sync (mirrors the
+                    // scraper manifest guard below).
+                    if (!OutOfSyncByAge())
+                    {
+                        if (const auto entry = g_psgt_pool.GetByRevision(inv.hash))
+                        {
+                            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                            ss.reserve(entry->serialized.size() + 16);
+                            ss << entry->serialized;
+                            pfrom->PushMessage(NetMsgType::PSGT, ss);
+                        }
+                    }
                 }
                 else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
                 {
@@ -1060,6 +1202,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == NetMsgType::PART)
     {
         CSplitBlob::RecvPart(pfrom, vRecv);
+    }
+    else if (strCommand == NetMsgType::PSGT)
+    {
+        ProcessPSGTMessage(pfrom, vRecv);
     }
 
 
@@ -1471,9 +1617,13 @@ public:
         return ::SendMessages(pto, fSendTrickle);
     }
 
-    void StartScheduledTasks(CScheduler& /*scheduler*/) override
+    void StartScheduledTasks(CScheduler& scheduler) override
     {
-        // No recurring tasks yet (issue #2558 PR 8a shell).
+        // Sweep expired PSGTs (#2910) so entries whose owners went idle still
+        // expire -- and fire the eviction notification -- even when no pool
+        // traffic triggers the lazy paths.
+        scheduler.scheduleEvery([] { g_psgt_pool.EraseExpired(GetAdjustedTime()); },
+                                std::chrono::minutes{10});
     }
 
     bool Misbehaving(const CAddress& addr, int howmuch) override
