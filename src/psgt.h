@@ -11,6 +11,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,12 @@ static constexpr uint8_t PSGT_OUT_BIP32_DERIVATION = 0x02;
 
 // Magic bytes: "psgt" + 0xff separator
 static const std::vector<unsigned char> PSGT_MAGIC = {0x70, 0x73, 0x67, 0x74, 0xff};
+
+// Upper bound on the serialized (binary) size of a PSGT accepted from
+// untrusted sources (network relay, pool submission). Generous for a
+// multisig spend of a few dozen inputs, each carrying its full previous
+// transaction, while bounding per-object memory.
+static constexpr size_t MAX_PSGT_WIRE_SIZE = 100000;
 
 /** HD key origin information: fingerprint + derivation path. */
 struct KeyOriginInfo
@@ -108,12 +115,22 @@ bool CombinePSGTs(PartiallySignedTransaction& out,
                    const std::vector<PartiallySignedTransaction>& psgts);
 
 /**
- * Decode a PSGT from a binary stream.
+ * Decode a PSGT from base64 text (whitespace tolerated).
  * @return true on success.
  */
 bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
                     const std::string& base64_tx,
                     std::string& error);
+
+/**
+ * Decode a PSGT from raw binary bytes (the SerializePSGT format). This is
+ * the transport-agnostic core of DecodeRawPSGT, exposed for callers that
+ * receive PSGT bytes directly (e.g. network relay) rather than base64 text.
+ * @return true on success.
+ */
+bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
+                     const std::vector<unsigned char>& data,
+                     std::string& error);
 
 /**
  * Serialize a PSGT to a binary byte vector.
@@ -171,5 +188,57 @@ struct PSGTAnalysis
  * Pure function of the PSGT; does not consult the wallet or mutate anything.
  */
 PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx);
+
+/**
+ * The multisig "image" of one PSGT input: the hash of its redeem script
+ * (CScriptID), the key a PSGT pool indexes on (#2910). Returns a value only
+ * when the input is trustworthily P2SH multisig: the carried previous
+ * transaction matches prevout, the funded output is P2SH, the redeem script
+ * is present and hashes to the script hash the output commits to, and the
+ * redeem script decomposes as m-of-n CHECKMULTISIG.
+ */
+std::optional<CScriptID> GetPSGTInputImage(const PartiallySignedTransaction& psgt,
+                                           unsigned int index);
+
+/**
+ * The single multisig image shared by ALL inputs of the PSGT, or nullopt if
+ * any input lacks an image or two inputs disagree. One image per PSGT is the
+ * pool's identity model: multi-input spends from the same multisig address
+ * qualify; mixed-arrangement PSGTs do not.
+ */
+std::optional<CScriptID> GetPSGTImage(const PartiallySignedTransaction& psgt);
+
+/**
+ * Recover the m-of-n parameters of the PSGT's (single) multisig image.
+ * @return false if GetPSGTImage would return nullopt.
+ */
+bool GetPSGTMultisigParams(const PartiallySignedTransaction& psgt,
+                           int& required, int& total);
+
+/**
+ * Cryptographically verify EVERY partial signature carried by the PSGT.
+ * For each input, each (key id, signature) entry must map to a pubkey of the
+ * input's multisig redeem script and pass CheckSig over the unsigned
+ * transaction. Any unknown key or invalid signature fails the whole PSGT —
+ * partial_sigs are untrusted after transport and CombinePSGTs (which merges
+ * without verifying).
+ *
+ * On success, valid_keys_per_input[i] holds the key ids with a verified
+ * signature on input i (the per-input m-of-n progress).
+ */
+bool VerifyPSGTPartialSigs(const PartiallySignedTransaction& psgt,
+                           std::vector<std::set<CKeyID>>& valid_keys_per_input,
+                           std::string& error);
+
+/**
+ * True iff some input carries a cryptographically valid partial signature
+ * from a key the provider holds — verified against the input's sighash, not
+ * merely present under an owned key id. Tolerant of other signers' invalid
+ * or unverifiable material (unlike VerifyPSGTPartialSigs): only the
+ * provider-owned entries decide the result. This is the ">=1 valid own
+ * signature" precondition for submitting a PSGT to the pool (#2910).
+ */
+bool PSGTSignedBy(const SigningProvider& provider,
+                  const PartiallySignedTransaction& psgt);
 
 #endif // GRIDCOIN_PSGT_H

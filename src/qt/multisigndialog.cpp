@@ -262,57 +262,9 @@ void MultisignPSGTDialog::setWorking(const PartiallySignedTransaction& psgt)
 
 bool MultisignPSGTDialog::walletHasSignature(const PartiallySignedTransaction& psgt) const
 {
-    if (!pwalletMain)
-        return false;
-
-    for (unsigned int i = 0; i < psgt.inputs.size() && i < psgt.tx.vin.size(); ++i)
-    {
-        const PSGTInput& input = psgt.inputs[i];
-        if (input.partial_sigs.empty())
-            continue;
-
-        // We must know what was signed, so require the provided previous
-        // transaction to actually match the prevout (the AnalyzePSGT guard) and
-        // verify against the real scriptPubKey.
-        const COutPoint& prevout = psgt.tx.vin[i].prevout;
-        if (input.non_witness_utxo.IsNull()
-            || prevout.n >= input.non_witness_utxo.vout.size()
-            || input.non_witness_utxo.GetHash() != prevout.hash)
-            continue;
-
-        // P2SH multisig signatures are made over the redeem script.
-        CScript signScript = input.non_witness_utxo.vout[prevout.n].scriptPubKey;
-        if (signScript.IsPayToScriptHash())
-        {
-            if (input.redeem_script.empty())
-                continue;
-            signScript = input.redeem_script;
-        }
-
-        // Map each partial signature back to its multisig pubkey and verify the
-        // bytes cryptographically. Presence under an owned CKeyID is not enough:
-        // a crafted or combined PSGT could carry arbitrary bytes under our key id,
-        // and Phase II's pool-acceptance precondition (#2910) is >=1 *valid* sig.
-        txnouttype scriptType;
-        std::vector<std::vector<unsigned char>> vSolutions;
-        if (!Solver(signScript, scriptType, vSolutions) || scriptType != TX_MULTISIG)
-            continue;
-
-        for (unsigned int j = 1; j + 1 < vSolutions.size(); ++j)
-        {
-            const CPubKey pubkey(vSolutions[j]);
-            if (!pubkey.IsValid() || !pwalletMain->HaveKey(pubkey.GetID()))
-                continue;
-
-            auto it = input.partial_sigs.find(pubkey.GetID());
-            if (it == input.partial_sigs.end())
-                continue;
-
-            if (CheckSig(it->second, vSolutions[j], signScript, CTransaction(psgt.tx), i))
-                return true;
-        }
-    }
-    return false;
+    // Hoisted into the core PSGT library as PSGTSignedBy so the Phase II pool
+    // (#2910) can gate on the same ">=1 valid own signature" precondition.
+    return pwalletMain && PSGTSignedBy(*pwalletMain, psgt);
 }
 
 void MultisignPSGTDialog::showDecoded(const PartiallySignedTransaction& psgt)

@@ -14,37 +14,11 @@
 #include <script/sign.h>
 #include <script/standard.h>
 #include <streams.h>
+#include <test/psgt_test_helpers.h>
 #include <util/strencodings.h>
 #include <version.h>
 
 BOOST_AUTO_TEST_SUITE(psgt_tests)
-
-static CKey MakeKey()
-{
-    CKey key;
-    key.MakeNewKey(true);
-    return key;
-}
-
-static CScript P2PKH(const CKeyID& id)
-{
-    CScript s;
-    s << OP_DUP << OP_HASH160 << id << OP_EQUALVERIFY << OP_CHECKSIG;
-    return s;
-}
-
-// Build a fake previous transaction that pays to the given key.
-static CTransaction MakePrevTx(const CKey& key, CAmount amount)
-{
-    CMutableTransaction mtx;
-    mtx.nVersion = 2;
-    mtx.nTime = 1700000000;
-    mtx.vin.resize(1);
-    mtx.vin[0].prevout.SetNull(); // coinbase-like
-    mtx.vin[0].scriptSig = CScript() << 0;
-    mtx.vout.push_back(CTxOut(amount, P2PKH(key.GetPubKey().GetID())));
-    return CTransaction(mtx);
-}
 
 // ---------------------------------------------------------------------------
 // Test 1: Create a PSGT, serialize, deserialize, verify round-trip.
@@ -742,48 +716,6 @@ BOOST_AUTO_TEST_CASE(hd_keypaths_roundtrip)
 // AnalyzePSGT tests.
 // ---------------------------------------------------------------------------
 
-static CScript P2SH(const CScriptID& id)
-{
-    CScript s;
-    s << OP_HASH160 << id << OP_EQUAL;
-    return s;
-}
-
-static CScript Multisig1of2(const CKey& key1, const CKey& key2)
-{
-    CScript s;
-    s << OP_1 << key1.GetPubKey() << key2.GetPubKey() << OP_2 << OP_CHECKMULTISIG;
-    return s;
-}
-
-// Build a fake previous transaction with an arbitrary scriptPubKey.
-static CTransaction MakePrevTxScript(const CScript& scriptPubKey, CAmount amount)
-{
-    CMutableTransaction mtx;
-    mtx.nVersion = 2;
-    mtx.nTime = 1700000000;
-    mtx.vin.resize(1);
-    mtx.vin[0].prevout.SetNull();
-    mtx.vin[0].scriptSig = CScript() << 0;
-    mtx.vout.push_back(CTxOut(amount, scriptPubKey));
-    return CTransaction(mtx);
-}
-
-// Build an unsigned one-input spend of prevTx:0 paying amount to a fresh key.
-static PartiallySignedTransaction MakeSpendPSGT(const CTransaction& prevTx, CAmount amount)
-{
-    CMutableTransaction mtx;
-    mtx.nVersion = 2;
-    mtx.nTime = 1700002000;
-    mtx.vin.resize(1);
-    mtx.vin[0].prevout = COutPoint(prevTx.GetHash(), 0);
-    mtx.vout.push_back(CTxOut(amount, P2PKH(MakeKey().GetPubKey().GetID())));
-
-    PartiallySignedTransaction psgt(mtx);
-    psgt.inputs[0].non_witness_utxo = prevTx;
-    return psgt;
-}
-
 // Test: unsigned P2PKH input — signer's turn, missing sig and pubkey,
 // fee/size/min-fee all computable.
 BOOST_AUTO_TEST_CASE(analyze_p2pkh_unsigned)
@@ -1004,6 +936,214 @@ BOOST_AUTO_TEST_CASE(analyze_error_precedence)
 
     BOOST_CHECK_EQUAL(analysis.error,
         "Input 0 spends a non-standard or unspendable output");
+}
+
+// ---------------------------------------------------------------------------
+// Phase II groundwork (#2910): bytes decoder, image helpers, partial-sig
+// verification.
+// ---------------------------------------------------------------------------
+
+// A funded 2-of-3 P2SH multisig spend with the redeem script attached --
+// the shape the PSGT pool operates on.
+struct Multisig2of3PSGT
+{
+    CKey k1, k2, k3;
+    CScript redeem;
+    PartiallySignedTransaction psgt;
+
+    Multisig2of3PSGT()
+        : k1(MakeKey()), k2(MakeKey()), k3(MakeKey())
+        , redeem(MultisigScript(2, {k1.GetPubKey(), k2.GetPubKey(), k3.GetPubKey()}))
+    {
+        CTransaction prevTx = MakePrevTxScript(P2SH(CScriptID(redeem)), 10 * COIN);
+        psgt = MakeSpendPSGT(prevTx, 9 * COIN);
+        psgt.inputs[0].redeem_script = redeem;
+    }
+
+    void Sign(const CKey& key)
+    {
+        CBasicKeyStore keystore;
+        keystore.AddKey(key);
+        keystore.AddCScript(redeem);
+        BOOST_REQUIRE(SignPSGTInput(keystore, psgt, 0));
+    }
+};
+
+// Test: DecodePSGTBytes accepts what SerializePSGT produced, agrees with the
+// base64 path, and rejects corrupted magic.
+BOOST_AUTO_TEST_CASE(decode_bytes_matches_base64)
+{
+    Multisig2of3PSGT fixture;
+    fixture.Sign(fixture.k1);
+
+    const std::vector<unsigned char> data = SerializePSGT(fixture.psgt);
+
+    PartiallySignedTransaction from_bytes;
+    PartiallySignedTransaction from_base64;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(DecodePSGTBytes(from_bytes, data, error), error);
+    BOOST_REQUIRE_MESSAGE(
+        DecodeRawPSGT(from_base64, EncodeBase64(data.data(), data.size()), error), error);
+
+    BOOST_CHECK(SerializePSGT(from_bytes) == data);
+    BOOST_CHECK(SerializePSGT(from_base64) == data);
+
+    std::vector<unsigned char> bad_magic = data;
+    bad_magic[0] ^= 0x01;
+    PartiallySignedTransaction rejected;
+    BOOST_CHECK(!DecodePSGTBytes(rejected, bad_magic, error));
+    BOOST_CHECK_EQUAL(error, "Invalid PSGT magic bytes");
+}
+
+// Test: image = CScriptID(redeem_script) for a trustworthy P2SH multisig
+// input; non-P2SH inputs and untrustworthy redeem scripts have none.
+BOOST_AUTO_TEST_CASE(image_and_multisig_params)
+{
+    Multisig2of3PSGT fixture;
+
+    const std::optional<CScriptID> image = GetPSGTImage(fixture.psgt);
+    BOOST_REQUIRE(image.has_value());
+    BOOST_CHECK(*image == CScriptID(fixture.redeem));
+
+    int required = 0;
+    int total = 0;
+    BOOST_REQUIRE(GetPSGTMultisigParams(fixture.psgt, required, total));
+    BOOST_CHECK_EQUAL(required, 2);
+    BOOST_CHECK_EQUAL(total, 3);
+
+    // A P2PKH input has no image.
+    CKey plain = MakeKey();
+    PartiallySignedTransaction p2pkh = MakeSpendPSGT(MakePrevTx(plain, 10 * COIN), 9 * COIN);
+    BOOST_CHECK(!GetPSGTInputImage(p2pkh, 0).has_value());
+    BOOST_CHECK(!GetPSGTImage(p2pkh).has_value());
+
+    // A redeem script that does not hash to the funded script hash is not
+    // trusted, so the input has no image.
+    Multisig2of3PSGT lying;
+    lying.psgt.inputs[0].redeem_script = Multisig1of2(MakeKey(), MakeKey());
+    BOOST_CHECK(!GetPSGTInputImage(lying.psgt, 0).has_value());
+}
+
+// Test: a multi-input spend from the SAME multisig shares one image; inputs
+// from different multisig arrangements do not.
+BOOST_AUTO_TEST_CASE(image_multi_input)
+{
+    CKey k1 = MakeKey();
+    CKey k2 = MakeKey();
+    CKey k3 = MakeKey();
+    const CScript redeem_a = MultisigScript(2, {k1.GetPubKey(), k2.GetPubKey(), k3.GetPubKey()});
+    const CScript redeem_b = Multisig1of2(MakeKey(), MakeKey());
+
+    // Distinct amounts so the two funding transactions hash differently.
+    CTransaction prev1 = MakePrevTxScript(P2SH(CScriptID(redeem_a)), 10 * COIN);
+    CTransaction prev2 = MakePrevTxScript(P2SH(CScriptID(redeem_a)), 20 * COIN);
+    CTransaction prev_b = MakePrevTxScript(P2SH(CScriptID(redeem_b)), 30 * COIN);
+
+    const auto make_two_input_psgt = [](const CTransaction& first, const CTransaction& second,
+                                        const CScript& first_redeem, const CScript& second_redeem) {
+        CMutableTransaction mtx;
+        mtx.nVersion = 2;
+        mtx.nTime = 1700002000;
+        mtx.vin.resize(2);
+        mtx.vin[0].prevout = COutPoint(first.GetHash(), 0);
+        mtx.vin[1].prevout = COutPoint(second.GetHash(), 0);
+        mtx.vout.push_back(CTxOut(25 * COIN, P2PKH(MakeKey().GetPubKey().GetID())));
+
+        PartiallySignedTransaction psgt(mtx);
+        psgt.inputs[0].non_witness_utxo = first;
+        psgt.inputs[0].redeem_script = first_redeem;
+        psgt.inputs[1].non_witness_utxo = second;
+        psgt.inputs[1].redeem_script = second_redeem;
+        return psgt;
+    };
+
+    // Same arrangement on both inputs: one image.
+    PartiallySignedTransaction same = make_two_input_psgt(prev1, prev2, redeem_a, redeem_a);
+    const std::optional<CScriptID> image = GetPSGTImage(same);
+    BOOST_REQUIRE(image.has_value());
+    BOOST_CHECK(*image == CScriptID(redeem_a));
+
+    // Mixed arrangements: both inputs have an image, the PSGT does not.
+    PartiallySignedTransaction mixed = make_two_input_psgt(prev1, prev_b, redeem_a, redeem_b);
+    BOOST_CHECK(GetPSGTInputImage(mixed, 0).has_value());
+    BOOST_CHECK(GetPSGTInputImage(mixed, 1).has_value());
+    BOOST_CHECK(!GetPSGTImage(mixed).has_value());
+}
+
+// Test: VerifyPSGTPartialSigs verifies every signature cryptographically and
+// reports per-input signer sets; any invalid or foreign entry fails the whole
+// PSGT.
+BOOST_AUTO_TEST_CASE(verify_partial_sigs)
+{
+    Multisig2of3PSGT fixture;
+    fixture.Sign(fixture.k1);
+
+    std::vector<std::set<CKeyID>> valid;
+    std::string error;
+
+    BOOST_REQUIRE_MESSAGE(VerifyPSGTPartialSigs(fixture.psgt, valid, error), error);
+    BOOST_REQUIRE_EQUAL(valid.size(), 1u);
+    BOOST_CHECK_EQUAL(valid[0].size(), 1u);
+    BOOST_CHECK(valid[0].count(fixture.k1.GetPubKey().GetID()));
+
+    // Second signer: both keys now verify.
+    fixture.Sign(fixture.k2);
+    BOOST_REQUIRE_MESSAGE(VerifyPSGTPartialSigs(fixture.psgt, valid, error), error);
+    BOOST_CHECK_EQUAL(valid[0].size(), 2u);
+    BOOST_CHECK(valid[0].count(fixture.k2.GetPubKey().GetID()));
+
+    // A corrupted signature poisons the whole PSGT (CombinePSGTs would merge
+    // it silently; the pool must not).
+    {
+        PartiallySignedTransaction corrupted = fixture.psgt;
+        auto& sig = corrupted.inputs[0].partial_sigs[fixture.k1.GetPubKey().GetID()];
+        sig[sig.size() / 2] ^= 0x01;
+        BOOST_CHECK(!VerifyPSGTPartialSigs(corrupted, valid, error));
+    }
+
+    // An entry keyed by a non-member key fails.
+    {
+        PartiallySignedTransaction foreign = fixture.psgt;
+        foreign.inputs[0].partial_sigs[MakeKey().GetPubKey().GetID()] =
+            fixture.psgt.inputs[0].partial_sigs.begin()->second;
+        BOOST_CHECK(!VerifyPSGTPartialSigs(foreign, valid, error));
+    }
+
+    // Signatures without a verifiable signing context (no matching previous
+    // transaction) fail rather than being skipped.
+    {
+        PartiallySignedTransaction no_utxo = fixture.psgt;
+        no_utxo.inputs[0].non_witness_utxo = CTransaction();
+        BOOST_CHECK(!VerifyPSGTPartialSigs(no_utxo, valid, error));
+    }
+}
+
+// Test: PSGTSignedBy is keyed to the provider's own keys and tolerant of
+// other signers' garbage.
+BOOST_AUTO_TEST_CASE(psgt_signed_by)
+{
+    Multisig2of3PSGT fixture;
+    fixture.Sign(fixture.k1);
+
+    CBasicKeyStore holder1;
+    holder1.AddKey(fixture.k1);
+    CBasicKeyStore holder2;
+    holder2.AddKey(fixture.k2);
+
+    BOOST_CHECK(PSGTSignedBy(holder1, fixture.psgt));
+    BOOST_CHECK(!PSGTSignedBy(holder2, fixture.psgt));
+
+    // k2 signs; now both holders pass.
+    fixture.Sign(fixture.k2);
+    BOOST_CHECK(PSGTSignedBy(holder2, fixture.psgt));
+
+    // Corrupt k1's signature: holder1 no longer passes (presence under an
+    // owned key id is not enough), holder2 is unaffected.
+    auto& sig = fixture.psgt.inputs[0].partial_sigs[fixture.k1.GetPubKey().GetID()];
+    sig[sig.size() / 2] ^= 0x01;
+    BOOST_CHECK(!PSGTSignedBy(holder1, fixture.psgt));
+    BOOST_CHECK(PSGTSignedBy(holder2, fixture.psgt));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

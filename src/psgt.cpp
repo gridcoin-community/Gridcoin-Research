@@ -597,6 +597,13 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
         return false;
     }
 
+    return DecodePSGTBytes(psgt, data, error);
+}
+
+bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
+                     const std::vector<unsigned char>& data,
+                     std::string& error)
+{
     // Check magic bytes.
     if (data.size() < PSGT_MAGIC.size() ||
         !std::equal(PSGT_MAGIC.begin(), PSGT_MAGIC.end(), data.begin()))
@@ -1000,4 +1007,224 @@ PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx)
     }
 
     return result;
+}
+
+/**
+ * Resolve the script the partial signatures of input `index` are made over
+ * (the P2SH-unwrapped redeem script), requiring the carried previous
+ * transaction to actually match prevout and, for P2SH, the redeem script to
+ * hash to the script hash the funded output commits to. Returns false when
+ * the input's signing context cannot be established trustworthily.
+ */
+static bool GetPSGTInputSignScript(const PartiallySignedTransaction& psgt,
+                                   unsigned int index, CScript& sign_script)
+{
+    if (index >= psgt.inputs.size() || index >= psgt.tx.vin.size())
+        return false;
+
+    const PSGTInput& input = psgt.inputs[index];
+    const COutPoint& prevout = psgt.tx.vin[index].prevout;
+
+    if (input.non_witness_utxo.IsNull()
+        || prevout.n >= input.non_witness_utxo.vout.size()
+        || input.non_witness_utxo.GetHash() != prevout.hash)
+        return false;
+
+    const CScript& scriptPubKey = input.non_witness_utxo.vout[prevout.n].scriptPubKey;
+    if (!scriptPubKey.IsPayToScriptHash())
+    {
+        sign_script = scriptPubKey;
+        return true;
+    }
+
+    if (input.redeem_script.empty())
+        return false;
+
+    const CScriptID expected(uint160(std::vector<unsigned char>(
+        scriptPubKey.begin() + 2, scriptPubKey.begin() + 22)));
+    if (CScriptID(input.redeem_script) != expected)
+        return false;
+
+    sign_script = input.redeem_script;
+    return true;
+}
+
+std::optional<CScriptID> GetPSGTInputImage(const PartiallySignedTransaction& psgt,
+                                           unsigned int index)
+{
+    if (index >= psgt.inputs.size() || index >= psgt.tx.vin.size())
+        return std::nullopt;
+
+    const PSGTInput& input = psgt.inputs[index];
+    const COutPoint& prevout = psgt.tx.vin[index].prevout;
+
+    if (input.non_witness_utxo.IsNull()
+        || prevout.n >= input.non_witness_utxo.vout.size()
+        || input.non_witness_utxo.GetHash() != prevout.hash)
+        return std::nullopt;
+
+    // Only P2SH-wrapped multisig arrangements have an image.
+    if (!input.non_witness_utxo.vout[prevout.n].scriptPubKey.IsPayToScriptHash())
+        return std::nullopt;
+
+    CScript sign_script;
+    if (!GetPSGTInputSignScript(psgt, index, sign_script))
+        return std::nullopt;
+
+    txnouttype script_type;
+    std::vector<std::vector<unsigned char>> vSolutions;
+    if (!Solver(sign_script, script_type, vSolutions) || script_type != TX_MULTISIG)
+        return std::nullopt;
+
+    return CScriptID(sign_script);
+}
+
+std::optional<CScriptID> GetPSGTImage(const PartiallySignedTransaction& psgt)
+{
+    if (psgt.inputs.empty() || psgt.inputs.size() != psgt.tx.vin.size())
+        return std::nullopt;
+
+    std::optional<CScriptID> image = GetPSGTInputImage(psgt, 0);
+    if (!image)
+        return std::nullopt;
+
+    for (unsigned int i = 1; i < psgt.inputs.size(); ++i)
+    {
+        const std::optional<CScriptID> other = GetPSGTInputImage(psgt, i);
+        if (!other || *other != *image)
+            return std::nullopt;
+    }
+
+    return image;
+}
+
+bool GetPSGTMultisigParams(const PartiallySignedTransaction& psgt,
+                           int& required, int& total)
+{
+    if (!GetPSGTImage(psgt))
+        return false;
+
+    // GetPSGTImage established that input 0's redeem script is present,
+    // committed to by the funded output, and TX_MULTISIG.
+    txnouttype script_type;
+    std::vector<std::vector<unsigned char>> vSolutions;
+    if (!Solver(psgt.inputs[0].redeem_script, script_type, vSolutions)
+        || script_type != TX_MULTISIG)
+        return false;
+
+    required = vSolutions.front()[0];
+    total = vSolutions.size() - 2;
+    return true;
+}
+
+bool VerifyPSGTPartialSigs(const PartiallySignedTransaction& psgt,
+                           std::vector<std::set<CKeyID>>& valid_keys_per_input,
+                           std::string& error)
+{
+    valid_keys_per_input.assign(psgt.inputs.size(), {});
+
+    if (psgt.inputs.size() != psgt.tx.vin.size())
+    {
+        error = "PSGT input count does not match unsigned transaction input count";
+        return false;
+    }
+
+    const CTransaction tx(psgt.tx);
+
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i)
+    {
+        const PSGTInput& input = psgt.inputs[i];
+        if (input.partial_sigs.empty())
+            continue;
+
+        CScript sign_script;
+        if (!GetPSGTInputSignScript(psgt, i, sign_script))
+        {
+            error = strprintf("input %u: carries partial signatures but its signing "
+                              "context cannot be verified (missing or mismatched "
+                              "previous transaction or redeem script)", i);
+            return false;
+        }
+
+        txnouttype script_type;
+        std::vector<std::vector<unsigned char>> vSolutions;
+        if (!Solver(sign_script, script_type, vSolutions) || script_type != TX_MULTISIG)
+        {
+            // Phase I only accumulates partial_sigs for multisig scripts;
+            // anything else carrying them is malformed or crafted.
+            error = strprintf("input %u: partial signatures on a non-multisig script", i);
+            return false;
+        }
+
+        // Map the redeem script's pubkeys by key id so each partial_sigs
+        // entry (keyed by CKeyID only) can be verified.
+        std::map<CKeyID, std::vector<unsigned char>> member_pubkeys;
+        for (unsigned int j = 1; j + 1 < vSolutions.size(); ++j)
+        {
+            const CPubKey pubkey(vSolutions[j]);
+            if (pubkey.IsValid())
+                member_pubkeys[pubkey.GetID()] = vSolutions[j];
+        }
+
+        for (const auto& [keyid, sig] : input.partial_sigs)
+        {
+            const auto member = member_pubkeys.find(keyid);
+            if (member == member_pubkeys.end())
+            {
+                error = strprintf("input %u: partial signature by a key that is not "
+                                  "part of the multisig arrangement", i);
+                return false;
+            }
+
+            if (sig.empty() || !CheckSig(sig, member->second, sign_script, tx, i))
+            {
+                error = strprintf("input %u: invalid partial signature", i);
+                return false;
+            }
+
+            valid_keys_per_input[i].insert(keyid);
+        }
+    }
+
+    return true;
+}
+
+bool PSGTSignedBy(const SigningProvider& provider,
+                  const PartiallySignedTransaction& psgt)
+{
+    const CTransaction tx(psgt.tx);
+
+    for (unsigned int i = 0; i < psgt.inputs.size() && i < psgt.tx.vin.size(); ++i)
+    {
+        const PSGTInput& input = psgt.inputs[i];
+        if (input.partial_sigs.empty())
+            continue;
+
+        // Tolerant per-input skip (not a hard failure like
+        // VerifyPSGTPartialSigs): only provider-owned entries decide.
+        CScript sign_script;
+        if (!GetPSGTInputSignScript(psgt, i, sign_script))
+            continue;
+
+        txnouttype script_type;
+        std::vector<std::vector<unsigned char>> vSolutions;
+        if (!Solver(sign_script, script_type, vSolutions) || script_type != TX_MULTISIG)
+            continue;
+
+        for (unsigned int j = 1; j + 1 < vSolutions.size(); ++j)
+        {
+            const CPubKey pubkey(vSolutions[j]);
+            if (!pubkey.IsValid() || !provider.HaveKey(pubkey.GetID()))
+                continue;
+
+            const auto it = input.partial_sigs.find(pubkey.GetID());
+            if (it == input.partial_sigs.end() || it->second.empty())
+                continue;
+
+            if (CheckSig(it->second, vSolutions[j], sign_script, tx, i))
+                return true;
+        }
+    }
+
+    return false;
 }
