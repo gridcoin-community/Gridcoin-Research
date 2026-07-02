@@ -48,6 +48,7 @@ add_executable(test_gridcoin
     netbase_tests.cpp
     net_tests.cpp
     orphan_block_tests.cpp
+    psgt_pool_tests.cpp
     psgt_tests.cpp
     # Qt-free transaction filter/sort core (src/qt/txfilter.cpp) + its unit
     # suite. The core has zero Qt dependencies, so it compiles into the

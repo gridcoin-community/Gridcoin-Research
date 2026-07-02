@@ -29,6 +29,7 @@
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include "node/mempool_persist.h"
+#include "node/psgt_pool.h"
 #include <util/syserror.h>
 
 #include <openssl/crypto.h>
@@ -304,6 +305,7 @@ void Shutdown(void* parg)
         // SignalScheduler() earlier in Shutdown() already reset CMainSignals' internals and
         // disconnected every subscriber -- but keeping them makes the subscribers' lifetimes
         // self-contained and load-bearing again if that ordering is ever changed.
+        UnregisterValidationInterface(&g_psgt_pool);
         UnregisterValidationInterface(&g_ui_notification_bridge);
         UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
@@ -1969,9 +1971,22 @@ bool AppInit2(ThreadHandlerPtr threads)
     // the Qt models keep receiving them (issue #3030, workstream B3).
     RegisterValidationInterface(&g_ui_notification_bridge);
 
+    // Subscribe the PSGT pool (#2910) to mempool/block events: pooled PSGTs
+    // whose inputs get spent are evicted on mempool admission (fast) and on
+    // block connection (authoritative).
+    RegisterValidationInterface(&g_psgt_pool);
+
     g_scheduler->scheduleEvery([]{
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
+
+    // Periodically expire stale PSGT pool entries (EXPIRY_SECONDS). The pool's
+    // capacity self-healing -- slots reopen as PSGTs complete or expire -- relies
+    // on this running; without it, entries whose funding is never spent leak their
+    // slot permanently and a full pool would reject all new images indefinitely.
+    g_scheduler->scheduleEvery([]{
+        g_psgt_pool.EraseExpired(GetAdjustedTime());
+    }, std::chrono::minutes{5});
 
     // Periodically rebroadcast the node's own transactions still awaiting initial
     // broadcast (the unbroadcast set). Runs on the scheduler thread, which holds no
