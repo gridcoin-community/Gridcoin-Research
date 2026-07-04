@@ -15,6 +15,8 @@
 #include <tinyformat.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 
 namespace node {
 
@@ -62,19 +64,24 @@ bool ReadMempoolEntries(const fs::path& path, MempoolPersistEntries& entries)
     entries.clear();
 
     FILE* file = fsbridge::fopen(path, "rb");
-    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
-    if (filein.IsNull()) {
-        filein.fclose();
-        // Missing file is normal (first run, or nothing was in flight); not an error.
-        return false;
+    if (file == nullptr) {
+        // A missing file is normal (first run, or nothing was in flight) and is
+        // reported as success with an empty set; any other open failure is a real
+        // error the caller should hear about.
+        if (errno == ENOENT) {
+            return true;
+        }
+        return error("%s: failed to open %s: %s", __func__, path.string(), std::strerror(errno));
     }
+    CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
 
     try {
         uint64_t version;
         filein >> version;
         if (version != UNBROADCAST_DUMP_VERSION) {
             filein.fclose();
-            return error("%s: unsupported unbroadcast.dat version %d", __func__, version);
+            return error("%s: unsupported unbroadcast.dat version %d (expected %d)",
+                         __func__, version, UNBROADCAST_DUMP_VERSION);
         }
         filein >> entries;
     } catch (const std::exception& e) {

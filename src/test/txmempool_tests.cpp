@@ -455,7 +455,8 @@ BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
     entries.emplace_back(a, 111);
     entries.emplace_back(b, 222);
 
-    const fs::path path = fs::temp_directory_path() / "gridcoin_unbroadcast_roundtrip.dat";
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_roundtrip_%%%%%%%%.dat");
     BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
 
     node::MempoolPersistEntries loaded;
@@ -480,7 +481,8 @@ BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
     pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
     pool.AddUnbroadcast(ours.GetHash()); // only `ours` is in the unbroadcast set
 
-    const fs::path path = fs::temp_directory_path() / "gridcoin_unbroadcast_dump.dat";
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_dump_%%%%%%%%.dat");
     BOOST_REQUIRE(node::DumpUnbroadcast(pool, path));
 
     node::MempoolPersistEntries loaded;
