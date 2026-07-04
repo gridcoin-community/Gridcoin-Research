@@ -370,4 +370,33 @@ BOOST_AUTO_TEST_CASE(trim_protects_contract_when_room_for_one)
     BOOST_CHECK_EQUAL(pool.m_mrc_by_cpid.size(), 1U);
 }
 
+BOOST_AUTO_TEST_CASE(trim_never_evicts_the_protected_transaction)
+{
+    CTxMemPool pool;
+
+    // Two transactions in the same feerate tier.
+    const CTransaction a = MakePlainTx(11);
+    const CTransaction b = MakePlainTx(12);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+
+    // Whichever sits at the front of the eviction set is the natural first victim.
+    // Protect exactly that one: TrimToSize must evict the OTHER transaction instead
+    // and keep the protected one -- this is the AcceptToMemoryPool self-eviction
+    // guard that stops a just-accepted tx (newest, so first in the tie-break) from
+    // being dropped as its own victim.
+    const uint256 natural_victim = pool.m_eviction_index.begin()->hash;
+
+    // Room for exactly one entry (both txs serialize to the same size).
+    const size_t one_entry = ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION)
+                             + CTxMemPool::PER_ENTRY_OVERHEAD;
+    pool.TrimToSize(one_entry, /*removed=*/nullptr, /*protect=*/&natural_victim);
+
+    BOOST_CHECK(pool.exists(natural_victim));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_total_tx_size,
+                      ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

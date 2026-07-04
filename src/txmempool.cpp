@@ -112,14 +112,23 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
     if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
         --m_mandatory_sidestake_count;
 
-    // Size accounting + eviction ordering.
-    if (m_total_tx_size >= entry.GetTxSize()) m_total_tx_size -= entry.GetTxSize();
+    // Size accounting + eviction ordering. add/erase are balanced in practice
+    // (every addUnchecked is matched by exactly one erase), so this cannot
+    // underflow; clamp to 0 anyway -- rather than wrapping size_t or leaving the
+    // counter stuck high -- so it stays self-correcting if it ever desynced.
+    m_total_tx_size = (m_total_tx_size >= entry.GetTxSize())
+                          ? m_total_tx_size - entry.GetTxSize()
+                          : 0;
     m_eviction_index.erase(EvictionKeyFor(entry));
 }
 
 
 bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalReason reason)
 {
+    // NOTE: `reason` is threaded through (including into the recursive call below)
+    // as groundwork for a future TransactionRemovedFromMempool validation signal.
+    // No subscriber consumes it yet, so it has no observable effect today.
+
     // Remove transaction from memory pool
     {
         LOCK(cs);
@@ -173,17 +182,26 @@ void CTxMemPool::clear()
     m_eviction_index.clear();
 }
 
-void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed)
+void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed,
+                            const uint256* protect)
 {
     LOCK(cs);
 
-    while (DynamicMemoryUsage() > limit && !m_eviction_index.empty()) {
-        const uint256 victim_hash = m_eviction_index.begin()->hash;
+    while (DynamicMemoryUsage() > limit) {
+        // Lowest-priority entry is the next victim, but never evict the protected
+        // transaction (the just-accepted one) -- skip it and take the next.
+        auto key_it = m_eviction_index.begin();
+        if (protect && key_it != m_eviction_index.end() && key_it->hash == *protect)
+            ++key_it;
+        if (key_it == m_eviction_index.end())
+            break; // nothing evictable remains but the protected tx (it alone is over-limit)
+
+        const uint256 victim_hash = key_it->hash;
 
         auto it = mapTx.find(victim_hash);
         if (it == mapTx.end()) {
             // Defensive: drop a stale key that has no backing entry.
-            m_eviction_index.erase(m_eviction_index.begin());
+            m_eviction_index.erase(key_it);
             continue;
         }
 

@@ -176,7 +176,11 @@ public:
     size_t m_max_size_bytes{300 * 1000 * 1000};       //!< -maxmempool cap in bytes (default 300 MB).
 
     //! Estimated per-entry bookkeeping overhead (CTxMemPoolEntry + map/index nodes)
-    //! added on top of the serialized size in DynamicMemoryUsage().
+    //! added on top of the serialized size in DynamicMemoryUsage(). This is an
+    //! optimistic floor, not a tight bound: the entry also stores a full in-memory
+    //! CTransaction copy whose heap footprint runs larger than its serialized size,
+    //! so real RSS exceeds the reported usage. Adequate for bounding a low-volume,
+    //! non-consensus pool; revisit if a tighter memory bound is ever needed.
     static constexpr size_t PER_ENTRY_OVERHEAD = 256;
 
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry);
@@ -196,7 +200,17 @@ public:
     //! \brief Evict transactions until DynamicMemoryUsage() is at or below \p limit,
     //! lowest-priority first (see CTxMemPoolEvictionKey). Routes every eviction
     //! through remove() so all indexes stay consistent.
-    void TrimToSize(size_t limit, std::vector<CTransaction>* removed = nullptr);
+    //!
+    //! If \p protect is non-null, the transaction with that hash is never chosen as
+    //! a victim -- room is made by evicting other (lower-priority) entries instead.
+    //! AcceptToMemoryPool passes the just-accepted hash here so it is not immediately
+    //! self-evicted (which, given Gridcoin's flat feerate and the newest-first
+    //! tie-break, it otherwise always would be), while the pool still stays bounded.
+    //!
+    //! \p removed, when non-null, receives the primary victims chosen here; it does
+    //! NOT include transactions dropped as recursive descendants of a victim.
+    void TrimToSize(size_t limit, std::vector<CTransaction>* removed = nullptr,
+                    const uint256* protect = nullptr);
 
     size_t GetMaxSize() const { LOCK(cs); return m_max_size_bytes; }
     void SetMaxSize(size_t bytes) { LOCK(cs); m_max_size_bytes = bytes; }

@@ -451,10 +451,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
         CTxMemPoolEntry entry(tx, nFees, GetAdjustedTime(), nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
 
-        // Enforce the -maxmempool cap. If this transaction is itself the lowest
-        // priority (and not a protected contract tx), it may be evicted again;
-        // treat that as a "mempool full" rejection.
-        pool.TrimToSize(pool.GetMaxSize());
+        // Enforce the -maxmempool cap. Protect the transaction we just accepted so
+        // it is not immediately self-evicted: given Gridcoin's flat feerate and the
+        // newest-first tie-break it would otherwise always be the first victim,
+        // failing the node's own sends. Room is made by evicting other, lower-
+        // priority entries instead. If the pool is still over the cap afterwards,
+        // this transaction alone exceeds it -- only possible with an unreasonably
+        // small -maxmempool, which the init-time floor already rejects; treat that
+        // as a "mempool full" rejection.
+        pool.TrimToSize(pool.GetMaxSize(), /*removed=*/nullptr, /*protect=*/&hash);
         if (!pool.exists(hash)) {
             return error("AcceptToMemoryPool : transaction %s rejected, mempool full",
                          hash.ToString());
