@@ -98,6 +98,25 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     if (g_connman) g_connman->RelayInventory(inv);
 }
 
+void ResendUnbroadcastTransactions()
+{
+    // Re-announce the node's own transactions still awaiting initial broadcast.
+    // Run from g_scheduler (see AppInit2), NOT from SendMessages: RelayTransaction
+    // -> RelayInventory takes m_nodes_mutex, and the socket handler already takes
+    // m_nodes_mutex -> cs_vSend, so relaying while cs_vSend is held (as it is in
+    // SendMessages) would invert that order. The scheduler thread holds neither.
+    //
+    // Re-announcing by inv reaches peers that do not yet know the tx -- in
+    // particular all peers are fresh after a restart, which is the case this
+    // exists for. Peers then fetch it via getdata, which clears it from the set.
+    for (const uint256& hash : mempool.GetUnbroadcast()) {
+        CTransaction tx;
+        if (mempool.lookup(hash, tx)) {
+            RelayTransaction(tx, hash);
+        }
+    }
+}
+
 // Peer misbehavior tracking moved into PeerManagerImpl::m_misbehavior in PR 8b
 // (it was file-static here since PR 2c). See PeerManagerImpl at the end of this
 // translation unit; CNode::Misbehaving/GetMisbehavior forward to g_peerman.
@@ -616,6 +635,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         pushed = true;
                     }
                 }
+                // A peer asking for one of our txs is evidence it is propagating,
+                // so stop tracking it for initial broadcast. Do this for the
+                // relay-memory hit above as well as the mempool-served path below
+                // -- freshly relayed txs live in mapRelay for ~15 min, so the
+                // common case is served from there, not from the mempool branch.
+                if (pushed && inv.type == MSG_TX) {
+                    mempool.RemoveUnbroadcast(inv.hash);
+                }
                 if (!pushed && inv.type == MSG_TX) {
                     CTransaction tx;
                     if (mempool.lookup(inv.hash, tx)) {
@@ -623,6 +650,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         ss.reserve(1000);
                         ss << tx;
                         pfrom->PushMessage(NetMsgType::TX, ss);
+                        // A peer asked for this tx, so it is propagating: stop
+                        // tracking it for initial broadcast.
+                        mempool.RemoveUnbroadcast(inv.hash);
                     }
                 }
                 else if(!pushed && inv.type == MSG_PART) {
@@ -1223,6 +1253,11 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
         LOCK2(cs_main, cs_setpwalletRegistered);
         ResendWalletTransactions();
     }
+
+    // (The node's own unbroadcast transactions are rebroadcast from a scheduler
+    // job, ResendUnbroadcastTransactions(), not here -- relaying from inside
+    // SendMessages would run under pto->cs_vSend and invert the
+    // m_nodes_mutex -> cs_vSend order taken by the socket handler.)
 
     // Address refresh broadcast
     if (!IsInitialBlockDownload())

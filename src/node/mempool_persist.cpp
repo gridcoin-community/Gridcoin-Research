@@ -11,7 +11,6 @@
 #include "sync.h"
 #include "txmempool.h"
 #include "util.h"
-#include "util/system.h"
 
 #include <tinyformat.h>
 
@@ -21,8 +20,8 @@ namespace node {
 
 bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entries)
 {
-    // Write to a temporary file and rename into place so an interrupted dump
-    // can never leave a partially written mempool.dat.
+    // Write to a temporary file and rename into place so an interrupted dump can
+    // never leave a partially written file.
     const uint16_t randv{GetRand<uint16_t>()};
     fs::path tmp = path;
     tmp += strprintf(".%04x", randv);
@@ -35,7 +34,7 @@ bool WriteMempoolEntries(const fs::path& path, const MempoolPersistEntries& entr
     }
 
     try {
-        fileout << MEMPOOL_DUMP_VERSION;
+        fileout << UNBROADCAST_DUMP_VERSION;
         fileout << entries;
     } catch (const std::exception& e) {
         fileout.fclose();
@@ -66,15 +65,16 @@ bool ReadMempoolEntries(const fs::path& path, MempoolPersistEntries& entries)
     CAutoFile filein(file, SER_DISK, CLIENT_VERSION);
     if (filein.IsNull()) {
         filein.fclose();
-        return error("%s: failed to open %s", __func__, path.string());
+        // Missing file is normal (first run, or nothing was in flight); not an error.
+        return false;
     }
 
     try {
         uint64_t version;
         filein >> version;
-        if (version != MEMPOOL_DUMP_VERSION) {
+        if (version != UNBROADCAST_DUMP_VERSION) {
             filein.fclose();
-            return error("%s: unsupported mempool.dat version %d", __func__, version);
+            return error("%s: unsupported unbroadcast.dat version %d", __func__, version);
         }
         filein >> entries;
     } catch (const std::exception& e) {
@@ -87,14 +87,17 @@ bool ReadMempoolEntries(const fs::path& path, MempoolPersistEntries& entries)
     return true;
 }
 
-bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path)
+bool DumpUnbroadcast(const CTxMemPool& pool, const fs::path& dump_path)
 {
     MempoolPersistEntries entries;
     {
         LOCK(pool.cs);
-        entries.reserve(pool.mapTx.size());
-        for (const auto& [hash, entry] : pool.mapTx) {
-            entries.emplace_back(entry.GetTx(), entry.GetTime());
+        entries.reserve(pool.m_unbroadcast.size());
+        for (const uint256& hash : pool.m_unbroadcast) {
+            auto it = pool.mapTx.find(hash);
+            if (it != pool.mapTx.end()) {
+                entries.emplace_back(it->second.GetTx(), it->second.GetTime());
+            }
         }
     }
 
@@ -102,30 +105,34 @@ bool DumpMempool(const CTxMemPool& pool, const fs::path& dump_path)
     return WriteMempoolEntries(dump_path, entries);
 }
 
-bool LoadMempool(CTxMemPool& pool, const fs::path& load_path)
+bool LoadUnbroadcast(CTxMemPool& pool, const fs::path& load_path)
 {
     MempoolPersistEntries entries;
     if (!ReadMempoolEntries(load_path, entries)) {
         return false;
     }
 
-    // Re-accept oldest-first so the original queue ordering is preserved.
+    // Re-accept oldest-first so the original relative ordering is preserved.
     std::sort(entries.begin(), entries.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     int accepted = 0;
     {
         LOCK(cs_main);
-        for (auto& [tx, time] : entries) {
+        for (auto& [tx, entry_time] : entries) {
             CValidationState state;
-            if (AcceptToMemoryPool(pool, tx, state, nullptr, time)) {
+            CTransaction mutable_tx = tx; // AcceptToMemoryPool takes a non-const ref.
+            // Preserve the original entry time; ATMP drops anything already
+            // confirmed or now invalid.
+            if (AcceptToMemoryPool(pool, mutable_tx, state, nullptr, entry_time)) {
+                pool.AddUnbroadcast(mutable_tx.GetHash());
                 ++accepted;
             }
         }
     }
 
-    LogPrintf("Imported mempool transactions from disk: %d accepted of %" PRIszu,
-              accepted, entries.size());
+    LogPrintf("Reloaded unbroadcast transactions: %d re-accepted of %d persisted\n",
+              accepted, (int)entries.size());
     return true;
 }
 

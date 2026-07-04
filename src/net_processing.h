@@ -19,6 +19,11 @@ class BanMan;
 void RelayTransaction(const CTransaction& tx, const uint256& hash);
 void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
+//! Re-announce the node's own transactions still awaiting initial broadcast.
+//! Intended to be driven periodically by the scheduler (never from SendMessages;
+//! see the definition for the lock-order rationale).
+void ResendUnbroadcastTransactions();
+
 //! Message-processing manager (issue #2558 PR 8a). Abstract interface; the
 //! implementation (PeerManagerImpl) lives in net_processing.cpp and also
 //! implements NetEventsInterface (ProcessMessages/SendMessages). The

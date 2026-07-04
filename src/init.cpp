@@ -27,8 +27,8 @@
 #include "net_processing.h"
 #include "txmempool.h"
 #include "node/blockstorage.h"
-#include "node/mempool_persist.h"
 #include "node/coherence.h"
+#include "node/mempool_persist.h"
 #include <util/syserror.h>
 
 #include <openssl/crypto.h>
@@ -70,6 +70,12 @@ extern constexpr int DEFAULT_WAIT_CLIENT_TIMEOUT = 0;
 
 std::unique_ptr<BanMan> g_banman;
 std::unique_ptr<CScheduler> g_scheduler;
+
+//! Set once AppInit2 has reached the unbroadcast-set reload. Shutdown() only
+//! persists the set when this is true, so an early AppInit2 failure (which still
+//! runs Shutdown) cannot overwrite a good unbroadcast.dat with the empty pool of
+//! an init that never loaded it.
+static std::atomic<bool> g_unbroadcast_load_reached{false};
 
 namespace {
 //! Bridges the validation-signal layer to the legacy ui_interface block
@@ -213,12 +219,18 @@ void Shutdown(void* parg)
             g_stake_miner_thread.join();
         }
 
-        // Persist the mempool to disk so unconfirmed transactions survive a
-        // restart (#3029 Phase 5). Done after StopNode() and the stake-miner
-        // join so nothing is still mutating the pool.
-        if (gArgs.GetBoolArg("-persistmempool", true)) {
-            LogPrintf("INFO: %s: Dumping mempool to disk.", __func__);
-            node::DumpMempool(mempool, GetDataDir() / "mempool.dat");
+        // Persist the unbroadcast set -- the node's own transactions that have not
+        // yet been seen propagating -- so a restart does not silently drop them.
+        // Net and miner threads are stopped here; the RPC server is not (it is
+        // stopped further below), but DumpUnbroadcast snapshots under the pool lock
+        // so a concurrent submission is at worst not-yet-included, never a race.
+        // The whole pool is intentionally NOT saved: every other tx is redelivered
+        // by block/inv gossip. Gated on -persistmempool (default on) AND on having
+        // reached the reload in AppInit2, so an early-init failure cannot overwrite
+        // a good unbroadcast.dat with an empty pool.
+        if (g_unbroadcast_load_reached && gArgs.GetBoolArg("-persistmempool", true)) {
+            LogPrintf("INFO: %s: Persisting the unbroadcast set.", __func__);
+            node::DumpUnbroadcast(mempool, GetDataDir() / "unbroadcast.dat");
         }
 
         // Coordinate block-file and block-index DB state before exit so a
@@ -662,7 +674,8 @@ void SetupServerArgs()
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
     argsman.AddArg("-maxmempool=<n>", "Keep the transaction memory pool below <n> megabytes (default: 300)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
-    argsman.AddArg("-persistmempool", "Whether to save the mempool on shutdown and load it on startup (default: 1)",
+    argsman.AddArg("-persistmempool", "Whether to save this node's own unbroadcast transactions on "
+                   "shutdown and reload them on startup so they survive a restart (default: 1)",
                    ArgsManager::ALLOW_ANY, OptionsCategory::NODE_RELAY);
     argsman.AddArg("-addnode=<ip>", "Add a node to connect to and attempt to keep the connection open",
                    ArgsManager::ALLOW_ANY, OptionsCategory::CONNECTION);
@@ -1889,13 +1902,6 @@ bool AppInit2(ThreadHandlerPtr threads)
     int64_t nBalanceInQuestion;
     pwalletMain->FixSpentCoins(nMismatchSpent, nBalanceInQuestion);
 
-    // Reload the persisted mempool now that the chain and wallet are ready
-    // (#3029 Phase 5). Each transaction is re-validated, so stale ones are dropped.
-    if (gArgs.GetBoolArg("-persistmempool", true)) {
-        uiInterface.InitMessage(_("Loading mempool..."));
-        node::LoadMempool(mempool, GetDataDir() / "mempool.dat");
-    }
-
     // Start the lightweight task scheduler thread
     assert(!g_scheduler);
     g_scheduler = std::make_unique<CScheduler>();
@@ -1938,7 +1944,27 @@ bool AppInit2(ThreadHandlerPtr threads)
         g_banman->DumpBanlist();
     }, std::chrono::seconds{DUMP_BANS_INTERVAL});
 
+    // Periodically rebroadcast the node's own transactions still awaiting initial
+    // broadcast (the unbroadcast set). Runs on the scheduler thread, which holds no
+    // per-node locks, so relaying here cannot invert the socket handler's
+    // m_nodes_mutex -> cs_vSend order.
+    g_scheduler->scheduleEvery([]{
+        ResendUnbroadcastTransactions();
+    }, std::chrono::minutes{12});
+
     GRC::ScheduleBackgroundJobs(*g_scheduler);
+
+    // Reload the node's own unbroadcast transactions saved on the previous
+    // shutdown. Each is re-accepted through AcceptToMemoryPool (dropping anything
+    // already confirmed or now invalid) and re-armed for rebroadcast by the
+    // message handler. Runs after the chainstate is loaded and the node has
+    // started, so re-validation sees the current tip.
+    if (gArgs.GetBoolArg("-persistmempool", true)) {
+        node::LoadUnbroadcast(mempool, GetDataDir() / "unbroadcast.dat");
+    }
+    // AppInit2 has reached the point where the mempool reflects real state; a
+    // later Shutdown() may now safely persist the unbroadcast set.
+    g_unbroadcast_load_reached = true;
 
     #if HAVE_SYSTEM
         StartupNotify(gArgs);

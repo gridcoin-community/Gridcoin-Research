@@ -7,12 +7,14 @@
 
 #include "amount.h"
 #include "arith_uint256.h"
+#include "chain.h"
 #include "chainparams.h"
 #include "consensus/consensus.h"
 #include "index/disktxpos.h"
 #include "index/txindex.h"
 #include "util.h"
 #include "net.h"
+#include "node/blockstorage.h"
 #include "gridcoin/block_index.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/cpid.h"
@@ -63,23 +65,17 @@ static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e0
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-typedef std::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
+// BlockHasher, BlockMap, cs_main and the active-chain-state globals
+// (mapBlockIndex, pindexBest, hashBestChain, nBestHeight, ...) now live in
+// chain.h, included above (issue #3030, workstream A6). FutureDrift and
+// GetTargetSpacing live in primitives/block.h (extracted in #3060).
 
 extern CScript COINBASE_FLAGS;
-extern CCriticalSection cs_main;
 extern CCriticalSection cs_tx_val_commit_to_disk;
-extern BlockMap mapBlockIndex GUARDED_BY(cs_main);
-extern CBlockIndex* pindexGenesisBlock GUARDED_BY(cs_main);
 extern unsigned int nStakeMinAge;
 extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
-extern int nBestHeight GUARDED_BY(cs_main);
-extern arith_uint256 nBestChainTrust GUARDED_BY(cs_main);
-extern uint256 hashBestChain GUARDED_BY(cs_main);
-extern CBlockIndex* pindexBest GUARDED_BY(cs_main);
-extern std::atomic<bool> g_reorg_in_progress;
 extern const std::string strMessageMagic;
 extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
@@ -94,9 +90,6 @@ extern bool fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
 extern bool fEnforceCanonical;
-
-// Minimum disk space required - used in CheckDiskSpace()
-static const uint64_t nMinDiskSpace = 52428800;
 
 //! \brief Guards \ref msMiningErrors. Written by Researcher::StoreResearcher
 //! on the GUI / timer thread, read by getmininginfo RPC and the Qt researcher
@@ -117,9 +110,8 @@ void RegisterWallet(CWallet* pwalletIn);
 void UnregisterWallet(CWallet* pwalletIn);
 void UpdatedTransaction(const uint256& hashTx) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
-FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
-FILE* AppendBlockFile(unsigned int& nFileRet);
+// Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
+// LoadExternalBlockFile) live in node/blockstorage.h, included above.
 // Takes cs_main internally; callers MUST NOT hold cs_main when calling
 // (the internal LOCK would deadlock under non-recursive locking; cs_main
 // is currently recursive but the annotation contract documents the intent).
@@ -128,8 +120,6 @@ void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
 // ProcessMessages / SendMessages moved to net_processing.h (issue #2558 PR 2a).
-bool LoadExternalBlockFile(FILE* fileIn, size_t file_size = 0,
-                           unsigned int percent_start = 0, unsigned int percent_end = 100);
 
 //! Abandonment-style rewind of the chain to `pindex_target`. Updates the in-memory chain
 //! globals (pindexBest, nBestHeight, hashBestChain, g_chain_trust, sync time) and persists
@@ -182,13 +172,15 @@ bool IsInitialBlockDownload();
 std::string GetWarnings(std::string strFor);
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 void ResendWalletTransactions(bool fForce = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered);
+// Persists the best-block locator to registered wallets. Now also called from
+// node/chainman.cpp's SetBestChain, so it has external linkage (issue #3030 A4).
+void SetBestChain(const CBlockLocator& loc) EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered);
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         CValidationState& state, bool* pfMissingInputs,
                         int64_t entry_time = 0) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 /** A transaction with a merkle branch linking it to the block chain. */

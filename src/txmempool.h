@@ -175,6 +175,14 @@ public:
     std::set<CTxMemPoolEvictionKey> m_eviction_index; //!< Victim ordering; begin() is evicted first.
     size_t m_max_size_bytes{300 * 1000 * 1000};       //!< -maxmempool cap in bytes (default 300 MB).
 
+    // Unbroadcast set (#3029 Phase 5). Transactions this node originated locally
+    // (wallet sends, sendrawtransaction) that we have not yet seen evidence of
+    // propagating. This -- not the whole pool -- is what is persisted across
+    // restart and periodically rebroadcast, so the node's own in-flight txs are
+    // not lost on shutdown. Entries are dropped when a peer requests the tx (it
+    // is propagating) or when it leaves the pool (confirmed/evicted/conflicted).
+    std::set<uint256> m_unbroadcast;
+
     //! Estimated per-entry bookkeeping overhead (CTxMemPoolEntry + map/index nodes)
     //! added on top of the serialized size in DynamicMemoryUsage(). This is an
     //! optimistic floor, not a tight bound: the entry also stores a full in-memory
@@ -214,6 +222,21 @@ public:
 
     size_t GetMaxSize() const { LOCK(cs); return m_max_size_bytes; }
     void SetMaxSize(size_t bytes) { LOCK(cs); m_max_size_bytes = bytes; }
+
+    //! \brief Mark a locally-originated transaction as awaiting initial broadcast.
+    //! No-op if the tx is not (or no longer) in the pool.
+    void AddUnbroadcast(const uint256& hash)
+    {
+        LOCK(cs);
+        if (mapTx.count(hash)) m_unbroadcast.insert(hash);
+    }
+
+    //! \brief Drop a transaction from the unbroadcast set (it propagated, or left
+    //! the pool). Safe to call for a hash that is not present.
+    void RemoveUnbroadcast(const uint256& hash) { LOCK(cs); m_unbroadcast.erase(hash); }
+
+    //! \brief Snapshot of the transactions still awaiting initial broadcast.
+    std::set<uint256> GetUnbroadcast() const { LOCK(cs); return m_unbroadcast; }
 
     //! \brief Whether the pool already holds an MRC for \p cpid. When it does and
     //! \p existing is non-null, the colliding transaction hash is written there.

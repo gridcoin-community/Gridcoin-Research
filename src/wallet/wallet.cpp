@@ -3322,6 +3322,10 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
         }
 
         wtxNew.RelayWalletTransaction();
+
+        // Locally originated: register for rebroadcast until we see the network
+        // pick it up, and so it survives a restart (see CTxMemPool::m_unbroadcast).
+        mempool.AddUnbroadcast(wtxNew.GetHash());
     }
     return true;
 }

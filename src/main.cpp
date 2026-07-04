@@ -448,8 +448,11 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
-        // entry_time != 0 when reloading from mempool.dat: preserve the original
-        // pool-entry time so age and queue ordering survive a restart.
+        // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
+        // the original pool-entry time so tx age and eviction ordering survive a
+        // restart. In practice this only affects the node's non-wallet reloaded txs;
+        // a wallet tx is re-pooled with a fresh time by ReacceptWalletTransactions
+        // before LoadUnbroadcast runs, so its persisted time is not applied.
         CTxMemPoolEntry entry(tx, nFees, entry_time != 0 ? entry_time : GetAdjustedTime(),
                               nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
