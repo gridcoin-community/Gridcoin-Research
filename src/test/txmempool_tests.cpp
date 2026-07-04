@@ -13,6 +13,8 @@
 #include <primitives/transaction.h>
 #include <txmempool.h>
 #include <uint256.h>
+#include <node/mempool_persist.h>
+#include <fs.h>
 #include <gridcoin/beacon.h>
 #include <gridcoin/cpid.h>
 #include <gridcoin/mrc.h>
@@ -397,6 +399,125 @@ BOOST_AUTO_TEST_CASE(trim_never_evicts_the_protected_transaction)
     BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
     BOOST_CHECK_EQUAL(pool.m_total_tx_size,
                       ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 (#3029): unbroadcast set + persistence
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(unbroadcast_tracks_local_origination)
+{
+    CTxMemPool pool;
+
+    const CTransaction a = MakePlainTx(21);
+    const CTransaction b = MakePlainTx(22);
+
+    // AddUnbroadcast is a no-op for a tx that is not in the pool.
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+
+    // Once the tx is in the pool, it can be marked unbroadcast.
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    pool.AddUnbroadcast(b.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 2U);
+
+    // Removal (e.g. a peer requested it) drops just that entry.
+    pool.RemoveUnbroadcast(a.GetHash());
+    const auto set = pool.GetUnbroadcast();
+    BOOST_CHECK_EQUAL(set.size(), 1U);
+    BOOST_CHECK(set.count(b.GetHash()) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_cleared_when_tx_leaves_pool)
+{
+    CTxMemPool pool;
+
+    const CTransaction a = MakePlainTx(31);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    // A tx confirmed/evicted/conflicted out of the pool is no longer ours to
+    // rebroadcast: remove() -> eraseIndexes() drops it from the unbroadcast set.
+    pool.remove(a, /*fRecursive=*/true, MemPoolRemovalReason::BLOCK);
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_persist_roundtrip)
+{
+    // The on-disk (tx, entry_time) round-trip, exercised without AcceptToMemoryPool
+    // (the reload's re-acceptance path is covered by functional testing).
+    node::MempoolPersistEntries entries;
+    const CTransaction a = MakePlainTx(41);
+    const CTransaction b = MakePlainTx(42);
+    entries.emplace_back(a, 111);
+    entries.emplace_back(b, 222);
+
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_roundtrip_%%%%%%%%.dat");
+    BOOST_REQUIRE(node::WriteMempoolEntries(path, entries));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 2U);
+    BOOST_CHECK(loaded[0].first.GetHash() == a.GetHash());
+    BOOST_CHECK_EQUAL(loaded[0].second, 111);
+    BOOST_CHECK(loaded[1].first.GetHash() == b.GetHash());
+    BOOST_CHECK_EQUAL(loaded[1].second, 222);
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_dump_reflects_pool)
+{
+    // DumpUnbroadcast must persist exactly the pool's unbroadcast members (looked up
+    // in mapTx), and nothing else. Exercises the pool->disk half directly.
+    CTxMemPool pool;
+    const CTransaction ours = MakePlainTx(51);
+    const CTransaction other = MakePlainTx(52);
+    pool.addUnchecked(ours.GetHash(), MakeEntryFee(ours, 10));
+    pool.addUnchecked(other.GetHash(), MakeEntryFee(other, 10));
+    pool.AddUnbroadcast(ours.GetHash()); // only `ours` is in the unbroadcast set
+
+    const fs::path path = fs::temp_directory_path()
+                          / fs::unique_path("gridcoin_unbroadcast_dump_%%%%%%%%.dat");
+    BOOST_REQUIRE(node::DumpUnbroadcast(pool, path));
+
+    node::MempoolPersistEntries loaded;
+    BOOST_REQUIRE(node::ReadMempoolEntries(path, loaded));
+    BOOST_REQUIRE_EQUAL(loaded.size(), 1U); // `other` is in the pool but not the set
+    BOOST_CHECK(loaded[0].first.GetHash() == ours.GetHash());
+
+    fs::remove(path);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_cleared_on_size_eviction)
+{
+    // A tx evicted under the -maxmempool cap (#3093 TrimToSize) leaves the pool via
+    // remove()->eraseIndexes(), so it must also drop out of the unbroadcast set.
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(51);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    pool.TrimToSize(0); // evict everything
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+}
+
+BOOST_AUTO_TEST_CASE(unbroadcast_reset_on_clear)
+{
+    CTxMemPool pool;
+    const CTransaction a = MakePlainTx(61);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.AddUnbroadcast(a.GetHash());
+    BOOST_CHECK_EQUAL(pool.GetUnbroadcast().size(), 1U);
+
+    pool.clear();
+    BOOST_CHECK(pool.GetUnbroadcast().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

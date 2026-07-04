@@ -191,7 +191,13 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     /* fix up after disconnecting, prepare for new blocks */
     if (cnt_dis > 0)
     {
-        // Resurrect memory transactions that were in the disconnected branch
+        // Resurrect memory transactions that were in the disconnected branch.
+        // Note: these are re-accepted but NOT re-added to the unbroadcast set --
+        // provenance ("was this ours?") is not tracked here. A locally-originated
+        // non-wallet tx (e.g. sendrawtransaction/HTLC) that had briefly confirmed
+        // and is then resurrected by a reorg will therefore not be rebroadcast by
+        // the unbroadcast machinery; wallet-originated txs remain covered by
+        // ResendWalletTransactions. Acceptable given how rare a same-tx reorg is.
         for( CTransaction& tx : vResurrect) {
             CValidationState resurrect_state;
             AcceptToMemoryPool(mempool, tx, resurrect_state, nullptr);

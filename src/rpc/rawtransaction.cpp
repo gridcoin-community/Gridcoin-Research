@@ -2264,5 +2264,9 @@ UniValue sendrawtransaction(const UniValue& params)
     }
     RelayTransaction(tx, hashTx);
 
+    // Locally originated via RPC: register for rebroadcast / restart persistence
+    // (no-op if it did not enter the pool). See CTxMemPool::m_unbroadcast.
+    mempool.AddUnbroadcast(hashTx);
+
     return hashTx.GetHex();
 }

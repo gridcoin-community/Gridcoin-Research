@@ -271,6 +271,10 @@ UniValue claimhtlc(const UniValue& params)
     uint256 txHash = txSpend.GetHash();
     RelayTransaction(txSpend, txHash);
 
+    // Locally originated: track for rebroadcast / restart persistence, like the
+    // wallet and sendrawtransaction paths (this raw ATMP+relay bypasses both).
+    mempool.AddUnbroadcast(txHash);
+
     UniValue result(UniValue::VOBJ);
     result.pushKV("txid", txHash.GetHex());
     return result;
@@ -423,6 +427,10 @@ UniValue refundhtlc(const UniValue& params)
 
     uint256 txHash = txSpend.GetHash();
     RelayTransaction(txSpend, txHash);
+
+    // Locally originated: track for rebroadcast / restart persistence, like the
+    // wallet and sendrawtransaction paths (this raw ATMP+relay bypasses both).
+    mempool.AddUnbroadcast(txHash);
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("txid", txHash.GetHex());

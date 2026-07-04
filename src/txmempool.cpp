@@ -120,6 +120,10 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
                           ? m_total_tx_size - entry.GetTxSize()
                           : 0;
     m_eviction_index.erase(EvictionKeyFor(entry));
+
+    // A tx leaving the pool (confirmed, evicted, or conflicted) is no longer ours
+    // to rebroadcast.
+    m_unbroadcast.erase(entry.GetTx().GetHash());
 }
 
 
@@ -180,6 +184,7 @@ void CTxMemPool::clear()
     m_mrc_by_fee.clear();
     m_total_tx_size = 0;
     m_eviction_index.clear();
+    m_unbroadcast.clear();
 }
 
 void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed,

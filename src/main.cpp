@@ -272,7 +272,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs
 }
 
 
-bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& state, bool* pfMissingInputs, int64_t entry_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
     if (pfMissingInputs)
@@ -448,7 +448,13 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
             LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
             pool.remove(*ptxOld);
         }
-        CTxMemPoolEntry entry(tx, nFees, GetAdjustedTime(), nBestHeight, nSize);
+        // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
+        // the original pool-entry time so tx age and eviction ordering survive a
+        // restart. In practice this only affects the node's non-wallet reloaded txs;
+        // a wallet tx is re-pooled with a fresh time by ReacceptWalletTransactions
+        // before LoadUnbroadcast runs, so its persisted time is not applied.
+        CTxMemPoolEntry entry(tx, nFees, entry_time != 0 ? entry_time : GetAdjustedTime(),
+                              nBestHeight, nSize);
         pool.addUnchecked(hash, entry);
 
         // Enforce the -maxmempool cap. Protect the transaction we just accepted so
