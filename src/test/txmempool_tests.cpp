@@ -295,4 +295,108 @@ BOOST_AUTO_TEST_CASE(rpc_mempool_diagnostics)
     mempool.clear();
 }
 
+// ---------------------------------------------------------------------------
+// Phase 4 (#3029): bounded size + eviction
+// ---------------------------------------------------------------------------
+
+namespace {
+//! Distinct plain (no-contract) transaction, made unique by its output value.
+CTransaction MakePlainTx(CAmount out_value)
+{
+    CTxOut vout;
+    vout.nValue = out_value;
+    return MakeTx({}, {}, {vout});
+}
+
+CTxMemPoolEntry MakeEntryFee(const CTransaction& tx, CAmount fee)
+{
+    return CTxMemPoolEntry(tx, fee, 0, 0, ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION));
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(trim_evicts_lowest_feerate_first_then_contracts_last)
+{
+    CTxMemPool pool;
+
+    const CTransaction lo = MakePlainTx(1);
+    const CTransaction mid = MakePlainTx(2);
+    const CTransaction hi = MakePlainTx(3);
+    pool.addUnchecked(lo.GetHash(), MakeEntryFee(lo, 10));
+    pool.addUnchecked(mid.GetHash(), MakeEntryFee(mid, 20));
+    pool.addUnchecked(hi.GetHash(), MakeEntryFee(hi, 30));
+
+    // A contract (MRC) tx with no fee -- lowest feerate of all, but protected.
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 5);
+    pool.addUnchecked(mrc.GetHash(), MakeEntryFee(mrc, 0));
+
+    BOOST_CHECK_EQUAL(pool.size(), 4UL);
+
+    std::vector<CTransaction> removed;
+    pool.TrimToSize(0, &removed);
+
+    // Order: non-contract by feerate ascending (lo, mid, hi), contract evicted last.
+    BOOST_REQUIRE_EQUAL(removed.size(), 4U);
+    BOOST_CHECK(removed[0].GetHash() == lo.GetHash());
+    BOOST_CHECK(removed[1].GetHash() == mid.GetHash());
+    BOOST_CHECK(removed[2].GetHash() == hi.GetHash());
+    BOOST_CHECK(removed[3].GetHash() == mrc.GetHash());
+
+    // Every index drained and consistent.
+    BOOST_CHECK_EQUAL(pool.size(), 0UL);
+    BOOST_CHECK_EQUAL(pool.m_total_tx_size, 0U);
+    BOOST_CHECK(pool.m_eviction_index.empty());
+    BOOST_CHECK(pool.m_mrc_by_cpid.empty());
+    BOOST_CHECK(pool.m_mrc_by_fee.empty());
+}
+
+BOOST_AUTO_TEST_CASE(trim_protects_contract_when_room_for_one)
+{
+    CTxMemPool pool;
+
+    const CTransaction plain = MakePlainTx(7);
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 9);
+    pool.addUnchecked(plain.GetHash(), MakeEntryFee(plain, 50)); // higher fee, but not protected
+    pool.addUnchecked(mrc.GetHash(), MakeEntryFee(mrc, 0));      // no fee, but a contract
+
+    // Leave room for exactly one entry. The non-contract plain tx is evicted even
+    // though it pays more, because contract txns are protected (evicted last).
+    const size_t mrc_size = ::GetSerializeSize(mrc, SER_NETWORK, PROTOCOL_VERSION);
+    pool.TrimToSize(mrc_size + CTxMemPool::PER_ENTRY_OVERHEAD);
+
+    BOOST_CHECK(!pool.exists(plain.GetHash()));
+    BOOST_CHECK(pool.exists(mrc.GetHash()));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_mrc_by_cpid.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(trim_never_evicts_the_protected_transaction)
+{
+    CTxMemPool pool;
+
+    // Two transactions in the same feerate tier.
+    const CTransaction a = MakePlainTx(11);
+    const CTransaction b = MakePlainTx(12);
+    pool.addUnchecked(a.GetHash(), MakeEntryFee(a, 10));
+    pool.addUnchecked(b.GetHash(), MakeEntryFee(b, 10));
+
+    // Whichever sits at the front of the eviction set is the natural first victim.
+    // Protect exactly that one: TrimToSize must evict the OTHER transaction instead
+    // and keep the protected one -- this is the AcceptToMemoryPool self-eviction
+    // guard that stops a just-accepted tx (newest, so first in the tie-break) from
+    // being dropped as its own victim.
+    const uint256 natural_victim = pool.m_eviction_index.begin()->hash;
+
+    // Room for exactly one entry (both txs serialize to the same size).
+    const size_t one_entry = ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION)
+                             + CTxMemPool::PER_ENTRY_OVERHEAD;
+    pool.TrimToSize(one_entry, /*removed=*/nullptr, /*protect=*/&natural_victim);
+
+    BOOST_CHECK(pool.exists(natural_victim));
+    BOOST_CHECK_EQUAL(pool.size(), 1UL);
+    BOOST_CHECK_EQUAL(pool.m_eviction_index.size(), 1U);
+    BOOST_CHECK_EQUAL(pool.m_total_tx_size,
+                      ::GetSerializeSize(a, SER_NETWORK, PROTOCOL_VERSION));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

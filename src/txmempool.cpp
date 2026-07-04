@@ -87,6 +87,10 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry& entry)
             m_beacon_by_cpid.insert_or_assign(e.GetBeaconCpid(), hash);
         if (e.HasMandatorySidestake())
             ++m_mandatory_sidestake_count;
+
+        // Size accounting + eviction ordering.
+        m_total_tx_size += e.GetTxSize();
+        m_eviction_index.insert(EvictionKeyFor(e));
     }
     return true;
 }
@@ -107,11 +111,24 @@ void CTxMemPool::eraseIndexes(const CTxMemPoolEntry& entry)
         m_beacon_by_cpid.erase(entry.GetBeaconCpid());
     if (entry.HasMandatorySidestake() && m_mandatory_sidestake_count > 0)
         --m_mandatory_sidestake_count;
+
+    // Size accounting + eviction ordering. add/erase are balanced in practice
+    // (every addUnchecked is matched by exactly one erase), so this cannot
+    // underflow; clamp to 0 anyway -- rather than wrapping size_t or leaving the
+    // counter stuck high -- so it stays self-correcting if it ever desynced.
+    m_total_tx_size = (m_total_tx_size >= entry.GetTxSize())
+                          ? m_total_tx_size - entry.GetTxSize()
+                          : 0;
+    m_eviction_index.erase(EvictionKeyFor(entry));
 }
 
 
-bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
+bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive, MemPoolRemovalReason reason)
 {
+    // NOTE: `reason` is threaded through (including into the recursive call below)
+    // as groundwork for a future TransactionRemovedFromMempool validation signal.
+    // No subscriber consumes it yet, so it has no observable effect today.
+
     // Remove transaction from memory pool
     {
         LOCK(cs);
@@ -123,7 +140,7 @@ bool CTxMemPool::remove(const CTransaction &tx, bool fRecursive)
                 for (unsigned int i = 0; i < tx.vout.size(); i++) {
                     std::map<COutPoint, CInPoint>::iterator it = mapNextTx.find(COutPoint(hash, i));
                     if (it != mapNextTx.end())
-                        remove(*it->second.ptx, true);
+                        remove(*it->second.ptx, true, reason);
                 }
             }
             // Tear down the secondary indexes before erasing the entry.
@@ -161,6 +178,40 @@ void CTxMemPool::clear()
     m_beacon_by_cpid.clear();
     m_mandatory_sidestake_count = 0;
     m_mrc_by_fee.clear();
+    m_total_tx_size = 0;
+    m_eviction_index.clear();
+}
+
+void CTxMemPool::TrimToSize(size_t limit, std::vector<CTransaction>* removed,
+                            const uint256* protect)
+{
+    LOCK(cs);
+
+    while (DynamicMemoryUsage() > limit) {
+        // Lowest-priority entry is the next victim, but never evict the protected
+        // transaction (the just-accepted one) -- skip it and take the next.
+        auto key_it = m_eviction_index.begin();
+        if (protect && key_it != m_eviction_index.end() && key_it->hash == *protect)
+            ++key_it;
+        if (key_it == m_eviction_index.end())
+            break; // nothing evictable remains but the protected tx (it alone is over-limit)
+
+        const uint256 victim_hash = key_it->hash;
+
+        auto it = mapTx.find(victim_hash);
+        if (it == mapTx.end()) {
+            // Defensive: drop a stale key that has no backing entry.
+            m_eviction_index.erase(key_it);
+            continue;
+        }
+
+        const CTransaction victim = it->second.GetTx();
+        if (removed) removed->push_back(victim);
+
+        // Route through remove() so every index (and the running size total)
+        // stays consistent. Recursive so dependents go too.
+        remove(victim, /*fRecursive=*/true, MemPoolRemovalReason::SIZELIMIT);
+    }
 }
 
 void CTxMemPool::queryHashes(std::vector<uint256>& vtxid)
