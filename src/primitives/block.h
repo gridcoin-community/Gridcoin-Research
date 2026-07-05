@@ -59,7 +59,7 @@ struct BlockHasher
 class CBlockHeader
 {
 public:
-    static const int32_t CURRENT_VERSION = 14;
+    static const int32_t CURRENT_VERSION = 15;
 
     // header
     int32_t nVersion;

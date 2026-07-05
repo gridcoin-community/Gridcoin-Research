@@ -1553,6 +1553,8 @@ void StakeMiner(CWallet *pwallet)
             StakeBlock.nVersion = 12;
         } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
             StakeBlock.nVersion = 13;
+        } else if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
+            StakeBlock.nVersion = 14;
         }
 
         StakeBlock.nTime = GetAdjustedTime();
@@ -1708,6 +1710,8 @@ bool TryMineRegtestBlock(CWallet* pwallet,
         StakeBlock.nVersion = 12;
     } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
         StakeBlock.nVersion = 13;
+    } else if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
+        StakeBlock.nVersion = 14;
     }
 
     StakeBlock.nTime = GetAdjustedTime();
