@@ -174,15 +174,6 @@ void UnregisterWallet(CWallet* pwalletIn)
 // pattern would otherwise create.
 
 
-// erases transaction with the given hash from all wallets
-void static EraseFromWallets(uint256 hash)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->EraseFromWallet(hash);
-}
-
-
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, cs_setpwalletRegistered)
@@ -431,11 +422,16 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
     }
 
     // Store transaction in memory
+    CTransactionRef replaced_tx; // copy of the replaced tx, captured before remove() frees it
     {
         LOCK(pool.cs);
         if (ptxOld)
         {
             LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : replacing tx %s with new version", ptxOld->GetHash().ToString());
+            // ptxOld points into the mempool entry that remove() erases below, so
+            // copy the transaction out first; the wallet-erase signal further down
+            // must use this copy, not the dangling ptxOld.
+            replaced_tx = MakeTransactionRef(*ptxOld);
             pool.remove(*ptxOld);
         }
         // entry_time is non-zero only when reloading from unbroadcast.dat: preserve
@@ -471,10 +467,15 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx, CValidationState& st
 
     ///// are we sure this is ok when loading transactions or restoring block txes
     // If updated, erase old tx from wallet
-    if (ptxOld)
+    if (replaced_tx)
     {
-        LOCK(cs_setpwalletRegistered);
-        EraseFromWallets(ptxOld->GetHash());
+        // The replaced tx was removed from the mempool above; notify the
+        // validation-signal layer so the wallet drops its now-defunct copy.
+        // Emitted synchronously under cs_main (held on entry), preserving the
+        // cs_main -> signals -> cs_wallet order and replacing the legacy
+        // cs_setpwalletRegistered EraseFromWallets wrapper (issue #3030). Uses the
+        // copy captured before remove() -- ptxOld dangles once the pool entry is gone.
+        GetMainSignals().TransactionReplacedInMempool(replaced_tx);
     }
 
     LogPrint(BCLog::LogFlags::MEMPOOL, "AcceptToMemoryPool : accepted %s (poolsz %" PRIszu ")", hash.ToString(), pool.mapTx.size());

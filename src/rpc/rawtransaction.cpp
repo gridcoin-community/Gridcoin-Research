@@ -2222,12 +2222,12 @@ UniValue sendrawtransaction(const UniValue& params)
 {
     RPCTypeCheck(params, { UniValue::VSTR });
 
-    // Canonical lock order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-    // Acquired as sequenced LOCKs (rather than a LOCK2 + nested LOCK) so the
-    // analyzer sees the order at acquisition time. The wallet registry lock
-    // is needed for the transactionAddedToMempool dispatch below.
+    // Canonical lock order: cs_main -> cs_wallet, acquired as sequenced LOCKs
+    // (rather than a LOCK2) so the analyzer sees the order at acquisition time.
+    // cs_wallet is held for this RPC's own wallet work; AcceptToMemoryPool's
+    // synchronous signal dispatch also takes cs_wallet recursively under
+    // cs_main. The legacy cs_setpwalletRegistered hop is gone (issue #3030).
     LOCK(cs_main);
-    LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);
 
     // parse hex string from parameter

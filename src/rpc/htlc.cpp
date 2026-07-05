@@ -152,11 +152,12 @@ const RPCHelpMan& claimhtlc_helpman() { return claimhtlc_help; }
 
 UniValue claimhtlc(const UniValue& params)
 {
-    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-    // The wallet-registry lock is needed for the transactionAddedToMempool
-    // dispatch after AcceptToMemoryPool below.
+    // Canonical order: cs_main -> cs_wallet. cs_wallet is held for this RPC's
+    // own wallet work; AcceptToMemoryPool's synchronous signal dispatch (the
+    // wallet's TransactionAddedToMempool / TransactionReplacedInMempool
+    // handlers) also takes cs_wallet, recursively, under cs_main. The legacy
+    // cs_setpwalletRegistered hop is gone (issue #3030 retirement).
     LOCK(cs_main);
-    LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
@@ -300,11 +301,12 @@ const RPCHelpMan& refundhtlc_helpman() { return refundhtlc_help; }
 
 UniValue refundhtlc(const UniValue& params)
 {
-    // Canonical order: cs_main -> cs_setpwalletRegistered -> cs_wallet.
-    // The wallet-registry lock is needed for the transactionAddedToMempool
-    // dispatch after AcceptToMemoryPool below.
+    // Canonical order: cs_main -> cs_wallet. cs_wallet is held for this RPC's
+    // own wallet work; AcceptToMemoryPool's synchronous signal dispatch (the
+    // wallet's TransactionAddedToMempool / TransactionReplacedInMempool
+    // handlers) also takes cs_wallet, recursively, under cs_main. The legacy
+    // cs_setpwalletRegistered hop is gone (issue #3030 retirement).
     LOCK(cs_main);
-    LOCK(cs_setpwalletRegistered);
     LOCK(pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
