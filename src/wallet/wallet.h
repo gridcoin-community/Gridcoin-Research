@@ -459,8 +459,6 @@ public:
 
     void UpdatedTransaction(const uint256 &hashTx);
 
-    void PrintWallet(const CBlock& block);
-
     void Inventory(const uint256 &hash)
     {
         {
