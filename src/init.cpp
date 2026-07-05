@@ -1935,7 +1935,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     assert(!g_scheduler);
     g_scheduler = std::make_unique<CScheduler>();
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, g_scheduler.get());
-    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+    threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "grc-scheduler", serviceLoop));
 
     // Register the PeerManager's recurring tasks now that the scheduler exists
     // (issue #2558). This call previously sat next to the PeerManager construction

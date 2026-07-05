@@ -30,6 +30,7 @@
 #include <util/strencodings.h>
 #include "util/system.h"
 #include "util/string.h"
+#include <util/threadnames.h>
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -851,6 +852,9 @@ private:
 template <typename Callable> void TraceThread(const char* name,  Callable func)
 {
     RenameThread(name);
+    // RenameThread only sets the OS thread name; also set the internal name so
+    // the log-line thread tag ([<name>]) is populated instead of "[unknown]".
+    util::ThreadSetInternalName(name);
     try
     {
         LogPrintf("%s thread start\n", name);
