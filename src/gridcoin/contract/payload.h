@@ -64,9 +64,11 @@ enum class ContractType
     PROTOCOL,     //!< Network control message or configuration directive.
     SCRAPER,      //!< Scraper node authorization grants and revocations.
     VOTE,         //!< A vote cast by a wallet for a poll.
-    MRC,          //!< A manual rewards claim (MRC) request to pay rewards
+    MRC,           //!< A manual rewards claim (MRC) request to pay rewards
     SIDESTAKE,     //!< Mandatory sidestakes
-    OUT_OF_BOUND, //!< Marker value for the end of the valid range.
+    POOL_REGISTER, //!< Operator-signed pool registration (lands in PENDING).
+    POOL_APPROVE,  //!< Master-key-signed pool approval/de-list (PENDING -> ACTIVE / -> DELETED).
+    OUT_OF_BOUND,  //!< Marker value for the end of the valid range.
 };
 
 //!
@@ -84,6 +86,8 @@ static constexpr GRC::ContractType CONTRACT_TYPES[] = {
     ContractType::VOTE,
     ContractType::MRC,
     ContractType::SIDESTAKE,
+    ContractType::POOL_REGISTER,
+    ContractType::POOL_APPROVE,
     ContractType::OUT_OF_BOUND
 };
 
@@ -98,6 +102,11 @@ enum class ContractAction
     UNKNOWN,      //!< An invalid, non-standard, or empty contract action.
     ADD,          //!< Handle a new contract addition (A).
     REMOVE,       //!< Remove an existing contract (D).
+    OPEN,         //!< Open / pre-authorize a contract slot (O). Currently
+                  //!< only consumed by POOL_APPROVE to name an operator
+                  //!< pubkey that may claim a builtin pool slot — see
+                  //!< gridcoin/pool.h. Appended here (not in the middle)
+                  //!< per the no-reorder consensus rule above.
     OUT_OF_BOUND, //!< Marker value for the end of the valid range.
 };
 

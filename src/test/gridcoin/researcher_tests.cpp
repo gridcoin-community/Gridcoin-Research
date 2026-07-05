@@ -6,6 +6,7 @@
 #include "main.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/contract/contract.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/project.h"
 #include "gridcoin/researcher.h"
 #include "util.h"
@@ -16,6 +17,29 @@
 #include <vector>
 
 extern leveldb::DB *txdb;
+
+namespace {
+
+//!
+//! \brief RAII helper retained for fixture-using tests. After the V15
+//! rework grandfathered the 5 legacy pools into PoolRegistry's
+//! constructor (plan §3), this fixture is largely a no-op — the
+//! grcpool.com entry it used to seed manually is now present from boot.
+//! The destructor calls ClearForTests() which re-seeds the builtins, so
+//! subsequent tests still see the canonical registry shape. Kept so
+//! existing BOOST_FIXTURE_TEST_CASEs continue to compile.
+//!
+struct PoolRegistryTestFixture
+{
+    PoolRegistryTestFixture() = default;
+
+    ~PoolRegistryTestFixture()
+    {
+        GRC::GetPoolRegistry().ClearForTests();
+    }
+};
+
+} // anonymous namespace
 
 namespace {
 
@@ -311,7 +335,7 @@ BOOST_AUTO_TEST_CASE(it_determines_whether_a_project_is_eligible)
     BOOST_CHECK(project.Eligible() == false);
 }
 
-BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
+BOOST_FIXTURE_TEST_CASE(it_detects_projects_with_pool_cpids, PoolRegistryTestFixture)
 {
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file:
@@ -330,7 +354,7 @@ BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_cpids)
     BOOST_CHECK(project.m_error == GRC::MiningProject::Error::POOL);
 }
 
-BOOST_AUTO_TEST_CASE(it_detects_projects_with_pool_usernames)
+BOOST_FIXTURE_TEST_CASE(it_detects_projects_with_pool_usernames, PoolRegistryTestFixture)
 {
     // The XML string contains a subset of data found within a <project> element
     // from BOINC's client_state.xml file. For this test case, we want to verify
@@ -949,7 +973,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_mode_when_parsing_no_projects)
     BOOST_CHECK(GRC::Researcher::Get()->Projects().empty() == true);
 }
 
-BOOST_AUTO_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml)
+BOOST_FIXTURE_TEST_CASE(it_tags_invalid_projects_with_errors_when_parsing_xml, PoolRegistryTestFixture)
 {
     // Simulate a protocol control directive that enables the team requirement. Resetting
     // the protocol registry defaults the team whitelist to just Gridcoin.
@@ -1731,7 +1755,7 @@ BOOST_AUTO_TEST_CASE(client_state_stub_exists)
     }
 }
 
-BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects)
+BOOST_FIXTURE_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects, PoolRegistryTestFixture)
 {
     const GRC::Cpid cpid = GRC::Cpid::Parse("f5d8234352e5a5ae3915debba7258294");
     gArgs.ForceSetArg("email", "researcher@example.com");
@@ -1819,7 +1843,7 @@ BOOST_AUTO_TEST_CASE(it_resets_to_noncruncher_when_it_only_finds_pool_projects)
     GRC::Researcher::Reload(GRC::MiningProjectMap());
 }
 
-BOOST_AUTO_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids)
+BOOST_FIXTURE_TEST_CASE(it_allows_pool_operators_to_load_pool_cpids, PoolRegistryTestFixture)
 {
     gArgs.ForceSetArg("pooloperator", "1");
 

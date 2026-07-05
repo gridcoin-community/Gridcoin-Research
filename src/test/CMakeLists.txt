@@ -32,6 +32,7 @@ add_executable(test_gridcoin
     gridcoin/enumbytes_tests.cpp
     gridcoin/magnitude_tests.cpp
     gridcoin/mrc_tests.cpp
+    gridcoin/pool_tests.cpp
     gridcoin/project_tests.cpp
     gridcoin/protocol_tests.cpp
     gridcoin/researcher_tests.cpp

@@ -815,6 +815,24 @@ void SetupServerArgs()
 
     hidden_args.emplace_back("-upgradewallet");
 
+    // Isolated-testnet / regtest override for the V15 (on-chain pool
+    // registration, issue #1783) activation height. Default chainparams
+    // value is std::numeric_limits<int>::max() until pinned by a follow-up
+    // release; this arg lets dev runs activate POOL contracts early so the
+    // full lifecycle can be exercised end-to-end. Read via GetBlockV15Height
+    // in chainparams.cpp.
+    hidden_args.emplace_back("-blockv15height");
+
+    // Isolated-testnet / regtest override for the PENDING / OPEN expiration
+    // window on POOL contracts (issue #1783). Default chainparams value is
+    // 28800 blocks (~30 days at mainnet ~90s spacing); this arg shortens
+    // the window so dev runs can exercise expiration boundaries without
+    // waiting weeks. CONSENSUS-AFFECTING — nodes with differing values
+    // disagree on POOL_REGISTER admission across expiration boundaries
+    // and will fork off the network if used on mainnet/public-testnet.
+    // Read via GetPendingPoolRetention in chainparams.cpp.
+    hidden_args.emplace_back("-pendingpoolretention");
+
     SetupChainParamsBaseOptions(argsman);
 
     // Add the hidden options
@@ -1200,6 +1218,12 @@ bool AppInit2(ThreadHandlerPtr threads)
     LogPrintf("Block version 12 hard fork configured for block %d", Params().GetConsensus().BlockV12Height);
     LogPrintf("Block version 13 hard fork configured for block %d", Params().GetConsensus().BlockV13Height);
     LogPrintf("Block version 14 hard fork configured for block %d", Params().GetConsensus().BlockV14Height);
+    LogPrintf("Block version 15 hard fork configured for block %d", GetBlockV15Height());
+
+    // Surface the effective POOL PENDING/OPEN retention so an isolated-testnet
+    // -pendingpoolretention override is visible in the log and an accidental
+    // mismatch across nodes is diagnosable (the value is consensus-affecting).
+    LogPrintf("POOL pending/open retention configured at %d blocks", GetPendingPoolRetention());
 
     fs::path datadir = GetDataDir();
     fs::path walletFileName = gArgs.GetArg("-wallet", "wallet.dat");

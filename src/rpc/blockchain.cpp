@@ -6,6 +6,7 @@
 
 #include "chainparams.h"
 #include "blockchain.h"
+#include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"
 #include "gridcoin/scraper/scraper_registry.h"
@@ -3184,6 +3185,13 @@ UniValue addkey(const UniValue& params)
     case GRC::ContractType::POLL:
         [[fallthrough]];
     case GRC::ContractType::VOTE:
+        [[fallthrough]];
+    // POOL_REGISTER and POOL_APPROVE have their own dedicated RPCs
+    // (registerpool / approvepool / removepool); they are not routed through
+    // addkey. Listed here only to satisfy -Wswitch coverage.
+    case GRC::ContractType::POOL_REGISTER:
+        [[fallthrough]];
+    case GRC::ContractType::POOL_APPROVE:
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid contract type for addkey.");
     case GRC::ContractType::UNKNOWN:
         [[fallthrough]];
@@ -3213,6 +3221,661 @@ UniValue addkey(const UniValue& params)
 
     res.pushKV("contract", ContractToJson(contract));
     res.pushKV("txid", result.first.GetHash().ToString());
+
+    return res;
+}
+
+// -----------------------------------------------------------------------------
+// On-chain pool registration (issue #1783)
+// -----------------------------------------------------------------------------
+
+namespace {
+
+//!
+//! \brief Reject pool-mutating RPCs before V15 activation.
+//!
+//! Pre-V15 every POOL contract is rejected by ValidateAtHeight, but the
+//! register/approve/remove/authorize RPCs would still build, sign, and
+//! broadcast a transaction that the mempool then bounces with a generic
+//! "coins already spent" — confusing, and it leaves a dead tx in the wallet.
+//! Fail early with a precise message instead.
+//!
+void EnsurePoolRegistrationActive()
+{
+    int tip_height = 0;
+    {
+        LOCK(cs_main);
+        tip_height = nBestHeight;
+    }
+
+    if (IsV15Enabled(tip_height)) {
+        return;
+    }
+
+    const int v15_height = GetBlockV15Height();
+    if (v15_height == std::numeric_limits<int>::max()) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+            "On-chain pool registration (block version 15) is not active on this "
+            "network yet; no activation height has been scheduled.");
+    }
+
+    throw JSONRPCError(RPC_INVALID_REQUEST,
+        strprintf("On-chain pool registration (block version 15) is not active until "
+                  "block %d (current height %d).", v15_height, tip_height));
+}
+
+GRC::Cpid ParseCpidArg(const UniValue& v)
+{
+    const std::string cpid_str = v.get_str();
+    GRC::Cpid cpid = GRC::Cpid::Parse(cpid_str);
+
+    // Cpid::Parse returns the zero CPID on malformed input. The zero CPID is
+    // technically representable but is never a real BOINC external CPID, so
+    // we reject it as an invalid argument.
+    if (cpid == GRC::Cpid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "Invalid CPID hex (must be 32 hex characters and not all zero).");
+    }
+
+    return cpid;
+}
+
+std::string PoolStatusName(const GRC::PoolStatus status)
+{
+    switch (status) {
+        case GRC::PoolStatus::UNKNOWN:      return "UNKNOWN";
+        case GRC::PoolStatus::PENDING:      return "PENDING";
+        case GRC::PoolStatus::ACTIVE:       return "ACTIVE";
+        case GRC::PoolStatus::DELETED:      return "DELETED";
+        case GRC::PoolStatus::OUT_OF_BOUND: break;
+    }
+    return "UNKNOWN";
+}
+
+UniValue PoolToJson(const GRC::Pool& pool, int tip_height)
+{
+    UniValue out(UniValue::VOBJ);
+    out.pushKV("cpid", pool.m_cpid.ToString());
+    out.pushKV("name", pool.m_name);
+    out.pushKV("url", pool.m_url);
+    out.pushKV("operator_pubkey", pool.m_operator_key.IsValid()
+                                      ? HexStr(pool.m_operator_key)
+                                      : std::string{});
+    out.pushKV("status", PoolStatusName(pool.m_status.Value()));
+    out.pushKV("timestamp", pool.m_timestamp);
+
+    // Grandfathered builtin slots carry a SYNTHETIC anchor hash
+    // (Hash("POOL_BUILTIN_SEED:" + cpid)) rather than an on-chain transaction
+    // hash: as contract_txid for an unclaimed seed, and as previous_contract_txid
+    // on the first real claim of a builtin. getrawtransaction/gettransaction will
+    // not find such a hash. Surface "builtin" (slot is grandfathered) and
+    // "seed_anchored" (the current contract_txid is the synthetic seed, i.e. the
+    // slot is still unclaimed) so callers can tell these apart from real entries.
+    const bool is_builtin = GRC::GetPoolRegistry().IsBuiltin(pool.m_cpid);
+    out.pushKV("builtin", is_builtin);
+    out.pushKV("seed_anchored",
+               is_builtin && pool.m_hash == GRC::PoolRegistry::BuiltinSeedHash(pool.m_cpid));
+    out.pushKV("contract_txid", pool.m_hash.GetHex());
+    out.pushKV("previous_contract_txid", pool.m_previous_hash.GetHex());
+
+    // OPEN authorization fields. Empty pubkey means no OPEN has been
+    // issued (or it was consumed by a POOL_REGISTER ADD).
+    if (pool.m_authorized_operator_key.IsValid()) {
+        out.pushKV("authorized_operator_pubkey", HexStr(pool.m_authorized_operator_key));
+        out.pushKV("authorization_height", pool.m_authorization_height);
+        out.pushKV("authorization_expired",
+                   GRC::PoolRegistry::IsAuthorizationExpired(pool, tip_height));
+    }
+
+    // PENDING entries can be query-time expired after
+    // consensus.PendingPoolRetention blocks; the chained entry remains
+    // in storage but consensus treats it as absent for takeover checks.
+    if (pool.m_status == GRC::PoolStatus::PENDING) {
+        out.pushKV("pending_expired",
+                   GRC::PoolRegistry::IsPendingExpired(pool, tip_height));
+    }
+
+    return out;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan registerpool_help{
+    "registerpool",
+    "Register a Gridcoin mining pool on chain. Generates a fresh operator key "
+    "from the wallet keypool, signs the registration payload with it, and "
+    "broadcasts a POOL_REGISTER contract. The entry lands in PENDING status; "
+    "a foundation-signed approvepool is required to flip it to ACTIVE. "
+    "Requires the wallet to be unlocked.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID identifying the pool's BOINC account."},
+        {"name", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Display name (e.g. \"grcpool.com\")."},
+        {"url", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "Pool website URL."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+            {RPCResult::Type::STR, "name", "Pool display name."},
+            {RPCResult::Type::STR, "url", "Pool website URL."},
+            {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key generated for this registration."},
+            {RPCResult::Type::STR, "status", "Registry status of the new entry (PENDING)."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_REGISTER contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\" \"grcpool.com\" \"https://grcpool.com\"") +
+        HelpExampleRpc("registerpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\", \"grcpool.com\", \"https://grcpool.com\"")},
+};
+const RPCHelpMan& registerpool_helpman() { return registerpool_help; }
+
+UniValue registerpool(const UniValue& params)
+{
+    EnsurePoolRegistrationActive();
+    EnsureWalletIsUnlocked();
+
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+    const std::string name = params[1].get_str();
+    const std::string url  = params[2].get_str();
+
+    if (name.empty() || name.size() > GRC::PoolRegisterPayload::MAX_NAME_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("Name must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_NAME_SIZE));
+    }
+    if (url.empty() || url.size() > GRC::PoolRegisterPayload::MAX_URL_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("URL must be non-empty and at most %u characters.",
+                      (unsigned)GRC::PoolRegisterPayload::MAX_URL_SIZE));
+    }
+
+    CPubKey operator_pubkey;
+    CKey operator_privkey;
+    // Reserve (do NOT yet commit) a fresh operator key. CReserveKey returns the
+    // key to the keypool from its destructor unless KeepKey() is called, so any
+    // throw before the broadcast succeeds (the builtin pre-flight auth check
+    // below, a signing failure, or a SendContract error) leaves the keypool and
+    // address book untouched. The previous GetKeyFromPool + SetAddressBookName
+    // here committed both BEFORE those checks, so every failed attempt against a
+    // not-yet-OPENed builtin slot leaked a keypool key and a stray address-book
+    // label.
+    CReserveKey reserve_key(pwalletMain);
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        // GetReservedKey falls back to the wallet default key on an empty pool;
+        // reject that so we never reuse the user's default address as a pool
+        // operator identity (preserving GetKeyFromPool(..., false)'s
+        // fail-on-empty-pool behavior).
+        if (!reserve_key.GetReservedKey(operator_pubkey)
+            || operator_pubkey == pwalletMain->vchDefaultKey) {
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT,
+                "Failed to allocate a new operator key from the wallet keypool. "
+                "Call keypoolrefill and retry.");
+        }
+
+        if (!pwalletMain->GetKey(operator_pubkey.GetID(), operator_privkey)) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                "Wallet returned a fresh pubkey but its private key is unavailable.");
+        }
+    }
+
+    // Pre-flight UX check (finding R): for builtin pool slots the
+    // IsBuiltin Path 2 guard in BlockValidate will reject any
+    // POOL_REGISTER ADD whose payload key doesn't match a live
+    // Foundation OPEN authorization. Surface that here so the user
+    // doesn't waste fee estimation + signing on a tx the mempool will
+    // reject anyway. Non-builtin CPIDs go through the standard first-
+    // claim path and don't need this check.
+    {
+        GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid);
+        if (existing && GRC::GetPoolRegistry().IsBuiltin(cpid)) {
+            const bool path1_claimed_operational =
+                existing->m_status != GRC::PoolStatus::DELETED
+                && existing->m_operator_key.IsValid();
+
+            if (!path1_claimed_operational) {
+                int tip_height = 0;
+                {
+                    LOCK(cs_main);
+                    tip_height = nBestHeight;
+                }
+                const bool auth_present = existing->m_authorized_operator_key.IsValid();
+                const bool auth_expired = auth_present
+                    && GRC::PoolRegistry::IsAuthorizationExpired(*existing, tip_height);
+                const bool auth_matches = auth_present
+                    && existing->m_authorized_operator_key == operator_pubkey;
+
+                if (!auth_present) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot. Foundation must broadcast "
+                                  "POOL_APPROVE OPEN authorizing your operator pubkey before you "
+                                  "can register. Operator pubkey for this attempt: %s",
+                                  cpid.ToString(), HexStr(operator_pubkey)));
+                }
+                if (auth_expired) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot whose OPEN authorization has "
+                                  "expired (issued at height %d, retention %d blocks). Ask "
+                                  "Foundation to re-OPEN.",
+                                  cpid.ToString(), existing->m_authorization_height,
+                                  GetPendingPoolRetention()));
+                }
+                if (!auth_matches) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,
+                        strprintf("CPID %s is a builtin pool slot authorized to a different "
+                                  "operator pubkey than the one this wallet just allocated. "
+                                  "Authorized: %s. This wallet: %s.",
+                                  cpid.ToString(),
+                                  HexStr(existing->m_authorized_operator_key),
+                                  HexStr(operator_pubkey)));
+                }
+            }
+        }
+    }
+
+    GRC::PoolRegisterPayload payload(cpid, name, url, operator_pubkey);
+
+    // Bind the action (ADD) and the predecessor hash into the operator
+    // signature so it can't be replayed with the action flipped or against a
+    // different predecessor state. The predecessor is the current entry's hash
+    // (the seed hash for a builtin claim, the prior entry for a rotation /
+    // re-registration) or null for a brand-new CPID — matching exactly what
+    // ApplyRegister records as m_previous_hash and what VerifyRegisterAuth
+    // recomputes at validation. (If a competing contract for this CPID lands
+    // between here and block validation, the predecessor moves and this tx is
+    // rejected — the operator simply re-issues; that is the intended freshness.)
+    uint256 register_prev_hash;
+    if (GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid)) {
+        register_prev_hash = existing->m_hash;
+    }
+
+    if (!payload.Sign(operator_privkey, GRC::ContractAction::ADD, register_prev_hash)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Failed to sign the pool registration payload with the operator key.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::ADD, std::move(payload));
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    // Broadcast succeeded — now commit the operator key: remove it from the
+    // keypool permanently and label it for the wallet UI. Doing this only after
+    // SendContract means every earlier failure path returns the key to the pool
+    // via CReserveKey's destructor (no leaked key, no stray label).
+    reserve_key.KeepKey();
+    pwalletMain->SetAddressBookName(operator_pubkey.GetID(),
+                                    "Pool operator key (" + name + ")");
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("name", name);
+    res.pushKV("url", url);
+    res.pushKV("operator_pubkey", HexStr(operator_pubkey));
+    res.pushKV("status", "PENDING");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+namespace {
+
+const char* PoolApproveActionName(const GRC::ContractAction action)
+{
+    switch (action) {
+    case GRC::ContractAction::ADD:    return "approve";
+    case GRC::ContractAction::REMOVE: return "remove";
+    case GRC::ContractAction::OPEN:   return "open";
+    default:                          return "unknown";
+    }
+}
+
+UniValue SendPoolApprove(const GRC::Cpid& cpid,
+                         const GRC::ContractAction action,
+                         CPubKey authorized_operator_key = CPubKey{})
+{
+    EnsurePoolRegistrationActive();
+
+    // Use EnsureWalletIsUnlocked() rather than a bare IsLocked() check so a
+    // staking-only unlock (fWalletUnlockStakingOnly) is rejected up front,
+    // matching registerpool / withdrawpool. A bare IsLocked() returns false
+    // when unlocked-for-staking-only, letting this master-key, coin-spending
+    // RPC proceed and fail with a less precise error deeper in SendContract.
+    EnsureWalletIsUnlocked();
+
+    GRC::PoolApprovePayload payload = (action == GRC::ContractAction::OPEN)
+        ? GRC::PoolApprovePayload(cpid, std::move(authorized_operator_key))
+        : GRC::PoolApprovePayload(cpid);
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolApprovePayload>(
+        action, std::move(payload));
+
+    // POOL_APPROVE returns true from RequiresMasterKey(); the network rejects
+    // the broadcast unless the wallet holds a UTXO at the foundation master
+    // address (HasMasterKeyInput, validation.cpp). Surfacing that early would
+    // be nicer but matches addkey's behaviour of trusting SendContract to
+    // raise the failure.
+    if (!contract.RequiresMasterKey()) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR,
+            "Internal error: POOL_APPROVE contract did not opt into master-key authority.");
+    }
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("action", PoolApproveActionName(action));
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+} // anonymous namespace
+
+static const RPCHelpMan approvepool_help{
+    "approvepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE contract that flips the named "
+    "CPID's pool entry to ACTIVE. The contract requires the master key as a "
+    "transaction input (HasMasterKeyInput in validation.cpp). Requires the "
+    "wallet to be unlocked and to hold a UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to approve."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the approved pool."},
+            {RPCResult::Type::STR, "action", "Always \"approve\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("approvepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& approvepool_helpman() { return approvepool_help; }
+
+UniValue approvepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::ADD);
+}
+
+static const RPCHelpMan removepool_help{
+    "removepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE REMOVE contract that flips the "
+    "named CPID's pool entry to DELETED. The contract requires the master key "
+    "as a transaction input. Requires the wallet to be unlocked and to hold a "
+    "UTXO at the foundation master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to de-list."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the de-listed pool."},
+            {RPCResult::Type::STR, "action", "Always \"remove\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("removepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& removepool_helpman() { return removepool_help; }
+
+UniValue removepool(const UniValue& params)
+{
+    return SendPoolApprove(ParseCpidArg(params[0]), GRC::ContractAction::REMOVE);
+}
+
+static const RPCHelpMan withdrawpool_help{
+    "withdrawpool",
+    "Operator self-withdrawal. Broadcasts an operator-signed POOL_REGISTER REMOVE "
+    "contract that flips the named CPID's pool entry to DELETED. Unlike removepool "
+    "(Foundation master-key authority), this is signed by the pool operator's own "
+    "key and requires no master key — the wallet must hold the private key for the "
+    "operator pubkey currently registered for the CPID. Requires the wallet to be "
+    "unlocked. A withdrawn builtin slot returns to requiring a fresh Foundation "
+    "POOL_APPROVE OPEN before it can be re-claimed.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the pool to withdraw."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the withdrawn pool."},
+            {RPCResult::Type::STR, "action", "Always \"remove\"."},
+            {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key that signed the withdrawal."},
+            {RPCResult::Type::STR, "status", "Registry status of the entry after withdrawal (DELETED)."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_REGISTER contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("withdrawpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"") +
+        HelpExampleRpc("withdrawpool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\"")},
+};
+const RPCHelpMan& withdrawpool_helpman() { return withdrawpool_help; }
+
+UniValue withdrawpool(const UniValue& params)
+{
+    EnsurePoolRegistrationActive();
+    EnsureWalletIsUnlocked();
+
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+
+    // The withdrawal targets a live registration this wallet owns. Resolve the
+    // currently-registered operator key for the CPID: consensus
+    // (VerifyRegisterAuth's standard takeover path) verifies the REMOVE
+    // signature against THIS key, not against whatever the payload carries, so
+    // only the registering operator can withdraw.
+    GRC::Pool_ptr existing = GRC::GetPoolRegistry().Try(cpid);
+    if (!existing || existing->m_status == GRC::PoolStatus::DELETED) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("CPID %s has no active pool registration to withdraw.", cpid.ToString()));
+    }
+    if (!existing->m_operator_key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("CPID %s is an unclaimed builtin pool slot — there is no operator "
+                      "registration to withdraw. Foundation removepool de-lists builtins.",
+                      cpid.ToString()));
+    }
+
+    const CPubKey operator_pubkey = existing->m_operator_key;
+    CKey operator_privkey;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        if (!pwalletMain->GetKey(operator_pubkey.GetID(), operator_privkey)) {
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                strprintf("This wallet does not hold the operator private key registered for "
+                          "CPID %s (operator pubkey %s); only the registering operator can "
+                          "withdraw it.", cpid.ToString(), HexStr(operator_pubkey)));
+        }
+    }
+
+    // Carry the existing descriptive fields so the DELETED record ApplyRegister
+    // writes stays faithful to the registration being withdrawn. WellFormed
+    // (REMOVE) still requires a non-empty name and a fully-valid operator key;
+    // the URL is not required for REMOVE.
+    GRC::PoolRegisterPayload payload(cpid, existing->m_name, existing->m_url, operator_pubkey);
+
+    // Bind action (REMOVE) + predecessor hash into the signature, exactly as
+    // registerpool does for ADD and as VerifyRegisterAuth recomputes. The
+    // predecessor is the entry being superseded. (If a competing contract for
+    // this CPID lands between here and block validation, the predecessor moves
+    // and this tx is rejected — the operator simply re-issues.)
+    const uint256 register_prev_hash = existing->m_hash;
+
+    if (!payload.Sign(operator_privkey, GRC::ContractAction::REMOVE, register_prev_hash)) {
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            "Failed to sign the pool withdrawal payload with the operator key.");
+    }
+
+    GRC::Contract contract = GRC::MakeContract<GRC::PoolRegisterPayload>(
+        GRC::ContractAction::REMOVE, std::move(payload));
+
+    std::pair<CWalletTx, std::string> result;
+    {
+        LOCK(cs_main);
+        result = GRC::SendContract(contract);
+    }
+
+    if (!result.second.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, std::move(result.second));
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("cpid", cpid.ToString());
+    res.pushKV("action", "remove");
+    res.pushKV("operator_pubkey", HexStr(operator_pubkey));
+    res.pushKV("status", "DELETED");
+    res.pushKV("contract", ContractToJson(contract));
+    res.pushKV("txid", result.first.GetHash().ToString());
+    return res;
+}
+
+static const RPCHelpMan authorizepool_help{
+    "authorizepool",
+    "Foundation-only. Broadcasts a POOL_APPROVE OPEN contract that pre-authorizes "
+    "the given operator pubkey to claim a builtin pool slot via a subsequent "
+    "POOL_REGISTER ADD. The contract requires the master key as a transaction "
+    "input. The authorization expires after consensus.PendingPoolRetention "
+    "blocks (~20 days at ~60s spacing) if not consumed by a matching "
+    "POOL_REGISTER ADD; Foundation may re-OPEN at any time to refresh. "
+    "Requires the wallet to be unlocked and to hold a UTXO at the foundation "
+    "master address.",
+    {
+        {"cpid", RPCArg::Type::STR, RPCArg::Optional::NO,
+            "32-character hex CPID of the builtin slot to open for claim."},
+        {"operator_pubkey_hex", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "Hex-encoded compressed secp256k1 pubkey the legitimate operator will submit POOL_REGISTER with."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR, "cpid", "CPID of the opened builtin slot."},
+            {RPCResult::Type::STR, "action", "Always \"open\"."},
+            {RPCResult::Type::OBJ, "contract", "The broadcast POOL_APPROVE contract.",
+                {
+                    {RPCResult::Type::ELISION, "", "contract fields"},
+                }},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction hash carrying the contract."},
+        }},
+    RPCExamples{
+        HelpExampleCli("authorizepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\" \"02a1b2...\"") +
+        HelpExampleRpc("authorizepool", "\"7d0d73fe026d66fd4ab8d5d8da32a611\", \"02a1b2...\"")},
+};
+const RPCHelpMan& authorizepool_helpman() { return authorizepool_help; }
+
+UniValue authorizepool(const UniValue& params)
+{
+    const GRC::Cpid cpid = ParseCpidArg(params[0]);
+
+    const std::string pubkey_hex = params[1].get_str();
+    if (!IsHex(pubkey_hex)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "operator_pubkey_hex must be a hex string.");
+    }
+    const std::vector<unsigned char> pubkey_bytes = ParseHex(pubkey_hex);
+    CPubKey authorized_key(pubkey_bytes);
+    if (!authorized_key.IsValid()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            "operator_pubkey_hex did not decode to a valid secp256k1 pubkey.");
+    }
+
+    return SendPoolApprove(cpid, GRC::ContractAction::OPEN, std::move(authorized_key));
+}
+
+static const RPCHelpMan listpools_help{
+    "listpools",
+    "Return every pool entry in the on-chain PoolRegistry.",
+    {
+        {"include_inactive", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "If true, include PENDING and DELETED entries alongside ACTIVE ones. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "Pool registry entry.",
+                {
+                    {RPCResult::Type::STR, "cpid", "CPID the pool registered with."},
+                    {RPCResult::Type::STR, "name", "Pool display name."},
+                    {RPCResult::Type::STR, "url", "Pool website URL."},
+                    {RPCResult::Type::STR_HEX, "operator_pubkey", "Operator public key."},
+                    {RPCResult::Type::STR, "status", "PENDING, ACTIVE, DELETED, or UNKNOWN."},
+                    {RPCResult::Type::NUM_TIME, "timestamp", "Contract timestamp."},
+                    {RPCResult::Type::BOOL, "builtin", "True if this is a grandfathered builtin pool slot."},
+                    {RPCResult::Type::BOOL, "seed_anchored",
+                        "True if contract_txid is a synthetic builtin-seed anchor (unclaimed builtin) rather than an on-chain txid."},
+                    {RPCResult::Type::STR_HEX, "contract_txid",
+                        "Transaction hash of the current registry entry (a synthetic seed anchor when seed_anchored is true)."},
+                    {RPCResult::Type::STR_HEX, "previous_contract_txid",
+                        "Transaction hash of the prior entry revision (a synthetic seed anchor on the first claim of a builtin)."},
+                    {RPCResult::Type::STR_HEX, "authorized_operator_pubkey", /*optional=*/true,
+                        "Operator pubkey pre-authorized by a Foundation POOL_APPROVE OPEN, when one is outstanding."},
+                    {RPCResult::Type::NUM, "authorization_height", /*optional=*/true,
+                        "Block height the OPEN authorization was recorded at."},
+                    {RPCResult::Type::BOOL, "authorization_expired", /*optional=*/true,
+                        "Whether the OPEN authorization has passed the PendingPoolRetention window."},
+                    {RPCResult::Type::BOOL, "pending_expired", /*optional=*/true,
+                        "For PENDING entries, whether the entry has passed the PendingPoolRetention window."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpools", "") +
+        HelpExampleCli("listpools", "true") +
+        HelpExampleRpc("listpools", "true")},
+};
+const RPCHelpMan& listpools_helpman() { return listpools_help; }
+
+UniValue listpools(const UniValue& params)
+{
+    const bool include_inactive = params.size() >= 1 ? params[0].get_bool() : false;
+
+    UniValue res(UniValue::VARR);
+
+    {
+        LOCK(cs_main);
+
+        const int tip_height = nBestHeight;
+
+        for (const GRC::Pool& pool : GRC::GetPoolRegistry().Entries()) {
+            if (!include_inactive && pool.m_status != GRC::PoolStatus::ACTIVE) {
+                continue;
+            }
+
+            res.push_back(PoolToJson(pool, tip_height));
+        }
+    }
 
     return res;
 }

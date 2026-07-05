@@ -57,6 +57,14 @@ void ResearcherWizardPoolPage::initializePage()
 
     m_researcher_model->switchToPool();
 
+    // TODO (issue #1783 follow-up): populate poolTableWidget from
+    // GetPoolRegistry().ActivePools() instead of the static rows defined in
+    // researcherwizardpoolpage.ui. With the V15 rework grandfathering the
+    // 5 legacy pools into PoolRegistry's constructor, the registry is never
+    // empty, so the dynamic path can switch over at any time — the
+    // pre-activation fallback this comment used to mention is no longer
+    // needed.
+
     connect(ui->poolTableWidget, &QTableWidget::cellClicked,
             this, &ResearcherWizardPoolPage::openLink);
 
