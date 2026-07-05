@@ -561,6 +561,18 @@ bool PoolRegistry::VerifyRegisterAuth(const PoolRegisterPayload& payload,
     // status), and null for a fresh first registration. Using the unfiltered
     // `existing` keeps it consistent across the builtin / takeover / first-claim
     // paths below — and matches what the registerpool RPC signs.
+    //
+    // Same-block note: during ConnectBlock every contract is validated against
+    // the PARENT chain state — no in-block contract is applied until the
+    // post-loop GridcoinConnectBlock/ApplyContracts pass. So if two POOL_REGISTER
+    // contracts for the same CPID land in one block, both validate here against
+    // the same parent-state `existing` (tx2 does NOT observe tx1), while
+    // ApplyRegister later chains them in tx order (tx2.m_previous_hash =
+    // tx1.m_hash). This validate-time vs apply-time prev_hash divergence is
+    // deterministic and identical on every node (same parent-state validate +
+    // same in-order apply); the stored chain used for Revert/replay is
+    // self-consistent, and each contract still needs its own valid operator
+    // signature + burn. Safe by construction, not a fork.
     const uint256 prev_hash = existing ? existing->m_hash : uint256{};
 
     // Findings B + K + M: IsBuiltin guard runs first, with status-driven
