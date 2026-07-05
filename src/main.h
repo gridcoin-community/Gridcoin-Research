@@ -180,7 +180,9 @@ bool OutOfSyncByAge();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
                         CValidationState& state, bool* pfMissingInputs,
-                        int64_t entry_time = 0) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+                        int64_t entry_time = 0, bool test_only = false,
+                        CAmount* fee_out = nullptr, size_t* vsize_out = nullptr)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
 /** A transaction with a merkle branch linking it to the block chain. */

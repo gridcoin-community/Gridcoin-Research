@@ -22,6 +22,9 @@
 #include <gridcoin/contract/contract.h>
 #include <rpc/server.h>
 #include <test/test_gridcoin.h>
+#include <streams.h>
+#include <util.h>
+#include <util/strencodings.h>
 
 #include <univalue.h>
 
@@ -518,6 +521,69 @@ BOOST_AUTO_TEST_CASE(unbroadcast_reset_on_clear)
 
     pool.clear();
     BOOST_CHECK(pool.GetUnbroadcast().empty());
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 (#3029): testmempoolaccept
+// ---------------------------------------------------------------------------
+
+namespace {
+std::string TxToHex(const CTransaction& tx)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tx;
+    return HexStr(ss);
+}
+
+UniValue TestAccept(const CTransaction& tx)
+{
+    UniValue rawtxs(UniValue::VARR);
+    rawtxs.push_back(TxToHex(tx));
+    UniValue params(UniValue::VARR);
+    params.push_back(rawtxs);
+    return testmempoolaccept(params);
+}
+} // anonymous namespace
+
+BOOST_AUTO_TEST_CASE(testmempoolaccept_reports_reject_reason)
+{
+    mempool.clear();
+    const size_t before = mempool.size();
+
+    // A legacy (v1) transaction is rejected with a precise Gridcoin reason, and a
+    // rejected tx is not pooled. (This tx fails at the first ATMP check, so it does
+    // not exercise the test_only skip of the store block on an *acceptable* tx.
+    // That accept-path no-mutation invariant needs a spendable input / real chain
+    // state, so there is no in-tree automated test for it; it is left to
+    // functional/manual testing.)
+    CMutableTransaction mtx;
+    mtx.nVersion = 1;
+    CTxOut vout;
+    vout.nValue = 1;
+    mtx.vout.push_back(vout);
+    const CTransaction legacy(mtx);
+
+    const UniValue res = TestAccept(legacy);
+    BOOST_REQUIRE_EQUAL(res.size(), 1U);
+    BOOST_CHECK_EQUAL(res[0]["txid"].get_str(), legacy.GetHash().ToString());
+    BOOST_CHECK_EQUAL(res[0]["allowed"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res[0]["reject-reason"].get_str(), "bad-txns-version");
+    BOOST_CHECK_EQUAL(mempool.size(), before);
+}
+
+BOOST_AUTO_TEST_CASE(testmempoolaccept_reports_already_in_mempool)
+{
+    mempool.clear();
+
+    const CTransaction mrc = MakeMrcTx(GRC::Cpid(InsecureRandBytes(16)), 10);
+    mempool.addUnchecked(mrc.GetHash(), MakeEntry(mrc));
+
+    const UniValue res = TestAccept(mrc);
+    BOOST_REQUIRE_EQUAL(res.size(), 1U);
+    BOOST_CHECK_EQUAL(res[0]["allowed"].get_bool(), false);
+    BOOST_CHECK_EQUAL(res[0]["reject-reason"].get_str(), "txn-already-in-mempool");
+
+    mempool.clear();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
