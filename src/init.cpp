@@ -308,6 +308,11 @@ void Shutdown(void* parg)
         UnregisterValidationInterface(pwalletMain);
         UnregisterWallet(pwalletMain);
         delete pwalletMain;
+        // Null the global so any late/defensive `if (pwalletMain)` guard (e.g. the
+        // scheduled wallet-rebroadcast job) is load-bearing rather than seeing a
+        // dangling pointer. Safe today only because the scheduler thread is already
+        // joined above; nulling hardens against future teardown reordering.
+        pwalletMain = nullptr;
         // close transaction database to prevent lock issue on restart
         // This causes issues on daemons where it tries to create a second
         // lock file.
@@ -1951,6 +1956,26 @@ bool AppInit2(ThreadHandlerPtr threads)
     g_scheduler->scheduleEvery([]{
         ResendUnbroadcastTransactions();
     }, std::chrono::minutes{12});
+
+    // Periodically rebroadcast the wallet's own unconfirmed transactions. This
+    // was previously driven per-pass from net_processing::SendMessages via the
+    // setpwalletRegistered ResendWalletTransactions wrapper; it now self-
+    // schedules here, retiring that wrapper (issue #3030).
+    // CWallet::ResendWalletTransactions self-rate-limits (random ~10x block
+    // spacing, gated on IBD / OutOfSyncByAge / new-block-seen), so a 60s poll
+    // reproduces the old cadence. TRY_LOCK(cs_main) matches the other
+    // wallet-touching scheduled jobs (RunBackupJob, RunRenewBeaconJob): when
+    // cs_main is busy (reorg/IBD) the cycle is skipped rather than stalling the
+    // shared scheduler thread, and the next poll is 60s away. Shutdown-safe: the
+    // scheduler thread is joined (threadGroup.join_all(), see Shutdown()) before
+    // g_connman and pwalletMain
+    // are torn down, so this can never deref freed state.
+    g_scheduler->scheduleEvery([]{
+        if (!pwalletMain) return;
+        TRY_LOCK(cs_main, locked_main);
+        if (!locked_main) return;
+        pwalletMain->ResendWalletTransactions();
+    }, std::chrono::seconds{60});
 
     GRC::ScheduleBackgroundJobs(*g_scheduler);
 

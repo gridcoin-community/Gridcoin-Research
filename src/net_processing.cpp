@@ -1245,14 +1245,10 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
         pto->PushMessage(NetMsgType::PING, nonce);
     }
 
-    // Resend wallet transactions that haven't gotten in a block yet.
-    // No outer locks held here in SendMessages; acquire in canonical order
-    // cs_main -> cs_setpwalletRegistered -> cs_wallet. cs_main is required
-    // for the wallet method's mapBlockIndex / pindexBest reads.
-    {
-        LOCK2(cs_main, cs_setpwalletRegistered);
-        ResendWalletTransactions();
-    }
+    // Wallet rebroadcast of unconfirmed transactions now self-schedules on
+    // g_scheduler (see AppInit2) rather than running per SendMessages pass,
+    // retiring the setpwalletRegistered ResendWalletTransactions wrapper
+    // (issue #3030).
 
     // (The node's own unbroadcast transactions are rebroadcast from a scheduler
     // job, ResendUnbroadcastTransactions(), not here -- relaying from inside
