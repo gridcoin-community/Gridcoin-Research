@@ -457,8 +457,6 @@ public:
 
     bool DelAddressBookName(const CTxDestination& address);
 
-    void UpdatedTransaction(const uint256 &hashTx);
-
     void Inventory(const uint256 &hash)
     {
         {

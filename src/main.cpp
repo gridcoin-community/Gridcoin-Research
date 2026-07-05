@@ -191,14 +191,6 @@ void SetBestChain(const CBlockLocator& loc)
         pwallet->SetBestChain(loc);
 }
 
-// notify wallets about an updated transaction
-void UpdatedTransaction(const uint256& hashTx)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->UpdatedTransaction(hashTx);
-}
-
 
 // ask wallets to resend their transactions
 void ResendWalletTransactions(bool fForce)

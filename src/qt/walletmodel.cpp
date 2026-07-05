@@ -752,13 +752,12 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     //       definition in main.cpp, not the header declaration — so the
     //       requirement is verified here by hand, not by the compiler.)
     //
-    //   All five CT_NEW / CT_UPDATED callsites hold both locks, verified by
+    //   All four CT_NEW / CT_UPDATED callsites hold both locks, verified by
     //   audit:
     //     wallet.cpp:572  AddToWallet            — EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
     //     wallet.cpp:2400 CommitTransaction      — LOCK2(cs_main, cs_wallet)
     //     wallet.cpp:458  WalletUpdateSpent      — caller AddToWallet / AddToWalletIfInvolvingMe, both EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
     //     wallet.cpp:475  WalletUpdateSpent      — same
-    //     wallet.cpp:3057 UpdatedTransaction     — reached via validation.cpp (cs_main required on entry); LOCK(cs_wallet)
     //   This function is annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main,
     //   wallet->cs_wallet) so the Clang thread-safety analyzer accepts the
     //   AssertLockHeld() calls and the mapWallet reads in the CT_NEW /
