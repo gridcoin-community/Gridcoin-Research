@@ -14,6 +14,7 @@
 
 class CBlock;
 class CBlockIndex;
+class CBlockLocator;
 class CScheduler;
 class CValidationInterface;
 struct MainSignalsInstance;
@@ -88,6 +89,12 @@ protected:
     /** Notifies listeners of a block being disconnected from the active chain. */
     virtual void BlockDisconnected(const CBlock& block, int height) {}
 
+    /**
+     * Notifies listeners that the active-chain best block was flushed, supplying
+     * a locator the subscriber can persist to recover its position on restart.
+     */
+    virtual void ChainStateFlushed(const CBlockLocator& locator) {}
+
     friend class CMainSignals;
     friend struct MainSignalsInstance;
 };
@@ -119,6 +126,7 @@ public:
     void TransactionRemovedFromMempool(const CTransactionRef&, MemPoolRemovalReason);
     void BlockConnected(const CBlock&, int height);
     void BlockDisconnected(const CBlock&, int height);
+    void ChainStateFlushed(const CBlockLocator&);
 };
 
 /** This will have its internals registered with a background signal scheduler in AppInit2. */

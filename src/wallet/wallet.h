@@ -296,14 +296,19 @@ public:
 
     // -- CValidationInterface callbacks ---------------------------------------
     // Invoked by the validation/mempool layer through GetMainSignals() with
-    // cs_main held; each acquires cs_wallet internally, so callers must hold
-    // cs_main but not cs_wallet. Override the (UpperCamelCase) CValidationInterface
+    // cs_main held. Lock-order rule for all of these: callers must hold cs_main
+    // and must NOT hold cs_wallet. Most acquire cs_wallet internally;
+    // ChainStateFlushed is the exception -- it only writes the wallet DB and
+    // takes no cs_wallet. Override the (UpperCamelCase) CValidationInterface
     // virtuals.
     void TransactionAddedToMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void BlockConnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void TransactionRemovedFromMempool(const CTransactionRef& tx,
                                       MemPoolRemovalReason reason) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
     void BlockDisconnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
+    //! Persist the best-block locator so a restored wallet can detect its
+    //! position. Writes wallet DB only; takes no cs_wallet.
+    void ChainStateFlushed(const CBlockLocator& locator) override EXCLUSIVE_LOCKS_REQUIRED(cs_main) LOCKS_EXCLUDED(cs_wallet);
 
     // -- Conflict tracking & abandonment -------------------------------------
     /** Return txids that spend the same inputs as @p txid. */
@@ -448,7 +453,6 @@ public:
         }
         return nChange;
     }
-    void SetBestChain(const CBlockLocator& loc);
 
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);

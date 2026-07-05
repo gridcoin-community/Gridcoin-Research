@@ -526,9 +526,12 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
 
     if (!fIsInitialDownload) {
         const CBlockLocator locator(pindexNew);
-        // Canonical order: cs_main (held by SetBestChain) -> cs_setpwalletRegistered -> cs_wallet.
-        LOCK(cs_setpwalletRegistered);
-        ::SetBestChain(locator);
+        // Persist the wallet best-block locator. Emitted synchronously under
+        // cs_main (held by SetBestChain), so the CValidationInterface subscriber
+        // (CWallet::ChainStateFlushed) runs in the canonical cs_main -> signals
+        // order -- replacing the legacy cs_setpwalletRegistered wrapper (issue
+        // #3030 setpwalletRegistered retirement).
+        GetMainSignals().ChainStateFlushed(locator);
     }
 
     if (LogInstance().WillLogCategory(BCLog::LogFlags::VERBOSE)) {
