@@ -30,7 +30,7 @@ with `purpose` defaulting to `unknown`), and the change is downgrade-safe.
 | Deprecated account RPC | Behavior now | Replacement |
 | --- | --- | --- |
 | `setaccount <addr> <name>` | works, logs a one-time deprecation warning | `setlabel <addr> <label>` |
-| `getaccount <addr>` | works, logs a warning | read the address's label (`getaddressesbylabel`, or address info) |
+| `getaccount <addr>` | works, logs a warning | `validateaddress <addr>` — the address's label is returned in the `account` field |
 | `getaddressesbyaccount <name>` | works, logs a warning | `getaddressesbylabel <label>` |
 | `getaccountaddress <name>` | **throws** unless `-enableaccounts=1` | `getnewaddress` + `setlabel` |
 | `listaccounts` | **throws** unless `-enableaccounts=1` **and** `-staking=0` | `listlabels` |
@@ -109,8 +109,8 @@ work and only log a deprecation warning.)
   odd balances" the accounting API warns about. Disabling staking removes that source
   of corruption while the deprecated ledger is in use.
 
-So the accounting RPCs need **both** `enableaccounts=1` **and** `staking=0`;
-`getaccountaddress` needs only `enableaccounts=1`. Both flags are **temporary**. Treat any run that needs them as a to-migrate item — the
+So the accounting RPCs need **both** `-enableaccounts=1` **and** `-staking=0`;
+`getaccountaddress` needs only `-enableaccounts=1`. Both flags are **temporary**. Treat any run that needs them as a to-migrate item — the
 accounts subsystem may be removed entirely in a future release.
 
 ## One-time cleanup: `migratelabels`
