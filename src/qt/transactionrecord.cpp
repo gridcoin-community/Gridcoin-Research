@@ -508,7 +508,7 @@ void TransactionRecord::populateDisplayLabel(const CWallet& wallet) EXCLUSIVE_LO
     label.clear();
     const auto mi = wallet.mapAddressBook.find(DecodeDestination(address));
     if (mi != wallet.mapAddressBook.end()) {
-        label = mi->second;
+        label = mi->second.name;
     }
 }
 

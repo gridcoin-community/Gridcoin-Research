@@ -34,6 +34,18 @@ bool CWalletDB::EraseName(const string& strAddress)
     return Erase(make_pair(string("name"), strAddress));
 }
 
+bool CWalletDB::WritePurpose(const string& strAddress, const string& strPurpose)
+{
+    nWalletDBUpdated++;
+    return Write(make_pair(string("purpose"), strAddress), strPurpose);
+}
+
+bool CWalletDB::ErasePurpose(const string& strAddress)
+{
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("purpose"), strAddress));
+}
+
 bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
 {
     nWalletDBUpdated++;
@@ -252,7 +264,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             string strAddress;
             ssKey >> strAddress;
-            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)];
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].name;
+        }
+        else if (strType == "purpose")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
         }
         else if (strType == "tx")
         {

@@ -182,8 +182,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
                             strHTML += "<b>" + tr("To") + ":</b> ";
                             strHTML += GUIUtil::HtmlEscape(EncodeDestination(address));
 
-                            if (!wallet->mapAddressBook[address].empty())
-                                strHTML += " (" + tr("own address") + ", " + tr("label") + ": " + GUIUtil::HtmlEscape(wallet->mapAddressBook[address]) + ")";
+                            if (!wallet->mapAddressBook[address].name.empty())
+                                strHTML += " (" + tr("own address") + ", " + tr("label") + ": " + GUIUtil::HtmlEscape(wallet->mapAddressBook[address].name) + ")";
 
                             else
                                 strHTML += " (" + tr("own address") + ")";
@@ -208,8 +208,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
 
         CTxDestination dest = DecodeDestination(strAddress);
 
-        if (wallet->mapAddressBook.count(dest) && !wallet->mapAddressBook[dest].empty())
-            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[dest]) + " ";
+        if (wallet->mapAddressBook.count(dest) && !wallet->mapAddressBook[dest].name.empty())
+            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[dest].name) + " ";
 
         strHTML += GUIUtil::HtmlEscape(strAddress) + "<br>";
     }
@@ -269,8 +269,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, unsigned int vo
                     {
                         strHTML += "<b>" + tr("To") + ":</b> ";
 
-                        if (wallet->mapAddressBook.count(address) && !wallet->mapAddressBook[address].empty())
-                            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[address]) + " ";
+                        if (wallet->mapAddressBook.count(address) && !wallet->mapAddressBook[address].name.empty())
+                            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[address].name) + " ";
 
                         strHTML += GUIUtil::HtmlEscape(EncodeDestination(address));
                         strHTML += "<br>";

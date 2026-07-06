@@ -64,7 +64,7 @@ public:
             for (auto const &item : wallet->mapAddressBook)
             {
                 const CTxDestination& address = item.first;
-                const std::string& strName = item.second;
+                const std::string& strName = item.second.name;
                 isminetype fMine = IsMine(*wallet, address);
                 cachedAddressTable.append(AddressTableEntry((fMine != ISMINE_NO) ? AddressTableEntry::Receiving : AddressTableEntry::Sending,
                                   QString::fromStdString(strName),
@@ -454,10 +454,10 @@ QString AddressTableModel::labelForAddress(const QString &address) const
     {
         LOCK(wallet->cs_wallet);
         CTxDestination address_parsed = DecodeDestination(address.toStdString());
-        std::map<CTxDestination, std::string>::iterator mi = wallet->mapAddressBook.find(address_parsed);
+        auto mi = wallet->mapAddressBook.find(address_parsed);
         if (mi != wallet->mapAddressBook.end())
         {
-            return QString::fromStdString(mi->second);
+            return QString::fromStdString(mi->second.name);
         }
     }
     return QString();

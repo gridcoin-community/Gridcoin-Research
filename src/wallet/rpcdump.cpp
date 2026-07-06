@@ -416,7 +416,7 @@ UniValue dumpwallet(const UniValue& params)
         if (pwalletMain->GetKey(keyid, key)) {
             file << strprintf("%s %s ", EncodeSecret(key), strTime);
             if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid]));
+                file << strprintf("label=%s", EncodeDumpString(pwalletMain->mapAddressBook[keyid].name));
             } else if (keyid == masterKeyID) {
                 file << "hdmaster=1";
             } else if (setKeyPool.count(keyid)) {

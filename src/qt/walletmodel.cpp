@@ -623,10 +623,10 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         {
             LOCK(wallet->cs_wallet);
 
-            std::map<CTxDestination, std::string>::iterator mi = wallet->mapAddressBook.find(dest);
+            auto mi = wallet->mapAddressBook.find(dest);
 
             // Check if we have a new address or an updated label
-            if (mi == wallet->mapAddressBook.end() || mi->second != strLabel)
+            if (mi == wallet->mapAddressBook.end() || mi->second.name != strLabel)
             {
                 wallet->SetAddressBookName(dest, strLabel);
             }
@@ -704,9 +704,11 @@ static void NotifyKeyStoreStatusChanged(WalletModel *walletmodel, CCryptoKeyStor
     QMetaObject::invokeMethod(walletmodel, "updateStatus", Qt::QueuedConnection);
 }
 
-static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, ChangeType status)
+static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)
 {
-    LogPrintf("NotifyAddressBookChanged %s %s isMine=%i status=%i", EncodeDestination(address), label, isMine, status);
+    // `purpose` is accepted to match the 6-arg core signal but is not yet surfaced to the GUI;
+    // the updateAddressBook slot remains a 4-arg interface (address, label, isMine, status).
+    LogPrintf("NotifyAddressBookChanged %s %s isMine=%i purpose=%s status=%i", EncodeDestination(address), label, isMine, purpose, status);
     QMetaObject::invokeMethod(walletmodel, "updateAddressBook", Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(EncodeDestination(address))),
                               Q_ARG(QString, QString::fromStdString(label)),
@@ -898,7 +900,7 @@ void WalletModel::subscribeToCoreSignals()
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
                                                          boost::placeholders::_3, boost::placeholders::_4,
-                                                         boost::placeholders::_5));
+                                                         boost::placeholders::_5, boost::placeholders::_6));
     wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
                                                          boost::placeholders::_3));
@@ -915,7 +917,7 @@ void WalletModel::unsubscribeFromCoreSignals()
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this,
                                                             boost::placeholders::_1, boost::placeholders::_2,
                                                             boost::placeholders::_3, boost::placeholders::_4,
-                                                            boost::placeholders::_5));
+                                                            boost::placeholders::_5, boost::placeholders::_6));
     wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this,
                                                             boost::placeholders::_1, boost::placeholders::_2,
                                                             boost::placeholders::_3));

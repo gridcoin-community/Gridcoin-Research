@@ -110,7 +110,11 @@ public:
     bool WriteName(const std::string& strAddress, const std::string& strName);
 
     bool EraseName(const std::string& strAddress);
-    
+
+    bool WritePurpose(const std::string& strAddress, const std::string& strPurpose);
+
+    bool ErasePurpose(const std::string& strAddress);
+
     bool WriteBestBlock(const CBlockLocator& locator);
     bool ReadBestBlock(CBlockLocator& locator);
 
