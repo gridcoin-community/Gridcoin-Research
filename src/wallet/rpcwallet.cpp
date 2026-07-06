@@ -92,6 +92,14 @@ string AccountFromValue(const UniValue& value)
     return strAccount;
 }
 
+string LabelFromValue(const UniValue& value)
+{
+    string strLabel = value.get_str();
+    if (strLabel == "*")
+        throw JSONRPCError(RPC_WALLET_INVALID_LABEL_NAME, "Invalid label name");
+    return strLabel;
+}
+
 static const RPCHelpMan getinfo_help{
     "getinfo",
     "Returns an object containing various state info about the running node, network, and wallet.",
@@ -481,6 +489,134 @@ UniValue getaddressesbyaccount(const UniValue& params)
         if (strName == strAccount)
             ret.push_back(EncodeDestination(address));
     }
+    return ret;
+}
+
+static const RPCHelpMan setlabel_help{
+    "setlabel",
+    "Sets the label associated with the given address.",
+    {
+        {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The Gridcoin address to be associated with a label."},
+        {"label", RPCArg::Type::STR, RPCArg::Optional::NO, "The label to assign to the address."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("setlabel", "\"S1exampleaddress\" \"tabby\"") +
+        HelpExampleRpc("setlabel", "\"S1exampleaddress\", \"tabby\"")},
+};
+const RPCHelpMan& setlabel_helpman() { return setlabel_help; }
+
+UniValue setlabel(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    CTxDestination dest = DecodeDestination(params[0].get_str());
+    if (!IsValidDestination(dest))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Gridcoin address");
+
+    string strLabel = LabelFromValue(params[1]);
+
+    // Owned addresses are receiving addresses; everything else is a sending address. The bool
+    // returns are ignored on purpose: in-memory (non-file-backed) wallets return false even on
+    // success (see CWallet::SetAddressBookName).
+    pwalletMain->SetAddressBookName(dest, strLabel);
+    pwalletMain->SetAddressBookPurpose(dest,
+        (IsMine(*pwalletMain, dest) != ISMINE_NO) ? "receive" : "send");
+
+    return NullUniValue;
+}
+
+static const RPCHelpMan getaddressesbylabel_help{
+    "getaddressesbylabel",
+    "Returns the list of addresses assigned the specified label.",
+    {
+        {"label", RPCArg::Type::STR, RPCArg::Optional::NO, "The label."},
+    },
+    RPCResult{RPCResult::Type::OBJ_DYN, "", "json object with addresses as keys",
+        {
+            {RPCResult::Type::OBJ, "address", "json object with information about the address",
+                {
+                    {RPCResult::Type::STR, "purpose", "Purpose of address: \"receive\", \"send\", or \"unknown\" for entries that predate the label system and have not yet been migrated (see migratelabels)."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("getaddressesbylabel", "\"tabby\"") +
+        HelpExampleRpc("getaddressesbylabel", "\"tabby\"")},
+};
+const RPCHelpMan& getaddressesbylabel_helpman() { return getaddressesbylabel_help; }
+
+UniValue getaddressesbylabel(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    string strLabel = LabelFromValue(params[0]);
+
+    // Bitcoin 0.17 shape: an object keyed by address, each value an object carrying the purpose.
+    // mapAddressBook keys are unique CTxDestinations and EncodeDestination is 1:1, so no dedup
+    // guard is needed.
+    UniValue ret(UniValue::VOBJ);
+    for (auto const& item : pwalletMain->mapAddressBook)
+    {
+        if (item.second.name != strLabel)
+            continue;
+        UniValue value(UniValue::VOBJ);
+        value.pushKV("purpose", item.second.purpose);
+        ret.pushKV(EncodeDestination(item.first), value);
+    }
+
+    if (ret.empty())
+        throw JSONRPCError(RPC_WALLET_INVALID_LABEL_NAME, string("No addresses with label ") + strLabel);
+
+    return ret;
+}
+
+static const RPCHelpMan listlabels_help{
+    "listlabels",
+    "Returns the list of all labels, or labels that are assigned to addresses with a specific purpose.",
+    {
+        {"purpose", RPCArg::Type::STR, RPCArg::Optional::OMITTED, "Address purpose to list labels for ('send','receive'). An empty string is the same as not providing this argument."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::STR, "label", "Label name."},
+        }},
+    RPCExamples{
+        "\nList all labels\n"
+        + HelpExampleCli("listlabels", "") +
+        "\nList labels that have receiving addresses\n"
+        + HelpExampleCli("listlabels", "receive") +
+        "\nAs a JSON-RPC call\n"
+        + HelpExampleRpc("listlabels", "receive")},
+};
+const RPCHelpMan& listlabels_helpman() { return listlabels_help; }
+
+UniValue listlabels(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    string strPurpose;
+    if (params.size() > 0)
+        strPurpose = params[0].get_str();
+
+    // Reject an unknown purpose filter rather than silently returning [] (matches Bitcoin).
+    if (!strPurpose.empty() && strPurpose != "send" && strPurpose != "receive")
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid purpose (expected \"send\" or \"receive\")");
+
+    // std::set gives sorted, de-duplicated label names.
+    set<string> setLabels;
+    for (auto const& entry : pwalletMain->mapAddressBook)
+    {
+        // Skip the implicit empty default label (e.g. GetAccountAddress / default-key stubs).
+        if (entry.second.name.empty())
+            continue;
+        if (strPurpose.empty() || entry.second.purpose == strPurpose)
+            setLabels.insert(entry.second.name);
+    }
+
+    UniValue ret(UniValue::VARR);
+    for (auto const& name : setLabels)
+        ret.push_back(name);
+
     return ret;
 }
 
