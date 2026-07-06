@@ -18,6 +18,8 @@
 #include <util/strencodings.h>
 #include <version.h>
 
+using namespace psgt_test;
+
 BOOST_AUTO_TEST_SUITE(psgt_tests)
 
 // ---------------------------------------------------------------------------
@@ -322,6 +324,50 @@ BOOST_AUTO_TEST_CASE(wrong_magic_rejected)
     std::string error;
     BOOST_CHECK(!DecodeRawPSGT(psgt, b64, error));
     BOOST_CHECK(error.find("magic") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Test 10b: a crafted over-long compact-size length is rejected, not crashed.
+// The first global key length is a 0xFF-prefixed 2^64-1 compact size. The old
+// hand-rolled reader let pos+n wrap past its bounds check (OOB); the framework's
+// ReadCompactSize rejects it (> MAX_SIZE). Must return false without crashing.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(decode_overlong_length_rejected)
+{
+    std::vector<unsigned char> data = {0x70, 0x73, 0x67, 0x74, 0xff}; // PSGT magic
+    data.push_back(0xff);                                             // compact-size 8-byte marker
+    for (int i = 0; i < 8; ++i) data.push_back(0xff);                 // length = 2^64-1
+    PartiallySignedTransaction psgt;
+    std::string error;
+    BOOST_CHECK(!DecodePSGTBytes(psgt, data, error)); // no crash, no OOB
+}
+
+// ---------------------------------------------------------------------------
+// Test 10c: input larger than MAX_PSGT_WIRE_SIZE is rejected up front.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(decode_oversize_rejected)
+{
+    std::vector<unsigned char> data = {0x70, 0x73, 0x67, 0x74, 0xff}; // PSGT magic
+    data.resize(MAX_PSGT_WIRE_SIZE + 1, 0x00);
+    PartiallySignedTransaction psgt;
+    std::string error;
+    BOOST_CHECK(!DecodePSGTBytes(psgt, data, error));
+    BOOST_CHECK(error.find("maximum size") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Test 10d: a field length under ReadCompactSize's MAX_SIZE but larger than the
+// remaining data is rejected before any oversized allocation.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(decode_field_length_exceeds_data_rejected)
+{
+    std::vector<unsigned char> data = {0x70, 0x73, 0x67, 0x74, 0xff}; // PSGT magic
+    data.push_back(0xfe);                                             // 4-byte compact-size marker
+    data.push_back(0x00); data.push_back(0x00);
+    data.push_back(0x00); data.push_back(0x01);                      // length = 0x01000000 (~16 MB)
+    PartiallySignedTransaction psgt;
+    std::string error;
+    BOOST_CHECK(!DecodePSGTBytes(psgt, data, error)); // rejected, no ~16 MB allocation
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,6 +1146,28 @@ BOOST_AUTO_TEST_CASE(verify_partial_sigs)
         auto& sig = corrupted.inputs[0].partial_sigs[fixture.k1.GetPubKey().GetID()];
         sig[sig.size() / 2] ^= 0x01;
         BOOST_CHECK(!VerifyPSGTPartialSigs(corrupted, valid, error));
+    }
+
+    // A signature that is valid ECDSA but non-canonically encoded (a superfluous
+    // leading zero on S) is accepted by CheckSig's lax DER parser yet fails
+    // strict DER, so the network's mandatory DERSIG would reject the finalized
+    // tx. VerifyPSGTPartialSigs must reject it (it would pass without the
+    // CheckSignatureEncoding gate).
+    {
+        PartiallySignedTransaction malleated = fixture.psgt;
+        auto& sig = malleated.inputs[0].partial_sigs[fixture.k1.GetPubKey().GetID()];
+        BOOST_REQUIRE(sig.size() > 6 && sig[0] == 0x30); // DER || hashtype
+        unsigned char hashtype = sig.back();
+        std::vector<unsigned char> der(sig.begin(), sig.end() - 1);
+        size_t rlen = der[3];
+        size_t s_len_pos = 4 + rlen + 1; // index of the S length byte
+        BOOST_REQUIRE(s_len_pos < der.size() && der[s_len_pos - 1] == 0x02);
+        der[1] += 1;                                     // total length += 1
+        der[s_len_pos] += 1;                             // S length += 1
+        der.insert(der.begin() + s_len_pos + 1, 0x00);  // superfluous leading zero on S
+        der.push_back(hashtype);
+        sig = der;
+        BOOST_CHECK(!VerifyPSGTPartialSigs(malleated, valid, error));
     }
 
     // An entry keyed by a non-member key fails.

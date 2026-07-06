@@ -7,6 +7,7 @@
 #include <hash.h>
 #include <keystore.h>
 #include <policy/fees.h>
+#include <policy/policy.h>
 #include <script/interpreter.h>
 #include <script/sign.h>
 #include <script/standard.h>
@@ -530,49 +531,20 @@ std::vector<unsigned char> SerializePSGT(const PartiallySignedTransaction& psgt)
     return result;
 }
 
-// Helper: read a compact size from a stream position.
-static bool ReadCompactSizeFromVec(const std::vector<unsigned char>& data, size_t& pos, uint64_t& nSize)
+// Read a length-prefixed byte string from a PSGT stream. ReadCompactSize bounds
+// the length to MAX_SIZE and rejects non-canonical encodings; the additional
+// remaining-bytes check bounds the allocation to the data actually present, so a
+// small PSGT cannot claim a large length and force an oversized allocation
+// before the read fails on truncation.
+template <typename Stream>
+static void ReadPSGTField(Stream& s, std::vector<unsigned char>& out)
 {
-    if (pos >= data.size()) return false;
-
-    unsigned char chSize = data[pos++];
-    if (chSize < 253)
-    {
-        nSize = chSize;
-    }
-    else if (chSize == 253)
-    {
-        if (pos + 2 > data.size()) return false;
-        nSize = data[pos] | ((uint64_t)data[pos + 1] << 8);
-        pos += 2;
-    }
-    else if (chSize == 254)
-    {
-        if (pos + 4 > data.size()) return false;
-        nSize = 0;
-        for (int i = 0; i < 4; ++i)
-            nSize |= ((uint64_t)data[pos + i] << (8 * i));
-        pos += 4;
-    }
-    else
-    {
-        if (pos + 8 > data.size()) return false;
-        nSize = 0;
-        for (int i = 0; i < 8; ++i)
-            nSize |= ((uint64_t)data[pos + i] << (8 * i));
-        pos += 8;
-    }
-    return true;
-}
-
-// Helper: read N bytes from a vector at a given position.
-static bool ReadBytes(const std::vector<unsigned char>& data, size_t& pos,
-                      std::vector<unsigned char>& out, size_t n)
-{
-    if (pos + n > data.size()) return false;
-    out.assign(data.begin() + pos, data.begin() + pos + n);
-    pos += n;
-    return true;
+    uint64_t len = ReadCompactSize(s);
+    if (len > s.size())
+        throw std::ios_base::failure("PSGT field length exceeds remaining data");
+    out.resize(len);
+    if (len > 0)
+        s.read(AsWritableBytes(Span{out.data(), out.size()}));
 }
 
 bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
@@ -587,6 +559,15 @@ bool DecodeRawPSGT(PartiallySignedTransaction& psgt,
     {
         if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
             cleaned += c;
+    }
+
+    // Bound the input before decoding so a large base64 blob can't force a big
+    // allocation ahead of the byte-level MAX_PSGT_WIRE_SIZE check. Base64 expands
+    // 3 bytes -> 4 chars, so a valid PSGT encodes to at most this many characters.
+    if (cleaned.size() > (MAX_PSGT_WIRE_SIZE / 3 + 1) * 4)
+    {
+        error = "PSGT exceeds maximum size";
+        return false;
     }
 
     bool invalid = false;
@@ -604,6 +585,16 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
                      const std::vector<unsigned char>& data,
                      std::string& error)
 {
+    // Bound untrusted input before any work: a PSGT from an untrusted source
+    // (the decode RPC/GUI, and the upcoming p2p relay) must not exceed the wire
+    // cap. Together with the range-checked ReadCompactSize used by the stream
+    // reads below, this removes attacker-controlled lengths as a crash vector.
+    if (data.size() > MAX_PSGT_WIRE_SIZE)
+    {
+        error = "PSGT exceeds maximum size";
+        return false;
+    }
+
     // Check magic bytes.
     if (data.size() < PSGT_MAGIC.size() ||
         !std::equal(PSGT_MAGIC.begin(), PSGT_MAGIC.end(), data.begin()))
@@ -612,30 +603,32 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
         return false;
     }
 
-    size_t pos = PSGT_MAGIC.size();
+    // Parse the key/value maps through the standard serialization framework
+    // instead of hand-rolled index walking: ReadPSGTField reads each
+    // length-prefixed byte string via ReadCompactSize (which rejects
+    // non-canonical and over-MAX_SIZE lengths) and rejects any length beyond the
+    // remaining bytes before allocating -- so a malformed length can neither
+    // overflow, over-read, nor force an oversized allocation.
+    CDataStream ss(std::vector<unsigned char>(data.begin() + PSGT_MAGIC.size(), data.end()),
+                   SER_NETWORK, PROTOCOL_VERSION);
+
+    try {
 
     // Parse global map.
     bool found_tx = false;
     std::set<std::vector<unsigned char>> global_keys;
-    while (pos < data.size())
+    while (!ss.empty())
     {
-        // Check for separator.
-        uint64_t keyLen = 0;
-        size_t savedPos = pos;
-        if (!ReadCompactSizeFromVec(data, pos, keyLen)) { error = "Truncated global key length"; return false; }
-        if (keyLen == 0) break; // Separator
-
         std::vector<unsigned char> key;
-        if (!ReadBytes(data, pos, key, keyLen)) { error = "Truncated global key"; return false; }
+        ReadPSGTField(ss, key);
+        if (key.empty()) break; // Separator
 
-        uint64_t valLen = 0;
-        if (!ReadCompactSizeFromVec(data, pos, valLen)) { error = "Truncated global value length"; return false; }
         std::vector<unsigned char> val;
-        if (!ReadBytes(data, pos, val, valLen)) { error = "Truncated global value"; return false; }
+        ReadPSGTField(ss, val);
 
         if (!global_keys.insert(key).second) { error = "Duplicate key in global map"; return false; }
 
-        if (key.size() >= 1 && key[0] == PSGT_GLOBAL_UNSIGNED_TX && !found_tx)
+        if (key[0] == PSGT_GLOBAL_UNSIGNED_TX && !found_tx)
         {
             CDataStream ssTx(val, SER_NETWORK, PROTOCOL_VERSION);
             try {
@@ -676,19 +669,14 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
     for (unsigned int i = 0; i < psgt.tx.vin.size(); ++i)
     {
         std::set<std::vector<unsigned char>> input_keys;
-        while (pos < data.size())
+        while (!ss.empty())
         {
-            uint64_t keyLen = 0;
-            if (!ReadCompactSizeFromVec(data, pos, keyLen)) { error = "Truncated input key length"; return false; }
-            if (keyLen == 0) break; // Separator
-
             std::vector<unsigned char> key;
-            if (!ReadBytes(data, pos, key, keyLen)) { error = "Truncated input key"; return false; }
+            ReadPSGTField(ss, key);
+            if (key.empty()) break; // Separator
 
-            uint64_t valLen = 0;
-            if (!ReadCompactSizeFromVec(data, pos, valLen)) { error = "Truncated input value length"; return false; }
             std::vector<unsigned char> val;
-            if (!ReadBytes(data, pos, val, valLen)) { error = "Truncated input value"; return false; }
+            ReadPSGTField(ss, val);
 
             if (!input_keys.insert(key).second) { error = "Duplicate key in input map"; return false; }
 
@@ -697,8 +685,8 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
             {
             case PSGT_IN_NON_WITNESS_UTXO:
             {
-                CDataStream ss(val, SER_NETWORK, PROTOCOL_VERSION);
-                try { ss >> psgt.inputs[i].non_witness_utxo; }
+                CDataStream ssu(val, SER_NETWORK, PROTOCOL_VERSION);
+                try { ssu >> psgt.inputs[i].non_witness_utxo; }
                 catch (...) { error = "Failed to decode non-witness UTXO"; return false; }
                 break;
             }
@@ -752,19 +740,14 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
     for (unsigned int i = 0; i < psgt.tx.vout.size(); ++i)
     {
         std::set<std::vector<unsigned char>> output_keys;
-        while (pos < data.size())
+        while (!ss.empty())
         {
-            uint64_t keyLen = 0;
-            if (!ReadCompactSizeFromVec(data, pos, keyLen)) { error = "Truncated output key length"; return false; }
-            if (keyLen == 0) break; // Separator
-
             std::vector<unsigned char> key;
-            if (!ReadBytes(data, pos, key, keyLen)) { error = "Truncated output key"; return false; }
+            ReadPSGTField(ss, key);
+            if (key.empty()) break; // Separator
 
-            uint64_t valLen = 0;
-            if (!ReadCompactSizeFromVec(data, pos, valLen)) { error = "Truncated output value length"; return false; }
             std::vector<unsigned char> val;
-            if (!ReadBytes(data, pos, val, valLen)) { error = "Truncated output value"; return false; }
+            ReadPSGTField(ss, val);
 
             if (!output_keys.insert(key).second) { error = "Duplicate key in output map"; return false; }
 
@@ -796,6 +779,13 @@ bool DecodePSGTBytes(PartiallySignedTransaction& psgt,
                 break;
             }
         }
+    }
+
+    } catch (const std::exception& e) {
+        // Any truncated/over-long length field or malformed embedded object
+        // surfaces here as a stream exception rather than a crash.
+        error = std::string("Malformed PSGT: ") + e.what();
+        return false;
     }
 
     return true;
@@ -1176,7 +1166,15 @@ bool VerifyPSGTPartialSigs(const PartiallySignedTransaction& psgt,
                 return false;
             }
 
-            if (sig.empty() || !CheckSig(sig, member->second, sign_script, tx, i))
+            // Enforce the signature encoding the finalized transaction will have to
+            // satisfy (strict DER + low-S + STRICTENC), not just ECDSA validity:
+            // CheckSig verifies through the lax parser + S-normalization, so a
+            // malleated (high-S / non-canonical-DER) copy would verify here yet be
+            // rejected by the network's mandatory DERSIG on broadcast. Reject it now
+            // so the pool never vouches for an un-finalizable PSGT.
+            if (sig.empty()
+                || !CheckSignatureEncoding(sig, STANDARD_SCRIPT_VERIFY_FLAGS)
+                || !CheckSig(sig, member->second, sign_script, tx, i))
             {
                 error = strprintf("input %u: invalid partial signature", i);
                 return false;
@@ -1221,7 +1219,11 @@ bool PSGTSignedBy(const SigningProvider& provider,
             if (it == input.partial_sigs.end() || it->second.empty())
                 continue;
 
-            if (CheckSig(it->second, vSolutions[j], sign_script, tx, i))
+            // Same encoding-strictness gate as VerifyPSGTPartialSigs: a malleated
+            // copy of an own signature would verify but not finalize, so it must
+            // not be reported as the provider having signed.
+            if (CheckSignatureEncoding(it->second, STANDARD_SCRIPT_VERIFY_FLAGS)
+                && CheckSig(it->second, vSolutions[j], sign_script, tx, i))
                 return true;
         }
     }

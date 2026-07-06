@@ -13,6 +13,7 @@ class CTransaction;
 bool EvalScript(std::vector<std::vector<unsigned char>>& stack, const CScript& script, unsigned int flags, const CTransaction& txTo, unsigned int nIn);
 uint256 SignatureHash(CScript scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);
 bool CheckSig(std::vector<unsigned char> vchSig, std::vector<unsigned char> vchPubKey, CScript scriptCode, const CTransaction& txTo, unsigned int nIn);
+bool CheckSignatureEncoding(const std::vector<unsigned char>& vchSig, unsigned int flags);
 bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigned int flags, const CTransaction& txTo, unsigned int nIn);
 bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int flags, unsigned int nIn, int nHashType);
 

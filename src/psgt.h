@@ -192,10 +192,18 @@ PSGTAnalysis AnalyzePSGT(const PartiallySignedTransaction& psgtx);
 /**
  * The multisig "image" of one PSGT input: the hash of its redeem script
  * (CScriptID), the key a PSGT pool indexes on (#2910). Returns a value only
- * when the input is trustworthily P2SH multisig: the carried previous
+ * when the input is a self-consistent P2SH multisig: the carried previous
  * transaction matches prevout, the funded output is P2SH, the redeem script
  * is present and hashes to the script hash the output commits to, and the
  * redeem script decomposes as m-of-n CHECKMULTISIG.
+ *
+ * IMPORTANT — this establishes INTERNAL CONSISTENCY only, not on-chain reality.
+ * The non_witness_utxo is attacker-supplied; these checks prove the carried
+ * previous transaction commits to this redeem script, NOT that it is confirmed
+ * or a live UTXO. A caller that trusts the image to gate real resources (the
+ * #2910/#3115 pool) MUST additionally verify each input's prevout against the
+ * live UTXO set (exists AND unspent) before trusting it; otherwise an image can
+ * be fabricated for a multisig that was never funded on-chain.
  */
 std::optional<CScriptID> GetPSGTInputImage(const PartiallySignedTransaction& psgt,
                                            unsigned int index);

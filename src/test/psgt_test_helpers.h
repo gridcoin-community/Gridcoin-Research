@@ -14,6 +14,9 @@
 #include <vector>
 
 //! Shared builders for PSGT unit tests (psgt_tests, psgt_pool_tests).
+//! Namespaced so the very generic names (MakeKey/P2PKH/P2SH/...) do not leak
+//! into the global namespace of every translation unit that includes this.
+namespace psgt_test {
 
 inline CKey MakeKey()
 {
@@ -91,5 +94,7 @@ inline PartiallySignedTransaction MakeSpendPSGT(const CTransaction& prevTx, CAmo
     psgt.inputs[0].non_witness_utxo = prevTx;
     return psgt;
 }
+
+} // namespace psgt_test
 
 #endif // GRIDCOIN_TEST_PSGT_TEST_HELPERS_H
