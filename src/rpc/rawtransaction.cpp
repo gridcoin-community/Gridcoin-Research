@@ -505,9 +505,9 @@ static const RPCHelpMan gettxoutproof_help{
     "gettxoutproof",
     "Returns a hex-encoded proof that one or more transactions were included in a block.\n"
     "\n"
-    "NOTE: By default this function only works when there is an unspent output\n"
-    "in the utxo for this transaction. To make it always work, you need to maintain\n"
-    "a full transaction index (txindex), which is enabled by default in Gridcoin.",
+    "NOTE: Gridcoin always maintains a full transaction index, so this works for\n"
+    "any confirmed transaction. A blockhash may be supplied to look in a specific\n"
+    "block instead of resolving the containing block automatically.",
     {
         {"txids", RPCArg::Type::ARR, RPCArg::Optional::NO, "The txids to filter.",
             {
@@ -516,8 +516,8 @@ static const RPCHelpMan gettxoutproof_help{
         {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED,
             "If specified, looks for txid in the block with this hash."},
     },
-    RPCResult{RPCResult::Type::STR, "data",
-        "A string that is a serialized, hex-encoded data for the proof."},
+    RPCResult{RPCResult::Type::STR_HEX, "",
+        "A serialized, hex-encoded proof."},
     RPCExamples{
         HelpExampleCli("gettxoutproof", "'[\"<txid>\"]'") +
         HelpExampleCli("gettxoutproof", "'[\"<txid>\"]' \"<blockhash>\"") +
@@ -527,8 +527,13 @@ const RPCHelpMan& gettxoutproof_helpman() { return gettxoutproof_help; }
 
 UniValue gettxoutproof(const UniValue& params)
 {
-    if (!params[0].isArray())
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected an array of txids");
+    RPCTypeCheck(params, { UniValue::VARR, UniValue::VSTR }, true);
+
+    // allow_null above is for the optional blockhash; txids is required, so
+    // reject an explicit null with a proper RPC_INVALID_PARAMETER rather than
+    // letting get_array() throw a generic RPC_MISC_ERROR.
+    if (params[0].isNull())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Parameter 'txids' is required");
 
     UniValue txids = params[0].get_array();
     if (txids.empty())
@@ -537,8 +542,7 @@ UniValue gettxoutproof(const UniValue& params)
     std::set<uint256> setTxids;
     for (unsigned int idx = 0; idx < txids.size(); idx++) {
         const UniValue& utxid = txids[idx];
-        uint256 hash;
-        hash.SetHex(utxid.get_str());
+        uint256 hash = ParseHashV(utxid, "txid");
         if (setTxids.count(hash))
             throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated txid: ") + utxid.get_str());
         setTxids.insert(hash);
@@ -549,30 +553,34 @@ UniValue gettxoutproof(const UniValue& params)
     CBlockIndex* pblockindex = nullptr;
 
     if (!params[1].isNull()) {
-        uint256 hashBlock;
-        hashBlock.SetHex(params[1].get_str());
+        uint256 hashBlock = ParseHashV(params[1], "blockhash");
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
         if (mi == mapBlockIndex.end() || !mi->second)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         pblockindex = mi->second;
     } else {
-        // Resolve the containing block from the first txid that is confirmed in a block.
-        for (const uint256& txid : setTxids) {
-            CTransaction tx;
-            uint256 hashBlock;
-            if (GetTransaction(txid, tx, hashBlock) && !hashBlock.IsNull()) {
-                BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-                if (mi != mapBlockIndex.end() && mi->second) {
-                    pblockindex = mi->second;
-                    break;
-                }
-            }
+        // Resolve the containing block from the FIRST provided txid, so the
+        // chosen block is deterministic and depends on caller input order rather
+        // than the sorted-set ordering of the txids.
+        uint256 firstTxid = ParseHashV(txids[0], "txid");
+        CTransaction tx;
+        uint256 hashBlock;
+        if (GetTransaction(firstTxid, tx, hashBlock) && !hashBlock.IsNull()) {
+            BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+            if (mi != mapBlockIndex.end() && mi->second)
+                pblockindex = mi->second;
         }
     }
 
     if (!pblockindex)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
             "Transaction not yet in block, or in a block that is not in the main chain");
+
+    // Reject non-main-chain blocks from BOTH the explicit-blockhash and the
+    // auto-resolution (GetTransaction) paths: a proof for a side-chain block
+    // would always be rejected by verifytxoutproof, so don't emit one.
+    if (!pblockindex->IsInMainChain())
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block is not in the main chain");
 
     CBlock block;
     if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
@@ -595,8 +603,9 @@ UniValue gettxoutproof(const UniValue& params)
 
 static const RPCHelpMan verifytxoutproof_help{
     "verifytxoutproof",
-    "Verifies that a proof points to a transaction in a block, returning the transaction it commits to\n"
-    "and throwing an RPC error if the block is not in our best chain.",
+    "Verifies that a proof points to transactions in a block, returning the transaction(s) it\n"
+    "commits to, or an empty array if the proof is invalid, and throwing an RPC error if the\n"
+    "block is not in our best chain.",
     {
         {"proof", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
             "The hex-encoded proof generated by gettxoutproof."},
@@ -614,6 +623,8 @@ const RPCHelpMan& verifytxoutproof_helpman() { return verifytxoutproof_help; }
 
 UniValue verifytxoutproof(const UniValue& params)
 {
+    RPCTypeCheck(params, { UniValue::VSTR });
+
     CMerkleBlock merkleBlock;
 
     try {
@@ -635,6 +646,19 @@ UniValue verifytxoutproof(const UniValue& params)
     BlockMap::iterator mi = mapBlockIndex.find(merkleBlock.header.GetHash());
     if (mi == mapBlockIndex.end() || !mi->second || !mi->second->IsInMainChain())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found in chain");
+    CBlockIndex* const pindex = mi->second;
+
+    // Bind the proof's tree SHAPE to the real block. A partial merkle tree's
+    // nTransactions fixes its width/height; without checking it against the real
+    // block's transaction count an attacker can craft a proof (e.g.
+    // nTransactions=1, vBits=[true], vHash=[merkleRoot]) whose ExtractMatches
+    // returns an INTERNAL node as both the computed root and a "matched txid",
+    // forging an inclusion claim. (Bitcoin Core commit ed82f17000.)
+    CBlock block;
+    if (!ReadBlockFromDisk(block, pindex, Params().GetConsensus()))
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to read block from disk");
+    if (block.vtx.size() != merkleBlock.txn.GetNumTransactions())
+        return res; // proof shape does not match the real block -> reject
 
     for (const uint256& hash : vMatch)
         res.push_back(hash.GetHex());

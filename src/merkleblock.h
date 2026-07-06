@@ -65,7 +65,10 @@ protected:
     //! helper function to efficiently calculate the number of nodes at given height in the merkle tree
     unsigned int CalcTreeWidth(int height) const
     {
-        return (nTransactions + (1 << height) - 1) >> height;
+        // Use an unsigned 64-bit shift: nTransactions is attacker-controlled on
+        // the verifytxoutproof path and height can reach 31-32, where a signed
+        // int shift would be undefined behavior.
+        return (nTransactions + (uint64_t{1} << height) - 1) >> height;
     }
 
     //! calculate the hash of a node in the merkle tree (at leaf level: the txid's themselves)

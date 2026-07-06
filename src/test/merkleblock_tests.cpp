@@ -10,6 +10,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 BOOST_AUTO_TEST_SUITE(merkleblock_tests)
@@ -72,7 +73,7 @@ BOOST_AUTO_TEST_CASE(pmt_test1)
             ss << pmt1;
 
             // verify CPartialMerkleTree's size guarantees (height is ceil(log2(nTx)))
-            unsigned int n = std::min<unsigned int>(nTx, 1 + vMatchTxid1.size() * (unsigned int)ceil(log2((double)nTx)));
+            unsigned int n = std::min<unsigned int>(nTx, 1 + vMatchTxid1.size() * (unsigned int)std::ceil(std::log2((double)nTx)));
             BOOST_CHECK(ss.size() <= 10 + (258 * n + 7) / 8);
 
             // deserialize into a tester copy
@@ -121,6 +122,42 @@ BOOST_AUTO_TEST_CASE(pmt_malleability)
     // The malleated tree (duplicated leaves 9 and 10) must be rejected: ExtractMatches
     // returns a null root because the duplicate-subtree guard trips.
     BOOST_CHECK(tree.ExtractMatches(vTxid2, vIndex).IsNull());
+}
+
+// Regression test for the verifytxoutproof inclusion-forgery: a proof that claims
+// nTransactions=1 with the single leaf set to a real multi-tx block's merkle ROOT
+// makes ExtractMatches surface that INTERNAL node as both the computed root and a
+// "matched txid" -- a forged inclusion claim. The defense is a shape cross-check:
+// the proof's GetNumTransactions() must equal the real block's transaction count.
+BOOST_AUTO_TEST_CASE(pmt_forged_internal_node_shape_mismatch)
+{
+    FastRandomContext rng(/*fDeterministic=*/true);
+
+    // A real multi-transaction block and its merkle root.
+    const unsigned int nTx = 8;
+    std::vector<uint256> vTxid(nTx);
+    for (unsigned int j = 0; j < nTx; j++)
+        vTxid[j] = rng.rand256();
+    bool unused = false;
+    uint256 root = ComputeMerkleRoot(vTxid, &unused);
+
+    // Forge a single-"transaction" proof whose one leaf is that merkle root.
+    CPartialMerkleTree forged(std::vector<uint256>{root}, std::vector<bool>{true});
+
+    std::vector<uint256> vMatch;
+    std::vector<unsigned int> vIndex;
+    uint256 extracted = forged.ExtractMatches(vMatch, vIndex);
+
+    // The forgery passes the merkle self-check: the internal node comes back as
+    // both the computed root and the single matched "txid".
+    BOOST_CHECK(extracted == root);
+    BOOST_REQUIRE_EQUAL(vMatch.size(), 1u);
+    BOOST_CHECK(vMatch[0] == root);
+
+    // ...but the proof's declared transaction count does not match the real
+    // block, which is exactly what verifytxoutproof now rejects on.
+    BOOST_CHECK_EQUAL(forged.GetNumTransactions(), 1u);
+    BOOST_CHECK(forged.GetNumTransactions() != nTx);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

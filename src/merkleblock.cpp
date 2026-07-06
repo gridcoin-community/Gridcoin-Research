@@ -5,6 +5,7 @@
 
 #include "merkleblock.h"
 
+#include "consensus/consensus.h"
 #include "hash.h"
 
 #include <cassert>
@@ -109,6 +110,10 @@ uint256 CPartialMerkleTree::TraverseAndExtract(int height, unsigned int pos, uns
 
 CPartialMerkleTree::CPartialMerkleTree(const std::vector<uint256> &vTxid, const std::vector<bool> &vMatch) : nTransactions(vTxid.size()), fBad(false)
 {
+    // TraverseAndBuild indexes vMatch by leaf position in [0, nTransactions),
+    // so it must have one entry per txid; a shorter vMatch would read OOB.
+    assert(vMatch.size() == vTxid.size());
+
     // reset state
     vBits.clear();
     vHash.clear();
@@ -127,11 +132,17 @@ CPartialMerkleTree::CPartialMerkleTree() : nTransactions(0), fBad(true) {}
 uint256 CPartialMerkleTree::ExtractMatches(std::vector<uint256> &vMatch, std::vector<unsigned int> &vnIndex)
 {
     vMatch.clear();
+    vnIndex.clear();
     // An empty set will not work
     if (nTransactions == 0)
         return uint256();
-    // check for excessively high numbers of transactions
-    // FIXME: Track the maximum block size we've seen and use it here.
+    // check for excessively high numbers of transactions: there can never be
+    // more than the block size divided by the smallest possible transaction.
+    // nTransactions is attacker-controlled on the verifytxoutproof path, so a
+    // larger value is a malformed/hostile proof (and would drive CalcTreeWidth
+    // toward extreme tree heights).
+    if (nTransactions > MAX_BLOCK_SIZE / 60)
+        return uint256();
 
     // there can never be more hashes provided than one for every txid
     if (vHash.size() > nTransactions)
