@@ -33,8 +33,8 @@ with `purpose` defaulting to `unknown`), and the change is downgrade-safe.
 | `getaccount <addr>` | works, logs a warning | read the address's label (`getaddressesbylabel`, or address info) |
 | `getaddressesbyaccount <name>` | works, logs a warning | `getaddressesbylabel <label>` |
 | `getaccountaddress <name>` | **throws** unless `-enableaccounts=1` | `getnewaddress` + `setlabel` |
-| `listaccounts` | **throws** unless `-staking=0` | `listlabels` |
-| `move`, `sendfrom`, `getbalance "<account>"` | **throws** unless `-staking=0` | no direct equivalent — see below |
+| `listaccounts` | **throws** unless `-enableaccounts=1` **and** `-staking=0` | `listlabels` |
+| `move`, `sendfrom`, `getbalance "<account>"` | **throws** unless `-enableaccounts=1` **and** `-staking=0` | no direct equivalent — see below |
 
 New label RPCs:
 
@@ -64,9 +64,13 @@ There is no longer an implicit "one receiving address per account." Where you us
 `getaccountaddress "<name>"`, create the address explicitly and label it:
 
 ```
-addr=$(gridcoinresearchd getnewaddress)
-gridcoinresearchd setlabel "$addr" "cold storage"
+# New: create the address, then label it
+getnewaddress                        # -> returns <address>
+setlabel "<address>" "cold storage"
 ```
+
+(Examples show bare RPC method names, as typed in the debug console or passed to
+`gridcoinresearch`/`gridcoinresearchd`.)
 
 ## The account balance ledger is going away
 
@@ -89,15 +93,24 @@ continues to report the wallet total.
 
 ## The two temporary opt-in flags
 
-During the deprecation window you can keep the old RPCs working:
+During the deprecation window you can keep the throwing RPCs working. (The warn-only
+RPCs — `setaccount`, `getaccount`, `getaddressesbyaccount` — need no flag; they still
+work and only log a deprecation warning.)
 
-- **`-enableaccounts=1`** — re-enables `getaccountaddress`.
-- **`-staking=0`** — required by the accounting RPCs (`move`, `sendfrom`,
-  `listaccounts`, `getbalance "<account>"`). This is the pre-existing accounting guard
-  and is unchanged by this release; it exists because those operations touch the
-  legacy double-entry ledger.
+- **`-enableaccounts=1`** — required by every deprecated RPC that throws: on its own it
+  re-enables `getaccountaddress`, and it is also the first requirement for the
+  accounting RPCs (`move`, `sendfrom`, `listaccounts`, `getbalance "<account>"`).
+- **`-staking=0`** — *additionally* required by those accounting RPCs, because they
+  touch the legacy double-entry balance ledger. This is the pre-existing accounting
+  guard, unchanged by this release. The reason is that **staking mutates the wallet's
+  coins outside the account bookkeeping**: a coinstake consumes UTXOs (possibly ones
+  attributed to an account) and credits the stake return plus research reward with no
+  account attribution, so per-account balances drift from reality — the "negative or
+  odd balances" the accounting API warns about. Disabling staking removes that source
+  of corruption while the deprecated ledger is in use.
 
-Both are **temporary**. Treat any run that needs them as a to-migrate item — the
+So the accounting RPCs need **both** `enableaccounts=1` **and** `staking=0`;
+`getaccountaddress` needs only `enableaccounts=1`. Both flags are **temporary**. Treat any run that needs them as a to-migrate item — the
 accounts subsystem may be removed entirely in a future release.
 
 ## One-time cleanup: `migratelabels`
