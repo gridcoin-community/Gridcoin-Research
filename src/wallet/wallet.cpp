@@ -3477,14 +3477,19 @@ bool CWallet::SetAddressBookName(const CTxDestination& address, const string& st
 
 bool CWallet::SetAddressBookPurpose(const CTxDestination& address, const string& strPurpose)
 {
+    bool fUpdated = false;
     std::string strName;
     {
         LOCK(cs_wallet); // mapAddressBook
+        // Determine new-vs-updated BEFORE operator[] creates the entry, so a purpose set on a
+        // not-yet-known address emits CT_NEW (matching SetAddressBookName) rather than telling a
+        // GUI subscriber to update a row it never inserted.
+        fUpdated = mapAddressBook.count(address);
         mapAddressBook[address].purpose = strPurpose;
         strName = mapAddressBook[address].name;
     }
     NotifyAddressBookChanged(this, address, strName, (::IsMine(*this, address) != ISMINE_NO),
-                             strPurpose, CT_UPDATED);
+                             strPurpose, (fUpdated ? CT_UPDATED : CT_NEW));
     if (!fFileBacked)
         return false;
     return CWalletDB(strWalletFile).WritePurpose(EncodeDestination(address), strPurpose);

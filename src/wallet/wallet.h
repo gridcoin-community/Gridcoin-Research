@@ -530,8 +530,9 @@ public:
 
     /** Address book entry changed.
      * @note Emitted with cs_wallet NOT held: the emitters snapshot name/purpose into locals
-     *       inside the lock scope and fire the signal after releasing it, so all arguments are
-     *       passed by value. A subscriber must not assume cs_wallet is held in its handler.
+     *       inside the lock scope and fire the signal after releasing it, so the by-reference
+     *       string arguments stay valid for the duration of the call. A subscriber must not
+     *       assume cs_wallet is held in its handler.
      */
     boost::signals2::signal<void (CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)> NotifyAddressBookChanged;
 

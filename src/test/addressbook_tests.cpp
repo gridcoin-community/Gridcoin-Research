@@ -136,13 +136,16 @@ BOOST_AUTO_TEST_CASE(notify_carries_purpose)
             ++calls;
         });
 
+    // dest has no prior entry, so setting its purpose creates the mapAddressBook entry: the
+    // signal must report CT_NEW (not CT_UPDATED), matching SetAddressBookName, so a GUI
+    // subscriber inserts the row rather than updating one it never saw.
     pwalletMain->SetAddressBookPurpose(dest, "receive");
 
     conn.disconnect();
 
     BOOST_CHECK_EQUAL(calls, 1);
     BOOST_CHECK_EQUAL(captured_purpose, "receive");
-    BOOST_CHECK(captured_status == CT_UPDATED);
+    BOOST_CHECK(captured_status == CT_NEW);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
