@@ -36,6 +36,7 @@ Running
 To create a secure environment for running Gridcoin see:
 
 - [Running Gridcoin](running.md)
+- [Migrating from accounts to labels](account-to-label-migration.md)
 
 Development
 -----------
