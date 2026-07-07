@@ -713,7 +713,7 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
     PSGTPoolEntry replacement;
     std::string validate_error;
     const PSGTPoolReject reject =
-        ValidatePSGTForPool(wire, GetAdjustedTime(), replacement, validate_error);
+        ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), replacement, validate_error);
 
     if (reject == PSGTPoolReject::COMPLETE) {
         PartiallySignedTransaction to_extract = psgt;

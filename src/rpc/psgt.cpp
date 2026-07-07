@@ -1083,7 +1083,7 @@ UniValue submitpsgt(const UniValue& params)
     const int64_t now = GetAdjustedTime();
     PSGTPoolEntry entry;
     std::string error;
-    const PSGTPoolReject reject = ValidatePSGTForPool(wire_bytes, now, entry, error);
+    const PSGTPoolReject reject = ValidatePSGTForPool(g_psgt_pool, wire_bytes, now, entry, error);
     if (reject != PSGTPoolReject::NONE) {
         throw JSONRPCError(RPC_INVALID_PARAMETER,
                            strprintf("PSGT rejected (%s): %s",
