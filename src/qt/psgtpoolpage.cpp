@@ -80,9 +80,9 @@ void PSGTPoolPage::setWalletModel(WalletModel* wallet_model)
     connect(m_refresh_button, &QPushButton::clicked, m_table_model, &PSGTPoolTableModel::refresh);
     connect(m_table->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &PSGTPoolPage::updateButtons);
-    // The core PSGTPoolChanged signal is delivered to the model by BitcoinGUI
-    // (which owns the uiInterface subscription) via handlePoolChanged; refresh
-    // the button enablement whenever the rows change.
+    // The core PSGTPoolChanged signal reaches the model via the
+    // ClientModel::psgtPoolChanged connection set up in setClientModel(); refresh
+    // the button enablement whenever the resulting model reset changes the rows.
     connect(m_table_model, &QAbstractItemModel::modelReset, this, &PSGTPoolPage::updateButtons);
 
     updateButtons();
