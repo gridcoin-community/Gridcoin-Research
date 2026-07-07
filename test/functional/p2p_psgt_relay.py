@@ -71,7 +71,7 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         self.num_nodes = 2
         self.chain = "regtest"
         self.setup_clean_chain = True
-        self.extra_args = [["-staking=0"], ["-staking=0"]]
+        self.extra_args = [["-staking=0", "-blockv15height=0"], ["-staking=0", "-blockv15height=0"]]
 
     def confirm_funding(self, txid):
         """Confirm a just-sent funding transaction. PoS block timestamps are

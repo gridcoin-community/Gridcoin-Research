@@ -325,6 +325,15 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
     }
 
     const uint256 revision_hash = entry.revision_hash;
+
+    // Mark the sender as knowing the CANONICAL revision (what we pool and
+    // relay), not just the wire-bytes hash tracked at the top of this function.
+    // The two differ if the peer sent a non-canonical encoding; without this we
+    // would relay inv(revision_hash) straight back to the sender. Re-asking is
+    // already prevented by HaveRevision() once the entry is pooled below, so no
+    // mapAlreadyAskedFor bookkeeping is needed for the canonical hash.
+    pfrom->AddInventoryKnown(CInv(MSG_PSGT, revision_hash));
+
     std::string reject_reason;
     const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
 
