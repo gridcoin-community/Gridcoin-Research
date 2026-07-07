@@ -495,6 +495,30 @@ std::vector<PSGTPoolEntry> PSGTPool::GetAll() const
     return entries;
 }
 
+std::vector<uint256> PSGTPool::GetAllRevisionHashes() const
+{
+    LOCK(cs_psgt_pool);
+
+    std::vector<uint256> hashes;
+    hashes.reserve(m_by_revision.size());
+    for (const auto& [revision_hash, image] : m_by_revision) {
+        hashes.push_back(revision_hash);
+    }
+    return hashes;
+}
+
+std::optional<std::vector<unsigned char>>
+PSGTPool::GetSerializedByRevision(const uint256& revision_hash) const
+{
+    LOCK(cs_psgt_pool);
+
+    const auto it = m_by_revision.find(revision_hash);
+    if (it == m_by_revision.end()) return std::nullopt;
+    const auto img = m_by_image.find(it->second);
+    if (img == m_by_image.end()) return std::nullopt;
+    return img->second.serialized;
+}
+
 size_t PSGTPool::EraseExpired(int64_t now)
 {
     std::vector<PSGTPoolEntry> expired;

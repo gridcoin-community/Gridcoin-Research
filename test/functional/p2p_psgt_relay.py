@@ -33,6 +33,7 @@ import time
 from test_framework.messages import (
     CInv,
     MSG_PSGT,
+    PSGT_PROTO_VERSION,
     hash256,
     msg_getdata,
     msg_psgt,
@@ -63,7 +64,7 @@ class OldVersionInvCollector(InvCollector):
 
     def peer_connect_send_version(self):
         super().peer_connect_send_version()
-        self.on_connection_send_msg.nVersion = 180329
+        self.on_connection_send_msg.nVersion = PSGT_PROTO_VERSION - 1
 
 
 class P2PPsgtRelayTest(GridcoinTestFramework):

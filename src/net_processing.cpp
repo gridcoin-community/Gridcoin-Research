@@ -572,9 +572,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->nVersion >= PSGT_PROTO_VERSION
             && WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge()))
         {
-            for (const auto& entry : g_psgt_pool.GetAll())
+            for (const uint256& revision_hash : g_psgt_pool.GetAllRevisionHashes())
             {
-                pfrom->PushInventory(CInv(MSG_PSGT, entry.revision_hash));
+                pfrom->PushInventory(CInv(MSG_PSGT, revision_hash));
             }
         }
 
@@ -835,12 +835,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // budget so a single getdata cannot force unbounded sends.
                     if (!OutOfSyncByAge() && psgt_served < MAX_PSGT_PER_GETDATA)
                     {
-                        if (const auto entry = g_psgt_pool.GetByRevision(inv.hash))
+                        if (const auto serialized = g_psgt_pool.GetSerializedByRevision(inv.hash))
                         {
                             ++psgt_served;
                             CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-                            ss.reserve(entry->serialized.size() + 16);
-                            ss << entry->serialized;
+                            ss.reserve(serialized->size() + 16);
+                            ss << *serialized;
                             pfrom->PushMessage(NetMsgType::PSGT, ss);
                         }
                     }

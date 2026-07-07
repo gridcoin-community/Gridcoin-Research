@@ -246,8 +246,20 @@ public:
     //! damping: recently completed/evicted revisions read as "already have").
     bool HaveRevision(const uint256& revision_hash) const;
 
-    //! Snapshot of all entries (RPC/GUI listing, connect-time advertisement).
+    //! Snapshot of all entries (RPC/GUI listing).
     std::vector<PSGTPoolEntry> GetAll() const;
+
+    //! Revision hashes of all pooled entries, for the connect-time inventory
+    //! push. Copies only the 32-byte hashes, not the full entries -- the push
+    //! runs on every inbound connection, so a peer must not be able to force
+    //! repeated multi-megabyte entry copies just by reconnecting.
+    std::vector<uint256> GetAllRevisionHashes() const;
+
+    //! Canonical serialized bytes of a pooled revision, if present, for the
+    //! getdata serve. Copies only the wire bytes, not the decoded PSGT, on this
+    //! peer-controlled hot path.
+    std::optional<std::vector<unsigned char>>
+        GetSerializedByRevision(const uint256& revision_hash) const;
 
     //! Evict entries older than EXPIRY_SECONDS. Returns the number evicted.
     size_t EraseExpired(int64_t now);
