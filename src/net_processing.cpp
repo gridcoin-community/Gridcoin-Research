@@ -288,7 +288,7 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
     PSGTPoolEntry entry;
     std::string reason;
     const PSGTPoolReject reject =
-        ValidatePSGTForPool(wire_bytes, GetAdjustedTime(), entry, reason);
+        ValidatePSGTForPool(g_psgt_pool, wire_bytes, GetAdjustedTime(), entry, reason);
 
     switch (reject) {
     case PSGTPoolReject::NONE:
@@ -305,7 +305,14 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
               pfrom->addr.ToString(), PSGTPoolRejectToString(reject), reason);
         return;
 
-    // Policy rejects honest nodes can disagree on: no penalty, no relay.
+    // Policy rejects honest nodes can disagree on, plus the cheap pre-validation
+    // drops (unknown fields and already-known revisions): no penalty, no relay.
+    // HAS_UNKNOWN_FIELDS and DUPLICATE_REVISION are rejected before the
+    // expensive signature verification, so replaying them costs no ECDSA work
+    // and needs no DoS score; scoring them would also risk banning honest peers
+    // in ordinary gossip races or future protocol extensions.
+    case PSGTPoolReject::HAS_UNKNOWN_FIELDS:
+    case PSGTPoolReject::DUPLICATE_REVISION:
     case PSGTPoolReject::COMPLETE:
     case PSGTPoolReject::UTXO_MISSING:
     case PSGTPoolReject::UTXO_SPENT:
@@ -731,6 +738,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         LOCK(cs_main);
+
+        // Bound the PSGT bytes served per getdata. The pool holds at most
+        // PSGTPool::MAX_ENTRIES distinct revisions, so any request for more than
+        // that many is necessarily redundant. This caps a getdata amplification
+        // where a peer packs MAX_INV_SZ (50000) MSG_PSGT entries all naming the
+        // same pooled revision (each up to MAX_PSGT_WIRE_SIZE) to force gigabytes
+        // of repeated sends under cs_main.
+        constexpr size_t MAX_PSGT_PER_GETDATA = PSGTPool::MAX_ENTRIES;
+        size_t psgt_served = 0;
+
         for (auto const& inv : vInv)
         {
             if (fShutdown)
@@ -805,11 +822,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // Serve from the PSGT pool, not mapRelay: pooled PSGTs
                     // live up to 7 days, far beyond mapRelay's 15-minute
                     // expiry. Do not serve while out of sync (mirrors the
-                    // scraper manifest guard below).
-                    if (!OutOfSyncByAge())
+                    // scraper manifest guard below). Bounded by the per-getdata
+                    // budget so a single getdata cannot force unbounded sends.
+                    if (!OutOfSyncByAge() && psgt_served < MAX_PSGT_PER_GETDATA)
                     {
                         if (const auto entry = g_psgt_pool.GetByRevision(inv.hash))
                         {
+                            ++psgt_served;
                             CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                             ss.reserve(entry->serialized.size() + 16);
                             ss << entry->serialized;
@@ -1617,13 +1636,14 @@ public:
         return ::SendMessages(pto, fSendTrickle);
     }
 
-    void StartScheduledTasks(CScheduler& scheduler) override
+    void StartScheduledTasks(CScheduler& /*scheduler*/) override
     {
-        // Sweep expired PSGTs (#2910) so entries whose owners went idle still
-        // expire -- and fire the eviction notification -- even when no pool
-        // traffic triggers the lazy paths.
-        scheduler.scheduleEvery([] { g_psgt_pool.EraseExpired(GetAdjustedTime()); },
-                                std::chrono::minutes{10});
+        // Intentionally empty. The recurring PSGT-pool sweep (EraseExpired,
+        // #2910) is scheduled in AppInit2 alongside the other recurring tasks
+        // (banlist dump, entropy, unbroadcast rebroadcast), so it is NOT
+        // duplicated here -- scheduling it in both places ran two sweeps of the
+        // same pool. This hook remains as the eventual home should those tasks
+        // be consolidated onto PeerManager.
     }
 
     bool Misbehaving(const CAddress& addr, int howmuch) override

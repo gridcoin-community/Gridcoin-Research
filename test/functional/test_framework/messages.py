@@ -888,8 +888,13 @@ class msg_pong:
 class msg_psgt:
     """A PSGT pool message (#2910): CompactSize-prefixed raw PSGT wire bytes.
 
-    The inv identity of a revision is hash256 of the raw bytes (the
-    "revision hash"), NOT the unsigned transaction's hash.
+    The inv identity of a revision is the "revision hash", NOT the unsigned
+    transaction's hash. Core computes it as hash256 of the CANONICAL
+    re-serialization (SerializePSGT: sorted maps, unknown fields rejected), not
+    of arbitrary received bytes. Nodes serve/relay those canonical bytes, so a
+    test should hash the canonical on-wire encoding it sent (which a wallet- or
+    SerializePSGT-produced PSGT already is); hashing a non-canonical encoding
+    would chase a revision hash the node never advertises.
     """
     __slots__ = ("psgt_bytes",)
     command = b"psgt"

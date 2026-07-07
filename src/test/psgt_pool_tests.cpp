@@ -103,7 +103,11 @@ static PSGTPoolReject Validate(const PartiallySignedTransaction& psgt,
                                PSGTPoolEntry& entry, std::string& error)
 {
     LOCK(cs_main);
-    return ValidatePSGTForPool(SerializePSGT(psgt), 1700003000, entry, error);
+    // Validate against an empty pool: HaveRevision is always false here, so the
+    // duplicate short-circuit never fires and this exercises the full pipeline.
+    // Duplicate-revision behaviour has its own dedicated test with a real pool.
+    const PSGTPool empty_pool;
+    return ValidatePSGTForPool(empty_pool, SerializePSGT(psgt), 1700003000, entry, error);
 }
 
 //! A synthetic entry with a unique image, for container-semantics tests that
@@ -217,14 +221,80 @@ BOOST_AUTO_TEST_CASE(validate_reject_matrix)
     // Oversize and malformed wire bytes.
     {
         LOCK(cs_main);
+        const PSGTPool empty_pool;
         std::vector<unsigned char> huge(MAX_PSGT_WIRE_SIZE + 1, 0x00);
-        BOOST_CHECK(ValidatePSGTForPool(huge, 1700003000, entry, error)
+        BOOST_CHECK(ValidatePSGTForPool(empty_pool, huge, 1700003000, entry, error)
                     == PSGTPoolReject::TOO_LARGE);
 
         std::vector<unsigned char> garbage = {0xde, 0xad, 0xbe, 0xef};
-        BOOST_CHECK(ValidatePSGTForPool(garbage, 1700003000, entry, error)
+        BOOST_CHECK(ValidatePSGTForPool(empty_pool, garbage, 1700003000, entry, error)
                     == PSGTPoolReject::MALFORMED);
     }
+}
+
+BOOST_AUTO_TEST_CASE(validate_rejects_unknown_fields)
+{
+    mempool.clear();
+    FundedMultisig fixture;
+
+    PSGTPoolEntry entry;
+    std::string error;
+
+    // Baseline: the same PSGT with no extension fields is accepted.
+    BOOST_REQUIRE(Validate(fixture.Signed({fixture.k1}), entry, error)
+                  == PSGTPoolReject::NONE);
+
+    // An unknown GLOBAL field makes it ineligible: it is a free revision-hash
+    // malleability vector and serves no pooling purpose.
+    {
+        PartiallySignedTransaction psgt = fixture.Signed({fixture.k1});
+        psgt.unknown[{0xff}] = {0x01, 0x02};
+        BOOST_CHECK(Validate(psgt, entry, error) == PSGTPoolReject::HAS_UNKNOWN_FIELDS);
+    }
+
+    // An unknown per-INPUT field is rejected the same way.
+    {
+        PartiallySignedTransaction psgt = fixture.Signed({fixture.k1});
+        psgt.inputs[0].unknown[{0xfe}] = {0x03};
+        BOOST_CHECK(Validate(psgt, entry, error) == PSGTPoolReject::HAS_UNKNOWN_FIELDS);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(validate_short_circuits_duplicate_revision)
+{
+    mempool.clear();
+    FundedMultisig fixture;
+
+    LOCK(cs_main);
+    PSGTPool pool;
+    const std::vector<unsigned char> wire = SerializePSGT(fixture.Signed({fixture.k1}));
+
+    // First sighting: full validation, accepted, added to the pool.
+    PSGTPoolEntry first;
+    std::string error;
+    BOOST_REQUIRE(ValidatePSGTForPool(pool, wire, 1700003000, first, error)
+                  == PSGTPoolReject::NONE);
+    const uint256 revision = first.revision_hash;
+    const std::vector<unsigned char> canonical = first.serialized;
+    std::string reject;
+    BOOST_REQUIRE(pool.Add(std::move(first), reject) == PSGTPoolAddResult::ACCEPTED_NEW);
+
+    // Second sighting of the SAME revision short-circuits as a duplicate -- this
+    // is the branch that returns BEFORE the expensive per-signature ECDSA
+    // verification, so a peer cannot replay a valid PSGT to burn CPU.
+    PSGTPoolEntry second;
+    BOOST_CHECK(ValidatePSGTForPool(pool, wire, 1700003000, second, error)
+                == PSGTPoolReject::DUPLICATE_REVISION);
+
+    // The revision identity is the hash of the CANONICAL re-serialization, and
+    // that canonical form is a fixed point: decoding and re-serializing the
+    // stored bytes reproduces them. Hence any alternate encoding (reordered
+    // maps) of the same content decodes to this same identity.
+    BOOST_CHECK(revision == Hash(canonical));
+    PartiallySignedTransaction round;
+    std::string decode_error;
+    BOOST_REQUIRE(DecodePSGTBytes(round, canonical, decode_error));
+    BOOST_CHECK(SerializePSGT(round) == canonical);
 }
 
 // ---------------------------------------------------------------------------

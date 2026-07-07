@@ -91,8 +91,11 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
     def add_spaced_p2p(self, node, peer):
         """add_p2p_connection with the daemon's inbound rate limit respected:
         at most one inbound per 5 seconds per IP (net.cpp AcceptConnection),
-        and every scripted peer here is 127.0.0.1."""
-        time.sleep(5)
+        and every scripted peer here is 127.0.0.1. The limit compares integer
+        second deltas from GetAdjustedTime(), so sleep a full 6 s -- sleeping
+        exactly 5 can land two connects in the same second boundary (delta 4)
+        and get the second one dropped / misbehavior-scored."""
+        time.sleep(6)
         return node.add_p2p_connection(peer)
 
     def setup_network(self):
