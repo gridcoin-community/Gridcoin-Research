@@ -498,7 +498,7 @@ void SetupServerArgs()
                                                      "7 days (168 hours)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
     argsman.AddArg("-psgtnotify=<cmd>", "Execute command when the PSGT pool changes (%s1 in cmd is replaced by the multisig "
-                                        "image hash, %s2 by the event: added, updated, expired, replaced, completed, "
+                                        "image hash, %s2 by the event: added, updated, expired, completed, "
                                         "conflict-mempool, conflict-block, removed; %s3 by the unsigned transaction id)",
                    ArgsManager::ALLOW_ANY | ArgsManager::IMMEDIATE_EFFECT, OptionsCategory::OPTIONS);
 #endif

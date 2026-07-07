@@ -1183,6 +1183,7 @@ static const RPCHelpMan signpsgtinpool_help{
     RPCResult{RPCResult::Type::OBJ, "", "",
         {
             {RPCResult::Type::BOOL, "complete", "Whether the transaction reached m-of-n and was broadcast."},
+            {RPCResult::Type::BOOL, "already_known", /*optional=*/true, "Present and true when the signed revision was already in (or recently in) the pool; the signature is present network-wide and nothing was re-relayed."},
             {RPCResult::Type::STR_HEX, "txid", "Transaction id (final id when complete)."},
             {RPCResult::Type::STR_HEX, "revision", /*optional=*/true, "New pooled revision (incomplete case only)."},
             {RPCResult::Type::NUM, "sigs_valid", /*optional=*/true, "Valid signatures after signing (incomplete case only)."},
@@ -1229,6 +1230,16 @@ UniValue signpsgtinpool(const UniValue& params)
         }
         return obj;
     }
+
+    case PSGTSignResult::ALREADY_KNOWN:
+        // The signature was added, but the resulting revision is one the network
+        // already has (an identical-key co-signer got there first, or it was
+        // pooled before). Report success: the contribution is present, nothing
+        // more to do.
+        obj.pushKV("complete", false);
+        obj.pushKV("already_known", true);
+        obj.pushKV("txid", txid.ToString());
+        return obj;
 
     case PSGTSignResult::NO_NEW_SIGNATURES:
         throw JSONRPCError(RPC_WALLET_ERROR, error);

@@ -207,6 +207,15 @@ public:
     //! For REMOVED changes the removal reason is provided. Wired to the
     //! uiInterface signal and -psgtnotify by the RPC/notification layer;
     //! unset (and skipped) until then.
+    //!
+    //! Consumer constraint: the hook may fire while the caller still holds
+    //! cs_main (and sometimes cs_wallet) -- e.g. from Add/Remove inside
+    //! SignAndAdvancePSGT, or from the synchronous EvictConflicts callback
+    //! during AcceptToMemoryPool/BlockConnected. It must therefore behave as a
+    //! LEAF: do not synchronously take cs_main, cs_wallet, or cs_psgt_pool, and
+    //! do not block. The existing sinks comply (a Qt queued signal and a
+    //! detached runCommand); a future subscriber that violates this would
+    //! deadlock or invert lock order.
     std::function<void(const PSGTPoolEntry&, PSGTPoolChangeType,
                        std::optional<PSGTRemovalReason>)> m_notify_hook;
 
@@ -317,6 +326,7 @@ enum class PSGTSignResult
     SIGNED_AND_RELAYED,      //!< Added signature(s); still incomplete; new revision pooled and relayed.
     COMPLETED_AND_BROADCAST, //!< Signature(s) completed the PSGT; final transaction broadcast; pool slot freed.
     NO_NEW_SIGNATURES,       //!< The wallet holds no key that could add a signature.
+    ALREADY_KNOWN,           //!< Added signature(s), but the resulting revision is already in (or was recently in) the pool; nothing to relay.
     FAILED,                  //!< See error.
 };
 

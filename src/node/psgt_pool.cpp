@@ -747,6 +747,17 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
         return PSGTSignResult::COMPLETED_AND_BROADCAST;
     }
 
+    if (reject == PSGTPoolReject::DUPLICATE_REVISION) {
+        // The wallet's signature reproduced a revision the pool already holds or
+        // recently held: another co-signer holding the same key signed
+        // identically first (deterministic low-S ECDSA yields identical bytes),
+        // or this exact revision was pooled before. The contribution is already
+        // known to the network -- there is nothing to add or relay, and it is
+        // not a failure. Report the unsigned-tx id like the SIGNED path does.
+        if (txid_out) *txid_out = pooled->tx_hash;
+        return PSGTSignResult::ALREADY_KNOWN;
+    }
+
     if (reject != PSGTPoolReject::NONE) {
         error = strprintf("signed PSGT failed revalidation: %s (%s)",
                           PSGTPoolRejectToString(reject), validate_error);
