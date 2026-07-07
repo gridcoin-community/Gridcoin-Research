@@ -145,6 +145,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getbalancedetail"       , 0 },
     { "getbalancedetail"       , 1 },
     { "getrawtransaction"      , 1 },
+    { "gettxoutproof"          , 0 },
     { "getreceivedbyaccount"   , 1 },
     { "getreceivedbyaddress"   , 1 },
     { "gettransaction"         , 1 },

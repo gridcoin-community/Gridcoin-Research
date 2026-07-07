@@ -43,6 +43,7 @@ add_executable(test_gridcoin
     gridcoin/superblock_tests.cpp
     key_tests.cpp
     merkle_tests.cpp
+    merkleblock_tests.cpp
     mruset_tests.cpp
     multisig_tests.cpp
     netbase_tests.cpp

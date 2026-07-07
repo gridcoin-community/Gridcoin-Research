@@ -342,6 +342,8 @@ static const CRPCCommand vRPCCommands[] =
     { "getnewpubkey",            &getnewpubkey,            cat_wallet, &getnewpubkey_helpman        },
     { "getrawtransaction",       &getrawtransaction,       cat_wallet, &getrawtransaction_helpman        },
     { "getrawwallettransaction", &getrawwallettransaction, cat_wallet, &getrawwallettransaction_helpman        },
+    { "gettxoutproof",           &gettxoutproof,           cat_wallet, &gettxoutproof_helpman        },
+    { "verifytxoutproof",        &verifytxoutproof,        cat_wallet, &verifytxoutproof_helpman        },
     { "getreceivedbyaccount",    &getreceivedbyaccount,    cat_wallet, &getreceivedbyaccount_helpman        },
     { "getreceivedbyaddress",    &getreceivedbyaddress,    cat_wallet, &getreceivedbyaddress_helpman        },
     { "gettransaction",          &gettransaction,          cat_wallet, &gettransaction_helpman        },
