@@ -50,6 +50,7 @@
 #include <boost/thread.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <ctime>
+#include <limits>
 #include <math.h>
 #include "wallet/wallet.h"
 
@@ -277,16 +278,30 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return false;
         }
 
-        // Disconnect peers on old protocol versions after a grace period past the
-        // BlockV14Height activation height. Skip entirely if that fork is not yet
-        // activated (height == INT_MAX) to avoid signed integer overflow UB in the addition.
+        // Disconnect peers on protocol versions older than the newest activated
+        // block-version fork requires, after a grace period past that fork's
+        // activation height. A per-fork ladder rather than a single
+        // PROTOCOL_VERSION comparison so that bumping PROTOCOL_VERSION for a
+        // future fork (v15) neither cuts off peers that satisfy every activated
+        // fork nor loses the staged enforcement of earlier ones (v14). Each
+        // fork is skipped entirely while unscheduled (height == INT_MAX), also
+        // avoiding signed integer overflow UB in the addition.
         const int nLocalBestHeight = WITH_LOCK(cs_main, return pindexBest ? pindexBest->nHeight : 0);
+        const Consensus::Params& consensus = Params().GetConsensus();
+        const auto past_fork_grace = [&](int fork_height) {
+            // int64_t arithmetic: fork_height can come from a user-supplied
+            // -blockv15height near INT_MAX, where fork_height + grace would
+            // overflow signed int (UB). The != max() guard handles "unscheduled".
+            return fork_height != std::numeric_limits<int>::max()
+                && nLocalBestHeight > (int64_t)fork_height + consensus.ProtocolVersionGracePeriod;
+        };
         if (pfrom->nVersion < MIN_PEER_PROTO_VERSION
             || (DISCONNECT_OLD_VERSION_AFTER_GRACE_PERIOD
-                && pfrom->nVersion < PROTOCOL_VERSION
-                && Params().GetConsensus().BlockV14Height != std::numeric_limits<int>::max()
-                && nLocalBestHeight > Params().GetConsensus().BlockV14Height
-                                             + Params().GetConsensus().ProtocolVersionGracePeriod
+                && ((pfrom->nVersion < V14_MIN_PROTO_VERSION && past_fork_grace(consensus.BlockV14Height))
+                    // Use GetBlockV15Height() (not the raw consensus field) so the
+                    // -blockv15height override that activates v15 early on
+                    // isolated-testnet/regtest also drives this disconnect rung.
+                    || (pfrom->nVersion < PROTOCOL_VERSION && past_fork_grace(GetBlockV15Height())))
                 )
             ) {
             // disconnect from peers older than this proto version
