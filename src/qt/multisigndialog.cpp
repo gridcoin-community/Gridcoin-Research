@@ -491,9 +491,11 @@ void MultisignPSGTDialog::on_submitToPoolButton_clicked()
     if (!syncWorkingFromInput())
         return;
 
-    if (!WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight))) {
-        setStatus(tr("The PSGT pool is not active yet: block v15 has not activated "
-                     "on this network."), true);
+    // Mirror EnsurePSGTPoolActive() (src/rpc/psgt.cpp): the pool is available
+    // only once v15 has activated AND the node is not out of sync by age.
+    if (!WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge())) {
+        setStatus(tr("The PSGT pool is unavailable: block v15 has not activated on "
+                     "this network, or this node is still syncing."), true);
         return;
     }
 

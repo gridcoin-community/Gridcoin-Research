@@ -102,8 +102,8 @@ void PSGTPoolPage::setClientModel(ClientModel* client_model)
     // Deliver the core PSGTPoolChanged signal (marshalled onto the GUI thread
     // by ClientModel) to the table model so its rows track the pool live.
     connect(client_model, &ClientModel::psgtPoolChanged, this,
-            [this](const QString&, quint8 change_type) {
-                if (m_table_model) m_table_model->handlePoolChanged(change_type);
+            [this](const QString& revision_hash, quint8 change_type) {
+                if (m_table_model) m_table_model->handlePoolChanged(revision_hash, change_type);
                 updateButtons();
             });
 
@@ -118,13 +118,24 @@ void PSGTPoolPage::setMultisignDialog(MultisignPSGTDialog* dialog)
 
 void PSGTPoolPage::updateActiveState()
 {
-    const bool active = WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight));
-    if (active) {
+    // Mirror EnsurePSGTPoolActive() (src/rpc/psgt.cpp): the pool is available
+    // only once v15 has activated AND the node is not out of sync by age.
+    // OutOfSyncByAge() reads chain state, so keep it under cs_main.
+    bool v15_enabled = false;
+    bool out_of_sync = false;
+    WITH_LOCK(cs_main, v15_enabled = IsV15Enabled(nBestHeight); out_of_sync = OutOfSyncByAge(););
+
+    if (v15_enabled && !out_of_sync) {
         m_banner->setVisible(false);
-    } else {
+    } else if (!v15_enabled) {
         m_banner->setText(tr("The PSGT pool is not active yet: it activates with the "
                              "block v15 network upgrade. Pending multisig transactions "
                              "will appear here once it does."));
+        m_banner->setVisible(true);
+    } else {
+        m_banner->setText(tr("The PSGT pool is unavailable while this node is syncing. "
+                             "Pending multisig transactions will appear here once the "
+                             "node has caught up with the network."));
         m_banner->setVisible(true);
     }
 }
@@ -152,10 +163,16 @@ void PSGTPoolPage::updateButtons()
         row = m_table_model->rowAt(m_table->selectionModel()->selectedRows().first().row());
     }
 
-    m_sign_button->setEnabled(have_pool_selection && row
+    // Gate the pool actions on availability, mirroring EnsurePSGTPoolActive()
+    // (src/rpc/psgt.cpp): with the pool inactive (pre-v15 or out of sync) the
+    // Sign/Remove/Details actions have nothing to act on.
+    const bool pool_active = WITH_LOCK(cs_main,
+        return IsV15Enabled(nBestHeight) && !OutOfSyncByAge());
+
+    m_sign_button->setEnabled(pool_active && have_pool_selection && row
                               && row->status == PSGTPoolTableModel::RowStatus::AwaitingYourSignature);
-    m_remove_button->setEnabled(have_pool_selection);
-    m_details_button->setEnabled(have_pool_selection && m_multisign_dialog);
+    m_remove_button->setEnabled(pool_active && have_pool_selection);
+    m_details_button->setEnabled(pool_active && have_pool_selection && m_multisign_dialog);
 }
 
 void PSGTPoolPage::sign()
@@ -207,6 +224,11 @@ void PSGTPoolPage::sign()
     case PSGTSignResult::FAILED:
         QMessageBox::critical(this, tr("Sign PSGT"),
                               tr("Signing failed: %1").arg(QString::fromStdString(error)));
+        break;
+    case PSGTSignResult::NOT_FOUND:
+        QMessageBox::warning(this, tr("Sign PSGT"),
+                             tr("This PSGT is no longer in the pool (it may have "
+                                "completed or expired)."));
         break;
     }
 

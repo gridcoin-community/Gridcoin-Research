@@ -74,9 +74,9 @@ public Q_SLOTS:
     void refresh();
 
     //! Slot bound to the core PSGTPoolChanged signal via QueuedConnection.
-    //! On a removal that this wallet had a stake in, promote the row to the
-    //! recently-completed history before it vanishes.
-    void handlePoolChanged(quint8 change_type);
+    //! On a removal that this wallet had a stake in, promote the row identified
+    //! by revision_hash to the recently-completed history before it vanishes.
+    void handlePoolChanged(const QString& revision_hash, quint8 change_type);
 
 private:
     WalletModel* m_wallet_model;

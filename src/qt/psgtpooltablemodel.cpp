@@ -16,6 +16,9 @@
 
 #include <QDateTime>
 
+#include <algorithm>
+#include <variant>
+
 extern CWallet* pwalletMain;
 
 namespace {
@@ -56,15 +59,31 @@ PSGTPoolTableModel::Row PSGTPoolTableModel::MakeRow(const PSGTPoolEntry& entry) 
     row.sigs_total = entry.sigs_total;
     row.time_received = entry.time_received;
 
-    // Largest output is the payment; the rest is (usually) change.
+    // The payment is the largest output that is NOT change. On a multisig
+    // spend the change returns to the arrangement's own P2SH address (the
+    // image), and change can exceed the payment -- so exclude any output paying
+    // back to the image before taking the largest. If every output pays to the
+    // image (degenerate) fall back to the largest overall so the row still
+    // shows something.
     CAmount best = 0;
     const CTxOut* payment = nullptr;
+    CAmount best_any = 0;
+    const CTxOut* payment_any = nullptr;
     for (const CTxOut& txout : entry.psgt.tx.vout) {
-        if (txout.nValue >= best) {
+        if (txout.nValue >= best_any) {
+            best_any = txout.nValue;
+            payment_any = &txout;
+        }
+        CTxDestination dest;
+        const bool is_change = ExtractDestination(txout.scriptPubKey, dest)
+            && std::holds_alternative<CScriptID>(dest)
+            && std::get<CScriptID>(dest) == entry.image;
+        if (!is_change && txout.nValue >= best) {
             best = txout.nValue;
             payment = &txout;
         }
     }
+    if (!payment) payment = payment_any; // all outputs were change (degenerate)
     if (payment) {
         row.amount = payment->nValue;
         CTxDestination dest;
@@ -114,15 +133,21 @@ void PSGTPoolTableModel::refresh()
     endResetModel();
 }
 
-void PSGTPoolTableModel::handlePoolChanged(quint8 change_type)
+void PSGTPoolTableModel::handlePoolChanged(const QString& revision_hash, quint8 change_type)
 {
     // On a removal, capture the wallet-relevant entry as history before it is
-    // gone from the pool. CT_DELETED is the removal case (see ui_interface
-    // ChangeType); the pool has already erased it, so we cannot re-read it and
-    // instead rely on any matching current row we still hold.
+    // gone from the view. CT_DELETED is the removal case (see ui_interface
+    // ChangeType). The signal carries the exact revision hash that left, so we
+    // relocate that specific row rather than scanning by pool membership --
+    // scanning could mis-order or re-promote rows when several of ours are
+    // pending. Prior CT_UPDATED events have already refresh()ed the cached
+    // rows, so a live row's revision matches the pool's current revision.
     if (change_type == CT_DELETED) {
+        uint256 removed;
+        removed.SetHex(revision_hash.toStdString());
+
         for (const Row& row : m_rows) {
-            if (row.in_pool && row.is_mine && !g_psgt_pool.Get(row.image)) {
+            if (row.in_pool && row.is_mine && row.revision == removed) {
                 Row completed = row;
                 completed.status = RowStatus::Complete;
                 completed.in_pool = false;
@@ -134,6 +159,7 @@ void PSGTPoolTableModel::handlePoolChanged(quint8 change_type)
                 while (m_history.size() > MAX_HISTORY_ROWS) {
                     m_history.removeLast();
                 }
+                break;
             }
         }
     }
@@ -153,7 +179,10 @@ QVariant PSGTPoolTableModel::data(const QModelIndex& index, int role) const
             switch (row.status) {
             case RowStatus::AwaitingYourSignature: return tr("Awaiting your signature");
             case RowStatus::AwaitingOthers:        return tr("Awaiting others");
-            case RowStatus::Complete:              return tr("Completed");
+            // Rows land here on ANY removal (completed, expired, conflicted, or
+            // locally removed) -- the Qt signal carries no reason -- so use a
+            // neutral label rather than implying the multisig completed.
+            case RowStatus::Complete:              return tr("No longer pending");
             }
             return QVariant();
         case Destination:
@@ -168,8 +197,11 @@ QVariant PSGTPoolTableModel::data(const QModelIndex& index, int role) const
             return QStringLiteral("%1 / %2 (of %3)")
                 .arg(row.sigs_valid).arg(row.sigs_required).arg(row.sigs_total);
         case Age: {
-            if (!row.in_pool) return tr("just now");
-            const qint64 secs = QDateTime::currentSecsSinceEpoch() - row.time_received;
+            // Compute the age from time_received for history rows too (a
+            // constant "just now" grows stale), and clamp to >= 0 so a local
+            // clock behind time_received never renders "-3 second(s)".
+            const qint64 now = QDateTime::currentSecsSinceEpoch();
+            const qint64 secs = std::max<qint64>(0, now - row.time_received);
             if (secs < 60) return tr("%n second(s)", nullptr, (int)secs);
             if (secs < 3600) return tr("%n minute(s)", nullptr, (int)(secs / 60));
             if (secs < 86400) return tr("%n hour(s)", nullptr, (int)(secs / 3600));
