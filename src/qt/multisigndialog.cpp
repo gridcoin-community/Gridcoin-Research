@@ -508,22 +508,26 @@ void MultisignPSGTDialog::on_submitToPoolButton_clicked()
 
     PSGTPoolEntry entry;
     std::string error;
-    PSGTPoolReject reject;
-    {
-        LOCK(cs_main);
-        reject = ValidatePSGTForPool(wire, GetAdjustedTime(), entry, error);
-    }
-    if (reject != PSGTPoolReject::NONE) {
-        setStatus(tr("The pool rejected this PSGT (%1): %2")
-                      .arg(QString::fromStdString(PSGTPoolRejectToString(reject)))
-                      .arg(QString::fromStdString(error)),
-                  true);
-        return;
-    }
-
-    const uint256 revision_hash = entry.revision_hash;
+    uint256 revision_hash;
     std::string reject_reason;
-    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+    PSGTPoolAddResult result;
+    {
+        // Hold cs_main continuously from validation through Add, so the
+        // funding-unspent guarantee ValidatePSGTForPool establishes still holds
+        // at insertion (the Add() caller contract; matches the submitpsgt RPC).
+        LOCK(cs_main);
+        const PSGTPoolReject reject =
+            ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), entry, error);
+        if (reject != PSGTPoolReject::NONE) {
+            setStatus(tr("The pool rejected this PSGT (%1): %2")
+                          .arg(QString::fromStdString(PSGTPoolRejectToString(reject)))
+                          .arg(QString::fromStdString(error)),
+                      true);
+            return;
+        }
+        revision_hash = entry.revision_hash;
+        result = g_psgt_pool.Add(std::move(entry), reject_reason);
+    }
 
     switch (result) {
     case PSGTPoolAddResult::ACCEPTED_NEW:

@@ -193,6 +193,12 @@ void PSGTPoolPage::sign()
                                  tr("Your signature was added and relayed to the other "
                                     "co-signers."));
         break;
+    case PSGTSignResult::ALREADY_KNOWN:
+        QMessageBox::information(this, tr("Sign PSGT"),
+                                 tr("Your signature was added, but this exact revision is "
+                                    "already known to the network (a co-signer may have "
+                                    "signed it first). Nothing more to do."));
+        break;
     case PSGTSignResult::NO_NEW_SIGNATURES:
         QMessageBox::warning(this, tr("Sign PSGT"),
                              tr("This wallet holds no key that can add a signature to "
