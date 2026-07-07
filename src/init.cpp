@@ -2005,7 +2005,8 @@ bool AppInit2(ThreadHandlerPtr threads)
             ReplaceAll(strCmd, "%s1", entry.image.ToString());
             ReplaceAll(strCmd, "%s2", event);
             ReplaceAll(strCmd, "%s3", entry.tx_hash.ToString());
-            boost::thread t(runCommand, strCmd); // thread runs free
+            boost::thread t(runCommand, strCmd);
+            t.detach(); // run free; never let t's destructor join/terminate
         }
 #endif
     };

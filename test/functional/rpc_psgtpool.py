@@ -40,7 +40,7 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
 
     def setup_network(self):
         self.notify_file = os.path.join(self.options.tmpdir, "psgt_events.txt")
-        self.extra_args[1].append("-psgtnotify=echo %s2 %s1 >> " + self.notify_file)
+        self.extra_args[1].append("-psgtnotify=echo %s2 %s1 >> '" + self.notify_file + "'")
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
         self.connect_nodes(1, 0)

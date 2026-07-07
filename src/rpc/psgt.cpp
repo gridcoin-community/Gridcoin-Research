@@ -1227,10 +1227,13 @@ UniValue signpsgtinpool(const UniValue& params)
 
     case PSGTSignResult::SIGNED_AND_RELAYED:
     {
-        const auto entry = g_psgt_pool.Get(image);
         obj.pushKV("complete", false);
+        // txid is always available from the sign result (the unsigned tx id) and
+        // the schema documents it as always present. The pool-derived fields are
+        // optional: the entry can race away (removed/expired) after signing.
+        obj.pushKV("txid", txid.ToString());
+        const auto entry = g_psgt_pool.Get(image);
         if (entry) {
-            obj.pushKV("txid", entry->tx_hash.ToString());
             obj.pushKV("revision", entry->revision_hash.ToString());
             obj.pushKV("sigs_valid", entry->valid_sigs);
             obj.pushKV("sigs_required", entry->sigs_required);
