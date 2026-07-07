@@ -268,7 +268,21 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
         return;
     }
 
-    const CInv inv(MSG_PSGT, Hash(wire_bytes));
+    // Identify the object by its CANONICAL revision hash (the hash of the
+    // SerializePSGT re-serialization) -- the identity we pool and relay -- not
+    // the raw wire-bytes hash, so inventory-known and mapAlreadyAskedFor
+    // bookkeeping match even when a peer sends a non-canonical encoding of the
+    // same content. Decoding here is cheap (no signature work); a decode failure
+    // falls back to the wire hash and is rejected during validation below.
+    uint256 obj_hash = Hash(wire_bytes);
+    {
+        PartiallySignedTransaction decoded;
+        std::string decode_err;
+        if (DecodePSGTBytes(decoded, wire_bytes, decode_err)) {
+            obj_hash = Hash(SerializePSGT(decoded));
+        }
+    }
+    const CInv inv(MSG_PSGT, obj_hash);
 
     // The sender obviously has this revision: suppress the inv echo.
     pfrom->AddInventoryKnown(inv);
@@ -324,15 +338,10 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
         return;
     }
 
+    // The inv tracked at the top of this function is already keyed on the
+    // canonical revision hash (== entry.revision_hash), so the sender is marked
+    // as knowing this revision and we will not echo it back.
     const uint256 revision_hash = entry.revision_hash;
-
-    // Mark the sender as knowing the CANONICAL revision (what we pool and
-    // relay), not just the wire-bytes hash tracked at the top of this function.
-    // The two differ if the peer sent a non-canonical encoding; without this we
-    // would relay inv(revision_hash) straight back to the sender. Re-asking is
-    // already prevented by HaveRevision() once the entry is pooled below, so no
-    // mapAlreadyAskedFor bookkeeping is needed for the canonical hash.
-    pfrom->AddInventoryKnown(CInv(MSG_PSGT, revision_hash));
 
     std::string reject_reason;
     const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
