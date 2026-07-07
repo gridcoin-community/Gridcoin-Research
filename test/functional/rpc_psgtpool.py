@@ -36,7 +36,7 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         self.setup_clean_chain = True
         # extra_args are finalized in setup_network (the notify file path
         # needs the test tmpdir, unknown at set_test_params time).
-        self.extra_args = [["-staking=0"], ["-staking=0"]]
+        self.extra_args = [["-staking=0", "-blockv15height=0"], ["-staking=0", "-blockv15height=0"]]
 
     def setup_network(self):
         self.notify_file = os.path.join(self.options.tmpdir, "psgt_events.txt")
