@@ -1,0 +1,592 @@
+// Copyright (c) 2026 The Gridcoin developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://opensource.org/licenses/mit-license.php.
+
+#include <node/psgt_pool.h>
+
+#include <consensus/validation.h>
+#include <dbwrapper.h>
+#include <hash.h>
+#include <index/txindex.h>
+#include <logging.h>
+#include <policy/fees.h>
+#include <tinyformat.h>
+#include <txmempool.h>
+#include <util.h>
+#include <validation.h>
+
+#include <algorithm>
+#include <cassert>
+
+PSGTPool g_psgt_pool;
+
+std::string PSGTRemovalReasonToString(PSGTRemovalReason reason)
+{
+    switch (reason) {
+    case PSGTRemovalReason::EXPIRED:          return "expired";
+    case PSGTRemovalReason::REPLACED:         return "replaced";
+    case PSGTRemovalReason::COMPLETED:        return "completed";
+    case PSGTRemovalReason::CONFLICT_MEMPOOL: return "conflict-mempool";
+    case PSGTRemovalReason::CONFLICT_BLOCK:   return "conflict-block";
+    case PSGTRemovalReason::LOCAL_REMOVE:     return "removed";
+    } // no default case, so the compiler can warn about missing cases
+    assert(false);
+    return "";
+}
+
+std::string PSGTPoolRejectToString(PSGTPoolReject reject)
+{
+    switch (reject) {
+    case PSGTPoolReject::NONE:         return "none";
+    case PSGTPoolReject::TOO_LARGE:    return "too-large";
+    case PSGTPoolReject::MALFORMED:    return "malformed";
+    case PSGTPoolReject::STRUCTURAL:   return "structural";
+    case PSGTPoolReject::INVALID_SIG:  return "invalid-signature";
+    case PSGTPoolReject::NO_VALID_SIG: return "no-valid-signature";
+    case PSGTPoolReject::COMPLETE:     return "complete";
+    case PSGTPoolReject::UTXO_MISSING: return "utxo-missing";
+    case PSGTPoolReject::UTXO_SPENT:   return "utxo-spent";
+    case PSGTPoolReject::FEE_TOO_LOW:  return "fee-too-low";
+    case PSGTPoolReject::FEE_ABSURD:   return "fee-absurd";
+    } // no default case, so the compiler can warn about missing cases
+    assert(false);
+    return "";
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+//! Reject fees above this multiple of the relay minimum as user error.
+static constexpr int MAX_POOL_FEE_MULTIPLIER = 100;
+
+//! Is the funding output available from this node's point of view? The
+//! embedded funding transaction is already hash-authenticated against
+//! prevout.hash, so existence and unspentness are the only chain facts left
+//! to establish: unspent in the transaction index (confirmed funding) or
+//! present in the mempool (unconfirmed funding), and in either case not
+//! spent by a mempool transaction.
+static PSGTPoolReject CheckFundingOutput(const COutPoint& prevout, CTxDB& txdb, std::string& error)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    {
+        LOCK(mempool.cs);
+
+        if (mempool.mapNextTx.count(prevout)) {
+            error = strprintf("funding output %s:%u is spent by a mempool transaction",
+                              prevout.hash.ToString(), prevout.n);
+            return PSGTPoolReject::UTXO_SPENT;
+        }
+
+        if (mempool.exists(prevout.hash)) {
+            return PSGTPoolReject::NONE; // unconfirmed funding, unspent
+        }
+    }
+
+    CTxIndex txindex;
+    if (!txdb.ReadTxIndex(prevout.hash, txindex)) {
+        error = strprintf("funding transaction %s is unknown (not in chain or mempool)",
+                          prevout.hash.ToString());
+        return PSGTPoolReject::UTXO_MISSING;
+    }
+
+    if (prevout.n >= txindex.vSpent.size()) {
+        error = strprintf("funding output %s:%u does not exist on chain",
+                          prevout.hash.ToString(), prevout.n);
+        return PSGTPoolReject::UTXO_MISSING;
+    }
+
+    if (!txindex.vSpent[prevout.n].IsNull()) {
+        error = strprintf("funding output %s:%u is already spent on chain",
+                          prevout.hash.ToString(), prevout.n);
+        return PSGTPoolReject::UTXO_SPENT;
+    }
+
+    return PSGTPoolReject::NONE;
+}
+
+PSGTPoolReject ValidatePSGTForPool(const std::vector<unsigned char>& wire_bytes,
+                                   int64_t now,
+                                   PSGTPoolEntry& out_entry,
+                                   std::string& error)
+{
+    AssertLockHeld(cs_main);
+
+    // Decode into a pristine entry: DecodePSGTBytes fills psgt incrementally,
+    // so state left over from a previous validation of a reused out_entry
+    // (e.g. partial_sigs surviving an inputs.resize to the same count) would
+    // otherwise leak into this one.
+    out_entry = PSGTPoolEntry{};
+
+    if (wire_bytes.size() > MAX_PSGT_WIRE_SIZE) {
+        error = strprintf("PSGT of %zu bytes exceeds the %zu byte limit",
+                          wire_bytes.size(), static_cast<size_t>(MAX_PSGT_WIRE_SIZE));
+        return PSGTPoolReject::TOO_LARGE;
+    }
+
+    PartiallySignedTransaction& psgt = out_entry.psgt;
+    if (!DecodePSGTBytes(psgt, wire_bytes, error)) {
+        return PSGTPoolReject::MALFORMED;
+    }
+
+    const CTransaction tx(psgt.tx);
+
+    if (tx.nVersion < 2) {
+        error = "legacy transaction version";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    CValidationState state;
+    if (!CheckTransaction(tx, state)) {
+        error = "unsigned transaction fails CheckTransaction";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    if (psgt.inputs.size() != tx.vin.size() || psgt.outputs.size() != tx.vout.size()) {
+        error = "PSGT input/output count does not match unsigned transaction";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    for (const PSGTInput& input : psgt.inputs) {
+        if (!input.final_script_sig.empty()) {
+            error = "pool holds partially signed material only; finalized "
+                    "inputs belong in a broadcast transaction";
+            return PSGTPoolReject::STRUCTURAL;
+        }
+    }
+
+    const std::optional<CScriptID> image = GetPSGTImage(psgt);
+    if (!image) {
+        error = "not a single-arrangement P2SH multisig spend (every input "
+                "must carry its matching funding transaction and a redeem "
+                "script committed to by the funded output, all for the same "
+                "multisig arrangement)";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    int sigs_required = 0;
+    int sigs_total = 0;
+    if (!GetPSGTMultisigParams(psgt, sigs_required, sigs_total)) {
+        error = "cannot recover m-of-n multisig parameters";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    if (!VerifyPSGTPartialSigs(psgt, out_entry.valid_keys_per_input, error)) {
+        return PSGTPoolReject::INVALID_SIG;
+    }
+
+    int min_valid_sigs = sigs_total;
+    for (const std::set<CKeyID>& keys : out_entry.valid_keys_per_input) {
+        min_valid_sigs = std::min<int>(min_valid_sigs, keys.size());
+    }
+
+    // The anti-spam floor of #2910: nobody puts a PSGT on the network without
+    // proving they are a party to it (the ValidateMRC principle).
+    if (min_valid_sigs < 1) {
+        error = "every input must carry at least one valid partial signature";
+        return PSGTPoolReject::NO_VALID_SIG;
+    }
+
+    // A PSGT with m valid signatures everywhere needs no co-signers: it should
+    // be finalized and broadcast as a transaction, and nodes must not race to
+    // finalize other people's PSGTs from the pool.
+    if (min_valid_sigs >= sigs_required) {
+        error = "already fully signed; finalize and broadcast as a transaction";
+        return PSGTPoolReject::COMPLETE;
+    }
+
+    // One CTxDB for the whole PSGT rather than constructing one per input.
+    CTxDB txdb("r");
+    for (const CTxIn& txin : tx.vin) {
+        const PSGTPoolReject utxo_result = CheckFundingOutput(txin.prevout, txdb, error);
+        if (utxo_result != PSGTPoolReject::NONE) {
+            return utxo_result;
+        }
+    }
+
+    // Fee sanity. The funding amounts come from the hash-verified embedded
+    // funding transactions, so AnalyzePSGT's fee is trustworthy here; its
+    // estimated final size prices the fully signed transaction.
+    const PSGTAnalysis analysis = AnalyzePSGT(psgt);
+    if (!analysis.fee || !analysis.estimated_final_size) {
+        error = "fee or final size not computable";
+        return PSGTPoolReject::STRUCTURAL;
+    }
+
+    const CAmount min_fee = GetMinFee(tx, 1000, GMF_RELAY, *analysis.estimated_final_size);
+    if (*analysis.fee < min_fee) {
+        error = strprintf("fee %s below the relay minimum %s for an estimated "
+                          "final size of %u bytes",
+                          FormatMoney(*analysis.fee), FormatMoney(min_fee),
+                          *analysis.estimated_final_size);
+        return PSGTPoolReject::FEE_TOO_LOW;
+    }
+
+    if (*analysis.fee > MAX_POOL_FEE_MULTIPLIER * min_fee) {
+        error = strprintf("fee %s is more than %d times the relay minimum %s; "
+                          "rejecting as probable user error",
+                          FormatMoney(*analysis.fee), MAX_POOL_FEE_MULTIPLIER,
+                          FormatMoney(min_fee));
+        return PSGTPoolReject::FEE_ABSURD;
+    }
+
+    out_entry.serialized = wire_bytes;
+    out_entry.revision_hash = Hash(wire_bytes);
+    out_entry.image = *image;
+    out_entry.tx_hash = tx.GetHash();
+    out_entry.time_received = now;
+    out_entry.valid_sigs = min_valid_sigs;
+    out_entry.sigs_required = sigs_required;
+    out_entry.sigs_total = sigs_total;
+    out_entry.fee = *analysis.fee;
+
+    error.clear();
+    return PSGTPoolReject::NONE;
+}
+
+// ---------------------------------------------------------------------------
+// Pool container
+// ---------------------------------------------------------------------------
+
+PSGTPoolAddResult PSGTPool::Add(PSGTPoolEntry&& entry, std::string& reject_reason)
+{
+    std::optional<PSGTPoolEntry> accepted;
+    PSGTPoolChangeType change = PSGTPoolChangeType::ADDED;
+    PSGTPoolAddResult result;
+
+    {
+        LOCK(cs_psgt_pool);
+
+        const int64_t now = entry.time_received;
+
+        if (m_by_revision.count(entry.revision_hash)
+            || m_recently_removed.count(entry.revision_hash)) {
+            reject_reason = "already have this revision";
+            return PSGTPoolAddResult::DUPLICATE;
+        }
+
+        const auto existing_it = m_by_image.find(entry.image);
+
+        if (existing_it == m_by_image.end()) {
+            if (m_by_image.size() >= MAX_ENTRIES) {
+                // Reject, never evict: slots open as PSGTs complete or
+                // expire, and the submitter gets a clear try-again-later
+                // signal instead of silently killing someone else's
+                // in-progress signing session.
+                reject_reason = "PSGT pool is full; try again later";
+                return PSGTPoolAddResult::REJECTED_POOL_FULL;
+            }
+
+            // First entry for this image: whoever holds a valid signature on
+            // it is recorded as the initiator for the image's lifetime.
+            entry.initiator_keys.clear();
+            for (const std::set<CKeyID>& keys : entry.valid_keys_per_input) {
+                entry.initiator_keys.insert(keys.begin(), keys.end());
+            }
+
+            accepted = entry;
+            InsertInternal(std::move(entry));
+            result = PSGTPoolAddResult::ACCEPTED_NEW;
+            change = PSGTPoolChangeType::ADDED;
+        } else {
+            const PSGTPoolEntry& existing = existing_it->second;
+
+            if (entry.tx_hash == existing.tx_hash) {
+                // Same unsigned transaction: accept only signature progress.
+                // Compare valid-signer SETS, not signature bytes -- ECDSA
+                // signatures are malleable and re-signing produces different
+                // bytes for the same authorization.
+                // Same unsigned tx => same input count, so the per-input signer
+                // vectors must match in length. Guard defensively before indexing
+                // existing[i] by entry's size, so a future call-site bug or a
+                // malformed synthetic entry rejects rather than reading OOB.
+                if (existing.valid_keys_per_input.size() != entry.valid_keys_per_input.size()) {
+                    reject_reason = "per-input signer vector size mismatch for same transaction";
+                    return PSGTPoolAddResult::REJECTED_NOT_BETTER;
+                }
+                bool superset = true;
+                bool strictly_larger = false;
+                for (size_t i = 0; i < entry.valid_keys_per_input.size(); ++i) {
+                    const std::set<CKeyID>& have = existing.valid_keys_per_input[i];
+                    const std::set<CKeyID>& offered = entry.valid_keys_per_input[i];
+                    if (!std::includes(offered.begin(), offered.end(),
+                                       have.begin(), have.end())) {
+                        superset = false;
+                        break;
+                    }
+                    if (offered.size() > have.size()) {
+                        strictly_larger = true;
+                    }
+                }
+
+                if (!superset) {
+                    reject_reason = "does not carry every signature of the pooled revision";
+                    return PSGTPoolAddResult::REJECTED_NOT_BETTER;
+                }
+                if (!strictly_larger) {
+                    reject_reason = "no new signatures over the pooled revision";
+                    return PSGTPoolAddResult::DUPLICATE;
+                }
+            } else {
+                // Different unsigned transaction: only the original initiator
+                // may supersede (change destination/amount/fee). Their valid
+                // signature over the NEW transaction on every input is the
+                // authorization; co-signatures legitimately drop off.
+                bool initiator_signed = false;
+                for (const CKeyID& keyid : existing.initiator_keys) {
+                    bool on_every_input = true;
+                    for (const std::set<CKeyID>& keys : entry.valid_keys_per_input) {
+                        if (!keys.count(keyid)) {
+                            on_every_input = false;
+                            break;
+                        }
+                    }
+                    if (on_every_input) {
+                        initiator_signed = true;
+                        break;
+                    }
+                }
+
+                if (!initiator_signed) {
+                    reject_reason = "supersedes the pooled transaction without a "
+                                    "valid signature from its initiator";
+                    return PSGTPoolAddResult::REJECTED_NOT_INITIATOR;
+                }
+            }
+
+            entry.initiator_keys = existing.initiator_keys;
+            EraseInternal(entry.image, now);
+            accepted = entry;
+            InsertInternal(std::move(entry));
+            result = PSGTPoolAddResult::ACCEPTED_REPLACEMENT;
+            change = PSGTPoolChangeType::UPDATED;
+        }
+    }
+
+    if (accepted) {
+        LogPrint(BCLog::LogFlags::MEMPOOL,
+                 "psgtpool: %s image %s revision %s (%d/%d signatures)",
+                 change == PSGTPoolChangeType::ADDED ? "accepted" : "replaced",
+                 accepted->image.ToString(), accepted->revision_hash.ToString(),
+                 accepted->valid_sigs, accepted->sigs_required);
+        Notify(*accepted, change, std::nullopt);
+    }
+
+    reject_reason.clear();
+    return result;
+}
+
+bool PSGTPool::Remove(const CScriptID& image, PSGTRemovalReason reason)
+{
+    std::optional<PSGTPoolEntry> removed;
+
+    {
+        LOCK(cs_psgt_pool);
+        removed = EraseInternal(image, GetAdjustedTime());
+    }
+
+    if (!removed) {
+        return false;
+    }
+
+    LogPrint(BCLog::LogFlags::MEMPOOL, "psgtpool: removed image %s (%s)",
+             image.ToString(), PSGTRemovalReasonToString(reason));
+    Notify(*removed, PSGTPoolChangeType::REMOVED, reason);
+    return true;
+}
+
+std::optional<PSGTPoolEntry> PSGTPool::Get(const CScriptID& image) const
+{
+    LOCK(cs_psgt_pool);
+
+    const auto it = m_by_image.find(image);
+    if (it == m_by_image.end()) return std::nullopt;
+    return it->second;
+}
+
+std::optional<PSGTPoolEntry> PSGTPool::GetByRevision(const uint256& revision_hash) const
+{
+    LOCK(cs_psgt_pool);
+
+    const auto it = m_by_revision.find(revision_hash);
+    if (it == m_by_revision.end()) return std::nullopt;
+    const auto img = m_by_image.find(it->second);
+    if (img == m_by_image.end()) return std::nullopt;
+    return img->second;
+}
+
+std::optional<PSGTPoolEntry> PSGTPool::GetByTxHash(const uint256& tx_hash) const
+{
+    LOCK(cs_psgt_pool);
+
+    const auto it = m_by_txhash.find(tx_hash);
+    if (it == m_by_txhash.end()) return std::nullopt;
+    const auto img = m_by_image.find(it->second);
+    if (img == m_by_image.end()) return std::nullopt;
+    return img->second;
+}
+
+bool PSGTPool::HaveRevision(const uint256& revision_hash) const
+{
+    LOCK(cs_psgt_pool);
+    return m_by_revision.count(revision_hash) || m_recently_removed.count(revision_hash);
+}
+
+std::vector<PSGTPoolEntry> PSGTPool::GetAll() const
+{
+    LOCK(cs_psgt_pool);
+
+    std::vector<PSGTPoolEntry> entries;
+    entries.reserve(m_by_image.size());
+    for (const auto& [image, entry] : m_by_image) {
+        entries.push_back(entry);
+    }
+    return entries;
+}
+
+size_t PSGTPool::EraseExpired(int64_t now)
+{
+    std::vector<PSGTPoolEntry> expired;
+
+    {
+        LOCK(cs_psgt_pool);
+
+        std::vector<CScriptID> images;
+        for (const auto& [image, entry] : m_by_image) {
+            if (now - entry.time_received > EXPIRY_SECONDS) {
+                images.push_back(image);
+            }
+        }
+        for (const CScriptID& image : images) {
+            if (auto entry = EraseInternal(image, now)) {
+                expired.push_back(std::move(*entry));
+            }
+        }
+    }
+
+    for (const PSGTPoolEntry& entry : expired) {
+        LogPrint(BCLog::LogFlags::MEMPOOL, "psgtpool: expired image %s",
+                 entry.image.ToString());
+        Notify(entry, PSGTPoolChangeType::REMOVED, PSGTRemovalReason::EXPIRED);
+    }
+
+    return expired.size();
+}
+
+size_t PSGTPool::Size() const
+{
+    LOCK(cs_psgt_pool);
+    return m_by_image.size();
+}
+
+void PSGTPool::Clear()
+{
+    LOCK(cs_psgt_pool);
+    m_by_image.clear();
+    m_by_revision.clear();
+    m_by_txhash.clear();
+    m_by_prevout.clear();
+    m_recently_removed.clear();
+}
+
+void PSGTPool::TransactionAddedToMempool(const CTransactionRef& tx)
+{
+    EvictConflicts(*tx, PSGTRemovalReason::CONFLICT_MEMPOOL);
+}
+
+void PSGTPool::BlockConnected(const CBlock& block, int /*height*/)
+{
+    for (const CTransaction& tx : block.vtx) {
+        EvictConflicts(tx, PSGTRemovalReason::CONFLICT_BLOCK);
+    }
+}
+
+void PSGTPool::EvictConflicts(const CTransaction& tx, PSGTRemovalReason reason)
+{
+    std::vector<PSGTPoolEntry> evicted;
+
+    {
+        LOCK(cs_psgt_pool);
+
+        const int64_t now = GetAdjustedTime();
+        std::set<CScriptID> images;
+        for (const CTxIn& txin : tx.vin) {
+            const auto it = m_by_prevout.find(txin.prevout);
+            if (it != m_by_prevout.end()) {
+                images.insert(it->second);
+            }
+        }
+        for (const CScriptID& image : images) {
+            if (auto entry = EraseInternal(image, now)) {
+                evicted.push_back(std::move(*entry));
+            }
+        }
+    }
+
+    for (const PSGTPoolEntry& entry : evicted) {
+        LogPrint(BCLog::LogFlags::MEMPOOL,
+                 "psgtpool: evicted image %s (%s, input spent by %s)",
+                 entry.image.ToString(), PSGTRemovalReasonToString(reason),
+                 tx.GetHash().ToString());
+        Notify(entry, PSGTPoolChangeType::REMOVED, reason);
+    }
+}
+
+std::optional<PSGTPoolEntry> PSGTPool::EraseInternal(const CScriptID& image, int64_t now)
+{
+    const auto it = m_by_image.find(image);
+    if (it == m_by_image.end()) {
+        return std::nullopt;
+    }
+
+    PSGTPoolEntry entry = std::move(it->second);
+    m_by_image.erase(it);
+    m_by_revision.erase(entry.revision_hash);
+    m_by_txhash.erase(entry.tx_hash);
+    for (const CTxIn& txin : entry.psgt.tx.vin) {
+        m_by_prevout.erase(txin.prevout);
+    }
+    RecordRemoved(entry.revision_hash, now);
+    return entry;
+}
+
+void PSGTPool::InsertInternal(PSGTPoolEntry&& entry)
+{
+    m_by_revision[entry.revision_hash] = entry.image;
+    m_by_txhash[entry.tx_hash] = entry.image;
+    for (const CTxIn& txin : entry.psgt.tx.vin) {
+        m_by_prevout[txin.prevout] = entry.image;
+    }
+    const CScriptID image = entry.image;
+    m_by_image.insert_or_assign(image, std::move(entry));
+}
+
+void PSGTPool::RecordRemoved(const uint256& revision_hash, int64_t now)
+{
+    // TTL prune, then a hard cap as a safety net (evict oldest).
+    for (auto it = m_recently_removed.begin(); it != m_recently_removed.end();) {
+        if (now - it->second > RECENTLY_REMOVED_TTL) {
+            it = m_recently_removed.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    while (m_recently_removed.size() >= MAX_RECENTLY_REMOVED) {
+        auto oldest = m_recently_removed.begin();
+        for (auto it = m_recently_removed.begin(); it != m_recently_removed.end(); ++it) {
+            if (it->second < oldest->second) oldest = it;
+        }
+        m_recently_removed.erase(oldest);
+    }
+
+    m_recently_removed[revision_hash] = now;
+}
+
+void PSGTPool::Notify(const PSGTPoolEntry& entry, PSGTPoolChangeType change,
+                      std::optional<PSGTRemovalReason> reason) const
+{
+    if (m_notify_hook) {
+        m_notify_hook(entry, change, reason);
+    }
+}
