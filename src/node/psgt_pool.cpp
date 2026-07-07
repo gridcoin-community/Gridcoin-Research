@@ -686,7 +686,7 @@ PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
     const std::optional<PSGTPoolEntry> pooled = g_psgt_pool.Get(image);
     if (!pooled) {
         error = "PSGT not found in the pool";
-        return PSGTSignResult::FAILED;
+        return PSGTSignResult::NOT_FOUND;
     }
 
     PartiallySignedTransaction psgt = pooled->psgt;

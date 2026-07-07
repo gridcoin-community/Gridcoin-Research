@@ -1092,6 +1092,10 @@ UniValue submitpsgt(const UniValue& params)
 
     const uint256 revision_hash = entry.revision_hash;
     const CScriptID image = entry.image;
+    // Keep a copy for the response: the pool takes cs_psgt_pool, not cs_main, so
+    // removepsgtfrompool or the expiry sweep can erase this image between Add and
+    // the Get below. Without a fallback that Get would dereference nullopt.
+    const PSGTPoolEntry submitted = entry;
 
     std::string reject_reason;
     const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
@@ -1110,7 +1114,10 @@ UniValue submitpsgt(const UniValue& params)
                            strprintf("PSGT not pooled: %s", reject_reason));
     }
 
-    UniValue obj = PoolEntryToJSON(*g_psgt_pool.Get(image), now);
+    // Prefer the freshly-pooled entry (reflects any carried-forward initiator
+    // keys on replacement); fall back to the submitted copy if it raced away.
+    const auto pooled = g_psgt_pool.Get(image);
+    UniValue obj = PoolEntryToJSON(pooled ? *pooled : submitted, now);
     obj.pushKV("replaced", result == PSGTPoolAddResult::ACCEPTED_REPLACEMENT);
     return obj;
 }
@@ -1243,6 +1250,11 @@ UniValue signpsgtinpool(const UniValue& params)
 
     case PSGTSignResult::NO_NEW_SIGNATURES:
         throw JSONRPCError(RPC_WALLET_ERROR, error);
+
+    case PSGTSignResult::NOT_FOUND:
+        // Never pooled, or removed/expired between resolve and signing -- a
+        // normal race/user condition, not an internal fault.
+        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
 
     case PSGTSignResult::FAILED:
         throw JSONRPCError(RPC_INTERNAL_ERROR, error);

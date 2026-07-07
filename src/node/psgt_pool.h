@@ -327,6 +327,7 @@ enum class PSGTSignResult
     COMPLETED_AND_BROADCAST, //!< Signature(s) completed the PSGT; final transaction broadcast; pool slot freed.
     NO_NEW_SIGNATURES,       //!< The wallet holds no key that could add a signature.
     ALREADY_KNOWN,           //!< Added signature(s), but the resulting revision is already in (or was recently in) the pool; nothing to relay.
+    NOT_FOUND,               //!< The image is not in the pool (never was, or was removed/expired before signing).
     FAILED,                  //!< See error.
 };
 
