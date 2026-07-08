@@ -72,8 +72,16 @@ class InterfaceCLITest(GridcoinTestFramework):
         self.log.info("array + object arguments round-trip: createrawtransaction")
         inputs = [{"txid": "00" * 32, "vout": 0}]
         outputs = {node.getnewaddress(): 1.0}
-        assert_equal(cli.createrawtransaction(inputs, outputs),
-                     node.createrawtransaction(inputs, outputs))
+        # createrawtransaction stamps the transaction's nTime from the (adjusted)
+        # clock, so two independent calls that straddle a 1-second boundary
+        # serialize different hex. Pin the clock with setmocktime so the CLI and
+        # RPC results are byte-identical, then restore the system clock.
+        node.setmocktime(1593912000)
+        try:
+            assert_equal(cli.createrawtransaction(inputs, outputs),
+                         node.createrawtransaction(inputs, outputs))
+        finally:
+            node.setmocktime(0)
 
         # int + bool arguments: getbalance "*" <minconf> <include_watchonly>.
         # Param 1 string->int, param 2 string->bool.

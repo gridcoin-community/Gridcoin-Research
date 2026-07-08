@@ -267,6 +267,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblocksbatch"         , 1 },
     { "getblocksbatch"         , 2 },
     { "getblockhash"           , 0 },
+    { "setmocktime"            , 0 },
     { "setban"                 , 2 },
     { "setban"                 , 3 },
     { "showblock"              , 0 },

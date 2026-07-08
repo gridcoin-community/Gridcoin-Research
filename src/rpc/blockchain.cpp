@@ -14,6 +14,7 @@
 #include "node/blockstorage.h"
 #include "node/chainman.h"
 #include <util/string.h>
+#include <util/time.h>
 #include "gridcoin/mrc.h"
 #include "gridcoin/support/block_finder.h"
 #include "gridcoin/support/xml.h"
@@ -858,6 +859,45 @@ UniValue getblockcount(const UniValue& params)
     LOCK(cs_main);
 
     return nBestHeight;
+}
+
+static const RPCHelpMan setmocktime_help{
+    "setmocktime",
+    "\nSet the node's mock time to the given timestamp (-regtest only).\n"
+    "Adjusts the time returned by GetTime()/GetAdjustedTime() for testing; this does\n"
+    "NOT change the system clock.",
+    {
+        {"timestamp", RPCArg::Type::NUM, RPCArg::Optional::NO, UNIX_EPOCH_TIME + "\n"
+         "Pass 0 to go back to using the system time."},
+    },
+    RPCResult{RPCResult::Type::NONE, "", ""},
+    RPCExamples{
+        HelpExampleCli("setmocktime", "1593912000") +
+        HelpExampleRpc("setmocktime", "1593912000")},
+};
+const RPCHelpMan& setmocktime_helpman() { return setmocktime_help; }
+
+UniValue setmocktime(const UniValue& params)
+{
+    if (!Params().IsMockableChain()) {
+        // Match Gridcoin's other regtest-only RPCs (generate, generatesuperblock,
+        // stakelimit): RPC_METHOD_NOT_FOUND maps to HTTP 404, unlike upstream's
+        // std::runtime_error (HTTP 500).
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "setmocktime is only available on -regtest");
+    }
+
+    // Don't change mocktime in the middle of validation -- as upstream notes, it can
+    // affect mempool time-based eviction, IsInitialBlockDownload() and fee estimation.
+    // Hold cs_main to serialize against those readers.
+    LOCK(cs_main);
+
+    const int64_t nMockTime = params[0].get_int64();
+    if (nMockTime < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Mocktime cannot be negative");
+    }
+    SetMockTime(nMockTime);
+
+    return NullUniValue;
 }
 
 static const RPCHelpMan getdifficulty_help{
