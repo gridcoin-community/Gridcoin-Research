@@ -208,7 +208,12 @@ QVariant PSGTPoolTableModel::data(const QModelIndex& index, int role) const
             return tr("%n day(s)", nullptr, (int)(secs / 86400));
         }
         case Image:
-            return QString::fromStdString(row.image.ToString());
+            // Show the arrangement's P2SH address, not the raw CScriptID hex.
+            // row.image.ToString() is the uint160 in reversed-byte form, which a
+            // user cannot correlate with the multisig address; encode it as the
+            // recognizable P2SH address instead. The raw image hash remains in
+            // the Details dialog and the RPC.
+            return QString::fromStdString(EncodeDestination(CTxDestination(row.image)));
         }
     } else if (role == Qt::TextAlignmentRole) {
         if (index.column() == Amount || index.column() == Signatures) {
@@ -229,7 +234,7 @@ QVariant PSGTPoolTableModel::headerData(int section, Qt::Orientation orientation
     case Amount:      return tr("Amount");
     case Signatures:  return tr("Signatures");
     case Age:         return tr("Age");
-    case Image:       return tr("Multisig image");
+    case Image:       return tr("Multisig address");
     }
     return QVariant();
 }
