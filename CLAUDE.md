@@ -127,6 +127,22 @@ Key threads: `ThreadStakeMiner` (block generation), `ThreadScraper`/`ThreadScrap
 
 All consensus rule changes must be gated by block height or version. Mainnet block-version activation heights are set in `src/chainparams.cpp` (`CMainParams`) — check there for the current, authoritative values rather than relying on this file. As of this writing: `BlockV13Height = 3989800`, `BlockV14Height = 3990000` (both set, scheduled as future mainnet activations at the time of this line's last update). Consensus changes require hard fork coordination.
 
+### RPC Heritage Ledger (adding or changing an RPC)
+
+Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritage classification** — the `CRPCCommand` constructor requires it, so a new RPC will not compile without one:
+
+```
+{ "name", &impl, cat_x, &help_helpman, heritage_<bucket>, "<fp>" }
+```
+
+- **Buckets:** `heritage_pure_upstream` (rote port, backport-safe), `heritage_mixed` (upstream analogue with Gridcoin-specific divergence — the "looks portable, isn't" case), `heritage_removed_upstream` (frozen fork, deleted upstream), `heritage_pure_gridcoin` (no upstream analogue). Rule of thumb: a rote GRC substitution stays pure-upstream; any *retained divergence decision* (extra/removed result fields, different args, account/contract entanglement) is mixed.
+- **Fingerprint `<fp>`:** required for the three fingerprinted buckets; `""` for pure-gridcoin. **Never hand-compute it** — run `test/lint/lint-rpc-heritage.py`, which prints the expected value on a mismatch. Use `"manual"` when the output isn't literal-key-trackable (dynamically-keyed object, or a positional array of scalars).
+- **Doc:** add a matching row to `doc/rpc-heritage.md` (correct bucket table + fp) and bump the per-bucket tally — the lint checks the doc row-by-row *and* that the tally equals the table.
+- **Drift:** if the lint flags a fingerprint mismatch on an existing RPC you touched, re-confirm the bucket is still correct, then update both the row's `heritage_fp` and the doc row. Full runbook in `doc/developer-notes.md`.
+- **Regtest-only RPCs** gate on `Params().IsMockableChain()` and throw `JSONRPCError(RPC_METHOD_NOT_FOUND, ...)` (maps to HTTP 404, not `std::runtime_error`), matching `generate`/`generatesuperblock`/`stakelimit`.
+
+`test/lint/lint-rpc-heritage.py` (wired into `lint-all.sh`) is the single fingerprint authority — it computes and validates the baselines, so run it after any RPC change.
+
 ## Test Conventions
 
 - Framework: Boost Unit Test
