@@ -407,6 +407,13 @@ static const CRPCCommand vRPCCommands[] =
     { "converttopsgt",           &converttopsgt,           cat_wallet, &converttopsgt_helpman        },
     { "walletcreatefundedpsgt",  &walletcreatefundedpsgt,  cat_wallet, &walletcreatefundedpsgt_helpman        },
 
+  // PSGT pool commands (#2910 Phase II)
+    { "submitpsgt",              &submitpsgt,              cat_wallet, &submitpsgt_helpman        },
+    { "listpsgtpool",            &listpsgtpool,            cat_wallet, &listpsgtpool_helpman        },
+    { "signpsgtinpool",          &signpsgtinpool,          cat_wallet, &signpsgtinpool_helpman        },
+    { "removepsgtfrompool",      &removepsgtfrompool,      cat_wallet, &removepsgtfrompool_helpman        },
+    { "getpsgtpoolinfo",         &getpsgtpoolinfo,         cat_wallet, &getpsgtpoolinfo_helpman        },
+
   // Staking commands
     { "advertisebeacon",         &advertisebeacon,         cat_staking, &advertisebeacon_helpman        },
     { "advertisebeaconv3",       &advertisebeaconv3,       cat_staking, &advertisebeaconv3_helpman        },

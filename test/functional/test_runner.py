@@ -153,6 +153,7 @@ BASE_SCRIPTS = [
     'rpc_signmessage.py',
     'rpc_rawtransaction.py',
     'rpc_psgt.py',
+    'rpc_psgtpool.py',
     'rpc_htlc.py',
     'rpc_txoutproof.py',
     'rpc_blockchain.py',

@@ -133,6 +133,11 @@ public:
     /** Beacon changed */
     ADD_SIGNALS_DECL_WRAPPER(BeaconChanged, void);
 
+    /** PSGT pool changed (#2910): an entry was added (CT_NEW), replaced by a
+     * better revision (CT_UPDATED) or removed (CT_DELETED). The revision hash
+     * identifies the affected entry; consumers query the pool for details. **/
+    ADD_SIGNALS_DECL_WRAPPER(PSGTPoolChanged, void, const uint256& revision_hash, ChangeType status);
+
     /** New poll received **/
     ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);
 

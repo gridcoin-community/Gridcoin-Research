@@ -4,8 +4,11 @@
 
 #include <psgt.h>
 
+#include <chainparams.h>
 #include <key_io.h>
 #include <main.h>
+#include <net_processing.h>
+#include <node/psgt_pool.h>
 #include <rpc/server.h>
 #include <rpc/protocol.h>
 #include <rpc/util.h>
@@ -908,4 +911,413 @@ UniValue walletcreatefundedpsgt(const UniValue& params)
     result.pushKV("fee", ValueFromAmount(nFeeRequired));
 
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// PSGT pool RPCs (#2910 Phase II)
+// ---------------------------------------------------------------------------
+
+//! Throw unless the PSGT pool is active on this node (v15 gate + sync state).
+static void EnsurePSGTPoolActive() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!IsV15Enabled(nBestHeight)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST,
+                           "The PSGT pool is not active: block v15 has not activated on this network");
+    }
+    if (OutOfSyncByAge()) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD,
+                           "The PSGT pool is unavailable while the node is syncing");
+    }
+}
+
+//! Resolve an RPC "hash" argument to a pooled entry: the 40-hex-char multisig
+//! image, or a 64-hex-char unsigned transaction id or revision hash.
+static PSGTPoolEntry ResolvePoolEntry(const std::string& hash)
+{
+    if (IsHex(hash)) {
+        if (hash.size() == 40) {
+            // SetHex, not the byte-vector constructor: ToString() renders
+            // base_blob hex byte-reversed, and this must round-trip it.
+            uint160 image_bits;
+            image_bits.SetHex(hash);
+            if (const auto entry = g_psgt_pool.Get(CScriptID(image_bits))) {
+                return *entry;
+            }
+        } else if (hash.size() == 64) {
+            const uint256 h = uint256S(hash);
+            if (const auto entry = g_psgt_pool.GetByTxHash(h)) {
+                return *entry;
+            }
+            if (const auto entry = g_psgt_pool.GetByRevision(h)) {
+                return *entry;
+            }
+        }
+    }
+
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+                       "No PSGT in the pool matches this image, transaction id or revision hash");
+}
+
+//! Does the local wallet hold a key of the entry's multisig arrangement?
+static bool PoolEntryIsMine(const PSGTPoolEntry& entry)
+{
+    if (!pwalletMain || entry.psgt.inputs.empty()) return false;
+
+    txnouttype script_type;
+    std::vector<std::vector<unsigned char>> vSolutions;
+    if (!Solver(entry.psgt.inputs[0].redeem_script, script_type, vSolutions)
+        || script_type != TX_MULTISIG) {
+        return false;
+    }
+
+    LOCK(pwalletMain->cs_wallet);
+    for (unsigned int i = 1; i + 1 < vSolutions.size(); ++i) {
+        const CPubKey pubkey(vSolutions[i]);
+        if (pubkey.IsValid() && pwalletMain->HaveKey(pubkey.GetID())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Render a pool entry for listpsgtpool/submitpsgt output.
+static UniValue PoolEntryToJSON(const PSGTPoolEntry& entry, int64_t now)
+{
+    UniValue obj(UniValue::VOBJ);
+
+    obj.pushKV("image", entry.image.ToString());
+    obj.pushKV("image_address", EncodeDestination(entry.image));
+    obj.pushKV("txid", entry.tx_hash.ToString());
+    obj.pushKV("revision", entry.revision_hash.ToString());
+    obj.pushKV("psgt", EncodeBase64(entry.serialized.data(), entry.serialized.size()));
+    obj.pushKV("time", entry.time_received);
+    obj.pushKV("expires_in", std::max<int64_t>(0, entry.time_received
+                                                      + PSGTPool::EXPIRY_SECONDS - now));
+    obj.pushKV("fee", ValueFromAmount(entry.fee));
+    obj.pushKV("sigs_valid", entry.valid_sigs);
+    obj.pushKV("sigs_required", entry.sigs_required);
+    obj.pushKV("sigs_total", entry.sigs_total);
+
+    UniValue destinations(UniValue::VARR);
+    for (const CTxOut& txout : entry.psgt.tx.vout) {
+        UniValue dest_obj(UniValue::VOBJ);
+        CTxDestination dest;
+        dest_obj.pushKV("address", ExtractDestination(txout.scriptPubKey, dest)
+                                       ? EncodeDestination(dest) : "(nonstandard)");
+        dest_obj.pushKV("amount", ValueFromAmount(txout.nValue));
+        destinations.push_back(dest_obj);
+    }
+    obj.pushKV("destinations", destinations);
+
+    UniValue initiators(UniValue::VARR);
+    for (const CKeyID& keyid : entry.initiator_keys) {
+        initiators.push_back(keyid.ToString());
+    }
+    obj.pushKV("initiator_keyids", initiators);
+
+    const bool is_mine = PoolEntryIsMine(entry);
+    obj.pushKV("ismine", is_mine);
+    obj.pushKV("awaiting_my_signature",
+               is_mine && pwalletMain
+                   && !WITH_LOCK(pwalletMain->cs_wallet,
+                                 return PSGTSignedBy(*pwalletMain, entry.psgt)));
+
+    return obj;
+}
+
+static const RPCHelpMan submitpsgt_help{
+    "submitpsgt",
+    "Submit a partially signed multisig transaction to the network PSGT pool (#2910)\n"
+    "so co-signers are notified and can sign in-band. The PSGT must be a single-\n"
+    "arrangement P2SH multisig spend carrying at least one valid signature (yours)\n"
+    "on every input, with known unspent funding outputs and a sane fee. One PSGT is\n"
+    "pooled per multisig arrangement; resubmitting with a different destination,\n"
+    "amount or fee supersedes your earlier PSGT (initiator privilege).",
+    {
+        {"psgt", RPCArg::Type::STR, RPCArg::Optional::NO, "The base64-encoded PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::STR_HEX, "image", "Multisig image (redeem script hash) the pool keys on."},
+            {RPCResult::Type::STR, "image_address", "The multisig arrangement as a P2SH address."},
+            {RPCResult::Type::STR_HEX, "txid", "Unsigned transaction id."},
+            {RPCResult::Type::STR_HEX, "revision", "Relay identity of this revision (hash of the wire bytes)."},
+            {RPCResult::Type::STR, "psgt", "The pooled PSGT, base64-encoded."},
+            {RPCResult::Type::NUM_TIME, "time", "Time the entry entered the pool."},
+            {RPCResult::Type::NUM, "expires_in", "Seconds until pool expiry."},
+            {RPCResult::Type::STR_AMOUNT, "fee", "Transaction fee."},
+            {RPCResult::Type::NUM, "sigs_valid", "Valid signatures present (minimum across inputs)."},
+            {RPCResult::Type::NUM, "sigs_required", "Signatures required (m of m-of-n)."},
+            {RPCResult::Type::NUM, "sigs_total", "Keys in the arrangement (n of m-of-n)."},
+            {RPCResult::Type::ARR, "destinations", "Where the transaction pays.",
+                {{RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "address", "Destination address."},
+                        {RPCResult::Type::STR_AMOUNT, "amount", "Amount."},
+                    }}}},
+            {RPCResult::Type::ARR, "initiator_keyids", "Key ids that signed the first pooled revision.",
+                {{RPCResult::Type::STR_HEX, "", "Key id."}}},
+            {RPCResult::Type::BOOL, "ismine", "This wallet holds a key of the arrangement."},
+            {RPCResult::Type::BOOL, "awaiting_my_signature", "This wallet can still add a signature."},
+            {RPCResult::Type::BOOL, "replaced", "Whether an earlier revision was superseded."},
+        }},
+    RPCExamples{
+        HelpExampleCli("submitpsgt", "\"psgt\"") +
+        HelpExampleRpc("submitpsgt", "\"psgt\"")},
+};
+const RPCHelpMan& submitpsgt_helpman() { return submitpsgt_help; }
+
+UniValue submitpsgt(const UniValue& params)
+{
+    bool invalid = false;
+    const std::vector<unsigned char> wire_bytes =
+        DecodeBase64(params[0].get_str().c_str(), &invalid);
+    if (invalid) {
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Invalid base64");
+    }
+
+    LOCK(cs_main);
+
+    EnsurePSGTPoolActive();
+
+    const int64_t now = GetAdjustedTime();
+    PSGTPoolEntry entry;
+    std::string error;
+    const PSGTPoolReject reject = ValidatePSGTForPool(g_psgt_pool, wire_bytes, now, entry, error);
+    if (reject != PSGTPoolReject::NONE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("PSGT rejected (%s): %s",
+                                     PSGTPoolRejectToString(reject), error));
+    }
+
+    const uint256 revision_hash = entry.revision_hash;
+    const CScriptID image = entry.image;
+    // Keep a copy for the response: the pool takes cs_psgt_pool, not cs_main, so
+    // removepsgtfrompool or the expiry sweep can erase this image between Add and
+    // the Get below. Without a fallback that Get would dereference nullopt.
+    const PSGTPoolEntry submitted = entry;
+
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+                           strprintf("PSGT not pooled: %s", reject_reason));
+    }
+
+    // Prefer the freshly-pooled entry (reflects any carried-forward initiator
+    // keys on replacement); fall back to the submitted copy if it raced away.
+    const auto pooled = g_psgt_pool.Get(image);
+    UniValue obj = PoolEntryToJSON(pooled ? *pooled : submitted, now);
+    obj.pushKV("replaced", result == PSGTPoolAddResult::ACCEPTED_REPLACEMENT);
+    return obj;
+}
+
+static const RPCHelpMan listpsgtpool_help{
+    "listpsgtpool",
+    "List the partially signed multisig transactions currently in the PSGT pool (#2910).",
+    {
+        {"ismineonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Only list PSGTs whose multisig arrangement includes a key of this wallet. Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::STR_HEX, "image", "Multisig image (redeem script hash) the pool keys on."},
+                    {RPCResult::Type::STR, "image_address", "The multisig arrangement as a P2SH address."},
+                    {RPCResult::Type::STR_HEX, "txid", "Unsigned transaction id."},
+                    {RPCResult::Type::STR_HEX, "revision", "Relay identity of this revision (hash of the wire bytes)."},
+                    {RPCResult::Type::STR, "psgt", "The pooled PSGT, base64-encoded."},
+                    {RPCResult::Type::NUM_TIME, "time", "Time the entry entered the pool."},
+                    {RPCResult::Type::NUM, "expires_in", "Seconds until pool expiry."},
+                    {RPCResult::Type::STR_AMOUNT, "fee", "Transaction fee."},
+                    {RPCResult::Type::NUM, "sigs_valid", "Valid signatures present (minimum across inputs)."},
+                    {RPCResult::Type::NUM, "sigs_required", "Signatures required (m of m-of-n)."},
+                    {RPCResult::Type::NUM, "sigs_total", "Keys in the arrangement (n of m-of-n)."},
+                    {RPCResult::Type::ARR, "destinations", "Where the transaction pays.",
+                        {{RPCResult::Type::OBJ, "", "",
+                            {
+                                {RPCResult::Type::STR, "address", "Destination address."},
+                                {RPCResult::Type::STR_AMOUNT, "amount", "Amount."},
+                            }}}},
+                    {RPCResult::Type::ARR, "initiator_keyids", "Key ids that signed the first pooled revision.",
+                        {{RPCResult::Type::STR_HEX, "", "Key id."}}},
+                    {RPCResult::Type::BOOL, "ismine", "This wallet holds a key of the arrangement."},
+                    {RPCResult::Type::BOOL, "awaiting_my_signature", "This wallet can still add a signature."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listpsgtpool", "true") +
+        HelpExampleRpc("listpsgtpool", "true")},
+};
+const RPCHelpMan& listpsgtpool_helpman() { return listpsgtpool_help; }
+
+UniValue listpsgtpool(const UniValue& params)
+{
+    const bool mine_only = !params.empty() && !params[0].isNull() && params[0].get_bool();
+    const int64_t now = GetAdjustedTime();
+
+    UniValue result(UniValue::VARR);
+    for (const PSGTPoolEntry& entry : g_psgt_pool.GetAll()) {
+        if (mine_only && !PoolEntryIsMine(entry)) continue;
+        result.push_back(PoolEntryToJSON(entry, now));
+    }
+    return result;
+}
+
+static const RPCHelpMan signpsgtinpool_help{
+    "signpsgtinpool",
+    "Sign a pooled PSGT with this wallet's keys and advance the workflow (#2910):\n"
+    "if your signature(s) complete the m-of-n requirement, the transaction is\n"
+    "finalized and broadcast and the pool slot is freed; otherwise the enriched\n"
+    "PSGT replaces the pooled revision and is relayed to co-signers.\n"
+    "Requires the wallet passphrase to be set with walletpassphrase first if\n"
+    "the wallet is encrypted.",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The multisig image, unsigned transaction id, or revision hash of the pooled PSGT."},
+    },
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "complete", "Whether the transaction reached m-of-n and was broadcast."},
+            {RPCResult::Type::BOOL, "already_known", /*optional=*/true, "Present and true when the signed revision was already in (or recently in) the pool; the signature is present network-wide and nothing was re-relayed."},
+            {RPCResult::Type::STR_HEX, "txid", "Transaction id (final id when complete)."},
+            {RPCResult::Type::STR_HEX, "revision", /*optional=*/true, "New pooled revision (incomplete case only)."},
+            {RPCResult::Type::NUM, "sigs_valid", /*optional=*/true, "Valid signatures after signing (incomplete case only)."},
+            {RPCResult::Type::NUM, "sigs_required", /*optional=*/true, "Signatures required (incomplete case only)."},
+        }},
+    RPCExamples{
+        HelpExampleCli("signpsgtinpool", "\"image\"") +
+        HelpExampleRpc("signpsgtinpool", "\"image\"")},
+};
+const RPCHelpMan& signpsgtinpool_helpman() { return signpsgtinpool_help; }
+
+UniValue signpsgtinpool(const UniValue& params)
+{
+    if (!pwalletMain) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not loaded");
+    }
+
+    EnsureWalletIsUnlocked();
+
+    const CScriptID image = WITH_LOCK(cs_main, EnsurePSGTPoolActive();
+                                      return ResolvePoolEntry(params[0].get_str()).image);
+
+    std::string error;
+    uint256 txid;
+    const PSGTSignResult result = SignAndAdvancePSGT(image, error, &txid);
+
+    UniValue obj(UniValue::VOBJ);
+
+    switch (result) {
+    case PSGTSignResult::COMPLETED_AND_BROADCAST:
+        obj.pushKV("complete", true);
+        obj.pushKV("txid", txid.ToString());
+        return obj;
+
+    case PSGTSignResult::SIGNED_AND_RELAYED:
+    {
+        obj.pushKV("complete", false);
+        // txid is always available from the sign result (the unsigned tx id) and
+        // the schema documents it as always present. The pool-derived fields are
+        // optional: the entry can race away (removed/expired) after signing.
+        obj.pushKV("txid", txid.ToString());
+        const auto entry = g_psgt_pool.Get(image);
+        if (entry) {
+            obj.pushKV("revision", entry->revision_hash.ToString());
+            obj.pushKV("sigs_valid", entry->valid_sigs);
+            obj.pushKV("sigs_required", entry->sigs_required);
+        }
+        return obj;
+    }
+
+    case PSGTSignResult::ALREADY_KNOWN:
+        // The signature was added, but the resulting revision is one the network
+        // already has (an identical-key co-signer got there first, or it was
+        // pooled before). Report success: the contribution is present, nothing
+        // more to do.
+        obj.pushKV("complete", false);
+        obj.pushKV("already_known", true);
+        obj.pushKV("txid", txid.ToString());
+        return obj;
+
+    case PSGTSignResult::NO_NEW_SIGNATURES:
+        throw JSONRPCError(RPC_WALLET_ERROR, error);
+
+    case PSGTSignResult::NOT_FOUND:
+        // Never pooled, or removed/expired between resolve and signing -- a
+        // normal race/user condition, not an internal fault.
+        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
+
+    case PSGTSignResult::FAILED:
+        throw JSONRPCError(RPC_INTERNAL_ERROR, error);
+    }
+
+    CHECK_NONFATAL(false); // all PSGTSignResult cases return above
+    return NullUniValue;
+}
+
+static const RPCHelpMan removepsgtfrompool_help{
+    "removepsgtfrompool",
+    "Remove a PSGT from this node's pool (local only: other nodes keep their\n"
+    "copies, and a NEW revision from the network would still be accepted).",
+    {
+        {"hash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO,
+            "The multisig image, unsigned transaction id, or revision hash of the pooled PSGT."},
+    },
+    RPCResult{RPCResult::Type::BOOL, "", "Whether an entry was removed."},
+    RPCExamples{
+        HelpExampleCli("removepsgtfrompool", "\"image\"") +
+        HelpExampleRpc("removepsgtfrompool", "\"image\"")},
+};
+const RPCHelpMan& removepsgtfrompool_helpman() { return removepsgtfrompool_help; }
+
+UniValue removepsgtfrompool(const UniValue& params)
+{
+    const PSGTPoolEntry entry = ResolvePoolEntry(params[0].get_str());
+    return g_psgt_pool.Remove(entry.image, PSGTRemovalReason::LOCAL_REMOVE);
+}
+
+static const RPCHelpMan getpsgtpoolinfo_help{
+    "getpsgtpoolinfo",
+    "Returns PSGT pool status (#2910).",
+    {},
+    RPCResult{RPCResult::Type::OBJ, "", "",
+        {
+            {RPCResult::Type::BOOL, "active", "Whether the pool is active (block v15 live and node in sync)."},
+            {RPCResult::Type::NUM, "size", "Entries currently pooled."},
+            {RPCResult::Type::NUM, "maxsize", "Pool capacity (new images are rejected when full)."},
+            {RPCResult::Type::NUM, "expiry", "Entry lifetime in seconds."},
+            {RPCResult::Type::NUM, "psgtprotocolversion", "Minimum peer protocol version PSGT inventory is relayed to."},
+        }},
+    RPCExamples{
+        HelpExampleCli("getpsgtpoolinfo", "") +
+        HelpExampleRpc("getpsgtpoolinfo", "")},
+};
+const RPCHelpMan& getpsgtpoolinfo_helpman() { return getpsgtpoolinfo_help; }
+
+UniValue getpsgtpoolinfo(const UniValue& params)
+{
+    UniValue obj(UniValue::VOBJ);
+
+    {
+        LOCK(cs_main);
+        obj.pushKV("active", IsV15Enabled(nBestHeight) && !OutOfSyncByAge());
+    }
+    obj.pushKV("size", (int64_t)g_psgt_pool.Size());
+    obj.pushKV("maxsize", (int64_t)PSGTPool::MAX_ENTRIES);
+    obj.pushKV("expiry", PSGTPool::EXPIRY_SECONDS);
+    obj.pushKV("psgtprotocolversion", PSGT_PROTO_VERSION);
+
+    return obj;
 }

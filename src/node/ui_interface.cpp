@@ -25,6 +25,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::AccrualChangedFromStakeOrMRCSig> AccrualChangedFromStakeOrMRC;
     boost::signals2::signal<CClientUIInterface::MRCChangedSig> MRCChanged;
     boost::signals2::signal<CClientUIInterface::BeaconChangedSig> BeaconChanged;
+    boost::signals2::signal<CClientUIInterface::PSGTPoolChangedSig> PSGTPoolChanged;
     boost::signals2::signal<CClientUIInterface::NewPollReceivedSig> NewPollReceived;
     boost::signals2::signal<CClientUIInterface::NewVoteReceivedSig> NewVoteReceived;
     boost::signals2::signal<CClientUIInterface::NotifyScraperEventSig> NotifyScraperEvent;
@@ -55,6 +56,7 @@ ADD_SIGNALS_IMPL_WRAPPER(ResearcherChanged);
 ADD_SIGNALS_IMPL_WRAPPER(AccrualChangedFromStakeOrMRC);
 ADD_SIGNALS_IMPL_WRAPPER(MRCChanged);
 ADD_SIGNALS_IMPL_WRAPPER(BeaconChanged);
+ADD_SIGNALS_IMPL_WRAPPER(PSGTPoolChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NewPollReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NewVoteReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyScraperEvent);
@@ -82,6 +84,7 @@ void CClientUIInterface::ResearcherChanged() { return g_ui_signals.ResearcherCha
 void CClientUIInterface::AccrualChangedFromStakeOrMRC() { return g_ui_signals.AccrualChangedFromStakeOrMRC(); }
 void CClientUIInterface::MRCChanged() { return g_ui_signals.MRCChanged(); }
 void CClientUIInterface::BeaconChanged() { return g_ui_signals.BeaconChanged(); }
+void CClientUIInterface::PSGTPoolChanged(const uint256& revision_hash, ChangeType status) { return g_ui_signals.PSGTPoolChanged(revision_hash, status); }
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
 void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }

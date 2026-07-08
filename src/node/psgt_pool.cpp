@@ -8,12 +8,15 @@
 #include <dbwrapper.h>
 #include <hash.h>
 #include <index/txindex.h>
+#include <init.h>
 #include <logging.h>
+#include <net_processing.h>
 #include <policy/fees.h>
 #include <tinyformat.h>
 #include <txmempool.h>
 #include <util.h>
 #include <validation.h>
+#include <wallet/wallet.h>
 
 #include <algorithm>
 #include <cassert>
@@ -664,4 +667,114 @@ void PSGTPool::Notify(const PSGTPoolEntry& entry, PSGTPoolChangeType change,
     if (m_notify_hook) {
         m_notify_hook(entry, change, reason);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Signing workflow
+// ---------------------------------------------------------------------------
+
+PSGTSignResult SignAndAdvancePSGT(const CScriptID& image, std::string& error,
+                                  uint256* txid_out)
+{
+    if (!pwalletMain) {
+        error = "wallet is not loaded";
+        return PSGTSignResult::FAILED;
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    const std::optional<PSGTPoolEntry> pooled = g_psgt_pool.Get(image);
+    if (!pooled) {
+        error = "PSGT not found in the pool";
+        return PSGTSignResult::NOT_FOUND;
+    }
+
+    PartiallySignedTransaction psgt = pooled->psgt;
+
+    // SignPSGTInput's multisig return value means "any signature present",
+    // not "this wallet signed", so count partial_sigs growth instead.
+    bool added_any = false;
+    for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+        const size_t before = psgt.inputs[i].partial_sigs.size();
+        SignPSGTInput(*pwalletMain, psgt, i);
+        if (psgt.inputs[i].partial_sigs.size() > before) {
+            added_any = true;
+        }
+    }
+
+    if (!added_any) {
+        error = "this wallet holds no key that can add a signature";
+        return PSGTSignResult::NO_NEW_SIGNATURES;
+    }
+
+    // Revalidate the enriched PSGT exactly as the network would; COMPLETE
+    // means our signature(s) finished the job.
+    const std::vector<unsigned char> wire = SerializePSGT(psgt);
+    PSGTPoolEntry replacement;
+    std::string validate_error;
+    const PSGTPoolReject reject =
+        ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), replacement, validate_error);
+
+    if (reject == PSGTPoolReject::COMPLETE) {
+        PartiallySignedTransaction to_extract = psgt;
+        CMutableTransaction final_mtx;
+        if (!FinalizeAndExtractPSGT(to_extract, final_mtx)) {
+            error = "PSGT has enough signatures but could not be finalized";
+            return PSGTSignResult::FAILED;
+        }
+
+        // Free the slot as COMPLETED before broadcasting: mempool admission
+        // fires this pool's own conflict eviction, which would otherwise get
+        // there first and report the completion as a conflict.
+        g_psgt_pool.Remove(image, PSGTRemovalReason::COMPLETED);
+
+        CTransaction final_tx(final_mtx);
+        CValidationState state;
+        if (!AcceptToMemoryPool(mempool, final_tx, state, nullptr)) {
+            // The local slot is already freed, but peers still carry the
+            // PSGT and the initiator can always resubmit.
+            error = "finalized transaction was rejected by the mempool";
+            return PSGTSignResult::FAILED;
+        }
+
+        RelayTransaction(final_tx, final_tx.GetHash());
+
+        if (txid_out) *txid_out = final_tx.GetHash();
+
+        LogPrint(BCLog::LogFlags::MEMPOOL,
+                 "psgtpool: completed image %s -> broadcast tx %s",
+                 image.ToString(), final_tx.GetHash().ToString());
+        return PSGTSignResult::COMPLETED_AND_BROADCAST;
+    }
+
+    if (reject == PSGTPoolReject::DUPLICATE_REVISION) {
+        // The wallet's signature reproduced a revision the pool already holds or
+        // recently held: another co-signer holding the same key signed
+        // identically first (deterministic low-S ECDSA yields identical bytes),
+        // or this exact revision was pooled before. The contribution is already
+        // known to the network -- there is nothing to add or relay, and it is
+        // not a failure. Report the unsigned-tx id like the SIGNED path does.
+        if (txid_out) *txid_out = pooled->tx_hash;
+        return PSGTSignResult::ALREADY_KNOWN;
+    }
+
+    if (reject != PSGTPoolReject::NONE) {
+        error = strprintf("signed PSGT failed revalidation: %s (%s)",
+                          PSGTPoolRejectToString(reject), validate_error);
+        return PSGTSignResult::FAILED;
+    }
+
+    const uint256 revision_hash = replacement.revision_hash;
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(replacement), reject_reason);
+    if (result != PSGTPoolAddResult::ACCEPTED_REPLACEMENT
+        && result != PSGTPoolAddResult::ACCEPTED_NEW) {
+        error = strprintf("signed PSGT was not pooled: %s", reject_reason);
+        return PSGTSignResult::FAILED;
+    }
+
+    if (txid_out) *txid_out = pooled->tx_hash;
+
+    RelayPSGT(revision_hash);
+    return PSGTSignResult::SIGNED_AND_RELAYED;
 }
