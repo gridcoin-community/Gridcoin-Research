@@ -95,6 +95,7 @@ enum
     MSG_BLOCK,
     MSG_PART,
     MSG_SCRAPERINDEX,
+    MSG_PSGT,
 };
 
 
@@ -709,8 +710,10 @@ public:
     void ForEachNodeUnderLock(const std::function<void(CNode*)>& func) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Relay an inventory item to every node (issue #2558 PR 9c; replaces the
-    //! free RelayInventory shim).
-    void RelayInventory(const CInv& inv);
+    //! free RelayInventory shim). When min_proto_version is set, only peers
+    //! whose negotiated protocol version is at least that value are told --
+    //! used for object types older peers cannot handle (e.g. MSG_PSGT, #2910).
+    void RelayInventory(const CInv& inv, int min_proto_version = 0);
 
     //! Relay an address to a deterministic, limited subset of nodes (issue #2558
     //! PR 9c; moved from net_processing's ADDR handler).

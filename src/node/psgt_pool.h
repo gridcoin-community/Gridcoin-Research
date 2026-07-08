@@ -33,9 +33,12 @@
 //!    number of distinct multisig arrangements actually funded on-chain,
 //!    which an attacker cannot inflate for free.
 //!  - The relay identity of a specific revision is its \b revision hash =
-//!    Hash(serialized wire bytes). Adding a co-signature does not change the
-//!    unsigned transaction's hash, so tx-hash inventory would never
-//!    propagate signature progress; every mutation produces a fresh
+//!    Hash(canonical serialization). ValidatePSGTForPool hashes a
+//!    SerializePSGT re-serialization (sorted maps, unknown fields rejected),
+//!    NOT the received wire bytes, so reordering or padding cannot mint a
+//!    fresh identity for the same content. Adding a co-signature does not
+//!    change the unsigned transaction's hash, so tx-hash inventory would never
+//!    propagate signature progress; every genuine mutation produces a fresh
 //!    revision hash and therefore a fresh inv.
 //!
 
@@ -79,7 +82,7 @@ enum class PSGTPoolAddResult
 struct PSGTPoolEntry
 {
     PartiallySignedTransaction psgt;
-    std::vector<unsigned char> serialized; //!< Exact wire bytes (getdata serving; hashed for revision).
+    std::vector<unsigned char> serialized; //!< Canonical SerializePSGT bytes (getdata serving; hashed for revision).
     uint256 revision_hash;                 //!< Hash(serialized) -- the inv/relay identity.
     CScriptID image;                       //!< CScriptID(redeem script) -- the pool key.
     uint256 tx_hash;                       //!< Hash of the unsigned transaction.
@@ -107,9 +110,11 @@ struct PSGTPoolEntry
 //! RPC layer maps them to error strings.
 enum class PSGTPoolReject
 {
-    NONE,         //!< Valid; out_entry is filled.
-    TOO_LARGE,    //!< Wire size above MAX_PSGT_WIRE_SIZE.
-    MALFORMED,    //!< Does not decode as a PSGT.
+    NONE,               //!< Valid; out_entry is filled.
+    TOO_LARGE,          //!< Wire size above MAX_PSGT_WIRE_SIZE.
+    MALFORMED,          //!< Does not decode as a PSGT.
+    HAS_UNKNOWN_FIELDS, //!< Decodes, but carries unknown (extension) key-value pairs; not relayed.
+    DUPLICATE_REVISION, //!< Canonically identical to a revision already pooled or recently removed.
     STRUCTURAL,   //!< Decodes, but is not a well-formed single-image P2SH multisig spend.
     INVALID_SIG,  //!< Carries a cryptographically invalid or foreign partial signature.
     NO_VALID_SIG, //!< Some input has no valid partial signature (anti-spam floor).
@@ -123,13 +128,16 @@ enum class PSGTPoolReject
 //! Human-readable reject reason (for logs and RPC errors).
 std::string PSGTPoolRejectToString(PSGTPoolReject reject);
 
+class PSGTPool;
+
 //!
 //! \brief Validate a PSGT received from an untrusted source (network relay or
 //! local submission) and fill a pool entry from it.
 //!
-//! Checks, cheap to expensive: wire size; decode; basic transaction sanity
-//! (CheckTransaction, version >= 2, no finalized inputs); single-image P2SH
-//! multisig structure across ALL inputs (GetPSGTImage's trustworthiness
+//! Checks, cheap to expensive: wire size; decode; unknown-field rejection;
+//! CANONICAL revision identity + duplicate short-circuit; basic transaction
+//! sanity (CheckTransaction, version >= 2, no finalized inputs); single-image
+//! P2SH multisig structure across ALL inputs (GetPSGTImage's trustworthiness
 //! rules); cryptographic verification of EVERY partial signature with at
 //! least one valid signature on every input, and fewer than m so the pool
 //! only holds material that still needs co-signers; funding outputs exist
@@ -138,10 +146,22 @@ std::string PSGTPoolRejectToString(PSGTPoolReject reject);
 //! chain facts to establish); and fee within [relay minimum, 100x relay
 //! minimum] for the estimated final size.
 //!
+//! Identity note (anti-DoS): the revision hash is computed over a CANONICAL
+//! re-serialization (SerializePSGT), not the received wire bytes, and PSGTs
+//! carrying unknown extension fields are rejected. Together with #3113's strict
+//! DER / low-S signature encoding this makes the revision hash canonical for a
+//! given (unsigned tx, valid-signer-set): map reordering and unknown-field
+//! padding can no longer mint a fresh identity for the same content. This lets
+//! the duplicate short-circuit run BEFORE the expensive per-signature ECDSA
+//! verification, so a peer cannot cheaply replay one valid PSGT under an
+//! ever-changing hash to burn CPU under cs_main (the deferred #3115/#3116 DoS).
+//! `pool` is consulted read-only for that HaveRevision short-circuit.
+//!
 //! Requires cs_main (chain/mempool lookups). Does NOT check IsV15Enabled or
 //! sync state -- those are the caller's (P2P handler / RPC) admission gates.
 //!
-PSGTPoolReject ValidatePSGTForPool(const std::vector<unsigned char>& wire_bytes,
+PSGTPoolReject ValidatePSGTForPool(const PSGTPool& pool,
+                                   const std::vector<unsigned char>& wire_bytes,
                                    int64_t now,
                                    PSGTPoolEntry& out_entry,
                                    std::string& error) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
@@ -202,6 +222,17 @@ public:
     //!    (initiator-privileged supersede).
     //! initiator_keys are snapshotted from the first accepted entry and
     //! carried forward on every replacement.
+    //!
+    //! Caller contract (funding-unspent invariant): an entry produced by
+    //! ValidatePSGTForPool was checked unspent against the UTXO view under
+    //! cs_main. To keep that guarantee at insertion, such a caller MUST hold
+    //! cs_main continuously from validation through this call, so no block or
+    //! mempool tx spending a funding output can land in the gap. The P2P
+    //! handler (ProcessPSGTMessage) does exactly this. Add itself takes only
+    //! cs_psgt_pool (a leaf); the cs_main requirement is the caller's, which is
+    //! why it is documented here rather than annotated -- unit tests that insert
+    //! synthetic entries never validated against a UTXO set have no such
+    //! invariant to preserve and legitimately call Add without cs_main.
     PSGTPoolAddResult Add(PSGTPoolEntry&& entry, std::string& reject_reason);
 
     //! Remove the entry for an image. Returns false if not present.
@@ -215,8 +246,20 @@ public:
     //! damping: recently completed/evicted revisions read as "already have").
     bool HaveRevision(const uint256& revision_hash) const;
 
-    //! Snapshot of all entries (RPC/GUI listing, connect-time advertisement).
+    //! Snapshot of all entries (RPC/GUI listing).
     std::vector<PSGTPoolEntry> GetAll() const;
+
+    //! Revision hashes of all pooled entries, for the connect-time inventory
+    //! push. Copies only the 32-byte hashes, not the full entries -- the push
+    //! runs on every inbound connection, so a peer must not be able to force
+    //! repeated multi-megabyte entry copies just by reconnecting.
+    std::vector<uint256> GetAllRevisionHashes() const;
+
+    //! Canonical serialized bytes of a pooled revision, if present, for the
+    //! getdata serve. Copies only the wire bytes, not the decoded PSGT, on this
+    //! peer-controlled hot path.
+    std::optional<std::vector<unsigned char>>
+        GetSerializedByRevision(const uint256& revision_hash) const;
 
     //! Evict entries older than EXPIRY_SECONDS. Returns the number evicted.
     size_t EraseExpired(int64_t now);

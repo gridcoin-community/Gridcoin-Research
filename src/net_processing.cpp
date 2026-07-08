@@ -42,7 +42,9 @@
 #include "node/blockstorage.h"
 #include "node/coherence.h"
 #include "node/orphan_blocks.h"
+#include "node/psgt_pool.h"
 #include "policy/fees.h"
+#include "scheduler.h"
 #include "policy/policy.h"
 #include "random.h"
 #include "validation.h"
@@ -226,9 +228,140 @@ bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(c
     case MSG_BLOCK:
         return mapBlockIndex.count(inv.hash) ||
                g_orphan_blocks.Contains(inv.hash);
+
+    case MSG_PSGT:
+        // Recently removed revisions read as "have": a completed, superseded
+        // or evicted PSGT must not be re-fetched from lagging peers (#2910).
+        return g_psgt_pool.HaveRevision(inv.hash);
     }
     // Don't know what it is, just say we already got one
     return true;
+}
+
+//! Relay a pooled PSGT revision to peers that can handle it (#2910). Served
+//! from the PSGT pool in the getdata loop, NOT from mapRelay: pooled PSGTs
+//! live up to 7 days, far beyond mapRelay's 15-minute expiry.
+void RelayPSGT(const uint256& revision_hash)
+{
+    if (!g_connman) return;
+
+    g_connman->RelayInventory(CInv(MSG_PSGT, revision_hash), PSGT_PROTO_VERSION);
+}
+
+//! Handle an incoming "psgt" message (#2910): validate against the pool
+//! admission rules and, on acceptance, pool and relay the new revision.
+//!
+//! Misbehavior policy: rejects no compliant node would have relayed
+//! (undecodable, oversize, structural, invalid or missing signatures) score
+//! 20 -- a buggy peer survives a couple of slips, a flooder is banned at
+//! five. Policy rejects honest nodes can disagree on (UTXO races around
+//! confirmation, fee bounds, pool-full, replacement races, completeness)
+//! score 0.
+static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
+{
+    std::vector<unsigned char> wire_bytes;
+    try {
+        vRecv >> wire_bytes;
+    } catch (const std::exception&) {
+        pfrom->Misbehaving(20);
+        error("%s: undecodable psgt message from %s", __func__, pfrom->addr.ToString());
+        return;
+    }
+
+    // Identify the object by its CANONICAL revision hash (the hash of the
+    // SerializePSGT re-serialization) -- the identity we pool and relay -- not
+    // the raw wire-bytes hash, so inventory-known and mapAlreadyAskedFor
+    // bookkeeping match even when a peer sends a non-canonical encoding of the
+    // same content. Decoding here is cheap (no signature work); a decode failure
+    // falls back to the wire hash and is rejected during validation below.
+    uint256 obj_hash = Hash(wire_bytes);
+    {
+        PartiallySignedTransaction decoded;
+        std::string decode_err;
+        if (DecodePSGTBytes(decoded, wire_bytes, decode_err)) {
+            obj_hash = Hash(SerializePSGT(decoded));
+        }
+    }
+    const CInv inv(MSG_PSGT, obj_hash);
+
+    // The sender obviously has this revision: suppress the inv echo.
+    pfrom->AddInventoryKnown(inv);
+
+    // The request is satisfied (or abandoned); stop re-asking either way.
+    {
+        LOCK(cs_mapAlreadyAskedFor);
+        mapAlreadyAskedFor.erase(inv);
+    }
+
+    LOCK(cs_main);
+
+    // Not active, or unable to validate against a current UTXO view yet:
+    // ignore silently, as a pre-v15 node would ignore the unknown message.
+    if (!IsV15Enabled(nBestHeight) || OutOfSyncByAge()) return;
+
+    PSGTPoolEntry entry;
+    std::string reason;
+    const PSGTPoolReject reject =
+        ValidatePSGTForPool(g_psgt_pool, wire_bytes, GetAdjustedTime(), entry, reason);
+
+    switch (reject) {
+    case PSGTPoolReject::NONE:
+        break;
+
+    // Rejects no compliant node would have relayed.
+    case PSGTPoolReject::TOO_LARGE:
+    case PSGTPoolReject::MALFORMED:
+    case PSGTPoolReject::STRUCTURAL:
+    case PSGTPoolReject::INVALID_SIG:
+    case PSGTPoolReject::NO_VALID_SIG:
+        pfrom->Misbehaving(20);
+        error("%s: invalid psgt from %s: %s (%s)", __func__,
+              pfrom->addr.ToString(), PSGTPoolRejectToString(reject), reason);
+        return;
+
+    // Policy rejects honest nodes can disagree on, plus the cheap pre-validation
+    // drops (unknown fields and already-known revisions): no penalty, no relay.
+    // HAS_UNKNOWN_FIELDS and DUPLICATE_REVISION are rejected before the
+    // expensive signature verification, so replaying them costs no ECDSA work
+    // and needs no DoS score; scoring them would also risk banning honest peers
+    // in ordinary gossip races or future protocol extensions.
+    case PSGTPoolReject::HAS_UNKNOWN_FIELDS:
+    case PSGTPoolReject::DUPLICATE_REVISION:
+    case PSGTPoolReject::COMPLETE:
+    case PSGTPoolReject::UTXO_MISSING:
+    case PSGTPoolReject::UTXO_SPENT:
+    case PSGTPoolReject::FEE_TOO_LOW:
+    case PSGTPoolReject::FEE_ABSURD:
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt from %s not accepted: %s (%s)",
+                 __func__, pfrom->addr.ToString(),
+                 PSGTPoolRejectToString(reject), reason);
+        return;
+    }
+
+    // The inv tracked at the top of this function is already keyed on the
+    // canonical revision hash (== entry.revision_hash), so the sender is marked
+    // as knowing this revision and we will not echo it back.
+    const uint256 revision_hash = entry.revision_hash;
+
+    std::string reject_reason;
+    const PSGTPoolAddResult result = g_psgt_pool.Add(std::move(entry), reject_reason);
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        // Normal gossip and replacement races.
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt %s from %s not pooled: %s",
+                 __func__, revision_hash.ToString(), pfrom->addr.ToString(),
+                 reject_reason);
+        break;
+    }
 }
 
 
@@ -442,6 +575,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 item.second.RelayTo(pfrom);
         }
 
+        // Notify the peer about pooled PSGTs (#2910): only peers that
+        // understand MSG_PSGT, and only when the fork is active and this
+        // node is in sync enough to serve what it advertises.
+        if (pfrom->nVersion >= PSGT_PROTO_VERSION
+            && WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge()))
+        {
+            for (const uint256& revision_hash : g_psgt_pool.GetAllRevisionHashes())
+            {
+                pfrom->PushInventory(CInv(MSG_PSGT, revision_hash));
+            }
+        }
+
         /* Notify the peer about statsscraper blobs we have */
         LOCK2(CScraperManifest::cs_mapManifest, CSplitBlob::cs_mapParts);
 
@@ -563,7 +708,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             {
                 LOCK(cs_main);
 
-                if (!fAlreadyHave)
+                // PSGTs (#2910) are only fetched once the v15 gate is active
+                // and this node is in sync -- validation needs a current UTXO
+                // view, and the pool does not operate pre-activation.
+                const bool skip_psgt = inv.type == MSG_PSGT
+                    && (!IsV15Enabled(nBestHeight) || OutOfSyncByAge());
+
+                if (!fAlreadyHave && !skip_psgt)
                     pfrom->AskFor(inv);
                 else if (inv.type == MSG_BLOCK && g_orphan_blocks.Contains(inv.hash)) {
                     const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(inv.hash);
@@ -605,6 +756,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         LOCK(cs_main);
+
+        // Bound the PSGT bytes served per getdata. The pool holds at most
+        // PSGTPool::MAX_ENTRIES distinct revisions, so any request for more than
+        // that many is necessarily redundant. This caps a getdata amplification
+        // where a peer packs MAX_INV_SZ (50000) MSG_PSGT entries all naming the
+        // same pooled revision (each up to MAX_PSGT_WIRE_SIZE) to force gigabytes
+        // of repeated sends under cs_main.
+        constexpr size_t MAX_PSGT_PER_GETDATA = PSGTPool::MAX_ENTRIES;
+        size_t psgt_served = 0;
+
         for (auto const& inv : vInv)
         {
             if (fShutdown)
@@ -674,6 +835,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     LOCK(CSplitBlob::cs_mapParts);
 
                     CSplitBlob::SendPartTo(pfrom, inv.hash);
+                }
+                else if (!pushed && inv.type == MSG_PSGT) {
+                    // Serve from the PSGT pool, not mapRelay: pooled PSGTs
+                    // live up to 7 days, far beyond mapRelay's 15-minute
+                    // expiry. Do not serve while out of sync (mirrors the
+                    // scraper manifest guard below). Bounded by the per-getdata
+                    // budget so a single getdata cannot force unbounded sends.
+                    if (!OutOfSyncByAge() && psgt_served < MAX_PSGT_PER_GETDATA)
+                    {
+                        if (const auto serialized = g_psgt_pool.GetSerializedByRevision(inv.hash))
+                        {
+                            ++psgt_served;
+                            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                            ss.reserve(serialized->size() + 16);
+                            ss << *serialized;
+                            pfrom->PushMessage(NetMsgType::PSGT, ss);
+                        }
+                    }
                 }
                 else if(!pushed &&  inv.type == MSG_SCRAPERINDEX)
                 {
@@ -1060,6 +1239,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == NetMsgType::PART)
     {
         CSplitBlob::RecvPart(pfrom, vRecv);
+    }
+    else if (strCommand == NetMsgType::PSGT)
+    {
+        ProcessPSGTMessage(pfrom, vRecv);
     }
 
 
@@ -1473,7 +1656,12 @@ public:
 
     void StartScheduledTasks(CScheduler& /*scheduler*/) override
     {
-        // No recurring tasks yet (issue #2558 PR 8a shell).
+        // Intentionally empty. The recurring PSGT-pool sweep (EraseExpired,
+        // #2910) is scheduled in AppInit2 alongside the other recurring tasks
+        // (banlist dump, entropy, unbroadcast rebroadcast), so it is NOT
+        // duplicated here -- scheduling it in both places ran two sweeps of the
+        // same pool. This hook remains as the eventual home should those tasks
+        // be consolidated onto PeerManager.
     }
 
     bool Misbehaving(const CAddress& addr, int howmuch) override

@@ -37,9 +37,11 @@ std::string PSGTRemovalReasonToString(PSGTRemovalReason reason)
 std::string PSGTPoolRejectToString(PSGTPoolReject reject)
 {
     switch (reject) {
-    case PSGTPoolReject::NONE:         return "none";
-    case PSGTPoolReject::TOO_LARGE:    return "too-large";
-    case PSGTPoolReject::MALFORMED:    return "malformed";
+    case PSGTPoolReject::NONE:               return "none";
+    case PSGTPoolReject::TOO_LARGE:          return "too-large";
+    case PSGTPoolReject::MALFORMED:          return "malformed";
+    case PSGTPoolReject::HAS_UNKNOWN_FIELDS: return "unknown-fields";
+    case PSGTPoolReject::DUPLICATE_REVISION: return "duplicate-revision";
     case PSGTPoolReject::STRUCTURAL:   return "structural";
     case PSGTPoolReject::INVALID_SIG:  return "invalid-signature";
     case PSGTPoolReject::NO_VALID_SIG: return "no-valid-signature";
@@ -105,7 +107,25 @@ static PSGTPoolReject CheckFundingOutput(const COutPoint& prevout, CTxDB& txdb, 
     return PSGTPoolReject::NONE;
 }
 
-PSGTPoolReject ValidatePSGTForPool(const std::vector<unsigned char>& wire_bytes,
+//! True if the PSGT carries any unknown (extension) key-value pairs in its
+//! global, per-input, or per-output maps. The relay pool understands only the
+//! fields it needs and rejects extension fields (see ValidatePSGTForPool):
+//! they are a free revision-hash malleability vector and serve no pooling
+//! purpose. Cheap -- iterates the already-decoded maps, no allocation.
+static bool PSGTHasUnknownFields(const PartiallySignedTransaction& psgt)
+{
+    if (!psgt.unknown.empty()) return true;
+    for (const PSGTInput& input : psgt.inputs) {
+        if (!input.unknown.empty()) return true;
+    }
+    for (const PSGTOutput& output : psgt.outputs) {
+        if (!output.unknown.empty()) return true;
+    }
+    return false;
+}
+
+PSGTPoolReject ValidatePSGTForPool(const PSGTPool& pool,
+                                   const std::vector<unsigned char>& wire_bytes,
                                    int64_t now,
                                    PSGTPoolEntry& out_entry,
                                    std::string& error)
@@ -127,6 +147,37 @@ PSGTPoolReject ValidatePSGTForPool(const std::vector<unsigned char>& wire_bytes,
     PartiallySignedTransaction& psgt = out_entry.psgt;
     if (!DecodePSGTBytes(psgt, wire_bytes, error)) {
         return PSGTPoolReject::MALFORMED;
+    }
+
+    // Unknown (extension) fields serve no purpose for a relay pool and are a
+    // free malleability vector: appending one mints a fresh wire encoding for
+    // otherwise-identical content. Reject them so the canonical revision hash
+    // computed below is stable. Cheap check, done before any signature work.
+    if (PSGTHasUnknownFields(psgt)) {
+        error = "PSGT carries unknown extension fields; not eligible for the pool";
+        return PSGTPoolReject::HAS_UNKNOWN_FIELDS;
+    }
+
+    // Canonical revision identity. Hash a re-serialization (SerializePSGT emits
+    // sorted maps) rather than the received wire bytes, so map reordering cannot
+    // mint a fresh identity for the same content either. Combined with #3113's
+    // strict DER / low-S encoding -- exactly one valid signature per (keyid,
+    // sighash) -- this makes the revision hash canonical for a given (unsigned
+    // tx, valid-signer-set). Storing the canonical bytes means getdata serves,
+    // and peers converge on, that single canonical form.
+    out_entry.serialized = SerializePSGT(psgt);
+    out_entry.revision_hash = Hash(out_entry.serialized);
+
+    // Duplicate short-circuit BEFORE the expensive per-signature ECDSA
+    // verification below: if we already hold (or recently held) this exact
+    // canonical revision, drop it cheaply. This is what stops a peer replaying
+    // one valid PSGT under an ever-changing hash to burn signature checks under
+    // cs_main (the deferred #3115/#3116 DoS). Correctness does not depend on it
+    // -- Add() re-checks under cs_psgt_pool -- so the read here is a pure
+    // optimization; a race merely means we do work we would have done anyway.
+    if (pool.HaveRevision(out_entry.revision_hash)) {
+        error = "revision already present in or recently removed from the pool";
+        return PSGTPoolReject::DUPLICATE_REVISION;
     }
 
     const CTransaction tx(psgt.tx);
@@ -230,8 +281,8 @@ PSGTPoolReject ValidatePSGTForPool(const std::vector<unsigned char>& wire_bytes,
         return PSGTPoolReject::FEE_ABSURD;
     }
 
-    out_entry.serialized = wire_bytes;
-    out_entry.revision_hash = Hash(wire_bytes);
+    // out_entry.serialized / revision_hash were set from the canonical
+    // re-serialization above (before the duplicate short-circuit).
     out_entry.image = *image;
     out_entry.tx_hash = tx.GetHash();
     out_entry.time_received = now;
@@ -442,6 +493,30 @@ std::vector<PSGTPoolEntry> PSGTPool::GetAll() const
         entries.push_back(entry);
     }
     return entries;
+}
+
+std::vector<uint256> PSGTPool::GetAllRevisionHashes() const
+{
+    LOCK(cs_psgt_pool);
+
+    std::vector<uint256> hashes;
+    hashes.reserve(m_by_revision.size());
+    for (const auto& [revision_hash, image] : m_by_revision) {
+        hashes.push_back(revision_hash);
+    }
+    return hashes;
+}
+
+std::optional<std::vector<unsigned char>>
+PSGTPool::GetSerializedByRevision(const uint256& revision_hash) const
+{
+    LOCK(cs_psgt_pool);
+
+    const auto it = m_by_revision.find(revision_hash);
+    if (it == m_by_revision.end()) return std::nullopt;
+    const auto img = m_by_image.find(it->second);
+    if (img == m_by_image.end()) return std::nullopt;
+    return img->second.serialized;
 }
 
 size_t PSGTPool::EraseExpired(int64_t now)
