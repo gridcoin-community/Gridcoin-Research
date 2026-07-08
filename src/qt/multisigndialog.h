@@ -33,6 +33,11 @@ public:
 
     void setModel(WalletModel *model);
 
+    //! Adopt psgt as the working PSGT and write its base64 back to the input
+    //! and result boxes. The entry point the PSGT Pool page (#2910) calls to
+    //! open a pooled PSGT in this dialog without a base64 text round-trip.
+    void setWorking(const PartiallySignedTransaction& psgt);
+
 private:
     Ui::MultisignPSGTDialog *ui;
     WalletModel *model;
@@ -49,11 +54,6 @@ private:
     //! status label and leaves m_working untouched (decodes into a temporary and
     //! only assigns on success). Returns false on failure.
     bool syncWorkingFromInput();
-
-    //! Adopt psgt as the working PSGT and write its base64 back to the input and
-    //! result boxes. Used by the operations that produce a new PSGT, and the
-    //! entry point a future pool source would call.
-    void setWorking(const PartiallySignedTransaction& psgt);
 
     //! True iff some input carries a cryptographically valid partial signature
     //! from a key this wallet owns -- verified against the input's sighash, not
@@ -78,6 +78,7 @@ private slots:
     void on_inspectButton_clicked();
     void on_signButton_clicked();
     void on_combineButton_clicked();
+    void on_submitToPoolButton_clicked();
     void on_finalizeButton_clicked();
     void on_copyResultButton_clicked();
     void on_clearButton_clicked();

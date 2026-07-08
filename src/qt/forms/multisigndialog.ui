@@ -76,6 +76,19 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="submitToPoolButton">
+       <property name="toolTip">
+        <string>Relay this PSGT to co-signers through the network PSGT pool (requires v15 and at least one of your signatures)</string>
+       </property>
+       <property name="text">
+        <string>Submit to &amp;pool</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="finalizeButton">
        <property name="toolTip">
         <string>If fully signed, extract the completed raw transaction (hex) for broadcast</string>

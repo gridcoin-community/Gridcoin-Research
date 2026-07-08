@@ -23,6 +23,10 @@
 #include "aboutdialog.h"
 #include "voting/polltab.h"
 #include "voting/votingpage.h"
+#include "psgtpoolpage.h"
+
+#include <node/psgt_pool.h>
+#include <script/standard.h>
 #include "clientmodel.h"
 #include "walletmodel.h"
 #include "researcher/researchermodel.h"
@@ -207,9 +211,11 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     transactionView = new TransactionView(this);
     addressBookPage = new FavoritesPage(this);
     votingPage = new VotingPage(this);
+    psgtPoolPage = new PSGTPoolPage(this);
 
     signVerifyMessageDialog = new SignVerifyMessageDialog(this);
     multisignDialog = new MultisignPSGTDialog(this);
+    psgtPoolPage->setMultisignDialog(multisignDialog);
 
     centralWidget = new QStackedWidget(this);
     centralWidget->addWidget(overviewPage);
@@ -218,6 +224,7 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
     centralWidget->addWidget(transactionView);
     centralWidget->addWidget(addressBookPage);
     centralWidget->addWidget(votingPage);
+    centralWidget->addWidget(psgtPoolPage);
 
     setCentralWidget(centralWidget);
 
@@ -486,6 +493,11 @@ void BitcoinGUI::createActions()
     connect(signMessageAction, &QAction::triggered, this, [this]{ this->gotoSignMessageTab(QString {}); });
     connect(verifyMessageAction, &QAction::triggered, this, [this]{ this->gotoVerifyMessageTab(QString {}); });
     connect(multisignAction, &QAction::triggered, this, &BitcoinGUI::gotoMultisignDialog);
+
+    psgtPoolAction = new QAction(tr("PSGT &pool..."), this);
+    psgtPoolAction->setStatusTip(tr("Multisig transactions awaiting signatures (PSGT pool)"));
+    psgtPoolAction->setMenuRole(QAction::NoRole);
+    connect(psgtPoolAction, &QAction::triggered, this, &BitcoinGUI::gotoPSGTPoolPage);
     connect(diagnosticsAction, &QAction::triggered, this, &BitcoinGUI::diagnosticsClicked);
     connect(snapshotAction, &QAction::triggered, this, &BitcoinGUI::snapshotClicked);
     connect(resetblockchainAction, &QAction::triggered, this, &BitcoinGUI::resetblockchainClicked);
@@ -598,6 +610,7 @@ void BitcoinGUI::createMenuBar()
     signMenu->addAction(signMessageAction);
     signMenu->addAction(verifyMessageAction);
     signMenu->addAction(multisignAction);
+    signMenu->addAction(psgtPoolAction);
     file->addSeparator();
 
     // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
@@ -845,6 +858,12 @@ void BitcoinGUI::setClientModel(ClientModel *clientModel)
         addressBookPage->setOptionsModel(clientModel->getOptionsModel());
         receiveCoinsPage->setOptionsModel(clientModel->getOptionsModel());
         votingPage->setOptionsModel(clientModel->getOptionsModel());
+
+        psgtPoolPage->setClientModel(clientModel);
+        // PSGT pool notifications (#2910): drive the page's table model and the
+        // signature-requested toast off the core PSGTPoolChanged signal.
+        connect(clientModel, &ClientModel::psgtPoolChanged,
+                this, &BitcoinGUI::handlePSGTPoolChanged);
     }
 }
 
@@ -869,6 +888,7 @@ void BitcoinGUI::setWalletModel(WalletModel *walletModel)
         sendCoinsPage->setModel(walletModel);
         signVerifyMessageDialog->setModel(walletModel);
         multisignDialog->setModel(walletModel);
+        psgtPoolPage->setWalletModel(walletModel);
 
         setEncryptionStatus(walletModel->getEncryptionStatus());
         connect(walletModel, &WalletModel::encryptionStatusChanged, this, &BitcoinGUI::setEncryptionStatus);
@@ -1657,6 +1677,56 @@ void BitcoinGUI::gotoMultisignDialog()
     multisignDialog->show();
     multisignDialog->raise();
     multisignDialog->activateWindow();
+}
+
+void BitcoinGUI::gotoPSGTPoolPage()
+{
+    centralWidget->setCurrentWidget(psgtPoolPage);
+
+    exportAction->setEnabled(false);
+    disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
+}
+
+void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type)
+{
+    // Toast only for an entry that newly needs THIS wallet's signature.
+    if (change_type == CT_DELETED || !clientModel) {
+        return;
+    }
+
+    uint256 revision;
+    revision.SetHex(revision_hash.toStdString());
+    const auto entry = g_psgt_pool.GetByRevision(revision);
+    if (!entry || !pwalletMain) {
+        return;
+    }
+
+    const bool needs_me = WITH_LOCK(pwalletMain->cs_wallet,
+                                    return !PSGTSignedBy(*pwalletMain, entry->psgt))
+        && [&] {
+            // Wallet holds a key of the arrangement?
+            txnouttype script_type;
+            std::vector<std::vector<unsigned char>> vSolutions;
+            if (entry->psgt.inputs.empty()
+                || !Solver(entry->psgt.inputs[0].redeem_script, script_type, vSolutions)
+                || script_type != TX_MULTISIG) {
+                return false;
+            }
+            LOCK(pwalletMain->cs_wallet);
+            for (unsigned int i = 1; i + 1 < vSolutions.size(); ++i) {
+                const CPubKey pubkey(vSolutions[i]);
+                if (pubkey.IsValid() && pwalletMain->HaveKey(pubkey.GetID())) return true;
+            }
+            return false;
+        }();
+
+    if (needs_me && notificator) {
+        notificator->notify(
+            Notificator::Information,
+            tr("Multisig signature requested"),
+            tr("A multisig transaction is waiting for your signature. Open the "
+               "PSGT pool to review and sign it."));
+    }
 }
 
 void BitcoinGUI::dragEnterEvent(QDragEnterEvent *event)

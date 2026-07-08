@@ -193,6 +193,11 @@ void ClientModel::updateScraper(int scraperEventtype, int status, const QString 
         emit updateScraperStatus(scraperEventtype, status);
 }
 
+void ClientModel::updatePSGTPool(const QString &revision_hash, int status)
+{
+    emit psgtPoolChanged(revision_hash, (quint8)status);
+}
+
 // Requires a lock on cs_ConvergedScraperStatsCache
 const ConvergedScraperStats& ClientModel::getConvergedScraperStatsCache() const
 {
@@ -344,6 +349,13 @@ static void MinerStatusChanged(ClientModel *clientmodel, bool staking, double co
                               Q_ARG(double, coin_weight));
 }
 
+static void PSGTPoolChanged(ClientModel *clientmodel, const uint256& revision_hash, ChangeType status)
+{
+    QMetaObject::invokeMethod(clientmodel, "updatePSGTPool", Qt::QueuedConnection,
+                              Q_ARG(QString, QString::fromStdString(revision_hash.GetHex())),
+                              Q_ARG(int, status));
+}
+
 void ClientModel::subscribeToCoreSignals()
 {
     // Connect signals to client
@@ -360,6 +372,8 @@ void ClientModel::subscribeToCoreSignals()
                                                      boost::placeholders::_3));
     uiInterface.MinerStatusChanged_connect(boost::bind(MinerStatusChanged, this,
                                                      boost::placeholders::_1, boost::placeholders::_2));
+    uiInterface.PSGTPoolChanged_connect(boost::bind(PSGTPoolChanged, this,
+                                                    boost::placeholders::_1, boost::placeholders::_2));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()

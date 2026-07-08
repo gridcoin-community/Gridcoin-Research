@@ -12,8 +12,11 @@
 #include "walletmodel.h"
 
 #include <psgt.h>
+#include <chainparams.h>
 #include <key_io.h>
 #include <main.h>
+#include <net_processing.h>
+#include <node/psgt_pool.h>
 #include <script/interpreter.h>
 #include <script/standard.h>
 #include <streams.h>
@@ -481,6 +484,73 @@ void MultisignPSGTDialog::on_combineButton_clicked()
     showDecoded(merged);
 
     setStatus(tr("Combined %1 PSGT(s).").arg(psgts.size()), false);
+}
+
+void MultisignPSGTDialog::on_submitToPoolButton_clicked()
+{
+    if (!syncWorkingFromInput())
+        return;
+
+    // Mirror EnsurePSGTPoolActive() (src/rpc/psgt.cpp): the pool is available
+    // only once v15 has activated AND the node is not out of sync by age.
+    if (!WITH_LOCK(cs_main, return IsV15Enabled(nBestHeight) && !OutOfSyncByAge())) {
+        setStatus(tr("The PSGT pool is unavailable: block v15 has not activated on "
+                     "this network, or this node is still syncing."), true);
+        return;
+    }
+
+    // Same precondition as the submitpsgt RPC and the pool's own acceptance:
+    // do not relay a PSGT this wallet has not signed.
+    if (!walletHasSignature(m_working)) {
+        setStatus(tr("Sign the PSGT with this wallet before submitting it to the pool."), true);
+        return;
+    }
+
+    const std::vector<unsigned char> wire = SerializePSGT(m_working);
+
+    PSGTPoolEntry entry;
+    std::string error;
+    uint256 revision_hash;
+    std::string reject_reason;
+    PSGTPoolAddResult result;
+    {
+        // Hold cs_main continuously from validation through Add, so the
+        // funding-unspent guarantee ValidatePSGTForPool establishes still holds
+        // at insertion (the Add() caller contract; matches the submitpsgt RPC).
+        LOCK(cs_main);
+        const PSGTPoolReject reject =
+            ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), entry, error);
+        if (reject != PSGTPoolReject::NONE) {
+            setStatus(tr("The pool rejected this PSGT (%1): %2")
+                          .arg(QString::fromStdString(PSGTPoolRejectToString(reject)))
+                          .arg(QString::fromStdString(error)),
+                      true);
+            return;
+        }
+        revision_hash = entry.revision_hash;
+        result = g_psgt_pool.Add(std::move(entry), reject_reason);
+    }
+
+    switch (result) {
+    case PSGTPoolAddResult::ACCEPTED_NEW:
+    case PSGTPoolAddResult::ACCEPTED_REPLACEMENT:
+        RelayPSGT(revision_hash);
+        setStatus(result == PSGTPoolAddResult::ACCEPTED_REPLACEMENT
+                      ? tr("Submitted to the pool, superseding your earlier PSGT. "
+                           "Co-signers have been notified.")
+                      : tr("Submitted to the pool. Co-signers have been notified."),
+                  false);
+        break;
+
+    case PSGTPoolAddResult::DUPLICATE:
+    case PSGTPoolAddResult::REJECTED_POOL_FULL:
+    case PSGTPoolAddResult::REJECTED_NOT_BETTER:
+    case PSGTPoolAddResult::REJECTED_NOT_INITIATOR:
+        setStatus(tr("The pool did not accept this PSGT: %1")
+                      .arg(QString::fromStdString(reject_reason)),
+                  true);
+        break;
+    }
 }
 
 void MultisignPSGTDialog::on_finalizeButton_clicked()

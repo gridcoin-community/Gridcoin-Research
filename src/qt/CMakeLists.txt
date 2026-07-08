@@ -86,6 +86,8 @@ add_library(gridcoinqt STATIC
     sidestaketablemodel.cpp
     signverifymessagedialog.cpp
     multisigndialog.cpp
+    psgtpoolpage.cpp
+    psgtpooltablemodel.cpp
     trafficgraphwidget.cpp
     transactiondesc.cpp
     transactiondescdialog.cpp

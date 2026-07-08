@@ -27,6 +27,7 @@ class FavoritesPage;
 class ReceiveCoinsPage;
 class SendCoinsDialog;
 class VotingPage;
+class PSGTPoolPage;
 class SignVerifyMessageDialog;
 class MultisignPSGTDialog;
 class Notificator;
@@ -126,6 +127,7 @@ private:
     SendCoinsDialog *sendCoinsPage;
     TransactionView *transactionView;
     VotingPage *votingPage;
+    PSGTPoolPage *psgtPoolPage;
     SignVerifyMessageDialog *signVerifyMessageDialog;
     MultisignPSGTDialog *multisignDialog;
     std::unique_ptr<UpdateDialog> updateMessageDialog;
@@ -163,6 +165,7 @@ private:
     QAction *addressBookAction;
     QAction *signMessageAction;
     QAction *multisignAction;
+    QAction *psgtPoolAction;
     QAction *bxAction;
     QAction *websiteAction;
     QAction *boincAction;
@@ -278,6 +281,10 @@ private slots:
     void gotoVerifyMessageTab(QString addr = "");
     /** Show the Multisign (PSGT) dialog */
     void gotoMultisignDialog();
+    /** Switch to the PSGT pool page (#2910) */
+    void gotoPSGTPoolPage();
+    /** Toast when a pooled PSGT relevant to this wallet needs a signature */
+    void handlePSGTPoolChanged(QString revision_hash, quint8 change_type);
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */
