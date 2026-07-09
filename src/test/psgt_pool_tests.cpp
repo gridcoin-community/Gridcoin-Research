@@ -532,4 +532,75 @@ BOOST_AUTO_TEST_CASE(pool_local_remove)
     BOOST_CHECK(!pool.Remove(image, PSGTRemovalReason::LOCAL_REMOVE));
 }
 
+// ---------------------------------------------------------------------------
+// Orphan holding pool (unconfirmed-funding relay race)
+// ---------------------------------------------------------------------------
+
+//! A PSGT whose funding is UTXO_MISSING is held, not dropped, and is promoted
+//! into the pool (and would relay) once the funding transaction arrives.
+BOOST_AUTO_TEST_CASE(orphan_held_then_promoted_when_funding_arrives)
+{
+    mempool.clear();
+    FundedMultisig fixture;
+    const PartiallySignedTransaction psgt = fixture.Signed({fixture.k1});
+    const std::vector<unsigned char> wire = SerializePSGT(psgt);
+
+    // With the funding visible it would validate; capture its canonical revision.
+    PSGTPoolEntry probe;
+    std::string perr;
+    BOOST_REQUIRE(Validate(psgt, probe, perr) == PSGTPoolReject::NONE);
+    const uint256 revision = probe.revision_hash;
+
+    // Funding not visible to this node -> UTXO_MISSING (the relay-race case).
+    mempool.remove(fixture.funding);
+    PSGTPoolEntry entry;
+    std::string error;
+    BOOST_REQUIRE(Validate(psgt, entry, error) == PSGTPoolReject::UTXO_MISSING);
+
+    // Held as an orphan, not pooled.
+    PSGTPool pool;
+    const COutPoint prevout(fixture.funding.GetHash(), 0);
+    pool.AddOrphan(wire, revision, {prevout}, 1700003000);
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), 1u);
+    BOOST_CHECK_EQUAL(pool.Size(), 0u);
+
+    // The funding transaction arrives -> the orphan is re-validated and pooled.
+    AddToMempool(fixture.funding);
+    {
+        LOCK(cs_main);
+        pool.TransactionAddedToMempool(MakeTransactionRef(fixture.funding));
+    }
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), 0u);
+    BOOST_CHECK_EQUAL(pool.Size(), 1u);
+    BOOST_CHECK(pool.GetByRevision(revision).has_value());
+}
+
+//! The orphan map is bounded: past MAX_ORPHAN_PSGTS the oldest is evicted, so a
+//! peer cannot grow it without bound (DoS safety). AddOrphan does not validate,
+//! so opaque bytes with random keys suffice here.
+BOOST_AUTO_TEST_CASE(orphan_pool_is_bounded)
+{
+    PSGTPool pool;
+    const std::vector<unsigned char> opaque{'p', 's', 'g', 't'};
+    for (size_t i = 0; i < PSGTPool::MAX_ORPHAN_PSGTS + 5; ++i) {
+        pool.AddOrphan(opaque, InsecureRand256(),
+                       {COutPoint(InsecureRand256(), 0)}, 1700003000 + static_cast<int64_t>(i));
+    }
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), PSGTPool::MAX_ORPHAN_PSGTS);
+}
+
+//! Orphans past ORPHAN_EXPIRY_SECONDS are swept by EraseExpired (the TTL bound).
+BOOST_AUTO_TEST_CASE(orphan_expires)
+{
+    PSGTPool pool;
+    const std::vector<unsigned char> opaque{'p', 's', 'g', 't'};
+    pool.AddOrphan(opaque, InsecureRand256(), {COutPoint(InsecureRand256(), 0)}, 1700003000);
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), 1u);
+
+    pool.EraseExpired(1700003000 + PSGTPool::ORPHAN_EXPIRY_SECONDS);       // exactly at TTL: kept
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), 1u);
+    pool.EraseExpired(1700003000 + PSGTPool::ORPHAN_EXPIRY_SECONDS + 1);   // past TTL: swept
+    BOOST_CHECK_EQUAL(pool.OrphanCount(), 0u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

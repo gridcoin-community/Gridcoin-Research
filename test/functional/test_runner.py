@@ -148,6 +148,7 @@ BASE_SCRIPTS = [
     'p2p_version_handshake.py',
     'p2p_block_tx_relay.py',
     'p2p_psgt_relay.py',
+    'p2p_psgt_orphan.py',
     'p2p_ping.py',
     'rpc_help.py',
     'rpc_signmessage.py',

@@ -1296,6 +1296,7 @@ static const RPCHelpMan getpsgtpoolinfo_help{
         {
             {RPCResult::Type::BOOL, "active", "Whether the pool is active (block v15 live and node in sync)."},
             {RPCResult::Type::NUM, "size", "Entries currently pooled."},
+            {RPCResult::Type::NUM, "orphan_count", "PSGTs held pending their (unconfirmed) funding transaction."},
             {RPCResult::Type::NUM, "maxsize", "Pool capacity (new images are rejected when full)."},
             {RPCResult::Type::NUM, "expiry", "Entry lifetime in seconds."},
             {RPCResult::Type::NUM, "psgtprotocolversion", "Minimum peer protocol version PSGT inventory is relayed to."},
@@ -1315,6 +1316,7 @@ UniValue getpsgtpoolinfo(const UniValue& params)
         obj.pushKV("active", IsV15Enabled(nBestHeight) && !OutOfSyncByAge());
     }
     obj.pushKV("size", (int64_t)g_psgt_pool.Size());
+    obj.pushKV("orphan_count", (int64_t)g_psgt_pool.OrphanCount());
     obj.pushKV("maxsize", (int64_t)PSGTPool::MAX_ENTRIES);
     obj.pushKV("expiry", PSGTPool::EXPIRY_SECONDS);
     obj.pushKV("psgtprotocolversion", PSGT_PROTO_VERSION);

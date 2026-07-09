@@ -325,10 +325,25 @@ static void ProcessPSGTMessage(CNode* pfrom, CDataStream& vRecv)
     // expensive signature verification, so replaying them costs no ECDSA work
     // and needs no DoS score; scoring them would also risk banning honest peers
     // in ordinary gossip races or future protocol extensions.
+    // Funding not yet visible to this node -- the unconfirmed-funding relay
+    // race: a peer relayed the PSGT before its funding transaction reached our
+    // mempool. Hold it rather than drop it; PSGTPool::TransactionAddedToMempool /
+    // BlockConnected re-validate and pool+relay it once the funding arrives.
+    // ValidatePSGTForPool decoded entry.psgt before the UTXO check, so its input
+    // prevouts are available to key the orphan on.
+    case PSGTPoolReject::UTXO_MISSING: {
+        std::vector<COutPoint> prevouts;
+        prevouts.reserve(entry.psgt.tx.vin.size());
+        for (const CTxIn& txin : entry.psgt.tx.vin) prevouts.push_back(txin.prevout);
+        g_psgt_pool.AddOrphan(wire_bytes, obj_hash, prevouts, GetAdjustedTime());
+        LogPrint(BCLog::LogFlags::MEMPOOL, "%s: psgt from %s held pending funding: %s",
+                 __func__, pfrom->addr.ToString(), reason);
+        return;
+    }
+
     case PSGTPoolReject::HAS_UNKNOWN_FIELDS:
     case PSGTPoolReject::DUPLICATE_REVISION:
     case PSGTPoolReject::COMPLETE:
-    case PSGTPoolReject::UTXO_MISSING:
     case PSGTPoolReject::UTXO_SPENT:
     case PSGTPoolReject::FEE_TOO_LOW:
     case PSGTPoolReject::FEE_ABSURD:
