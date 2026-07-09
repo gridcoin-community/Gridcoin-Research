@@ -203,6 +203,15 @@ public:
     //! Hard cap on the recently-removed set (safety net; TTL is the normal bound).
     static constexpr size_t MAX_RECENTLY_REMOVED = 1000;
 
+    //! Orphan holding pool for a PSGT whose funding transaction this node has
+    //! not seen yet (the unconfirmed-funding relay race: a peer relays the PSGT
+    //! before the funding tx reaches this node's mempool). Bounded (oldest
+    //! evicted at the cap) and TTL'd so a peer cannot grow it with fabricated
+    //! missing-funding PSGTs -- and an orphan is only held AFTER it passed every
+    //! admission check except the UTXO presence one (well-formed, signed, fee-ok).
+    static constexpr size_t MAX_ORPHAN_PSGTS = 100;
+    static constexpr int64_t ORPHAN_EXPIRY_SECONDS = 20 * 60;
+
     //! Notification hook, fired outside the pool lock for every mutation.
     //! For REMOVED changes the removal reason is provided. Wired to the
     //! uiInterface signal and -psgtnotify by the RPC/notification layer;
@@ -271,7 +280,23 @@ public:
         GetSerializedByRevision(const uint256& revision_hash) const;
 
     //! Evict entries older than EXPIRY_SECONDS. Returns the number evicted.
+    //! Also sweeps orphans older than ORPHAN_EXPIRY_SECONDS.
     size_t EraseExpired(int64_t now);
+
+    //! Hold a PSGT whose funding output(s) are unknown to this node (a
+    //! UTXO_MISSING reject at relay time) instead of dropping it, keyed by its
+    //! canonical revision hash and indexed by every input prevout. When a
+    //! funding transaction later arrives (TransactionAddedToMempool /
+    //! BlockConnected) the orphan is re-validated and, on success, pooled and
+    //! relayed. No-op if the revision is already pooled/recently-removed or
+    //! already held. wire is the received canonical bytes (re-validated on
+    //! promotion, so a stale orphan cannot be trusted blindly). Caller holds
+    //! cs_main (as ProcessPSGTMessage does); Add-style leaf on cs_psgt_pool.
+    void AddOrphan(std::vector<unsigned char> wire, const uint256& revision_hash,
+                   const std::vector<COutPoint>& prevouts, int64_t now);
+
+    //! Number of held orphans (diagnostics / tests).
+    size_t OrphanCount() const;
 
     size_t Size() const;
     void Clear();
@@ -280,10 +305,10 @@ public:
     //! pooled PSGT spending one of its inputs is dead (locally observed
     //! double spend -- or, commonly, the completed PSGT itself arriving as a
     //! transaction, which is how completion propagates network-wide).
-    void TransactionAddedToMempool(const CTransactionRef& tx) override;
+    void TransactionAddedToMempool(const CTransactionRef& tx) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     //! Eviction trigger 2 (authoritative): a connected block spent an input.
-    void BlockConnected(const CBlock& block, int height) override;
+    void BlockConnected(const CBlock& block, int height) override EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 private:
     mutable CCriticalSection cs_psgt_pool;
@@ -296,6 +321,17 @@ private:
     std::map<COutPoint, CScriptID> m_by_prevout GUARDED_BY(cs_psgt_pool);
     //! Removed revision hash -> removal time (TTL-pruned, hard-capped).
     std::map<uint256, int64_t> m_recently_removed GUARDED_BY(cs_psgt_pool);
+
+    //! A PSGT held pending its (unconfirmed) funding transaction.
+    struct OrphanPSGT {
+        std::vector<unsigned char> wire; //!< canonical bytes, re-validated on promotion
+        int64_t time_received;
+    };
+    //! Canonical revision hash -> held orphan.
+    std::map<uint256, OrphanPSGT> m_orphans GUARDED_BY(cs_psgt_pool);
+    //! Funding prevout -> revision hash(es) of orphans waiting on it. A multimap
+    //! because several orphans can reference the same missing output.
+    std::multimap<COutPoint, uint256> m_orphans_by_prevout GUARDED_BY(cs_psgt_pool);
 
     //! Erase an entry from every index and record its revision as recently
     //! removed. Returns the entry (for post-lock notification).
@@ -311,6 +347,20 @@ private:
 
     //! Shared body of the two eviction triggers.
     void EvictConflicts(const CTransaction& tx, PSGTRemovalReason reason);
+
+    //! Re-evaluate any orphan waiting on an output of tx (its funding just
+    //! became available). Re-runs ValidatePSGTForPool; on success pools + relays
+    //! the orphan, on a still-missing funding keeps it, on a hard reject drops
+    //! it. cs_main is held throughout (the two validation-interface triggers that
+    //! call it are annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main), matching CWallet).
+    void PromoteOrphans(const CTransaction& tx) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+    //! Drop orphans older than ORPHAN_EXPIRY_SECONDS. Returns the count removed.
+    size_t EraseExpiredOrphans(int64_t now) EXCLUSIVE_LOCKS_REQUIRED(cs_psgt_pool);
+
+    //! Remove one orphan from m_orphans and its m_orphans_by_prevout entries.
+    void EraseOrphanInternal(const uint256& revision_hash)
+        EXCLUSIVE_LOCKS_REQUIRED(cs_psgt_pool);
 
     //! Fire m_notify_hook if set (call with the lock RELEASED).
     void Notify(const PSGTPoolEntry& entry, PSGTPoolChangeType change,

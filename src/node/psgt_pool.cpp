@@ -540,6 +540,8 @@ size_t PSGTPool::EraseExpired(int64_t now)
                 expired.push_back(std::move(*entry));
             }
         }
+
+        EraseExpiredOrphans(now);
     }
 
     for (const PSGTPoolEntry& entry : expired) {
@@ -565,17 +567,22 @@ void PSGTPool::Clear()
     m_by_txhash.clear();
     m_by_prevout.clear();
     m_recently_removed.clear();
+    m_orphans.clear();
+    m_orphans_by_prevout.clear();
 }
 
 void PSGTPool::TransactionAddedToMempool(const CTransactionRef& tx)
 {
     EvictConflicts(*tx, PSGTRemovalReason::CONFLICT_MEMPOOL);
+    // The tx may also be the funding an orphan PSGT was waiting on.
+    PromoteOrphans(*tx);
 }
 
 void PSGTPool::BlockConnected(const CBlock& block, int /*height*/)
 {
     for (const CTransaction& tx : block.vtx) {
         EvictConflicts(tx, PSGTRemovalReason::CONFLICT_BLOCK);
+        PromoteOrphans(tx);
     }
 }
 
@@ -607,6 +614,127 @@ void PSGTPool::EvictConflicts(const CTransaction& tx, PSGTRemovalReason reason)
                  entry.image.ToString(), PSGTRemovalReasonToString(reason),
                  tx.GetHash().ToString());
         Notify(entry, PSGTPoolChangeType::REMOVED, reason);
+    }
+}
+
+void PSGTPool::AddOrphan(std::vector<unsigned char> wire, const uint256& revision_hash,
+                         const std::vector<COutPoint>& prevouts, int64_t now)
+{
+    LOCK(cs_psgt_pool);
+
+    // Already pooled, recently removed, or already held: nothing to do.
+    if (m_by_revision.count(revision_hash) || m_recently_removed.count(revision_hash)
+        || m_orphans.count(revision_hash)) {
+        return;
+    }
+
+    // Bounded: drop the oldest held orphan when at the cap so a peer cannot grow
+    // the map without bound.
+    while (m_orphans.size() >= MAX_ORPHAN_PSGTS) {
+        auto oldest = m_orphans.begin();
+        for (auto it = m_orphans.begin(); it != m_orphans.end(); ++it) {
+            if (it->second.time_received < oldest->second.time_received) oldest = it;
+        }
+        EraseOrphanInternal(oldest->first);
+    }
+
+    m_orphans.emplace(revision_hash, OrphanPSGT{std::move(wire), now});
+    for (const COutPoint& prevout : prevouts) {
+        m_orphans_by_prevout.emplace(prevout, revision_hash);
+    }
+    LogPrint(BCLog::LogFlags::MEMPOOL, "psgtpool: holding orphan revision %s (%zu held)",
+             revision_hash.ToString(), m_orphans.size());
+}
+
+size_t PSGTPool::OrphanCount() const
+{
+    LOCK(cs_psgt_pool);
+    return m_orphans.size();
+}
+
+void PSGTPool::EraseOrphanInternal(const uint256& revision_hash)
+{
+    // Copy first: a caller may pass a reference INTO m_orphans (AddOrphan's
+    // oldest-eviction does), and erasing that node would dangle the argument
+    // before the prevout-index sweep below reads it again.
+    const uint256 rev = revision_hash;
+    m_orphans.erase(rev);
+    for (auto it = m_orphans_by_prevout.begin(); it != m_orphans_by_prevout.end();) {
+        it = (it->second == rev) ? m_orphans_by_prevout.erase(it) : std::next(it);
+    }
+}
+
+size_t PSGTPool::EraseExpiredOrphans(int64_t now)
+{
+    std::vector<uint256> stale;
+    for (const auto& [rev, orphan] : m_orphans) {
+        if (now - orphan.time_received > ORPHAN_EXPIRY_SECONDS) stale.push_back(rev);
+    }
+    for (const uint256& rev : stale) EraseOrphanInternal(rev);
+    return stale.size();
+}
+
+void PSGTPool::PromoteOrphans(const CTransaction& tx)
+{
+    AssertLockHeld(cs_main);
+
+    // Snapshot (revision, wire) of every orphan waiting on an output of tx under
+    // the pool lock, then re-validate with the pool lock RELEASED -- as in
+    // EvictConflicts. ValidatePSGTForPool needs cs_main only (held throughout by
+    // our caller, satisfying Add's funding-unspent invariant); Add re-takes
+    // cs_psgt_pool as a leaf.
+    std::vector<std::pair<uint256, std::vector<unsigned char>>> candidates;
+    {
+        LOCK(cs_psgt_pool);
+        if (m_orphans.empty()) return;
+
+        const uint256 txid = tx.GetHash();
+        std::set<uint256> seen;
+        for (size_t n = 0; n < tx.vout.size(); ++n) {
+            const auto range = m_orphans_by_prevout.equal_range(COutPoint(txid, n));
+            for (auto it = range.first; it != range.second; ++it) {
+                const uint256& rev = it->second;
+                if (!seen.insert(rev).second) continue;
+                const auto orphan = m_orphans.find(rev);
+                if (orphan != m_orphans.end()) candidates.emplace_back(rev, orphan->second.wire);
+            }
+        }
+    }
+    if (candidates.empty()) return;
+
+    const int64_t now = GetAdjustedTime();
+    for (auto& [rev, wire] : candidates) {
+        PSGTPoolEntry entry;
+        std::string error;
+        const PSGTPoolReject reject = ValidatePSGTForPool(*this, wire, now, entry, error);
+
+        // Still waiting on another funding input -- keep holding it.
+        if (reject == PSGTPoolReject::UTXO_MISSING) continue;
+
+        // Otherwise we stop holding it: either it now validates (promote) or it
+        // hard-rejects (e.g. this tx spent the funding output it needed).
+        {
+            LOCK(cs_psgt_pool);
+            EraseOrphanInternal(rev);
+        }
+
+        if (reject != PSGTPoolReject::NONE) {
+            LogPrint(BCLog::LogFlags::MEMPOOL, "psgtpool: orphan %s dropped on promotion: %s (%s)",
+                     rev.ToString(), PSGTPoolRejectToString(reject), error);
+            continue;
+        }
+
+        // Relay the freshly re-validated canonical revision (== rev by
+        // construction, but do not depend on the stash path for it).
+        const uint256 revision = entry.revision_hash;
+        std::string reject_reason;
+        const PSGTPoolAddResult result = Add(std::move(entry), reject_reason);
+        if (result == PSGTPoolAddResult::ACCEPTED_NEW
+            || result == PSGTPoolAddResult::ACCEPTED_REPLACEMENT) {
+            LogPrint(BCLog::LogFlags::MEMPOOL, "psgtpool: promoted orphan %s (funding arrived)",
+                     revision.ToString());
+            RelayPSGT(revision);
+        }
     }
 }
 
