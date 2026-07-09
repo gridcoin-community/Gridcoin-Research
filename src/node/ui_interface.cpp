@@ -84,7 +84,7 @@ void CClientUIInterface::ResearcherChanged() { return g_ui_signals.ResearcherCha
 void CClientUIInterface::AccrualChangedFromStakeOrMRC() { return g_ui_signals.AccrualChangedFromStakeOrMRC(); }
 void CClientUIInterface::MRCChanged() { return g_ui_signals.MRCChanged(); }
 void CClientUIInterface::BeaconChanged() { return g_ui_signals.BeaconChanged(); }
-void CClientUIInterface::PSGTPoolChanged(const uint256& revision_hash, ChangeType status) { return g_ui_signals.PSGTPoolChanged(revision_hash, status); }
+void CClientUIInterface::PSGTPoolChanged(const uint256& revision_hash, ChangeType status, int reason) { return g_ui_signals.PSGTPoolChanged(revision_hash, status, reason); }
 void CClientUIInterface::NewPollReceived(int64_t poll_time) { return g_ui_signals.NewPollReceived(poll_time); }
 void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui_signals.NewVoteReceived(poll_txid); }
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }

@@ -1991,7 +1991,12 @@ bool AppInit2(ThreadHandlerPtr threads)
             change == PSGTPoolChangeType::ADDED ? CT_NEW :
             change == PSGTPoolChangeType::UPDATED ? CT_UPDATED : CT_DELETED;
 
-        uiInterface.PSGTPoolChanged(entry.revision_hash, status);
+        // Carry the removal reason (as int) on a removal; -1 for add/update.
+        const int reason_code =
+            (change == PSGTPoolChangeType::ADDED || change == PSGTPoolChangeType::UPDATED)
+                ? -1
+                : static_cast<int>(reason.value_or(PSGTRemovalReason::LOCAL_REMOVE));
+        uiInterface.PSGTPoolChanged(entry.revision_hash, status, reason_code);
 
 #if HAVE_SYSTEM
         std::string strCmd = gArgs.GetArg("-psgtnotify", std::string{});

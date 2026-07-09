@@ -136,7 +136,9 @@ public:
     /** PSGT pool changed (#2910): an entry was added (CT_NEW), replaced by a
      * better revision (CT_UPDATED) or removed (CT_DELETED). The revision hash
      * identifies the affected entry; consumers query the pool for details. **/
-    ADD_SIGNALS_DECL_WRAPPER(PSGTPoolChanged, void, const uint256& revision_hash, ChangeType status);
+    // reason is a PSGTRemovalReason (as int) on removal (CT_DELETED), or -1 for
+    // CT_NEW/CT_UPDATED. Kept as int so this header stays decoupled from the pool enum.
+    ADD_SIGNALS_DECL_WRAPPER(PSGTPoolChanged, void, const uint256& revision_hash, ChangeType status, int reason);
 
     /** New poll received **/
     ADD_SIGNALS_DECL_WRAPPER(NewPollReceived, void, int64_t poll_time);

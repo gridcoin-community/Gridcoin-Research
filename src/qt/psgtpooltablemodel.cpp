@@ -9,6 +9,7 @@
 #include "walletmodel.h"
 
 #include <key_io.h>
+#include <node/psgt_pool.h>
 #include <psgt.h>
 #include <script/standard.h>
 #include <util.h>
@@ -133,7 +134,7 @@ void PSGTPoolTableModel::refresh()
     endResetModel();
 }
 
-void PSGTPoolTableModel::handlePoolChanged(const QString& revision_hash, quint8 change_type)
+void PSGTPoolTableModel::handlePoolChanged(const QString& revision_hash, quint8 change_type, int reason)
 {
     // On a removal, capture the wallet-relevant entry as history before it is
     // gone from the view. CT_DELETED is the removal case (see ui_interface
@@ -149,7 +150,15 @@ void PSGTPoolTableModel::handlePoolChanged(const QString& revision_hash, quint8 
         for (const Row& row : m_rows) {
             if (row.in_pool && row.is_mine && row.revision == removed) {
                 Row completed = row;
-                completed.status = RowStatus::Complete;
+                // Map the pool's removal reason (int, see ui_interface) to a
+                // specific terminal status so the history row is meaningful.
+                switch (static_cast<PSGTRemovalReason>(reason)) {
+                case PSGTRemovalReason::EXPIRED:          completed.status = RowStatus::Expired;    break;
+                case PSGTRemovalReason::COMPLETED:        completed.status = RowStatus::Completed;   break;
+                case PSGTRemovalReason::CONFLICT_MEMPOOL:
+                case PSGTRemovalReason::CONFLICT_BLOCK:   completed.status = RowStatus::Conflicted;  break;
+                default:                                  completed.status = RowStatus::Removed;     break;
+                }
                 completed.in_pool = false;
                 // Newest first; dedupe by image; bound the length.
                 for (int i = m_history.size() - 1; i >= 0; --i) {
@@ -179,10 +188,11 @@ QVariant PSGTPoolTableModel::data(const QModelIndex& index, int role) const
             switch (row.status) {
             case RowStatus::AwaitingYourSignature: return tr("Awaiting your signature");
             case RowStatus::AwaitingOthers:        return tr("Awaiting others");
-            // Rows land here on ANY removal (completed, expired, conflicted, or
-            // locally removed) -- the Qt signal carries no reason -- so use a
-            // neutral label rather than implying the multisig completed.
-            case RowStatus::Complete:              return tr("No longer pending");
+            // History rows, labelled from the pool's removal reason.
+            case RowStatus::Expired:               return tr("Expired");
+            case RowStatus::Completed:             return tr("Completed");
+            case RowStatus::Conflicted:            return tr("Conflict");
+            case RowStatus::Removed:               return tr("Removed");
             }
             return QVariant();
         case Destination:

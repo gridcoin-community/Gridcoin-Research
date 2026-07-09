@@ -42,7 +42,11 @@ public:
     enum class RowStatus {
         AwaitingYourSignature,
         AwaitingOthers,
-        Complete, //!< Recently completed/removed (history only).
+        // History-only terminal states, mapped from the pool's removal reason.
+        Expired,
+        Completed,
+        Conflicted,
+        Removed,
     };
 
     struct Row {
@@ -76,7 +80,7 @@ public Q_SLOTS:
     //! Slot bound to the core PSGTPoolChanged signal via QueuedConnection.
     //! On a removal that this wallet had a stake in, promote the row identified
     //! by revision_hash to the recently-completed history before it vanishes.
-    void handlePoolChanged(const QString& revision_hash, quint8 change_type);
+    void handlePoolChanged(const QString& revision_hash, quint8 change_type, int reason);
 
 private:
     WalletModel* m_wallet_model;

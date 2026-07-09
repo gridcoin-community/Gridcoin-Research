@@ -609,8 +609,9 @@ void BitcoinGUI::createMenuBar()
     QMenu *signMenu = file->addMenu(tr("Sign &message"));
     signMenu->addAction(signMessageAction);
     signMenu->addAction(verifyMessageAction);
-    signMenu->addAction(multisignAction);
-    signMenu->addAction(psgtPoolAction);
+    QMenu *multisigMenu = file->addMenu(tr("MultiSig &Txns"));
+    multisigMenu->addAction(multisignAction);
+    multisigMenu->addAction(psgtPoolAction);
     file->addSeparator();
 
     // Snapshot GUI menu action disabled due to snapshot CDN abuse in 202308.
@@ -1687,8 +1688,12 @@ void BitcoinGUI::gotoPSGTPoolPage()
     disconnect(exportAction, &QAction::triggered, nullptr, nullptr);
 }
 
-void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type)
+void BitcoinGUI::handlePSGTPoolChanged(QString revision_hash, quint8 change_type, int reason)
 {
+    // The toast fires only on add/update, so the removal reason is unused here;
+    // the table model consumes it (to label the history row).
+    Q_UNUSED(reason);
+
     // Toast only for an entry that newly needs THIS wallet's signature.
     if (change_type == CT_DELETED || !clientModel) {
         return;
