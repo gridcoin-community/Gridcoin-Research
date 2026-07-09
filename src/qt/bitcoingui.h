@@ -284,7 +284,7 @@ private slots:
     /** Switch to the PSGT pool page (#2910) */
     void gotoPSGTPoolPage();
     /** Toast when a pooled PSGT relevant to this wallet needs a signature */
-    void handlePSGTPoolChanged(QString revision_hash, quint8 change_type);
+    void handlePSGTPoolChanged(QString revision_hash, quint8 change_type, int reason);
     /** Show configuration dialog */
     void optionsClicked();
     /** Switch the active light/dark theme */

@@ -14,6 +14,7 @@
 #include <node/psgt_pool.h>
 #include <sync.h>
 
+#include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -26,6 +27,17 @@ PSGTPoolPage::PSGTPoolPage(QWidget* parent)
     : QWidget(parent)
 {
     auto* layout = new QVBoxLayout(this);
+
+    auto* title = new QLabel(tr("PSGT Pool"), this);
+    QFont title_font = title->font();
+    title_font.setPointSize(title_font.pointSize() + 4);
+    title_font.setBold(true);
+    title->setFont(title_font);
+    layout->addWidget(title);
+
+    auto* subtitle = new QLabel(tr("Multisig transactions awaiting signatures."), this);
+    subtitle->setWordWrap(true);
+    layout->addWidget(subtitle);
 
     m_banner = new QLabel(this);
     m_banner->setWordWrap(true);
@@ -102,8 +114,8 @@ void PSGTPoolPage::setClientModel(ClientModel* client_model)
     // Deliver the core PSGTPoolChanged signal (marshalled onto the GUI thread
     // by ClientModel) to the table model so its rows track the pool live.
     connect(client_model, &ClientModel::psgtPoolChanged, this,
-            [this](const QString& revision_hash, quint8 change_type) {
-                if (m_table_model) m_table_model->handlePoolChanged(revision_hash, change_type);
+            [this](const QString& revision_hash, quint8 change_type, int reason) {
+                if (m_table_model) m_table_model->handlePoolChanged(revision_hash, change_type, reason);
                 updateButtons();
             });
 
