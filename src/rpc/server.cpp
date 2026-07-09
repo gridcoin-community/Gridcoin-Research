@@ -506,6 +506,7 @@ static const CRPCCommand vRPCCommands[] =
     { "getblockbymintime",       &getblockbymintime,       cat_network, &getblockbymintime_helpman, heritage_pure_gridcoin, "" },
     { "getblocksbatch",          &getblocksbatch,          cat_network, &getblocksbatch_helpman, heritage_pure_gridcoin, "" },
     { "getblockcount",           &getblockcount,           cat_network, &getblockcount_helpman, heritage_pure_upstream, "e169db2f48c0" },
+    { "setmocktime",             &setmocktime,             cat_developer, &setmocktime_helpman, heritage_mixed, "994b2dfc6e39" },
     { "getblockhash",            &getblockhash,            cat_network, &getblockhash_helpman, heritage_pure_upstream, "bd157738fbdb" },
     { "getburnreport",           &getburnreport,           cat_network, &getburnreport_helpman, heritage_pure_gridcoin, "" },
     { "getcheckpoint",           &getcheckpoint,           cat_network, &getcheckpoint_helpman, heritage_pure_gridcoin, "" },
