@@ -31,6 +31,8 @@
 #include <stdexcept>
 
 #include <memory>
+#include <mutex>
+#include <set>
 #include <vector>
 
 using namespace std;
@@ -50,6 +52,40 @@ static boost::thread_group* rpc_worker_group = nullptr;
 // the io_service, which prevents the shutdown hang on an open keep-alive socket
 // that authproxy.py works around on the client side.
 static std::vector<boost::shared_ptr<boost::asio::ip::tcp::acceptor>> rpc_acceptors;
+
+// Live connections currently being serviced (a worker parked in
+// ServiceConnection()). Closing the acceptors stops *new* connections, but an
+// already-established keep-alive client leaves its worker blocked in a
+// synchronous read; StopRPCThreads() must interrupt those sockets or
+// join_all() hangs forever (issue #3123). This registry is the leaf-most lock
+// in the process -- it guards only the set below and never calls back into any
+// subsystem while held, so it has no ordering relationship with cs_main et al.
+static std::mutex g_rpc_connections_mutex;
+static std::set<AcceptedConnection*> g_rpc_connections;
+// Set once StopRPCThreads() has begun tearing down. A connection that is
+// accepted after this point must not park in ServiceConnection(), or it would
+// re-introduce the very hang we are closing this window against.
+static bool g_rpc_connections_stopped = false;
+
+//! Register a just-accepted connection so StopRPCThreads() can interrupt it.
+//! Returns false if the server is already shutting down, in which case the
+//! caller must not service the connection (there is no worker-drain left to
+//! wake it).
+static bool RegisterRPCConnection(AcceptedConnection* conn)
+{
+    std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+    if (g_rpc_connections_stopped) return false;
+    g_rpc_connections.insert(conn);
+    return true;
+}
+
+//! Remove a connection from the registry once its worker is done servicing it
+//! (before the connection is closed and deleted).
+static void UnregisterRPCConnection(AcceptedConnection* conn)
+{
+    std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+    g_rpc_connections.erase(conn);
+}
 
 const UniValue emptyobj(UniValue::VOBJ);
 
@@ -666,8 +702,15 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol> 
             if (!fUseSSL)
                 conn->stream() << HTTPReply(HTTP_FORBIDDEN, "", false) << std::flush;
         }
-        else
+        // Register before servicing so a concurrent StopRPCThreads() can wake us
+        // out of the blocking read loop. If the server is already stopping,
+        // RegisterRPCConnection() returns false and we skip servicing entirely
+        // rather than park with no drain left to interrupt us (issue #3123).
+        else if (RegisterRPCConnection(conn))
+        {
             ServiceConnection(conn);
+            UnregisterRPCConnection(conn);
+        }
 
         conn->close();
     }
@@ -715,6 +758,19 @@ void StartRPCThreads()
     const bool fUseSSL = gArgs.GetBoolArg("-rpcssl");
 
     assert(rpc_io_service == nullptr);
+
+    // Clear the shutdown latch so a same-process restart (stop then start) can
+    // service connections again; StopRPCThreads() sets it true (issue #3123).
+    // The set is already empty here (the prior StopRPCThreads()' join_all()
+    // guarantees every registered connection was unregistered), but clear it
+    // defensively so a future refactor that broke that invariant cannot leave a
+    // dangling pointer to be shutdown() on the next teardown.
+    {
+        std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+        g_rpc_connections_stopped = false;
+        g_rpc_connections.clear();
+    }
+
     rpc_io_service = new ioContext();
     rpc_ssl_context = new ssl::context(ssl::context::sslv23);
 
@@ -824,9 +880,10 @@ void StopRPCThreads()
 
     // Close the listening acceptors before stopping the io_service. This makes
     // any pending async_accept complete with operation_aborted (RPCAcceptHandler
-    // then sees !is_open() and does not re-arm), so no newly-accepted connection
-    // can wedge the join_all() below. Without this, an open keep-alive socket can
-    // hang shutdown -- the exact failure authproxy.py works around client-side.
+    // then sees !is_open() and does not re-arm), so no further connection is
+    // accepted. This is necessary but not sufficient to unblock join_all() --
+    // connections already being serviced are handled by the interrupt loop
+    // below (issue #3123).
     for (auto& acc : rpc_acceptors) {
         if (acc && acc->is_open()) {
             boost::system::error_code ec;
@@ -834,6 +891,22 @@ void StopRPCThreads()
         }
     }
     rpc_acceptors.clear();
+
+    // Closing the acceptors above only stops *new* connections. An established
+    // keep-alive client leaves its worker blocked in a synchronous read inside
+    // ServiceConnection(), which io_service->stop() cannot interrupt (that
+    // worker is not in the io_service run loop -- it is parked in recv). Shut
+    // those sockets down so the reads fail and the workers return; otherwise
+    // join_all() below hangs forever (issue #3123). Setting the stopped flag
+    // under the same lock closes the race with a connection accepted just now:
+    // its RegisterRPCConnection() will observe the flag and decline to park.
+    {
+        std::lock_guard<std::mutex> lock(g_rpc_connections_mutex);
+        g_rpc_connections_stopped = true;
+        for (AcceptedConnection* conn : g_rpc_connections) {
+            conn->interrupt();
+        }
+    }
 
     rpc_io_service->stop();
     if (rpc_worker_group != nullptr) {

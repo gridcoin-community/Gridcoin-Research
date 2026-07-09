@@ -171,6 +171,12 @@ public:
     virtual std::iostream& stream() = 0;
     virtual std::string peer_address_to_string() const = 0;
     virtual void close() = 0;
+    //! Wake a worker thread parked in a synchronous read on this connection by
+    //! shutting down the underlying socket. Safe to call from another thread
+    //! while the owning worker is blocked in ServiceConnection(); used by
+    //! StopRPCThreads() so join_all() cannot hang on an idle keep-alive client
+    //! (issue #3123).
+    virtual void interrupt() = 0;
 };
 
 template <typename Protocol>
@@ -200,6 +206,16 @@ public:
     virtual void close()
     {
         _stream.close();
+    }
+
+    virtual void interrupt()
+    {
+        // shutdown() (rather than close()) is the portable way to break a
+        // synchronous read that another thread is blocked in: it wakes the
+        // recv without racing on file-descriptor reuse. The owning worker
+        // still performs the actual close()/delete on its own thread.
+        boost::system::error_code ec;
+        sslStream.lowest_layer().shutdown(boost::asio::socket_base::shutdown_both, ec);
     }
 
     typename Protocol::endpoint peer;
