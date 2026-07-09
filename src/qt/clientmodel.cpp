@@ -359,26 +359,31 @@ static void PSGTPoolChanged(ClientModel *clientmodel, const uint256& revision_ha
 
 void ClientModel::subscribeToCoreSignals()
 {
-    // Connect signals to client
-    uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChanged, this,
+    // Connect signals to client, retaining each connection so it is disconnected
+    // in unsubscribeFromCoreSignals() (from ~ClientModel). Every callback below
+    // captures `this`; a core signal firing after this object is gone would
+    // otherwise invoke a slot on freed memory during shutdown.
+    m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChanged, this,
                                                       boost::placeholders::_1, boost::placeholders::_2,
-                                                      boost::placeholders::_3, boost::placeholders::_4));
-    uiInterface.BannedListChanged_connect(boost::bind(BannedListChanged, this));
-    uiInterface.NotifyNumConnectionsChanged_connect(boost::bind(NotifyNumConnectionsChanged, this,
-                                                              boost::placeholders::_1));
-    uiInterface.NotifyAlertChanged_connect(boost::bind(NotifyAlertChanged, this,
-                                                     boost::placeholders::_1, boost::placeholders::_2));
-    uiInterface.NotifyScraperEvent_connect(boost::bind(NotifyScraperEvent, this,
+                                                      boost::placeholders::_3, boost::placeholders::_4)));
+    m_handlers.emplace_back(uiInterface.BannedListChanged_connect(boost::bind(BannedListChanged, this)));
+    m_handlers.emplace_back(uiInterface.NotifyNumConnectionsChanged_connect(boost::bind(NotifyNumConnectionsChanged, this,
+                                                              boost::placeholders::_1)));
+    m_handlers.emplace_back(uiInterface.NotifyAlertChanged_connect(boost::bind(NotifyAlertChanged, this,
+                                                     boost::placeholders::_1, boost::placeholders::_2)));
+    m_handlers.emplace_back(uiInterface.NotifyScraperEvent_connect(boost::bind(NotifyScraperEvent, this,
                                                      boost::placeholders::_1, boost::placeholders::_2,
-                                                     boost::placeholders::_3));
-    uiInterface.MinerStatusChanged_connect(boost::bind(MinerStatusChanged, this,
-                                                     boost::placeholders::_1, boost::placeholders::_2));
-    uiInterface.PSGTPoolChanged_connect(boost::bind(PSGTPoolChanged, this,
+                                                     boost::placeholders::_3)));
+    m_handlers.emplace_back(uiInterface.MinerStatusChanged_connect(boost::bind(MinerStatusChanged, this,
+                                                     boost::placeholders::_1, boost::placeholders::_2)));
+    m_handlers.emplace_back(uiInterface.PSGTPoolChanged_connect(boost::bind(PSGTPoolChanged, this,
                                                     boost::placeholders::_1, boost::placeholders::_2,
-                                                    boost::placeholders::_3));
+                                                    boost::placeholders::_3)));
 }
 
 void ClientModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client
+    // Disconnect signals from client: clearing the retained connections runs each
+    // scoped_connection's destructor, which disconnects it.
+    m_handlers.clear();
 }

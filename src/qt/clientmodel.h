@@ -3,7 +3,10 @@
 
 #include <QObject>
 
+#include <boost/signals2/connection.hpp>
+
 #include <atomic>
+#include <vector>
 
 class OptionsModel;
 class AddressTableModel;
@@ -73,6 +76,13 @@ private:
     mutable std::atomic<double> m_cached_etts_days;
 
     QTimer *pollTimer;
+
+    //! uiInterface signal connections held so they are disconnected on
+    //! destruction. Each captures `this`; leaving them connected (the previous
+    //! empty unsubscribeFromCoreSignals) risked a core signal invoking a slot on
+    //! a destroyed ClientModel during shutdown. scoped_connection disconnects on
+    //! clear()/destruction.
+    std::vector<boost::signals2::scoped_connection> m_handlers;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
