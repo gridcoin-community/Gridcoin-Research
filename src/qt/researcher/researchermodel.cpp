@@ -969,18 +969,23 @@ void ResearcherModel::onWizardClose()
 
 void ResearcherModel::subscribeToCoreSignals()
 {
-    // Connect signals to client
-    uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this));
-    uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this));
-    uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this));
-    uiInterface.NotifyBlocksChanged_connect(std::bind(NotifyBlocksChangedForResearcher, this,
+    // Connect signals to client, retaining each connection so it is severed in
+    // unsubscribeFromCoreSignals() (from ~ResearcherModel). Every callback below
+    // captures `this`; a signal firing after this object is gone would otherwise
+    // invoke a slot on freed memory.
+    m_handlers.emplace_back(uiInterface.ResearcherChanged_connect(std::bind(ResearcherChanged, this)));
+    m_handlers.emplace_back(uiInterface.AccrualChangedFromStakeOrMRC_connect(std::bind(AccrualChangedFromStakeOrMRC, this)));
+    m_handlers.emplace_back(uiInterface.BeaconChanged_connect(std::bind(BeaconChanged, this)));
+    m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(std::bind(NotifyBlocksChangedForResearcher, this,
                                                      std::placeholders::_1, std::placeholders::_2,
-                                                     std::placeholders::_3, std::placeholders::_4));
+                                                     std::placeholders::_3, std::placeholders::_4)));
 }
 
 void ResearcherModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client
+    // Disconnect signals from client: clearing the retained connections runs
+    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    m_handlers.clear();
 }
 
 void ResearcherModel::commitBeacon(const BeaconStatus beacon_status)

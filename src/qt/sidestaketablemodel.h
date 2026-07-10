@@ -7,6 +7,8 @@
 
 #include <QAbstractTableModel>
 #include <memory>
+#include <vector>
+#include <boost/signals2/connection.hpp>
 #include "gridcoin/sidestake.h"
 
 class OptionsModel;
@@ -91,6 +93,11 @@ private:
     EditStatus m_edit_status;
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
+
+    //! Retained core-signal connections, cleared on teardown so a signal that
+    //! fires after this model is destroyed cannot invoke a slot bound to freed
+    //! memory. scoped_connection disconnects on destruction (issue #3129).
+    std::vector<boost::signals2::scoped_connection> m_handlers;
 
 signals:
 

@@ -894,33 +894,31 @@ static void NotifyBlocksChangedForWallet(WalletModel *walletmodel,
 
 void WalletModel::subscribeToCoreSignals()
 {
-    // Connect signals to wallet
-    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this,
-                                                    boost::placeholders::_1));
-    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this,
+    // Connect signals to wallet, retaining each connection so it is severed in
+    // unsubscribeFromCoreSignals() (from ~WalletModel). Every callback below
+    // captures `this`; a signal firing after this object is gone would
+    // otherwise invoke a slot on freed memory during shutdown.
+    m_handlers.emplace_back(wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this,
+                                                    boost::placeholders::_1)));
+    m_handlers.emplace_back(wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
                                                          boost::placeholders::_3, boost::placeholders::_4,
-                                                         boost::placeholders::_5, boost::placeholders::_6));
-    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
+                                                         boost::placeholders::_5, boost::placeholders::_6)));
+    m_handlers.emplace_back(wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
-                                                         boost::placeholders::_3));
-    uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChangedForWallet, this,
+                                                         boost::placeholders::_3)));
+    m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChangedForWallet, this,
                                                        boost::placeholders::_1, boost::placeholders::_2,
-                                                       boost::placeholders::_3, boost::placeholders::_4));
+                                                       boost::placeholders::_3, boost::placeholders::_4)));
 }
 
 void WalletModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from wallet
-    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this,
-                                                       boost::placeholders::_1));
-    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this,
-                                                            boost::placeholders::_1, boost::placeholders::_2,
-                                                            boost::placeholders::_3, boost::placeholders::_4,
-                                                            boost::placeholders::_5, boost::placeholders::_6));
-    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this,
-                                                            boost::placeholders::_1, boost::placeholders::_2,
-                                                            boost::placeholders::_3));
+    // Disconnect signals from wallet: clearing the retained connections runs
+    // each scoped_connection's destructor, which disconnects it. This also
+    // covers the uiInterface.NotifyBlocksChanged connection, which the previous
+    // hand-written disconnects missed and leaked (issue #3129 follow-up).
+    m_handlers.clear();
 }
 
 // WalletModel::UnlockContext implementation
