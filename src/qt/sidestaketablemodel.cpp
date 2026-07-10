@@ -124,7 +124,7 @@ SideStakeTableModel::SideStakeTableModel(OptionsModel* parent)
 
 SideStakeTableModel::~SideStakeTableModel()
 {
-  // Intentionally left empty
+    unsubscribeFromCoreSignals();
 }
 
 int SideStakeTableModel::rowCount(const QModelIndex &parent) const
@@ -452,11 +452,16 @@ void SideStakeTableModel::updateSideStakeTableModel()
 
 void SideStakeTableModel::subscribeToCoreSignals()
 {
-    // Connect signals to client
-    uiInterface.RwSettingsUpdated_connect(boost::bind(RwSettingsUpdated, this));
+    // Retain the connection so it is severed in unsubscribeFromCoreSignals()
+    // (from ~SideStakeTableModel); the callback captures `this` and a signal
+    // firing after this object is gone would otherwise invoke a slot on freed
+    // memory.
+    m_handlers.emplace_back(uiInterface.RwSettingsUpdated_connect(boost::bind(RwSettingsUpdated, this)));
 }
 
 void SideStakeTableModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client (currently no-op).
+    // Disconnect signals from client: clearing the retained connections runs
+    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    m_handlers.clear();
 }

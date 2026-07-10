@@ -545,12 +545,18 @@ VotingResult VotingModel::sendVote(
 
 void VotingModel::subscribeToCoreSignals()
 {
-    uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1));
-    uiInterface.NewVoteReceived_connect(std::bind(NewVoteReceived, this, std::placeholders::_1));
+    // Retain each connection so it is severed in unsubscribeFromCoreSignals()
+    // (from ~VotingModel). Both callbacks capture `this`; a signal firing after
+    // this object is gone would otherwise invoke a slot on freed memory.
+    m_handlers.emplace_back(uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1)));
+    m_handlers.emplace_back(uiInterface.NewVoteReceived_connect(std::bind(NewVoteReceived, this, std::placeholders::_1)));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
 {
+    // Disconnect signals from client: clearing the retained connections runs
+    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    m_handlers.clear();
 }
 
 void VotingModel::handleNewPoll(int64_t poll_time)

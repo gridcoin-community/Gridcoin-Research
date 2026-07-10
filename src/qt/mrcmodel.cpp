@@ -220,12 +220,17 @@ bool MRCModel::isWalletLocked()
 
 void MRCModel::subscribeToCoreSignals()
 {
-    uiInterface.MRCChanged_connect(std::bind(MRCChanged, this));
+    // Retain the connection so it is severed in unsubscribeFromCoreSignals()
+    // (from ~MRCModel); the callback captures `this` and a signal firing after
+    // this object is gone would otherwise invoke a slot on freed memory.
+    m_handlers.emplace_back(uiInterface.MRCChanged_connect(std::bind(MRCChanged, this)));
 }
 
 void MRCModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client (no-op currently)
+    // Disconnect signals from client: clearing the retained connections runs
+    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    m_handlers.clear();
 }
 
 void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)

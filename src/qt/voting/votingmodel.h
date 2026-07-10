@@ -16,6 +16,7 @@
 #include <vector>
 #include <QVariant>
 #include <QStringList>
+#include <boost/signals2/connection.hpp>
 
 namespace GRC {
 class PollRegistry;
@@ -192,6 +193,11 @@ private:
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
+
+    //! Retained core-signal connections, cleared on teardown so a signal that
+    //! fires after this model is destroyed cannot invoke a slot bound to freed
+    //! memory. scoped_connection disconnects on destruction (issue #3129).
+    std::vector<boost::signals2::scoped_connection> m_handlers;
 
 private slots:
     void handleNewPoll(int64_t poll_time);
