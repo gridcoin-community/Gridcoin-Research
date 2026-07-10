@@ -51,6 +51,12 @@ cs_main -> cs_setpwalletRegistered -> cs_wallet -> subsystem locks
 
 The wallet-registry lock (`cs_setpwalletRegistered`) was not previously part of the canonical order documented in `CLAUDE.md`. Phase 1 inserted it between `cs_main` and `cs_wallet` because the wallet-registry wrappers (`SyncWithWallets` and friends) iterate `setpwalletRegistered` and then dispatch into per-wallet methods that take `cs_wallet`. Acquisition at the call site (rather than inside the wrapper) avoids the inversion an inside-lock would have created with `sendrawtransaction`'s `LOCK2(cs_main, cs_wallet)` → `SyncWithWallets` path against the `SendMessages` → `ResendWalletTransactions` path (which holds no cs_main).
 
+> **Update (2026-07, #3108):** the wallet registry and `cs_setpwalletRegistered` have been
+> retired entirely — wallet notifications flow through `CMainSignals`, and the remaining
+> net-processing request-count / own-tx-trickle paths call `pwalletMain` directly. The
+> canonical order is now simply `cs_main -> cs_wallet -> subsystem locks`. The
+> `cs_setpwalletRegistered` material below is retained as a historical record of Phase 1.
+
 ## Globals annotated in Phase 1
 
 | Variable | File:line | Lock |

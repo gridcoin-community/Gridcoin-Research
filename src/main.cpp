@@ -64,9 +64,6 @@ using namespace boost;
 // Global state
 //
 
-CCriticalSection cs_setpwalletRegistered;
-set<CWallet*> setpwalletRegistered;
-
 CCriticalSection cs_main;
 CCriticalSection cs_tx_val_commit_to_disk;
 
@@ -147,29 +144,11 @@ arith_uint256 GetChainTrust(const CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(
     return g_chain_trust.GetTrust(pindex);
 }
 
-void RegisterWallet(CWallet* pwalletIn)
-{
-    {
-        LOCK(cs_setpwalletRegistered);
-        setpwalletRegistered.insert(pwalletIn);
-    }
-}
-
-void UnregisterWallet(CWallet* pwalletIn)
-{
-    {
-        LOCK(cs_setpwalletRegistered);
-        setpwalletRegistered.erase(pwalletIn);
-    }
-}
-
-// The setpwalletRegistered dispatch wrappers (EraseFromWallets, SetBestChain,
-// UpdatedTransaction, PrintWallets, ResendWalletTransactions) have been retired
-// under issue #3030: wallet notifications now flow through CMainSignals and the
-// wallet rebroadcast self-schedules on g_scheduler. cs_setpwalletRegistered now
-// guards only the registry set itself (RegisterWallet/UnregisterWallet above) and
-// the net-half Inventory/GetTransaction wrappers (tracked separately). The
-// canonical lock order remains cs_main -> cs_setpwalletRegistered -> cs_wallet.
+// The setpwalletRegistered wallet registry has been fully retired (issues #3030
+// and #3108): wallet notifications flow through CMainSignals, the wallet
+// rebroadcast self-schedules on g_scheduler, and the net-half request-count /
+// own-tx-trickle paths call pwalletMain directly. The canonical lock order is
+// now cs_main -> cs_wallet.
 
 
 double CoinToDouble(double surrogate)

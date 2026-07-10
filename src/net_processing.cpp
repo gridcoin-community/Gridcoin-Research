@@ -194,24 +194,6 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRE
     return nEvicted;
 }
 
-// get the wallet transaction with the given hash (if it exists)
-bool static GetTransaction(const uint256& hashTx, CWalletTx& wtx)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        if (pwallet->GetTransaction(hashTx,wtx))
-            return true;
-    return false;
-}
-
-// notify wallets about an incoming inventory (for request counts)
-void static Inventory(const uint256& hash)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_setpwalletRegistered)
-{
-    for (auto const& pwallet : setpwalletRegistered)
-        pwallet->Inventory(hash);
-}
-
 bool static AlreadyHave(CTxDB& txdb, const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     switch (inv.type)
@@ -745,10 +727,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 }
 
                 // Track requests for our stuff
-                {
-                    LOCK(cs_setpwalletRegistered);
-                    Inventory(inv.hash);
-                }
+                if (pwalletMain) pwalletMain->Inventory(inv.hash);
 
             }
         }
@@ -922,10 +901,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
 
             // Track requests for our stuff
-            {
-                LOCK(cs_setpwalletRegistered);
-                Inventory(inv.hash);
-            }
+            if (pwalletMain) pwalletMain->Inventory(inv.hash);
         }
     }
 
@@ -1540,10 +1516,8 @@ static bool SendMessages(CNode* pto, bool fSendTrickle)
                 if (!fTrickleWait)
                 {
                     CWalletTx wtx;
-                    LOCK(cs_setpwalletRegistered);
-                    if (GetTransaction(inv.hash, wtx))
-                        if (wtx.fFromMe)
-                            fTrickleWait = true;
+                    if (pwalletMain && pwalletMain->GetTransaction(inv.hash, wtx) && wtx.fFromMe)
+                        fTrickleWait = true;
                 }
 
                 if (fTrickleWait)
