@@ -17,6 +17,7 @@
 
 class CTxDB;
 class CBlockHeader;
+class CTxMemPool;
 extern CCriticalSection cs_main;
 namespace Consensus {
     struct Params;
@@ -112,6 +113,14 @@ int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 //! If it was found inside a block, its hash is placed in hashBlock. Takes
 //! cs_main internally. Moved from main.cpp (issue #3125, workstream C3).
 bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock);
+
+/** (try to) add transaction to memory pool. Moved from main.{h,cpp}
+ * (issue #3125, workstream C2). **/
+bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
+                        CValidationState& state, bool* pfMissingInputs,
+                        int64_t entry_time = 0, bool test_only = false,
+                        CAmount* fee_out = nullptr, size_t* vsize_out = nullptr)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
 
