@@ -48,45 +48,47 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
 
     def fund_multisig(self, ms_address):
         """Fund the multisig from a raw spend of a consensus-mature UTXO
-        (>10 confirmations) and confirm it. The wallet does not track raw
-        spends, so the staker can race us for the same UTXO when mining the
-        confirmation block and double-spend the funding away: verify the
-        funding confirmed and retry with a fresh UTXO if not.
+        (>10 confirmations) and confirm it.
+
+        The confirmation block is mined on node1, not node0. The wallet does
+        not track raw spends, so a node0-mined confirmation block can pick the
+        very UTXO the funding transaction spends for its own coinstake and evict
+        the funding as a double-spend. node1's coinstake stakes node1's coins
+        (it has no keys for node0's UTXO), so mining on node1 confirms the
+        funding deterministically and leaves node0's thin mature-UTXO pool
+        intact -- the node0-mined race recurred on the slower Alpine/musl CI
+        image and exhausted that pool ('no mature UTXO left to fund the
+        multisig'). Mining on node1 also ages node0's coinstakes toward maturity
+        instead of consuming node0's stake, which offsets the funding spend so
+        node0's thin mature pool survives this test's two funding rounds.
+        (Provisioning is height-deterministic, not timing-dependent; a third
+        round would need a few more setup blocks.)
         Returns (txid, vout, amount)."""
-        node0 = self.nodes[0]
-        tried = set()
-        for _ in range(5):
-            candidates = [u for u in node0.listunspent(11)
-                          if (u["txid"], u["vout"]) not in tried]
-            assert candidates, "no mature UTXO left to fund the multisig"
-            utxo = candidates[0]
-            tried.add((utxo["txid"], utxo["vout"]))
+        node0, node1 = self.nodes[0], self.nodes[1]
+        candidates = node0.listunspent(11)
+        assert candidates, "no mature UTXO left to fund the multisig"
+        utxo = candidates[0]
 
-            amount = round(float(utxo["amount"]) - 1.0, 8)  # ~1 GRC fee
-            raw = node0.createrawtransaction(
-                [{"txid": utxo["txid"], "vout": utxo["vout"]}], {ms_address: amount})
-            signed = node0.signrawtransactionwithwallet(raw)
-            assert signed.get("complete"), signed
-            txid = node0.sendrawtransaction(signed["hex"])
+        amount = round(float(utxo["amount"]) - 1.0, 8)  # ~1 GRC fee
+        raw = node0.createrawtransaction(
+            [{"txid": utxo["txid"], "vout": utxo["vout"]}], {ms_address: amount})
+        signed = node0.signrawtransactionwithwallet(raw)
+        assert signed.get("complete"), signed
+        txid = node0.sendrawtransaction(signed["hex"])
 
-            # PoS block timestamps are masked down to 16-second boundaries
-            # (STAKE_TIMESTAMP_MASK) and the miner excludes transactions with
-            # nTime > block.nTime: wait for the next boundary before mining
-            # the confirmation block.
-            time.sleep(16 - (int(time.time()) % 16) + 1)
-            node0.generatetoaddress(1, node0.getnewaddress())
+        # Wait for the funding tx to reach node1's mempool, then for the next
+        # 16-second STAKE_TIMESTAMP_MASK boundary (the miner excludes
+        # transactions with nTime > block.nTime) before node1 mines it.
+        self.wait_until(lambda: txid in node1.getrawmempool())
+        time.sleep(16 - (int(time.time()) % 16) + 1)
+        node1.generatetoaddress(1, node1.getnewaddress())
+        self.sync_blocks()
 
-            try:
-                funding = node0.getrawtransaction(txid, True)
-                if funding.get("confirmations", 0) >= 1:
-                    self.sync_blocks()
-                    vout = next(o["n"] for o in funding["vout"]
-                                if ms_address in o["scriptPubKey"].get("addresses", []))
-                    return txid, vout, amount
-            except Exception:
-                pass  # double-spent by the staker's coinstake: retry
-
-        raise AssertionError("could not confirm the multisig funding transaction")
+        funding = node0.getrawtransaction(txid, True)
+        assert funding.get("confirmations", 0) >= 1, "funding transaction did not confirm"
+        vout = next(o["n"] for o in funding["vout"]
+                    if ms_address in o["scriptPubKey"].get("addresses", []))
+        return txid, vout, amount
 
     def initiator_psgt(self, txid, vout, amount, fee):
         """node0 builds and partially signs a spend of the multisig UTXO."""
