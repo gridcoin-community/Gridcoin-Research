@@ -11,6 +11,7 @@
 #include "dbwrapper.h"
 #include "init.h"
 #include "main.h"
+#include "node/chainman.h"
 #include "node/ui_interface.h"
 #include "protocol.h"
 #include "serialize.h"

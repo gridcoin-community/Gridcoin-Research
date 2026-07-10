@@ -10,6 +10,7 @@
 #include "txdb.h"
 #include "miner.h"
 #include "main.h"
+#include "node/chainman.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/cpid.h"
 #include "gridcoin/claim.h"

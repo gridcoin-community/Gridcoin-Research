@@ -12,7 +12,9 @@
 
 class CBlock;
 class CBlockIndex;
+class CNode;
 class CTxDB;
+class CValidationState;
 
 extern CCriticalSection cs_main;
 
@@ -27,5 +29,17 @@ bool ForceReorganizeToHash(uint256 NewHash);
 //! Update the "previous block time" / "best received" sync clocks from the new
 //! tip. Called from chain connection and from the abandonment path in main.cpp.
 void UpdateSyncTime(const CBlockIndex* pindexBest);
+
+//! Run the Gridcoin tally-transition services for the current chain tip.
+//! Called from SetBestChain after the tip advances (issue #3125, C1).
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+//! Ask up to 10 connected peers for blocks starting at hashStart (or the
+//! current tip when hashStart is null).
+bool AskForOutstandingBlocks(uint256 hashStart);
+
+//! Validate and accept a block arriving from the network, a bootstrap file or
+//! the internal miner, parking orphans until their parents arrive.
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 #endif // GRIDCOIN_NODE_CHAINMAN_H

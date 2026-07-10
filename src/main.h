@@ -103,7 +103,9 @@ class CReserveKey;
 class CTxDB;
 class CTxIndex;
 
-bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+// ProcessBlock, AskForOutstandingBlocks and GridcoinServices live in
+// node/chainman.h (issue #3125, workstream C1); callers include it directly
+// (a main.h re-include would create a main <-> node/chainman module cycle).
 // Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
 // LoadExternalBlockFile) live in node/blockstorage.h, included above.
 // Takes cs_main internally; callers MUST NOT hold cs_main when calling
