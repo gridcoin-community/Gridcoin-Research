@@ -6,54 +6,157 @@
 
 #include "chainparams.h"
 
+#include "amount.h"
+#include "arith_uint256.h"
 #include "consensus/merkle.h"
 #include <key.h>
+#include "primitives/block.h"
+#include "script.h"
 #include "tinyformat.h"
+#include "util.h"
 #include "util/strencodings.h"
 #include "util/system.h"
 
 #include <assert.h>
 
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
-/* TODO: Uncomment this when CBlock is moved from main.h
-static CBlock CreateGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion)
+// Construct the genesis block for the active network (main/testnet/regtest).
+// Moved out of LoadBlockIndex (issue #3125, workstream C5), fulfilling the
+// old "uncomment when CBlock is moved from main.h" TODO that sat here --
+// CBlock moved to primitives/block.h in #3060. Behavior-preserving: note the
+// mainnet/testnet coinbase nTime (1413033777) deliberately differs from the
+// testnet block nTime (1406674534), exactly as the original code had it.
+CBlock CreateGenesisBlock()
 {
-    CMutableTransaction txNew;
-    txNew.nVersion = 1;
-    txNew.nTime = nTime;
-    txNew.vin.resize(1);
-    txNew.vout.resize(1);
-    txNew.vin[0].scriptSig = CScript() << 0 << CBigNum(42) << vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
-    txNew.vout[0].SetEmpty();
+    // Genesis block - Genesis2
+    // MainNet - Official New Genesis Block:
+    ////////////////////////////////////////
+    /*
+         21:58:24 block.nTime = 1413149999
+        10/12/14 21:58:24 block.nNonce = 1572771
+        10/12/14 21:58:24 block.GetHash = 00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990
+        10/12/14 21:58:24 CBlock(hash=00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990, ver=1,
+        hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000,
+        hashMerkleRoot=0bd65ac9501e8079a38b5c6f558a99aea0c1bcff478b8b3023d09451948fe841, nTime=1413149999, nBits=1e0fffff, nNonce=1572771, vtx=1, vchBlockSig=)
+        10/12/14 21:58:24   Coinbase(hash=0bd65ac950, nTime=1413149999, ver=1, vin.size=1, vout.size=1, nLockTime=0)
+        CTxIn(COutPoint(0000000000, 4294967295), coinbase 00012a4531302f31312f313420416e6472656120526f73736920496e647573747269616c20486561742076696e646963617465642077697468204c454e522076616c69646174696f6e)
+        CTxOut(empty)
+        vMerkleTree: 0bd65ac950
 
-    CBlock genesis;
-    genesis.nTime    = nTime;
-    genesis.nBits    = nBits;
-    genesis.nNonce   = nNonce;
-    genesis.nVersion = nVersion;
-    genesis.vtx.push_back(txNew);
-    genesis.hashPrevBlock.SetNull();
-    genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
-    return genesis;
-} */
+    */
 
-/**
- * Build the genesis block. Note that the output of its generation
- * transaction cannot be spent since it did not originally exist in the
- * database.
- *
- * CBlock(hash=00000f762f698b5962aa81e38926c3a3f1f03e0b384850caed34cd9164b7f990, ver=1,
- *        hashPrevBlock=0000000000000000000000000000000000000000000000000000000000000000,
- *        hashMerkleRoot=0bd65ac9501e8079a38b5c6f558a99aea0c1bcff478b8b3023d09451948fe841, nTime=1413149999, nBits=1e0fffff, nNonce=1572771, vtx=1, vchBlockSig=)
-static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion)
-{
     const char* pszTimestamp = "10/11/14 Andrea Rossi Industrial Heat vindicated with LENR validation";
-    return CreateGenesisBlock(pszTimestamp, nTime, nNonce, nBits, nVersion);
-}  */
+
+    CMutableTransaction txNew;
+    //GENESIS TIME
+    txNew.nVersion = 1;
+    txNew.nTime = Params().IsMockableChain() ? 1296688602u : 1413033777u;
+    txNew.vin.resize(1);
+    txNew.vin[0].scriptSig = CScript() << 0 << CScriptNum(42) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+
+    if (Params().IsMockableChain()) {
+        // Regtest premine. Pays 10 UTXOs of 100,000 GRC each (1M total) to
+        // the well-known secp256k1 privkey=1 P2PKH address. The matching
+        // private key is `01..01` (32 bytes of 0x01... no, scalar value 1)
+        // and is imported into the wallet by init.cpp under -regtest. UTXOs
+        // are marked immediately mature by GetBlocksToMaturity's regtest
+        // shortcut so the staker can use them at height 1.
+        //
+        // Master plan calls for 10M GRC across 100 UTXOs (final amount/dist
+        // needs maintainer signoff — flagged in PR description). Tonight's
+        // smaller layout is enough to fund Phase 2B.2 generate tests.
+        const std::vector<unsigned char> kRegtestPubKeyHash = {
+            0x75, 0x1e, 0x76, 0xe8, 0x19, 0x91, 0x96, 0xd4, 0x54, 0x94,
+            0x1c, 0x45, 0xd1, 0xb3, 0xa3, 0x23, 0xf1, 0x43, 0x3b, 0xd6
+        };
+        const CScript premine_script = CScript()
+            << OP_DUP << OP_HASH160
+            << kRegtestPubKeyHash
+            << OP_EQUALVERIFY << OP_CHECKSIG;
+        txNew.vout.resize(10);
+        for (size_t i = 0; i < txNew.vout.size(); ++i) {
+            txNew.vout[i].nValue = 100000 * COIN;
+            txNew.vout[i].scriptPubKey = premine_script;
+        }
+    } else {
+        txNew.vout.resize(1);
+        txNew.vout[0].SetEmpty();
+    }
+    CBlock block;
+    block.vtx.push_back(CTransaction(txNew));
+    block.hashPrevBlock.SetNull();
+    block.hashMerkleRoot = BlockMerkleRoot(block);
+    const bool fRegTest = Params().IsMockableChain();
+    // Regtest genesis announces a modern block version so the staker
+    // walking back to it via GetProofOfStakeReward() sees pindexPrev->nVersion
+    // >= 10 and uses GetConstantBlockReward(); with nVersion=1 the call
+    // falls into the coin-age formula with our nCoinAge=0 argument and
+    // returns a zero subsidy, which fails Claim::WellFormed.
+    block.nVersion = fRegTest ? 14 : 1;
+    //R&D - Testers Wanted Thread:
+    block.nTime    = fRegTest ? 1296688602 : !fTestNet ? 1413033777 : 1406674534;
+    //Official Launch time:
+    block.nBits    = UintToArith256(Params().GetConsensus().powLimit).GetCompact();
+    block.nNonce = fRegTest ? 0 : !fTestNet ? 130208 : 22436;
+    LogPrintf("starting Genesis Check...");
+    // If genesis block hash does not match, then generate new genesis hash.
+    if (block.GetHash(true) != (fRegTest ? hashGenesisBlockRegTest : !fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet))
+    {
+        LogPrintf("Searching for genesis block...");
+        // This will figure out a valid hash and Nonce if you're
+        // creating a different genesis block: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000xFFF
+        arith_uint256 hashTarget = arith_uint256().SetCompact(block.nBits);
+        arith_uint256 thash;
+        while (true)
+        {
+            thash = UintToArith256(block.GetHash(true));
+            if (thash <= hashTarget)
+                break;
+            if ((block.nNonce & 0xFFF) == 0)
+            {
+                LogPrintf("nonce %08X: hash = %s (target = %s)", block.nNonce, thash.ToString(), hashTarget.ToString());
+            }
+            ++block.nNonce;
+            if (block.nNonce == 0)
+            {
+                LogPrintf("NONCE WRAPPED, incrementing time");
+                ++block.nTime;
+            }
+        }
+        LogPrintf("block.nTime = %u ", block.nTime);
+        LogPrintf("block.nNonce = %u ", block.nNonce);
+        LogPrintf("block.GetHash = %s", block.GetHash(true).ToString());
+    }
+
+
+    block.print();
+
+    //// debug print
+
+    //GENESIS3: Official Merkle Root
+    if (!fRegTest) {
+        uint256 merkle_root = uint256S("0x5109d5782a26e6a5a5eb76c7867f3e8ddae2bff026632c36afec5dc32ed8ce9f");
+        assert(block.hashMerkleRoot == merkle_root);
+        assert(block.GetHash(true) == (!fTestNet ? hashGenesisBlock : hashGenesisBlockTestNet));
+    } else {
+        // Regtest genesis is deterministic (fixed nVersion/nTime/nNonce and a
+        // fixed premine coinbase), so its hash is stable and assertable. Mirror
+        // the main/testnet assert so a future premine-layout change can't leave
+        // hashGenesisBlockRegTest (main.h) silently stale.
+        LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u",
+                  block.GetHash(true).ToString(),
+                  block.hashMerkleRoot.ToString(),
+                  block.nNonce, block.nTime);
+        assert(block.GetHash(true) == hashGenesisBlockRegTest);
+    }
+
+    return block;
+}
 
 /**
  * Main network

@@ -9,8 +9,11 @@
 #include "clientversion.h"
 #include "consensus/consensus.h"
 #include "dbwrapper.h"
+#include "gridcoin/staking/chain_trust.h"
+#include "gridcoin/staking/spam.h"
 #include "init.h"
 #include "main.h"
+#include "net.h"
 #include "node/chainman.h"
 #include "node/ui_interface.h"
 #include "protocol.h"
@@ -20,6 +23,11 @@
 #include "validation.h"
 
 #include <stdio.h>
+
+// Chain-state globals defined in main.cpp that LoadBlockIndex references;
+// same ad-hoc extern pattern as node/chainman.cpp and node/coherence.cpp.
+extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
 
 
 bool WriteBlockToDisk(const CBlock& block, unsigned int& nFileRet, unsigned int& nBlockPosRet,
@@ -281,3 +289,102 @@ bool LoadExternalBlockFile(FILE* fileIn, size_t file_size, unsigned int percent_
     return nLoaded > 0;
 }
 
+
+// Load-time entry point moved here from main.cpp (issue #3125, workstream
+// C5): loads the block index from LevelDB and, on an empty datadir, creates
+// the genesis block via CreateGenesisBlock() (chainparams.cpp) and writes it
+// to disk. Takes cs_main internally.
+bool LoadBlockIndex(bool fAllowNew)
+{
+    LOCK(cs_main);
+
+    if (Params().IsMockableChain())
+    {
+        // GLOBAL REGTEST SETTINGS — staking and maturity gated to 0 so the kernel
+        // checks at gridcoin/staking/kernel.cpp:617,654 pass trivially. nGrandfather
+        // is irrelevant at regtest heights.
+        nStakeMinAge = 0;
+        nCoinbaseMaturity = 10;
+        nGrandfather = 0;
+        MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
+    }
+    else if (fTestNet)
+    {
+        // GLOBAL TESTNET SETTINGS - R HALFORD
+        nStakeMinAge = 1 * 60 * 60; // test net min age is 1 hour
+        nCoinbaseMaturity = 10; // test maturity is 10 blocks
+        nGrandfather = 196550;
+        //1-24-2016
+        MAX_OUTBOUND_CONNECTIONS = (int)gArgs.GetArg("-maxoutboundconnections", 8);
+    }
+
+    LogPrintf("Mode=%s", Params().IsMockableChain() ? "RegTest" : fTestNet ? "TestNet" : "Prod");
+
+    //
+    // Load block index
+    //
+    CTxDB txdb("cr+");
+    if (!txdb.LoadBlockIndex())
+        return false;
+
+    //
+    // Init with genesis block
+    //
+    if (mapBlockIndex.empty())
+    {
+        if (!fAllowNew)
+            return false;
+
+        CBlock block = CreateGenesisBlock();
+        const bool fRegTest = Params().IsMockableChain();
+        { CValidationState genesis_state; assert(CheckBlock(block, genesis_state, 1)); }
+
+        // Start new block file
+        unsigned int nFile;
+        unsigned int nBlockPos;
+        if (!WriteBlockToDisk(block, nFile, nBlockPos, Params().MessageStart()))
+            return error("LoadBlockIndex() : writing genesis block to disk failed");
+        const uint256 genesis_proof = fRegTest ? block.GetHash(true)
+                                               : hashGenesisBlock;
+        if (!AddToBlockIndex(block, nFile, nBlockPos, genesis_proof))
+            return error("LoadBlockIndex() : genesis block not accepted");
+
+        // Under -regtest the genesis coinbase carries spendable premine
+        // outputs (see chainparams.cpp). LoadBlockIndex bypasses ConnectBlock
+        // for genesis, so the txindex/UpdateTxIndex path that normally writes
+        // each block's transactions is never taken — leaving CheckProofOfStakeV8
+        // unable to ReadStakedInput for the premine UTXO. Write the genesis
+        // coinbase to the tx index directly so the staker can spend it at
+        // height 1.
+        if (fRegTest) {
+            CTxDB regtxdb;
+            const unsigned int nTxPos = nBlockPos
+                + ::GetSerializeSize<CBlockHeader>(block, SER_DISK, CLIENT_VERSION)
+                + GetSizeOfCompactSize(block.vtx.size());
+            const CDiskTxPos pos(nFile, nBlockPos, nTxPos);
+            const uint256 genesis_coinbase_hash = block.vtx[0].GetHash();
+            if (!regtxdb.AddTxIndex(block.vtx[0], pos, /*nHeight=*/0)) {
+                return error("LoadBlockIndex() : failed to write regtest genesis tx index");
+            }
+            LogPrintf("regtest: wrote genesis coinbase %s to tx index at file=%u blockpos=%u txpos=%u",
+                      genesis_coinbase_hash.ToString(), nFile, nBlockPos, nTxPos);
+            CTxIndex verify_index;
+            if (regtxdb.ReadTxIndex(genesis_coinbase_hash, verify_index)) {
+                LogPrintf("regtest: verified genesis coinbase readable from tx index");
+            } else {
+                LogPrintf("regtest: WARN — genesis coinbase NOT readable back from tx index");
+            }
+        }
+    }
+
+    if (fRequestShutdown) {
+        return true;
+    }
+
+    UpdateSyncTime(pindexBest);
+
+    g_chain_trust.Initialize(pindexGenesisBlock, pindexBest);
+    g_seen_stakes.Refill(pindexBest);
+
+    return true;
+}
