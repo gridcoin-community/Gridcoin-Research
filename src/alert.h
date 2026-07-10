@@ -106,4 +106,8 @@ public:
     static CAlert getAlertByHash(const uint256 &hash);
 };
 
+//! Aggregate the highest-priority warning for the status bar / RPC "errors"
+//! field (issue #3125, workstream C6). strFor must be "statusbar".
+std::string GetWarnings(std::string strFor);
+
 #endif // BITCOIN_ALERT_H

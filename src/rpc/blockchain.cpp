@@ -4,6 +4,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "alert.h"
 #include "chainparams.h"
 #include "blockchain.h"
 #include "gridcoin/pool.h"

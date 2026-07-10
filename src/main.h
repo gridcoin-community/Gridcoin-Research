@@ -165,7 +165,7 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
-std::string GetWarnings(std::string strFor);
+// GetWarnings lives in alert.h (issue #3125, workstream C6).
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
 bool OutOfSyncByAge();
 
