@@ -108,6 +108,11 @@ bool GetCoinAge(const CTransaction& tx, CTxDB& txdb, uint64_t& nCoinAge) EXCLUSI
 
 int GetDepthInMainChain(const CTxIndex& txi) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+//! Look a transaction up by hash, first in the mempool and then in the txdb.
+//! If it was found inside a block, its hash is placed in hashBlock. Takes
+//! cs_main internally. Moved from main.cpp (issue #3125, workstream C3).
+bool GetTransaction(const uint256& hash, CTransaction& tx, uint256& hashBlock);
+
 bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params);
 
 bool DisconnectBlock(CBlock& block, CTxDB& txdb, CBlockIndex* pindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

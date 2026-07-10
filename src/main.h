@@ -124,8 +124,9 @@ GRC::ClaimOption GetClaimByIndex(const CBlockIndex* const pblockindex) EXCLUSIVE
 
 int GetNumBlocksOfPeers();
 bool IsInitialBlockDownload();
-// GetWarnings lives in alert.h (issue #3125, workstream C6).
-bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock);
+// GetWarnings lives in alert.h (issue #3125, workstream C6). GetTransaction
+// lives in validation.h, included above, and CMerkleTx in wallet/wallet.h --
+// only the wallet derives from it (issue #3125, workstream C3).
 bool OutOfSyncByAge();
 
 /** (try to) add transaction to memory pool **/
@@ -136,56 +137,5 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CTransaction &tx,
     EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 
-/** A transaction with a merkle branch linking it to the block chain. */
-class CMerkleTx : public CTransaction
-{
-protected:
-    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
-public:
-    uint256 hashBlock;
-    int nIndex;
-
-    CMerkleTx()
-    {
-        Init();
-    }
-
-    CMerkleTx(const CTransaction& txIn) : CTransaction(txIn)
-    {
-        Init();
-    }
-
-    virtual ~CMerkleTx() = default;
-
-    void Init()
-    {
-        hashBlock.SetNull();
-        nIndex = -1;
-    }
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        std::vector<uint256> dummy_vector1; //!< Used to be vMerkleBranch
-        READWRITEAS(CTransaction, *this);
-        READWRITE(hashBlock);
-        READWRITE(dummy_vector1);
-        READWRITE(nIndex);
-    }
-
-    int SetMerkleBranch(const CBlock* pblock = nullptr);
-
-    // Return depth of transaction in blockchain:
-    // -1  : not in blockchain, and not in memory pool (conflicted transaction)
-    //  0  : in memory pool, waiting to be included in a block
-    // >=1 : this many blocks deep in the main chain
-    int GetDepthInMainChain(CBlockIndex* &pindexRet) const;
-    int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
-    bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
-    int GetBlocksToMaturity() const;
-    bool AcceptToMemoryPool();
-};
 
 #endif

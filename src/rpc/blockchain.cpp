@@ -7,6 +7,7 @@
 #include "alert.h"
 #include "chainparams.h"
 #include "blockchain.h"
+#include "wallet/wallet.h"
 #include "gridcoin/pool.h"
 #include "gridcoin/protocol.h"
 #include "gridcoin/project.h"

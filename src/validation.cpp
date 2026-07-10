@@ -1784,3 +1784,29 @@ bool ValidateMRC(const CBlockIndex* mrc_last_pindex, const GRC::MRC &mrc) EXCLUS
 
     return true;
 }
+
+// Moved here from main.cpp (issue #3125, workstream C3): a chain/mempool
+// lookup with no wallet dependency.
+// Return transaction in tx, and if it was found inside a block, its hash is placed in hashBlock
+bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock)
+{
+    {
+        LOCK(cs_main);
+        {
+            if (mempool.lookup(hash, tx))
+            {
+                return true;
+            }
+        }
+        CTxDB txdb("r");
+        CTxIndex txindex;
+        if (ReadTxFromDisk(tx, txdb, COutPoint(hash, 0), txindex))
+        {
+            CBlock block;
+            if (ReadBlockFromDisk(block, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus(), false))
+                hashBlock = block.GetHash(true);
+            return true;
+        }
+    }
+    return false;
+}

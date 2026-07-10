@@ -4338,3 +4338,123 @@ bool CWallet::AbandonTransaction(const uint256& txid)
 
     return true;
 }
+
+// CMerkleTx and the CWalletTx mempool-acceptance methods moved here from
+// main.cpp (issue #3125, workstream C3): only the wallet derives from
+// CMerkleTx, mirroring Bitcoin's relocation of the class into the wallet.
+
+int CMerkleTx::SetMerkleBranch(const CBlock* pblock) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+
+    CBlock blockTmp;
+    if (pblock == nullptr) {
+        // Load the block this tx is in
+        CTxIndex txindex;
+        if (!CTxDB("r").ReadTxIndex(GetHash(), txindex))
+            return 0;
+        if (!ReadBlockFromDisk(blockTmp, txindex.pos.nFile, txindex.pos.nBlockPos, Params().GetConsensus()))
+            return 0;
+        pblock = &blockTmp;
+    }
+
+    // Update the tx's hashBlock
+    hashBlock = pblock->GetHash(true);
+
+    // Locate the transaction
+    for (nIndex = 0; nIndex < (int)pblock->vtx.size(); nIndex++)
+        if (pblock->vtx[nIndex] == *(CTransaction*)this)
+            break;
+    if (nIndex == (int)pblock->vtx.size())
+    {
+        nIndex = -1;
+        LogPrintf("ERROR: SetMerkleBranch() : couldn't find tx in block");
+        return 0;
+    }
+
+    // Is the tx in a block that's in the main chain
+    BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+    if (mi == mapBlockIndex.end())
+        return 0;
+    CBlockIndex* pindex = mi->second;
+    if (!pindex || !pindex->IsInMainChain())
+        return 0;
+
+    return pindexBest->nHeight - pindex->nHeight + 1;
+}
+
+int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+
+    if (hashBlock.IsNull() || nIndex == -1)
+        return 0;
+
+    BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+    if (mi == mapBlockIndex.end())
+        return 0;
+
+    CBlockIndex* pindex = mi->second;
+    if (!pindex || !pindex->IsInMainChain())
+        return 0;
+
+    pindexRet = pindex;
+    return pindexBest->nHeight - pindex->nHeight + 1;
+}
+
+int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    int nResult = GetDepthInMainChainINTERNAL(pindexRet);
+    if (nResult == 0 && !mempool.exists(GetHash()))
+        return -1; // Not in chain, not in mempool
+
+    return nResult;
+}
+
+int CMerkleTx::GetBlocksToMaturity() const
+{
+    if (!(IsCoinBase() || IsCoinStake()))
+        return 0;
+    // Under -regtest, treat coinbase/coinstake outputs as immediately mature so
+    // the genesis premine can be staked at height 1 without bootstrap loops.
+    // The +10 below would otherwise make regtest unable to produce a first
+    // PoS block (no spendable UTXO to stake against).
+    if (Params().IsMockableChain())
+        return 0;
+    return max(0, (nCoinbaseMaturity+10) - GetDepthInMainChain());
+}
+
+
+bool CMerkleTx::AcceptToMemoryPool() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    CValidationState state;
+    return ::AcceptToMemoryPool(mempool, *this, state, nullptr);
+}
+
+
+
+bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+
+    {
+        // Add previous supporting transactions first
+        for (auto tx : vtxPrev)
+        {
+            if (!(tx.IsCoinBase() || tx.IsCoinStake()))
+            {
+                uint256 hash = tx.GetHash();
+                if (!mempool.exists(hash) && !txdb.ContainsTx(hash))
+                    tx.AcceptToMemoryPool();
+            }
+        }
+        return AcceptToMemoryPool();
+    }
+    return false;
+}
+
+bool CWalletTx::AcceptWalletTransaction() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    CTxDB txdb("r");
+    return AcceptWalletTransaction(txdb);
+}
