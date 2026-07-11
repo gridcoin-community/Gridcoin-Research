@@ -27,7 +27,8 @@ bool SetBestChain(CTxDB& txdb, CBlock& blockNew, CBlockIndex* pindexNew) EXCLUSI
 bool ForceReorganizeToHash(uint256 NewHash);
 
 //! Update the "previous block time" / "best received" sync clocks from the new
-//! tip. Called from chain connection and from the abandonment path in main.cpp.
+//! tip. Called from chain connection and from the abandonment path in
+//! node/coherence.cpp.
 void UpdateSyncTime(const CBlockIndex* pindexBest);
 
 //! Run the Gridcoin tally-transition services for the current chain tip.
