@@ -289,3 +289,42 @@ bool CAlert::ProcessAlert(bool fThread)
     LogPrint(BCLog::LogFlags::VERBOSE, "accepted alert %d, AppliesToMe()=%d", nID, AppliesToMe());
     return true;
 }
+
+// Aggregate the highest-priority warning for the status bar / RPC "errors"
+// field: misc warnings (out of disk space, wrong clock) plus any applicable
+// alerts. Moved from main.cpp next to the alert storage it reads (issue #3125,
+// workstream C6).
+string GetWarnings(string strFor)
+{
+    int nPriority = 0;
+    string strStatusBar;
+
+    // Misc warnings like out of disk space and clock is wrong
+    if (strMiscWarning != "")
+    {
+        nPriority = 1000;
+        strStatusBar = strMiscWarning;
+    }
+
+    // Alerts
+    {
+        LOCK(cs_mapAlerts);
+        for (auto const& item : mapAlerts)
+        {
+            const CAlert& alert = item.second;
+            if (alert.AppliesToMe() && alert.nPriority > nPriority)
+            {
+                nPriority = alert.nPriority;
+                strStatusBar = alert.strStatusBar;
+            }
+        }
+    }
+
+    if (strFor == "statusbar")
+    {
+        return strStatusBar;
+    }
+
+    assert(!"GetWarnings() : invalid parameter");
+    return "error";
+}

@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
+#include "alert.h"
 #include "init.h"
 #include <key_io.h>
 #include "main.h"

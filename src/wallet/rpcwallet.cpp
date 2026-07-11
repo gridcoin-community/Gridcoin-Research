@@ -4,6 +4,7 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include <key_io.h>
+#include "alert.h"
 #include "version.h"
 #include "txdb.h"
 #include "rpc/server.h"
