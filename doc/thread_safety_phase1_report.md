@@ -45,6 +45,11 @@ Applied to both the `DEBUG_LOCKORDER` and no-debug declarations. **Annotation-on
 
 ## Canonical lock order established in Phase 1
 
+> **Superseded (see the #3108 Update below).** The current canonical order is
+> `cs_main -> cs_wallet -> subsystem locks`; the `cs_setpwalletRegistered` hop
+> was retired with the wallet registry. The block immediately below records the
+> order as it stood in Phase 1, for historical reference.
+
 ```
 cs_main -> cs_setpwalletRegistered -> cs_wallet -> subsystem locks
 ```
@@ -67,7 +72,7 @@ The wallet-registry lock (`cs_setpwalletRegistered`) was not previously part of 
 | `nBestChainTrust` | `src/main.h:83` | `cs_main` |
 | `hashBestChain` | `src/main.h:84` | `cs_main` |
 | `pindexBest` | `src/main.h:85` | `cs_main` |
-| `setpwalletRegistered` | `src/main.h:89` | `cs_setpwalletRegistered` |
+| `setpwalletRegistered` _(removed, #3108)_ | `src/main.h:89` | `cs_setpwalletRegistered` |
 
 `net.h`'s `vNodes` / `cs_vNodes` / `mapRelay` / `cs_mapRelay` and the `wallet.cs_wallet` mutex were already declared and partially annotated upstream; Phase 1 left those declarations as-is and resolved only the warnings that surfaced from the new cs_main `GUARDED_BY` additions.
 
