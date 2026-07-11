@@ -40,6 +40,7 @@
 #include "gridcoin/tally.h"
 #include "gridcoin/tx_message.h"
 #include "node/blockstorage.h"
+#include "node/chainman.h"
 #include "node/coherence.h"
 #include "node/orphan_blocks.h"
 #include "node/psgt_pool.h"

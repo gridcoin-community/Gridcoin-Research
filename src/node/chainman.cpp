@@ -6,12 +6,17 @@
 
 #include "node/chainman.h"
 
+#include "chainparams.h"
+#include "checkpoints.h"
 #include "main.h"
+#include "net.h"
 #include "txdb.h"
 #include "node/blockstorage.h"
+#include "node/orphan_blocks.h"
 #include "node/ui_interface.h"
 #include "validation.h"
 #include "validationinterface.h"
+#include "gridcoin/staking/spam.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/gridcoin.h"
 #include "gridcoin/mrc.h"
@@ -37,15 +42,14 @@ using namespace std;
 // Chain-state globals defined elsewhere that the chain-management functions
 // reference. Kept where they are to limit churn (issue #3030, A4):
 //   g_chain_trust       -> defined in main.cpp (also extern'd in validation.cpp)
+//   g_seen_stakes / g_v11_timestamp -> defined in main.cpp (same ad-hoc extern
+//                          pattern as node/orphan_blocks.cpp / node/coherence.cpp)
 //   g_previous_block_time / g_nTimeBestReceived -> defined in main.cpp, declared in main.h
 //   pwalletMain         -> defined in init.cpp
 extern GRC::ChainTrustCache g_chain_trust GUARDED_BY(cs_main);
+extern GRC::SeenStakes g_seen_stakes GUARDED_BY(cs_main);
+extern int64_t g_v11_timestamp;
 extern CWallet* pwalletMain;
-
-// Defined in main.cpp; forward-declared here for the moved callers (mirrors the
-// forward declarations main.cpp itself uses).
-extern bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-extern bool AskForOutstandingBlocks(uint256 hashStart);
 
 void UpdateSyncTime(const CBlockIndex* const pindexBest)
 {
@@ -624,6 +628,212 @@ bool ForceReorganizeToHash(uint256 NewHash)
               __func__,
               pindexBest->nHeight,
               pindexBest->GetBlockHash().GetHex());
+
+    return true;
+}
+
+// Block-arrival orchestration moved out of main.cpp (issue #3125, workstream
+// C1): GridcoinServices, AskForOutstandingBlocks and ProcessBlock live next to
+// the chain-management functions above, which are their main collaborators.
+
+bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    // Block version 9 tally transition:
+    //
+    // This block controls the switch to a new tallying system introduced with
+    // block version 9. Mainnet and testnet activate at different heights seen
+    // below.
+    //
+    if (!IsV9Enabled_Tally(nBestHeight)
+        && IsV9Enabled(nBestHeight + (fTestNet ? 200 : 40))
+        && nBestHeight % 20 == 0)
+    {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v9 threshold.");
+
+        GRC::Tally::LegacyRecount(pindexBest);
+    }
+
+    // Block version 11 tally transition:
+    //
+    // Before the first version 11 block arrives, activate the snapshot accrual
+    // system by creating a baseline of the research rewards owed in historical
+    // superblocks so that we can validate the reward for the next block.
+    //
+    if (nBestHeight + 1 == Params().GetConsensus().BlockV11Height) {
+        LogPrint(BCLog::LogFlags::TALLY,
+            "GridcoinServices: Priming tally system for v11 threshold.");
+
+        if (!GRC::Tally::ActivateSnapshotAccrual(pindexBest)) {
+            return error("GridcoinServices: Failed to prepare tally for v11.");
+        }
+
+        // Set the timestamp for the block version 11 threshold. This
+        // is temporary. Remove this variable in a release that comes
+        // after the hard fork.
+        //
+        g_v11_timestamp = pindexBest->nTime;
+    }
+
+    // Fix ability for new CPIDs to accrue research rewards earlier than one
+    // superblock.
+    //
+    // A bug in the snapshot accrual system for block version 11+ requires a
+    // consensus change to fix. This activates the solution at the following
+    // height:
+    //
+
+    // This is actually broken. Commented out.
+    /*
+    if (nBestHeight + 1 == GetNewbieSnapshotFixHeight()) {
+        if (!GRC::Tally::FixNewbieSnapshotAccrual()) {
+            return error("%s: Failed to fix newbie snapshot accrual", __func__);
+        }
+    }
+    */
+
+    return true;
+}
+
+bool AskForOutstandingBlocks(uint256 hashStart)
+{
+    LOCK(cs_main);
+
+    // Resolve the start block index once under cs_main (issue #2558 PR 9c);
+    // it does not depend on the peer, so hoist it out of the per-node loop.
+    CBlockIndex* pindexStart = pindexBest;
+    if (hashStart != uint256())
+    {
+        const auto it = mapBlockIndex.find(hashStart);
+        if (it == mapBlockIndex.end() || !it->second)
+            return error("Unable to find block index %s", hashStart.ToString().c_str());
+        pindexStart = it->second;
+    }
+
+    // Read the cs_main-guarded height into a local so the iteration callback
+    // touches no cs_main-guarded state (keeps -Werror=thread-safety happy).
+    const int nBestHeightLocal = nBestHeight;
+    int iAsked = 0;
+    if (g_connman)
+    {
+        g_connman->ForEachNodeUnderLock([&](CNode* pNode) {
+            // Once 10 nodes have been asked, skip the rest. ForEachNodeUnderLock
+            // has no early-exit, so this keeps iterating (cheaply) rather than
+            // break-ing as the pre-API loop did -- same set of nodes asked.
+            if (iAsked > 10) return;
+            if (!pNode->fClient && !pNode->fOneShot && (pNode->nStartingHeight > (nBestHeightLocal - 144)))
+            {
+                pNode->PushGetBlocks(pindexStart, uint256());
+                LogPrintf("Asked for blocks");
+                iAsked++;
+            }
+        });
+    }
+    return true;
+}
+
+bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool generated_by_me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+
+    // Check for duplicate
+    uint256 hash = pblock->GetHash(true);
+    if (mapBlockIndex.count(hash))
+        return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().c_str());
+    if (g_orphan_blocks.Contains(hash))
+        return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str());
+
+    if (pblock->hashPrevBlock != hashBestChain)
+    {
+        // Extra checks to prevent "fill up memory by spamming with bogus blocks"
+        const CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
+        if (pcheckpoint != nullptr) {
+            int64_t deltaTime = pblock->GetBlockTime() - pcheckpoint->nTime;
+            if (deltaTime < 0)
+            {
+                if (pfrom)
+                    pfrom->Misbehaving(1);
+                return error("ProcessBlock() : block with timestamp before last checkpoint");
+            }
+        }
+    }
+
+    // Preliminary checks
+    if (!CheckBlock(*pblock, state, pindexBest->nHeight + 1))
+        return error("ProcessBlock() : CheckBlock FAILED");
+
+    // If don't already have its previous block, shunt it off to holding area until we get it
+    if (!pblock->hashPrevBlock.IsNull() && !mapBlockIndex.count(pblock->hashPrevBlock))
+    {
+        LogPrintf("ProcessBlock: ORPHAN BLOCK, prev=%s", pblock->hashPrevBlock.ToString());
+
+        // If we can't ask the node for the parent blocks, no need to keep it.
+        // This happens while loading a bootstrap file (-loadblock):
+        if (!pfrom) {
+            return true;
+        }
+
+        if (pblock->IsProofOfStake()) {
+            if (g_seen_stakes.ContainsOrphan(pblock->vtx[1])
+                && !g_orphan_blocks.HasChildrenOf(hash))
+            {
+                return error(
+                    "%s: ignored duplicate proof-of-stake for orphan %s",
+                    __func__,
+                    hash.ToString());
+            } else {
+                g_seen_stakes.RememberOrphan(pblock->vtx[1]);
+            }
+        }
+
+        if (!g_orphan_blocks.Add(hash, *pblock, GetTime())) {
+            return true;
+        }
+
+        // Ask this guy to fill in what we're missing
+        const CBlock* pblock_root = g_orphan_blocks.GetRootBlock(hash);
+
+        if (pblock_root) {
+            pfrom->PushGetBlocks(pindexBest, pblock_root->GetHash(true));
+            // ppcoin: getblocks may not obtain the ancestor block rejected
+            // earlier by duplicate-stake check so we ask for it again directly
+            if (!IsInitialBlockDownload())
+            {
+                const CInv ancestor_request(MSG_BLOCK, pblock_root->hashPrevBlock);
+
+                // Ensure that this request is not deferred. CNode::AskFor() bumps
+                // the earliest time for a message by two minutes for each call. A
+                // node with many connections can miss a parent block because this
+                // method can delay the queued request so far into the future that
+                // it never sends the request to download that block. We reset the
+                // request time first to guarantee that the node does not postpone
+                // the message:
+                //
+                {
+                    LOCK(cs_mapAlreadyAskedFor);
+                    mapAlreadyAskedFor[ancestor_request] = 0;
+                }
+                pfrom->AskFor(ancestor_request);
+            }
+        }
+
+        return true;
+    }
+
+    // Store to disk
+    if (!AcceptBlock(*pblock, state, generated_by_me))
+        return error("ProcessBlock() : AcceptBlock FAILED");
+
+    // Recursively process any orphan blocks that depended on this one.
+    // ProcessQueue handles BFS traversal and SeenStakes cleanup internally.
+    // ProcessQueue is EXCLUSIVE_LOCKS_REQUIRED(cs_main) so the lambda runs
+    // with cs_main held, but TSA cannot propagate that into the lambda
+    // body — suppress the analyzer here rather than tag every chain-state
+    // access AcceptBlock makes downstream.
+    g_orphan_blocks.ProcessQueue(hash, [&](CBlock& orphan) NO_THREAD_SAFETY_ANALYSIS -> bool {
+        CValidationState orphan_state;
+        return AcceptBlock(orphan, orphan_state, generated_by_me);
+    });
 
     return true;
 }

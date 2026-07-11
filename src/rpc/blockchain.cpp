@@ -28,7 +28,6 @@ extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 using namespace std;
 
-bool AskForOutstandingBlocks(uint256 hashStart);
 extern UniValue MagnitudeReport(const GRC::Cpid cpid) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern UniValue SuperblockReport(int lookback = 14, bool displaycontract = false, std::string cpid = "") EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 extern GRC::Superblock ScraperGetSuperblockContract(bool bStoreConvergedStats = false,
