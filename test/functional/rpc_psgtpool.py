@@ -47,33 +47,45 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         self.sync_blocks()
 
     def fund_multisig(self, ms_address):
-        """Fund the multisig from a raw spend of a consensus-mature UTXO
-        (>10 confirmations) and confirm it.
+        """Fund the multisig from a raw spend of a consensus-mature UTXO and
+        confirm it on node1.
 
-        The confirmation block is mined on node1, not node0. The wallet does
-        not track raw spends, so a node0-mined confirmation block can pick the
-        very UTXO the funding transaction spends for its own coinstake and evict
-        the funding as a double-spend. node1's coinstake stakes node1's coins
-        (it has no keys for node0's UTXO), so mining on node1 confirms the
-        funding deterministically and leaves node0's thin mature-UTXO pool
-        intact -- the node0-mined race recurred on the slower Alpine/musl CI
-        image and exhausted that pool ('no mature UTXO left to fund the
-        multisig'). Mining on node1 also ages node0's coinstakes toward maturity
-        instead of consuming node0's stake, which offsets the funding spend so
-        node0's thin mature pool survives this test's two funding rounds.
-        (Provisioning is height-deterministic, not timing-dependent; a third
-        round would need a few more setup blocks.)
+        The confirmation block is mined on node1: its coinstake stakes node1's
+        own coins (node1 holds no key for node0's funding UTXO), so it cannot
+        pick the funding UTXO for a coinstake the way a node0-mined block could.
+
+        Selection gate: the test funds via a *raw* spend of a specific
+        listunspent output. Unlike a normal wallet send -- whose coin selection
+        is already consistent with staking -- that manual selection can briefly
+        race node0's own coinstake consuming that same premine output on the slow
+        depends/musl CI (node0's wallet coin-availability lags the block that
+        just staked it). So we only fund from a candidate whose spend BOTH nodes'
+        consensus view accepts (testmempoolaccept), which makes the manual
+        selection as consistent as normal coin selection already is and removes
+        the manufactured double-spend. This is not a real-world condition -- a
+        wallet never raw-spends an output its own miner is staking.
         Returns (txid, vout, amount)."""
         node0, node1 = self.nodes[0], self.nodes[1]
-        candidates = node0.listunspent(11)
-        assert candidates, "no mature UTXO left to fund the multisig"
-        utxo = candidates[0]
+        self.sync_blocks()
 
-        amount = round(float(utxo["amount"]) - 1.0, 8)  # ~1 GRC fee
-        raw = node0.createrawtransaction(
-            [{"txid": utxo["txid"], "vout": utxo["vout"]}], {ms_address: amount})
-        signed = node0.signrawtransactionwithwallet(raw)
-        assert signed.get("complete"), signed
+        amount = None
+        signed = None
+        for cand in node0.listunspent(11):
+            amount = round(float(cand["amount"]) - 1.0, 8)  # ~1 GRC fee
+            if amount <= 0:
+                continue  # too small to fund after fee (createrawtransaction rejects <= 0)
+            raw = node0.createrawtransaction(
+                [{"txid": cand["txid"], "vout": cand["vout"]}], {ms_address: amount})
+            candidate = node0.signrawtransactionwithwallet(raw)
+            if not candidate.get("complete"):
+                continue
+            hexes = [candidate["hex"]]
+            # Only commit to an output every node agrees is genuinely unspent.
+            if (node0.testmempoolaccept(hexes)[0]["allowed"]
+                    and node1.testmempoolaccept(hexes)[0]["allowed"]):
+                signed = candidate
+                break
+        assert signed is not None, "no consensus-unspent mature UTXO to fund the multisig"
         txid = node0.sendrawtransaction(signed["hex"])
 
         # Wait for the funding tx to reach node1's mempool, then for the next
