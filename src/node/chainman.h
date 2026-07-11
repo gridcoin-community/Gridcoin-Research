@@ -35,7 +35,7 @@ void UpdateSyncTime(const CBlockIndex* pindexBest);
 bool GridcoinServices() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 //! Ask up to 10 connected peers for blocks starting at hashStart (or the
-//! current tip when hashStart is null).
+//! current tip when hashStart is the default/empty hash uint256()).
 bool AskForOutstandingBlocks(uint256 hashStart);
 
 //! Validate and accept a block arriving from the network, a bootstrap file or
