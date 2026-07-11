@@ -998,7 +998,7 @@ void GetAccountAddresses(string strAccount, set<CTxDestination>& setAddress) EXC
 static const RPCHelpMan getreceivedbyaccount_help{
     "getreceivedbyaccount",
     "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-    "Use getreceivedbyaddress instead.\n"
+    "Use getreceivedbylabel instead.\n"
     "\n"
     "Returns the total amount received by addresses with <account> in transactions with at least\n"
     "[minconf] confirmations.",
@@ -1015,23 +1015,11 @@ static const RPCHelpMan getreceivedbyaccount_help{
 };
 const RPCHelpMan& getreceivedbyaccount_helpman() { return getreceivedbyaccount_help; }
 
-UniValue getreceivedbyaccount(const UniValue& params)
+//! Total received by the given address set in transactions with at least nMinDepth
+//! confirmations. Shared tally for getreceivedbyaccount and its label twin getreceivedbylabel.
+static int64_t TallyReceivedByAddresses(const set<CTxDestination>& setAddress, int nMinDepth)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
-    accountingDeprecationCheck();
-
-    // Minimum confirmations
-    int nMinDepth = 1;
-    if (params.size() > 1)
-        nMinDepth = params[1].get_int();
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    // Get the set of pub keys assigned to account
-    string strAccount = AccountFromValue(params[0]);
-    set<CTxDestination> setAddress;
-    GetAccountAddresses(strAccount, setAddress);
-
-    // Tally
     int64_t nAmount = 0;
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
@@ -1050,8 +1038,62 @@ UniValue getreceivedbyaccount(const UniValue& params)
             }
         }
     }
+    return nAmount;
+}
 
-    return ValueFromAmount(nAmount);
+UniValue getreceivedbyaccount(const UniValue& params)
+{
+    accountingDeprecationCheck();
+
+    // Minimum confirmations
+    int nMinDepth = 1;
+    if (params.size() > 1)
+        nMinDepth = params[1].get_int();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Get the set of pub keys assigned to account
+    string strAccount = AccountFromValue(params[0]);
+    set<CTxDestination> setAddress;
+    GetAccountAddresses(strAccount, setAddress);
+
+    return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
+}
+
+static const RPCHelpMan getreceivedbylabel_help{
+    "getreceivedbylabel",
+    "Returns the total amount received by addresses with <label> in transactions with at least\n"
+    "[minconf] confirmations.",
+    {
+        {"label", RPCArg::Type::STR, RPCArg::Optional::NO, "The selected label, may be the default label using \"\"."},
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Minimum confirmations. Default: 1."},
+    },
+    RPCResult{RPCResult::Type::STR_AMOUNT, "", "Total amount received for this label."},
+    RPCExamples{
+        HelpExampleCli("getreceivedbylabel", "\"tabby\"") +
+        HelpExampleCli("getreceivedbylabel", "\"tabby\" 6") +
+        HelpExampleRpc("getreceivedbylabel", "\"tabby\", 6")},
+};
+const RPCHelpMan& getreceivedbylabel_helpman() { return getreceivedbylabel_help; }
+
+UniValue getreceivedbylabel(const UniValue& params)
+{
+    // Minimum confirmations
+    int nMinDepth = 1;
+    if (params.size() > 1)
+        nMinDepth = params[1].get_int();
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // The label IS the address-book name, so the address lookup is identical to the account
+    // twin's -- minus the accounting gate: this reads only the address book and wallet txs,
+    // never the acentry ledger, and an unknown label simply tallies to zero (Bitcoin 0.17).
+    string strLabel = LabelFromValue(params[0]);
+    set<CTxDestination> setAddress;
+    GetAccountAddresses(strLabel, setAddress);
+
+    return ValueFromAmount(TallyReceivedByAddresses(setAddress, nMinDepth));
 }
 
 int64_t GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter = ISMINE_SPENDABLE) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
@@ -1749,7 +1791,10 @@ struct tallyitem
     }
 };
 
-UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+//! When fByAccounts (grouped) rows carry the address-book name under strGroupKey: "account"
+//! for the deprecated account twin, "label" for listreceivedbylabel. Same grouping either way
+//! -- the name IS the label.
+UniValue ListReceived(const UniValue& params, bool fByAccounts, const string& strGroupKey = "account") EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet)
 {
     // Minimum confirmations
     int nMinDepth = 1;
@@ -1781,13 +1826,12 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
         for (auto const& txout : wtx.vout)
         {
             CTxDestination address;
-            // if (!ExtractDestination(txout.scriptPubKey, address) || !IsMine(*pwalletMain, address))                continue;
             if (!ExtractDestination(txout.scriptPubKey, address))
                  continue;
 
             isminefilter mine = IsMine(*pwalletMain, address);
-            if( (!mine) & filter)
-                  continue;
+            if (!(mine & filter))
+                continue;
 
             tallyitem& item = mapTally[address];
             item.nAmount += txout.nValue;
@@ -1861,9 +1905,14 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts) EXCLUSIVE_LOCKS_
             UniValue obj(UniValue::VOBJ);
             if (it.second.fIsWatchonly)
                 obj.pushKV("involvesWatchonly", true);
-            obj.pushKV("account", it.first);
+            // "account" leads the row (frozen legacy layout); "label" trails it, matching
+            // Bitcoin's serialized order for listreceivedbylabel.
+            if (strGroupKey == "account")
+                obj.pushKV(strGroupKey, it.first);
             obj.pushKV("amount", ValueFromAmount(nAmount));
             obj.pushKV("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf));
+            if (strGroupKey != "account")
+                obj.pushKV(strGroupKey, it.first);
             ret.push_back(obj);
         }
     }
@@ -1911,7 +1960,7 @@ UniValue listreceivedbyaddress(const UniValue& params)
 static const RPCHelpMan listreceivedbyaccount_help{
     "listreceivedbyaccount",
     "DEPRECATED. The accounts subsystem is deprecated and may be removed in a future release.\n"
-    "Use listreceivedbyaddress instead.\n"
+    "Use listreceivedbylabel instead.\n"
     "\n"
     "List balances by account.",
     {
@@ -1946,6 +1995,43 @@ UniValue listreceivedbyaccount(const UniValue& params)
     accountingDeprecationCheck();
 
     return ListReceived(params, true);
+}
+
+static const RPCHelpMan listreceivedbylabel_help{
+    "listreceivedbylabel",
+    "List received transactions by label.",
+    {
+        {"minconf", RPCArg::Type::NUM, RPCArg::Optional::OMITTED,
+            "Minimum confirmations before payments are included. Default: 1."},
+        {"includeempty", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include labels that haven't received any payments. Default: false."},
+        {"includeWatchonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,
+            "Include watch-only addresses (see importaddress). Default: false."},
+    },
+    RPCResult{RPCResult::Type::ARR, "", "",
+        {
+            {RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "involvesWatchonly", /*optional=*/true,
+                        "Only returned if imported addresses were involved in transactions."},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Total amount received by addresses with this label."},
+                    {RPCResult::Type::NUM, "confirmations", "Confirmations of the most recent transaction."},
+                    {RPCResult::Type::STR, "label", "The label of the receiving address. The default label is \"\"."},
+                }},
+        }},
+    RPCExamples{
+        HelpExampleCli("listreceivedbylabel", "") +
+        HelpExampleRpc("listreceivedbylabel", "6, true")},
+};
+const RPCHelpMan& listreceivedbylabel_helpman() { return listreceivedbylabel_help; }
+
+UniValue listreceivedbylabel(const UniValue& params)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // No accounting gate: grouping by label reads only the address book, never the acentry
+    // ledger (Bitcoin 0.17's replacement for listreceivedbyaccount).
+    return ListReceived(params, true, "label");
 }
 
  void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth,
