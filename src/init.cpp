@@ -309,7 +309,6 @@ void Shutdown(void* parg)
         UnregisterValidationInterface(&g_psgt_pool);
         UnregisterValidationInterface(&g_ui_notification_bridge);
         UnregisterValidationInterface(pwalletMain);
-        UnregisterWallet(pwalletMain);
         delete pwalletMain;
         // Null the global so any late/defensive `if (pwalletMain)` guard (e.g. the
         // scheduled wallet-rebroadcast job) is load-bearing rather than seeing a
@@ -1686,8 +1685,6 @@ bool AppInit2(ThreadHandlerPtr threads)
         }
     }
 
-    RegisterWallet(pwalletMain);
-
     // Init-time wallet rescan + GRC::Initialize reads pindexBest /
     // pindexGenesisBlock / mapBlockIndex; take cs_main for the whole block
     // (uncontended at init, required by Phase 1 thread-safety annotations).
@@ -1968,8 +1965,7 @@ bool AppInit2(ThreadHandlerPtr threads)
     GetMainSignals().RegisterBackgroundSignalScheduler(*g_scheduler);
 
     // Subscribe the wallet to validation/mempool events now that the signal
-    // layer is wired (issue #3030, workstream B). The wallet also stays in
-    // setpwalletRegistered for the legacy notifications not yet migrated.
+    // layer is wired (issue #3030, workstream B).
     RegisterValidationInterface(pwalletMain);
 
     // Bridge chain-tip updates to the legacy ui_interface block notification so

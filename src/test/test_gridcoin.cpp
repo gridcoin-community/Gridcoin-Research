@@ -64,7 +64,6 @@ struct TestingSetup {
         bool fFirstRun;
         pwalletMain = new CWallet("wallet.dat");
         pwalletMain->LoadWallet(fFirstRun);
-        RegisterWallet(pwalletMain);
         // Ban manager instance should not already be instantiated
         assert(!g_banman);
         // Create ban manager instance.

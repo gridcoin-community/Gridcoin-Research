@@ -30,7 +30,6 @@
 #include <unordered_map>
 #include <set>
 
-class CWallet;
 class CBlock;
 class CBlockIndex;
 class CKeyItem;
@@ -77,8 +76,6 @@ extern unsigned int nStakeMaxAge;
 extern unsigned int nNodeLifespan;
 extern int nCoinbaseMaturity;
 extern const std::string strMessageMagic;
-extern CCriticalSection cs_setpwalletRegistered;
-extern std::set<CWallet*> setpwalletRegistered GUARDED_BY(cs_setpwalletRegistered);
 // Orphan block storage is managed by g_orphan_blocks in node/orphan_blocks.h
 
 // Settings
@@ -106,8 +103,6 @@ class CReserveKey;
 class CTxDB;
 class CTxIndex;
 
-void RegisterWallet(CWallet* pwalletIn);
-void UnregisterWallet(CWallet* pwalletIn);
 bool ProcessBlock(CNode* pfrom, CBlock* pblock, bool Generated_By_Me, CValidationState& state) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 // Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
 // LoadExternalBlockFile) live in node/blockstorage.h, included above.
