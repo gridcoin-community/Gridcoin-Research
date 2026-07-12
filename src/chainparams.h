@@ -18,6 +18,25 @@
 typedef std::map<int, uint256> MapCheckpoints;
 typedef std::map<int, std::vector<unsigned char>> MapMasterKeys;
 
+class CBlock;
+
+// Genesis block hashes (moved from main.h; issue #3125, workstream C5).
+
+//Genesis - MainNet - Production Genesis: as of 10-20-2014:
+static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
+
+//TestNet Genesis:
+static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
+
+//RegTest Genesis (deterministic; computed from the regtest premine
+//coinbase + nTime=1296688602 + nNonce=0 + nVersion=14 under trivial powLimit):
+static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e02e304767b2ad16f1d18f72efcf0a724efe01e065371");
+
+//! Construct (and hash-assert) the genesis block for the active network,
+//! including the regtest premine coinbase. Moved out of LoadBlockIndex
+//! (issue #3125, workstream C5); the body lives in chainparams.cpp.
+CBlock CreateGenesisBlock();
+
 struct CCheckpointData {
     MapCheckpoints mapCheckpoints;
 

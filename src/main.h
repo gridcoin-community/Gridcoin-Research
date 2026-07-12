@@ -50,19 +50,9 @@ typedef std::optional<Claim> ClaimOption;
 }
 
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-//Genesis - MainNet - Production Genesis: as of 10-20-2014:
-static const uint256 hashGenesisBlock = uint256S("0x000005a247b397eadfefa58e872bc967c2614797bdc8d4d0e6b09fea5c191599");
-
-//TestNet Genesis:
-static const uint256 hashGenesisBlockTestNet = uint256S("0x00006e037d7b84104208ecf2a8638d23149d712ea810da604ee2f2cb39bae713");
-
-//RegTest Genesis (deterministic; computed from the regtest premine
-//coinbase + nTime=1296688602 + nNonce=0 + nVersion=14 under trivial powLimit):
-static const uint256 hashGenesisBlockRegTest = uint256S("0x4692b9564c585f76f41e02e304767b2ad16f1d18f72efcf0a724efe01e065371");
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+// The genesis block-hash constants (hashGenesisBlock, hashGenesisBlockTestNet,
+// hashGenesisBlockRegTest) live in chainparams.h, included above, next to
+// CreateGenesisBlock (issue #3125, workstream C5).
 
 // BlockHasher, BlockMap, cs_main and the active-chain-state globals
 // (mapBlockIndex, pindexBest, hashBestChain, nBestHeight, ...) now live in
@@ -107,11 +97,8 @@ class CTxIndex;
 // node/chainman.h (issue #3125, workstream C1); callers include it directly
 // (a main.h re-include would create a main <-> node/chainman module cycle).
 // Block-file I/O helpers (CheckDiskSpace, OpenBlockFile, AppendBlockFile,
-// LoadExternalBlockFile) live in node/blockstorage.h, included above.
-// Takes cs_main internally; callers MUST NOT hold cs_main when calling
-// (the internal LOCK would deadlock under non-recursive locking; cs_main
-// is currently recursive but the annotation contract documents the intent).
-bool LoadBlockIndex(bool fAllowNew=true);
+// LoadExternalBlockFile) and LoadBlockIndex live in node/blockstorage.h,
+// included above (issue #3125, workstream C5).
 void PrintBlockTree() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 double CoinToDouble(double surrogate);
 
