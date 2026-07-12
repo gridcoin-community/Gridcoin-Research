@@ -5,6 +5,7 @@ endif()
 
 add_executable(test_gridcoin
     bip68_tests.cpp
+    block_version_tests.cpp
     checkpoints_tests.cpp
     coinstake_construction_tests.cpp
     csv_tests.cpp
