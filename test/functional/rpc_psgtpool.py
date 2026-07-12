@@ -46,72 +46,6 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         self.connect_nodes(1, 0)
         self.sync_blocks()
 
-    def grow_utxo_universe(self, funder, miner, count):
-        """Split one large premine UTXO into `count` consensus-agreed outputs,
-        confirmed on `funder`.
-
-        Funding the multisig needs at least one output both nodes agree is
-        unspent. With only the few premine outputs, `funder`'s own staking can
-        briefly leave every mature output spent-or-disagreed across the nodes
-        (its wallet coin-availability lags the block it just staked), starving
-        the funding gate. We fan one premine UTXO out into many ordinary outputs
-        so a large agreed pool is always available. `miner` is used only to
-        confirm, via testmempoolaccept, that the chosen source is unspent on
-        both nodes.
-
-        The split is confirmed on `funder`, NOT `miner` (see the comment at the
-        generate call): the outputs go to `funder`'s own addresses, so confirming
-        on `miner` would spend one of its coinstakes and deplete its stake budget
-        for the funding-confirmation blocks. The outputs are ordinary
-        (non-coinstake), spendable at 1 confirmation, so one block suffices and
-        fund_multisig picks them up via listunspent(1).
-
-        The split is a *raw* transaction: dev builds cripple wallet-level
-        CommitTransaction (fDevbuildCripple), so sendmany/sendtoaddress fail --
-        the test funds via raw txs throughout for the same reason."""
-        self.sync_blocks()
-
-        # Pick a source UTXO both nodes agree is unspent (same consistency guard
-        # as fund_multisig) and large enough to fan out.
-        src = None
-        for cand in funder.listunspent(11):
-            probe_amount = round(float(cand["amount"]) - 1.0, 8)
-            if probe_amount <= 0:
-                continue  # too small to fan out after fee
-            probe = funder.signrawtransactionwithwallet(
-                funder.createrawtransaction(
-                    [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {funder.getnewaddress(): probe_amount}))
-            if (probe.get("complete")
-                    and funder.testmempoolaccept([probe["hex"]])[0]["allowed"]
-                    and miner.testmempoolaccept([probe["hex"]])[0]["allowed"]):
-                src = cand
-                break
-        assert src is not None, "no consensus-unspent UTXO to seed the universe"
-
-        assert count > 0, "universe count must be positive"
-        per_out = round((float(src["amount"]) - 1.0) / count, 8)  # ~1 GRC total fee
-        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {funder.getnewaddress(): per_out for _ in range(count)}
-        signed = funder.signrawtransactionwithwallet(
-            funder.createrawtransaction(
-                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
-        assert signed.get("complete"), "failed to sign the universe split transaction"
-        funder.sendrawtransaction(signed["hex"])
-
-        # Confirm the split on the FUNDER, not the miner: the split outputs go to
-        # funder's own addresses (miner holds no key for them), so miner can only
-        # stake the shared premine, and spending a coinstake there on the split
-        # would deplete miner's stake budget for the funding-confirmation blocks
-        # ("CreateCoinStake: no stake found"). funder's coinstake in this block
-        # cannot touch the split outputs (created in the same block) or the split
-        # source (excluded as a mempool-spent input). One block suffices: the
-        # outputs are ordinary (non-coinstake), spendable at 1 confirmation, and
-        # fund_multisig accepts 1-confirm candidates.
-        time.sleep(16 - (int(time.time()) % 16) + 1)  # STAKE_TIMESTAMP_MASK boundary
-        funder.generatetoaddress(1, funder.getnewaddress())
-        self.sync_blocks()
-
     def fund_multisig(self, ms_address):
         """Fund the multisig from a raw spend of a consensus-mature UTXO and
         confirm it on node1.
@@ -190,17 +124,13 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         node0.generatetoaddress(12, node0.getnewaddress())
         self.sync_blocks()
 
-        # Enlarge node0's mature-UTXO universe so the funding gate (fund_multisig)
-        # always has an ample supply of outputs both nodes agree are unspent. The
-        # regtest premine is only a handful of large outputs, and node0's own
-        # staking -- here and between the two funding rounds -- churns them, so on
-        # slow CI the set of mature, consensus-agreed unspent outputs can briefly
-        # empty and starve the gate ("no consensus-unspent mature UTXO"). Splitting
-        # into many small outputs (confirmed on node0 itself, so node1's stake
-        # budget is spared for the funding confirmations) keeps a large,
-        # consensus-agreed pool and removes the pathology at its source -- the
-        # gate stays as a safety net.
-        self.grow_utxo_universe(node0, node1, count=48)
+        # Enlarge node0's mature-UTXO pool (see grow_utxo_universe) so
+        # fund_multisig's both-nodes gate always has agreed-unspent candidates --
+        # the premine is only a few large outputs and node0's staking churns them,
+        # briefly starving the gate ("no consensus-unspent mature UTXO") on slow
+        # CI. confirm_on defaults to node0 because node1 mines the funding
+        # confirmations; the gate stays as a safety net.
+        self.grow_utxo_universe(node0, 48, agree_with=node1)
 
         # 2-of-3: node0 one key (initiator), node1 two (can complete alone).
         pub_initiator = node0.validateaddress(node0.getnewaddress())["pubkey"]

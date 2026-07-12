@@ -6,6 +6,7 @@
 """Base class for RPC testing."""
 
 import configparser
+from decimal import Decimal, ROUND_DOWN
 from enum import Enum
 import argparse
 import logging
@@ -708,6 +709,93 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
 
     def wait_until(self, test_function, timeout=60):
         return wait_until_helper(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor)
+
+    def grow_utxo_universe(self, funder, count=48, *, agree_with=None, confirm_on=None):
+        """Fan one mature premine UTXO on `funder` into `count` ordinary,
+        consensus-agreed outputs so a test's mature-UTXO funding scan never runs
+        dry.
+
+        Regtest starts with only a handful of large premine outputs, and a
+        node's own PoS staking churns them, so on slow / concurrent CI the pool
+        of usable mature outputs can momentarily empty and a funding helper that
+        indexes ``listunspent(...)[0]`` (or gates on it) fails. Fanning one UTXO
+        into many small outputs removes the scarcity; abundance -- not
+        pristineness -- is what makes it robust.
+
+        The outputs are ordinary (non-coinstake), spendable at 1 confirmation, so
+        a single confirming block suffices (mining more would over-mine the
+        shared premine pool -> "CreateCoinStake: no stake found"). The split is a
+        *raw* transaction because dev builds cripple wallet-level
+        CommitTransaction (fDevbuildCripple), so sendmany/sendtoaddress fail.
+
+        Args:
+          funder: node whose premine UTXO is fanned out; the outputs go to
+            `funder`'s own addresses (only it holds their keys).
+          count: number of output slots to create.
+          agree_with: optional second node. When given, the chosen source must be
+            unspent in BOTH nodes' consensus view (testmempoolaccept) and the
+            nodes are synced around the split. Omit for single-node tests.
+          confirm_on: node that mines the single confirming block; defaults to
+            `funder`. Pass the OTHER node when `funder` itself mines the test's
+            funding-confirmation blocks, so the split confirmation does not eat
+            `funder`'s stake budget -- the split is confirmed on whichever node
+            does NOT mine the funding confirmations, spreading the staking load.
+        """
+        confirm_on = confirm_on or funder
+        assert count > 0, "universe count must be positive"
+        if agree_with is not None:
+            self.sync_blocks()
+
+        # Pick a mature source UTXO unspent in every consensus view.
+        src = None
+        for cand in funder.listunspent(11):
+            # Amount math stays in Decimal (authproxy parses amounts as Decimal)
+            # so it is exact at 1e-8 (satoshi) granularity. Only cast to float at
+            # the createrawtransaction boundary: Gridcoin's AmountFromValue takes
+            # a JSON number via get_real() (it does not accept the string a
+            # Decimal serializes to) and rounds double*COIN to the satoshi, which
+            # recovers the exact value for these ranges. Drop the float() once
+            # AmountFromValue accepts exact string amounts (issue #3148).
+            amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
+            if amount <= 0:
+                continue
+            probe = funder.signrawtransactionwithwallet(
+                funder.createrawtransaction(
+                    [{"txid": cand["txid"], "vout": cand["vout"]}],
+                    {funder.getnewaddress(): float(amount)}))
+            if not probe.get("complete"):
+                continue
+            if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                continue
+            if agree_with is not None and not agree_with.testmempoolaccept([probe["hex"]])[0]["allowed"]:
+                continue
+            src = cand
+            break
+        assert src is not None, "no spendable consensus-unspent UTXO to seed the universe"
+
+        # ROUND_DOWN to the satoshi so count * per_out never exceeds the input
+        # (rounding up could make the outputs sum > the source, invalidating the
+        # tx). Decimal at 1e-8 is the exact int64_t CAmount in GRC units.
+        per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
+        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
+        outputs = {funder.getnewaddress(): float(per_out) for _ in range(count)}
+        signed = funder.signrawtransactionwithwallet(
+            funder.createrawtransaction(
+                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
+        assert signed.get("complete"), "failed to sign the universe split transaction"
+        split_txid = funder.sendrawtransaction(signed["hex"])
+
+        # Confirm in a single block. If confirming on a different node, wait for
+        # the split tx to propagate there first. Wait for the next 16-second
+        # STAKE_TIMESTAMP_MASK boundary either way: the miner excludes txs with
+        # nTime > block.nTime, so mining too early would leave the split out.
+        if confirm_on is not funder:
+            self.wait_until(lambda: split_txid in confirm_on.getrawmempool())
+        time.sleep(16 - (int(time.time()) % 16) + 1)
+        confirm_on.generatetoaddress(1, confirm_on.getnewaddress())
+        if agree_with is not None:
+            self.sync_blocks()
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
