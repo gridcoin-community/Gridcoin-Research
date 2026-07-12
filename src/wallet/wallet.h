@@ -620,6 +620,60 @@ struct COutputEntry
      int vout;
 };
 
+// Moved here from main.h (issue #3125, workstream C3): only CWalletTx below
+// derives from CMerkleTx, mirroring Bitcoin's relocation into the wallet.
+/** A transaction with a merkle branch linking it to the block chain. */
+class CMerkleTx : public CTransaction
+{
+protected:
+    virtual int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
+public:
+    uint256 hashBlock;
+    int nIndex;
+
+    CMerkleTx()
+    {
+        Init();
+    }
+
+    CMerkleTx(const CTransaction& txIn) : CTransaction(txIn)
+    {
+        Init();
+    }
+
+    virtual ~CMerkleTx() = default;
+
+    void Init()
+    {
+        hashBlock.SetNull();
+        nIndex = -1;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        std::vector<uint256> dummy_vector1; //!< Used to be vMerkleBranch
+        READWRITEAS(CTransaction, *this);
+        READWRITE(hashBlock);
+        READWRITE(dummy_vector1);
+        READWRITE(nIndex);
+    }
+
+    int SetMerkleBranch(const CBlock* pblock = nullptr);
+
+    // Return depth of transaction in blockchain:
+    // -1  : not in blockchain, and not in memory pool (conflicted transaction)
+    //  0  : in memory pool, waiting to be included in a block
+    // >=1 : this many blocks deep in the main chain
+    int GetDepthInMainChain(CBlockIndex* &pindexRet) const;
+    int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
+    bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
+    int GetBlocksToMaturity() const;
+    bool AcceptToMemoryPool();
+};
+
 /** A transaction with a bunch of additional info that only the owner cares about.
  * It includes any unrecorded transactions needed to link it back to the block chain.
  */
