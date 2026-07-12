@@ -258,7 +258,8 @@ static bool DisconnectBlocksBatch(CTxDB& txdb, list<CTransaction>& vResurrect, u
     return true;
 }
 
-static bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew)
+static bool ReorganizeChain(CTxDB& txdb, unsigned &cnt_dis, unsigned &cnt_con, CBlock &blockNew, CBlockIndex* pindexNew,
+                            const CBlockIndex** pfork_out = nullptr)
 EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     assert(pindexNew);
@@ -273,6 +274,13 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     /* find fork point */
     CBlockIndex* pcommon = nullptr;
+
+    // The interface fork point (last common ancestor of the old and new tips),
+    // captured before any legacy-tally rewind of pcommon below. Distinct from
+    // pcommon, which for pre-v11 reorgs is deliberately walked deeper to a tally
+    // trigger; those deeper blocks are identical on both chains (disconnected
+    // and reconnected as-is), so the true fork point is the pre-rewind ancestor.
+    const CBlockIndex* fork_point = nullptr;
 
     if (pindexGenesisBlock) {
         pcommon = pindexNew;
@@ -289,6 +297,10 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                 return error("%s: unable to find fork root", __func__);
             }
         }
+
+        // pcommon is now the true last common ancestor; record it as the fork
+        // point before the legacy-tally rewind below can move it deeper.
+        fork_point = pcommon;
 
         // Blocks version 11+ do not use the legacy tally system triggered by
         // block height intervals:
@@ -314,6 +326,15 @@ EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                       pindexBest->nHeight - pcommon->nHeight,
                       pindexNew->nHeight - pcommon->nHeight);
         }
+    }
+
+    // Publish the fork point (true last common ancestor, pre-tally-rewind) so
+    // SetBestChain can forward it to UpdatedBlockTip subscribers. It is the
+    // previous tip for a trivial single-block extension and the deeper common
+    // ancestor for a multi-block reorg; it is nullptr only when connecting the
+    // genesis block, where there is no fork point (issue #3104).
+    if (pfork_out) {
+        *pfork_out = fork_point;
     }
 
     /* disconnect blocks (in non-trivial condition) */
@@ -501,7 +522,14 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // g_reorg_in_progress is set in ReorganizeChain, because ReorganizeChain determines whether this is a trivial
     // reorg, where we are just adding a new block to the head of the current chain, in which case we do not
     // want the flag to be set.
-    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew);
+    //
+    // pfork captures the fork point of this forward reorg to pindexNew, threaded
+    // out for the UpdatedBlockTip emission below (issue #3104). The reorg-back
+    // call, if it runs, intentionally leaves pfork untouched: the emission
+    // reports pindexNew, so its matching fork point is this forward common
+    // ancestor.
+    const CBlockIndex* pfork = nullptr;
+    success = ReorganizeChain(txdb, cnt_dis, cnt_con, blockNew, pindexNew, &pfork);
 
     if (previous_chain_trust > g_chain_trust.Best()) {
         LogPrintf("INFO: %s: Reorganize caused lower chain trust than before. Reorganizing back.", __func__);
@@ -565,15 +593,15 @@ bool SetBestChain(CTxDB& txdb, CBlock &blockNew, CBlockIndex* pindexNew) EXCLUSI
     // for the Qt models, so GUI block notifications now flow through the
     // validation interface (issue #3030, workstream B3).
     //
-    // pindexFork is passed as nullptr: the true reorg fork point is the common
-    // ancestor (pcommon, computed in ReorganizeChain) and is not plumbed up to
-    // this layer, so origBestIndex (the previous tip) would be wrong for any
-    // non-trivial reorg. No current subscriber reads pindexFork (the UI bridge
-    // ignores it), so nullptr is an honest "not supplied" rather than a
-    // misleading value; a future fork-point-dependent subscriber (e.g. the
-    // deferred PeerManager) should thread pcommon through instead. Tracked in
-    // issue #3104.
-    GetMainSignals().UpdatedBlockTip(pindexNew, nullptr, fIsInitialDownload);
+    // pindexFork is the true reorg fork point: the last common ancestor
+    // (pcommon) computed in ReorganizeChain and threaded up here via pfork. It
+    // is the previous tip for a trivial single-block extension and the deeper
+    // common ancestor for a multi-block reorg -- unlike origBestIndex, which
+    // would be wrong for any non-trivial reorg. nullptr only when connecting the
+    // genesis block. This resolves the #3080 stopgap so fork-point-dependent
+    // subscribers (e.g. the deferred PeerManager) receive correct semantics
+    // (issue #3104).
+    GetMainSignals().UpdatedBlockTip(pindexNew, pfork, fIsInitialDownload);
 
     return GridcoinServices();
 }
