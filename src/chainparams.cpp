@@ -147,7 +147,7 @@ CBlock CreateGenesisBlock()
         // Regtest genesis is deterministic (fixed nVersion/nTime/nNonce and a
         // fixed premine coinbase), so its hash is stable and assertable. Mirror
         // the main/testnet assert so a future premine-layout change can't leave
-        // hashGenesisBlockRegTest (main.h) silently stale.
+        // hashGenesisBlockRegTest (chainparams.h) silently stale.
         LogPrintf("regtest genesis hash = %s merkle_root = %s nNonce = %u nTime = %u",
                   block.GetHash(true).ToString(),
                   block.hashMerkleRoot.ToString(),
