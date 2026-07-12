@@ -239,6 +239,14 @@ public:
                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
     bool SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins,
                              std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
+    //! \brief Coin selection for contract transactions: prefer the smallest UTXOs
+    //! (dust consolidation) but fall back to normal target-based selection when
+    //! the smallest-first set would exceed a standard-tx-safe input budget, so a
+    //! large burn on a fragmented wallet cannot produce a >MAX_STANDARD_TX_SIZE
+    //! transaction (issue #3120). Takes \p vCoins so it is unit-testable in
+    //! isolation, mirroring SelectCoinsMinConf / SelectSmallestCoins.
+    bool SelectContractCoins(int64_t nTargetValue, unsigned int nSpendTime, std::vector<COutput> vCoins,
+                             std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const;
 
     // keystore implementation
     // Generate a new key

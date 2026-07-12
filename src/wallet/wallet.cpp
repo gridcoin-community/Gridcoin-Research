@@ -2755,6 +2755,21 @@ bool CWallet::SelectSmallestCoins(int64_t nTargetValue, unsigned int nSpendTime,
     return false;
 }
 
+//! \brief Upper bound on the number of inputs the contract-tx "smallest coins
+//! first" selection may accumulate before falling back to normal target-based
+//! selection. Derived from MAX_STANDARD_TX_SIZE with headroom reserved for the
+//! contract payload(s), the burn/change outputs and per-tx overhead, using a
+//! conservative per-P2PKH-input serialized-size estimate. Keeps a large burn on
+//! a fragmented wallet from producing a non-standard (>MAX_STANDARD_TX_SIZE)
+//! transaction (issue #3120).
+static constexpr unsigned int CONTRACT_TX_INPUT_HEADROOM_BYTES = 20000;
+static constexpr unsigned int CONTRACT_TX_BYTES_PER_INPUT = 200;
+static_assert(MAX_STANDARD_TX_SIZE > CONTRACT_TX_INPUT_HEADROOM_BYTES,
+              "contract-tx input headroom must be smaller than the standard tx size, "
+              "otherwise the unsigned budget subtraction underflows into an enormous bound");
+static const size_t MAX_CONTRACT_TX_SMALLEST_COIN_INPUTS =
+    (MAX_STANDARD_TX_SIZE - CONTRACT_TX_INPUT_HEADROOM_BYTES) / CONTRACT_TX_BYTES_PER_INPUT;
+
 bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet, const CCoinControl* coinControl, bool contract) const
 {
     vector<COutput> vCoins;
@@ -2772,12 +2787,57 @@ bool CWallet::SelectCoins(int64_t nTargetValue, unsigned int nSpendTime, set<pai
     }
 
     if (contract) {
-        LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Contract is included so SelectSmallestCoins will be used.", __func__);
+        LogPrint(BCLog::LogFlags::ESTIMATEFEE, "INFO %s: Contract is included so SelectContractCoins will be used.", __func__);
 
-        return (SelectSmallestCoins(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
-                SelectSmallestCoins(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
-                SelectSmallestCoins(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
+        // vCoins is not used again in this branch, so move it in to avoid copying
+        // a potentially large coin vector (the fragmented-wallet case #3120 targets).
+        return SelectContractCoins(nTargetValue, nSpendTime, std::move(vCoins), setCoinsRet, nValueRet);
     }
+
+    return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
+            SelectCoinsMinConf(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet));
+}
+
+bool CWallet::SelectContractCoins(int64_t nTargetValue, unsigned int nSpendTime, vector<COutput> vCoins,
+                                  set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, int64_t& nValueRet) const
+{
+    // Prefer consuming the smallest UTXOs for contract transactions (dust
+    // consolidation), but bound the input count. On a heavily-fragmented wallet
+    // -- normal for a long-running staker -- a contract carrying a non-trivial
+    // burn (e.g. registerpool's 100 GRC) would otherwise sweep thousands of tiny
+    // inputs and push the transaction past MAX_STANDARD_TX_SIZE, so
+    // CreateTransaction rejects it ("tx size ... greater than standard").
+    const bool funded =
+        SelectSmallestCoins(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
+        SelectSmallestCoins(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||
+        SelectSmallestCoins(nTargetValue, nSpendTime, 0, 1, vCoins, setCoinsRet, nValueRet);
+
+    // Smallest-first funds the target iff the eligible coins sum to at least it;
+    // if it cannot, neither can the target-based selection over the same coins
+    // and confirmation tiers, so report the shortfall directly rather than
+    // repeating the work.
+    if (!funded) {
+        return false;
+    }
+
+    // Funded within a standard-tx-safe input budget: keep the smallest-first set.
+    if (setCoinsRet.size() <= MAX_CONTRACT_TX_SMALLEST_COIN_INPUTS) {
+        return true;
+    }
+
+    // Funded, but the smallest-first set is too large for a standard transaction.
+    // Fall back to the normal target-based selection, which picks a near-minimal
+    // input set exactly as an ordinary send does (issue #3120).
+    LogPrint(BCLog::LogFlags::ESTIMATEFEE,
+             "INFO %s: smallest-coin selection needs %u inputs (over the standard-tx budget of %u); "
+             "falling back to target-based coin selection.",
+             __func__, static_cast<unsigned int>(setCoinsRet.size()),
+             static_cast<unsigned int>(MAX_CONTRACT_TX_SMALLEST_COIN_INPUTS));
+
+    // Discard the oversized smallest-coin selection before the fallback.
+    setCoinsRet.clear();
+    nValueRet = 0;
 
     return (SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 10, vCoins, setCoinsRet, nValueRet) ||
             SelectCoinsMinConf(nTargetValue, nSpendTime, 1, 1, vCoins, setCoinsRet, nValueRet)  ||

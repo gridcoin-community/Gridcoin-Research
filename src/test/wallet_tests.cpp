@@ -311,6 +311,60 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
     empty_wallet();
 }
 
+// Regression for issue #3120: on a fragmented wallet a contract's burn must not
+// drag in thousands of dust inputs (which would push the tx past
+// MAX_STANDARD_TX_SIZE and get it rejected with "tx size ... greater than
+// standard"). SelectContractCoins prefers the smallest UTXOs (dust
+// consolidation) but falls back to normal target-based selection when the
+// smallest-first set would blow the standard-tx input budget.
+BOOST_AUTO_TEST_CASE(contract_coin_selection_bounds_fragmented_wallet)
+{
+    CoinSet setCoinsRet;
+    int64_t nValueRet = 0;
+    const int64_t spendTime = GetTime();
+
+    empty_wallet();
+
+    // A heavily-fragmented wallet: 450 dust UTXOs (0.01 GRC each) plus two large
+    // consolidated coins. The dust alone (4.5 GRC) cannot fund a 6 GRC burn, so
+    // smallest-first must reach past every dust output into a large coin, i.e.
+    // > 450 inputs -- over the standard-tx input budget bound
+    // (MAX_CONTRACT_TX_SMALLEST_COIN_INPUTS, currently 400 in wallet.cpp). The
+    // dust count is chosen to exceed that bound; if the bound is ever retuned
+    // above ~450, raise the dust count here so the fallback still triggers.
+    for (int i = 0; i < 450; ++i) {
+        add_coin(CENT);            // 0.01 GRC dust
+    }
+    add_coin(100 * COIN);          // large consolidated coins
+    add_coin(100 * COIN);
+
+    const int64_t target = 6 * COIN;
+
+    // Witness the pathology: raw smallest-first sweeps every dust UTXO (plus a
+    // large coin to close the gap) -> a non-standard input count.
+    CoinSet smallestSet;
+    int64_t smallestValue = 0;
+    BOOST_REQUIRE(wallet.SelectSmallestCoins(target, spendTime, 1, 1, vCoins, smallestSet, smallestValue));
+    BOOST_CHECK_GT(smallestSet.size(), 450u);
+
+    // The fix: SelectContractCoins detects the oversized smallest-first set and
+    // falls back to target-based selection, funding the burn from a single large
+    // coin -- a standard-sized transaction.
+    BOOST_REQUIRE(wallet.SelectContractCoins(target, spendTime, vCoins, setCoinsRet, nValueRet));
+    BOOST_CHECK_EQUAL(setCoinsRet.size(), 1u);
+    BOOST_CHECK_EQUAL(nValueRet, 100 * COIN);
+
+    // A small burn the dust CAN cover within the budget still uses the
+    // smallest-first path -- dust consolidation is preserved for the common case.
+    CoinSet smallBurnSet;
+    int64_t smallBurnValue = 0;
+    BOOST_REQUIRE(wallet.SelectContractCoins(3 * CENT, spendTime, vCoins, smallBurnSet, smallBurnValue));
+    BOOST_CHECK_EQUAL(smallBurnSet.size(), 3u);   // three 0.01 GRC dust coins
+    BOOST_CHECK_EQUAL(smallBurnValue, 3 * CENT);
+
+    empty_wallet();
+}
+
 // ---------------------------------------------------------------------------
 // SyncLegacyFromState — derives hashBlock/nIndex from m_state
 // ---------------------------------------------------------------------------
