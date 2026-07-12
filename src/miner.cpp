@@ -46,6 +46,26 @@ unsigned int nMinerSleep;
 
 std::atomic<int> g_stakelimit_height{0};
 
+int32_t ComputeBlockVersion(int height)
+{
+    // Block version transition ladder. Handling for versions prior to v13 was
+    // removed because no block of an earlier version than v13 can be staked
+    // now; below the v13 gate we still stamp 12 for completeness. The final
+    // rung returns CBlock::CURRENT_VERSION rather than a literal 15 so the
+    // miner default tracks any future CURRENT_VERSION bump (see the header and
+    // issue #3121). This must stay in lockstep with the AcceptBlock version
+    // lower bound in validation.cpp.
+    if (!IsV13Enabled(height)) {
+        return 12;
+    } else if (!IsV14Enabled(height)) {
+        return 13;
+    } else if (!IsV15Enabled(height)) {
+        return 14;
+    }
+
+    return CBlock::CURRENT_VERSION;
+}
+
 namespace {
 class COrphan
 {
@@ -1547,16 +1567,7 @@ void StakeMiner(CWallet *pwallet)
 
         // * Create a bare block
 
-        // Block version transition handling. The other transition handling
-        // for block versions prior to v13 have been removed, because no blocks
-        // of an earlier version than v13 can be staked now.
-        if (!IsV13Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 12;
-        } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 13;
-        } else if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
-            StakeBlock.nVersion = 14;
-        }
+        StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
 
         StakeBlock.nTime = GetAdjustedTime();
         StakeBlock.nNonce = 0;
@@ -1707,13 +1718,7 @@ bool TryMineRegtestBlock(CWallet* pwallet,
         return false;
     }
 
-    if (!IsV13Enabled(pindexPrev->nHeight + 1)) {
-        StakeBlock.nVersion = 12;
-    } else if (!IsV14Enabled(pindexPrev->nHeight + 1)) {
-        StakeBlock.nVersion = 13;
-    } else if (!IsV15Enabled(pindexPrev->nHeight + 1)) {
-        StakeBlock.nVersion = 14;
-    }
+    StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
 
     StakeBlock.nTime = GetAdjustedTime();
     StakeBlock.nNonce = 0;

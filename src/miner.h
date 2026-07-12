@@ -19,6 +19,22 @@ typedef std::vector<GRC::SideStake_ptr> SideStakeAlloc;
 
 extern unsigned int nMinerSleep;
 
+//! \brief Select the block header version the miner must stamp for a block at
+//! the given height. Mirrors Bitcoin Core's ComputeBlockVersion: a pure,
+//! side-effect-free function of \p height and the active chain parameters, so
+//! the version ladder that used to live inline in the two StakeBlock assembly
+//! paths is now unit-testable.
+//!
+//! \param height The height of the block being produced, i.e.
+//!               pindexPrev->nHeight + 1.
+//! \return 12 below V13, 13 in [V13, V14), 14 in [V14, V15), and
+//!         CBlock::CURRENT_VERSION at or above V15. The V15 rung must return
+//!         CURRENT_VERSION (not a literal 15) so that a future CURRENT_VERSION
+//!         bump keeps the miner default aligned with the AcceptBlock lower
+//!         bound (issue #3121 / #2955: the miner emitting a stale version its
+//!         own validator rejects self-halts the chain at the gate).
+int32_t ComputeBlockVersion(int height);
+
 // Regtest-only staking-height ceiling. When > 0, ThreadStakeMiner pauses
 // once `nBestHeight >= g_stakelimit_height`. Set via the `stakelimit` RPC
 // (Particl-analog) and consumed in StakeMiner. Unused on testnet / mainnet.
