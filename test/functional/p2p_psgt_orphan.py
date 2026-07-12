@@ -67,47 +67,6 @@ class P2PPsgtOrphanTest(GridcoinTestFramework):
         self.add_nodes(self.num_nodes, self.extra_args)
         self.start_nodes()
 
-    def grow_utxo_universe(self, node, count):
-        """Fan one mature UTXO into `count` ordinary outputs so the funding
-        selection never hits an empty listunspent.
-
-        node0's own staking can consume the handful of premine outputs, leaving
-        no mature UTXO for build_unconfirmed_funding_and_psgt -- a bare
-        listunspent(11)[0] then raises IndexError on slow CI. A large pool of
-        ordinary outputs (spendable at 1 confirmation, so a single confirming
-        block suffices) keeps one always available. The split is a *raw*
-        transaction because dev builds cripple wallet-level CommitTransaction
-        (fDevbuildCripple)."""
-        src = None
-        for cand in node.listunspent(1):
-            amount = round(float(cand["amount"]) - 1.0, 8)
-            if amount <= 0:
-                continue
-            probe = node.signrawtransactionwithwallet(
-                node.createrawtransaction(
-                    [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {node.getnewaddress(): amount}))
-            if probe.get("complete") and node.testmempoolaccept([probe["hex"]])[0]["allowed"]:
-                src = cand
-                break
-        assert src is not None, "no spendable UTXO to seed the universe"
-
-        assert count > 0, "universe count must be positive"
-        per_out = round((float(src["amount"]) - 1.0) / count, 8)  # ~1 GRC total fee
-        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {node.getnewaddress(): per_out for _ in range(count)}
-        signed = node.signrawtransactionwithwallet(
-            node.createrawtransaction(
-                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
-        assert signed.get("complete"), "failed to sign the universe split transaction"
-        node.sendrawtransaction(signed["hex"])
-        # Wait for the next 16-second STAKE_TIMESTAMP_MASK boundary before mining:
-        # the miner excludes transactions with nTime > block.nTime (masked down to
-        # the boundary), so without this the split tx can be left out of the block
-        # and the universe is not actually enlarged.
-        time.sleep(16 - (int(time.time()) % 16) + 1)
-        node.generatetoaddress(1, node.getnewaddress())  # ordinary outputs: 1 conf
-
     def build_unconfirmed_funding_and_psgt(self):
         """On node0, create a 2-of-3 multisig (1 own key, 2 node1 keys), fund it
         with an UNCONFIRMED raw spend of a mature UTXO, and build a partially

@@ -108,59 +108,6 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         self.connect_nodes(1, 0)
         self.sync_blocks()
 
-    def grow_utxo_universe(self, funder, miner, count):
-        """Split one premine UTXO into `count` consensus-agreed outputs,
-        confirmed on `miner`.
-
-        make_partially_signed_psgt funds from a mature UTXO; with only the few
-        premine outputs, `funder`'s staking can deplete them and its
-        `assert candidates` fails ("no mature UTXO left"). We fan one premine
-        UTXO into many ordinary outputs so the candidate scan is never empty.
-
-        The split is confirmed on `miner` (node1), NOT `funder` (node0): here
-        node0 mines the funding-confirmation blocks (confirm_funding), so
-        confirming the split there too would spend an extra node0 coinstake and
-        eat into its stake budget ("CreateCoinStake: no stake found"). This
-        mirrors rpc_psgtpool, which confirms its funding on node1 and so splits
-        on node0 -- the split is always confirmed on whichever node does NOT mine
-        the funding confirmations, to spread the shared premine pool's staking
-        load. Abundance (not pristineness) is what makes it robust: node0's later
-        confirm_funding coinstakes may consume a few split outputs, but dozens
-        remain and the retry loop absorbs the rest. Ordinary outputs are spendable
-        at 1 confirmation, so a single block suffices. Raw tx because dev builds
-        cripple wallet-level CommitTransaction (fDevbuildCripple)."""
-        self.sync_blocks()
-        src = None
-        for cand in funder.listunspent(11):
-            probe_amount = round(float(cand["amount"]) - 1.0, 8)
-            if probe_amount <= 0:
-                continue
-            probe = funder.signrawtransactionwithwallet(
-                funder.createrawtransaction(
-                    [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {funder.getnewaddress(): probe_amount}))
-            if (probe.get("complete")
-                    and funder.testmempoolaccept([probe["hex"]])[0]["allowed"]
-                    and miner.testmempoolaccept([probe["hex"]])[0]["allowed"]):
-                src = cand
-                break
-        assert src is not None, "no consensus-unspent UTXO to seed the universe"
-
-        assert count > 0, "universe count must be positive"
-        per_out = round((float(src["amount"]) - 1.0) / count, 8)  # ~1 GRC total fee
-        assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {funder.getnewaddress(): per_out for _ in range(count)}
-        signed = funder.signrawtransactionwithwallet(
-            funder.createrawtransaction(
-                [{"txid": src["txid"], "vout": src["vout"]}], outputs))
-        assert signed.get("complete"), "failed to sign the universe split transaction"
-        split_txid = funder.sendrawtransaction(signed["hex"])
-
-        self.wait_until(lambda: split_txid in miner.getrawmempool())
-        time.sleep(16 - (int(time.time()) % 16) + 1)
-        miner.generatetoaddress(1, miner.getnewaddress())
-        self.sync_blocks()
-
     def make_partially_signed_psgt(self):
         """Fund a 2-of-3 multisig (1 node0 key, 2 node1 keys) and have node0
         sign its one key: a valid, incomplete PSGT the pool must accept."""
@@ -229,7 +176,7 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         # scan never empties (node0's staking can deplete the few premine
         # outputs). Confirmed on node1 -- node0 mines the funding confirmations,
         # so splitting there too would eat into node0's stake budget.
-        self.grow_utxo_universe(node0, node1, count=48)
+        self.grow_utxo_universe(node0, 48, agree_with=node1, confirm_on=node1)
 
         wire = self.make_partially_signed_psgt()
         revision = uint256_from_str(hash256(wire))
