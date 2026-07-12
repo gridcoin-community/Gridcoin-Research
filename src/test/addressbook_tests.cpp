@@ -4,6 +4,8 @@
 
 #include "key.h"
 #include "key_io.h"
+#include "main.h"
+#include "primitives/transaction.h"
 #include "rpc/protocol.h"
 #include "rpc/server.h"
 #include "wallet/wallet.h"
@@ -266,6 +268,123 @@ BOOST_AUTO_TEST_CASE(account_only_rpcs_gated_without_flag)
 {
     BOOST_CHECK_THROW(getaccountaddress(ArgArray({""})), std::runtime_error);
     BOOST_CHECK_THROW(sendfrom(ArgArray({"someaccount", "dummy", "1.0"})), std::runtime_error);
+}
+
+// The received-by-label twins work WITHOUT -enableaccounts (their account twins are
+// hard-gated). This case pins the gating and the JSON shape on an unfunded wallet; the
+// tally semantics are covered by received_by_label_tallies_owned_outputs_only below.
+BOOST_AUTO_TEST_CASE(received_by_label_rpcs_work_flag_free)
+{
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));   // owned -> purpose "receive"
+    const std::string addr = EncodeDestination(CTxDestination(key.GetPubKey().GetID()));
+    setlabel(ArgArray({addr, "recvlabel"}));
+
+    // The gated account twins throw without -enableaccounts; the label twins must not.
+    BOOST_CHECK_THROW(getreceivedbyaccount(ArgArray({"recvlabel"})), std::runtime_error);
+    BOOST_CHECK_THROW(listreceivedbyaccount(UniValue(UniValue::VARR)), std::runtime_error);
+
+    // Empty test wallet: an existing label (and an unknown one) both tally to zero.
+    BOOST_CHECK_EQUAL(getreceivedbylabel(ArgArray({"recvlabel"})).get_real(), 0.0);
+    BOOST_CHECK_EQUAL(getreceivedbylabel(ArgArray({"no-such-label-xyz"})).get_real(), 0.0);
+
+    // "*" is not a valid label name (mirrors LabelFromValue everywhere else).
+    BOOST_CHECK_THROW(getreceivedbylabel(ArgArray({"*"})), UniValue);
+
+    // includeempty=true so the unfunded label still gets a row; rows are keyed "label",
+    // not "account".
+    UniValue lrArgs(UniValue::VARR);
+    lrArgs.push_back(UniValue(1));
+    lrArgs.push_back(UniValue(true));
+    UniValue rows = listreceivedbylabel(lrArgs);
+    BOOST_REQUIRE(rows.isArray());
+    bool found = false;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        BOOST_CHECK(rows[i].exists("label"));
+        BOOST_CHECK(!rows[i].exists("account"));
+        if (rows[i]["label"].get_str() == "recvlabel") found = true;
+    }
+    BOOST_CHECK(found);
+}
+
+// The label tally counts only outputs the wallet owns (a labeled send-to address that
+// receives coins must NOT be counted), honors minconf, and listreceivedbylabel rows carry
+// the "label" key LAST (Bitcoin's serialized order: amount, confirmations, label).
+BOOST_AUTO_TEST_CASE(received_by_label_tallies_owned_outputs_only)
+{
+    // Owned, labeled address -> its output is tallied.
+    CKey key;
+    key.MakeNewKey(false);
+    BOOST_REQUIRE(pwalletMain->AddKey(key));
+    const CTxDestination dest = CTxDestination(key.GetPubKey().GetID());
+    setlabel(ArgArray({EncodeDestination(dest), "fundedlabel"}));
+
+    // Non-owned, labeled (purpose "send") address paid by the SAME tx -> never tallied.
+    const CTxDestination otherDest = NewDestination();   // key not added to the wallet
+    setlabel(ArgArray({EncodeDestination(otherDest), "othersfunds"}));
+
+    // One unconfirmed wallet tx paying both. The fixture has no chain, so depth comes from
+    // the global mempool (a wtx in neither reports depth -1); visible only at minconf=0.
+    CMutableTransaction mtx;
+    mtx.vout.resize(2);
+    mtx.vout[0].nValue = 5 * COIN;
+    mtx.vout[0].scriptPubKey.SetDestination(dest);
+    mtx.vout[1].nValue = 7 * COIN;
+    mtx.vout[1].scriptPubKey.SetDestination(otherDest);
+    CTransaction tx(mtx);
+    const uint256 hash = tx.GetHash();
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        CWalletTx wtx(pwalletMain, tx);
+        wtx.SetTxState(TxStateInMempool{});
+        pwalletMain->mapWallet[hash] = wtx;
+        // addUnchecked's contract requires the caller hold mempool.cs (it does no
+        // internal locking, unlike mempool.remove below); acquire it after cs_wallet
+        // per the canonical lock order.
+        LOCK(mempool.cs);
+        mempool.addUnchecked(hash, CTxMemPoolEntry(
+            tx, /*fee=*/0, /*time=*/0, /*height=*/0,
+            ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION)));
+    }
+
+    UniValue grArgs(UniValue::VARR);
+    grArgs.push_back("fundedlabel");
+    grArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbylabel(grArgs).get_real(), 5.0);
+
+    // The default minconf=1 must not see the unconfirmed tx.
+    BOOST_CHECK_EQUAL(getreceivedbylabel(ArgArray({"fundedlabel"})).get_real(), 0.0);
+
+    // The non-owned address's 7-coin output must not be attributed to its label.
+    UniValue goArgs(UniValue::VARR);
+    goArgs.push_back("othersfunds");
+    goArgs.push_back(UniValue(0));
+    BOOST_CHECK_EQUAL(getreceivedbylabel(goArgs).get_real(), 0.0);
+
+    // listreceivedbylabel agrees with getreceivedbylabel on both labels, and every row ends
+    // with the "label" key.
+    UniValue lrArgs(UniValue::VARR);
+    lrArgs.push_back(UniValue(0));
+    lrArgs.push_back(UniValue(true));
+    UniValue rows = listreceivedbylabel(lrArgs);
+    BOOST_REQUIRE(rows.isArray());
+    double funded = -1.0;
+    double others = -1.0;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        BOOST_CHECK_EQUAL(rows[i].getKeys().back(), "label");
+        if (rows[i]["label"].get_str() == "fundedlabel") funded = rows[i]["amount"].get_real();
+        if (rows[i]["label"].get_str() == "othersfunds") others = rows[i]["amount"].get_real();
+    }
+    BOOST_CHECK_EQUAL(funded, 5.0);
+    BOOST_CHECK_EQUAL(others, 0.0);
+
+    // Remove the injected tx so later cases (and suites) see the wallet they expect.
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        mempool.remove(tx);
+        pwalletMain->mapWallet.erase(hash);
+    }
 }
 
 // migratelabels backfills purpose on entries that loaded as "unknown" (owned -> "receive"),

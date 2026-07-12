@@ -760,6 +760,8 @@ BOOST_AUTO_TEST_CASE(tier1_label_help_renders)
         {"setlabel",             &setlabel_helpman},
         {"getaddressesbylabel",  &getaddressesbylabel_helpman},
         {"listlabels",           &listlabels_helpman},
+        {"getreceivedbylabel",   &getreceivedbylabel_helpman},
+        {"listreceivedbylabel",  &listreceivedbylabel_helpman},
         {"migratelabels",        &migratelabels_helpman},
     });
 }
