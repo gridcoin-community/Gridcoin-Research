@@ -907,33 +907,20 @@ enum class CliConversion {
     FORBIDDEN, //!< must stay a string: a vRPCConvertParams entry would break it
 };
 
-//! AMOUNT args whose command body parses a *string* (ParseMoney(get_str()))
-//! instead of calling AmountFromValue (rpc/server.cpp). ParseMoney rejects a
-//! JSON number, and a vRPCConvertParams entry turns the CLI token into a
-//! number, so a conversion entry would break these -- they must stay strings.
-//! (AmountFromValue itself accepts either a number or a string, so it imposes
-//! no such constraint.) createmrcrequest's fee is the only string-parsed one.
-bool IsStringParsedAmountArg(const std::string& method, const size_t idx)
-{
-    return method == "createmrcrequest" && idx == 2;
-}
-
-CliConversion ArgTypeCliConversion(const std::string& method, const size_t idx, const RPCArg::Type type)
+CliConversion ArgTypeCliConversion(const RPCArg::Type type)
 {
     switch (type) {
     case RPCArg::Type::STR:
     case RPCArg::Type::STR_HEX:
         return CliConversion::FORBIDDEN;
     case RPCArg::Type::AMOUNT:
-        // Documented as "can be either NUM or STR" (rpc/util.h). AmountFromValue
-        // accepts both, so a convert entry is not strictly mandatory for those
-        // args -- but every one of them has one, routing the amount to the
-        // server as a JSON number, and this cross-check pins that wiring so an
-        // entry is not dropped by accident. The exception is a ParseMoney
-        // (get_str()) arg, which rejects a JSON number outright and so must NOT
-        // have a convert entry.
-        return IsStringParsedAmountArg(method, idx) ? CliConversion::FORBIDDEN
-                                                    : CliConversion::REQUIRED;
+        // Documented as "can be either NUM or STR" (rpc/util.h). Every AMOUNT
+        // arg is parsed by AmountFromValue (rpc/server.cpp), which accepts a
+        // JSON number or a string; each carries a vRPCConvertParams entry that
+        // routes the CLI token to the server as a number, and this cross-check
+        // pins that wiring so an entry is not dropped by accident. No AMOUNT arg
+        // is parsed as a bare string (ParseMoney) any longer.
+        return CliConversion::REQUIRED;
     case RPCArg::Type::OBJ:
     case RPCArg::Type::ARR:
     case RPCArg::Type::NUM:
@@ -1027,7 +1014,7 @@ BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
                 continue;
             }
 
-            switch (ArgTypeCliConversion(name, i, args[i].m_type)) {
+            switch (ArgTypeCliConversion(args[i].m_type)) {
             case CliConversion::REQUIRED:
                 BOOST_CHECK_MESSAGE(!converted[i].isStr(),
                     strprintf("%s arg %u (%s): declared as a non-string JSON type but "

@@ -5173,8 +5173,12 @@ UniValue createmrcrequest(const UniValue& params) {
         force = params[1].get_bool() && fTestNet;
     }
 
-    if (params.size() > 2 && !ParseMoney(params[2].get_str(), provided_fee)) {
-        throw runtime_error("Invalid fee.");
+    if (params.size() > 2) {
+        // AmountFromValue accepts the fee as either a JSON number or string and
+        // enforces the money range; it throws on anything invalid. A provided
+        // fee is therefore always strictly positive, so the provided_fee != 0
+        // "was a fee supplied" sentinel below still holds (the default is 0).
+        provided_fee = AmountFromValue(params[2]);
     }
 
     LOCK(cs_main);
