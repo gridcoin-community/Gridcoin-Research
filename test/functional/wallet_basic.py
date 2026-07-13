@@ -57,7 +57,7 @@ class WalletBasicTest(GridcoinTestFramework):
         cs = min(node.listunspent(0), key=lambda u: u["confirmations"])
         dest = node.getnewaddress()
         raw = node.createrawtransaction(
-            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: float(cs["amount"]) - 1})
+            [{"txid": cs["txid"], "vout": cs["vout"]}], {dest: cs["amount"] - 1})
         signed = node.signrawtransactionwithwallet(raw)
         assert signed.get("complete"), signed
         txid = node.sendrawtransaction(signed["hex"])

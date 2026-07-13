@@ -27,6 +27,7 @@ from test_framework.util import assert_equal
 
 import os
 import time
+from decimal import Decimal
 
 
 class RpcPsgtPoolTest(GridcoinTestFramework):
@@ -75,7 +76,7 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         # still guards spendability (and both-nodes agreement) for whatever
         # listunspent(1) returns.
         for cand in node0.listunspent(1):
-            amount = round(float(cand["amount"]) - 1.0, 8)  # ~1 GRC fee
+            amount = cand["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
             if amount <= 0:
                 continue  # too small to fund after fee (createrawtransaction rejects <= 0)
             raw = node0.createrawtransaction(
@@ -111,7 +112,7 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
         node0 = self.nodes[0]
         dest = node0.getnewaddress()
         psgt = node0.createpsgt([{"txid": txid, "vout": vout}],
-                                {dest: round(amount - fee, 8)})
+                                {dest: amount - fee})
         psgt = node0.utxoupdatepsgt(psgt)
         processed = node0.walletprocesspsgt(psgt)
         assert not processed["complete"], "expected a PARTIALLY signed PSGT"
@@ -145,7 +146,7 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
 
         # --- initiate: submitpsgt pools and relays ---
         txid, vout, amount = self.fund_multisig(ms_address)
-        submitted = node0.submitpsgt(self.initiator_psgt(txid, vout, amount, 0.01))
+        submitted = node0.submitpsgt(self.initiator_psgt(txid, vout, amount, Decimal("0.01")))
         assert_equal(submitted["sigs_valid"], 1)
         assert_equal(submitted["sigs_required"], 2)
         assert_equal(submitted["sigs_total"], 3)
@@ -181,10 +182,10 @@ class RpcPsgtPoolTest(GridcoinTestFramework):
 
         # --- initiator supersede: new destination replaces the pooled PSGT ---
         txid2, vout2, amount2 = self.fund_multisig(ms_address)
-        first = node0.submitpsgt(self.initiator_psgt(txid2, vout2, amount2, 0.01))
+        first = node0.submitpsgt(self.initiator_psgt(txid2, vout2, amount2, Decimal("0.01")))
         assert_equal(first["replaced"], False)
 
-        revised = node0.submitpsgt(self.initiator_psgt(txid2, vout2, amount2, 0.02))
+        revised = node0.submitpsgt(self.initiator_psgt(txid2, vout2, amount2, Decimal("0.02")))
         assert_equal(revised["replaced"], True)
         assert_equal(revised["image"], image)  # same arrangement, same slot
         assert revised["txid"] != first["txid"]

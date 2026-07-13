@@ -29,6 +29,7 @@ message and we assert, in order:
 """
 
 import time
+from decimal import Decimal
 
 from test_framework.messages import (
     CInv,
@@ -133,12 +134,12 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
             # still absorb the staker racing us for a chosen output.
             candidates = [u for u in node0.listunspent(1)
                           if (u["txid"], u["vout"]) not in tried
-                          and round(float(u["amount"]) - 1.0, 8) > 0.01]
+                          and u["amount"] - 1 > Decimal("0.01")]
             assert candidates, "no mature UTXO left to fund the multisig"
             utxo = candidates[0]
             tried.add((utxo["txid"], utxo["vout"]))
 
-            ms_amount = round(float(utxo["amount"]) - 1.0, 8)  # ~1 GRC fee
+            ms_amount = utxo["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
             raw = node0.createrawtransaction(
                 [{"txid": utxo["txid"], "vout": utxo["vout"]}], {ms_address: ms_amount})
             signed = node0.signrawtransactionwithwallet(raw)
@@ -158,7 +159,7 @@ class P2PPsgtRelayTest(GridcoinTestFramework):
         # 0.01 GRC fee: above the relay floor, below the absurd-fee ceiling.
         dest = node0.getnewaddress()
         psgt = node0.createpsgt([{"txid": txid, "vout": vout}],
-                                {dest: round(ms_amount - 0.01, 8)})
+                                {dest: ms_amount - Decimal("0.01")})
         psgt = node0.utxoupdatepsgt(psgt)
         processed = node0.walletprocesspsgt(psgt)
         assert not processed["complete"], "expected a PARTIALLY signed PSGT"

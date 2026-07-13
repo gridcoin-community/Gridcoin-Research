@@ -41,7 +41,7 @@ class RpcPsgtTest(GridcoinTestFramework):
         utxo = min(node.listunspent(0), key=lambda u: u["confirmations"])
         inputs = [{"txid": utxo["txid"], "vout": utxo["vout"]}]
         dest = node.getnewaddress()
-        outputs = {dest: float(utxo["amount"]) - 1}
+        outputs = {dest: utxo["amount"] - 1}  # amounts are Decimal from authproxy
 
         # --- createpsgt + decodepsgt round-trip ---
         psgt = node.createpsgt(inputs, outputs)

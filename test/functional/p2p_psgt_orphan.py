@@ -24,6 +24,7 @@ A scripted peer injects the PSGT and we assert:
 """
 
 import time
+from decimal import Decimal
 
 from base64 import b64decode
 
@@ -84,8 +85,8 @@ class P2PPsgtOrphanTest(GridcoinTestFramework):
         # hit an empty list once staking has consumed the mature premine outputs.
         utxo = None
         for cand in node0.listunspent(1):
-            ms_amount = round(float(cand["amount"]) - 1.0, 8)  # ~1 GRC fee
-            if ms_amount <= 0.01:  # need enough for the funding + the PSGT's 0.01 fee
+            ms_amount = cand["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
+            if ms_amount <= Decimal("0.01"):  # need enough for the funding + the PSGT's 0.01 fee
                 continue
             raw = node0.createrawtransaction(
                 [{"txid": cand["txid"], "vout": cand["vout"]}], {ms_address: ms_amount})
@@ -103,7 +104,7 @@ class P2PPsgtOrphanTest(GridcoinTestFramework):
 
         dest = node0.getnewaddress()
         psgt = node0.createpsgt([{"txid": txid, "vout": vout}],
-                                {dest: round(ms_amount - 0.01, 8)})
+                                {dest: ms_amount - Decimal("0.01")})
         psgt = node0.utxoupdatepsgt(psgt)
         processed = node0.walletprocesspsgt(psgt)
         assert not processed["complete"], "expected a PARTIALLY signed PSGT"
