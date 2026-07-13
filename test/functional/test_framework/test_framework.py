@@ -749,20 +749,18 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         # Pick a mature source UTXO unspent in every consensus view.
         src = None
         for cand in funder.listunspent(11):
-            # Amount math stays in Decimal (authproxy parses amounts as Decimal)
-            # so it is exact at 1e-8 (satoshi) granularity. Only cast to float at
-            # the createrawtransaction boundary: Gridcoin's AmountFromValue takes
-            # a JSON number via get_real() (it does not accept the string a
-            # Decimal serializes to) and rounds double*COIN to the satoshi, which
-            # recovers the exact value for these ranges. Drop the float() once
-            # AmountFromValue accepts exact string amounts (issue #3148).
+            # Amount math stays in Decimal end to end (authproxy parses amounts
+            # as Decimal), exact at 1e-8 (satoshi) granularity, and is handed
+            # straight to createrawtransaction: a Decimal serializes to a JSON
+            # string, which AmountFromValue now parses exactly to the satoshi
+            # (issue #3148). No float() round-trip, so no double-rounding.
             amount = cand["amount"] - Decimal("1.0")  # ~1 GRC fee
             if amount <= 0:
                 continue
             probe = funder.signrawtransactionwithwallet(
                 funder.createrawtransaction(
                     [{"txid": cand["txid"], "vout": cand["vout"]}],
-                    {funder.getnewaddress(): float(amount)}))
+                    {funder.getnewaddress(): amount}))
             if not probe.get("complete"):
                 continue
             if not funder.testmempoolaccept([probe["hex"]])[0]["allowed"]:
@@ -779,7 +777,7 @@ class GridcoinTestFramework(metaclass=GridcoinTestMetaClass):
         per_out = ((src["amount"] - Decimal("1.0")) / count).quantize(
             Decimal("0.00000001"), rounding=ROUND_DOWN)  # ~1 GRC total fee
         assert per_out > 0, "source UTXO too small to fan out into `count` outputs"
-        outputs = {funder.getnewaddress(): float(per_out) for _ in range(count)}
+        outputs = {funder.getnewaddress(): per_out for _ in range(count)}
         signed = funder.signrawtransactionwithwallet(
             funder.createrawtransaction(
                 [{"txid": src["txid"], "vout": src["vout"]}], outputs))
