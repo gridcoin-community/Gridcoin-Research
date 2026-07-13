@@ -117,6 +117,28 @@ BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("1.00000000")), 100000000LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.9999999")), 2099999999999990LL);
     BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("20999999.99999999")), 2099999999999999LL);
+
+    // A JSON string amount parses identically to the numeric form. Before the
+    // ParseFixedPoint conversion, AmountFromValue called value.get_real() and
+    // threw on any string-typed amount; now it accepts either representation.
+    BOOST_CHECK_EQUAL(AmountFromValue(UniValue(UniValue::VSTR, "0.5")), 50000000LL);
+    BOOST_CHECK_EQUAL(AmountFromValue(UniValue(UniValue::VSTR, "1.00000000")), 100000000LL);
+
+    // Exact parsing at the top of the money range (a double would lose the low
+    // digits here): MAX_MONEY = 2000000000 * COIN.
+    BOOST_CHECK_EQUAL(AmountFromValue(ValueFromString("2000000000.00000000")), 200000000000000000LL);
+
+    // Rejections. JSONRPCError throws a UniValue.
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0")), UniValue);            // zero (Gridcoin rejects <= 0)
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0.00000000")), UniValue);   // zero, written out
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("-1")), UniValue);           // negative
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("-0.00000001")), UniValue);  // negative sub-satoshi
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("0.000000001")), UniValue);  // more than 8 decimals (was silently rounded)
+    BOOST_CHECK_THROW(AmountFromValue(ValueFromString("2000000000.00000001")), UniValue); // just past MAX_MONEY
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "")), UniValue);    // empty string
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1.2.3")), UniValue);   // not a fixed-point number
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1a")), UniValue);      // trailing junk
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(true)), UniValue);                      // neither number nor string
 }
 
 // Regression guard: getaddednodeinfo dns=true must return an ARRAY of per-node

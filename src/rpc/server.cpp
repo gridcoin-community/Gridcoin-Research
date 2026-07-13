@@ -17,6 +17,7 @@
 #include "wallet/db.h"
 #include <rpc/util.h>
 #include <util.h>
+#include <util/strencodings.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ip/v6_only.hpp>
@@ -147,11 +148,25 @@ bool HTTPAuthorized(map<string, string>& mapHeaders)
 
 int64_t AmountFromValue(const UniValue& value)
 {
-    double dAmount = value.get_real();
-    if (dAmount <= 0.0 || dAmount > MAX_MONEY)
+    // Parse the amount exactly from its decimal string representation rather
+    // than routing it through a double. get_real() loses precision for large
+    // amounts (a double carries ~15-16 significant digits, but MAX_MONEY in
+    // satoshis is ~2e17) and rounds inputs with more than 8 decimal places
+    // instead of rejecting them. ParseFixedPoint converts the string directly
+    // to an int64_t satoshi count with 8 implied decimals, so the amount the
+    // RPC acts on is exactly the value the user typed. It also accepts either a
+    // JSON number or a JSON string (getValStr() yields the original token for
+    // both), which fixes string-typed amounts being rejected outright.
+    if (!value.isNum() && !value.isStr())
+        throw JSONRPCError(RPC_TYPE_ERROR, "Amount is not a number or string");
+    int64_t nAmount;
+    if (!ParseFixedPoint(value.getValStr(), 8, &nAmount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
-    int64_t nAmount = roundint64(dAmount * COIN);
-    if (!MoneyRange(nAmount))
+    // Preserve Gridcoin's historical contract of strictly-positive amounts:
+    // zero and negative are rejected. MoneyRange already excludes negatives and
+    // the out-of-range high end; the explicit > 0 keeps zero rejected as the
+    // get_real()-based implementation did (Bitcoin Core's MoneyRange admits 0).
+    if (nAmount <= 0 || !MoneyRange(nAmount))
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount");
     return nAmount;
 }

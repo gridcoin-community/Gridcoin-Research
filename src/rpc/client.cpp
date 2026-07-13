@@ -220,6 +220,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "beaconreport"           , 0 },
     { "createmrcrequest"       , 0 },
     { "createmrcrequest"       , 1 },
+    { "createmrcrequest"       , 2 },
     { "generate"               , 0 },
     { "generatetoaddress"      , 0 },
     { "getmrcinfo"             , 0 },

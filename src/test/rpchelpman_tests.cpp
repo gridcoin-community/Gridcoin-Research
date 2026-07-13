@@ -907,27 +907,20 @@ enum class CliConversion {
     FORBIDDEN, //!< must stay a string: a vRPCConvertParams entry would break it
 };
 
-//! AMOUNT args whose command body parses a *string* (ParseMoney(get_str()))
-//! instead of calling the number-only AmountFromValue (rpc/server.cpp), so a
-//! conversion entry would break them. createmrcrequest's fee is the only one.
-bool IsStringParsedAmountArg(const std::string& method, const size_t idx)
-{
-    return method == "createmrcrequest" && idx == 2;
-}
-
-CliConversion ArgTypeCliConversion(const std::string& method, const size_t idx, const RPCArg::Type type)
+CliConversion ArgTypeCliConversion(const RPCArg::Type type)
 {
     switch (type) {
     case RPCArg::Type::STR:
     case RPCArg::Type::STR_HEX:
         return CliConversion::FORBIDDEN;
     case RPCArg::Type::AMOUNT:
-        // Documented as "can be either NUM or STR" (rpc/util.h), but which of
-        // the two a command accepts is fixed by its body (AmountFromValue
-        // wants VNUM, ParseMoney wants VSTR), so resolve the expectation per
-        // (method, index) instead of exempting the type from the cross-check.
-        return IsStringParsedAmountArg(method, idx) ? CliConversion::FORBIDDEN
-                                                    : CliConversion::REQUIRED;
+        // Documented as "can be either NUM or STR" (rpc/util.h). Every AMOUNT
+        // arg is parsed by AmountFromValue (rpc/server.cpp), which accepts a
+        // JSON number or a string; each carries a vRPCConvertParams entry that
+        // routes the CLI token to the server as a number, and this cross-check
+        // pins that wiring so an entry is not dropped by accident. No AMOUNT arg
+        // is parsed as a bare string (ParseMoney) any longer.
+        return CliConversion::REQUIRED;
     case RPCArg::Type::OBJ:
     case RPCArg::Type::ARR:
     case RPCArg::Type::NUM:
@@ -1021,7 +1014,7 @@ BOOST_AUTO_TEST_CASE(every_helpman_arg_type_matches_client_conversion_table)
                 continue;
             }
 
-            switch (ArgTypeCliConversion(name, i, args[i].m_type)) {
+            switch (ArgTypeCliConversion(args[i].m_type)) {
             case CliConversion::REQUIRED:
                 BOOST_CHECK_MESSAGE(!converted[i].isStr(),
                     strprintf("%s arg %u (%s): declared as a non-string JSON type but "
