@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
     BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "")), UniValue);    // empty string
     BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1.2.3")), UniValue);   // not a fixed-point number
     BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VSTR, "1a")), UniValue);      // trailing junk
-    BOOST_CHECK_THROW(AmountFromValue(UniValue(UniValue::VBOOL, "1")), UniValue);      // neither number nor string
+    BOOST_CHECK_THROW(AmountFromValue(UniValue(true)), UniValue);                      // neither number nor string
 }
 
 // Regression guard: getaddednodeinfo dns=true must return an ARRAY of per-node

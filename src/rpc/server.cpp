@@ -153,8 +153,8 @@ int64_t AmountFromValue(const UniValue& value)
     // amounts (a double carries ~15-16 significant digits, but MAX_MONEY in
     // satoshis is ~2e17) and rounds inputs with more than 8 decimal places
     // instead of rejecting them. ParseFixedPoint converts the string directly
-    // to an int64_t satoshi count with 8 implied decimals, so the value that
-    // reaches consensus is the value the user typed. It also accepts either a
+    // to an int64_t satoshi count with 8 implied decimals, so the amount the
+    // RPC acts on is exactly the value the user typed. It also accepts either a
     // JSON number or a JSON string (getValStr() yields the original token for
     // both), which fixes string-typed amounts being rejected outright.
     if (!value.isNum() && !value.isStr())
