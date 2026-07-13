@@ -40,7 +40,7 @@ class RpcRawTransactionTest(GridcoinTestFramework):
         node.generatetoaddress(10, node.getnewaddress())
         utxo = min(node.listunspent(0), key=lambda u: u["confirmations"])
         dest = node.getnewaddress()
-        amount = float(utxo["amount"]) - 1  # ~1 GRC fee
+        amount = utxo["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
 
         # --- createrawtransaction ---
         raw = node.createrawtransaction(

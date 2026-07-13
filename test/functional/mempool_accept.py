@@ -51,7 +51,7 @@ class MempoolAcceptTest(GridcoinTestFramework):
         # most-recently-staked output (fewest confirmations) is a coinstake,
         # never the height-0 premine coinbase.
         u = min(node.listunspent(0), key=lambda x: x["confirmations"])
-        amt = float(u["amount"]) - 1  # ~1 GRC fee
+        amt = u["amount"] - 1  # ~1 GRC fee (amounts are Decimal from authproxy)
 
         # 1. a valid tx is accepted into the mempool
         first = self._signed_spend(node, u, node.getnewaddress(), amt)
