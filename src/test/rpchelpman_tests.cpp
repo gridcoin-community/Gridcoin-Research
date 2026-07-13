@@ -908,8 +908,11 @@ enum class CliConversion {
 };
 
 //! AMOUNT args whose command body parses a *string* (ParseMoney(get_str()))
-//! instead of calling the number-only AmountFromValue (rpc/server.cpp), so a
-//! conversion entry would break them. createmrcrequest's fee is the only one.
+//! instead of calling AmountFromValue (rpc/server.cpp). ParseMoney rejects a
+//! JSON number, and a vRPCConvertParams entry turns the CLI token into a
+//! number, so a conversion entry would break these -- they must stay strings.
+//! (AmountFromValue itself accepts either a number or a string, so it imposes
+//! no such constraint.) createmrcrequest's fee is the only string-parsed one.
 bool IsStringParsedAmountArg(const std::string& method, const size_t idx)
 {
     return method == "createmrcrequest" && idx == 2;
@@ -922,10 +925,13 @@ CliConversion ArgTypeCliConversion(const std::string& method, const size_t idx, 
     case RPCArg::Type::STR_HEX:
         return CliConversion::FORBIDDEN;
     case RPCArg::Type::AMOUNT:
-        // Documented as "can be either NUM or STR" (rpc/util.h), but which of
-        // the two a command accepts is fixed by its body (AmountFromValue
-        // wants VNUM, ParseMoney wants VSTR), so resolve the expectation per
-        // (method, index) instead of exempting the type from the cross-check.
+        // Documented as "can be either NUM or STR" (rpc/util.h). AmountFromValue
+        // accepts both, so a convert entry is not strictly mandatory for those
+        // args -- but every one of them has one, routing the amount to the
+        // server as a JSON number, and this cross-check pins that wiring so an
+        // entry is not dropped by accident. The exception is a ParseMoney
+        // (get_str()) arg, which rejects a JSON number outright and so must NOT
+        // have a convert entry.
         return IsStringParsedAmountArg(method, idx) ? CliConversion::FORBIDDEN
                                                     : CliConversion::REQUIRED;
     case RPCArg::Type::OBJ:
