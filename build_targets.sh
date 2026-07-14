@@ -50,9 +50,23 @@ print_help() {
 
 # Get the current robust git version string (hash + dirty status)
 get_current_git_state() {
-    if [ -d ".git" ]; then
+    # .git is a directory in a primary checkout but a plain FILE in linked
+    # worktrees (git worktree) and submodules, so ask git itself rather than
+    # testing for the directory. The state is trusted only when the current
+    # directory IS the work-tree root: being merely *inside* some enclosing
+    # repo (e.g. a tarball extracted under a git-managed home directory)
+    # would silently compute the parent repo's state. Anything else (no git,
+    # not a work tree, wrong root) yields "unknown", which should_skip_build
+    # treats as never skippable.
+    if [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$(pwd -P)" ]; then
         local DESCRIBE
-        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude=* 2>/dev/null)
+        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude='*' 2>/dev/null)
+
+        if [ -z "$DESCRIBE" ]; then
+            # e.g. unborn HEAD (git init with no commits): indeterminate.
+            echo "unknown"
+            return 0
+        fi
 
         # A bare "-dirty" suffix is content-independent: two different sets of
         # uncommitted changes on the same commit yield the same state string,
@@ -85,6 +99,10 @@ get_current_git_state() {
     fi
 }
 
+# Git state captured by should_skip_build at skip-decision time (i.e., just
+# before a build starts) and recorded by write_build_state on success.
+CAPTURED_BUILD_STATE=""
+
 # Check if we can skip the build
 # Usage: should_skip_build "BUILD_DIR" "FILE_1" "FILE_2" ...
 # Returns 0 (true) if we should skip, 1 (false) if we must build
@@ -94,6 +112,21 @@ should_skip_build() {
 
     local CURRENT_STATE
     CURRENT_STATE=$(get_current_git_state)
+
+    # Capture now for write_build_state: recomputing the state AFTER the
+    # build would silently record source edits made while the build ran as
+    # built. Recording the pre-build snapshot instead means such edits leave
+    # the recorded state stale and the next run rebuilds -- the safe
+    # direction.
+    CAPTURED_BUILD_STATE="$CURRENT_STATE"
+
+    # An indeterminate state (not a git work-tree root, git unavailable, or
+    # an empty result) cannot prove the artifacts match the sources: never
+    # skip. The -z test is defense-in-depth; get_current_git_state already
+    # maps empty describe output to "unknown".
+    if [ -z "$CURRENT_STATE" ] || [ "$CURRENT_STATE" == "unknown" ]; then
+        return 1
+    fi
 
     # If explicit clean requested, never skip
     if [ "$CLEAN_BUILD" == "true" ] || [ "$CLEAN_BUILD" == "main" ]; then
@@ -123,10 +156,12 @@ should_skip_build() {
     return 1
 }
 
-# Write the current state to file upon success
+# Write the state captured at skip-decision time upon success (see
+# should_skip_build). Falls back to "unknown" -- never skippable -- if no
+# capture happened.
 write_build_state() {
     local BUILD_DIR=$1
-    get_current_git_state > "$BUILD_DIR/.build_state"
+    echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
 }
 
 # ==============================================================================
