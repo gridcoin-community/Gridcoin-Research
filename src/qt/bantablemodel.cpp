@@ -11,6 +11,9 @@
 #include <QDateTime>
 #include <QLocale>
 
+#include <algorithm>
+#include <utility>
+
 bool BannedNodeLessThan::operator()(const interfaces::BannedNode& left, const interfaces::BannedNode& right) const
 {
     const interfaces::BannedNode* pLeft = &left;
@@ -26,6 +29,7 @@ bool BannedNodeLessThan::operator()(const interfaces::BannedNode& left, const in
         return pLeft->ban_until < pRight->ban_until;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
+    return false; // Unreachable: keeps release builds (NDEBUG) well-defined.
 }
 
 // private implementation
