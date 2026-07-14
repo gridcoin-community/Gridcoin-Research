@@ -65,6 +65,8 @@ qrc_*.cpp
 #qt creator
 *.pro.user
 *.pro.user.*
+.qmlls.ini
+.qtc_clangd/
 #mac specific
 .DS_Store
 background.tiff
