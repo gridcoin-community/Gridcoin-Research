@@ -50,12 +50,78 @@ print_help() {
 
 # Get the current robust git version string (hash + dirty status)
 get_current_git_state() {
-    if [ -d ".git" ]; then
-        git describe --always --dirty --abbrev=12 --exclude=* 2>/dev/null
+    # .git is a directory in a primary checkout but a plain FILE in linked
+    # worktrees (git worktree) and submodules, so ask git itself rather than
+    # testing for the directory. The state is trusted only when the current
+    # directory IS the work-tree root: being merely *inside* some enclosing
+    # repo (e.g. a tarball extracted under a git-managed home directory)
+    # would silently compute the parent repo's state. Anything else (no git,
+    # not a work tree, wrong root) yields "unknown", which should_skip_build
+    # treats as never skippable. The root is accepted by either its physical
+    # (pwd -P) or logical ($PWD) path, since git's canonicalization of
+    # symlinked paths has differed across versions/platforms; a false
+    # negative here only costs a rebuild, never a wrong skip.
+    # Every git command substitution is ||-guarded so a failure (no git, not
+    # a repo) degrades to "unknown" instead of aborting the script under
+    # set -e, regardless of the calling context.
+    local TOPLEVEL
+    TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || TOPLEVEL=""
+    if [ -n "$TOPLEVEL" ] && { [ "$TOPLEVEL" = "$(pwd -P)" ] || [ "$TOPLEVEL" = "$PWD" ]; }; then
+        local DESCRIBE
+        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude='*' 2>/dev/null) || DESCRIBE=""
+
+        if [ -z "$DESCRIBE" ]; then
+            # e.g. unborn HEAD (git init with no commits): indeterminate.
+            echo "unknown"
+            return 0
+        fi
+
+        # A bare "-dirty" suffix is content-independent: two different sets of
+        # uncommitted changes on the same commit yield the same state string,
+        # so a recorded dirty build state could wrongly skip a build of
+        # different working-tree content. Disambiguate by folding a hash of
+        # the tracked diff (staged + unstaged, vs HEAD) into the state.
+        # Untracked files are ignored, matching --dirty semantics. git
+        # hash-object is used instead of sha256sum for macOS portability.
+        case "$DESCRIBE" in
+            *-dirty)
+                local DIFF_TMP
+                local DIFF_HASH
+                local STATE_OUT
+                # Write the diff to a temp file rather than a shell variable
+                # (a --binary diff can be large) and check its exit status: a
+                # failed diff must not be hashed as partial output, which
+                # could wrongly MATCH a recorded state. On any failure emit a
+                # never-matching token so the error degrades to a rebuild.
+                # Explicit template: BSD/macOS mktemp requires one (bare GNU
+                # mktemp defaults are not portable). Respects $TMPDIR.
+                DIFF_TMP=$(mktemp "${TMPDIR:-/tmp}/build_targets_state.XXXXXX" 2>/dev/null) || {
+                    echo "${DESCRIBE}-difffail-$$-$(date +%s)"
+                    return 0
+                }
+                if git diff --no-ext-diff --no-color --binary HEAD >"$DIFF_TMP" 2>/dev/null; then
+                    DIFF_HASH=$(git hash-object -- "$DIFF_TMP" 2>/dev/null | cut -c1-12) || DIFF_HASH=""
+                fi
+                if [ -n "$DIFF_HASH" ]; then
+                    STATE_OUT="${DESCRIBE}-${DIFF_HASH}"
+                else
+                    STATE_OUT="${DESCRIBE}-difffail-$$-$(date +%s)"
+                fi
+                rm -f "$DIFF_TMP"
+                echo "$STATE_OUT"
+                ;;
+            *)
+                echo "$DESCRIBE"
+                ;;
+        esac
     else
         echo "unknown"
     fi
 }
+
+# Git state captured by should_skip_build at skip-decision time (i.e., just
+# before a build starts) and recorded by write_build_state on success.
+CAPTURED_BUILD_STATE=""
 
 # Check if we can skip the build
 # Usage: should_skip_build "BUILD_DIR" "FILE_1" "FILE_2" ...
@@ -65,7 +131,25 @@ should_skip_build() {
     shift
 
     local CURRENT_STATE
-    CURRENT_STATE=$(get_current_git_state)
+    CURRENT_STATE=$(get_current_git_state) || CURRENT_STATE=""
+
+    # Capture now for write_build_state: recomputing the state AFTER the
+    # build would silently record source edits made while the build ran as
+    # built. Recording the pre-build snapshot instead means such edits leave
+    # the recorded state stale and the next run rebuilds -- the safe
+    # direction.
+    CAPTURED_BUILD_STATE="$CURRENT_STATE"
+
+    # An indeterminate state cannot prove the artifacts match the sources:
+    # never skip. This covers an empty result (defense-in-depth), "unknown"
+    # (not a git work-tree root / git unavailable), and "*-difffail-*"
+    # tokens (state hashing failed) -- guarding the current side here also
+    # means a recorded difffail token can never satisfy the equality check.
+    case "$CURRENT_STATE" in
+        ""|unknown|*-difffail-*)
+            return 1
+            ;;
+    esac
 
     # If explicit clean requested, never skip
     if [ "$CLEAN_BUILD" == "true" ] || [ "$CLEAN_BUILD" == "main" ]; then
@@ -95,10 +179,12 @@ should_skip_build() {
     return 1
 }
 
-# Write the current state to file upon success
+# Write the state captured at skip-decision time upon success (see
+# should_skip_build). Falls back to "unknown" -- never skippable -- if no
+# capture happened.
 write_build_state() {
     local BUILD_DIR=$1
-    get_current_git_state > "$BUILD_DIR/.build_state"
+    echo "${CAPTURED_BUILD_STATE:-unknown}" > "$BUILD_DIR/.build_state"
 }
 
 # ==============================================================================
