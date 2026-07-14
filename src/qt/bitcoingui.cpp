@@ -46,7 +46,6 @@
 #include "init.h"
 #include "main.h"
 #include "clicklabel.h"
-#include "univalue.h"
 #include "upgradeqt.h"
 #include "voting/votingmodel.h"
 #include "voting/polltablemodel.h"
@@ -91,9 +90,6 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "rpc/server.h"
-#include "rpc/client.h"
-#include "rpc/protocol.h"
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/superblock.h"
@@ -118,7 +114,6 @@ BitcoinGUI::BitcoinGUI(QWidget* parent)
         , rpcConsole(nullptr)
         , m_sync_overlay(nullptr)
         , m_in_sync(false)
-        , nWeight(0)
 {
     QSettings settings;
 
@@ -1317,16 +1312,6 @@ void BitcoinGUI::closeEvent(QCloseEvent *event)
 }
 
 
-void BitcoinGUI::askQuestion(std::string caption, std::string body, bool *result)
-{
-
-        QString qsCaption = tr(caption.c_str());
-        QString qsBody = tr(body.c_str());
-        QMessageBox::StandardButton retval = QMessageBox::question(this, qsCaption, qsBody, QMessageBox::Yes|QMessageBox::Cancel,   QMessageBox::Cancel);
-        *result = (retval == QMessageBox::Yes);
-
-}
-
 void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
 {
     QString strMessage =
@@ -1898,22 +1883,6 @@ void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
     }
     else if(fToggleHidden)
         hide();
-}
-
-void BitcoinGUI::updateWeight()
-{
-    if (!pwalletMain)
-        return;
-
-    TRY_LOCK(cs_main, lockMain);
-    if (!lockMain)
-        return;
-
-    TRY_LOCK(pwalletMain->cs_wallet, lockWallet);
-    if (!lockWallet)
-        return;
-
-    nWeight = GRC::GetStakeWeight(*pwalletMain);
 }
 
 QString BitcoinGUI::GetEstimatedStakingFrequency(unsigned int nEstimateTime)

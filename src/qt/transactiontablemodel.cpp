@@ -6,9 +6,6 @@
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
-#include "main.h"
-#include "wallet/wallet.h"
-#include "node/ui_interface.h"
 #include "util.h"
 
 #include <QLocale>

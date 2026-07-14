@@ -10,8 +10,6 @@
 #include <numeric>
 #include <type_traits>
 
-extern std::atomic<int64_t> g_nTimeBestReceived;
-
 DiagnosticsDialog::DiagnosticsDialog(QWidget *parent, ResearcherModel* researcher_model) :
     QDialog(parent),
     ui(new Ui::DiagnosticsDialog),

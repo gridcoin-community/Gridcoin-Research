@@ -7,7 +7,6 @@
 #include "monitoreddatamapper.h"
 #include "optionsmodel.h"
 #include "qt/decoration.h"
-#include "init.h"
 #include "miner.h"
 #include "sidestaketablemodel.h"
 #include "editsidestakedialog.h"

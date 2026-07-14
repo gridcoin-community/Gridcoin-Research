@@ -1,7 +1,6 @@
 #include "sendcoinsdialog.h"
 #include "ui_sendcoinsdialog.h"
 
-#include "init.h"
 #include "addresstablemodel.h"
 #include "addressbookpage.h"
 
@@ -12,7 +11,6 @@
 #include "askpassphrasedialog.h"
 
 #include "wallet/coincontrol.h"
-#include "policy/policy.h"
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
 #include "consolidateunspentwizard.h"

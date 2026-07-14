@@ -2,9 +2,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
 #include "qspinbox.h"
-#include "sync.h"
 #include "mrcrequestpage.h"
 #include "forms/ui_mrcrequestpage.h"
 #include "walletmodel.h"

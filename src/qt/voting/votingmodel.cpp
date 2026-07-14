@@ -27,9 +27,6 @@
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
-extern CCriticalSection cs_main;
-extern int nBestHeight;
-
 namespace {
 //!
 //! \brief Model callback bound to the \c NewPollReceived core signal.
