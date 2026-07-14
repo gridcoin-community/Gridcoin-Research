@@ -57,8 +57,13 @@ get_current_git_state() {
     # repo (e.g. a tarball extracted under a git-managed home directory)
     # would silently compute the parent repo's state. Anything else (no git,
     # not a work tree, wrong root) yields "unknown", which should_skip_build
-    # treats as never skippable.
-    if [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$(pwd -P)" ]; then
+    # treats as never skippable. The root is accepted by either its physical
+    # (pwd -P) or logical ($PWD) path, since git's canonicalization of
+    # symlinked paths has differed across versions/platforms; a false
+    # negative here only costs a rebuild, never a wrong skip.
+    local TOPLEVEL
+    TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$TOPLEVEL" ] && { [ "$TOPLEVEL" = "$(pwd -P)" ] || [ "$TOPLEVEL" = "$PWD" ]; }; then
         local DESCRIBE
         DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude='*' 2>/dev/null)
 
@@ -77,18 +82,28 @@ get_current_git_state() {
         # hash-object is used instead of sha256sum for macOS portability.
         case "$DESCRIBE" in
             *-dirty)
-                local DIFF_OUTPUT
+                local DIFF_TMP
                 local DIFF_HASH
-                # Capture the diff and check its exit status: without pipefail
-                # a failed diff would silently hash partial output, which could
-                # wrongly MATCH a recorded state. On failure emit a
+                local STATE_OUT
+                # Write the diff to a temp file rather than a shell variable
+                # (a --binary diff can be large) and check its exit status: a
+                # failed diff must not be hashed as partial output, which
+                # could wrongly MATCH a recorded state. On any failure emit a
                 # never-matching token so the error degrades to a rebuild.
-                if DIFF_OUTPUT=$(git diff --no-ext-diff --no-color --binary HEAD 2>/dev/null); then
-                    DIFF_HASH=$(printf '%s' "$DIFF_OUTPUT" | git hash-object --stdin | cut -c1-12)
-                    echo "${DESCRIBE}-${DIFF_HASH}"
-                else
+                DIFF_TMP=$(mktemp 2>/dev/null) || {
                     echo "${DESCRIBE}-difffail-$$-$(date +%s)"
+                    return 0
+                }
+                if git diff --no-ext-diff --no-color --binary HEAD >"$DIFF_TMP" 2>/dev/null; then
+                    DIFF_HASH=$(git hash-object -- "$DIFF_TMP" 2>/dev/null | cut -c1-12)
                 fi
+                if [ -n "$DIFF_HASH" ]; then
+                    STATE_OUT="${DESCRIBE}-${DIFF_HASH}"
+                else
+                    STATE_OUT="${DESCRIBE}-difffail-$$-$(date +%s)"
+                fi
+                rm -f "$DIFF_TMP"
+                echo "$STATE_OUT"
                 ;;
             *)
                 echo "$DESCRIBE"
