@@ -140,13 +140,16 @@ should_skip_build() {
     # direction.
     CAPTURED_BUILD_STATE="$CURRENT_STATE"
 
-    # An indeterminate state (not a git work-tree root, git unavailable, or
-    # an empty result) cannot prove the artifacts match the sources: never
-    # skip. The -z test is defense-in-depth; get_current_git_state already
-    # maps empty describe output to "unknown".
-    if [ -z "$CURRENT_STATE" ] || [ "$CURRENT_STATE" == "unknown" ]; then
-        return 1
-    fi
+    # An indeterminate state cannot prove the artifacts match the sources:
+    # never skip. This covers an empty result (defense-in-depth), "unknown"
+    # (not a git work-tree root / git unavailable), and "*-difffail-*"
+    # tokens (state hashing failed) -- guarding the current side here also
+    # means a recorded difffail token can never satisfy the equality check.
+    case "$CURRENT_STATE" in
+        ""|unknown|*-difffail-*)
+            return 1
+            ;;
+    esac
 
     # If explicit clean requested, never skip
     if [ "$CLEAN_BUILD" == "true" ] || [ "$CLEAN_BUILD" == "main" ]; then
