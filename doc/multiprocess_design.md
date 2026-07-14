@@ -42,6 +42,9 @@ that wrap the existing globals and registries:
  domain models             interfaces (§5)                       src/gridcoin/interfaces.cpp
 ```
 
+(The diagram shows the *planned* layout: `src/interfaces/` and the impl files do
+not exist yet — Phase 1a creates them.)
+
 The monolithic build keeps working the entire time; each migrated model is an
 independent PR. A `NodeContext`-style context struct is **explicitly not a
 prerequisite** — Bitcoin Core shipped its interfaces two years before NodeContext
@@ -201,10 +204,13 @@ version; the new counter is named `registry_version` to avoid collision.)
 Synchronous core→GUI round-trips do not survive a process boundary gracefully and are
 handled as follows during Phase 1:
 
-- **`ThreadSafeAskFee`** — currently fired *while the sender holds*
-  `LOCK2(cs_main, cs_wallet)`, blocking a wallet thread on a modal. Eliminated: the fee
-  decision moves ahead of transaction commitment (precompute and confirm before locks),
-  not ported as a blocking IPC call.
+- **`ThreadSafeAskFee`** — the live emit site (`WalletModel::sendCoins`) fires it
+  *inside* that function's `LOCK2(cs_main, cs_wallet)` scope, so core locks are held
+  across a user-facing modal for arbitrary think-time. (The other emit site,
+  `CWallet::SendMoney`, prompts before its commit takes the locks — but it is dead
+  code: `fAskFee` defaults to false and no caller passes true.) Eliminated: the fee
+  decision moves ahead of transaction commitment (precompute and confirm before
+  locks), not ported as a blocking IPC call.
 - **`ThreadSafeAskQuestion`** — zero emit sites in the tree; deleted rather than ported.
 - **`ThreadSafeMessageBox` (MODAL)** — becomes async-with-acknowledgement; the node
   never blocks on GUI dismissal in the split build.
