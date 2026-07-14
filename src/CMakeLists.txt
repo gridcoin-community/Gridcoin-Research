@@ -173,6 +173,7 @@ add_library(gridcoin_util STATIC
     gridcoin/voting/vote.cpp
     hash.cpp
     init.cpp
+    interfaces/handler.cpp
     key.cpp
     key_io.cpp
     keystore.cpp
@@ -187,6 +188,7 @@ add_library(gridcoin_util STATIC
     node/blockstorage.cpp
     node/chainman.cpp
     node/coherence.cpp
+    node/interfaces.cpp
     node/mempool_persist.cpp
     node/orphan_blocks.cpp
     node/psgt_pool.cpp
@@ -243,6 +245,7 @@ add_library(gridcoin_util STATIC
     validationinterface.cpp
     wallet/db.cpp
     wallet/diagnose.cpp
+    wallet/interfaces.cpp
     wallet/rpcdump.cpp
     wallet/rpcwallet.cpp
     wallet/wallet.cpp
