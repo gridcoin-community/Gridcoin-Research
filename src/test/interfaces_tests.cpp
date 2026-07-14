@@ -151,10 +151,15 @@ BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
     // No alerts in the unit-test environment: unknown hash yields empty.
     BOOST_CHECK(node->getAlertStatusBarMessage(uint256S("0x01")).empty());
 
-    // No scraper convergence in the unit-test environment.
+    // The scraper convergence cache is process-global: assert the snapshot
+    // query is safe and the value data is well-formed without assuming the
+    // cache is empty (no scraper threads run under the unit tests today,
+    // but suite order must not matter).
     const interfaces::ScraperConvergenceSnapshot snapshot = node->getScraperConvergenceSnapshot();
-    BOOST_CHECK_EQUAL(snapshot.time, 0);
-    BOOST_CHECK(snapshot.included_scrapers.empty());
+    BOOST_CHECK(snapshot.time >= 0);
+    for (const auto& scraper : snapshot.included_scrapers) {
+        BOOST_CHECK(!scraper.empty());
+    }
 
     // Pure conversion: the difficulty-1 compact target maps to ~1.0.
     BOOST_CHECK_CLOSE(node->getBlockDifficulty(0x1d00ffff), 1.0, 0.1);
