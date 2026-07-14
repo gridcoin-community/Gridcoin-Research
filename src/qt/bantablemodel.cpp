@@ -12,6 +12,7 @@
 #include <QLocale>
 
 #include <algorithm>
+#include <cassert>
 #include <utility>
 
 bool BannedNodeLessThan::operator()(const interfaces::BannedNode& left, const interfaces::BannedNode& right) const

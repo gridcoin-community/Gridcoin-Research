@@ -141,9 +141,12 @@ BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
 {
     std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
 
-    // BanMan exists via the global test fixture, but nothing has banned a
-    // peer by the time this suite runs.
-    BOOST_CHECK(node->getBanned().empty());
+    // BanMan exists via the global test fixture and is shared across every
+    // suite in the process, so do not assume emptiness: assert the query is
+    // safe and any rows are well-formed value types.
+    for (const auto& banned : node->getBanned()) {
+        BOOST_CHECK(!banned.address.empty());
+    }
 
     // No alerts in the unit-test environment: unknown hash yields empty.
     BOOST_CHECK(node->getAlertStatusBarMessage(uint256S("0x01")).empty());
