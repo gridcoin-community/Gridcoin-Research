@@ -383,6 +383,11 @@ bool OptionsModel::getLimitTxnDisplay()
     return fLimitTxnDisplay;
 }
 
+bool OptionsModel::getSuppressNetworkGraph()
+{
+    return gArgs.GetArg("-suppressnetworkgraph", "false") == "true";
+}
+
 bool OptionsModel::getMaskValues()
 {
     return fMaskValues;

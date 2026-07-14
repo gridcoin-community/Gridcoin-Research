@@ -2,6 +2,9 @@
 #include "ui_rpcconsole.h"
 
 #ifndef Q_MOC_RUN
+#include "banman.h" // Direct include: previously supplied transitively by the
+                     // pre-interfaces bantablemodel.h; the ban/unban mutations
+                     // here are existing coupling scheduled for Phase 1e.
 #include "clientmodel.h"
 #include "qt/bantablemodel.h"
 #include "qt/decoration.h"

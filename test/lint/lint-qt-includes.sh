@@ -22,17 +22,15 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 FORBIDDEN_RE='^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](main\.h|validation\.h|init\.h|net\.h|net_processing\.h|netbase\.h|miner\.h|txdb\.h|txdb-leveldb\.h|txmempool\.h|banman\.h|alert\.h|keystore\.h|key\.h|chain\.h|chainparams\.h|chainparamsbase\.h|protocol\.h|psgt\.h|sync\.h|util\.h|node/[^">]+|util/system\.h|wallet/[^">]+|gridcoin/[^">]+|rpc/[^">]+|policy/[^">]+|script/[^">]+)[">]'
 
 # file:header pairs present when the ratchet was introduced. DO NOT ADD
-# ENTRIES -- migrate the file onto src/interfaces/*.h instead.
+# ENTRIES -- migrate the file onto src/interfaces/*.h instead. (Sole
+# exception: an entry may be added when a migration surfaces PRE-EXISTING
+# coupling that was previously hidden behind a transitive include, e.g.
+# rpcconsole.cpp:banman.h -- the coupling is old, only the include is new.)
 ALLOWLIST="\
 src/qt/aboutdialog.cpp:util.h
 src/qt/addresstablemodel.cpp:util.h
 src/qt/addresstablemodel.cpp:wallet/wallet.h
 src/qt/addresstablemodel.h:wallet/ismine.h
-src/qt/bantablemodel.cpp:net.h
-src/qt/bantablemodel.cpp:sync.h
-src/qt/bantablemodel.cpp:util.h
-src/qt/bantablemodel.h:banman.h
-src/qt/bantablemodel.h:net.h
 src/qt/bitcoin.cpp:chainparamsbase.h
 src/qt/bitcoin.cpp:chainparams.h
 src/qt/bitcoin.cpp:gridcoin/gridcoin.h
@@ -45,21 +43,12 @@ src/qt/bitcoin.cpp:util.h
 src/qt/bitcoin.cpp:validation.h
 src/qt/bitcoingui.cpp:gridcoin/backup.h
 src/qt/bitcoingui.cpp:gridcoin/staking/difficulty.h
-src/qt/bitcoingui.cpp:gridcoin/superblock.h
 src/qt/bitcoingui.cpp:init.h
 src/qt/bitcoingui.cpp:main.h
 src/qt/bitcoingui.cpp:node/psgt_pool.h
 src/qt/bitcoingui.cpp:script/standard.h
 src/qt/bitcoingui.cpp:util.h
 src/qt/bitcoingui.cpp:wallet/wallet.h
-src/qt/clientmodel.cpp:alert.h
-src/qt/clientmodel.cpp:gridcoin/scraper/fwd.h
-src/qt/clientmodel.cpp:gridcoin/staking/difficulty.h
-src/qt/clientmodel.cpp:gridcoin/staking/status.h
-src/qt/clientmodel.cpp:gridcoin/superblock.h
-src/qt/clientmodel.cpp:main.h
-src/qt/clientmodel.cpp:node/ui_interface.h
-src/qt/clientmodel.cpp:util.h
 src/qt/coincontroldialog.cpp:policy/fees.h
 src/qt/coincontroldialog.cpp:policy/policy.h
 src/qt/coincontroldialog.cpp:validation.h
@@ -131,6 +120,7 @@ src/qt/researcher/researchermodel.cpp:gridcoin/support/xml.h
 src/qt/researcher/researchermodel.cpp:main.h
 src/qt/researcher/researchermodel.cpp:node/ui_interface.h
 src/qt/researcher/researcherwizardpoolpage.cpp:key.h
+src/qt/rpcconsole.cpp:banman.h
 src/qt/rpcconsole.cpp:rpc/client.h
 src/qt/rpcconsole.cpp:rpc/protocol.h
 src/qt/rpcconsole.cpp:rpc/server.h

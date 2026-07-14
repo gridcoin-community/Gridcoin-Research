@@ -7,6 +7,7 @@
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
 #include "interfaces/node.h"
+#include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "node/ui_interface.h"
 #include "sync.h"
@@ -136,12 +137,55 @@ BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
     BOOST_CHECK_EQUAL(calls, 1);
 }
 
+BOOST_AUTO_TEST_CASE(node_value_queries_are_safe_in_empty_environment)
+{
+    std::unique_ptr<interfaces::Node> node = interfaces::MakeNode();
+
+    // BanMan exists via the global test fixture and is shared across every
+    // suite in the process, so do not assume emptiness: assert the query is
+    // safe and any rows are well-formed value types.
+    for (const auto& banned : node->getBanned()) {
+        BOOST_CHECK(!banned.address.empty());
+    }
+
+    // No alerts in the unit-test environment: unknown hash yields empty.
+    BOOST_CHECK(node->getAlertStatusBarMessage(uint256S("0x01")).empty());
+
+    // The scraper convergence cache is process-global: assert the snapshot
+    // query is safe and the value data is well-formed without assuming the
+    // cache is empty (no scraper threads run under the unit tests today,
+    // but suite order must not matter).
+    const interfaces::ScraperConvergenceSnapshot snapshot = node->getScraperConvergenceSnapshot();
+    BOOST_CHECK(snapshot.time >= 0);
+    for (const auto& scraper : snapshot.included_scrapers) {
+        BOOST_CHECK(!scraper.empty());
+    }
+
+    // Pure conversion: the difficulty-1 compact target maps to ~1.0.
+    BOOST_CHECK_CLOSE(node->getBlockDifficulty(0x1d00ffff), 1.0, 0.1);
+}
+
+BOOST_AUTO_TEST_CASE(staking_status_wraps_miner_status)
+{
+    std::unique_ptr<interfaces::StakingStatus> staking = interfaces::MakeStakingStatus();
+
+    // Not staking in the unit-test environment, and the error summary is
+    // callable. The network-weight/ETTS queries are deliberately NOT
+    // exercised here: they walk real chain state from pindexBest, and
+    // earlier suites leave sparse/foreign block indexes in the global chain
+    // state (the same pre-existing hazard project_tests' TestStateGuard
+    // works around) -- a suite-ordering trap, not an interface property.
+    BOOST_CHECK(!staking->isStaking());
+    BOOST_CHECK_NO_THROW(staking->getErrors());
+}
+
 BOOST_AUTO_TEST_CASE(init_hands_out_interfaces)
 {
     std::unique_ptr<interfaces::Init> init = interfaces::MakeGridcoinInit();
 
     BOOST_REQUIRE(init != nullptr);
     BOOST_CHECK(init->makeNode() != nullptr);
+    BOOST_CHECK(init->makeStakingStatus() != nullptr);
     // pwalletMain exists in the unit-test environment, so the monolithic
     // Init must hand out a wallet interface for it.
     BOOST_CHECK(init->makeWallet() != nullptr);

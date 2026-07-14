@@ -10,6 +10,7 @@
 namespace interfaces {
 
 class Node;
+class StakingStatus;
 class Wallet;
 
 //! Per-process bootstrap interface: hands out the other interfaces. In the
@@ -24,13 +25,18 @@ class Wallet;
 class Init
 {
 public:
-    virtual ~Init() = default;
+    virtual ~Init();
 
-    virtual std::unique_ptr<Node> makeNode() { return nullptr; }
+    //! The defaults return nullptr and are defined out of line (init.cpp):
+    //! inline definitions would require every includer to see the complete
+    //! interface types just to instantiate the unique_ptr deleters.
+    virtual std::unique_ptr<Node> makeNode();
+
+    virtual std::unique_ptr<StakingStatus> makeStakingStatus();
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.
-    virtual std::unique_ptr<Wallet> makeWallet() { return nullptr; }
+    virtual std::unique_ptr<Wallet> makeWallet();
 };
 
 //! Return the monolithic-build Init implementation.

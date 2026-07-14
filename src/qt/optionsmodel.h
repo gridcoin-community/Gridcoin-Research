@@ -71,6 +71,7 @@ public:
 	bool getDisplayAddresses();
     bool getCoinControlFeatures();
     bool getLimitTxnDisplay();
+    bool getSuppressNetworkGraph();
     bool getMaskValues();
     QDate getLimitTxnDate();
     int64_t getLimitTxnDateTime();

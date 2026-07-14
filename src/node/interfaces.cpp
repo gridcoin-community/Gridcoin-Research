@@ -5,11 +5,15 @@
 #include "interfaces/node.h"
 
 #include "alert.h"
+#include "banman.h"
 #include "clientversion.h"
+#include "gridcoin/scraper/scraper.h"
 #include "gridcoin/staking/difficulty.h"
+#include "gridcoin/superblock.h"
 #include "init.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
+#include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "main.h"
 #include "net.h"
@@ -18,7 +22,12 @@
 #include "util.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
+
+// The converged scraper stats cache has no header declaration; every consumer
+// declares the extern locally (quorum.cpp, scraper_net.cpp, rpc/blockchain.cpp).
+extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace interfaces {
 namespace {
@@ -58,6 +67,19 @@ public:
 
     int getNumBlocksOfPeers() override { return GetNumBlocksOfPeers(); }
 
+    std::optional<int> tryGetNumBlocksOfPeers() override
+    {
+        TRY_LOCK(cs_main, locked);
+
+        if (!locked) {
+            return std::nullopt;
+        }
+
+        // Holding cs_main here makes the internal (recursive) lock in
+        // GetNumBlocksOfPeers() uncontended.
+        return GetNumBlocksOfPeers();
+    }
+
     double getDifficulty() override
     {
         LOCK(cs_main);
@@ -73,6 +95,48 @@ public:
     std::string getClientVersion() override { return FormatFullVersion(); }
 
     bool isTestNet() override { return fTestNet; }
+
+    double getBlockDifficulty(uint32_t target_bits) override
+    {
+        return GRC::GetBlockDifficulty(target_bits);
+    }
+
+    std::string getAlertStatusBarMessage(const uint256& hash) override
+    {
+        const CAlert alert = CAlert::getAlertByHash(hash);
+        return alert.IsNull() ? std::string{} : alert.strStatusBar;
+    }
+
+    std::vector<BannedNode> getBanned() override
+    {
+        std::vector<BannedNode> banned;
+
+        if (g_banman) {
+            banmap_t ban_map;
+            g_banman->GetBanned(ban_map);
+            banned.reserve(ban_map.size());
+
+            for (const auto& entry : ban_map) {
+                banned.push_back({entry.first.ToString(), entry.second.nBanUntil});
+            }
+        }
+
+        return banned;
+    }
+
+    ScraperConvergenceSnapshot getScraperConvergenceSnapshot() override
+    {
+        LOCK(cs_ConvergedScraperStatsCache);
+
+        ScraperConvergenceSnapshot snapshot;
+        snapshot.time = ConvergedScraperStatsCache.nTime;
+        snapshot.excluded_projects = ConvergedScraperStatsCache.Convergence.vExcludedProjects;
+        snapshot.included_scrapers = ConvergedScraperStatsCache.Convergence.vIncludedScrapers;
+        snapshot.excluded_scrapers = ConvergedScraperStatsCache.Convergence.vExcludedScrapers;
+        snapshot.scrapers_not_publishing = ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing;
+
+        return snapshot;
+    }
 
     std::unique_ptr<Handler> handleNotifyBlocksChanged(NotifyBlocksChangedFn fn) override
     {
@@ -116,6 +180,8 @@ class InitImpl : public Init
 {
 public:
     std::unique_ptr<Node> makeNode() override { return MakeNode(); }
+
+    std::unique_ptr<StakingStatus> makeStakingStatus() override { return MakeStakingStatus(); }
 
     std::unique_ptr<Wallet> makeWallet() override
     {
