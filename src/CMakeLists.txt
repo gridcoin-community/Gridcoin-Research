@@ -144,6 +144,7 @@ add_library(gridcoin_util STATIC
     gridcoin/contract/registry.cpp
     gridcoin/cpid.cpp
     gridcoin/gridcoin.cpp
+    gridcoin/interfaces.cpp
     gridcoin/mrc.cpp
     gridcoin/pool.cpp
     gridcoin/project.cpp
@@ -174,6 +175,7 @@ add_library(gridcoin_util STATIC
     hash.cpp
     init.cpp
     interfaces/handler.cpp
+    interfaces/init.cpp
     key.cpp
     key_io.cpp
     keystore.cpp

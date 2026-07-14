@@ -92,14 +92,12 @@
 
 #include "gridcoin/backup.h"
 #include "gridcoin/staking/difficulty.h"
-#include "gridcoin/superblock.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include "util.h"
 
 extern CWallet* pwalletMain;
 extern std::string FromQString(QString qs);
-extern CCriticalSection cs_ConvergedScraperStatsCache;
 
 BitcoinGUI::BitcoinGUI(QWidget* parent)
         : QMainWindow(parent)
@@ -1960,11 +1958,11 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 {
     LogPrint(BCLog::MISC, "BitcoinGUI::updateScraperIcon()");
 
-    LOCK(cs_ConvergedScraperStatsCache);
+    // Value snapshot through the node interface; the scraper cache lock is
+    // taken node-side and never held here.
+    const interfaces::ScraperConvergenceSnapshot snapshot = clientModel->getScraperConvergenceSnapshot();
 
-    const ConvergedScraperStats& ConvergedScraperStatsCache = clientModel->getConvergedScraperStatsCache();
-
-    int64_t nConvergenceTime = ConvergedScraperStatsCache.nTime;
+    int64_t nConvergenceTime = snapshot.time;
 
     QString qsExcludedProjects;
     QString qsIncludedScrapers;
@@ -1975,9 +1973,9 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
 
     // Note that the translation macro tr is applied in the setToolTip call below.
     // If the convergence cache has excluded projects...
-    if (!ConvergedScraperStatsCache.Convergence.vExcludedProjects.empty())
+    if (!snapshot.excluded_projects.empty())
     {
-        qsExcludedProjects = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedProjects, ", ")).c_str());
+        qsExcludedProjects = QString(((std::string)boost::algorithm::join(snapshot.excluded_projects, ", ")).c_str());
     }
     else
     {
@@ -1990,20 +1988,20 @@ void BitcoinGUI::updateScraperIcon(int scraperEventtype, int status)
         bDisplayScrapers = true;
 
         // No need to include "none" for included scrapers, because if no scrapers there will not be a convergence.
-        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vIncludedScrapers, ", ")).c_str());
+        qsIncludedScrapers = QString(((std::string)boost::algorithm::join(snapshot.included_scrapers, ", ")).c_str());
 
-        if (!ConvergedScraperStatsCache.Convergence.vExcludedScrapers.empty())
+        if (!snapshot.excluded_scrapers.empty())
         {
-            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vExcludedScrapers, ", ")).c_str());
+            qsExcludedScrapers = QString(((std::string)boost::algorithm::join(snapshot.excluded_scrapers, ", ")).c_str());
         }
         else
         {
             qsExcludedScrapers = tr("none");
         }
 
-        if (!ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing.empty())
+        if (!snapshot.scrapers_not_publishing.empty())
         {
-            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(ConvergedScraperStatsCache.Convergence.vScrapersNotPublishing, ", ")).c_str());
+            qsScrapersNotPublishing = QString(((std::string)boost::algorithm::join(snapshot.scrapers_not_publishing, ", ")).c_str());
         }
         else
         {

@@ -6,18 +6,44 @@
 #define GRIDCOIN_INTERFACES_NODE_H
 
 #include "interfaces/handler.h"
-// For ChangeType; scrapereventtypes is forward-declared there. TODO(Stage 2):
-// extract ChangeType into a standalone header (upstream: util/ui_change_type.h)
-// so interface headers stop pulling the signal hub transitively.
+// For scrapereventtypes' enumerators, which consumers of the scraper-event
+// handler discriminate on. TODO(Stage 2): extract the enum into a standalone
+// header -- fwd.h transitively pulls heavyweight core headers (net.h, util.h)
+// into every interface consumer.
+#include "gridcoin/scraper/fwd.h"
+// For ChangeType. TODO(Stage 2): extract ChangeType into a standalone header
+// (upstream: util/ui_change_type.h) so interface headers stop pulling the
+// signal hub transitively.
 #include "node/ui_interface.h"
 #include "uint256.h"
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace interfaces {
+
+//! A banned peer, as a value row for the GUI ban table.
+struct BannedNode
+{
+    std::string address;  //!< Subnet/address string form.
+    int64_t ban_until = 0; //!< Ban expiry, seconds since epoch.
+};
+
+//! Value snapshot of the scraper convergence status consumed by the GUI
+//! status icon. Taken under the scraper cache lock inside the implementation;
+//! callers hold nothing.
+struct ScraperConvergenceSnapshot
+{
+    int64_t time = 0; //!< Convergence timestamp, 0 when no convergence yet.
+    std::vector<std::string> excluded_projects;
+    std::vector<std::string> included_scrapers;
+    std::vector<std::string> excluded_scrapers;
+    std::vector<std::string> scrapers_not_publishing;
+};
 
 //! Top-level node interface for the GUI: chain and network state queries plus
 //! notification registration. In the monolithic build the implementation
@@ -54,8 +80,13 @@ public:
     virtual int64_t getLastBlockTime() = 0;
 
     //! Median best-chain height reported by connected peers, or the hardened
-    //! checkpoint height, whichever is greater.
+    //! checkpoint height, whichever is greater. Blocking: takes cs_main.
     virtual int getNumBlocksOfPeers() = 0;
+
+    //! Non-blocking variant of getNumBlocksOfPeers(): std::nullopt when
+    //! cs_main is contended, for GUI-thread slots that must never wait on
+    //! core locks.
+    virtual std::optional<int> tryGetNumBlocksOfPeers() = 0;
 
     //! Proof-of-stake difficulty of the chain tip.
     virtual double getDifficulty() = 0;
@@ -74,6 +105,20 @@ public:
 
     //! Whether the node runs on testnet.
     virtual bool isTestNet() = 0;
+
+    //! Proof-of-stake difficulty corresponding to a compact target-bits
+    //! value (pure conversion; no chain state read).
+    virtual double getBlockDifficulty(uint32_t target_bits) = 0;
+
+    //! Status-bar message of the alert with the given hash, or an empty
+    //! string when no such alert exists.
+    virtual std::string getAlertStatusBarMessage(const uint256& hash) = 0;
+
+    //! Current ban list.
+    virtual std::vector<BannedNode> getBanned() = 0;
+
+    //! Value snapshot of the scraper convergence status.
+    virtual ScraperConvergenceSnapshot getScraperConvergenceSnapshot() = 0;
 
     //! Register a handler for block-tip changes.
     using NotifyBlocksChangedFn =

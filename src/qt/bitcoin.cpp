@@ -18,6 +18,9 @@
 #include "guiutil.h"
 #include "qt/intro.h"
 #include "guiconstants.h"
+#include "interfaces/init.h"
+#include "interfaces/node.h"
+#include "interfaces/staking.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -669,7 +672,14 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // Put this in a block, so that the Model objects are cleaned up before
                 // calling Shutdown().
 
-                ClientModel clientModel(&optionsModel);
+                // The monolithic-build interface implementations the models
+                // consume core state through (doc/multiprocess_design.md).
+                // These must outlive every model constructed below.
+                std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
+                std::unique_ptr<interfaces::Node> node = interface_init->makeNode();
+                std::unique_ptr<interfaces::StakingStatus> staking_status = interface_init->makeStakingStatus();
+
+                ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
                 MRCModel mrcModel(&walletModel, &clientModel, &researcherModel);

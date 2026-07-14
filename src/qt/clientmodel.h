@@ -1,11 +1,12 @@
 #ifndef BITCOIN_QT_CLIENTMODEL_H
 #define BITCOIN_QT_CLIENTMODEL_H
 
+#include "interfaces/node.h"
+
 #include <QObject>
 
-#include <boost/signals2/connection.hpp>
-
 #include <atomic>
+#include <memory>
 #include <vector>
 
 class OptionsModel;
@@ -14,7 +15,10 @@ class TransactionTableModel;
 class BanTableModel;
 class PeerTableModel;
 
-struct ConvergedScraperStats;
+namespace interfaces {
+class Handler;
+class StakingStatus;
+} // namespace interfaces
 
 QT_BEGIN_NAMESPACE
 class QDateTime;
@@ -26,18 +30,21 @@ class ClientModel : public QObject
 {
     Q_OBJECT
 public:
-    explicit ClientModel(OptionsModel* optionsModel, QObject* parent = nullptr);
+    explicit ClientModel(interfaces::Node& node,
+                         interfaces::StakingStatus& staking_status,
+                         OptionsModel* optionsModel,
+                         QObject* parent = nullptr);
     ~ClientModel();
 
+    interfaces::Node& node() const { return m_node; }
     OptionsModel *getOptionsModel();
     PeerTableModel *getPeerTableModel();
     BanTableModel *getBanTableModel();
 
     int getNumConnections() const;
     int getNumBlocks() const;
-	quint64 getTotalBytesRecv() const;
+    quint64 getTotalBytesRecv() const;
     quint64 getTotalBytesSent() const;
-
 
     QDateTime getLastBlockDate() const;
 
@@ -60,9 +67,14 @@ public:
     QString clientName() const;
     QString formatClientStartupTime() const;
 
-    QString formatBoostVersion()  const;
-    const ConvergedScraperStats& getConvergedScraperStatsCache() const;
+    QString formatBoostVersion() const;
+
+    //! Value snapshot of the scraper convergence status (no locks cross this
+    //! call; the node side takes the scraper cache lock internally).
+    interfaces::ScraperConvergenceSnapshot getScraperConvergenceSnapshot() const;
 private:
+    interfaces::Node& m_node;
+    interfaces::StakingStatus& m_staking_status;
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
     BanTableModel *banTableModel;
@@ -76,12 +88,11 @@ private:
 
     QTimer *pollTimer;
 
-    //! uiInterface signal connections held so they are disconnected on
-    //! destruction. Each captures `this`; leaving them connected (the previous
-    //! empty unsubscribeFromCoreSignals) risked a core signal invoking a slot on
-    //! a destroyed ClientModel during shutdown. scoped_connection disconnects on
-    //! clear()/destruction.
-    std::vector<boost::signals2::scoped_connection> m_handlers;
+    //! Notification registrations held so they are disconnected on
+    //! destruction. Each callback captures `this`; leaving them connected
+    //! risked a core signal invoking a slot on a destroyed ClientModel during
+    //! shutdown. interfaces::Handler disconnects on destruction.
+    std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -89,7 +100,7 @@ signals:
     void numConnectionsChanged(int count);
     void numBlocksChanged(int count, int countOfPeers);
     void difficultyChanged(double difficulty);
-	void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
+    void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
     void minerStatusChanged(bool staking, double netWeight, double coinWeight, double etts_days);
     void updateScraperLog(QString message);
     void updateScraperStatus(int ScraperEventtype, int status);

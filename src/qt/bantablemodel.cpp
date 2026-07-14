@@ -6,30 +6,24 @@
 
 #include <qt/clientmodel.h>
 
-//#include <interfaces/node.h>
-#include <net.h>
-#include <sync.h>
-//#include <util/time.h>
-#include <util.h>
-
 #include <QDebug>
 #include <QList>
 #include <QDateTime>
 #include <QLocale>
 
-bool BannedNodeLessThan::operator()(const CCombinedBan& left, const CCombinedBan& right) const
+bool BannedNodeLessThan::operator()(const interfaces::BannedNode& left, const interfaces::BannedNode& right) const
 {
-    const CCombinedBan* pLeft = &left;
-    const CCombinedBan* pRight = &right;
+    const interfaces::BannedNode* pLeft = &left;
+    const interfaces::BannedNode* pRight = &right;
 
     if (order == Qt::DescendingOrder)
         std::swap(pLeft, pRight);
 
     switch (static_cast<BanTableModel::ColumnIndex>(column)) {
     case BanTableModel::Address:
-        return pLeft->subnet.ToString().compare(pRight->subnet.ToString()) < 0;
+        return pLeft->address.compare(pRight->address) < 0;
     case BanTableModel::Bantime:
-        return pLeft->banEntry.nBanUntil < pRight->banEntry.nBanUntil;
+        return pLeft->ban_until < pRight->ban_until;
     } // no default case, so the compiler can warn about missing cases
     assert(false);
 }
@@ -38,27 +32,23 @@ bool BannedNodeLessThan::operator()(const CCombinedBan& left, const CCombinedBan
 class BanTablePriv
 {
 public:
-    /** Local cache of peer information */
-    QList<CCombinedBan> cachedBanlist;
+    /** Local cache of banned peers */
+    QList<interfaces::BannedNode> cachedBanlist;
     /** Column to sort nodes by (default to unsorted) */
     int sortColumn{-1};
     /** Order (ascending or descending) to sort nodes by */
     Qt::SortOrder sortOrder;
 
-    /** Pull a full list of banned nodes from CNode into our cache */
-    void refreshBanlist()
+    /** Pull a full list of banned nodes through the node interface into our cache */
+    void refreshBanlist(interfaces::Node& node)
     {
-        banmap_t banMap;
-        g_banman->GetBanned(banMap);
+        const std::vector<interfaces::BannedNode> banned = node.getBanned();
 
         cachedBanlist.clear();
-        cachedBanlist.reserve(banMap.size());
-        for (const auto& entry : banMap)
+        cachedBanlist.reserve(banned.size());
+        for (const auto& entry : banned)
         {
-            CCombinedBan banEntry;
-            banEntry.subnet = entry.first;
-            banEntry.banEntry = entry.second;
-            cachedBanlist.append(banEntry);
+            cachedBanlist.append(entry);
         }
 
         if (sortColumn >= 0)
@@ -71,7 +61,7 @@ public:
         return cachedBanlist.size();
     }
 
-    CCombinedBan *index(int idx)
+    interfaces::BannedNode *index(int idx)
     {
         if (idx >= 0 && idx < cachedBanlist.size())
             return &cachedBanlist[idx];
@@ -80,9 +70,9 @@ public:
     }
 };
 
-BanTableModel::BanTableModel(ClientModel *parent) :
+BanTableModel::BanTableModel(interfaces::Node& node, ClientModel *parent) :
     QAbstractTableModel(parent),
-    //m_node(node),
+    m_node(node),
     clientModel(parent)
 {
     columns << tr("IP/Netmask") << tr("Banned Until");
@@ -118,16 +108,16 @@ QVariant BanTableModel::data(const QModelIndex &index, int role) const
     if(!index.isValid())
         return QVariant();
 
-    CCombinedBan *rec = static_cast<CCombinedBan*>(index.internalPointer());
+    interfaces::BannedNode *rec = static_cast<interfaces::BannedNode*>(index.internalPointer());
 
     const auto column = static_cast<ColumnIndex>(index.column());
     if (role == Qt::DisplayRole) {
         switch (column) {
         case Address:
-            return QString::fromStdString(rec->subnet.ToString());
+            return QString::fromStdString(rec->address);
         case Bantime:
             QDateTime date = QDateTime::fromMSecsSinceEpoch(0);
-            date = date.addSecs(rec->banEntry.nBanUntil);
+            date = date.addSecs(rec->ban_until);
             return QLocale::system().toString(date, QLocale::LongFormat);
         } // no default case, so the compiler can warn about missing cases
         assert(false);
@@ -159,7 +149,7 @@ Qt::ItemFlags BanTableModel::flags(const QModelIndex &index) const
 QModelIndex BanTableModel::index(int row, int column, const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    CCombinedBan *data = priv->index(row);
+    interfaces::BannedNode *data = priv->index(row);
 
     if (data)
         return createIndex(row, column, data);
@@ -169,7 +159,7 @@ QModelIndex BanTableModel::index(int row, int column, const QModelIndex &parent)
 void BanTableModel::refresh()
 {
     Q_EMIT layoutAboutToBeChanged();
-    priv->refreshBanlist();
+    priv->refreshBanlist(m_node);
     Q_EMIT layoutChanged();
 }
 
