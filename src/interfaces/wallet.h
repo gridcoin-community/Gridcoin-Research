@@ -21,8 +21,12 @@ namespace interfaces {
 //! Wallet interface for the GUI: wallet queries plus notification
 //! registration. The same boundary rules as interfaces::Node apply (see
 //! src/interfaces/README.md); notification callbacks are bridged from
-//! CWallet's own signals, which fire on core threads under core locks --
-//! callbacks enqueue and return.
+//! CWallet's own signals, which fire on core threads and, depending on the
+//! signal, may or may not hold core locks at emission time (e.g.
+//! NotifyTransactionChanged fires with cs_wallet held while
+//! NotifyAddressBookChanged deliberately does not). Callbacks must not
+//! assume either way: enqueue and return, and never take core locks or
+//! re-enter interface methods that do.
 //!
 //! The method set covers only what the migrated consumers need (Phase 1c-i
 //! starts with WalletModel's balance/encryption surface); it grows with each
