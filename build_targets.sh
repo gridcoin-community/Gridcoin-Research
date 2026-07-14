@@ -51,7 +51,35 @@ print_help() {
 # Get the current robust git version string (hash + dirty status)
 get_current_git_state() {
     if [ -d ".git" ]; then
-        git describe --always --dirty --abbrev=12 --exclude=* 2>/dev/null
+        local DESCRIBE
+        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude=* 2>/dev/null)
+
+        # A bare "-dirty" suffix is content-independent: two different sets of
+        # uncommitted changes on the same commit yield the same state string,
+        # so a recorded dirty build state could wrongly skip a build of
+        # different working-tree content. Disambiguate by folding a hash of
+        # the tracked diff (staged + unstaged, vs HEAD) into the state.
+        # Untracked files are ignored, matching --dirty semantics. git
+        # hash-object is used instead of sha256sum for macOS portability.
+        case "$DESCRIBE" in
+            *-dirty)
+                local DIFF_OUTPUT
+                local DIFF_HASH
+                # Capture the diff and check its exit status: without pipefail
+                # a failed diff would silently hash partial output, which could
+                # wrongly MATCH a recorded state. On failure emit a
+                # never-matching token so the error degrades to a rebuild.
+                if DIFF_OUTPUT=$(git diff --no-ext-diff --no-color --binary HEAD 2>/dev/null); then
+                    DIFF_HASH=$(printf '%s' "$DIFF_OUTPUT" | git hash-object --stdin | cut -c1-12)
+                    echo "${DESCRIBE}-${DIFF_HASH}"
+                else
+                    echo "${DESCRIBE}-difffail-$$-$(date +%s)"
+                fi
+                ;;
+            *)
+                echo "$DESCRIBE"
+                ;;
+        esac
     else
         echo "unknown"
     fi
