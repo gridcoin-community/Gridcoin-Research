@@ -108,11 +108,15 @@ node squatting the socket. The comparison is between the stored expectation and 
 identity the node reports over IPC, never merely between the json file and the node
 that wrote it.
 
-Both binaries embed `git_sha / built_at / schema_major / schema_minor /
-protocol_version` at compile time; CMake refuses to configure when `git_sha` is not
-resolvable at all, so no build ships an empty fingerprint. Immediately after
-authentication (see the handshake sequence in §4.3), the build-info exchange
-compares:
+Both binaries embed `git_commit / built_at / schema_major / schema_minor /
+protocol_version` at compile time. The commit fingerprint builds on the existing
+build metadata (`BUILD_GIT_COMMIT` / `BUILD_GIT_TAG` from
+`build-aux/cmake/VersionFromGit.cmake`, which already appends a `-dirty` suffix to
+the commit hash). Today those variables are simply left empty when git metadata is
+unavailable; Stage 2 additionally requires a configure-time refusal for
+split-capable builds when the commit is not resolvable at all, so no such build
+ships an empty fingerprint. Immediately after authentication (see the handshake
+sequence in §4.3), the build-info exchange compares:
 
 | Field | Mismatch policy |
 |---|---|
@@ -120,10 +124,10 @@ compares:
 | `schema_major` | Hard fail (incompatible wire format) |
 | `schema_minor` | GUI > node: refuse. GUI < node: soft warn |
 | `protocol_version` | Hard fail outside the compatible range |
-| `git_sha` | Soft-warn banner, dismissable, keyed by SHA pair |
+| `git_commit` | Soft-warn banner, dismissible, keyed by the commit-hash pair |
 | `built_at` | Informational (About dialog) |
 
-Dev builds with dirty trees get an explicit `dirty-<parent_sha>-<diff_hash>` identity;
+Dev builds with dirty trees get an explicit `dirty-<parent_commit>-<diff_hash>` identity;
 the banner simply triggers more often. Schema evolution: additive changes bump minor;
 breaking changes (field reorder/renumber/removal) require a major bump and a
 one-version transition release where the node speaks both — CI enforces via a
@@ -156,9 +160,11 @@ The connect-time sequence, in order (steps 1–7 add ~5–10 ms to startup):
 1. GUI reads `node_identity.json` → expected `node_id`, `network`
 2. GUI reads `ipc.cookie` (absent cookie ⇒ node not running, do not dial)
 3. `connect(node.sock)`
-4. Peer-identity check (best-effort, §above) → hard fail on mismatch
+4. Peer-identity check (`SO_PEERCRED` / `LOCAL_PEERCRED` /
+   `SIO_AF_UNIX_GETPEERPID`; best-effort defense-in-depth per the
+   authentication layers listed earlier in this section) → hard fail on mismatch
 5. `Init::authenticate(cookie)` → hard fail on mismatch
-6. `Init::getBuildInfo()` → schema/protocol/sha comparison per §4.2
+6. `Init::getBuildInfo()` → schema/protocol/commit comparison per §4.2
 7. `Init::getIdentity()` → compare against the stored expectation per §4.2
 8. `Init::makeNode()` / `makeWallet()` / … → proceed
 
