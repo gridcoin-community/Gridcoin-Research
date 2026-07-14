@@ -3,7 +3,8 @@
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "util.h"
-#include "init.h"
+#include "protocol.h"
+#include "clientversion.h"
 #include <codecvt>
 
 #include <QString>

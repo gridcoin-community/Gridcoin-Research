@@ -202,8 +202,6 @@ private:
 
     QMovie *syncIconMovie;
 
-    uint64_t nWeight;
-
 #ifdef Q_OS_MAC
     CAppNapInhibitor* m_app_nap_inhibitor = nullptr;
     MacDockShutdownHandler* m_dock_shutdown_handler = nullptr;
@@ -256,8 +254,6 @@ public slots:
       @param[out] payFee            true to pay the fee, false to not pay the fee
     */
     void askFee(qint64 nFeeRequired, bool *payFee);
-
-    void askQuestion(std::string caption, std::string body, bool *result);
 
     void handleURI(QString strURI);
     void setOptionsStyleSheet(QString qssFileName);
@@ -335,7 +331,6 @@ private slots:
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
     void showNormalIfMinimized(bool fToggleHidden = false);
 
-    void updateWeight();
     void updateStakingIcon(bool staking, double net_weight, double coin_weight, double etts_days);
     void updateScraperIcon(int scraperEventtype, int status);
     void updateBeaconIcon();

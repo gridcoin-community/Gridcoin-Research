@@ -9,7 +9,6 @@
 #include "init.h"
 
 #include "miner.h"
-#include "wallet/walletdb.h"
 
 OptionsModel::OptionsModel(QObject *parent) :
     QAbstractListModel(parent)

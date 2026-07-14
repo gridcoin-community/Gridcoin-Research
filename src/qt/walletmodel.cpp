@@ -16,8 +16,6 @@
 #include <QSet>
 #include <QTimer>
 
-void qtInsertConfirm(double dAmt, std::string sFrom, std::string sTo, std::string txid);
-
 WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
          , wallet(wallet)

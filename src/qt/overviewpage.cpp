@@ -6,7 +6,6 @@
 
 #ifndef Q_MOC_RUN
 #include "qt/decoration.h"
-#include "main.h"
 #endif
 #include "researcher/researchermodel.h"
 #include "mrcmodel.h"
@@ -19,7 +18,6 @@
 #include "uint256.h"
 #include "guiutil.h"
 #include "guiconstants.h"
-#include "gridcoin/voting/fwd.h"
 
 #include <functional>
 

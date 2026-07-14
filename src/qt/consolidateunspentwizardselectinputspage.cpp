@@ -2,10 +2,10 @@
 #include "consolidateunspentwizardselectinputspage.h"
 #include "ui_consolidateunspentwizardselectinputspage.h"
 
-#include "init.h"
 #include "bitcoinunits.h"
 #include "addresstablemodel.h"
 #include "optionsmodel.h"
+#include "wallet/wallet.h"
 #include "policy/policy.h"
 #include "policy/fees.h"
 #include "validation.h"

@@ -15,7 +15,6 @@ class BanTableModel;
 class PeerTableModel;
 
 struct ConvergedScraperStats;
-class CWallet;
 
 QT_BEGIN_NAMESPACE
 class QDateTime;

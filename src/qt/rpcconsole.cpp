@@ -9,7 +9,6 @@
 #include "rpc/client.h"
 #include "rpc/protocol.h"
 #include "guiutil.h"
-#include "main.h"
 #endif
 
 #include <stdexcept>
