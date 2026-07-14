@@ -61,11 +61,14 @@ get_current_git_state() {
     # (pwd -P) or logical ($PWD) path, since git's canonicalization of
     # symlinked paths has differed across versions/platforms; a false
     # negative here only costs a rebuild, never a wrong skip.
+    # Every git command substitution is ||-guarded so a failure (no git, not
+    # a repo) degrades to "unknown" instead of aborting the script under
+    # set -e, regardless of the calling context.
     local TOPLEVEL
-    TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)
+    TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null) || TOPLEVEL=""
     if [ -n "$TOPLEVEL" ] && { [ "$TOPLEVEL" = "$(pwd -P)" ] || [ "$TOPLEVEL" = "$PWD" ]; }; then
         local DESCRIBE
-        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude='*' 2>/dev/null)
+        DESCRIBE=$(git describe --always --dirty --abbrev=12 --exclude='*' 2>/dev/null) || DESCRIBE=""
 
         if [ -z "$DESCRIBE" ]; then
             # e.g. unborn HEAD (git init with no commits): indeterminate.
@@ -95,7 +98,7 @@ get_current_git_state() {
                     return 0
                 }
                 if git diff --no-ext-diff --no-color --binary HEAD >"$DIFF_TMP" 2>/dev/null; then
-                    DIFF_HASH=$(git hash-object -- "$DIFF_TMP" 2>/dev/null | cut -c1-12)
+                    DIFF_HASH=$(git hash-object -- "$DIFF_TMP" 2>/dev/null | cut -c1-12) || DIFF_HASH=""
                 fi
                 if [ -n "$DIFF_HASH" ]; then
                     STATE_OUT="${DESCRIBE}-${DIFF_HASH}"
@@ -126,7 +129,7 @@ should_skip_build() {
     shift
 
     local CURRENT_STATE
-    CURRENT_STATE=$(get_current_git_state)
+    CURRENT_STATE=$(get_current_git_state) || CURRENT_STATE=""
 
     # Capture now for write_build_state: recomputing the state AFTER the
     # build would silently record source edits made while the build ran as
