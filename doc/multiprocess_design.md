@@ -151,10 +151,12 @@ schema-diff lint against the previous release tag.
   a two-method port (listen/connect + peer identity) with one contract-test suite. The
   only new CI cost is a single native-Windows job for ACL/peer-identity assertions
   (Wine does not enforce NTFS ACLs).
-- Anti-replay / anti-hijack: the node creates the socket path with `O_EXCL`; if the
-  path already exists (stale from a crash), the node verifies no process is listening
-  before removing and recreating it — it never unlinks a live socket, and it never
-  silently displaces another listener.
+- Anti-replay / anti-hijack: the node relies on `bind()`'s exclusive-create
+  semantics for the socket path — bind fails with `EADDRINUSE` when the path
+  already exists. On that failure the node connect-probes the existing socket: a
+  refused connection means a stale path left by a crash, which is unlinked and
+  rebound; a successful connection means a live listener, and the node refuses to
+  start rather than displace it. A live socket is never unlinked.
 - Wallet passphrase crosses as bytes zeroed on both sides after the call; unlock is
   always time-bounded.
 
