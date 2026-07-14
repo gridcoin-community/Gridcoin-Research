@@ -93,7 +93,9 @@ get_current_git_state() {
                 # failed diff must not be hashed as partial output, which
                 # could wrongly MATCH a recorded state. On any failure emit a
                 # never-matching token so the error degrades to a rebuild.
-                DIFF_TMP=$(mktemp 2>/dev/null) || {
+                # Explicit template: BSD/macOS mktemp requires one (bare GNU
+                # mktemp defaults are not portable). Respects $TMPDIR.
+                DIFF_TMP=$(mktemp "${TMPDIR:-/tmp}/build_targets_state.XXXXXX" 2>/dev/null) || {
                     echo "${DESCRIBE}-difffail-$$-$(date +%s)"
                     return 0
                 }
