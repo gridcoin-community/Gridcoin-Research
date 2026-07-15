@@ -290,7 +290,7 @@ bool WalletModel::validateAddress(const QString &address)
 }
 
 WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients,
-                                                    const CCoinControl *coinControl,
+                                                    const std::optional<interfaces::WalletCoinControl>& coinControl,
                                                     qint64 acceptedFee)
 {
     QSet<QString> setAddress;

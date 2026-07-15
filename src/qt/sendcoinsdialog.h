@@ -9,6 +9,7 @@
 namespace Ui {
     class SendCoinsDialog;
 }
+class CCoinControl;
 class SendCoinsEntry;
 
 QT_BEGIN_NAMESPACE

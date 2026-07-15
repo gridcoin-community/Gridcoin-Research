@@ -10,6 +10,7 @@
 #include "guiutil.h"
 #include "askpassphrasedialog.h"
 
+#include "key_io.h"
 #include "wallet/coincontrol.h"
 #include "coincontroldialog.h"
 #include "consolidateunspentdialog.h"
@@ -182,9 +183,21 @@ void SendCoinsDialog::on_sendButton_clicked()
     }
 
     WalletModel::SendCoinsReturn sendstatus;
-    const CCoinControl* coin_control =
-        (!model->getOptionsModel() || !model->getOptionsModel()->getCoinControlFeatures())
-            ? nullptr : coinControl;
+
+    // Snapshot the dialog's CCoinControl into the boundary value type when
+    // coin-control features are on; the wallet-side class itself does not
+    // cross the interface.
+    std::optional<interfaces::WalletCoinControl> coin_control;
+    if (model->getOptionsModel() && model->getOptionsModel()->getCoinControlFeatures())
+    {
+        interfaces::WalletCoinControl ctrl;
+        if (IsValidDestination(coinControl->destChange)) {
+            ctrl.dest_change = EncodeDestination(coinControl->destChange);
+        }
+        ctrl.allow_watch_only = coinControl->fAllowWatchOnly;
+        coinControl->ListSelected(ctrl.selected);
+        coin_control = std::move(ctrl);
+    }
 
     // Fee-confirmation loop. When the required fee exceeds both the
     // configured transaction fee and what the user has accepted so far,

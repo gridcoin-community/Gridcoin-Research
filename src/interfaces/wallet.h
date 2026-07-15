@@ -15,10 +15,10 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-class CCoinControl;
 class CKeyID;
 class CPubKey;
 class CWallet;
@@ -50,6 +50,18 @@ struct WalletOutput
     //! Coinstake still maturing: shown disabled in the views. Deliberately
     //! matches the old GUI-side check, which tested IsCoinStake() only.
     bool immature{false};
+};
+
+//! Value mirror of the coin-control options Wallet::sendCoins consumes —
+//! the wallet-side CCoinControl does not cross the boundary (value types
+//! only); the node reconstructs it from this.
+struct WalletCoinControl
+{
+    //! Encoded destination for change; empty lets the wallet pick.
+    std::string dest_change;
+    bool allow_watch_only{false};
+    //! Outpoints coin selection is pinned to.
+    std::vector<COutPoint> selected;
 };
 
 //! One send-coins recipient (the Qt-free mirror of SendCoinsRecipient).
@@ -194,9 +206,9 @@ public:
     //! returned fee; the transaction is recreated from current wallet state,
     //! and a fee that meanwhile grew past accepted_fee simply returns
     //! FeeConfirmationRequired again, so no fee the user has not accepted is
-    //! ever committed. coin_control may be null.
+    //! ever committed.
     virtual SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
-                                      const CCoinControl* coin_control,
+                                      const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee) = 0;
 
     //! Register a handler for encryption/lock status changes.

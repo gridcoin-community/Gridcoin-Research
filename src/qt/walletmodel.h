@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,6 @@ class CWallet;
 class CKeyID;
 class CPubKey;
 class COutPoint;
-class CCoinControl;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
@@ -123,7 +123,7 @@ public:
     // Send coins to a list of recipients. acceptedFee is the largest fee the
     // user has already confirmed (see StatusCode::FeeConfirmationRequired).
     SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients,
-                              const CCoinControl* coinControl = nullptr,
+                              const std::optional<interfaces::WalletCoinControl>& coinControl = std::nullopt,
                               qint64 acceptedFee = 0);
 
     // Wallet encryption

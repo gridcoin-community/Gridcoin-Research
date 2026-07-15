@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(wallet_send_coins_boundary_guards)
 
     // An empty recipient list must fail cleanly rather than index
     // recipients[0] (the GUI pre-checks this; a direct caller must not UB).
-    interfaces::SendCoinsResult result = wallet->sendCoins({}, nullptr, 0);
+    interfaces::SendCoinsResult result = wallet->sendCoins({}, std::nullopt, 0);
     BOOST_CHECK(result.status == interfaces::SendCoinsStatus::TransactionCreationFailed);
 
     // An undecodable address must be rejected node-side — it would
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(wallet_send_coins_boundary_guards)
     interfaces::WalletSendRecipient bad_recipient;
     bad_recipient.address = "not-a-valid-address";
     bad_recipient.amount = 1;
-    result = wallet->sendCoins({bad_recipient}, nullptr, 0);
+    result = wallet->sendCoins({bad_recipient}, std::nullopt, 0);
     BOOST_CHECK(result.status == interfaces::SendCoinsStatus::InvalidAddress);
 
     // With a well-formed address, the empty test wallet has no spendable
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(wallet_send_coins_boundary_guards)
     interfaces::WalletSendRecipient recipient;
     recipient.address = EncodeDestination(CKeyID());
     recipient.amount = 1;
-    result = wallet->sendCoins({recipient}, nullptr, 0);
+    result = wallet->sendCoins({recipient}, std::nullopt, 0);
     BOOST_CHECK(result.status == interfaces::SendCoinsStatus::AmountExceedsBalance);
     BOOST_CHECK(result.txid_hex.empty());
 }

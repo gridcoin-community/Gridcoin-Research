@@ -218,7 +218,7 @@ public:
     }
 
     SendCoinsResult sendCoins(const std::vector<WalletSendRecipient>& recipients,
-                              const CCoinControl* coin_control,
+                              const std::optional<WalletCoinControl>& coin_control,
                               int64_t accepted_fee) override;
 
     std::unique_ptr<Handler> handleStatusChanged(StatusChangedFn fn) override
@@ -253,9 +253,24 @@ private:
 };
 
 SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& recipients,
-                                      const CCoinControl* coin_control,
+                                      const std::optional<WalletCoinControl>& coin_control,
                                       int64_t accepted_fee)
 {
+    // Reconstruct the wallet-side CCoinControl from the boundary value type
+    // (the raw class does not cross the interface).
+    CCoinControl ctrl;
+    const CCoinControl* coin_control_ptr = nullptr;
+    if (coin_control) {
+        if (!coin_control->dest_change.empty()) {
+            ctrl.destChange = DecodeDestination(coin_control->dest_change);
+        }
+        ctrl.fAllowWatchOnly = coin_control->allow_watch_only;
+        for (const COutPoint& outpoint : coin_control->selected) {
+            ctrl.Select(outpoint);
+        }
+        coin_control_ptr = &ctrl;
+    }
+
     // Defensive guards at the trust boundary. The GUI pre-checks both
     // conditions, but the node side must not rely on the client: an empty
     // recipient list would index recipients[0] below, and an undecodable
@@ -297,7 +312,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
         LOCK2(cs_main, m_wallet->cs_wallet);
 
         std::vector<COutput> vCoins;
-        m_wallet->AvailableCoins(vCoins, true, coin_control, false);
+        m_wallet->AvailableCoins(vCoins, true, coin_control_ptr, false);
 
         for (auto const& out : vCoins)
             nBalance += out.tx->vout[out.i].nValue;
@@ -352,7 +367,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
 
         CReserveKey keyChange(m_wallet);
         int64_t nFeeRequired = 0;
-        bool fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control);
+        bool fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control_ptr);
 
         // If any recipient has "subtract fee from amount" enabled, rebuild
         // the outputs with the fee deducted and create the transaction
@@ -471,7 +486,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
                     return {SendCoinsStatus::FeeExceedsSubtractedAmount, nFeeRequired};
 
                 int64_t nFeePrev = nFeeRequired;
-                fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control);
+                fCreated = m_wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coin_control_ptr);
 
                 if (fCreated && nFeeRequired == nFeePrev)
                 {
@@ -529,7 +544,7 @@ SendCoinsResult WalletImpl::sendCoins(const std::vector<WalletSendRecipient>& re
                 // uses default copy semantics; setSelected, destChange, and
                 // fAllowWatchOnly are all carried over.
                 CCoinControl pinControl;
-                if (coin_control) pinControl = *coin_control;
+                if (coin_control_ptr) pinControl = *coin_control_ptr;
                 for (const COutPoint& op : vinsAtMaxFee)
                     pinControl.Select(op);
 
