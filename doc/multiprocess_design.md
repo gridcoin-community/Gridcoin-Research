@@ -70,7 +70,7 @@ enabled by `-multiprocess` or, equivalently, `multiprocess=1` in the config file
 shared, that one line flips a deployment coherently. The complexity drivers
 behind upstream's
 multi-binary sprawl and wrapper launcher (wallet-process split, multiwallet) do not
-exist here. Transport: unix domain socket at `<datadir>/<network>/node.sock`
+exist here. Transport: Unix domain socket at `<datadir>/<network>/node.sock`
 (AF_UNIX on Windows as well — see §4.3).
 
 ## 3. Settled decisions

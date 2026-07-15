@@ -247,7 +247,7 @@ in-node (settled decision 2).
 
 | Step | Scope |
 |---|---|
-| 2a | depends packages (libmultiprocess, capnproto); `ENABLE_MULTIPROCESS` build plumbing; `.capnp` schemas for `Init`/`Handler`/`Node`/`StakingStatus` mirroring the headers 1:1; schema-diff lint vs previous release tag (design §4.2) |
+| 2a | Add libmultiprocess + capnproto to `depends`; `ENABLE_MULTIPROCESS` build plumbing; `.capnp` schemas for `Init`/`Handler`/`Node`/`StakingStatus` mirroring the headers 1:1; schema-diff lint vs previous release tag (design §4.2) |
 | 2b | Transport + handshake: AF_UNIX everywhere incl. Windows; socket permissions and `bind()`-exclusivity recovery rules; cookie-PSK `Init::authenticate`; `node_identity.json` + QSettings expectation binding; build-identities dialog + dismissible soft-warn banner (design §4.2/§4.3, connect sequence steps 1–8) |
 | 2c | `Wallet` + `WalletTxSource` over IPC: the event channel becomes the connection (seqno resync from high-water on reconnect); attach/detach = capability construct/destruct; `SecureString` passphrase bytes zeroed both sides; time-bounded unlock enforced |
 | 2d | Domain interfaces over IPC (schemas for the 1d set); versioned-notification high-water reset tied to the handshake identity step (design §4.4) |
