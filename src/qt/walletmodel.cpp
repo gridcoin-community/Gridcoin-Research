@@ -363,8 +363,12 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return SendCoinsReturn(FeeConfirmationRequired, result.fee);
     }
 
-    // Unreachable: the switch above covers every SendCoinsStatus value.
+    // Unreachable: the switch above covers every SendCoinsStatus value (and
+    // deliberately has no default, so -Wswitch flags a new enumerator). The
+    // return keeps the function well-defined in NDEBUG builds, where the
+    // assert compiles out and falling off the end would be UB.
     assert(false);
+    return TransactionCreationFailed;
 }
 
 OptionsModel *WalletModel::getOptionsModel()
