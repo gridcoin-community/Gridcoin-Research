@@ -202,6 +202,14 @@ class TestNode():
         if extra_args is None:
             extra_args = self.extra_args
 
+        # The daemon resets its mock time on every (re)start, so drop the
+        # Python-side tracking (see setmocktime/generatetoaddress) — otherwise a
+        # stale _mocktime_off from a pre-restart setmocktime(0) would disable the
+        # clock auto-advance forever, and a stale _mocktime would be compared
+        # against the fresh process's real clock.
+        self._mocktime = None
+        self._mocktime_off = False
+
         # Add a new stdout and stderr file each time gridcoinresearchd is started
         if stderr is None:
             stderr = tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False)
