@@ -10,8 +10,6 @@
 #include <QPushButton>
 #include <QKeyEvent>
 
-extern bool fWalletUnlockStakingOnly;
-
 AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
                  : QDialog(parent)
                  , ui(new Ui::AskPassphraseDialog)
@@ -31,8 +29,6 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent)
     ui->oldPassphraseEdit->installEventFilter(this);
     ui->newPassphraseEdit->installEventFilter(this);
     ui->repeatNewPassphraseEdit->installEventFilter(this);
-
-    ui->stakingCheckBox->setChecked(fWalletUnlockStakingOnly);
 
     switch(mode)
     {
@@ -75,6 +71,15 @@ AskPassphraseDialog::~AskPassphraseDialog()
 void AskPassphraseDialog::setModel(WalletModel *model)
 {
     this->model = model;
+
+    // Seed the staking-only checkbox from the persisted unlock preference —
+    // done here rather than in the constructor, which runs before a model is
+    // attached (the preference lives behind the wallet interface now, not a
+    // core global). UnlockStaking mode forces the box checked in the
+    // constructor and stays forced.
+    if (model && mode != UnlockStaking) {
+        ui->stakingCheckBox->setChecked(model->wallet().getUnlockStakingOnlyFlag());
+    }
 }
 
 void AskPassphraseDialog::accept()
@@ -138,7 +143,10 @@ void AskPassphraseDialog::accept()
     } break;
     case UnlockStaking:
     case Unlock:
-        if(!model->setWalletLocked(false, oldpass)) {
+        // A successful unlock also persists the staking-only preference
+        // node-side (the checkbox state), which the old code applied to the
+        // fWalletUnlockStakingOnly global after the fact.
+        if(!model->setWalletLocked(false, oldpass, ui->stakingCheckBox->isChecked())) {
             // Check if the passphrase has a null character
             if (oldpass.find('\0') == std::string::npos) {
                     QMessageBox::critical(this, tr("Wallet unlock failed"),
@@ -155,7 +163,6 @@ void AskPassphraseDialog::accept()
         }
         else
         {
-            fWalletUnlockStakingOnly = ui->stakingCheckBox->isChecked();
             QDialog::accept(); // Success
         }
         break;

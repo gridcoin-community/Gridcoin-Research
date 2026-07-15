@@ -91,9 +91,6 @@ public:
     /** Update notification message box. */
     ADD_SIGNALS_DECL_WRAPPER(UpdateMessageBox, void, const std::string& version, const int& update_type, const std::string& message);
 
-    /** Ask the user whether they want to pay a fee or not. */
-    ADD_SIGNALS_DECL_WRAPPER(ThreadSafeAskFee, bool, int64_t nFeeRequired, const std::string& strCaption);
-
     /** Handle a URL passed at the command line. */
     ADD_SIGNALS_DECL_WRAPPER(ThreadSafeHandleURI, void, const std::string& strURI);
 

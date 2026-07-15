@@ -4,6 +4,7 @@
 
 #include "bitcoinunits.h"
 #include "addresstablemodel.h"
+#include "key_io.h"
 #include "optionsmodel.h"
 #include "wallet/wallet.h"
 #include "policy/policy.h"
@@ -376,9 +377,8 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
     unsigned int nQuantity = 0;
 
     vector<COutPoint> vCoinControl;
-    vector<COutput> vOutputs;
     coinControl->ListSelected(vCoinControl);
-    model->getOutputs(vCoinControl, vOutputs);
+    const std::vector<interfaces::WalletOutput> vOutputs = model->getOutputs(vCoinControl);
 
     for (const auto& out : vOutputs)
     {
@@ -386,12 +386,12 @@ void ConsolidateUnspentWizardSelectInputsPage::updateLabels()
         nQuantity++;
 
         // Amount
-        nAmount += out.tx->vout[out.i].nValue;
+        nAmount += out.amount;
 
         // Bytes
-        CTxDestination address;
-        if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, address))
+        if (!out.address.empty())
         {
+            CTxDestination address = DecodeDestination(out.address);
             CPubKey pubkey;
             try {
                 if (model->getPubKey(std::get<CKeyID>(address), pubkey))
@@ -535,13 +535,12 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
         nDisplayUnit = model->getOptionsModel()->getDisplayUnit();
     }
 
-    map<QString, vector<COutput>> mapCoins;
-    model->listCoins(mapCoins);
+    const std::map<std::string, std::vector<interfaces::WalletOutput>> mapCoins = model->listCoins();
 
     for (auto const& coins : mapCoins)
     {
         QTreeWidgetItem *itemWalletAddress = new QTreeWidgetItem();
-        QString sWalletAddress = coins.first;
+        QString sWalletAddress = QString::fromStdString(coins.first);
         QString sWalletLabel = "";
         if (model->getAddressTableModel())
             sWalletLabel = model->getAddressTableModel()->labelForAddress(sWalletAddress);
@@ -568,7 +567,7 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
 
         for (auto const& out : coins.second)
         {
-            nSum += out.tx->vout[out.i].nValue;
+            nSum += out.amount;
             nChildren++;
 
             QTreeWidgetItem *itemOutput;
@@ -578,12 +577,9 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
             itemOutput->setCheckState(COLUMN_CHECKBOX,Qt::Unchecked);
 
             // address
-            CTxDestination outputAddress;
-            QString sAddress = "";
-            if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, outputAddress))
+            QString sAddress = QString::fromStdString(out.address);
+            if (!sAddress.isEmpty())
             {
-                sAddress = EncodeDestination(outputAddress).c_str();
-
                 // if listMode or change => show bitcoin address. In tree mode, address is not shown again for direct wallet address outputs
                 if (!treeMode || (!(sAddress == sWalletAddress)))
                     itemOutput->setText(COLUMN_ADDRESS, sAddress);
@@ -608,35 +604,31 @@ void ConsolidateUnspentWizardSelectInputsPage::updateView()
             }
 
             // amount
-            itemOutput->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, out.tx->vout[out.i].nValue));
-            itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.tx->vout[out.i].nValue), 15, " ")); // padding so that sorting works correctly
+            itemOutput->setText(COLUMN_AMOUNT, BitcoinUnits::format(nDisplayUnit, out.amount));
+            itemOutput->setText(COLUMN_AMOUNT_INT64, strPad(QString::number(out.amount), 15, " ")); // padding so that sorting works correctly
 
             // date
-            itemOutput->setText(COLUMN_DATE, QDateTime::fromSecsSinceEpoch(out.tx->GetTxTime()).toUTC().toString("yy-MM-dd hh:mm"));
+            itemOutput->setText(COLUMN_DATE, QDateTime::fromSecsSinceEpoch(out.time).toUTC().toString("yy-MM-dd hh:mm"));
 
-            // immature PoS reward
-            {
-                // LOCK on cs_main must be taken for depth and maturity.
-                LOCK(cs_main);
-
-                if (out.tx->IsCoinStake() && out.tx->GetBlocksToMaturity() > 0 && out.tx->GetDepthInMainChain() > 0) {
-                    itemOutput->setBackground(COLUMN_CONFIRMATIONS, Qt::red);
-                    itemOutput->setDisabled(true);
-                }
+            // immature PoS reward — flagged node-side (the maturity check
+            // needs cs_main, which no longer belongs on the GUI thread)
+            if (out.immature) {
+                itemOutput->setBackground(COLUMN_CONFIRMATIONS, Qt::red);
+                itemOutput->setDisabled(true);
             }
 
             // confirmations
-            itemOutput->setText(COLUMN_CONFIRMATIONS, strPad(QString::number(out.nDepth), 8, " "));
+            itemOutput->setText(COLUMN_CONFIRMATIONS, strPad(QString::number(out.depth), 8, " "));
 
             // transaction hash
-            uint256 txhash = out.tx->GetHash();
+            uint256 txhash = out.outpoint.hash;
             itemOutput->setText(COLUMN_TXHASH, txhash.GetHex().c_str());
 
             // vout index
-            itemOutput->setText(COLUMN_VOUT_INDEX, QString::number(out.i));
+            itemOutput->setText(COLUMN_VOUT_INDEX, QString::number(out.outpoint.n));
 
             // set checkbox
-            if (coinControl->IsSelected(txhash, out.i))
+            if (coinControl->IsSelected(txhash, out.outpoint.n))
             {
                 itemOutput->setCheckState(COLUMN_CHECKBOX,Qt::Checked);
             }

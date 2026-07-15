@@ -21,6 +21,9 @@
 #include "interfaces/init.h"
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
+#include "interfaces/wallet.h"
+
+#include <cassert>
 #include "init.h"
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -133,34 +136,6 @@ static void ThreadSafeMessageBox(const std::string& message, const std::string& 
         tfm::format(std::cerr, "%s: %s\n", caption.c_str(), message.c_str());
     }
 }
-
-static bool ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption)
-{
-    if(!guiref)
-        return false;
-
-    int64_t nMinFee;
-
-    {
-        LOCK(cs_main);
-
-        CMutableTransaction txDummy;
-
-        // Min Fee
-        nMinFee = GetBaseFee(CTransaction(txDummy), GMF_SEND);
-    }
-
-    if (nFeeRequired < nMinFee || nFeeRequired <= nTransactionFee)
-        return true;
-    bool payFee = false;
-
-    QMetaObject::invokeMethod(guiref, "askFee", GUIUtil::blockingGUIThreadConnection(),
-                               Q_ARG(qint64, nFeeRequired),
-                               Q_ARG(bool*, &payFee));
-
-    return payFee;
-}
-
 
 static void ThreadSafeHandleURI(const std::string& strURI)
 {
@@ -619,8 +594,6 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
     // Subscribe to global signals from core
     uiInterface.ThreadSafeMessageBox_connect(ThreadSafeMessageBox);
-    uiInterface.ThreadSafeAskFee_connect(ThreadSafeAskFee);
-
     uiInterface.ThreadSafeHandleURI_connect(ThreadSafeHandleURI);
     uiInterface.InitMessage_connect(InitMessage);
     uiInterface.QueueShutdown_connect(QueueShutdown);
@@ -678,9 +651,13 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
                 std::unique_ptr<interfaces::Node> node = interface_init->makeNode();
                 std::unique_ptr<interfaces::StakingStatus> staking_status = interface_init->makeStakingStatus();
+                // Non-null here: wallet startup completed above, so
+                // pwalletMain is set for the monolithic build.
+                std::unique_ptr<interfaces::Wallet> wallet = interface_init->makeWallet();
+                assert(wallet);
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
-                WalletModel walletModel(pwalletMain, &optionsModel);
+                WalletModel walletModel(*wallet, pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
                 MRCModel mrcModel(&walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(clientModel, optionsModel, walletModel);

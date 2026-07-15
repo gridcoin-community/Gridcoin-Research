@@ -121,7 +121,7 @@ UniValue createhtlc(const UniValue& params)
 
         // Send the transaction
         CWalletTx wtx;
-        string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx, false);
+        string strError = pwalletMain->SendMoney(scriptPubKey, nAmount, wtx);
         if (!strError.empty())
             throw JSONRPCError(RPC_WALLET_ERROR, strError);
 

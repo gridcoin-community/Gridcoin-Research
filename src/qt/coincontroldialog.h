@@ -56,8 +56,6 @@ private:
     QMenu *contextMenu;
     QTreeWidgetItem *contextMenuItem;
     QAction *copyTransactionHashAction;
-    //QAction *lockAction;
-    //QAction *unlockAction;
 
     std::pair<QString, QString> m_consolidationAddress;
     Qt::CheckState m_ToState = Qt::Checked;
@@ -89,8 +87,6 @@ private slots:
     void copyLabel();
     void copyAddress();
     void copyTransactionHash();
-    //void lockCoin();
-    //void unlockCoin();
     void clipboardQuantity();
     void clipboardAmount();
     void clipboardFee();
@@ -109,7 +105,6 @@ private slots:
     void buttonFilterClicked();
     void buttonConsolidateClicked();
     void selectedConsolidationAddressSlot(std::pair<QString, QString> address);
-    //void updateLabelLocked();
 };
 
 #endif // BITCOIN_QT_COINCONTROLDIALOG_H

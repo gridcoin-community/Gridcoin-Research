@@ -7,18 +7,20 @@
 
 #include "node/ui_interface.h"
 #include "wallet/wallet.h"
-#include "wallet/coincontrol.h"
 #include "main.h"
 #include <key_io.h>
 #include "util.h"
-#include "gridcoin/tx_message.h"
 
 #include <QSet>
 #include <QTimer>
 
-WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent)
+#include <cassert>
+
+WalletModel::WalletModel(interfaces::Wallet& wallet, CWallet* core_wallet,
+                         OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
-         , wallet(wallet)
+         , m_wallet(wallet)
+         , m_core_wallet(core_wallet)
          , optionsModel(optionsModel)
          , addressTableModel(nullptr)
          , transactionTableModel(nullptr)
@@ -29,14 +31,14 @@ WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* p
          , cachedNumTransactions(0)
          , cachedEncryptionStatus(Unencrypted)
          , cachedNumBlocks(0)
-         , m_txStore(wallet, m_event_queue)
+         , m_txStore(core_wallet, m_event_queue)
 {
-    addressTableModel = new AddressTableModel(wallet, this);
+    addressTableModel = new AddressTableModel(core_wallet, this);
     // TransactionTableModel's ctor performs the initial load via
     // m_txStore.reloadAndSnapshot(); m_txStore is already constructed (init
     // list) and no producer can run yet — subscribeToCoreSignals() is called
     // below, after the model exists.
-    transactionTableModel = new TransactionTableModel(wallet, this);
+    transactionTableModel = new TransactionTableModel(core_wallet, this);
 
     // Drain the producer→GUI event queue at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the
@@ -67,32 +69,27 @@ WalletModel::~WalletModel()
 
 qint64 WalletModel::getBalance() const
 {
-    return wallet->GetBalance();
+    return m_wallet.getBalance();
 }
 
 qint64 WalletModel::getUnconfirmedBalance() const
 {
-    return wallet->GetUnconfirmedBalance();
+    return m_wallet.getUnconfirmedBalance();
 }
 
 qint64 WalletModel::getStake() const
 {
-    return wallet->GetStake();
+    return m_wallet.getStake();
 }
 
 qint64 WalletModel::getImmatureBalance() const
 {
-    return wallet->GetImmatureBalance();
+    return m_wallet.getImmatureBalance();
 }
 
 int WalletModel::getNumTransactions() const
 {
-    int numTransactions = 0;
-    {
-        LOCK(wallet->cs_wallet);
-        numTransactions = wallet->mapWallet.size();
-    }
-    return numTransactions;
+    return m_wallet.getNumTransactions();
 }
 
 void WalletModel::updateStatus()
@@ -105,60 +102,57 @@ void WalletModel::updateStatus()
 
 void WalletModel::checkBalanceChanged()
 {
-    // The Get*Balance() calls iterate the wallet's full mapWallet and become
+    // The balance scans iterate the wallet's full mapWallet and become
     // INCREDIBLY expensive on large wallets. Two layers of protection:
     //
-    //  1. TRY_LOCK on cs_main + cs_wallet: bow out cleanly if the core is
-    //     holding them (e.g. during a wallet rescan). This is the same
-    //     guard pollBalanceChanged used to apply.
+    //  1. A MODEL_UPDATE_DELAY (4s) stale-time gate: only actually recompute
+    //     at most once per gate interval. Bursts of rapid-fire wallet events
+    //     during a resync, rescan, or large consolidation collapse into a
+    //     single recompute. Checked first — it is free, while the interface
+    //     call below takes lock attempts even when it bows out.
     //
-    //  2. A MODEL_UPDATE_DELAY (4s) stale-time gate: even when the locks
-    //     are available, only actually recompute at most once per gate
-    //     interval. Bursts of rapid-fire wallet events during a resync,
-    //     rescan, or large consolidation collapse into a single recompute.
+    //  2. tryGetBalances: bows out cleanly (returns false) if the core is
+    //     holding cs_main/cs_wallet (e.g. during a wallet rescan). This is
+    //     the same TRY_LOCK guard pollBalanceChanged used to apply, now on
+    //     the node side of the interface boundary.
     //
-    // The last call in a burst that fails the stale-time test isn't lost:
-    // the next ChainTipChanged event (or the next drain pass with events
-    // in it) re-runs this function, which by then will pass the gate.
-    TRY_LOCK(cs_main, lockMain);
-    if (!lockMain) {
-        return;
-    }
-    TRY_LOCK(wallet->cs_wallet, lockWallet);
-    if (!lockWallet) {
+    // The gate timestamp advances only on an actual recompute — NOT when a
+    // busy core makes tryGetBalances bow out, and not only when a change is
+    // detected. The gate exists to rate-limit the expensive scans
+    // themselves; if the timestamp only advanced on a detected change, a
+    // long-stable balance would leave the gate permanently open and every
+    // drain tick (which can fire back-to-back when drainEventQueue re-arms
+    // to clear a backlog) would run a fresh full-wallet scan.
+    //
+    // A call that fails either layer isn't lost: the next ChainTipChanged
+    // event (or the next drain pass with events in it) re-runs this
+    // function, which by then will pass.
+    // Plain wall clock, not GetAdjustedTime(): this is a purely local rate
+    // limiter, and a network-time offset step must not wedge or bypass it.
+    int64_t current_time = GetTime();
+
+    if (current_time - last_balance_update_time <= MODEL_UPDATE_DELAY / 1000) {
         return;
     }
 
-    int64_t current_time = GetAdjustedTime();
+    interfaces::WalletBalances balances;
+    if (!m_wallet.tryGetBalances(balances)) {
+        return;
+    }
 
-    if (current_time - last_balance_update_time > MODEL_UPDATE_DELAY / 1000)
+    last_balance_update_time = current_time;
+
+    if (cachedBalance != balances.balance
+            || cachedStake != balances.stake
+            || cachedUnconfirmedBalance != balances.unconfirmed_balance
+            || cachedImmatureBalance != balances.immature_balance)
     {
-        // Stamp the gate as soon as we commit to a recompute — NOT only when
-        // a change is detected. The gate exists to rate-limit the expensive
-        // Get*Balance() scans themselves; if the timestamp only advanced on a
-        // detected change, a long-stable balance would leave the gate
-        // permanently open and every drain tick (which can fire back-to-back
-        // when drainEventQueue re-arms to clear a backlog) would run a fresh
-        // full-wallet scan.
-        last_balance_update_time = current_time;
+        cachedBalance = balances.balance;
+        cachedStake = balances.stake;
+        cachedUnconfirmedBalance = balances.unconfirmed_balance;
+        cachedImmatureBalance = balances.immature_balance;
 
-        qint64 newBalance = getBalance();
-        qint64 newStake = getStake();
-        qint64 newUnconfirmedBalance = getUnconfirmedBalance();
-        qint64 newImmatureBalance = getImmatureBalance();
-
-        if (cachedBalance != newBalance
-                || cachedStake != newStake
-                || cachedUnconfirmedBalance != newUnconfirmedBalance
-                || cachedImmatureBalance != newImmatureBalance)
-        {
-            cachedBalance = newBalance;
-            cachedStake = newStake;
-            cachedUnconfirmedBalance = newUnconfirmedBalance;
-            cachedImmatureBalance = newImmatureBalance;
-
-            emit balanceChanged(newBalance, newStake, newUnconfirmedBalance, newImmatureBalance);
-        }
+        emit balanceChanged(cachedBalance, cachedStake, cachedUnconfirmedBalance, cachedImmatureBalance);
     }
 }
 
@@ -295,18 +289,20 @@ bool WalletModel::validateAddress(const QString &address)
     return IsValidDestination(addressParsed);
 }
 
-WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients, const CCoinControl *coinControl)
+WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipient> &recipients,
+                                                    const CCoinControl *coinControl,
+                                                    qint64 acceptedFee)
 {
-    qint64 total = 0;
     QSet<QString> setAddress;
-    QString hex;
 
     if(recipients.empty())
     {
         return OK;
     }
 
-    // Pre-check input data for validity
+    // Pre-check input data for validity. These are purely GUI-detectable
+    // conditions (parseable address, positive amount, no duplicate
+    // recipients), so they are checked here and never reach the interface.
     for (const SendCoinsRecipient& rcp : recipients) {
         if(!validateAddress(rcp.address))
         {
@@ -318,7 +314,6 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         {
             return InvalidAmount;
         }
-        total += rcp.amount;
     }
 
     if(recipients.size() > setAddress.size())
@@ -326,312 +321,50 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(const QList<SendCoinsRecipie
         return DuplicateAddress;
     }
 
-    int64_t nBalance = 0;
-    std::vector<COutput> vCoins;
-    wallet->AvailableCoins(vCoins, true, coinControl,false);
+    std::vector<interfaces::WalletSendRecipient> vRecipients;
+    vRecipients.reserve(recipients.size());
 
-    for (auto const& out : vCoins)
-        nBalance += out.tx->vout[out.i].nValue;
-
-    bool fAnySubtractFeeFromAmount = false;
-    for (const SendCoinsRecipient& rcp : recipients)
-    {
-        if (rcp.fSubtractFeeFromAmount)
-        {
-            fAnySubtractFeeFromAmount = true;
-            break;
-        }
-    }
-
-    if(total > nBalance)
-    {
-        return AmountExceedsBalance;
-    }
-
-    if(!fAnySubtractFeeFromAmount && (total + nTransactionFee) > nBalance)
-    {
-        return SendCoinsReturn(AmountWithFeeExceedsBalance, nTransactionFee);
-    }
-
-    CWalletTx wtx;
-
-    if (fAnySubtractFeeFromAmount)
-    {
-        wtx.mapValue["subtractFeeFromAmount"] = "1";
-    }
-
-    if (!recipients[0].Message.isEmpty())
-    {
-        CMutableTransaction mtx;
-        mtx.vContracts.emplace_back(GRC::MakeContract<GRC::TxMessage>(
-            GRC::ContractAction::ADD,
-            recipients[0].Message.toStdString()));
-        static_cast<CTransaction&>(wtx) = CTransaction(std::move(mtx));
-    }
-
-    {
-        LOCK2(cs_main, wallet->cs_wallet);
-
-        // Sendmany
-        std::vector<std::pair<CScript, int64_t> > vecSend;
-        for (const SendCoinsRecipient& rcp : recipients) {
-            CScript scriptPubKey;
-            scriptPubKey.SetDestination(DecodeDestination(rcp.address.toStdString()));
-            vecSend.push_back(std::make_pair(scriptPubKey, rcp.amount));
-        }
-
-        CReserveKey keyChange(wallet);
-        int64_t nFeeRequired = 0;
-        bool fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
-
-        // If any recipient has "subtract fee from amount" enabled, rebuild
-        // the outputs with the fee deducted and create the transaction
-        // again. This runs even if the first pass failed (e.g. sending
-        // entire balance), since CWallet::CreateTransaction overwrites the
-        // caller's nFeeRet to nTransactionFee on entry (wallet.cpp:2964)
-        // and bumps from there — so even a failed pass leaves a reasonable
-        // starting estimate.
-        //
-        // The loop refines the subtracted fee against the fee the wallet
-        // actually charges. A single retry is not enough because the
-        // wallet's own internal fee-bumping — primarily byte-tier
-        // crossing where nPayFee = nTransactionFee * (1 + nBytes/1000)
-        // jumps when the signed tx crosses each 1 KB boundary
-        // (wallet.cpp:3191) — can return an nFeeRequired that exceeds
-        // what we subtracted. Committing at that point under-debits the
-        // recipient and silently absorbs the surplus into the sender's
-        // change (issue #2981). Sub-CENT change handling
-        // (wallet.cpp:3064-3078) is a second potential fee-bumper but
-        // is dormant under default fee parameters because its trigger
-        // `nFeeRet < GetBaseFee` is false when nFeeRet is seeded from
-        // the default nTransactionFee.
-        //
-        // We require strict equality (subtracted == returned) for
-        // convergence. The earlier `<=` form let the inverse case
-        // (returned < subtracted) commit silently, over-debiting the
-        // recipient and "saving" the difference back to the sender's
-        // change.
-        //
-        // In a uniform-UTXO wallet, the loop can enter a 2-cycle: when
-        // the higher fee is subtracted, the target shrinks and the wallet
-        // picks fewer inputs (size drops below 1 KB → tier-1 fee, e.g.
-        // 0.001); when the lower fee is subtracted, the target grows and
-        // the wallet picks more inputs (size crosses 1 KB → tier-2 fee,
-        // 0.002). The two states map to each other and strict equality
-        // never fires. Constructable: ten 400.000-GRC UTXOs, send 2400.001
-        // with subtract-fee — the loop alternates 0.001 / 0.002
-        // indefinitely.
-        //
-        // To force a deterministic, convergent commit in such a case,
-        // track the largest fee observed during the loop and the input
-        // set that produced it. If the loop exits without strict
-        // convergence — whether from oscillation or from a slower
-        // non-converging case hitting the 10-attempt cap — pin coin
-        // selection to that input set via CCoinControl and re-create
-        // the transaction with the larger fee subtracted. With inputs
-        // pinned, SelectCoins returns exactly those outpoints
-        // (wallet.cpp:2750-2758), the transaction size is fixed, the
-        // wallet's computed fee matches our subtraction, and the commit
-        // converges. The sender pays exactly the entered amount; the
-        // recipient receives (entered − higher fee).
-        if (fAnySubtractFeeFromAmount)
-        {
-            int nSubtractRecipients = 0;
-            for (const SendCoinsRecipient& rcp : recipients)
-            {
-                if (rcp.fSubtractFeeFromAmount) ++nSubtractRecipients;
-            }
-
-            // Rebuild vecSend with the given fee distributed across the
-            // subtract-fee recipients. Returns false if any opted-in
-            // recipient's amount would drop to zero or negative; the
-            // caller should respond with FeeExceedsSubtractedAmount.
-            auto BuildSubtractedVecSend = [&](int64_t nFee) -> bool {
-                vecSend.clear();
-                int64_t nFeeRemainder = nFee % nSubtractRecipients;
-                bool fFirst = true;
-                for (const SendCoinsRecipient& rcp : recipients)
-                {
-                    CScript scriptPubKey;
-                    scriptPubKey.SetDestination(DecodeDestination(rcp.address.toStdString()));
-                    int64_t nAmount = rcp.amount;
-
-                    if (rcp.fSubtractFeeFromAmount)
-                    {
-                        nAmount -= nFee / nSubtractRecipients;
-                        // First opted-in recipient absorbs the truncation remainder
-                        if (fFirst)
-                        {
-                            nAmount -= nFeeRemainder;
-                            fFirst = false;
-                        }
-                        if (nAmount <= 0)
-                            return false;
-                    }
-
-                    vecSend.push_back(std::make_pair(scriptPubKey, nAmount));
-                }
-                return true;
-            };
-
-            // Track the largest fee returned and the input set that
-            // produced it. Seed from pass 1 only if it succeeded —
-            // seeding nMaxFeeSeen from a *failed* pass-1 call would
-            // leave a phantom high fee with no corresponding snapshot
-            // (the wallet sets nFeeRet = nTransactionFee on entry and
-            // can bump it before returning false), which would then
-            // block subsequent successful iterations with lower fees
-            // from populating vinsAtMaxFee via the `>` comparison.
-            // Inside the loop, snapshot on the first success regardless
-            // of fee value (vinsAtMaxFee.empty()) so we always have a
-            // valid input set to pin if the rescue is needed.
-            int64_t nMaxFeeSeen = 0;
-            std::vector<COutPoint> vinsAtMaxFee;
-            if (fCreated)
-            {
-                nMaxFeeSeen = nFeeRequired;
-                for (const CTxIn& in : wtx.vin)
-                    vinsAtMaxFee.push_back(in.prevout);
-            }
-            bool fConverged = false;
-
-            for (int nAttempt = 0; nAttempt < 10; ++nAttempt)
-            {
-                if (!BuildSubtractedVecSend(nFeeRequired))
-                    return SendCoinsReturn(FeeExceedsSubtractedAmount, nFeeRequired);
-
-                int64_t nFeePrev = nFeeRequired;
-                fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, coinControl);
-
-                if (fCreated && nFeeRequired == nFeePrev)
-                {
-                    fConverged = true;
-                    break;
-                }
-
-                if (fCreated && (vinsAtMaxFee.empty() || nFeeRequired > nMaxFeeSeen))
-                {
-                    nMaxFeeSeen = nFeeRequired;
-                    vinsAtMaxFee.clear();
-                    for (const CTxIn& in : wtx.vin)
-                        vinsAtMaxFee.push_back(in.prevout);
-                }
-            }
-
-            // Rescue pass for oscillation or cap-without-convergence.
-            // Requires a non-empty snapshot — if every prior pass failed
-            // we have no input set to pin and we fall through to the
-            // TransactionCreationFailed return below.
-            //
-            // Pinning the inputs locks transaction size against
-            // SelectCoins-driven input-count flipping. Under default
-            // Gridcoin fee parameters and reasonable UTXO shapes the
-            // wallet returns the same fee on the rescue call that
-            // produced the snapshot — fee-tier transitions happen at
-            // the 1 KB byte boundary, and the only remaining structural
-            // variation (change-vout present/absent, ±34 bytes) plus
-            // per-signature DER length variation (1-2 bytes per input)
-            // are not enough to cross 1 KB at typical input counts:
-            // 6 pinned inputs span 936-970 bytes (tier 1×), 7 pinned
-            // span 1084-1118 bytes (tier 2×). So in practice the rescue
-            // converges in iter 0.
-            //
-            // The bounded loop is defensive against pathologies I can
-            // describe but cannot construct concretely: keypool
-            // exhaustion mid-rescue (CreateTransaction returns false on
-            // reservekey.GetReservedKey), an unusually low custom
-            // -paytxfee combined with an adversarial UTXO sum that
-            // re-activates the sub-CENT change handler at
-            // wallet.cpp:3064-3078 (which is dormant under defaults
-            // because the trigger nFeeRet < GetBaseFee is false once
-            // nFeeRet equals the default nTransactionFee), or a future
-            // change to wallet internals that introduces new
-            // fee-determining factors. The strict-equality convergence
-            // check matches the outer loop; on non-convergence we set
-            // fCreated = false so the caller returns
-            // TransactionCreationFailed rather than commit a tx whose
-            // subtract-fee accounting doesn't match the wallet's actual
-            // charge.
-            if (!fConverged && !vinsAtMaxFee.empty())
-            {
-                // Copy any caller-supplied options (destChange,
-                // fAllowWatchOnly) and add the pinned outpoints. CCoinControl
-                // uses default copy semantics; setSelected, destChange, and
-                // fAllowWatchOnly are all carried over.
-                CCoinControl pinControl;
-                if (coinControl) pinControl = *coinControl;
-                for (const COutPoint& op : vinsAtMaxFee)
-                    pinControl.Select(op);
-
-                int64_t nRescueFee = nMaxFeeSeen;
-                bool fRescueConverged = false;
-                for (int nRescueAttempt = 0; nRescueAttempt < 5; ++nRescueAttempt)
-                {
-                    if (!BuildSubtractedVecSend(nRescueFee))
-                        return SendCoinsReturn(FeeExceedsSubtractedAmount, nRescueFee);
-
-                    int64_t nRescuePrev = nRescueFee;
-                    nFeeRequired = 0;
-                    fCreated = wallet->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, &pinControl);
-                    if (!fCreated)
-                        break;
-
-                    if (nFeeRequired == nRescuePrev)
-                    {
-                        fRescueConverged = true;
-                        break;
-                    }
-                    nRescueFee = nFeeRequired;
-                }
-
-                // Non-converging rescue: fall through to the
-                // TransactionCreationFailed return below rather than
-                // commit a tx whose subtract-fee accounting doesn't
-                // match the wallet's actual charge.
-                if (!fRescueConverged)
-                    fCreated = false;
-            }
-        }
-
-        if(!fCreated)
-        {
-            if(!fAnySubtractFeeFromAmount && (total + nFeeRequired) > nBalance)
-            {
-                return SendCoinsReturn(AmountWithFeeExceedsBalance, nFeeRequired);
-            }
-            return TransactionCreationFailed;
-        }
-
-        if(!uiInterface.ThreadSafeAskFee(nFeeRequired, tr("Sending...").toStdString()))
-        {
-            return Aborted;
-        }
-        if(!wallet->CommitTransaction(wtx, keyChange))
-        {
-            return TransactionCommitFailed;
-        }
-        hex = QString::fromStdString(wtx.GetHash().GetHex());
-    }
-
-    // Add addresses / update labels that we've sent to the address book
     for (const SendCoinsRecipient& rcp : recipients) {
-        std::string strAddress = rcp.address.toStdString();
-        CTxDestination dest = DecodeDestination(strAddress);
-        std::string strLabel = rcp.label.toStdString();
-        {
-            LOCK(wallet->cs_wallet);
-
-            auto mi = wallet->mapAddressBook.find(dest);
-
-            // Check if we have a new address or an updated label
-            if (mi == wallet->mapAddressBook.end() || mi->second.name != strLabel)
-            {
-                wallet->SetAddressBookName(dest, strLabel);
-            }
-        }
+        interfaces::WalletSendRecipient recipient;
+        recipient.address = rcp.address.toStdString();
+        recipient.label = rcp.label.toStdString();
+        recipient.amount = rcp.amount;
+        recipient.message = rcp.Message.toStdString();
+        recipient.subtract_fee_from_amount = rcp.fSubtractFeeFromAmount;
+        vRecipients.push_back(std::move(recipient));
     }
 
-    return SendCoinsReturn(OK, 0, hex);
+    // Creation, fee convergence, fee-threshold gating, and commit all run
+    // node-side; a FeeConfirmationRequired result comes back WITHOUT a
+    // commit so the caller can prompt the user with no core locks held and
+    // re-invoke with the accepted fee (the eliminated ThreadSafeAskFee used
+    // to block inside the node's LOCK2 scope right before the commit).
+    const interfaces::SendCoinsResult result =
+        m_wallet.sendCoins(vRecipients, coinControl, acceptedFee);
+
+    switch (result.status) {
+    case interfaces::SendCoinsStatus::OK:
+        return SendCoinsReturn(OK, 0, QString::fromStdString(result.txid_hex));
+    case interfaces::SendCoinsStatus::InvalidAddress:
+        return InvalidAddress;
+    case interfaces::SendCoinsStatus::InvalidAmount:
+        return InvalidAmount;
+    case interfaces::SendCoinsStatus::AmountExceedsBalance:
+        return AmountExceedsBalance;
+    case interfaces::SendCoinsStatus::AmountWithFeeExceedsBalance:
+        return SendCoinsReturn(AmountWithFeeExceedsBalance, result.fee);
+    case interfaces::SendCoinsStatus::FeeExceedsSubtractedAmount:
+        return SendCoinsReturn(FeeExceedsSubtractedAmount, result.fee);
+    case interfaces::SendCoinsStatus::TransactionCreationFailed:
+        return TransactionCreationFailed;
+    case interfaces::SendCoinsStatus::TransactionCommitFailed:
+        return TransactionCommitFailed;
+    case interfaces::SendCoinsStatus::FeeConfirmationRequired:
+        return SendCoinsReturn(FeeConfirmationRequired, result.fee);
+    }
+
+    // Unreachable: the switch above covers every SendCoinsStatus value.
+    assert(false);
 }
 
 OptionsModel *WalletModel::getOptionsModel()
@@ -651,11 +384,11 @@ TransactionTableModel *WalletModel::getTransactionTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
-    if(!wallet->IsCrypted())
+    if(!m_wallet.isCrypted())
     {
         return Unencrypted;
     }
-    else if(wallet->IsLocked())
+    else if(m_wallet.isLocked())
     {
         return Locked;
     }
@@ -667,53 +400,33 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 
 bool WalletModel::setWalletEncrypted(const SecureString& passphrase)
 {
-        return wallet->EncryptWallet(passphrase);
+    return m_wallet.encryptWallet(passphrase);
 }
 
-bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
+bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase, bool stakingOnly)
 {
     if(locked)
     {
-        // Lock
-        return wallet->Lock();
+        // Lock. Does not clear the staking-only unlock preference.
+        return m_wallet.lockWallet();
     }
     else
     {
-        // Unlock
-        return wallet->Unlock(passPhrase);
+        // Unlock; on success the staking-only preference is set node-side
+        // (a full unlock clears a stale staking-only restriction).
+        return m_wallet.unlockWallet(passPhrase, stakingOnly);
     }
 }
 
 bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureString &newPass)
 {
-    bool retval;
-    {
-        LOCK(wallet->cs_wallet);
-        wallet->Lock(); // Make sure wallet is locked before attempting pass change
-        retval = wallet->ChangeWalletPassphrase(oldPass, newPass);
-    }
-    return retval;
+    // Locks the wallet first (node-side) before attempting the change.
+    return m_wallet.changeWalletPassphrase(oldPass, newPass);
 }
 
-// Handlers for core signals
-static void NotifyKeyStoreStatusChanged(WalletModel *walletmodel, CCryptoKeyStore *wallet)
-{
-    LogPrintf("NotifyKeyStoreStatusChanged");
-    QMetaObject::invokeMethod(walletmodel, "updateStatus", Qt::QueuedConnection);
-}
-
-static void NotifyAddressBookChanged(WalletModel *walletmodel, CWallet *wallet, const CTxDestination &address, const std::string &label, bool isMine, const std::string &purpose, ChangeType status)
-{
-    // `purpose` is accepted to match the 6-arg core signal but is not yet surfaced to the GUI;
-    // the updateAddressBook slot remains a 4-arg interface (address, label, isMine, status).
-    LogPrintf("NotifyAddressBookChanged %s %s isMine=%i purpose=%s status=%i", EncodeDestination(address), label, isMine, purpose, status);
-    QMetaObject::invokeMethod(walletmodel, "updateAddressBook", Qt::QueuedConnection,
-                              Q_ARG(QString, QString::fromStdString(EncodeDestination(address))),
-                              Q_ARG(QString, QString::fromStdString(label)),
-                              Q_ARG(bool, isMine),
-                              Q_ARG(int, status));
-}
-
+// Producer-side handlers for the tx-table core signals (the Phase 1c-ii
+// leg; the status and address-book notifications arrive through
+// interfaces::Wallet handlers registered in subscribeToCoreSignals).
 static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, const uint256 &hash, ChangeType status)
     EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
 {
@@ -892,17 +605,40 @@ static void NotifyBlocksChangedForWallet(WalletModel *walletmodel,
 
 void WalletModel::subscribeToCoreSignals()
 {
-    // Connect signals to wallet, retaining each connection so it is severed in
+    // Register notification handlers, retaining each so it is severed in
     // unsubscribeFromCoreSignals() (from ~WalletModel). Every callback below
     // captures `this`; a signal firing after this object is gone would
     // otherwise invoke a slot on freed memory during shutdown.
-    m_handlers.emplace_back(wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this,
-                                                    boost::placeholders::_1)));
-    m_handlers.emplace_back(wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this,
-                                                         boost::placeholders::_1, boost::placeholders::_2,
-                                                         boost::placeholders::_3, boost::placeholders::_4,
-                                                         boost::placeholders::_5, boost::placeholders::_6)));
-    m_handlers.emplace_back(wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
+    //
+    // Status and address-book changes come through the interfaces::Wallet
+    // boundary as value types (Phase 1c-i). The callbacks fire on core
+    // threads, possibly under core locks, so they enqueue to the Qt thread
+    // and return — same discipline the raw-signal handlers applied.
+    m_wallet_handlers.emplace_back(m_wallet.handleStatusChanged(
+        [this]() {
+            LogPrintf("NotifyKeyStoreStatusChanged");
+            QMetaObject::invokeMethod(this, "updateStatus", Qt::QueuedConnection);
+        }));
+    m_wallet_handlers.emplace_back(m_wallet.handleAddressBookChanged(
+        [this](const std::string& address, const std::string& label, bool is_mine,
+               const std::string& purpose, ChangeType status) {
+            // `purpose` is accepted to match the 6-arg core signal but is not
+            // yet surfaced to the GUI; the updateAddressBook slot remains a
+            // 4-arg interface (address, label, isMine, status).
+            LogPrintf("NotifyAddressBookChanged %s %s isMine=%i purpose=%s status=%i",
+                      address, label, is_mine, purpose, status);
+            QMetaObject::invokeMethod(this, "updateAddressBook", Qt::QueuedConnection,
+                                      Q_ARG(QString, QString::fromStdString(address)),
+                                      Q_ARG(QString, QString::fromStdString(label)),
+                                      Q_ARG(bool, is_mine),
+                                      Q_ARG(int, status));
+        }));
+
+    // The tx-table producer wiring stays on the raw core signals until the
+    // store/event-queue machinery migrates behind interfaces::WalletTxSource
+    // (Phase 1c-ii) — the producer runs under the emitting thread's locks by
+    // design (it decomposes transactions in place).
+    m_handlers.emplace_back(m_core_wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
                                                          boost::placeholders::_1, boost::placeholders::_2,
                                                          boost::placeholders::_3)));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChangedForWallet, this,
@@ -913,9 +649,11 @@ void WalletModel::subscribeToCoreSignals()
 void WalletModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from wallet: clearing the retained connections runs
-    // each scoped_connection's destructor, which disconnects it. This also
-    // covers the uiInterface.NotifyBlocksChanged connection, which the previous
-    // hand-written disconnects missed and leaked (issue #3129 follow-up).
+    // each scoped_connection's (and interfaces::Handler's) destructor, which
+    // disconnects it. This also covers the uiInterface.NotifyBlocksChanged
+    // connection, which the previous hand-written disconnects missed and
+    // leaked (issue #3129 follow-up).
+    m_wallet_handlers.clear();
     m_handlers.clear();
 }
 
@@ -924,7 +662,10 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
 {
     bool was_locked = getEncryptionStatus() == Locked;
 
-    if ((!was_locked) && fWalletUnlockStakingOnly)
+    // A staking-only unlock is not enough here: relock and force a full
+    // unlock prompt. (isUnlockedForStakingOnly is the unlocked-AND-restricted
+    // composite, so it can only be true on the !was_locked path.)
+    if ((!was_locked) && m_wallet.isUnlockedForStakingOnly())
     {
        setWalletLocked(true);
        was_locked = getEncryptionStatus() == Locked;
@@ -938,7 +679,7 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
     // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
     bool valid = getEncryptionStatus() != Locked;
 
-    return UnlockContext(this, valid, was_locked && !fWalletUnlockStakingOnly);
+    return UnlockContext(this, valid, was_locked && !m_wallet.isUnlockedForStakingOnly());
 }
 
 WalletModel::UnlockContext::UnlockContext(WalletModel *wallet, bool valid, bool relock):
@@ -965,76 +706,24 @@ void WalletModel::UnlockContext::CopyFrom(const UnlockContext& rhs)
 
 bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
 {
-    return wallet->GetPubKey(address, vchPubKeyOut);
+    return m_wallet.getPubKey(address, vchPubKeyOut);
 }
 
 bool WalletModel::getKeyFromPool(CPubKey& out_public_key, const std::string& label)
 {
-    if (!wallet->GetKeyFromPool(out_public_key, false)) {
-        return false;
-    }
-
-    if (!label.empty()) {
-        wallet->SetAddressBookName(out_public_key.GetID(), label);
-    }
-
-    return true;
+    return m_wallet.getKeyFromPool(out_public_key, label);
 }
 
-// returns a list of COutputs from COutPoints
-void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
+// returns value snapshots of the given outpoints (unknown or conflicted
+// outpoints are skipped)
+std::vector<interfaces::WalletOutput> WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints) const
 {
-    LOCK2(cs_main, wallet->cs_wallet);
-    for (auto const& outpoint : vOutpoints)
-    {
-        if (!wallet->mapWallet.count(outpoint.hash)) continue;
-        int nDepth = wallet->mapWallet[outpoint.hash].GetDepthInMainChain();
-        if (nDepth < 0) continue;
-        COutput out(&wallet->mapWallet[outpoint.hash], outpoint.n, nDepth);
-        vOutputs.push_back(out);
-    }
+    return m_wallet.getOutputs(vOutpoints);
 }
 
-// AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)
-void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const
+// AvailableCoins grouped by wallet address (change is grouped under the
+// address it derives from, walked node-side)
+std::map<std::string, std::vector<interfaces::WalletOutput>> WalletModel::listCoins() const
 {
-    std::vector<COutput> vCoins;
-    wallet->AvailableCoins(vCoins, true, nullptr, false);
-
-    LOCK2(cs_main, wallet->cs_wallet); // ListLockedCoins, mapWallet
-
-    for (auto const& out : vCoins)
-    {
-        COutput cout = out;
-
-        while (wallet->IsChange(cout.tx->vout[cout.i]) && cout.tx->vin.size() > 0 && (wallet->IsMine(cout.tx->vin[0]) != ISMINE_NO))
-        {
-            if (!wallet->mapWallet.count(cout.tx->vin[0].prevout.hash)) break;
-            cout = COutput(&wallet->mapWallet[cout.tx->vin[0].prevout.hash], cout.tx->vin[0].prevout.n, 0);
-        }
-
-        CTxDestination address;
-        if(!ExtractDestination(cout.tx->vout[cout.i].scriptPubKey, address)) continue;
-        mapCoins[EncodeDestination(address).c_str()].push_back(out);
-    }
-}
-
-bool WalletModel::isLockedCoin(uint256 hash, unsigned int n) const
-{
-    return false;
-}
-
-void WalletModel::lockCoin(COutPoint& output)
-{
-    return;
-}
-
-void WalletModel::unlockCoin(COutPoint& output)
-{
-    return;
-}
-
-void WalletModel::listLockedCoins(std::vector<COutPoint>& vOutpts)
-{
-    return;
+    return m_wallet.listCoins();
 }
