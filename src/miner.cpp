@@ -1695,7 +1695,8 @@ void StakeMiner(CWallet *pwallet)
 // to keep the mainnet/testnet staking path untouched.
 bool TryMineRegtestBlock(CWallet* pwallet,
                          CBlock& blocknew_out,
-                         std::string& err)
+                         std::string& err,
+                         int stake_time_slot_offset)
 {
     if (!Params().IsMockableChain()) {
         err = "TryMineRegtestBlock: only valid on regtest";
@@ -1720,7 +1721,16 @@ bool TryMineRegtestBlock(CWallet* pwallet,
 
     StakeBlock.nVersion = ComputeBlockVersion(pindexPrev->nHeight + 1);
 
-    StakeBlock.nTime = GetAdjustedTime();
+    // Advance the candidate stake time by one 16-second mask slot per retry
+    // attempt. CreateCoinStake masks this to STAKE_TIMESTAMP_MASK granularity
+    // and evaluates the kernel at that single timestamp — no time search — so a
+    // block mined at a masked slot where no coin's kernel hash falls under
+    // target fails, and (because generatetoaddress mines many blocks within one
+    // 16-second wall-clock window) a same-slot retry re-rolls nothing. Stepping
+    // to the next slot rerolls the kernel. Offset 0 (the first attempt) keeps
+    // the original behaviour.
+    StakeBlock.nTime = GetAdjustedTime()
+        + static_cast<int64_t>(stake_time_slot_offset) * (GRC::STAKE_TIMESTAMP_MASK + 1);
     StakeBlock.nNonce = 0;
     StakeBlock.nBits = GRC::GetNextTargetRequired(pindexPrev);
     StakeBlock.vtx.resize(2);

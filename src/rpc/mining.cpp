@@ -1097,14 +1097,19 @@ UniValue MineNBlocks(int nblocks, const std::string& dest_address /*advisory*/)
     for (int i = 0; i < nblocks; ++i) {
         CBlock block;
         std::string err;
-        // Retry transient CreateCoinStake failures (kernel hash too high, etc.)
-        // a few times before giving up. Under trivial powLimit + nStakeMinAge=0
-        // the kernel passes on first try, but UTXO selection can race with
-        // mempool / wallet flushes briefly.
+        // The coinstake kernel is evaluated at a single 16-second-masked
+        // timestamp (CreateCoinStake does no time search), so an "unlucky"
+        // masked slot — one where no wallet coin's kernel hash falls under
+        // target — yields "no stake found" even with a fully mature wallet.
+        // Because we mine many blocks within one 16-second wall-clock window,
+        // retrying at the same masked slot re-rolls nothing; pass the attempt
+        // number so each retry steps the candidate stake time to the next slot
+        // and rolls a fresh kernel. Five slots make an all-unlucky run
+        // vanishingly unlikely.
         bool ok = false;
         for (int attempt = 0; attempt < 5 && !ok; ++attempt) {
             err.clear();
-            ok = TryMineRegtestBlock(pwalletMain, block, err);
+            ok = TryMineRegtestBlock(pwalletMain, block, err, attempt);
             if (!ok) {
                 LogPrintf("generatetoaddress: attempt %d failed: %s", attempt, err);
             }

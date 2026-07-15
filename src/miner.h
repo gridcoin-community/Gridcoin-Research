@@ -70,9 +70,17 @@ bool CreateGridcoinReward(CMutableTransaction& mtxCoinbase, CMutableTransaction&
 // fills blocknew_out on success; returns false and sets err on failure. Used
 // by `generatetoaddress` / `generatesuperblock` RPCs to advance the chain
 // deterministically.
+//
+// stake_time_slot_offset advances the candidate stake timestamp by that many
+// 16-second STAKE_TIMESTAMP_MASK slots. The kernel is evaluated at a single
+// masked timestamp (no time search), so a given slot either yields a passing
+// kernel for the wallet's coins or does not; the caller passes the retry
+// attempt number here so each retry rolls a fresh slot instead of
+// re-evaluating the same dead one (see the retry loop in generatetoaddress).
 bool TryMineRegtestBlock(CWallet* pwallet,
                          CBlock& blocknew_out,
-                         std::string& err);
+                         std::string& err,
+                         int stake_time_slot_offset = 0);
 
 //! \brief The proof-of-stake miner loop. Runs until \ref fShutdown is set.
 void StakeMiner(CWallet* pwallet);
