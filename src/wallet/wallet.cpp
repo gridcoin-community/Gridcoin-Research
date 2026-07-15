@@ -442,7 +442,7 @@ bool CWallet::AddCScript(const CScript& redeemScript)
 // optional setting to unlock wallet for staking only
 // serves to disable the trivial sendmoney when OS account compromised
 // provides no real security
-bool fWalletUnlockStakingOnly = false;
+std::atomic<bool> fWalletUnlockStakingOnly{false};
 
 bool CWallet::LoadCScript(const CScript& redeemScript)
 {

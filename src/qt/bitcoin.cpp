@@ -22,8 +22,6 @@
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
-
-#include <cassert>
 #include "init.h"
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -651,10 +649,18 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 std::unique_ptr<interfaces::Init> interface_init = interfaces::MakeGridcoinInit();
                 std::unique_ptr<interfaces::Node> node = interface_init->makeNode();
                 std::unique_ptr<interfaces::StakingStatus> staking_status = interface_init->makeStakingStatus();
-                // Non-null here: wallet startup completed above, so
-                // pwalletMain is set for the monolithic build.
+                // Wallet startup completed above, so pwalletMain is set and
+                // the monolithic Init must hand out a wallet interface. If
+                // that invariant is ever broken, fail loudly instead of
+                // dereferencing null below (assert alone compiles out under
+                // NDEBUG).
                 std::unique_ptr<interfaces::Wallet> wallet = interface_init->makeWallet();
-                assert(wallet);
+                if (!wallet) {
+                    // Throw rather than return: the enclosing catch funnels
+                    // through handleRunawayException, and the normal
+                    // Shutdown()/thread-teardown path still runs.
+                    throw std::runtime_error("wallet interface unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(*wallet, pwalletMain, &optionsModel);

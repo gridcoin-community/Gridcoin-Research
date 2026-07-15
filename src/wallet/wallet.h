@@ -6,6 +6,7 @@
 #ifndef BITCOIN_WALLET_WALLET_H
 #define BITCOIN_WALLET_WALLET_H
 
+#include <atomic>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,7 +31,10 @@
 #include <wallet/walletutil.h>
 #include "wallet/ismine.h"
 
-extern bool fWalletUnlockStakingOnly;
+//! Staking-only unlock preference. Atomic: written by the GUI unlock path
+//! (interfaces::Wallet::unlockWallet) and RPC walletpassphrase, read by RPC
+//! send paths and the GUI status rendering, on different threads.
+extern std::atomic<bool> fWalletUnlockStakingOnly;
 extern bool fConfChange;
 class CAccountingEntry;
 class CWalletTx;
