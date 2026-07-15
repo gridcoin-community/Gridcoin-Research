@@ -5,7 +5,10 @@
 #include "wallet/generated_type.h"
 #include "wallet/ismine.h"
 
-#include <QList>
+#include <cstdint>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 class CWallet;
 class CWalletTx;
@@ -124,19 +127,16 @@ public:
     /** Decompose CWallet transaction to model transaction records.
      */
     static bool showTransaction(const CWalletTx &wtx, bool datetime_limit_flag = false, const int64_t &datetime_limit = 0);
-    static QList<TransactionRecord> decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx);
-
-    QString TypeToString() const;
-    static QString TypeToString(const Type& type, const bool& translated = true);
+    static std::vector<TransactionRecord> decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx);
 
     /** @name Immutable transaction attributes
       @{*/
     uint256 hash;
-    qint64 time;
+    int64_t time;
     Type type;
     std::string address;
-    qint64 debit;
-    qint64 credit;
+    int64_t debit;
+    int64_t credit;
 
     // Side/Split Stake
     unsigned int vout;
@@ -172,5 +172,22 @@ public:
      */
     std::string label;
 };
+
+//! Marshalability pin (multiprocess design §4.1, windowed-model design): these
+//! records are the wallet-transaction-channel DTOs and must stay value types a
+//! node-side source can fill and ship across the interfaces:: boundary — no Qt
+//! types, no pointers into core state, freely copyable. The translated type
+//! rendering lives GUI-side (transactionview/transactiontablemodel), not here.
+static_assert(std::is_copy_constructible_v<TransactionRecord>
+                  && std::is_copy_assignable_v<TransactionRecord>
+                  && std::is_move_constructible_v<TransactionRecord>,
+              "TransactionRecord must remain a copyable value type");
+static_assert(std::is_copy_constructible_v<TransactionStatus>
+                  && std::is_copy_assignable_v<TransactionStatus>,
+              "TransactionStatus must remain a copyable value type");
+static_assert(std::is_same_v<decltype(TransactionRecord::time), int64_t>
+                  && std::is_same_v<decltype(TransactionRecord::debit), int64_t>
+                  && std::is_same_v<decltype(TransactionRecord::credit), int64_t>,
+              "TransactionRecord amounts/time are fixed-width value types");
 
 #endif // BITCOIN_QT_TRANSACTIONRECORD_H

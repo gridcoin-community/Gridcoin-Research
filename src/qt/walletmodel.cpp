@@ -548,10 +548,9 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
             // and emits events off the core locks; the enqueue itself is O(1).
             // Status is computed here so the off-lock cursors can filter/sort by
             // it without re-touching the wallet.
-            const QList<TransactionRecord> decomposed =
+            std::vector<TransactionRecord> recs =
                 TransactionRecord::decomposeTransaction(wallet, wtx);
-            if (!decomposed.isEmpty()) {
-                std::vector<TransactionRecord> recs(decomposed.begin(), decomposed.end());
+            if (!recs.empty()) {
                 for (TransactionRecord& rec : recs) {
                     rec.updateStatus(wtx);
                     rec.populateDisplayLabel(*wallet);  // address-book label snapshot (PR4)
