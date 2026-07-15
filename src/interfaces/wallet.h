@@ -47,7 +47,8 @@ struct WalletOutput
     std::string address;
     int depth{0};
     int64_t time{0};
-    //! Coinstake (or coinbase) still maturing: shown disabled in the views.
+    //! Coinstake still maturing: shown disabled in the views. Deliberately
+    //! matches the old GUI-side check, which tested IsCoinStake() only.
     bool immature{false};
 };
 
