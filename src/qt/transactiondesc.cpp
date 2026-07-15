@@ -18,7 +18,7 @@ QString TransactionDesc::FormatTxStatus(const WalletTxDetail& detail)
     switch (detail.finality)
     {
     case WalletTxDetail::Finality::OpenForBlocks:
-        return tr("Open for %n more block(s)", "", detail.finality_value);
+        return tr("Open for %n more block(s)", "", static_cast<int>(detail.finality_value));
     case WalletTxDetail::Finality::OpenUntilTime:
         return tr("Open until %1").arg(GUIUtil::dateTimeStr(detail.finality_value));
     case WalletTxDetail::Finality::Conflicted:

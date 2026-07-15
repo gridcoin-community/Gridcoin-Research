@@ -20,7 +20,7 @@ namespace GRC {
 //!
 //! Takes LOCK2(cs_main, cs_wallet) internally, exactly as toHTML did — safe
 //! to call with or without the locks already held (they are recursive).
-WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int vout);
+WalletTxDetail FillWalletTxDetail(CWallet* wallet, const CWalletTx& wtx, unsigned int vout);
 
 } // namespace GRC
 

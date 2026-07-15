@@ -59,7 +59,7 @@ void FillFinality(WalletTxDetail& detail, const CWalletTx& wtx) EXCLUSIVE_LOCKS_
 
 } // namespace
 
-WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int vout)
+WalletTxDetail FillWalletTxDetail(CWallet* wallet, const CWalletTx& wtx, unsigned int vout)
 {
     WalletTxDetail detail;
     detail.found = true;
@@ -85,10 +85,10 @@ WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int 
         detail.source = WalletTxDetail::Source::CoinStake;
         detail.generated_type = GetGeneratedType(wallet, wtx.GetHash(), vout);
     }
-    else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
+    else if (wtx.mapValue.count("from") && !wtx.mapValue.at("from").empty())
     {
         detail.source = WalletTxDetail::Source::OnlineFrom;
-        detail.from_value = wtx.mapValue["from"];
+        detail.from_value = wtx.mapValue.at("from");
     }
     else if (nNet > 0)
     {
@@ -116,10 +116,10 @@ WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int 
     }
 
     // To
-    if (wtx.mapValue.count("to") && !wtx.mapValue["to"].empty())
+    if (wtx.mapValue.count("to") && !wtx.mapValue.at("to").empty())
     {
         detail.has_to = true;
-        detail.to_value = wtx.mapValue["to"];
+        detail.to_value = wtx.mapValue.at("to");
 
         CTxDestination dest = DecodeDestination(detail.to_value);
 
@@ -161,7 +161,7 @@ WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int 
         {
             detail.amount_form = WalletTxDetail::AmountForm::FromMe;
 
-            const bool have_map_to = wtx.mapValue.count("to") && !wtx.mapValue["to"].empty();
+            const bool have_map_to = wtx.mapValue.count("to") && !wtx.mapValue.at("to").empty();
 
             for (auto const& txout : wtx.vout)
             {
@@ -218,11 +218,11 @@ WalletTxDetail FillWalletTxDetail(CWallet* wallet, CWalletTx& wtx, unsigned int 
 
     detail.net = nNet;
 
-    if (wtx.mapValue.count("message") && !wtx.mapValue["message"].empty())
-        detail.map_message = wtx.mapValue["message"];
+    if (wtx.mapValue.count("message") && !wtx.mapValue.at("message").empty())
+        detail.map_message = wtx.mapValue.at("message");
 
-    if (wtx.mapValue.count("comment") && !wtx.mapValue["comment"].empty())
-        detail.map_comment = wtx.mapValue["comment"];
+    if (wtx.mapValue.count("comment") && !wtx.mapValue.at("comment").empty())
+        detail.map_comment = wtx.mapValue.at("comment");
 
     detail.txid = wtx.GetHash().ToString();
 
