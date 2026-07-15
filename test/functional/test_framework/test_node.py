@@ -324,10 +324,13 @@ class TestNode():
 
     def setmocktime(self, timestamp):
         """Shadow the RPC so we can track the node's mock clock (0 disables it).
-        See generatetoaddress() for why the clock is tracked."""
+        See generatetoaddress() for why the clock is tracked. Local tracking is
+        updated only after the RPC succeeds, so a failed call cannot leave the
+        instance believing the daemon's clock changed when it did not."""
+        result = self._rpc().setmocktime(timestamp)
         self._mocktime = None if timestamp == 0 else timestamp
         self._mocktime_off = (timestamp == 0)
-        return self._rpc().setmocktime(timestamp)
+        return result
 
     def generatetoaddress(self, *args, **kwargs):
         """Shadow the RPC to keep the node's adjusted time in step with the
@@ -356,10 +359,11 @@ class TestNode():
         No functional test mines that way; the direct node.generatetoaddress /
         node.generate paths are the covered ones."""
         hashes = self._rpc().generatetoaddress(*args, **kwargs)
-        if not self._mocktime_off:
-            # getblock (not getblockheader — Gridcoin has no such RPC) for the
-            # tip time; the extra payload is negligible against a mining call.
-            tip_time = self._rpc().getblock(self._rpc().getbestblockhash())['time']
+        if not self._mocktime_off and hashes:
+            # The last returned hash is the block we just produced (the tip),
+            # so no getbestblockhash round-trip is needed. getblock (not
+            # getblockheader — Gridcoin has no such RPC) carries the time.
+            tip_time = self._rpc().getblock(hashes[-1])['time']
             current = self._mocktime if self._mocktime is not None else int(time.time())
             if tip_time > current:
                 self.setmocktime(tip_time)
