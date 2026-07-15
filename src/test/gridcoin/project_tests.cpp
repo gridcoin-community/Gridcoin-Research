@@ -1938,17 +1938,30 @@ BOOST_AUTO_TEST_CASE(push_superblock_heals_corruption_at_gate_crossing)
     whitelist.Reset();
 
     // RAII guard so a mid-test BOOST_REQUIRE failure doesn't leak -autogreylistdeepcopyheight=100
-    // into subsequent test cases in the same binary. Also save/restore pindexBest: earlier tests in
-    // the suite may leave pindexBest pointing at a stack-allocated CBlockIndex that has since gone
-    // out of scope, and Quorum::PushSuperblock's Refresh path runs BlockFinder::FindByHeight which
-    // dereferences pindexBest -- triggers ASan stack-use-after-return on CI. Set pindexBest=nullptr
-    // for the duration of the test so FindByHeight returns immediately at its null-check.
+    // into subsequent test cases in the same binary. Also save/restore the chain-tip globals:
+    // earlier tests in the suite may leave pindexBest OR pindexGenesisBlock pointing at a
+    // stack-allocated CBlockIndex that has since gone out of scope, and Quorum::PushSuperblock's
+    // Refresh path runs BlockFinder::FindByHeight, which dereferences one of them. FindByHeight
+    // picks its start as `height < nBestHeight/2 ? pindexGenesisBlock : pindexBest`, so nulling
+    // pindexBest ALONE is not enough: when the low-height branch is taken (nBestHeight is itself a
+    // stale global here), it walks a dangling pindexGenesisBlock instead -- benign on Linux (freed
+    // memory reads as a plausible/terminating pointer) but a wild-pointer fault under the Windows
+    // cross-compile's Wine run, which scribbles freed memory. Null BOTH so FindByHeight returns at
+    // its null-check regardless of the branch.
     struct TestStateGuard {
         CBlockIndex* saved_pindexBest;
-        TestStateGuard() : saved_pindexBest(pindexBest) { pindexBest = nullptr; }
+        CBlockIndex* saved_pindexGenesisBlock;
+        TestStateGuard()
+            : saved_pindexBest(pindexBest)
+            , saved_pindexGenesisBlock(pindexGenesisBlock)
+        {
+            pindexBest = nullptr;
+            pindexGenesisBlock = nullptr;
+        }
         ~TestStateGuard()
         {
             pindexBest = saved_pindexBest;
+            pindexGenesisBlock = saved_pindexGenesisBlock;
             gArgs.ForceSetArg("-autogreylistdeepcopyheight",
                               ToString(Params().GetConsensus().AutoGreylistDeepCopyHeight));
         }
