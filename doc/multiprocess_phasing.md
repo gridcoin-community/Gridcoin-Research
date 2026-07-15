@@ -16,7 +16,7 @@ checklist lives in issue #3153.
 
 | Step | PR | Merged | Delivered |
 |---|---|---|---|
-| PR-0 | #3154 | 2026-07-13 | Vestigial-include + dead-code sweep (~10 files); removed the dead `updateWeight` slot and the emitter-less `ThreadSafeAskQuestion`; shrank the lint baseline before the ratchet existed |
+| PR-0 | #3154 | 2026-07-13 | Vestigial-include + dead-code sweep (22 files); removed the dead `updateWeight` slot and the emitter-less `ThreadSafeAskQuestion`; shrank the lint baseline before the ratchet existed |
 | 1a | #3156 | 2026-07-14 | `src/interfaces/{README.md,handler.h,node.h,wallet.h,staking.h,init.h}` + in-process impls (`src/node/interfaces.cpp`, `src/wallet/interfaces.cpp`); `MakeSignalHandler`; `test/lint/lint-qt-includes.sh` ratchet (163-entry allowlist); interface unit tests; the two hard rules documented (no `cs_main` in notification callbacks; value types only) |
 | 1b | #3157 | 2026-07-14 | ClientModel + BanTableModel onto `interfaces::Node` + new `interfaces::StakingStatus`; scraper by-reference global getter → value snapshot; alert queries folded into Node; `tryGetNumBlocksOfPeers` TRY_LOCK idiom; ratchet 163 → 150 |
 | 1c-i | #3158 | 2026-07-15 | WalletModel query/command surface onto `interfaces::Wallet` (balances snapshot, encryption commands with the staking-only preference folded into `unlockWallet`, key ops, value-typed coin control, sendCoins moved node-side); **ThreadSafeAskFee eliminated** (stateless `FeeConfirmationRequired` + accepted-fee retry, design §4.5); trust-boundary re-validation node-side; `fWalletUnlockStakingOnly` made atomic; `WalletCoinControl` value type; ratchet 150 → 147 |
@@ -226,10 +226,13 @@ scaffolded empty.
   datadir lock; it performs the §4.3 handshake and obtains its `interfaces::*` from
   the IPC `Init` proxy instead of `MakeGridcoinInit()`. The Init seam built in 1e is
   exactly this switch.
-- No flag = monolithic, exactly as today, indefinitely.
-- The shared config file means one `multiprocess=1` line flips a deployment
-  coherently; each binary ignores the other's-only arguments, and the handshake
-  catches network/datadir mismatch.
+- The default is multiprocess disabled: without the option both binaries are
+  monolithic, exactly as today, indefinitely. Split mode is enabled by
+  `-multiprocess` on the command line or, equivalently, `multiprocess=1` in the
+  config file (config options mirror CLI arguments as usual) — and because the
+  config file is shared, that one line flips a deployment coherently. Each
+  binary ignores the other's-only arguments, and the handshake catches
+  network/datadir mismatch.
 - v1 behavior: the GUI errors clearly when no daemon is listening (auto-spawn is later
   sugar; the listen/connect transport supports it without upstream's fd-passing).
 - Settings ownership in split mode: conf read by both; QSettings GUI-local;

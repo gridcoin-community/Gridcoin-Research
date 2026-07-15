@@ -63,9 +63,12 @@ gives direct calls; `=ON` gives generated proxies.
 the two existing binaries only.** `gridcoinresearchd -multiprocess` additionally
 listens on the IPC socket; `gridcoinresearch -multiprocess` runs the GUI as a client
 (no core init, no datadir lock — it handshakes and obtains its `interfaces::*` from
-the IPC `Init` proxy instead of the in-process factory). Without the flag both
-binaries behave exactly as today. The shared config file means one `multiprocess=1`
-line flips a deployment coherently. The complexity drivers behind upstream's
+the IPC `Init` proxy instead of the in-process factory). The default is
+multiprocess disabled — both binaries behave exactly as today; split mode is
+enabled by `-multiprocess` or, equivalently, `multiprocess=1` in the config file
+(config options mirror CLI arguments as usual), and because the config file is
+shared, that one line flips a deployment coherently. The complexity drivers
+behind upstream's
 multi-binary sprawl and wrapper launcher (wallet-process split, multiwallet) do not
 exist here. Transport: unix domain socket at `<datadir>/<network>/node.sock`
 (AF_UNIX on Windows as well — see §4.3).
