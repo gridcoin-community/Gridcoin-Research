@@ -5,7 +5,9 @@ converged 2026-07). Phase 1 (the `interfaces::` abstraction layer) is in progres
 document codifies the decisions the RFC thread settled and the revised implementation
 plan. Where this document and the RFC discussion disagree, this document wins.
 
-Companion documents: `doc/transaction_table_windowed_model.md` and
+Companion documents: `doc/multiprocess_phasing.md` carries the detailed per-phase
+decomposition (ordered work items, PR boundaries, acceptance criteria) that §7's
+summary table condenses. `doc/transaction_table_windowed_model.md` and
 `doc/windowed-transaction-table-architecture.md` describe the windowed transaction-table
 stack that serves as the wallet-side transport seam for this design.
 
@@ -55,9 +57,17 @@ and can migrate to a context struct incrementally later.
 
 libmultiprocess + Cap'n Proto proxies generated from `.capnp` schemas that mirror the
 `interfaces::` headers 1:1. Same headers, different backend: `ENABLE_MULTIPROCESS=OFF`
-gives direct calls; `=ON` gives generated proxies. Binaries: `gridcoinresearch-gui`,
-`gridcoinresearch-node`, and an umbrella `gridcoinresearch` launcher dispatching on
-`argv[0]` / `-m`. Transport: unix domain socket at `<datadir>/<network>/node.sock`
+gives direct calls; `=ON` gives generated proxies.
+
+**Packaging (settled 2026-07-14, superseding the RFC-era umbrella-launcher sketch):
+the two existing binaries only.** `gridcoinresearchd -multiprocess` additionally
+listens on the IPC socket; `gridcoinresearch -multiprocess` runs the GUI as a client
+(no core init, no datadir lock — it handshakes and obtains its `interfaces::*` from
+the IPC `Init` proxy instead of the in-process factory). Without the flag both
+binaries behave exactly as today. The shared config file means one `multiprocess=1`
+line flips a deployment coherently. The complexity drivers behind upstream's
+multi-binary sprawl and wrapper launcher (wallet-process split, multiwallet) do not
+exist here. Transport: unix domain socket at `<datadir>/<network>/node.sock`
 (AF_UNIX on Windows as well — see §4.3).
 
 ## 3. Settled decisions
@@ -300,7 +310,8 @@ headers, or reaches core globals) is the **gate to Phase 2**.
 
 Add libmultiprocess + capnproto to depends; `.capnp` schemas mirroring the headers;
 handshake per §4.2/§4.3 including the QSettings-persisted node-identity check;
-build-identities dialog + soft-warn banner; umbrella launcher; integration tests
+build-identities dialog + soft-warn banner; the `-multiprocess` flag on both existing
+binaries (packaging per §2 — no umbrella launcher); integration tests
 including the handshake-failure suite (wrong cookie, mismatched schema, wrong UID,
 stale socket per the §4.3 recovery rules).
 
