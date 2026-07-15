@@ -726,13 +726,14 @@ QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt
         case Status:
             return QString::fromStdString(rec->status.sortKey);
         case Date:
-            return rec->time;
+            // qint64: int64_t is `long` on LP64, which QVariant cannot take.
+            return qint64{rec->time};
         case Type:
             return formatTxType(rec);
         case ToAddress:
             return formatTxToAddress(rec, true);
         case Amount:
-            return rec->credit + rec->debit;
+            return qint64{rec->credit + rec->debit};
         } // no default case, so the compiler can warn about missing cases
         assert(false);
     case Qt::ToolTipRole:
@@ -788,7 +789,7 @@ QVariant TransactionTableModel::formatRole(TransactionRecord *rec, int columnInt
     case LabelRole:
         return walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(rec->address));
     case AmountRole:
-        return rec->credit + rec->debit;
+        return qint64{rec->credit + rec->debit};
     case TxIDRole:
         return QString::fromStdString(rec->getTxID());
     case ConfirmedRole:

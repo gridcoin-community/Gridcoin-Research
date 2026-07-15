@@ -1,7 +1,6 @@
 #include "transactionrecord.h"
 #include "wallet/wallet.h"
 #include <key_io.h>
-#include <QObject>
 
 /* Return positive answer if transaction should be shown in list. */
 bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limit_flag, const int64_t &datetime_limit)
@@ -52,9 +51,9 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx, bool datetime_limi
 /*
  * Decompose CWallet transaction to model transaction records.
  */
-QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx)
+std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx)
 {
-    QList<TransactionRecord> parts;
+    std::vector<TransactionRecord> parts;
     int64_t nTime = wtx.GetTxTime();
     int64_t nCredit = wtx.GetCredit(true);
     int64_t nDebit = wtx.GetDebit();
@@ -95,7 +94,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 sub.type = TransactionRecord::Generated;
                 sub.credit = txout.nValue;
 
-                parts.append(sub);
+                parts.push_back(sub);
             }
         }
     }
@@ -135,8 +134,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
             sub.debit = -nDebit;
 
-            // Append the subtransaction to the parts QList (transaction record).
-            parts.append(sub);
+            // Append the subtransaction to the parts vector (transaction record).
+            parts.push_back(sub);
         }
 
         // We only want outputs > 1 because the zeroth output is always empty,
@@ -187,7 +186,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     sub.debit = -nValue;
                 }
 
-                parts.append(sub);
+                parts.push_back(sub);
             }
         }
     }
@@ -221,7 +220,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
                 sub.credit = txout.nValue;
 
-                parts.append(sub);
+                parts.push_back(sub);
             }
         }
     }
@@ -250,7 +249,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             // Payment to self
             int64_t nChange = wtx.GetChange();
 
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
+            parts.push_back(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
                                            -(nDebit - nChange), nCredit - nChange, 0));
         }
         else if (fAllFromMe)
@@ -349,7 +348,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                     }
                 }
 
-                parts.append(sub);
+                parts.push_back(sub);
             }
         }
         else
@@ -357,59 +356,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
             //
             // Mixed debit transaction, can't break down payees
             //
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0, 0));
+            parts.push_back(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0, 0));
         }
     }
 
     return parts;
-}
-
-QString TransactionRecord::TypeToString() const
-{
-    return TypeToString(type);
-}
-
-QString TransactionRecord::TypeToString(const Type& type, const bool& translated)
-{
-    if (translated) {
-        switch(type) {
-        case Other:                 return QObject::tr("Other");
-        case Generated:             return QObject::tr("Mined");
-        case SendToAddress:         return QObject::tr("Sent to Address");
-        case SendToOther:           return QObject::tr("Sent to Other");
-        case RecvWithAddress:       return QObject::tr("Received with Address");
-        case RecvFromOther:         return QObject::tr("Received from Other");
-        case SendToSelf:            return QObject::tr("Self");
-        case BeaconAdvertisement:   return QObject::tr("Beacon Advertisements");
-        case Poll:                  return QObject::tr("Polls");
-        case Vote:                  return QObject::tr("Votes");
-        case Message:               return QObject::tr("Messages");
-        case MRC:                   return QObject::tr("MRCs");
-        }
-
-        assert(false); // Suppress warning
-    } else {
-        switch(type) {
-        case Other:                 return "Other";
-        case Generated:             return "Mined";
-        case SendToAddress:         return "Sent to Address";
-        case SendToOther:           return "Sent to Other";
-        case RecvWithAddress:       return "Received with Address";
-        case RecvFromOther:         return "Received from Other";
-        case SendToSelf:            return "Self";
-        case BeaconAdvertisement:   return "Beacon Advertisements";
-        case Poll:                  return "Polls";
-        case Vote:                  return "Votes";
-        case Message:               return "Messages";
-        case MRC:                   return "MRCs";
-        }
-
-        assert(false); // Suppress warning
-    }
-
-    // This will never be reached. Put it in anyway to prevent control reaches end of non-void function warning
-    // from some compiler versions.
-    return QString{};
 }
 
 void TransactionRecord::updateStatus(const CWalletTx &wtx) EXCLUSIVE_LOCKS_REQUIRED(cs_main)

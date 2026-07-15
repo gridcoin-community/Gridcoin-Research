@@ -420,7 +420,7 @@ std::vector<TransactionRecord> WalletTxStore::reloadAndSnapshot(bool limit_enabl
         if (!TransactionRecord::showTransaction(it->second)) {
             continue;
         }
-        const QList<TransactionRecord> decomposed =
+        const std::vector<TransactionRecord> decomposed =
             TransactionRecord::decomposeTransaction(m_wallet, it->second);
         for (const TransactionRecord& rec : decomposed) {
             if (limit_enabled && rec.time < limit_time) {

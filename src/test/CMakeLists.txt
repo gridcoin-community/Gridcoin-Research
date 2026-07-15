@@ -73,6 +73,11 @@ add_executable(test_gridcoin
     # two-channel split (structural deltas vs scroll-driven content fetch) and the
     # cache-base arithmetic (windowed-model PR5), tested GUI-OFF.
     qt_windowcache_tests.cpp
+    # Wallet-transaction DTOs (src/qt/transactionrecord.cpp), Qt-scrubbed for
+    # the multiprocess boundary (Phase 1c-ii) + smoke suite. Compiling the TU
+    # into the GUI-OFF binary pins the Qt-freedom the node-side source needs.
+    ${CMAKE_SOURCE_DIR}/src/qt/transactionrecord.cpp
+    qt_transactionrecord_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

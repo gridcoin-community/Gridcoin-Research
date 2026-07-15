@@ -8,8 +8,9 @@
 // guarantees — that the producer-side GRC::WalletTxStore relies on to compute
 // the position-stamped RowsInserted / RowsRemoved events. Testing it here keeps
 // the position/clustering logic covered in the ENABLE_GUI=OFF configuration CI
-// exercises (TransactionRecord itself is Qt-coupled, so the store proper is
-// covered by ASan-GUI + isolated-testnet validation instead).
+// exercises (the store proper stays Qt-coupled until Phase 1c-ii completes,
+// so it is covered by ASan-GUI + isolated-testnet validation instead;
+// TransactionRecord itself was Qt-scrubbed and now compiles GUI-OFF too).
 
 #include <qt/txorder.h>
 

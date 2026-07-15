@@ -39,6 +39,35 @@
 #include <QLabel>
 #include <QDateTimeEdit>
 
+namespace {
+//! Translated display name for a transaction type. Moved here from
+//! TransactionRecord (this combo is its only consumer) when the record was
+//! scrubbed of Qt for the multiprocess boundary — translated rendering stays
+//! GUI-side by design. QObject::tr keeps the strings' original translation
+//! context so shipped locale files keep working.
+QString TypeToString(TransactionRecord::Type type)
+{
+    switch (type) {
+    case TransactionRecord::Other:                 return QObject::tr("Other");
+    case TransactionRecord::Generated:             return QObject::tr("Mined");
+    case TransactionRecord::SendToAddress:         return QObject::tr("Sent to Address");
+    case TransactionRecord::SendToOther:           return QObject::tr("Sent to Other");
+    case TransactionRecord::RecvWithAddress:       return QObject::tr("Received with Address");
+    case TransactionRecord::RecvFromOther:         return QObject::tr("Received from Other");
+    case TransactionRecord::SendToSelf:            return QObject::tr("Self");
+    case TransactionRecord::BeaconAdvertisement:   return QObject::tr("Beacon Advertisements");
+    case TransactionRecord::Poll:                  return QObject::tr("Polls");
+    case TransactionRecord::Vote:                  return QObject::tr("Votes");
+    case TransactionRecord::Message:               return QObject::tr("Messages");
+    case TransactionRecord::MRC:                   return QObject::tr("MRCs");
+    }
+
+    // Unreachable: the switch covers every Type (and has no default so
+    // -Wswitch flags a new enumerator).
+    return QString{};
+}
+} // namespace
+
 TransactionView::TransactionView(QWidget *parent)
     : QFrame(parent)
     , model(nullptr)
@@ -95,7 +124,7 @@ TransactionView::TransactionView(QWidget *parent)
 
     // Add types from TransactionRecord Type enum.
     for (const auto& iter : TransactionRecord::TYPES) {
-        typeWidget->addItem(TransactionRecord::TypeToString(iter), GRC::TypeBit(iter));
+        typeWidget->addItem(TypeToString(iter), GRC::TypeBit(iter));
     }
 
     filterFrameLayout->addWidget(typeWidget);
