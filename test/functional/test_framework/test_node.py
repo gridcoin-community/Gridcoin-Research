@@ -133,6 +133,14 @@ class TestNode():
         self.rpc_connected = False
         self.rpc = None
         self.url = None
+        # Last mock time this node was told to use (None => running on the real
+        # clock). Tracked so generatetoaddress can keep the node's adjusted time
+        # in step with the chain tip it produces; see generatetoaddress().
+        self._mocktime = None
+        # True once a test explicitly disables mock time (setmocktime(0)),
+        # distinguishing "test wants the real clock" from "never set" so the
+        # generatetoaddress auto-advance below leaves that choice alone.
+        self._mocktime_off = False
         self.log = logging.getLogger('TestFramework.node%d' % i)
         self.cleanup_on_exit = True # Whether to kill the node when this object goes away
         # Cache perf subprocesses here by their data output filename.
@@ -193,6 +201,14 @@ class TestNode():
         """Start the node."""
         if extra_args is None:
             extra_args = self.extra_args
+
+        # The daemon resets its mock time on every (re)start, so drop the
+        # Python-side tracking (see setmocktime/generatetoaddress) — otherwise a
+        # stale _mocktime_off from a pre-restart setmocktime(0) would disable the
+        # clock auto-advance forever, and a stale _mocktime would be compared
+        # against the fresh process's real clock.
+        self._mocktime = None
+        self._mocktime_off = False
 
         # Add a new stdout and stderr file each time gridcoinresearchd is started
         if stderr is None:
@@ -302,6 +318,64 @@ class TestNode():
     def generate(self, nblocks, maxtries=1000000):
         self.log.debug("TestNode.generate() dispatches `generate` call to `generatetoaddress`")
         return self.generatetoaddress(nblocks=nblocks, address=self.get_deterministic_priv_key().address, maxtries=maxtries)
+
+    def _rpc(self):
+        """The bare RPC/CLI dispatch target used by the methods below, which
+        shadow the RPC auto-dispatch in __getattr__ and so cannot call
+        themselves through it. Mirrors __getattr__'s connection guard so a call
+        before wait_for_rpc_connection() raises the same clear assertion rather
+        than a NoneType error."""
+        if self.use_cli:
+            return self.cli
+        assert self.rpc_connected and self.rpc is not None, self._node_msg("Error: no RPC connection")
+        return self.rpc
+
+    def setmocktime(self, timestamp):
+        """Shadow the RPC so we can track the node's mock clock (0 disables it).
+        See generatetoaddress() for why the clock is tracked. Local tracking is
+        updated only after the RPC succeeds, so a failed call cannot leave the
+        instance believing the daemon's clock changed when it did not."""
+        result = self._rpc().setmocktime(timestamp)
+        self._mocktime = None if timestamp == 0 else timestamp
+        self._mocktime_off = (timestamp == 0)
+        return result
+
+    def generatetoaddress(self, *args, **kwargs):
+        """Shadow the RPC to keep the node's adjusted time in step with the
+        chain tip it just produced.
+
+        Regtest proof-of-stake masks coinstake timestamps to 16-second slots and
+        requires each block's timestamp to advance past the previous one, so
+        mining several blocks within a single wall-clock 16-second window pushes
+        the block times AHEAD of real time. A freshly-mined coinstake output is
+        then future-dated, and a transaction spending it — which the wallet
+        stamps with the current adjusted time — is rejected by the coinstake
+        timestamp rule ("ConnectInputs: transaction timestamp earlier than input
+        transaction"). This surfaced as intermittent functional-test failures
+        (rpc_txoutproof, rpc_psgtpool, ...), most often under the slower
+        sanitizer CI job.
+
+        After mining, advance the node's mock clock to the tip so its adjusted
+        time never lags the chain. Guarded: the clock only ever moves FORWARD
+        (never behind a mocktime a test has deliberately set ahead of the tip),
+        it is a no-op when the tip is not ahead of the current clock, and it is
+        skipped entirely once a test has explicitly disabled mock time
+        (setmocktime(0)) — so tests that manage their own time are unaffected.
+
+        Limitation: mining through a raw wallet handle (get_wallet_rpc) calls
+        the RPC directly and bypasses this shadow, so the clock is not advanced.
+        No functional test mines that way; the direct node.generatetoaddress /
+        node.generate paths are the covered ones."""
+        hashes = self._rpc().generatetoaddress(*args, **kwargs)
+        if not self._mocktime_off and hashes:
+            # The last returned hash is the block we just produced (the tip),
+            # so no getbestblockhash round-trip is needed. getblock (not
+            # getblockheader — Gridcoin has no such RPC) carries the time.
+            tip_time = self._rpc().getblock(hashes[-1])['time']
+            current = self._mocktime if self._mocktime is not None else int(time.time())
+            if tip_time > current:
+                self.setmocktime(tip_time)
+        return hashes
 
     def get_wallet_rpc(self, wallet_name):
         if self.use_cli:
