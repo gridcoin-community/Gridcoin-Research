@@ -59,7 +59,11 @@ public:
         AmountWithFeeExceedsBalance,
         FeeExceedsSubtractedAmount,
         DuplicateAddress,
-        TransactionCreationFailed, // Error returned when wallet is still locked
+        //! Transaction could not be created and nothing was committed. Most
+        //! commonly the wallet is still locked; also covers subtract-fee
+        //! non-convergence node-side and the fee-confirmation attempt cap
+        //! in SendCoinsDialog.
+        TransactionCreationFailed,
         TransactionCommitFailed,
         Aborted,
         //! The required fee exceeds both the configured transaction fee and
