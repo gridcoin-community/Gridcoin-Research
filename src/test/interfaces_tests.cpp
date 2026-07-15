@@ -9,6 +9,7 @@
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "key_io.h"
 #include "node/ui_interface.h"
 #include "sync.h"
 #include "util.h"
@@ -134,6 +135,129 @@ BOOST_AUTO_TEST_CASE(wallet_wraps_cwallet)
 
     handler->disconnect();
     pwalletMain->NotifyTransactionChanged(pwalletMain, probe, CT_NEW);
+    BOOST_CHECK_EQUAL(calls, 1);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_query_surface_wraps_cwallet)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+
+    BOOST_CHECK_EQUAL(wallet->getNumTransactions(),
+                      static_cast<int>(WITH_LOCK(pwalletMain->cs_wallet,
+                                                 return pwalletMain->mapWallet.size())));
+
+    // No contention in the unit-test environment, so the try-variant must
+    // succeed and agree with the unconditional single getters.
+    interfaces::WalletBalances balances;
+    BOOST_REQUIRE(wallet->tryGetBalances(balances));
+    BOOST_CHECK_EQUAL(balances.balance, pwalletMain->GetBalance());
+    BOOST_CHECK_EQUAL(balances.stake, pwalletMain->GetStake());
+    BOOST_CHECK_EQUAL(balances.unconfirmed_balance, pwalletMain->GetUnconfirmedBalance());
+    BOOST_CHECK_EQUAL(balances.immature_balance, pwalletMain->GetImmatureBalance());
+
+    // Staking-only preference: the raw flag getter tracks the global; the
+    // composite requires the wallet to actually be unlocked.
+    const bool saved_flag = fWalletUnlockStakingOnly;
+    fWalletUnlockStakingOnly = true;
+    BOOST_CHECK(wallet->getUnlockStakingOnlyFlag());
+    BOOST_CHECK_EQUAL(wallet->isUnlockedForStakingOnly(), !pwalletMain->IsLocked());
+    fWalletUnlockStakingOnly = false;
+    BOOST_CHECK(!wallet->getUnlockStakingOnlyFlag());
+    BOOST_CHECK(!wallet->isUnlockedForStakingOnly());
+
+    // The test wallet is unencrypted: Unlock must fail, and a failed unlock
+    // must NOT overwrite the staking-only preference.
+    BOOST_CHECK(!wallet->unlockWallet(SecureString("passphrase"), true));
+    BOOST_CHECK(!wallet->getUnlockStakingOnlyFlag());
+    fWalletUnlockStakingOnly = saved_flag;
+
+    // Unknown outpoints are skipped; the coin queries return empty value
+    // containers rather than touching wallet internals.
+    const std::vector<COutPoint> unknown{COutPoint(uint256S("0xdeadbeef"), 0)};
+    BOOST_CHECK(wallet->getOutputs(unknown).empty());
+    BOOST_CHECK(wallet->getOutputs({}).empty());
+    BOOST_CHECK(wallet->listCoins().empty());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_send_coins_boundary_guards)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+
+    // An empty recipient list must fail cleanly rather than index
+    // recipients[0] (the GUI pre-checks this; a direct caller must not UB).
+    interfaces::SendCoinsResult result = wallet->sendCoins({}, std::nullopt, 0);
+    BOOST_CHECK(result.status == interfaces::SendCoinsStatus::TransactionCreationFailed);
+
+    // An undecodable address must be rejected node-side — it would
+    // otherwise become an empty (anyone-can-spend) output script.
+    interfaces::WalletSendRecipient bad_recipient;
+    bad_recipient.address = "not-a-valid-address";
+    bad_recipient.amount = 1;
+    result = wallet->sendCoins({bad_recipient}, std::nullopt, 0);
+    BOOST_CHECK(result.status == interfaces::SendCoinsStatus::InvalidAddress);
+
+    // With a well-formed address, the empty test wallet has no spendable
+    // coins, so any positive send must fail the node-side balance pre-check
+    // without creating anything.
+    interfaces::WalletSendRecipient recipient;
+    recipient.address = EncodeDestination(CKeyID());
+    recipient.amount = 1;
+    result = wallet->sendCoins({recipient}, std::nullopt, 0);
+    BOOST_CHECK(result.status == interfaces::SendCoinsStatus::AmountExceedsBalance);
+    BOOST_CHECK(result.txid_hex.empty());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_key_from_pool_labels_address_book)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+
+    CPubKey pub_key;
+    const std::string label = "interfaces-test-label";
+    BOOST_REQUIRE(wallet->getKeyFromPool(pub_key, label));
+    BOOST_CHECK(pub_key.IsValid());
+
+    LOCK(pwalletMain->cs_wallet);
+    auto it = pwalletMain->mapAddressBook.find(pub_key.GetID());
+    BOOST_REQUIRE(it != pwalletMain->mapAddressBook.end());
+    BOOST_CHECK_EQUAL(it->second.name, label);
+}
+
+BOOST_AUTO_TEST_CASE(wallet_address_book_handler_bridges_value_types)
+{
+    BOOST_REQUIRE(pwalletMain != nullptr);
+
+    std::unique_ptr<interfaces::Wallet> wallet = interfaces::MakeWallet(pwalletMain);
+
+    int calls = 0;
+    std::string seen_address, seen_label, seen_purpose;
+    ChangeType seen_status = CT_DELETED;
+    std::unique_ptr<interfaces::Handler> handler = wallet->handleAddressBookChanged(
+        [&](const std::string& address, const std::string& label, bool is_mine,
+            const std::string& purpose, ChangeType status) {
+            ++calls;
+            seen_address = address;
+            seen_label = label;
+            seen_purpose = purpose;
+            seen_status = status;
+            BOOST_CHECK(is_mine);
+        });
+
+    const CTxDestination dest = CKeyID();
+    pwalletMain->NotifyAddressBookChanged(pwalletMain, dest, "label", true, "purpose", CT_NEW);
+    BOOST_CHECK_EQUAL(calls, 1);
+    BOOST_CHECK_EQUAL(seen_address, EncodeDestination(dest));
+    BOOST_CHECK_EQUAL(seen_label, "label");
+    BOOST_CHECK_EQUAL(seen_purpose, "purpose");
+    BOOST_CHECK(seen_status == CT_NEW);
+
+    handler->disconnect();
+    pwalletMain->NotifyAddressBookChanged(pwalletMain, dest, "label", true, "purpose", CT_NEW);
     BOOST_CHECK_EQUAL(calls, 1);
 }
 

@@ -2,15 +2,17 @@
 #define BITCOIN_QT_WALLETMODEL_H
 
 #include <QObject>
-#include <vector>
 #include <map>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <boost/signals2/connection.hpp>
 
+#include "interfaces/wallet.h"
 #include "qt/wallet_event_queue.h"
 #include "qt/wallettxstore.h"
 #include "support/allocators/secure.h" /* for SecureString */
-#include "wallet/ismine.h"
 
 class OptionsModel;
 class AddressTableModel;
@@ -18,10 +20,7 @@ class TransactionTableModel;
 class CWallet;
 class CKeyID;
 class CPubKey;
-class COutput;
 class COutPoint;
-class uint256;
-class CCoinControl;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
@@ -43,7 +42,12 @@ class WalletModel : public QObject
     Q_OBJECT
 
 public:
-    explicit WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent = nullptr);
+    //! The query/command surface goes through the interfaces::Wallet
+    //! boundary (Phase 1c-i); the raw CWallet* leg feeds only the tx-table
+    //! store/event-queue machinery, which migrates behind
+    //! interfaces::WalletTxSource in Phase 1c-ii — do not add new uses.
+    explicit WalletModel(interfaces::Wallet& wallet, CWallet* core_wallet,
+                         OptionsModel* optionsModel, QObject* parent = nullptr);
     ~WalletModel();
 
     enum StatusCode // Returned by sendCoins
@@ -55,9 +59,19 @@ public:
         AmountWithFeeExceedsBalance,
         FeeExceedsSubtractedAmount,
         DuplicateAddress,
-        TransactionCreationFailed, // Error returned when wallet is still locked
+        //! Transaction could not be created and nothing was committed. Most
+        //! commonly the wallet is still locked; also covers subtract-fee
+        //! non-convergence node-side and the fee-confirmation attempt cap
+        //! in SendCoinsDialog.
+        TransactionCreationFailed,
         TransactionCommitFailed,
-        Aborted
+        Aborted,
+        //! The required fee exceeds both the configured transaction fee and
+        //! the fee the caller has accepted so far; nothing was committed.
+        //! The caller prompts the user (with no core locks held — this
+        //! replaces the eliminated ThreadSafeAskFee modal) and re-invokes
+        //! sendCoins with acceptedFee set to the returned fee.
+        FeeConfirmationRequired
     };
 
     enum EncryptionStatus
@@ -66,6 +80,11 @@ public:
         Locked,       // wallet->IsCrypted() && wallet->IsLocked()
         Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
     };
+
+    //! The interface boundary for wallet queries and commands. Dialogs that
+    //! need surface not wrapped by this model (e.g. the staking-only unlock
+    //! preference) reach it here rather than through core globals.
+    interfaces::Wallet& wallet() const { return m_wallet; }
 
     OptionsModel *getOptionsModel();
     AddressTableModel *getAddressTableModel();
@@ -101,13 +120,18 @@ public:
         QString hex; // is filled with the transaction hash if status is "OK"
     };
 
-    // Send coins to a list of recipients
-    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients, const CCoinControl* coinControl = nullptr);
+    // Send coins to a list of recipients. acceptedFee is the largest fee the
+    // user has already confirmed (see StatusCode::FeeConfirmationRequired).
+    SendCoinsReturn sendCoins(const QList<SendCoinsRecipient>& recipients,
+                              const std::optional<interfaces::WalletCoinControl>& coinControl = std::nullopt,
+                              qint64 acceptedFee = 0);
 
     // Wallet encryption
     bool setWalletEncrypted(const SecureString& passphrase);
-    // Passphrase only needed when unlocking
-    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString());
+    // Passphrase only needed when unlocking; stakingOnly restricts the
+    // unlock to staking (persisted node-side as the unlock preference).
+    bool setWalletLocked(bool locked, const SecureString& passPhrase=SecureString(),
+                         bool stakingOnly = false);
     bool changePassphrase(const SecureString& oldPass, const SecureString& newPass);
 
     // RAI object for unlocking wallet, returned by requestUnlock()
@@ -137,12 +161,8 @@ public:
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool getKeyFromPool(CPubKey& out_public_key, const std::string& label);
-    void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
-    void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
-    bool isLockedCoin(uint256 hash, unsigned int n) const;
-    void lockCoin(COutPoint& output);
-    void unlockCoin(COutPoint& output);
-    void listLockedCoins(std::vector<COutPoint>& vOutpts);
+    std::vector<interfaces::WalletOutput> getOutputs(const std::vector<COutPoint>& vOutpoints) const;
+    std::map<std::string, std::vector<interfaces::WalletOutput>> listCoins() const;
 
     //!
     //! \brief Producer→GUI event channel. Producers (core threads firing
@@ -166,7 +186,14 @@ public:
     void requestEventDrainSoon();
 
 private:
-    CWallet *wallet;
+    //! Interface boundary for the query/command surface (Phase 1c-i).
+    interfaces::Wallet& m_wallet;
+
+    //! Raw wallet pointer feeding ONLY the tx-table store/event-queue
+    //! producer leg (m_txStore, the NotifyTransactionChanged handler, and
+    //! the sub-models' constructors), which migrates behind
+    //! interfaces::WalletTxSource in Phase 1c-ii. Do not add new uses.
+    CWallet *m_core_wallet;
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -219,10 +246,16 @@ private:
     void unsubscribeFromCoreSignals();
     void checkBalanceChanged();
 
-    //! Retained core-signal connections, cleared on teardown so a signal that
-    //! fires after this model is destroyed cannot invoke a slot bound to freed
-    //! memory. scoped_connection disconnects on destruction (issue #3129).
+    //! Retained core-signal connections for the tx-table producer leg
+    //! (Phase 1c-ii), cleared on teardown so a signal that fires after this
+    //! model is destroyed cannot invoke a slot bound to freed memory.
+    //! scoped_connection disconnects on destruction (issue #3129).
     std::vector<boost::signals2::scoped_connection> m_handlers;
+
+    //! Retained interface notification handlers (status and address-book
+    //! changes), cleared on teardown. interfaces::Handler disconnects on
+    //! destruction.
+    std::vector<std::unique_ptr<interfaces::Handler>> m_wallet_handlers;
 
 
 public slots:

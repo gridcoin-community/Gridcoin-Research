@@ -165,13 +165,10 @@ src/qt/voting/votingmodel.cpp:sync.h
 src/qt/voting/votingmodel.h:gridcoin/voting/filter.h
 src/qt/voting/votingmodel.h:gridcoin/voting/poll.h
 src/qt/voting/votingmodel.h:gridcoin/voting/result.h
-src/qt/walletmodel.cpp:gridcoin/tx_message.h
 src/qt/walletmodel.cpp:main.h
 src/qt/walletmodel.cpp:node/ui_interface.h
 src/qt/walletmodel.cpp:util.h
-src/qt/walletmodel.cpp:wallet/coincontrol.h
 src/qt/walletmodel.cpp:wallet/wallet.h
-src/qt/walletmodel.h:wallet/ismine.h
 src/qt/wallettxstore.cpp:main.h
 src/qt/wallettxstore.cpp:wallet/wallet.h
 src/qt/wallettxstore.h:sync.h

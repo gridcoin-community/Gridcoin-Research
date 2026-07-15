@@ -28,7 +28,6 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::NewPollReceivedSig> NewPollReceived;
     boost::signals2::signal<CClientUIInterface::NewVoteReceivedSig> NewVoteReceived;
     boost::signals2::signal<CClientUIInterface::NotifyScraperEventSig> NotifyScraperEvent;
-    boost::signals2::signal<CClientUIInterface::ThreadSafeAskFeeSig> ThreadSafeAskFee;
     boost::signals2::signal<CClientUIInterface::ThreadSafeHandleURISig> ThreadSafeHandleURI;
     boost::signals2::signal<CClientUIInterface::QueueShutdownSig> QueueShutdown;
     boost::signals2::signal<CClientUIInterface::TranslateSig> Translate;
@@ -58,7 +57,6 @@ ADD_SIGNALS_IMPL_WRAPPER(PSGTPoolChanged);
 ADD_SIGNALS_IMPL_WRAPPER(NewPollReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NewVoteReceived);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyScraperEvent);
-ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeAskFee);
 ADD_SIGNALS_IMPL_WRAPPER(ThreadSafeHandleURI);
 ADD_SIGNALS_IMPL_WRAPPER(QueueShutdown);
 ADD_SIGNALS_IMPL_WRAPPER(Translate);
@@ -68,7 +66,6 @@ ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
-bool CClientUIInterface::ThreadSafeAskFee(int64_t nFeeRequired, const std::string& strCaption) { return g_ui_signals.ThreadSafeAskFee(nFeeRequired, strCaption).value_or(false); }
 void CClientUIInterface::ThreadSafeHandleURI(const std::string& strURI) { return g_ui_signals.ThreadSafeHandleURI(strURI); }
 void CClientUIInterface::InitMessage(const std::string &message) { return g_ui_signals.InitMessage(message); }
 void CClientUIInterface::QueueShutdown() { return g_ui_signals.QueueShutdown(); }

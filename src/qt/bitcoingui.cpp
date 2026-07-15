@@ -1310,19 +1310,6 @@ void BitcoinGUI::closeEvent(QCloseEvent *event)
 }
 
 
-void BitcoinGUI::askFee(qint64 nFeeRequired, bool *payFee)
-{
-    QString strMessage =
-        tr("This transaction is over the size limit.  You can still send it for a fee of %1, "
-          "which goes to the nodes that process your transaction and helps to support the network.  "
-          "Do you want to pay the fee?").arg(
-                BitcoinUnits::formatWithUnit(BitcoinUnits::BTC, nFeeRequired));
-    QMessageBox::StandardButton retval = QMessageBox::question(
-          this, tr("Confirm transaction fee"), strMessage,
-          QMessageBox::Yes|QMessageBox::Cancel, QMessageBox::Yes);
-    *payFee = (retval == QMessageBox::Yes);
-}
-
 void BitcoinGUI::incomingTransaction(const QModelIndex & parent, int start, int end)
 {
     if(!walletModel || !clientModel)
@@ -1771,12 +1758,21 @@ void BitcoinGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
-        if (fWalletUnlockStakingOnly) {
+    {
+        // The raw preference flag, exactly what the old code read from the
+        // fWalletUnlockStakingOnly global at render time. (Not the composite
+        // isUnlockedForStakingOnly: this slot runs queued, and a relock
+        // racing the queued delivery would flip the composite to false and
+        // paint "fully unlocked" where the old code kept the staking-only
+        // rendering until the lock's own status event arrived.)
+        const bool staking_only = walletModel && walletModel->wallet().getUnlockStakingOnlyFlag();
+
+        if (staking_only) {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_unlocked_" + sSheet));
         } else {
             labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_none_" + sSheet));
         }
-        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(fWalletUnlockStakingOnly ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
+        labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently %1 ").arg(staking_only ? tr("<b>unlocked for staking only</b>") : tr("<b>fully unlocked</b>")));
         encryptWalletAction->setChecked(true);
         changePassphraseAction->setEnabled(true);
         unlockWalletAction->setVisible(false);
@@ -1785,6 +1781,7 @@ void BitcoinGUI::setEncryptionStatus(int status)
         lockWalletAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_7));
         encryptWalletAction->setEnabled(false);
         break;
+    }
     case WalletModel::Locked:
         labelEncryptionIcon->setPixmap(GRC::ScaleStatusIcon(this, ":/icons/status_encryption_locked_" + sSheet));
         labelEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));
