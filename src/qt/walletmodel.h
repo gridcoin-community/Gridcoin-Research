@@ -7,11 +7,8 @@
 #include <string>
 #include <vector>
 
-#include <boost/signals2/connection.hpp>
-
 #include "interfaces/wallet.h"
-#include "qt/wallet_event_queue.h"
-#include "qt/wallettxstore.h"
+#include "interfaces/wallet_tx_source.h"
 #include "support/allocators/secure.h" /* for SecureString */
 
 class OptionsModel;
@@ -43,11 +40,16 @@ class WalletModel : public QObject
 
 public:
     //! The query/command surface goes through the interfaces::Wallet
-    //! boundary (Phase 1c-i); the raw CWallet* leg feeds only the tx-table
-    //! store/event-queue machinery, which migrates behind
-    //! interfaces::WalletTxSource in Phase 1c-ii — do not add new uses.
-    explicit WalletModel(interfaces::Wallet& wallet, CWallet* core_wallet,
-                         OptionsModel* optionsModel, QObject* parent = nullptr);
+    //! boundary (Phase 1c-i); the windowed tx-table store/event-queue
+    //! machinery is reached through the interfaces::WalletTxSource boundary
+    //! (Phase 1c-ii), which the model does not own — it is created node-side
+    //! (interfaces::Init::makeWalletTxSource) and must outlive the model. The
+    //! raw CWallet* leg now feeds only the address-table and
+    //! transaction-table sub-model constructors, which migrate in a later
+    //! phase — do not add new uses.
+    explicit WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         CWallet* core_wallet, OptionsModel* optionsModel,
+                         QObject* parent = nullptr);
     ~WalletModel();
 
     enum StatusCode // Returned by sendCoins
@@ -165,20 +167,15 @@ public:
     std::map<std::string, std::vector<interfaces::WalletOutput>> listCoins() const;
 
     //!
-    //! \brief Producer→GUI event channel. Producers (core threads firing
-    //! NotifyTransactionChanged etc.) push under the locks they already hold;
-    //! the Qt-side consumer, WalletModel::drainEventQueue(), is driven by
-    //! eventDrainTimer and periodically pops events and applies them to the
-    //! transaction table model.
+    //! \brief The windowed transaction-table boundary (Phase 1c-ii). The GUI
+    //! sub-models drive per-view cursors, pull rows/detail, and drain the
+    //! producer→GUI event stream through this handle; the concrete node-side
+    //! implementation owns the store, its worker thread, and the producer
+    //! subscriptions to CWallet's transaction signals. The source is created
+    //! and owned outside this model (interfaces::Init::makeWalletTxSource) and
+    //! must outlive it.
     //!
-    GRC::WalletEventQueue& getEventQueue() { return m_event_queue; }
-
-    //!
-    //! \brief Accessor for the producer-owned transaction ordering store. The
-    //! producer (NotifyTransactionChanged) mutates it; TransactionTableModel
-    //! reads it only at reset time (reloadAndSnapshot).
-    //!
-    GRC::WalletTxStore& getTxStore() { return m_txStore; }
+    interfaces::WalletTxSource& txSource() { return m_tx_source; }
 
     //! Kick an immediate (next-event-loop-turn) event-queue drain, so a
     //! user-initiated cursor change (a windowed-view filter/sort) is reflected
@@ -189,11 +186,10 @@ private:
     //! Interface boundary for the query/command surface (Phase 1c-i).
     interfaces::Wallet& m_wallet;
 
-    //! Raw wallet pointer feeding ONLY the tx-table store/event-queue
-    //! producer leg (m_txStore, the NotifyTransactionChanged handler, and
-    //! the sub-models' constructors), which migrates behind
-    //! interfaces::WalletTxSource in Phase 1c-ii. Do not add new uses.
-    CWallet *m_core_wallet;
+    //! The windowed transaction-table boundary (Phase 1c-ii). Not owned: the
+    //! source is created node-side (interfaces::Init::makeWalletTxSource) and
+    //! outlives this model; the model only drives it.
+    interfaces::WalletTxSource& m_tx_source;
 
     // Wallet has an options model for wallet-specific options
     // (transaction fee, for example)
@@ -228,33 +224,15 @@ private:
     //! never double-processed. Qt-thread only.
     bool m_draining = false;
 
-    //!
-    //! \brief MPSC queue carrying producer-side wallet events to the GUI.
-    //! Producers push under the locks they already hold; the consumer is
-    //! drainEventQueue(), fired by eventDrainTimer every 500ms.
-    //!
-    GRC::WalletEventQueue m_event_queue;
-
-    //!
-    //! \brief Producer-owned transaction ordering store. Declared AFTER
-    //! m_event_queue so the WalletEventQueue& it holds is bound to a fully
-    //! constructed object (member init order == declaration order).
-    //!
-    GRC::WalletTxStore m_txStore;
-
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
     void checkBalanceChanged();
 
-    //! Retained core-signal connections for the tx-table producer leg
-    //! (Phase 1c-ii), cleared on teardown so a signal that fires after this
-    //! model is destroyed cannot invoke a slot bound to freed memory.
-    //! scoped_connection disconnects on destruction (issue #3129).
-    std::vector<boost::signals2::scoped_connection> m_handlers;
-
     //! Retained interface notification handlers (status and address-book
     //! changes), cleared on teardown. interfaces::Handler disconnects on
-    //! destruction.
+    //! destruction. The tx-table producer subscriptions moved node-side into
+    //! the WalletTxSource in Phase 1c-ii, so this model no longer holds any
+    //! raw core-signal connections.
     std::vector<std::unique_ptr<interfaces::Handler>> m_wallet_handlers;
 
 

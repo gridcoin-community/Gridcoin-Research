@@ -5,9 +5,9 @@
 #ifndef BITCOIN_QT_DETAILEDTXMODEL_H
 #define BITCOIN_QT_DETAILEDTXMODEL_H
 
-#include "qt/transactionrecord.h"
-#include "qt/txfilter.h"
-#include "qt/wallet_event_queue.h"
+#include "interfaces/wallet_tx_record.h"
+#include "interfaces/wallet_tx_filter.h"
+#include "interfaces/wallet_tx_channel.h"
 #include "qt/windowcache.h"
 #include "uint256.h"
 

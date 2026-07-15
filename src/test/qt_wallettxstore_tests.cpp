@@ -1,15 +1,26 @@
 // Copyright (c) 2026 The Gridcoin developers
-// Distributed under the MIT/X11 software license, see the accompanying
+// Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "wallettxstore_tests.h"
+// GUI-OFF unit coverage for the Qt-free PR2.5 store-worker / double-queue
+// (src/wallet/wallettxstore.{h,cpp}): producers enqueue (O(1)) and a single
+// worker thread drains the intake queue and runs the O(N) store maintenance off
+// the core locks, pushing the position-stamped events. These exercise the
+// worker's drain/ordering/concurrency and clean shutdown. The store has zero Qt
+// dependencies, so it compiles into the GUI-OFF test binary directly. The
+// rebuild barrier (reloadAndSnapshot quiescing the worker) needs a live
+// CWallet, so it is covered by the ASan-GUI mesh soak + isolated-testnet
+// validation, exactly as the PR2 store proper was.
 
-#include "arith_uint256.h"
-#include "qt/transactionrecord.h"
-#include "qt/wallet_event_queue.h"
-#include "qt/wallettxstore.h"
-#include "uint256.h"
+#include <arith_uint256.h>
+#include <interfaces/wallet_tx_record.h>
+#include <wallet/wallet_event_queue.h>
+#include <wallet/wallettxstore.h>
+#include <uint256.h>
 
+#include <boost/test/unit_test.hpp>
+
+#include <chrono>
 #include <set>
 #include <thread>
 #include <utility>
@@ -40,18 +51,20 @@ TransactionRecord makeRec(const uint256& hash, int64_t time, int idx)
 }
 
 //! Poll the event queue (the worker drains asynchronously) until it holds at
-//! least `expected` events or a generous timeout elapses. qWait pumps the Qt
-//! loop and sleeps; ~1.5s ceiling is far above the worker's drain latency.
+//! least `expected` events or a generous timeout elapses. Each iteration sleeps
+//! 5ms; the ~1.5s ceiling is far above the worker's drain latency.
 void waitForQueue(WalletEventQueue& q, std::size_t expected)
 {
     for (int i = 0; i < 300 && q.size() < expected; ++i) {
-        QTest::qWait(5);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 
 } // anonymous namespace
 
-void WalletTxStoreTests::workerDrainsAllInsertsInOrder()
+BOOST_AUTO_TEST_SUITE(qt_wallettxstore_tests)
+
+BOOST_AUTO_TEST_CASE(workerDrainsAllInsertsInOrder)
 {
     WalletEventQueue q;
     // reloadAndSnapshot (the only consumer of m_wallet) is not exercised here,
@@ -66,16 +79,16 @@ void WalletTxStoreTests::workerDrainsAllInsertsInOrder()
     waitForQueue(q, static_cast<std::size_t>(N));
 
     auto batch = q.drain();
-    QCOMPARE(batch.size(), static_cast<std::size_t>(N));
+    BOOST_CHECK_EQUAL(batch.size(), static_cast<std::size_t>(N));
     // Each distinct-hash insert yields exactly one RowsInserted; the single
     // worker drains the intake FIFO in order, so seqnos are dense [0, N).
     for (int i = 0; i < N; ++i) {
-        QVERIFY(std::holds_alternative<RowsInsertedPayload>(batch[i].payload));
-        QCOMPARE(batch[i].seqno, static_cast<uint64_t>(i));
+        BOOST_CHECK(std::holds_alternative<RowsInsertedPayload>(batch[i].payload));
+        BOOST_CHECK_EQUAL(batch[i].seqno, static_cast<uint64_t>(i));
     }
 }
 
-void WalletTxStoreTests::workerHandlesInterleavedInsertRemove()
+BOOST_AUTO_TEST_CASE(workerHandlesInterleavedInsertRemove)
 {
     WalletEventQueue q;
     WalletTxStore store(nullptr, q);
@@ -89,14 +102,14 @@ void WalletTxStoreTests::workerHandlesInterleavedInsertRemove()
     waitForQueue(q, 3);
 
     auto batch = q.drain();
-    QCOMPARE(batch.size(), static_cast<std::size_t>(3));
+    BOOST_CHECK_EQUAL(batch.size(), static_cast<std::size_t>(3));
     // The worker dispatches both intake kinds, in enqueue order.
-    QVERIFY(std::holds_alternative<RowsInsertedPayload>(batch[0].payload));
-    QVERIFY(std::holds_alternative<RowsInsertedPayload>(batch[1].payload));
-    QVERIFY(std::holds_alternative<RowsRemovedPayload>(batch[2].payload));
+    BOOST_CHECK(std::holds_alternative<RowsInsertedPayload>(batch[0].payload));
+    BOOST_CHECK(std::holds_alternative<RowsInsertedPayload>(batch[1].payload));
+    BOOST_CHECK(std::holds_alternative<RowsRemovedPayload>(batch[2].payload));
 }
 
-void WalletTxStoreTests::workerPreservesAllUnderConcurrentProducers()
+BOOST_AUTO_TEST_CASE(workerPreservesAllUnderConcurrentProducers)
 {
     WalletEventQueue q;
     WalletTxStore store(nullptr, q);
@@ -123,19 +136,19 @@ void WalletTxStoreTests::workerPreservesAllUnderConcurrentProducers()
     waitForQueue(q, static_cast<std::size_t>(kTotal));
 
     auto batch = q.drain();
-    QCOMPARE(batch.size(), static_cast<std::size_t>(kTotal));
+    BOOST_CHECK_EQUAL(batch.size(), static_cast<std::size_t>(kTotal));
     std::set<uint64_t> seqnos;
     for (const auto& ev : batch) {
-        QVERIFY(std::holds_alternative<RowsInsertedPayload>(ev.payload));
+        BOOST_CHECK(std::holds_alternative<RowsInsertedPayload>(ev.payload));
         seqnos.insert(ev.seqno);
     }
     // Dense, unique seqnos == single-writer serialization of the concurrent intake.
-    QCOMPARE(seqnos.size(), static_cast<std::size_t>(kTotal));
-    QCOMPARE(*seqnos.begin(),  static_cast<uint64_t>(0));
-    QCOMPARE(*seqnos.rbegin(), static_cast<uint64_t>(kTotal - 1));
+    BOOST_CHECK_EQUAL(seqnos.size(), static_cast<std::size_t>(kTotal));
+    BOOST_CHECK_EQUAL(*seqnos.begin(),  static_cast<uint64_t>(0));
+    BOOST_CHECK_EQUAL(*seqnos.rbegin(), static_cast<uint64_t>(kTotal - 1));
 }
 
-void WalletTxStoreTests::dtorWithPendingIntakeIsClean()
+BOOST_AUTO_TEST_CASE(dtorWithPendingIntakeIsClean)
 {
     WalletEventQueue q;
     {
@@ -148,10 +161,10 @@ void WalletTxStoreTests::dtorWithPendingIntakeIsClean()
             store.enqueueInsert(std::vector<TransactionRecord>{makeRec(hashOf(i), 1000 + i, 0)});
         }
     } // store dtor here: stop + join. If it hung, this test would never return.
-    QVERIFY(true);
+    BOOST_CHECK(true);
 }
 
-void WalletTxStoreTests::getRowDetailUnknownHashReturnsEmpty()
+BOOST_AUTO_TEST_CASE(getRowDetailUnknownHashReturnsEmpty)
 {
     WalletEventQueue q;
     // Null wallet is safe: an unknown hash finds no m_by_hash entry, so
@@ -161,12 +174,13 @@ void WalletTxStoreTests::getRowDetailUnknownHashReturnsEmpty()
     store.start();
 
     // Empty store, query a hash that was never inserted.
-    QVERIFY(store.getRowDetail(hashOf(99), 0).isEmpty());
+    // getRowDetail returns a value DTO now; found == false marks the miss.
+    BOOST_CHECK(!store.getRowDetail(hashOf(99), 0).found);
     // idx < 0 (first-part fallback) on an absent hash is equally a miss.
-    QVERIFY(store.getRowDetail(hashOf(99), -1).isEmpty());
+    BOOST_CHECK(!store.getRowDetail(hashOf(99), -1).found);
 }
 
-void WalletTxStoreTests::getRowDetailWrongIdxReturnsEmpty()
+BOOST_AUTO_TEST_CASE(getRowDetailWrongIdxReturnsEmpty)
 {
     WalletEventQueue q;
     WalletTxStore store(nullptr, q);
@@ -175,8 +189,8 @@ void WalletTxStoreTests::getRowDetailWrongIdxReturnsEmpty()
     // Insert a single-part record (idx 0). After the worker applies it, m_by_hash
     // holds h, but a query for a DIFFERENT part index matches no record, so
     // getRowDetail returns empty WITHOUT taking the wallet locks — null-wallet
-    // safe. (A query for the real idx 0 would proceed to toHTML and need a live
-    // wallet, so that path is GUI-soak-only.)
+    // safe. (A query for the real idx 0 would proceed to the DTO fill and need
+    // a live wallet, so that path is GUI-soak-only.)
     const uint256 h = hashOf(7);
     store.enqueueInsert(std::vector<TransactionRecord>{makeRec(h, 1000, 0)});
     waitForQueue(q, 1);
@@ -185,7 +199,9 @@ void WalletTxStoreTests::getRowDetailWrongIdxReturnsEmpty()
     // never applied, getRowDetail would return empty for the WRONG reason (unknown
     // hash) and this test would still pass without exercising the wrong-idx path
     // (Copilot review, PR5-C).
-    QVERIFY(q.size() >= 1);
+    BOOST_CHECK(q.size() >= 1);
 
-    QVERIFY(store.getRowDetail(h, 5).isEmpty());
+    BOOST_CHECK(!store.getRowDetail(h, 5).found);
 }
+
+BOOST_AUTO_TEST_SUITE_END()

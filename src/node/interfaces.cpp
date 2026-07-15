@@ -15,6 +15,7 @@
 #include "interfaces/init.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_tx_source.h"
 #include "main.h"
 #include "net.h"
 #include "node/ui_interface.h"
@@ -186,6 +187,11 @@ public:
     std::unique_ptr<Wallet> makeWallet() override
     {
         return pwalletMain ? MakeWallet(pwalletMain) : nullptr;
+    }
+
+    std::unique_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet) override
+    {
+        return wallet ? MakeWalletTxSource(wallet) : nullptr;
     }
 };
 

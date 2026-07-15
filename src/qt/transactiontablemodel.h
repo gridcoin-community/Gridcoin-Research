@@ -1,7 +1,7 @@
 #ifndef BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 #define BITCOIN_QT_TRANSACTIONTABLEMODEL_H
 
-#include "qt/wallet_event_queue.h"
+#include "interfaces/wallet_tx_channel.h"
 
 #include <QAbstractTableModel>
 #include <QStringList>

@@ -91,14 +91,8 @@ add_library(gridcoinqt STATIC
     trafficgraphwidget.cpp
     transactiondesc.cpp
     transactiondescdialog.cpp
-    txfilter.cpp
-    txorder.cpp
-    cursor.cpp
-    transactionrecord.cpp
     transactiontablemodel.cpp
     transactionview.cpp
-    wallet_event_queue.cpp
-    wallettxstore.cpp
     updatedialog.cpp
     upgradeqt.cpp
     voting/additionalfieldstableview.cpp

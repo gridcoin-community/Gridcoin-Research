@@ -2,9 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "qt/wallettxstore.h"
+#include "wallet/wallettxstore.h"
 
-#include "qt/transactiondesc.h"
+#include "wallet/txdetail.h"
 #include "main.h"
 #include "wallet/wallet.h"
 
@@ -867,7 +867,7 @@ int WalletTxStore::rowForKey(int viewId, const uint256& hash, int idx)
     return static_cast<int>(best);
 }
 
-QString WalletTxStore::getRowDetail(const uint256& hash, int idx)
+WalletTxDetail WalletTxStore::getRowDetail(const uint256& hash, int idx)
 {
     // Resolve (hash, idx) -> the clicked part's vout under cs_store ONLY, then
     // RELEASE cs_store before taking the wallet locks: the class invariant
@@ -895,17 +895,17 @@ QString WalletTxStore::getRowDetail(const uint256& hash, int idx)
         // !found: no such (hash, idx). !m_wallet: defensive — the live GUI always
         // constructs the store with a wallet, but the nullptr-wallet unit harness
         // must not dereference it once a match is found (Copilot review, PR5-C).
-        return QString();
+        return WalletTxDetail{};
     }
-    // Heavy detail formatting under the canonical wallet locks, OFF the store
+    // Heavy detail fill under the canonical wallet locks, OFF the store
     // leaf. A future edit MUST NOT hoist this under the cs_store scope above —
     // that would invert cs_store -> cs_main/cs_wallet and violate the lock order.
     LOCK2(cs_main, m_wallet->cs_wallet);
     auto mi = m_wallet->mapWallet.find(hash);
     if (mi == m_wallet->mapWallet.end()) {
-        return QString();
+        return WalletTxDetail{};
     }
-    return TransactionDesc::toHTML(m_wallet, mi->second, vout);
+    return FillWalletTxDetail(m_wallet, mi->second, vout);
 }
 
 void WalletTxStore::emitCursorDeltas(int viewId, uint64_t epoch,

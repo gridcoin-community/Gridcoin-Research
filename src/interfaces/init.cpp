@@ -7,6 +7,7 @@
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_tx_source.h"
 
 namespace interfaces {
 
@@ -17,5 +18,7 @@ std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
+
+std::unique_ptr<WalletTxSource> Init::makeWalletTxSource(CWallet* /*wallet*/) { return nullptr; }
 
 } // namespace interfaces

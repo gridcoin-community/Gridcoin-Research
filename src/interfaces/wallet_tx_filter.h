@@ -2,14 +2,14 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_QT_TXFILTER_H
-#define GRIDCOIN_QT_TXFILTER_H
+#ifndef GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H
+#define GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H
 
 #include <cstdint>
 #include <string>
 
 //!
-//! \file txfilter.h
+//! \file wallet_tx_filter.h
 //!
 //! Qt-free transaction-list filter/sort evaluation core.
 //!
@@ -184,4 +184,4 @@ bool Less(const SortKey& a, const SortKey& b, int column, int order);
 
 } // namespace GRC
 
-#endif // GRIDCOIN_QT_TXFILTER_H
+#endif // GRIDCOIN_INTERFACES_WALLET_TX_FILTER_H

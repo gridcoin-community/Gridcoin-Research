@@ -11,8 +11,8 @@
 // cursor itself is Qt-free, so it compiles into test_gridcoin with ENABLE_GUI=OFF
 // where CI actually runs (the blind spot that hid #2944).
 
-#include <qt/cursor.h>
-#include <qt/txfilter.h>
+#include <wallet/cursor.h>
+#include <interfaces/wallet_tx_filter.h>
 
 #include <boost/test/unit_test.hpp>
 

@@ -1,5 +1,5 @@
-#ifndef BITCOIN_QT_TRANSACTIONRECORD_H
-#define BITCOIN_QT_TRANSACTIONRECORD_H
+#ifndef GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H
+#define GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H
 
 #include "uint256.h"
 #include "wallet/generated_type.h"
@@ -190,4 +190,4 @@ static_assert(std::is_same_v<decltype(TransactionRecord::time), int64_t>
                   && std::is_same_v<decltype(TransactionRecord::credit), int64_t>,
               "TransactionRecord amounts/time are fixed-width value types");
 
-#endif // BITCOIN_QT_TRANSACTIONRECORD_H
+#endif // GRIDCOIN_INTERFACES_WALLET_TX_RECORD_H

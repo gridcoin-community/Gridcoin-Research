@@ -9,7 +9,7 @@
 // the configuration CI actually exercises (ENABLE_GUI=OFF) — the blind spot
 // that hid PR #2944's heap corruption.
 
-#include <qt/txfilter.h>
+#include <interfaces/wallet_tx_filter.h>
 
 #include <boost/test/unit_test.hpp>
 

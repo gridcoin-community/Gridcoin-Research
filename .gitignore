@@ -97,3 +97,7 @@ flatpak-repo/
 
 # mypy cache (lint-python.sh writes here)
 test/.mypy_cache/
+
+# Python bytecode from the functional test framework
+__pycache__/
+*.pyc
