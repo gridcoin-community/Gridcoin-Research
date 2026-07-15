@@ -314,8 +314,13 @@ class TestNode():
     def _rpc(self):
         """The bare RPC/CLI dispatch target used by the methods below, which
         shadow the RPC auto-dispatch in __getattr__ and so cannot call
-        themselves through it."""
-        return self.cli if self.use_cli else self.rpc
+        themselves through it. Mirrors __getattr__'s connection guard so a call
+        before wait_for_rpc_connection() raises the same clear assertion rather
+        than a NoneType error."""
+        if self.use_cli:
+            return self.cli
+        assert self.rpc_connected and self.rpc is not None, self._node_msg("Error: no RPC connection")
+        return self.rpc
 
     def setmocktime(self, timestamp):
         """Shadow the RPC so we can track the node's mock clock (0 disables it).
@@ -352,6 +357,8 @@ class TestNode():
         node.generate paths are the covered ones."""
         hashes = self._rpc().generatetoaddress(*args, **kwargs)
         if not self._mocktime_off:
+            # getblock (not getblockheader — Gridcoin has no such RPC) for the
+            # tip time; the extra payload is negligible against a mining call.
             tip_time = self._rpc().getblock(self._rpc().getbestblockhash())['time']
             current = self._mocktime if self._mocktime is not None else int(time.time())
             if tip_time > current:
