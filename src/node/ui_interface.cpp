@@ -34,6 +34,7 @@ struct UISignals {
     boost::signals2::signal<CClientUIInterface::NotifyBlocksChangedSig> NotifyBlocksChanged;
     boost::signals2::signal<CClientUIInterface::UpdateMessageBoxSig> UpdateMessageBox;
     boost::signals2::signal<CClientUIInterface::RwSettingsUpdatedSig> RwSettingsUpdated;
+    boost::signals2::signal<CClientUIInterface::MandatorySideStakeChangedSig> MandatorySideStakeChanged;
 };
 static UISignals g_ui_signals;
 
@@ -63,6 +64,7 @@ ADD_SIGNALS_IMPL_WRAPPER(Translate);
 ADD_SIGNALS_IMPL_WRAPPER(NotifyBlocksChanged);
 ADD_SIGNALS_IMPL_WRAPPER(UpdateMessageBox);
 ADD_SIGNALS_IMPL_WRAPPER(RwSettingsUpdated);
+ADD_SIGNALS_IMPL_WRAPPER(MandatorySideStakeChanged);
 
 void CClientUIInterface::ThreadSafeMessageBox(const std::string& message, const std::string& caption, int style) { return g_ui_signals.ThreadSafeMessageBox(message, caption, style); }
 void CClientUIInterface::UpdateMessageBox(const std::string& version, const int& update_type, const std::string& message) { return g_ui_signals.UpdateMessageBox(version, update_type, message); }
@@ -84,6 +86,7 @@ void CClientUIInterface::NewVoteReceived(const uint256& poll_txid) { return g_ui
 void CClientUIInterface::NotifyAlertChanged(const uint256 &hash, ChangeType status) { return g_ui_signals.NotifyAlertChanged(hash, status); }
 void CClientUIInterface::NotifyScraperEvent(const scrapereventtypes& ScraperEventtype, ChangeType status, const std::string& message) { return g_ui_signals.NotifyScraperEvent(ScraperEventtype, status, message); }
 void CClientUIInterface::RwSettingsUpdated() { return g_ui_signals.RwSettingsUpdated(); }
+void CClientUIInterface::MandatorySideStakeChanged() { return g_ui_signals.MandatorySideStakeChanged(); }
 
 bool InitError(const std::string &str)
 {

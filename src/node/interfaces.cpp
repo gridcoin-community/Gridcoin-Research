@@ -14,6 +14,7 @@
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
+#include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
@@ -188,6 +189,11 @@ public:
     std::unique_ptr<MRC> makeMRC(CWallet* wallet) override
     {
         return wallet ? MakeMRC(wallet) : nullptr;
+    }
+
+    std::unique_ptr<SideStakeManager> makeSideStakeManager() override
+    {
+        return MakeSideStakeManager();
     }
 
     std::unique_ptr<Wallet> makeWallet() override

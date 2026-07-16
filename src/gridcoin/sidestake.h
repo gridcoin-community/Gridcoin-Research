@@ -840,6 +840,25 @@ public:
     void LoadLocalSideStakesFromConfig();
 
     //!
+    //! \brief Monotonic in-memory revision of the LOCAL (voluntary, rwsettings-
+    //! persisted) sidestake state, advanced at every local mutation commit
+    //! (design §4.4 versioned refetch). Lets a consumer (e.g. the GUI sidestake
+    //! model via interfaces::SideStakeManager) keep a high-water mark, drop stale
+    //! RwSettingsUpdated notifications, and read-its-writes.
+    //!
+    //! Scope is deliberately local-only: the mandatory (contract) side already has
+    //! block-height ordering and does not drive the GUI's RwSettingsUpdated
+    //! refresh, so contract Add/Delete/Revert do not touch this counter. It is
+    //! memory-only (reset to 0 on restart, per §4.4 point 4), never serialized,
+    //! not consensus state. It is distinct from both SideStakePayload::m_version
+    //! (a payload serialization format version) and the SideStakeDB format version
+    //! passed to m_sidestake_db on construction — hence "revision", not "version".
+    //!
+    //! \return The current local sidestake revision.
+    //!
+    uint64_t GetLocalSideStakeRevision() const;
+
+    //!
     //! \brief Specializes the template RegistryDB for the SideStake class. Note that std::set<MandatorySideStake>
     //! is not actually used.
     //!
@@ -901,6 +920,13 @@ private:
     //! flag, no other state is published through it. It is deliberately NOT
     //! GUARDED_BY(cs_lock) — it is accessed outside the registry lock by design.
     std::atomic<bool> m_local_entry_already_saved_to_config{false};
+
+    //! \brief Monotonic in-memory revision of the local sidestake state (design
+    //! §4.4). Incremented at each LOCAL mutation commit while cs_lock is held (so
+    //! the bump is ordered with the map change); read lock-free via
+    //! GetLocalSideStakeRevision(). See the accessor's note — observability-only,
+    //! local-scope, never consensus state.
+    std::atomic<uint64_t> m_local_sidestake_revision{0};
 }; // sidestakeRegistry
 
 //!

@@ -750,6 +750,11 @@ void SideStakeRegistry::AddDelete(const ContractContext& ctx)
     // Finally, insert the new SideStake entry (payload) smart pointer into the m_sidestake_entries map.
     m_mandatory_sidestake_entries[payload.m_entry.m_destination] = m_sidestake_db.find(ctx.m_tx.GetHash())->second;
 
+    // A mandatory (contract) sidestake entry changed; nudge the GUI table with a
+    // payload-free refetch trigger. The only subscriber marshals to the GUI
+    // thread, so emitting under cs_lock is safe (see ui_interface.h).
+    uiInterface.MandatorySideStakeChanged();
+
     return;
 }
 
@@ -770,6 +775,8 @@ void SideStakeRegistry::NonContractAdd(const LocalSideStake& sidestake, const bo
     // Using this form of insert because we want the latest record with the same key to override any previous one.
     m_local_sidestake_entries[sidestake.m_destination] = std::make_shared<LocalSideStake>(sidestake);
 
+    ++m_local_sidestake_revision;
+
     if (save_to_file) {
         SaveLocalSideStakesToConfig();
     }
@@ -783,6 +790,8 @@ void SideStakeRegistry::NonContractDelete(const CTxDestination& destination, con
 
     if (sidestake_entry_pair_iter != m_local_sidestake_entries.end()) {
         m_local_sidestake_entries.erase(sidestake_entry_pair_iter);
+
+        ++m_local_sidestake_revision;
     }
 
     if (save_to_file) {
@@ -825,6 +834,11 @@ void SideStakeRegistry::Revert(const ContractContext& ctx) EXCLUSIVE_LOCKS_REQUI
             // If the record to revert is not found in the m_sidestake_entries map, no point in continuing.
             return;
         }
+
+        // A mandatory sidestake entry was reverted (reorg); nudge the GUI table.
+        // The queued refetch runs after this Revert completes, so it observes the
+        // final state (including any resurrected prior entry below).
+        uiInterface.MandatorySideStakeChanged();
 
                // Also erase the record from the db.
         if (!m_sidestake_db.erase(ctx.m_tx.GetHash())) {
@@ -939,6 +953,8 @@ void SideStakeRegistry::ResetInMemoryOnly()
     m_local_sidestake_entries.clear();
     m_mandatory_sidestake_entries.clear();
     m_sidestake_db.clear_in_memory_only();
+
+    ++m_local_sidestake_revision;
 }
 
 uint64_t SideStakeRegistry::PassivateDB()
@@ -946,6 +962,17 @@ uint64_t SideStakeRegistry::PassivateDB()
     LOCK(cs_lock);
 
     return m_sidestake_db.passivate_db();
+}
+
+uint64_t SideStakeRegistry::GetLocalSideStakeRevision() const
+{
+    // Lock-free read of the monotonic revision. Each LOCAL mutation bumps it
+    // while holding cs_lock, so a reader here observes a value that is at least
+    // as new as any mutation ordered before this load (design §4.4). Callers that
+    // need a revision consistent with a snapshot read the revision BEFORE the
+    // snapshot, so an interleaving mutation only makes the revision
+    // conservatively low (an extra refetch), never stale.
+    return m_local_sidestake_revision.load();
 }
 
 void SideStakeRegistry::LoadLocalSideStakesFromConfig()
@@ -1116,6 +1143,12 @@ void SideStakeRegistry::LoadLocalSideStakesFromConfig()
     if (gArgs.GetBoolArg("-enablesidestaking") && !sum_allocation)
         LogPrintf("WARN: %s: enablesidestaking was set in config but nothing has been allocated for"
                   " distribution!", __func__);
+
+    // A config-driven reload mutated the local map. Per-entry NonContractAdd
+    // already bumps the revision, but a removal that only reseats a map entry to
+    // INACTIVE (above) does not, so bump once here to guarantee any reload
+    // advances the revision (over-counting coalesces on the consumer side).
+    ++m_local_sidestake_revision;
 }
 
 bool SideStakeRegistry::SaveLocalSideStakesToConfig()

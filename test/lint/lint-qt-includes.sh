@@ -120,9 +120,6 @@ src/qt/rpcconsole.cpp:rpc/protocol.h
 src/qt/rpcconsole.cpp:rpc/server.h
 src/qt/rpcconsole.h:net.h
 src/qt/sendcoinsdialog.cpp:wallet/coincontrol.h
-src/qt/sidestaketablemodel.cpp:gridcoin/support/enumbytes.h
-src/qt/sidestaketablemodel.cpp:node/ui_interface.h
-src/qt/sidestaketablemodel.h:gridcoin/sidestake.h
 src/qt/signverifymessagedialog.cpp:init.h
 src/qt/signverifymessagedialog.cpp:main.h
 src/qt/signverifymessagedialog.cpp:wallet/wallet.h

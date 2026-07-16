@@ -10,8 +10,9 @@
 
 #include "miner.h"
 
-OptionsModel::OptionsModel(QObject *parent) :
-    QAbstractListModel(parent)
+OptionsModel::OptionsModel(interfaces::SideStakeManager& sidestake_manager, QObject *parent) :
+    QAbstractListModel(parent),
+    m_sidestake_manager(sidestake_manager)
 {
     Init();
 }
@@ -85,7 +86,7 @@ void OptionsModel::Init()
         }
     }
 
-    m_sidestake_model = new SideStakeTableModel(this);
+    m_sidestake_model = new SideStakeTableModel(m_sidestake_manager, this);
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const

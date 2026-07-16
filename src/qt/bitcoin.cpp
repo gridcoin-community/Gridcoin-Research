@@ -21,6 +21,7 @@
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
@@ -352,9 +353,17 @@ int main(int argc, char *argv[])
     app.installNativeEventFilter(new WinShutdownMonitor());
 #endif
 
+    // The sidestake registry interface backs the OptionsModel's sidestake table
+    // model (Phase 1d-ii). Created here, before optionsModel, so it outlives it
+    // (reverse destruction order). It wraps the global registry, so it needs no
+    // node/wallet; Phase 2 will hand this out from the single process Init
+    // instead of a locally-minted one.
+    std::unique_ptr<interfaces::Init> gui_init = interfaces::MakeGridcoinInit();
+    std::unique_ptr<interfaces::SideStakeManager> sidestake_manager = gui_init->makeSideStakeManager();
+
     // Load the optionsModel. This has to be loaded before the translations, because the language selection is
     // a setting that can be stored in options.
-    OptionsModel optionsModel;
+    OptionsModel optionsModel(*sidestake_manager);
 
     // Get desired locale (e.g. "de_DE") from command line or use system locale
     QString lang_territory = QString::fromStdString(gArgs.GetArg("-lang", QLocale::system().name().toStdString()));

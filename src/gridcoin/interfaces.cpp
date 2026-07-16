@@ -4,25 +4,31 @@
 
 #include "interfaces/staking.h"
 #include "interfaces/mrc.h"
+#include "interfaces/sidestake.h"
 
 #include "amount.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
 #include "interfaces/handler.h"
+#include "key_io.h"
 #include "main.h"
 #include "node/ui_interface.h"
 #include "sync.h"
 #include "txmempool.h"
+#include "util/strencodings.h"
 #include "validation.h"
 #include "wallet/wallet.h"
 
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace interfaces {
@@ -283,6 +289,260 @@ private:
     CWallet* m_wallet;
 };
 
+//! In-process SideStakeManager over the global sidestake registry (Phase 1d-ii).
+//! Presents the unified mandatory+local table as value rows and moves all local
+//! add/edit/delete validation (formerly in SideStakeTableModel) behind command
+//! methods, so no GUI code holds a GRC::SideStake or calls GetSideStakeRegistry()
+//! directly. Mutations return the post-mutation local sidestake revision (design
+//! §4.4) for read-your-writes.
+class SideStakeManagerImpl : public SideStakeManager
+{
+public:
+    SideStakeSnapshot entries() override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        SideStakeSnapshot snap;
+
+        // Read the revision BEFORE the entries so an interleaving local mutation
+        // only makes it conservatively low (an extra refetch), never stale.
+        snap.local_revision = registry.GetLocalSideStakeRevision();
+
+        for (const auto& entry :
+             registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
+            SideStakeEntry row;
+            row.address = EncodeDestination(entry->GetDestination());
+            row.allocation_percent = entry->GetAllocation().ToPercent();
+            row.description = entry->GetDescription();
+            row.status = entry->StatusToString();
+            row.is_mandatory = entry->IsMandatory();
+            row.status_sort_key = StatusSortKey(*entry);
+
+            snap.entries.push_back(std::move(row));
+        }
+
+        return snap;
+    }
+
+    uint64_t localRevision() override
+    {
+        return GRC::GetSideStakeRegistry().GetLocalSideStakeRevision();
+    }
+
+    SideStakeEditResult addLocal(const std::string& address,
+                                 double allocation_percent,
+                                 const std::string& description) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        const CTxDestination destination = DecodeDestination(address);
+        if (!IsValidDestination(destination)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        // Duplicate local sidestake check against the registry (not a stale view).
+        if (!registry.Try(destination, GRC::SideStake::FilterFlag::LOCAL).empty()) {
+            return Result(SideStakeEditStatus::DUPLICATE_ADDRESS);
+        }
+
+        // Validate the percent before constructing GRC::Allocation, whose
+        // double -> int64_t conversion is undefined for NaN/Inf/out-of-range.
+        if (!ValidAllocationPercent(allocation_percent)) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const GRC::Allocation new_allocation(allocation_percent / 100.0);
+
+        // The new allocation plus all active entries must not exceed 100%.
+        if (TotalActiveAllocation(registry, nullptr) + new_allocation > 1) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const std::string sanitized = SanitizeString(description, SAFE_CHARS_CSV);
+        if (sanitized != description) {
+            return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
+        }
+
+        registry.NonContractAdd(GRC::LocalSideStake(destination,
+                                                    new_allocation,
+                                                    sanitized,
+                                                    GRC::LocalSideStake::LocalSideStakeStatus::ACTIVE));
+
+        return Result(SideStakeEditStatus::OK, EncodeDestination(destination));
+    }
+
+    SideStakeEditResult setAllocation(const std::string& address,
+                                      double allocation_percent) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        if (original.GetAllocation().ToPercent() == allocation_percent) {
+            return Result(SideStakeEditStatus::NO_CHANGES);
+        }
+
+        // Validate the percent before constructing GRC::Allocation (see addLocal).
+        if (!ValidAllocationPercent(allocation_percent)) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        const CTxDestination destination = original.GetDestination();
+        const GRC::Allocation new_allocation(allocation_percent / 100.0);
+
+        // The new allocation plus the OTHER active entries must not exceed 100%.
+        if (TotalActiveAllocation(registry, &destination) + new_allocation > 1) {
+            return Result(SideStakeEditStatus::INVALID_ALLOCATION);
+        }
+
+        registry.NonContractAdd(
+            GRC::LocalSideStake(destination,
+                                new_allocation,
+                                original.GetDescription(),
+                                std::get<GRC::LocalSideStake::Status>(original.GetStatus()).Value()),
+            true);
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    SideStakeEditResult setDescription(const std::string& address,
+                                       const std::string& description) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        if (original.GetDescription() == description) {
+            return Result(SideStakeEditStatus::NO_CHANGES);
+        }
+
+        const std::string sanitized = SanitizeString(description, SAFE_CHARS_CSV);
+        if (sanitized != description) {
+            return Result(SideStakeEditStatus::INVALID_DESCRIPTION);
+        }
+
+        registry.NonContractAdd(
+            GRC::LocalSideStake(original.GetDestination(),
+                                original.GetAllocation(),
+                                sanitized,
+                                std::get<GRC::LocalSideStake::Status>(original.GetStatus()).Value()),
+            true);
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    SideStakeEditResult deleteLocal(const std::string& address) override
+    {
+        GRC::SideStakeRegistry& registry = GRC::GetSideStakeRegistry();
+
+        GRC::SideStake original;
+        // Only local entries are deletable; a mandatory address is not found as
+        // LOCAL, so this also enforces the GUI's "no deleting mandatory" rule.
+        if (!FindLocal(registry, address, original)) {
+            return Result(SideStakeEditStatus::INVALID_ADDRESS);
+        }
+
+        registry.NonContractDelete(original.GetDestination());
+
+        return Result(SideStakeEditStatus::OK);
+    }
+
+    std::unique_ptr<Handler> handleRwSettingsUpdated(RwSettingsUpdatedFn fn) override
+    {
+        // Forward the payload-free callback directly. Deliberately does NOT read
+        // the revision here: this slot may run before the registry's own
+        // RwSettingsUpdated reload slot (slot order is not guaranteed), so an
+        // emission-time revision could predate the reload. The consumer reads
+        // localRevision() itself when handling the notification — see
+        // interfaces/sidestake.h.
+        return MakeSignalHandler(uiInterface.RwSettingsUpdated_connect(std::move(fn)));
+    }
+
+    std::unique_ptr<Handler> handleMandatorySideStakeChanged(MandatorySideStakeChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.MandatorySideStakeChanged_connect(std::move(fn)));
+    }
+
+private:
+    //! Build a result stamped with the current local sidestake revision.
+    static SideStakeEditResult Result(SideStakeEditStatus status, std::string address = {})
+    {
+        SideStakeEditResult res;
+        res.status = status;
+        res.address = std::move(address);
+        res.local_revision = GRC::GetSideStakeRegistry().GetLocalSideStakeRevision();
+        return res;
+    }
+
+    //! A well-formed allocation percentage: finite and within [0, 100]. Checked
+    //! before constructing GRC::Allocation, whose double -> int64_t conversion is
+    //! undefined behavior for NaN/Inf/out-of-range values (QString::toDouble can
+    //! yield inf, e.g. from "1e400").
+    static bool ValidAllocationPercent(double percent)
+    {
+        return std::isfinite(percent) && percent >= 0.0 && percent <= 100.0;
+    }
+
+    //! The Status-column sort key: mandatory statuses keep their enum value,
+    //! local statuses are shifted above the mandatory range (reproducing the
+    //! former SideStakeLessThan ordering).
+    static int StatusSortKey(const GRC::SideStake& entry)
+    {
+        if (entry.IsMandatory()) {
+            return static_cast<int>(
+                std::get<GRC::MandatorySideStake::Status>(entry.GetStatus()).Value());
+        }
+
+        return static_cast<int>(std::get<GRC::LocalSideStake::Status>(entry.GetStatus()).Value())
+               + static_cast<int>(GRC::MandatorySideStake::MandatorySideStakeStatus::OUT_OF_BOUND);
+    }
+
+    //! Total allocation of the active entries, optionally excluding one
+    //! destination (used when re-validating an edit of that entry).
+    static GRC::Allocation TotalActiveAllocation(GRC::SideStakeRegistry& registry,
+                                                 const CTxDestination* exclude)
+    {
+        GRC::Allocation total;
+
+        for (const auto& entry :
+             registry.ActiveSideStakeEntries(GRC::SideStake::FilterFlag::ALL, true)) {
+            if (exclude != nullptr && entry->GetDestination() == *exclude) {
+                continue;
+            }
+
+            total += entry->GetAllocation();
+        }
+
+        return total;
+    }
+
+    //! Look up an existing LOCAL sidestake by encoded address. Returns false if
+    //! the address is invalid or has no local entry.
+    static bool FindLocal(GRC::SideStakeRegistry& registry,
+                          const std::string& address,
+                          GRC::SideStake& out)
+    {
+        const CTxDestination destination = DecodeDestination(address);
+        if (!IsValidDestination(destination)) {
+            return false;
+        }
+
+        const auto existing = registry.Try(destination, GRC::SideStake::FilterFlag::LOCAL);
+        if (existing.empty()) {
+            return false;
+        }
+
+        out = *existing.front();
+        return true;
+    }
+};
+
 } // namespace
 
 std::unique_ptr<StakingStatus> MakeStakingStatus()
@@ -293,6 +553,11 @@ std::unique_ptr<StakingStatus> MakeStakingStatus()
 std::unique_ptr<MRC> MakeMRC(CWallet* wallet)
 {
     return std::make_unique<MRCImpl>(wallet);
+}
+
+std::unique_ptr<SideStakeManager> MakeSideStakeManager()
+{
+    return std::make_unique<SideStakeManagerImpl>();
 }
 
 } // namespace interfaces
