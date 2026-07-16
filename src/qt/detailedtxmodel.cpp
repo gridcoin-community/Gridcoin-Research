@@ -6,7 +6,7 @@
 
 #include "qt/transactiontablemodel.h"
 #include "qt/walletmodel.h"
-#include "qt/wallettxstore.h"
+#include "interfaces/wallet_tx_source.h"
 #include "util/system.h"
 
 #include <QTimer>
@@ -56,7 +56,7 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
     // runtime mutation path, behavior-identical to reading it repeatedly).
     GRC::FilterSpec spec;
     spec.show_orphans = gArgs.GetBoolArg("-showorphans", false);
-    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    interfaces::WalletTxSource& store = m_walletModel->txSource();
     store.registerView(GRC::VIEW_DETAILED, spec, GRC::TXCOL_DATE, GRC::TXSORT_DESC);
 
     // Seed a BOUNDED initial window into the cache (NOT count=-1: under the unlimited
@@ -115,7 +115,7 @@ void DetailedTxModel::sort(int column, Qt::SortOrder order)
     // Forward to the producer cursor; the resulting RowsReset refills this model
     // on the next drain. QTableView owns the header sort-indicator display. Kick
     // an immediate drain so the reorder lands now, not up to 500ms later (PR4-D).
-    m_walletModel->getTxStore().setViewSort(
+    m_walletModel->txSource().setViewSort(
         GRC::VIEW_DETAILED, column,
         order == Qt::AscendingOrder ? GRC::TXSORT_ASC : GRC::TXSORT_DESC);
     m_walletModel->requestEventDrainSoon();
@@ -123,7 +123,7 @@ void DetailedTxModel::sort(int column, Qt::SortOrder order)
 
 void DetailedTxModel::setFilter(const GRC::FilterSpec& spec)
 {
-    m_walletModel->getTxStore().setViewFilter(GRC::VIEW_DETAILED, spec);
+    m_walletModel->txSource().setViewFilter(GRC::VIEW_DETAILED, spec);
     m_walletModel->requestEventDrainSoon();   // reflect the filter immediately (PR4-D)
 }
 
@@ -132,7 +132,7 @@ QModelIndex DetailedTxModel::indexForTxid(const uint256& hash) const
     // Resolve over the producer, not the cached slice: a click-through can target a
     // row outside the window. rowForKey returns the accepted row in the live
     // filtered+sorted view, or -1 if absent/filtered.
-    const int row = m_walletModel->getTxStore().rowForKey(GRC::VIEW_DETAILED, hash, -1);
+    const int row = m_walletModel->txSource().rowForKey(GRC::VIEW_DETAILED, hash, -1);
     return row >= 0 ? index(row, 0) : QModelIndex();
 }
 
@@ -140,12 +140,12 @@ std::vector<TransactionRecord> DetailedTxModel::getAllRows() const
 {
     // CSV export must cover every matching row, not just the cached window — read
     // the full filtered+sorted set from the producer (cap-independent).
-    return m_walletModel->getTxStore().getAllRows(GRC::VIEW_DETAILED).records;
+    return m_walletModel->txSource().getAllRows(GRC::VIEW_DETAILED).records;
 }
 
 int DetailedTxModel::rowForKey(const uint256& hash, int idx) const
 {
-    return m_walletModel->getTxStore().rowForKey(GRC::VIEW_DETAILED, hash, idx);
+    return m_walletModel->txSource().rowForKey(GRC::VIEW_DETAILED, hash, idx);
 }
 
 bool DetailedTxModel::keyAt(int row, uint256& hash, int& idx) const
@@ -251,7 +251,7 @@ void DetailedTxModel::fetchWindow(int first, int count)
     // the flag and freeze the viewport permanently (PR5-B review: exception safety).
     struct Guard { bool& f; ~Guard() { f = false; } } guard{m_fetch_in_progress};
 
-    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    interfaces::WalletTxSource& store = m_walletModel->txSource();
     bool adopted = false;
     // Synchronous bounded retry: drain the queue FIRST so the cache's structural
     // seqno matches the store's high-water (GAP #2), then read + fill. The only
@@ -290,7 +290,7 @@ void DetailedTxModel::sinkDataChanged(int first, int count)
 
 void DetailedTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
-    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    interfaces::WalletTxSource& store = m_walletModel->txSource();
     for (const GRC::WalletEvent& ev : events) {
         const uint64_t seqno = ev.seqno;
         std::visit([&](auto&& payload) {

@@ -1,13 +1,14 @@
 #include "transactionview.h"
 
 #include "detailedtxmodel.h"
-#include "transactionrecord.h"
+#include "interfaces/wallet_tx_record.h"
 #include "walletmodel.h"
-#include "qt/wallettxstore.h"
+#include "interfaces/wallet_tx_source.h"
 #include "addresstablemodel.h"
 #include "transactiontablemodel.h"
 #include "bitcoinunits.h"
 #include "csvmodelwriter.h"
+#include "transactiondesc.h"
 #include "transactiondescdialog.h"
 #include "editaddressdialog.h"
 #include "optionsmodel.h"
@@ -525,7 +526,9 @@ void TransactionView::showDetails()
         QString html;
         if (m_detailedModel->keyAt(row, hash, idx))
         {
-            html = model->getTxStore().getRowDetail(hash, idx);
+            // The node fills a structured detail DTO; the HTML (and its
+            // translation) is rendered here, GUI-side (multiprocess design §4.1).
+            html = TransactionDesc::toHTML(model->txSource().getRowDetail(hash, idx));
         }
         // Always open the dialog: an empty html renders the "details unavailable"
         // fallback, so a double-click on an off-window/placeholder row (keyAt false)

@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_QT_TXORDER_H
-#define BITCOIN_QT_TXORDER_H
+#ifndef GRIDCOIN_WALLET_TXORDER_H
+#define GRIDCOIN_WALLET_TXORDER_H
 
 #include "uint256.h"
 
@@ -63,4 +63,4 @@ bool TxOrderLess(const TxOrderKey& a, const TxOrderKey& b);
 
 } // namespace GRC
 
-#endif // BITCOIN_QT_TXORDER_H
+#endif // GRIDCOIN_WALLET_TXORDER_H

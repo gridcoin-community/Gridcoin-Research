@@ -2,10 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef GRIDCOIN_QT_CURSOR_H
-#define GRIDCOIN_QT_CURSOR_H
+#ifndef GRIDCOIN_WALLET_CURSOR_H
+#define GRIDCOIN_WALLET_CURSOR_H
 
-#include "qt/txfilter.h"
+#include "interfaces/wallet_tx_filter.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -148,4 +148,4 @@ private:
 
 } // namespace GRC
 
-#endif // GRIDCOIN_QT_CURSOR_H
+#endif // GRIDCOIN_WALLET_CURSOR_H

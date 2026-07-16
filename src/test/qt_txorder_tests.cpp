@@ -12,7 +12,7 @@
 // so it is covered by ASan-GUI + isolated-testnet validation instead;
 // TransactionRecord itself was Qt-scrubbed and now compiles GUI-OFF too).
 
-#include <qt/txorder.h>
+#include <wallet/txorder.h>
 
 #include "uint256.h"
 

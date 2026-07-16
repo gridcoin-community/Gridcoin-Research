@@ -2,17 +2,16 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#ifndef BITCOIN_QT_WALLETTXSTORE_H
-#define BITCOIN_QT_WALLETTXSTORE_H
+#ifndef GRIDCOIN_WALLET_WALLETTXSTORE_H
+#define GRIDCOIN_WALLET_WALLETTXSTORE_H
 
-#include "qt/cursor.h"
-#include "qt/txorder.h"
-#include "qt/transactionrecord.h"
-#include "qt/wallet_event_queue.h"
+#include "interfaces/wallet_tx_channel.h"
+#include "interfaces/wallet_tx_record.h"
+#include "wallet/cursor.h"
+#include "wallet/txorder.h"
+#include "wallet/wallet_event_queue.h"
 #include "sync.h"
 #include "uint256.h"
-
-#include <QString>
 
 #include <cstddef>
 #include <cstdint>
@@ -41,30 +40,6 @@ namespace GRC {
 //!
 struct TxHashHasher {
     std::size_t operator()(const uint256& h) const { return static_cast<std::size_t>(h.GetUint64(0)); }
-};
-
-//!
-//! \brief Atomic result of a windowed read (getRows): the requested row slice
-//! plus the view's metadata, all sampled under the SAME cs_store hold.
-//!
-//! Returning the four together is the generalization of PR4-fix B to the PR5
-//! scroll path. A windowed consumer keeps two reconciliation channels: a
-//! STRUCTURAL channel (the virtual rowCount + the ordered Insert/Remove/Change/
-//! Reset delta stream) and a CONTENT channel (the scroll-driven slice fetch).
-//! The content fetch must observe the rowCount (\ref total_accepted), the
-//! cursor's sort/filter generation (\ref epoch) and the view's event high-water
-//! (\ref high_water) at the EXACT instant the rows were copied — a second,
-//! separately-locked call (the removed totalAccepted(viewId)) could observe a
-//! different store state and misalign the slice against the structural channel,
-//! dropping or double-counting a row (the PR4-fix B bug class). The consumer
-//! adopts a content fetch only when its \ref epoch and \ref high_water match the
-//! structural channel's, and NEVER advances the structural seqno from it.
-//!
-struct RowsResult {
-    std::vector<TransactionRecord> records; //!< the [first, first+count) slice (a copy)
-    int total_accepted = 0;                 //!< the view's full accepted count (virtual rowCount)
-    uint64_t epoch = 0;                      //!< cursor sort/filter generation at the read instant
-    uint64_t high_water = 0;                 //!< seqno of the last event emitted for the view at the read
 };
 
 //!
@@ -208,25 +183,24 @@ public:
     //! anchor-on-resort (windowed-model PR5-B). Pure read; no projector calls.
     int rowForKey(int viewId, const uint256& hash, int idx = -1);
 
-    //! Qt thread: full HTML transaction-detail for the record identified by
-    //! (\p hash, \p idx) — the double-click detail dialog. The consumer passes a
-    //! self-describing identity (read from its OWN cached record via
+    //! Qt thread: structured transaction-detail DTO for the record identified
+    //! by (\p hash, \p idx) — the double-click detail dialog. The consumer
+    //! passes a self-describing identity (read from its OWN cached record via
     //! DetailedTxModel::keyAt), NOT a view-relative row, so the result is
     //! drift-free even if the consumer's drain queue lags the producer cursor
     //! (the absolute row a stale cursor maps could be a neighbouring tx). \p idx
     //! < 0 matches SOME part sharing \p hash — the m_by_hash iteration order is
     //! unspecified — which is fine for this defensive fallback only because the
     //! real path (keyAt) always supplies a concrete idx. Resolves the part's vout
-    //! under cs_store (the leaf), RELEASES cs_store, then formats under
-    //! LOCK2(cs_main, cs_wallet) — the same lock pair the deleted
-    //! TransactionTablePriv::describe() took on the Qt thread, relocated to the
-    //! authoritative producer so it is the node-side call at the multiprocess
-    //! split (#2937). IMPORTANT: in-process this still takes the wallet locks on
-    //! the Qt thread, so it RELOCATES (does not remove) the detail-path stall;
-    //! only deleting the lazy index() refresh takes the render thread fully off
-    //! cs_main/cs_wallet. Returns an empty QString for an unknown key or a tx no
+    //! under cs_store (the leaf), RELEASES cs_store, then fills the DTO under
+    //! LOCK2(cs_main, cs_wallet) — the node-side call at the multiprocess split
+    //! (#2937); rendering (and translation) is the GUI's job (design §4.1).
+    //! IMPORTANT: in-process this still takes the wallet locks on the Qt
+    //! thread, so it RELOCATES (does not remove) the detail-path stall; only
+    //! deleting the lazy index() refresh takes the render thread fully off
+    //! cs_main/cs_wallet. Returns found == false for an unknown key or a tx no
     //! longer in the wallet (the dialog then shows a fallback string).
-    QString getRowDetail(const uint256& hash, int idx);
+    WalletTxDetail getRowDetail(const uint256& hash, int idx);
 
     //!
     //! \brief Qt thread: rebuild the store from the wallet and return a full
@@ -378,4 +352,4 @@ private:
 
 } // namespace GRC
 
-#endif // BITCOIN_QT_WALLETTXSTORE_H
+#endif // GRIDCOIN_WALLET_WALLETTXSTORE_H

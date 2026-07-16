@@ -5,8 +5,8 @@
 #ifndef BITCOIN_QT_OVERVIEWTXMODEL_H
 #define BITCOIN_QT_OVERVIEWTXMODEL_H
 
-#include "qt/transactionrecord.h"
-#include "qt/wallet_event_queue.h"
+#include "interfaces/wallet_tx_record.h"
+#include "interfaces/wallet_tx_channel.h"
 #include "uint256.h"
 
 #include <QAbstractListModel>

@@ -1,7 +1,7 @@
 #ifndef BITCOIN_QT_TRANSACTIONVIEW_H
 #define BITCOIN_QT_TRANSACTIONVIEW_H
 
-#include "qt/txfilter.h"
+#include "interfaces/wallet_tx_filter.h"
 #include "uint256.h"
 
 #include <QFrame>

@@ -245,13 +245,21 @@ add_library(gridcoin_util STATIC
     util/tokenpipe.cpp
     validation.cpp
     validationinterface.cpp
+    wallet/cursor.cpp
     wallet/db.cpp
     wallet/diagnose.cpp
     wallet/interfaces.cpp
     wallet/rpcdump.cpp
     wallet/rpcwallet.cpp
+    wallet/transactionrecord.cpp
+    wallet/txdetail.cpp
+    wallet/txfilter.cpp
+    wallet/txorder.cpp
     wallet/wallet.cpp
+    wallet/wallet_event_queue.cpp
+    wallet/wallet_tx_source.cpp
     wallet/walletdb.cpp
+    wallet/wallettxstore.cpp
     wallet/walletutil.cpp
 )
 

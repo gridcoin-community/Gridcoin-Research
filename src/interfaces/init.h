@@ -7,11 +7,14 @@
 
 #include <memory>
 
+class CWallet;
+
 namespace interfaces {
 
 class Node;
 class StakingStatus;
 class Wallet;
+class WalletTxSource;
 
 //! Per-process bootstrap interface: hands out the other interfaces. In the
 //! monolithic build MakeGridcoinInit() returns an implementation whose
@@ -37,6 +40,13 @@ public:
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.
     virtual std::unique_ptr<Wallet> makeWallet();
+
+    //! Returns a transaction-table source over \p wallet (the windowed
+    //! tx-table store, its worker, and the producer subscriptions). The
+    //! returned object owns the node-side machinery, so a headless process
+    //! that never calls this pays nothing. Returns nullptr for a null wallet.
+    //! \p wallet must outlive the returned object.
+    virtual std::unique_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet);
 };
 
 //! Return the monolithic-build Init implementation.

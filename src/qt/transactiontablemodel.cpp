@@ -1,6 +1,6 @@
 #include "transactiontablemodel.h"
 #include "guiutil.h"
-#include "transactionrecord.h"
+#include "interfaces/wallet_tx_record.h"
 #include "guiconstants.h"
 #include "walletmodel.h"
 #include "optionsmodel.h"
@@ -70,7 +70,7 @@ public:
         // for this replica. The datetime-display cutoff is applied store-side.
         const bool fLimitTxnDisplay = walletModel->getOptionsModel()->getLimitTxnDisplay();
         const int64_t limitTxnDateTime = walletModel->getOptionsModel()->getLimitTxnDateTime();
-        cachedWallet = walletModel->getTxStore().reloadAndSnapshot(fLimitTxnDisplay, limitTxnDateTime);
+        cachedWallet = walletModel->txSource().reloadAndSnapshot(fLimitTxnDisplay, limitTxnDateTime);
     }
 
 

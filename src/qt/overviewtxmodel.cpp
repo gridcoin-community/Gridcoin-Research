@@ -4,10 +4,10 @@
 
 #include "qt/overviewtxmodel.h"
 
-#include "qt/txfilter.h"
+#include "interfaces/wallet_tx_filter.h"
 #include "qt/transactiontablemodel.h"
 #include "qt/walletmodel.h"
-#include "qt/wallettxstore.h"
+#include "interfaces/wallet_tx_source.h"
 
 #include <algorithm>
 #include <type_traits>
@@ -26,7 +26,7 @@ OverviewTxModel::OverviewTxModel(WalletModel* walletModel, int initialLimit, QOb
     GRC::FilterSpec spec;
     spec.show_inactive = false;
     spec.limit_rows = m_limit;
-    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    interfaces::WalletTxSource& store = m_walletModel->txSource();
     store.registerView(GRC::VIEW_OVERVIEW, spec, GRC::TXCOL_STATUS, GRC::TXSORT_DESC);
 
     // registerView pushed a RowsReset that the next drain will deliver, but also
@@ -72,7 +72,7 @@ void OverviewTxModel::setLimit(int limit)
     m_limit = limit;
     // The cursor recomputes its served window and emits the boundary Insert/Remove
     // events, which arrive on the next drain.
-    m_walletModel->getTxStore().setViewLimit(GRC::VIEW_OVERVIEW, limit);
+    m_walletModel->txSource().setViewLimit(GRC::VIEW_OVERVIEW, limit);
 }
 
 uint256 OverviewTxModel::txidAt(int row) const
@@ -85,7 +85,7 @@ uint256 OverviewTxModel::txidAt(int row) const
 
 void OverviewTxModel::applyEventBatch(const std::vector<GRC::WalletEvent>& events)
 {
-    GRC::WalletTxStore& store = m_walletModel->getTxStore();
+    interfaces::WalletTxSource& store = m_walletModel->txSource();
     for (const GRC::WalletEvent& ev : events) {
         const uint64_t seqno = ev.seqno;
         std::visit([&](auto&& payload) {

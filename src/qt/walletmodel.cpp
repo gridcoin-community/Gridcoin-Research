@@ -2,25 +2,22 @@
 #include "guiconstants.h"
 #include "optionsmodel.h"
 #include "addresstablemodel.h"
-#include "transactionrecord.h"
 #include "transactiontablemodel.h"
 
-#include "node/ui_interface.h"
-#include "wallet/wallet.h"
-#include "main.h"
+#include "node/ui_interface.h" /* for ChangeType */
 #include <key_io.h>
-#include "util.h"
+#include "util.h" /* for LogPrint / LogPrintf */
 
 #include <QSet>
 #include <QTimer>
 
 #include <cassert>
 
-WalletModel::WalletModel(interfaces::Wallet& wallet, CWallet* core_wallet,
-                         OptionsModel* optionsModel, QObject* parent)
+WalletModel::WalletModel(interfaces::Wallet& wallet, interfaces::WalletTxSource& tx_source,
+                         CWallet* core_wallet, OptionsModel* optionsModel, QObject* parent)
          : QObject(parent)
          , m_wallet(wallet)
-         , m_core_wallet(core_wallet)
+         , m_tx_source(tx_source)
          , optionsModel(optionsModel)
          , addressTableModel(nullptr)
          , transactionTableModel(nullptr)
@@ -31,33 +28,28 @@ WalletModel::WalletModel(interfaces::Wallet& wallet, CWallet* core_wallet,
          , cachedNumTransactions(0)
          , cachedEncryptionStatus(Unencrypted)
          , cachedNumBlocks(0)
-         , m_txStore(core_wallet, m_event_queue)
 {
     addressTableModel = new AddressTableModel(core_wallet, this);
     // TransactionTableModel's ctor performs the initial load via
-    // m_txStore.reloadAndSnapshot(); m_txStore is already constructed (init
-    // list) and no producer can run yet — subscribeToCoreSignals() is called
-    // below, after the model exists.
+    // txSource().reloadAndSnapshot(). The source's store-worker is already
+    // running (started in the WalletTxSource ctor, before this model was
+    // constructed), and its producers are already subscribed — reloadAndSnapshot
+    // quiesces the worker and rebuilds from the wallet, so any event enqueued in
+    // the window between source creation and this snapshot is superseded by the
+    // rebuild.
     transactionTableModel = new TransactionTableModel(core_wallet, this);
 
-    // Drain the producer→GUI event queue at a steady cadence. 500ms is
+    // Drain the producer→GUI event stream at a steady cadence. 500ms is
     // imperceptible for transaction-list updates while still giving the
     // queue room to absorb bursts (e.g. a reorg flood) without per-event
     // round-trips to the Qt event loop. This single timer also drives the
     // balance / row-confirmation refresh that used to be done by a
     // separate 4-second pollBalanceChanged timer; refresh now fires off
-    // ChainTipChanged events pushed by the producer-side subscriber to
-    // uiInterface.NotifyBlocksChanged.
+    // ChainTipChanged events the source pushes from its NotifyBlocksChanged
+    // subscriber.
     eventDrainTimer = new QTimer(this);
     connect(eventDrainTimer, &QTimer::timeout, this, &WalletModel::drainEventQueue);
     eventDrainTimer->start(MODEL_EVENT_DRAIN_INTERVAL);
-
-    // Launch the store-worker now — before producers can fire (subscribe is
-    // below) — so it is ready to drain the intake queue off the core locks
-    // (PR2.5). The initial reloadAndSnapshot in the TransactionTableModel ctor
-    // above ran with no worker yet; that is fine, it skips the worker barrier
-    // when the worker has not started.
-    m_txStore.start();
 
     subscribeToCoreSignals();
 }
@@ -178,7 +170,7 @@ void WalletModel::drainEventQueue()
     // cannot freeze the Qt main thread in a single apply pass. If the queue
     // still has events after this batch, re-arm immediately (see below)
     // instead of waiting MODEL_EVENT_DRAIN_INTERVAL for the periodic tick.
-    auto events = m_event_queue.drain(MODEL_EVENT_DRAIN_MAX_BATCH);
+    auto events = m_tx_source.drainEvents(MODEL_EVENT_DRAIN_MAX_BATCH);
     if (events.empty()) {
         return;
     }
@@ -280,7 +272,7 @@ void WalletModel::updateAddressBook(const QString &address, const QString &label
     // re-drives the cursors off the GUI thread.
     const QString current = addressTableModel
         ? addressTableModel->labelForAddress(address) : label;
-    getTxStore().enqueueAddressBookChange(address.toStdString(), current.toStdString());
+    txSource().noteAddressBookChanged(address.toStdString(), current.toStdString());
 }
 
 bool WalletModel::validateAddress(const QString &address)
@@ -428,184 +420,12 @@ bool WalletModel::changePassphrase(const SecureString &oldPass, const SecureStri
     return m_wallet.changeWalletPassphrase(oldPass, newPass);
 }
 
-// Producer-side handlers for the tx-table core signals (the Phase 1c-ii
-// leg; the status and address-book notifications arrive through
-// interfaces::Wallet handlers registered in subscribeToCoreSignals).
-static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, const uint256 &hash, ChangeType status)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
-{
-    LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
-
-    // Producer-side push into the WalletEventQueue. CT_NEW and CT_UPDATED are
-    // handled identically: the producer looks up the wtx, applies the
-    // wtx-level visibility checks (orphan coinstake/coinbase / legacy
-    // OP_RETURN — datetime filter is consumer-side), and pushes either a
-    // TxAdded with decomposed records or a TxRemoved with just the hash.
-    // The consumer's binary-search-by-hash insert path de-dupes a TxAdded
-    // when the tx is already in cachedWallet, and the remove path no-ops
-    // when the tx isn't.
-    //
-    // The unified CT_NEW/CT_UPDATED handling matters because the wallet
-    // fires CT_UPDATED (not CT_NEW) when a tx already in mapWallet is
-    // re-validated against a fresh chain — e.g. during an IBD that follows
-    // a chainstate wipe but retains wallet.dat. If we only acted on CT_NEW,
-    // the GUI's cachedWallet would never see those txs become visible
-    // again. It also covers the steady-state case where a previously
-    // filtered-out tx (e.g. an orphan coinstake) becomes valid: CT_UPDATED
-    // fires, the producer's showTransaction now returns true, and the
-    // consumer inserts the row. The reverse direction (tx falls out of
-    // visibility) is covered by pushing TxRemoved when showTransaction
-    // returns false.
-    //
-    // Lock state at this point:
-    //   The CT_NEW / CT_UPDATED / CT_UPDATING branch needs BOTH cs_main and
-    //   cs_wallet held:
-    //     - cs_wallet — to look up mapWallet[hash] and run
-    //       decomposeTransaction (which recursively calls IsMine()).
-    //     - cs_main   — TransactionRecord::showTransaction() calls
-    //       CWalletTx::IsInMainChain(), which is EXCLUSIVE_LOCKS_REQUIRED
-    //       (cs_main). (The thread-safety analyzer does not flag this
-    //       cross-TU because GetDepthInMainChain's annotation lives on the
-    //       definition in main.cpp, not the header declaration — so the
-    //       requirement is verified here by hand, not by the compiler.)
-    //
-    //   All four CT_NEW / CT_UPDATED callsites hold both locks, verified by
-    //   audit:
-    //     wallet.cpp:572  AddToWallet            — EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
-    //     wallet.cpp:2400 CommitTransaction      — LOCK2(cs_main, cs_wallet)
-    //     wallet.cpp:458  WalletUpdateSpent      — caller AddToWallet / AddToWalletIfInvolvingMe, both EXCLUSIVE_LOCKS_REQUIRED(cs_main); LOCK(cs_wallet)
-    //     wallet.cpp:475  WalletUpdateSpent      — same
-    //   This function is annotated EXCLUSIVE_LOCKS_REQUIRED(cs_main,
-    //   wallet->cs_wallet) so the Clang thread-safety analyzer accepts the
-    //   AssertLockHeld() calls and the mapWallet reads in the CT_NEW /
-    //   CT_UPDATED branch. The AssertLockHeld() calls additionally enforce
-    //   the requirement at runtime in DEBUG_LOCKORDER builds.
-    //
-    //   CT_DELETED callsites (main.cpp:1290, wallet.cpp:1349) DO NOT hold
-    //   either lock — the tx has already been erased. The TxRemoved payload
-    //   carries only the hash, so no wallet lookup or showTransaction call
-    //   is needed; that branch touches nothing the annotation guards. The
-    //   EXCLUSIVE_LOCKS_REQUIRED annotation therefore over-claims for the
-    //   CT_DELETED path — harmless, because the handler is invoked only
-    //   through boost::signals2, which the analyzer cannot trace, so no
-    //   caller is ever checked against the annotation; its sole effect is
-    //   to satisfy the analyzer inside the CT_NEW / CT_UPDATED branch.
-    switch (status) {
-    case CT_NEW:
-    case CT_UPDATED:
-    case CT_UPDATING: {
-        AssertLockHeld(cs_main);
-        AssertLockHeld(wallet->cs_wallet);
-        auto it = wallet->mapWallet.find(hash);
-        if (it == wallet->mapWallet.end()) {
-            // Tx isn't in mapWallet — only happens if the notification
-            // raced with an erasure. Push TxRemoved to keep the consumer
-            // in sync.
-            LogPrint(BCLog::LogFlags::VERBOSE,
-                     "NotifyTransactionChanged: %s status=%d but tx not in mapWallet "
-                     "— removing from store",
-                     hash.GetHex(), status);
-            walletmodel->getTxStore().enqueueRemove(hash);
-            break;
-        }
-        const CWalletTx& wtx = it->second;
-
-        bool visible = TransactionRecord::showTransaction(wtx, false, 0);
-
-        // showTransaction() hides a generated (coinstake/coinbase) tx whose
-        // block is not yet in the main chain. This handler, however, runs
-        // synchronously inside block connection: the wallet is notified of a
-        // block's transactions before SetBestChain advances pindexBest (see
-        // main.cpp), so the block being connected — and its own coinstake —
-        // transiently read as orphan. That is a false negative: the block is
-        // a split-second from becoming the tip, and without this guard its
-        // coinstake gets a TxRemoved and never enters the GUI model.
-        //
-        // Detect exactly that window: a block sitting directly on the current
-        // tip but not yet the tip itself is the one being connected right
-        // now. A genuine orphan has pprev != pindexBest and stays hidden, so
-        // -showorphans semantics are unchanged. For a current-era coinstake
-        // the orphan check is showTransaction()'s only false path, so this
-        // override cannot un-hide a tx filtered for any other reason.
-        if (!visible && (wtx.IsCoinStake() || wtx.IsCoinBase())) {
-            auto bi = mapBlockIndex.find(wtx.hashBlock);
-            if (bi != mapBlockIndex.end() && bi->second != nullptr
-                    && !bi->second->IsInMainChain()
-                    && bi->second->pprev == pindexBest) {
-                LogPrint(BCLog::LogFlags::VERBOSE,
-                         "NotifyTransactionChanged: %s is in the block being "
-                         "connected — keeping visible despite transient orphan state",
-                         hash.GetHex());
-                visible = true;
-            }
-        }
-
-        if (visible) {
-            // Decompose under the locks already held, compute per-row status
-            // producer-side (updateStatus requires cs_main, held here), then
-            // ENQUEUE to the store-worker (PR2.5). The worker applies the datetime
-            // cutoff, de-dupes, computes positions, maintains the per-view cursors
-            // and emits events off the core locks; the enqueue itself is O(1).
-            // Status is computed here so the off-lock cursors can filter/sort by
-            // it without re-touching the wallet.
-            std::vector<TransactionRecord> recs =
-                TransactionRecord::decomposeTransaction(wallet, wtx);
-            if (!recs.empty()) {
-                for (TransactionRecord& rec : recs) {
-                    rec.updateStatus(wtx);
-                    rec.populateDisplayLabel(*wallet);  // address-book label snapshot (PR4)
-                }
-                // CT_NEW is a fresh insert; CT_UPDATED / CT_UPDATING is an upsert
-                // of an existing tx (e.g. a confirmation) — the store updates it in
-                // place and repositions it in any status-sorted cursor.
-                if (status == CT_NEW) {
-                    walletmodel->getTxStore().enqueueInsert(std::move(recs));
-                } else {
-                    walletmodel->getTxStore().enqueueUpsert(std::move(recs));
-                }
-            }
-        } else {
-            // Tx is genuinely filtered out (a real orphan coinstake, or a
-            // legacy non-IsFromMe OP_RETURN). Ensure the store removes the rows
-            // if they were previously visible — a no-op if absent.
-            walletmodel->getTxStore().enqueueRemove(hash);
-        }
-        break;
-    }
-    case CT_DELETED:
-        walletmodel->getTxStore().enqueueRemove(hash);
-        break;
-    }
-}
-
-static void NotifyBlocksChangedForWallet(WalletModel *walletmodel,
-                                         bool /*syncing*/,
-                                         int height,
-                                         int64_t best_time,
-                                         uint32_t /*target_bits*/)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    // Fired from main.cpp::SetBestChain (under cs_main) after every chain
-    // tip advance — connect, disconnect, or reorg. Pushes a lightweight
-    // marker into the event queue. The Qt-side drain handler reacts by
-    // re-running the existing (rate-limited) balance recompute path. This
-    // replaces the 4-second pollBalanceChanged poll that used to compare
-    // nBestHeight to a cached copy on a timer.
-    walletmodel->getEventQueue().push(GRC::ChainTipChangedPayload{height, best_time});
-
-    // Refresh per-row confirmation/maturity status for the bounded set of
-    // height-volatile records and re-drive the cursors (windowed-model PR4-A).
-    // Runs INLINE here — we already hold cs_main, so the store can take
-    // cs_wallet (recursive) + cs_store in canonical order with no store-worker
-    // involvement (the worker must stay cs_main/cs_wallet-free or it would
-    // deadlock reloadAndSnapshot's park protocol). The work is O(volatile), so a
-    // per-block refresh on the validation thread is bounded; the cursor
-    // reposition cost is O(volatile × view_index) until PR5 windowing shrinks the
-    // per-view index. Restores the per-block status advance the deleted proxy got
-    // from TransactionTableModel::index()'s lazy updateStatus.
-    walletmodel->getTxStore().applyChainTipRefresh();
-}
-
+// The tx-table producer-side handlers (NotifyTransactionChanged /
+// NotifyBlocksChangedForWallet) and their subscriptions moved node-side into
+// the WalletTxSource in Phase 1c-ii, so this model no longer touches the raw
+// core signals — it drives the source's up-channel and drains its event
+// stream. The status and address-book notifications still arrive through
+// interfaces::Wallet handlers registered in subscribeToCoreSignals().
 void WalletModel::subscribeToCoreSignals()
 {
     // Register notification handlers, retaining each so it is severed in
@@ -637,27 +457,18 @@ void WalletModel::subscribeToCoreSignals()
                                       Q_ARG(int, status));
         }));
 
-    // The tx-table producer wiring stays on the raw core signals until the
-    // store/event-queue machinery migrates behind interfaces::WalletTxSource
-    // (Phase 1c-ii) — the producer runs under the emitting thread's locks by
-    // design (it decomposes transactions in place).
-    m_handlers.emplace_back(m_core_wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this,
-                                                         boost::placeholders::_1, boost::placeholders::_2,
-                                                         boost::placeholders::_3)));
-    m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(boost::bind(NotifyBlocksChangedForWallet, this,
-                                                       boost::placeholders::_1, boost::placeholders::_2,
-                                                       boost::placeholders::_3, boost::placeholders::_4)));
+    // The tx-table producer wiring (NotifyTransactionChanged /
+    // NotifyBlocksChanged) now lives node-side in the WalletTxSource, wired in
+    // its constructor; this model only drains the source's event stream.
 }
 
 void WalletModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from wallet: clearing the retained connections runs
-    // each scoped_connection's (and interfaces::Handler's) destructor, which
-    // disconnects it. This also covers the uiInterface.NotifyBlocksChanged
-    // connection, which the previous hand-written disconnects missed and
-    // leaked (issue #3129 follow-up).
+    // Disconnect signals from wallet: clearing the retained handlers runs each
+    // interfaces::Handler's destructor, which disconnects it. The tx-table
+    // producer connections severed here in earlier phases now live in the
+    // WalletTxSource and are severed by its destructor.
     m_wallet_handlers.clear();
-    m_handlers.clear();
 }
 
 // WalletModel::UnlockContext implementation

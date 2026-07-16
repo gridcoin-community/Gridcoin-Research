@@ -22,6 +22,7 @@
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
+#include "interfaces/wallet_tx_source.h"
 #include "init.h"
 #include "node/ui_interface.h"
 #include "qtipcserver.h"
@@ -661,9 +662,18 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                     // Shutdown()/thread-teardown path still runs.
                     throw std::runtime_error("wallet interface unavailable after init");
                 }
+                // The windowed tx-table source (its store, worker thread, and
+                // producer subscriptions). Owned here so it outlives the
+                // WalletModel that drives it and is torn down — worker joined,
+                // producers severed — before Shutdown() destroys the wallet.
+                std::unique_ptr<interfaces::WalletTxSource> wallet_tx_source =
+                    interface_init->makeWalletTxSource(pwalletMain);
+                if (!wallet_tx_source) {
+                    throw std::runtime_error("wallet tx source unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
-                WalletModel walletModel(*wallet, pwalletMain, &optionsModel);
+                WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
                 MRCModel mrcModel(&walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(clientModel, optionsModel, walletModel);
@@ -701,6 +711,17 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.hide();
                 window.setClientModel(nullptr);
                 window.setWalletModel(nullptr);
+                // Lifetime note (Phase 1c-ii): the per-view tx-table sub-models
+                // (OverviewTxModel, DetailedTxModel) are destroyed with `window`
+                // at block exit below — AFTER walletModel and wallet_tx_source
+                // are gone. This is safe only because those sub-models have no
+                // destructor that reaches back through walletModel->txSource()
+                // (and no Qt event loop runs after app.exec() returns, so no
+                // slot fires on them). Phase 1c-ii-c adds unregisterView on view
+                // teardown; when it does, setWalletModel(nullptr) must first
+                // detach the sub-models (BitcoinGUI currently skips that on a
+                // null model), or the unregisterView call will dereference the
+                // already-destroyed source here.
                 window.setResearcherModel(nullptr);
                 // Clear the voting model BEFORE the enclosing block exits and
                 // destroys the stack-allocated VotingModel: this propagates to

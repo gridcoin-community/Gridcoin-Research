@@ -57,16 +57,16 @@ add_executable(test_gridcoin
     # suite. The core has zero Qt dependencies, so it compiles into the
     # GUI-OFF test binary directly — landing the GUI predicate logic in the
     # one configuration CI exercises.
-    ${CMAKE_SOURCE_DIR}/src/qt/txfilter.cpp
+    ${CMAKE_SOURCE_DIR}/src/wallet/txfilter.cpp
     qt_txfilter_tests.cpp
     # Qt-free transaction ordering core (src/qt/txorder.cpp) + its unit suite:
     # the position/clustering logic the producer-side WalletTxStore relies on,
     # tested in the GUI-OFF configuration CI exercises.
-    ${CMAKE_SOURCE_DIR}/src/qt/txorder.cpp
+    ${CMAKE_SOURCE_DIR}/src/wallet/txorder.cpp
     qt_txorder_tests.cpp
     # Qt-free per-view cursor (src/qt/cursor.cpp) + its unit suite: the
     # view_index-maintenance arithmetic (windowed-model PR3), tested GUI-OFF.
-    ${CMAKE_SOURCE_DIR}/src/qt/cursor.cpp
+    ${CMAKE_SOURCE_DIR}/src/wallet/cursor.cpp
     qt_cursor_tests.cpp
     # Qt-free windowed-table reconciliation core (src/qt/windowcache.h, a
     # header-only template — no .cpp) + its unit suite: the consumer-side
@@ -76,8 +76,17 @@ add_executable(test_gridcoin
     # Wallet-transaction DTOs (src/qt/transactionrecord.cpp), Qt-scrubbed for
     # the multiprocess boundary (Phase 1c-ii) + smoke suite. Compiling the TU
     # into the GUI-OFF binary pins the Qt-freedom the node-side source needs.
-    ${CMAKE_SOURCE_DIR}/src/qt/transactionrecord.cpp
+    ${CMAKE_SOURCE_DIR}/src/wallet/transactionrecord.cpp
     qt_transactionrecord_tests.cpp
+    # Qt-free wallet event queue (src/wallet/wallet_event_queue.cpp) unit suite:
+    # the MPSC intake drain/ordering + multi-producer seqno-density contract. The
+    # core is already in gridcoin_util, so only the suite is listed here (GUI-OFF).
+    qt_wallet_event_queue_tests.cpp
+    # Qt-free store-worker / double-queue (src/wallet/wallettxstore.cpp) unit
+    # suite: the worker's drain/ordering/concurrency + clean shutdown and the
+    # null-wallet-safe getRowDetail early-returns. Core lives in gridcoin_util,
+    # so only the suite is listed here (GUI-OFF).
+    qt_wallettxstore_tests.cpp
     random_tests.cpp
     rpc_tests.cpp
     rpchelpman_tests.cpp

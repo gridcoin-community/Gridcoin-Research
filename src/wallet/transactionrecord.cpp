@@ -1,4 +1,4 @@
-#include "transactionrecord.h"
+#include "interfaces/wallet_tx_record.h"
 #include "wallet/wallet.h"
 #include <key_io.h>
 

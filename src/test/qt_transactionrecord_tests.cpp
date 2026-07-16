@@ -11,7 +11,7 @@
 // semantics the marshalability static_asserts promise and the decompose
 // entry point's degenerate path.
 
-#include <qt/transactionrecord.h>
+#include <interfaces/wallet_tx_record.h>
 
 #include "sync.h"
 #include "uint256.h"
