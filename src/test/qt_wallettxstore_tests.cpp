@@ -60,6 +60,38 @@ void waitForQueue(WalletEventQueue& q, std::size_t expected)
     }
 }
 
+//! True if the event's payload carries the given viewId. All payload variants
+//! except ChainTipChangedPayload are per-view and stamp a viewId (C++17: no
+//! `requires`, so match the concrete types explicitly).
+bool eventHasViewId(const GRC::WalletEvent& ev, int viewId)
+{
+    if (const auto* p = std::get_if<GRC::RowsInsertedPayload>(&ev.payload))   return p->viewId == viewId;
+    if (const auto* p = std::get_if<GRC::RowsRemovedPayload>(&ev.payload))    return p->viewId == viewId;
+    if (const auto* p = std::get_if<GRC::RowsResetPayload>(&ev.payload))      return p->viewId == viewId;
+    if (const auto* p = std::get_if<GRC::RowCountChangedPayload>(&ev.payload))return p->viewId == viewId;
+    if (const auto* p = std::get_if<GRC::RowsChangedPayload>(&ev.payload))    return p->viewId == viewId;
+    return false;
+}
+
+//! Does any event in the batch belong to the given view?
+bool batchHasViewId(const std::vector<GRC::WalletEvent>& batch, int viewId)
+{
+    for (const auto& ev : batch) {
+        if (eventHasViewId(ev, viewId)) return true;
+    }
+    return false;
+}
+
+//! A fully-permissive view filter: show_orphans (and the default show_inactive)
+//! accept every row regardless of status, so a synthetic makeRec record is
+//! guaranteed to pass the cursor and produce a per-view event.
+GRC::FilterSpec permissiveSpec()
+{
+    GRC::FilterSpec spec;
+    spec.show_orphans = true;
+    return spec;
+}
+
 } // anonymous namespace
 
 BOOST_AUTO_TEST_SUITE(qt_wallettxstore_tests)
@@ -202,6 +234,63 @@ BOOST_AUTO_TEST_CASE(getRowDetailWrongIdxReturnsEmpty)
     BOOST_CHECK(q.size() >= 1);
 
     BOOST_CHECK(!store.getRowDetail(h, 5).found);
+}
+
+BOOST_AUTO_TEST_CASE(unregisterViewStopsCursorEvents)
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    // Register a permissive VIEW_OVERVIEW cursor. registerView pushes a Reset
+    // SYNCHRONOUSLY on this thread; drain it so it cannot satisfy a later
+    // waitForQueue or bleed into a batch we assert on (a Reset also carries
+    // viewId==VIEW_OVERVIEW, which would make the insert assertion below vacuous).
+    store.registerView(GRC::VIEW_OVERVIEW, permissiveSpec(), GRC::TXCOL_DATE, GRC::TXSORT_DESC);
+    q.drain();
+
+    // An insert while the view is registered drives the cursor. The worker
+    // produces exactly two events — the native VIEW_FULL RowsInserted and the
+    // VIEW_OVERVIEW cursor delta — under one cs_store hold. Wait for BOTH so the
+    // insert is fully applied (the cursor drive complete) before we assert or
+    // unregister; then the VIEW_OVERVIEW event genuinely proves the record passed
+    // the filter and the cursor is live.
+    store.enqueueInsert(std::vector<TransactionRecord>{makeRec(hashOf(1), 1000, 0)});
+    waitForQueue(q, 2);
+    auto batch1 = q.drain();
+    BOOST_CHECK(batchHasViewId(batch1, GRC::VIEW_FULL));
+    BOOST_CHECK(batchHasViewId(batch1, GRC::VIEW_OVERVIEW));
+
+    // Drop the view. The first insert is fully drained above, so nothing from it
+    // can bleed into the next batch. A subsequent identical insert must still
+    // drive the native VIEW_FULL stream but emit NOTHING for the now-unregistered
+    // VIEW_OVERVIEW.
+    store.unregisterView(GRC::VIEW_OVERVIEW);
+    store.enqueueInsert(std::vector<TransactionRecord>{makeRec(hashOf(2), 1001, 0)});
+    waitForQueue(q, 1);
+    auto batch2 = q.drain();
+    BOOST_CHECK(batchHasViewId(batch2, GRC::VIEW_FULL));
+    BOOST_CHECK(!batchHasViewId(batch2, GRC::VIEW_OVERVIEW));
+}
+
+BOOST_AUTO_TEST_CASE(unregisterViewIsIdempotent)
+{
+    WalletEventQueue q;
+    WalletTxStore store(nullptr, q);
+    store.start();
+
+    // Unregistering a never-registered view is a harmless no-op.
+    store.unregisterView(GRC::VIEW_OVERVIEW);
+
+    // Register, then unregister twice — the second call is a no-op, not a crash.
+    store.registerView(GRC::VIEW_DETAILED, permissiveSpec(), GRC::TXCOL_DATE, GRC::TXSORT_DESC);
+    store.unregisterView(GRC::VIEW_DETAILED);
+    store.unregisterView(GRC::VIEW_DETAILED);
+
+    // Re-registering after an unregister works: it pushes a fresh Reset for the view.
+    q.drain();
+    store.registerView(GRC::VIEW_DETAILED, permissiveSpec(), GRC::TXCOL_DATE, GRC::TXSORT_DESC);
+    BOOST_CHECK(batchHasViewId(q.drain(), GRC::VIEW_DETAILED));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

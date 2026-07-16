@@ -77,6 +77,16 @@ DetailedTxModel::DetailedTxModel(WalletModel* walletModel, QObject* parent)
             this, &DetailedTxModel::applyEventBatch);
 }
 
+DetailedTxModel::~DetailedTxModel()
+{
+    // Symmetric with the ctor's registerView: drop the VIEW_DETAILED cursor so
+    // the node-side store stops maintaining a per-view index for a consumer that
+    // is gone (Phase 1c-ii-c). m_walletModel — and the WalletTxSource it hands
+    // out — outlives this model by the teardown-ordering contract (bitcoin.cpp).
+    if (m_walletModel)
+        m_walletModel->txSource().unregisterView(GRC::VIEW_DETAILED);
+}
+
 int DetailedTxModel::rowCount(const QModelIndex& parent) const
 {
     return parent.isValid() ? 0 : m_cache.total();

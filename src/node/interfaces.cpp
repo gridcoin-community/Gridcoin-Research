@@ -189,7 +189,7 @@ public:
         return pwalletMain ? MakeWallet(pwalletMain) : nullptr;
     }
 
-    std::unique_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet) override
+    std::shared_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet) override
     {
         return wallet ? MakeWalletTxSource(wallet) : nullptr;
     }

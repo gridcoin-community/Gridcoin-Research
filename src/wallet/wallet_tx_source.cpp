@@ -24,7 +24,19 @@ namespace {
 //! CWallet's transaction signals. Constructing an instance is the "attach"
 //! (worker started, producers wired); destroying it is the "detach" (producers
 //! severed, worker joined) — so nothing runs when no GUI holds a source.
-class WalletTxSourceImpl : public WalletTxSource
+//!
+//! Held by shared_ptr: the producer subscriptions capture a weak_ptr to this
+//! source and lock() it for the duration of each callback. A core producer
+//! thread (e.g. the stake miner firing NotifyBlocksChanged) that is inside a
+//! callback when the last owning shared_ptr is released therefore holds a
+//! strong reference across the call, which defers this object's destruction
+//! until the callback returns — closing the cross-thread teardown UAF that a
+//! bare boost::signals2 disconnect does not (disconnect does not block an
+//! in-flight slot running on another thread). enable_shared_from_this supplies
+//! the weak_ptr; the factory constructs via make_shared and calls subscribe()
+//! afterward, since weak_from_this() is only valid once the shared_ptr owns it.
+class WalletTxSourceImpl : public WalletTxSource,
+                           public std::enable_shared_from_this<WalletTxSourceImpl>
 {
 public:
     explicit WalletTxSourceImpl(CWallet* wallet)
@@ -33,9 +45,15 @@ public:
     {
         // Launch the store-worker before producers can fire, so it is ready to
         // drain the intake queue off the core locks (windowed-model PR2.5).
+        // subscribe() is NOT called here: it needs weak_from_this(), which is
+        // only valid after make_shared has taken ownership — see MakeWalletTxSource.
         m_store.start();
-        subscribe();
     }
+
+    //! Wire the producer subscriptions. Called by MakeWalletTxSource immediately
+    //! after make_shared (weak_from_this() is valid only then). Not part of the
+    //! interface — invoked through the concrete shared_ptr.
+    void subscribe();
 
     ~WalletTxSourceImpl() override
     {
@@ -51,6 +69,8 @@ public:
     {
         m_store.registerView(view_id, std::move(filter), sort_column, sort_order);
     }
+
+    void unregisterView(int view_id) override { m_store.unregisterView(view_id); }
 
     void setViewSort(int view_id, int sort_column, int sort_order) override
     {
@@ -97,21 +117,26 @@ public:
     }
 
 private:
-    void subscribe();
-
     //! Producer: a wallet transaction became visible / changed / was deleted.
     //! Runs on the emitting core thread under the locks it already holds;
     //! decomposes and status-stamps in place, then enqueues to the store worker
     //! (O(1)). Body hoisted unchanged from the former WalletModel free function.
+    //! Dispatched through a weak_ptr-locking lambda (see subscribe()), so the
+    //! Clang analyzer cannot see the emitter's held cs_main/cs_wallet across the
+    //! signals2 boundary; NO_THREAD_SAFETY_ANALYSIS suppresses the false
+    //! positive, and the AssertLockHeld() calls inside enforce the contract at
+    //! runtime (DEBUG_LOCKORDER) exactly as before.
     void onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet);
+        NO_THREAD_SAFETY_ANALYSIS;
 
     //! Producer: the chain tip advanced (connect/disconnect/reorg). Pushes a
     //! ChainTipChanged marker and runs the bounded per-tip status refresh inline
     //! under cs_main. Body hoisted unchanged from the former WalletModel free
-    //! function.
+    //! function. NO_THREAD_SAFETY_ANALYSIS for the same signals2-dispatch reason
+    //! as onTransactionChanged; the inline applyChainTipRefresh still requires
+    //! cs_main, held by the SetBestChain emitter.
     void onBlocksChanged(bool syncing, int height, int64_t best_time, uint32_t target_bits)
-        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+        NO_THREAD_SAFETY_ANALYSIS;
 
     CWallet* const m_wallet;
 
@@ -129,29 +154,46 @@ private:
 void WalletTxSourceImpl::subscribe()
 {
     // The producer runs under the emitting thread's locks by design (it
-    // decomposes transactions in place). The handlers are bound to this source
-    // (not the WalletModel), so the source outlives the GUI models that drive
-    // it. ~WalletTxSourceImpl clears m_handlers first, disconnecting the
-    // subscriptions so no NEW emission is dispatched to a freed handler. This
-    // does NOT block an emission already in flight on another core thread when
-    // disconnect runs (boost::signals2's default mutex releases before the slot
-    // body executes, and the binds carry no shared_ptr slot tracking); that
-    // narrow window is bounded only by shutdown ordering — the same pre-existing
-    // property the former WalletModel::unsubscribeFromCoreSignals() relied on.
-    // Closing it fully (shared_ptr-tracked slots, or teardown gated on producer
-    // quiescence) belongs to the attach/detach lifecycle work (Phase 1c-ii-c).
+    // decomposes transactions in place). Each handler is a lambda that captures
+    // a weak_ptr to this source and lock()s it before touching any member. This
+    // closes the cross-thread teardown UAF (Phase 1c-ii-c): weak_ptr::lock() is
+    // atomic w.r.t. the owning shared_ptr's refcount, so
+    //   - if the source is already being destroyed, lock() returns empty and the
+    //     callback is a no-op (no access to freed state); and
+    //   - if a callback is IN FLIGHT on a core thread when the last owning
+    //     shared_ptr (bitcoin.cpp) is released, the locked shared_ptr held here
+    //     keeps the refcount >= 1, deferring ~WalletTxSourceImpl until the
+    //     callback returns.
+    // This is stronger than a bare boost::signals2 disconnect, which does not
+    // block a slot already executing on another thread. m_handlers.clear() in
+    // the destructor still severs the subscriptions so no NEW emission is
+    // dispatched; the weak_ptr guard covers the in-flight overlap.
+    std::weak_ptr<WalletTxSourceImpl> weak_self = weak_from_this();
+
     m_handlers.emplace_back(m_wallet->NotifyTransactionChanged.connect(
-        boost::bind(&WalletTxSourceImpl::onTransactionChanged, this,
-                    boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3)));
+        [weak_self](CWallet* wallet, const uint256& hash, ChangeType status) {
+            if (auto self = weak_self.lock()) {
+                self->onTransactionChanged(wallet, hash, status);
+            }
+        }));
     m_handlers.emplace_back(uiInterface.NotifyBlocksChanged_connect(
-        boost::bind(&WalletTxSourceImpl::onBlocksChanged, this,
-                    boost::placeholders::_1, boost::placeholders::_2,
-                    boost::placeholders::_3, boost::placeholders::_4)));
+        [weak_self](bool syncing, int height, int64_t best_time, uint32_t target_bits) {
+            if (auto self = weak_self.lock()) {
+                self->onBlocksChanged(syncing, height, best_time, target_bits);
+            }
+        }));
 }
 
 void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& hash, ChangeType status)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main, wallet->cs_wallet)
+    NO_THREAD_SAFETY_ANALYSIS
 {
+    // Invoked via the weak_ptr-locking lambda in subscribe(), on the emitting
+    // core thread, under the cs_main + cs_wallet the emitter already holds (all
+    // CT_NEW/CT_UPDATED callsites: AddToWallet / CommitTransaction /
+    // WalletUpdateSpent). The analyzer cannot see those locks across the signals2
+    // dispatch, hence NO_THREAD_SAFETY_ANALYSIS; the AssertLockHeld() calls below
+    // enforce the contract at runtime under DEBUG_LOCKORDER, exactly as the prior
+    // EXCLUSIVE_LOCKS_REQUIRED annotation did for the analyzer.
     LogPrint(BCLog::LogFlags::VERBOSE, "NotifyTransactionChanged %s status=%i", hash.GetHex(), status);
 
     // CT_NEW and CT_UPDATED are handled identically: look up the wtx, apply the
@@ -251,7 +293,7 @@ void WalletTxSourceImpl::onTransactionChanged(CWallet* wallet, const uint256& ha
 
 void WalletTxSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t best_time,
                                          uint32_t /*target_bits*/)
-    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    NO_THREAD_SAFETY_ANALYSIS
 {
     // Fired under cs_main after every chain-tip advance, via the synchronous
     // validation-interface bridge (SetBestChain -> UpdatedBlockTip ->
@@ -269,9 +311,14 @@ void WalletTxSourceImpl::onBlocksChanged(bool /*syncing*/, int height, int64_t b
 
 } // namespace
 
-std::unique_ptr<WalletTxSource> MakeWalletTxSource(CWallet* wallet)
+std::shared_ptr<WalletTxSource> MakeWalletTxSource(CWallet* wallet)
 {
-    return std::make_unique<WalletTxSourceImpl>(wallet);
+    // Two-phase: construct under shared ownership FIRST, then subscribe(). The
+    // producer handlers capture weak_from_this(), which is only valid once the
+    // shared_ptr owns the object — so subscribe() cannot run from the ctor.
+    auto source = std::make_shared<WalletTxSourceImpl>(wallet);
+    source->subscribe();
+    return source;
 }
 
 } // namespace interfaces

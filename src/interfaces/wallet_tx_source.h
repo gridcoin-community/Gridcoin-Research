@@ -44,6 +44,13 @@ public:
     virtual void registerView(int view_id, GRC::FilterSpec filter,
                               int sort_column, int sort_order) = 0;
 
+    //! Drop a registered view's cursor when its consumer tears down (Phase
+    //! 1c-ii-c). The GUI view models call this from their destructors so the
+    //! node-side per-view index no longer tracks store mutations for a view
+    //! that is gone. Idempotent. Must be called while the source is still
+    //! alive — see the teardown-ordering contract in bitcoin.cpp.
+    virtual void unregisterView(int view_id) = 0;
+
     //! Change a registered view's sort / filter / served-row cap. Each pushes
     //! the cursor's resulting events (Reset for sort/filter, Insert/Remove at
     //! the boundary for a limit change).
@@ -92,8 +99,16 @@ public:
 //! Return an in-process WalletTxSource over the given wallet, which must
 //! outlive the returned object. Constructing it starts the store worker and
 //! subscribes the producer handlers to the wallet's transaction signals;
-//! destroying it unsubscribes and joins.
-std::unique_ptr<WalletTxSource> MakeWalletTxSource(CWallet* wallet);
+//! releasing the last owning reference unsubscribes and joins.
+//!
+//! Returned by shared_ptr (not unique_ptr): the producer subscriptions hold a
+//! weak reference and lock it for each callback, so a core producer thread
+//! executing a callback when the owner releases keeps the source alive until
+//! that callback returns. This closes the cross-thread teardown race a bare
+//! signal disconnect leaves open. The single GUI owner still governs lifetime;
+//! the extra strong reference exists only for the duration of an in-flight
+//! callback.
+std::shared_ptr<WalletTxSource> MakeWalletTxSource(CWallet* wallet);
 
 } // namespace interfaces
 

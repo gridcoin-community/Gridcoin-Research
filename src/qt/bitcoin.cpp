@@ -666,7 +666,7 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 // producer subscriptions). Owned here so it outlives the
                 // WalletModel that drives it and is torn down — worker joined,
                 // producers severed — before Shutdown() destroys the wallet.
-                std::unique_ptr<interfaces::WalletTxSource> wallet_tx_source =
+                std::shared_ptr<interfaces::WalletTxSource> wallet_tx_source =
                     interface_init->makeWalletTxSource(pwalletMain);
                 if (!wallet_tx_source) {
                     throw std::runtime_error("wallet tx source unavailable after init");
@@ -683,6 +683,25 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 window.setWalletModel(&walletModel);
                 window.setMRCModel(&mrcModel);
                 window.setVotingModel(&votingModel);
+
+                // Exception-safe teardown of the tx-table view models (Phase
+                // 1c-ii-c). `window` is declared in an OUTER scope than
+                // walletModel / wallet_tx_source, so on an exception thrown below
+                // (window.show / ipcInit / app.exec) the stack unwind frees the
+                // model and source FIRST, then destroys `window` — and
+                // ~OverviewTxModel / ~DetailedTxModel would call
+                // txSource().unregisterView() against an already-freed source
+                // (UAF). This guard is declared AFTER the model and source, so
+                // its destructor runs BEFORE theirs on every exit path (normal or
+                // exception): it detaches the wallet from the window — destroying
+                // the view models while the source is still alive — so their
+                // unregisterView() always reaches a live source. The explicit
+                // setWalletModel(nullptr) on the normal path below makes this a
+                // no-op there; on the throw path it is the only teardown.
+                struct WalletModelDetachGuard {
+                    BitcoinGUI& window;
+                    ~WalletModelDetachGuard() { window.setWalletModel(nullptr); }
+                } wallet_model_detach_guard{window};
 
                 // If -min option passed, start window minimized.
                 if(gArgs.GetBoolArg("-min"))
@@ -710,18 +729,15 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
 
                 window.hide();
                 window.setClientModel(nullptr);
+                // Normal-path detach of the tx-table view models, in order with
+                // the other models. Destroys OverviewTxModel / DetailedTxModel
+                // (via BitcoinGUI -> {transactionView->setModel,
+                // overviewPage->setWalletModel}(nullptr)) while walletModel and
+                // wallet_tx_source below are still alive, so their
+                // unregisterView() reaches a live source. wallet_model_detach_guard
+                // above enforces the same on the exception path; this explicit
+                // call then becomes an idempotent no-op for the guard.
                 window.setWalletModel(nullptr);
-                // Lifetime note (Phase 1c-ii): the per-view tx-table sub-models
-                // (OverviewTxModel, DetailedTxModel) are destroyed with `window`
-                // at block exit below — AFTER walletModel and wallet_tx_source
-                // are gone. This is safe only because those sub-models have no
-                // destructor that reaches back through walletModel->txSource()
-                // (and no Qt event loop runs after app.exec() returns, so no
-                // slot fires on them). Phase 1c-ii-c adds unregisterView on view
-                // teardown; when it does, setWalletModel(nullptr) must first
-                // detach the sub-models (BitcoinGUI currently skips that on a
-                // null model), or the unregisterView call will dereference the
-                // already-destroyed source here.
                 window.setResearcherModel(nullptr);
                 // Clear the voting model BEFORE the enclosing block exits and
                 // destroys the stack-allocated VotingModel: this propagates to

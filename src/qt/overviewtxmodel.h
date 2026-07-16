@@ -40,6 +40,12 @@ class OverviewTxModel : public QAbstractListModel
 public:
     explicit OverviewTxModel(WalletModel* walletModel, int initialLimit, QObject* parent = nullptr);
 
+    //! Unregisters the VIEW_OVERVIEW cursor node-side (Phase 1c-ii-c). Must run
+    //! while the WalletModel/WalletTxSource is still alive — OverviewPage resets
+    //! this model on setWalletModel(nullptr), which BitcoinGUI drives before the
+    //! source is torn down (teardown-ordering contract in bitcoin.cpp).
+    ~OverviewTxModel() override;
+
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role) const override;
 

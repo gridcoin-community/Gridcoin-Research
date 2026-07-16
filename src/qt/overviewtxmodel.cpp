@@ -43,6 +43,16 @@ OverviewTxModel::OverviewTxModel(WalletModel* walletModel, int initialLimit, QOb
             this, &OverviewTxModel::applyEventBatch);
 }
 
+OverviewTxModel::~OverviewTxModel()
+{
+    // Symmetric with the ctor's registerView: drop the VIEW_OVERVIEW cursor so
+    // the node-side store stops maintaining a per-view index for a consumer that
+    // is gone (Phase 1c-ii-c). m_walletModel — and the WalletTxSource it hands
+    // out — outlives this model by the teardown-ordering contract (bitcoin.cpp).
+    if (m_walletModel)
+        m_walletModel->txSource().unregisterView(GRC::VIEW_OVERVIEW);
+}
+
 int OverviewTxModel::rowCount(const QModelIndex& parent) const
 {
     return parent.isValid() ? 0 : static_cast<int>(m_rows.size());

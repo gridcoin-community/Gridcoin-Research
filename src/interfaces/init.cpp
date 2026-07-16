@@ -19,6 +19,6 @@ std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 
-std::unique_ptr<WalletTxSource> Init::makeWalletTxSource(CWallet* /*wallet*/) { return nullptr; }
+std::shared_ptr<WalletTxSource> Init::makeWalletTxSource(CWallet* /*wallet*/) { return nullptr; }
 
 } // namespace interfaces
