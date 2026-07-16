@@ -6,6 +6,7 @@
 
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
@@ -19,6 +20,8 @@ std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
 
 std::unique_ptr<MRC> Init::makeMRC(CWallet* /*wallet*/) { return nullptr; }
+
+std::unique_ptr<SideStakeManager> Init::makeSideStakeManager() { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 

@@ -13,6 +13,7 @@ namespace interfaces {
 
 class MRC;
 class Node;
+class SideStakeManager;
 class StakingStatus;
 class Wallet;
 class WalletTxSource;
@@ -42,6 +43,11 @@ public:
     //! wallet. Returns nullptr for a null wallet; \p wallet must outlive the
     //! returned object.
     virtual std::unique_ptr<MRC> makeMRC(CWallet* wallet);
+
+    //! Returns the sidestake registry interface (the unified mandatory + local
+    //! sidestake table and local add/edit/delete commands). Over the global
+    //! registry, so no wallet argument.
+    virtual std::unique_ptr<SideStakeManager> makeSideStakeManager();
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.

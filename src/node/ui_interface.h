@@ -143,6 +143,12 @@ public:
     /** Read-write settings file updated **/
     ADD_SIGNALS_DECL_WRAPPER(RwSettingsUpdated, void);
 
+    /** A mandatory (contract) sidestake entry was added, deleted, or reverted.
+     *  Payload-free refetch trigger for the GUI sidestake table (the mandatory
+     *  side already has block-height ordering). @note emitted with the sidestake
+     *  registry lock held; the only subscriber marshals to the GUI thread. */
+    ADD_SIGNALS_DECL_WRAPPER(MandatorySideStakeChanged, void);
+
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.

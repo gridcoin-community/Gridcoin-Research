@@ -5,6 +5,10 @@
 #include <QAbstractListModel>
 #include <QDate>
 
+namespace interfaces {
+class SideStakeManager;
+} // namespace interfaces
+
 /** Interface from Qt to configuration data structure for Bitcoin client.
    To Qt, the options are presented as a list with the different options
    laid out vertically.
@@ -16,7 +20,9 @@ class OptionsModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    explicit OptionsModel(QObject* parent = nullptr);
+    //! \p sidestake_manager backs the sidestake table model constructed here; it
+    //! is owned by the process and must outlive this OptionsModel.
+    explicit OptionsModel(interfaces::SideStakeManager& sidestake_manager, QObject* parent = nullptr);
 
     enum OptionID {
         StartAtStartup,          // bool
@@ -105,6 +111,11 @@ private:
     QString language;
     QString walletStylesheet;
     QString dataDir;
+
+    //! The sidestake registry interface backing m_sidestake_model. Owned by the
+    //! process (created before this OptionsModel) and outlives it; held by
+    //! reference so Init() can construct the table model with it.
+    interfaces::SideStakeManager& m_sidestake_manager;
 
     SideStakeTableModel* m_sidestake_model;
 
