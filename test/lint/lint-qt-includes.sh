@@ -70,12 +70,6 @@ src/qt/guiutil.cpp:protocol.h
 src/qt/guiutil.cpp:util.h
 src/qt/intro.cpp:chainparams.h
 src/qt/intro.cpp:util.h
-src/qt/mrcmodel.cpp:gridcoin/contract/contract.h
-src/qt/mrcmodel.cpp:gridcoin/contract/message.h
-src/qt/mrcmodel.cpp:main.h
-src/qt/mrcmodel.cpp:node/ui_interface.h
-src/qt/mrcmodel.cpp:wallet/wallet.h
-src/qt/mrcmodel.h:gridcoin/mrc.h
 src/qt/multisigndialog.cpp:chainparams.h
 src/qt/multisigndialog.cpp:main.h
 src/qt/multisigndialog.cpp:net_processing.h

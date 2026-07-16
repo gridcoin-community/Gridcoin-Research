@@ -13,6 +13,7 @@
 #include "init.h"
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
+#include "interfaces/mrc.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
@@ -183,6 +184,11 @@ public:
     std::unique_ptr<Node> makeNode() override { return MakeNode(); }
 
     std::unique_ptr<StakingStatus> makeStakingStatus() override { return MakeStakingStatus(); }
+
+    std::unique_ptr<MRC> makeMRC(CWallet* wallet) override
+    {
+        return wallet ? MakeMRC(wallet) : nullptr;
+    }
 
     std::unique_ptr<Wallet> makeWallet() override
     {

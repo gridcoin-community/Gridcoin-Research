@@ -2,39 +2,26 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "main.h"
-#include "wallet/wallet.h"
-#include "gridcoin/contract/contract.h"
-#include "gridcoin/contract/message.h"
+#include "interfaces/handler.h"
+#include "interfaces/mrc.h"
+#include "logging.h"
 #include "mrcmodel.h"
 #include "walletmodel.h"
 #include "clientmodel.h"
 #include "researcher/researchermodel.h"
 #include "qt/mrcrequestpage.h"
-#include "node/ui_interface.h"
 
-extern CWallet* pwalletMain;
+#include <limits>
 
-namespace {
-//!
-//! \brief Model callback bound to the \c MRCChanged core signal.
-//!
-void MRCChanged(MRCModel* model)
-{
-    LogPrint(BCLog::LogFlags::QT, "GUI: received MRCChanged() core signal");
-
-    QMetaObject::invokeMethod(model, "mrcChanged", Qt::QueuedConnection);
-
-}
-} // anonymous namespace
-
-MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, ResearcherModel *researcher_model, QObject *parent)
+MRCModel::MRCModel(interfaces::MRC& mrc, WalletModel* wallet_model, ClientModel *client_model,
+                   ResearcherModel *researcher_model, QObject *parent)
     : QObject(parent)
+    , m_mrc(mrc)
     , m_wallet_model(wallet_model)
     , m_client_model(client_model)
     , m_researcher_model(researcher_model)
     , m_mrc_request(nullptr)
-    , m_submitted_mrc({})
+    , m_submitted_research_subsidy({})
     , m_mrc_status(MRCRequestStatus::NONE)
     , m_reward(0)
     , m_mrc_min_fee(0)
@@ -49,6 +36,7 @@ MRCModel::MRCModel(WalletModel* wallet_model, ClientModel *client_model, Researc
     , m_mrc_error(false)
     , m_mrc_error_desc(QString{})
     , m_wallet_locked(false)
+    , m_block_version_valid(false)
     , m_init_block_height(0)
     , m_block_height(0)
     , m_submitted_height(0)
@@ -153,10 +141,12 @@ MRCModel::ModelStatus MRCModel::getMRCModelStatus()
         return MRCModel::ModelStatus::NOT_VALID_RESEARCHER;
     } else if (m_mrc_status == MRCRequestStatus::INSUFFICIENT_MATURE_FUNDS) {
         return MRCModel::ModelStatus::INSUFFICIENT_MATURE_FUNDS;
-    } else if (!IsV12Enabled(m_block_height)) {
+    } else if (!m_block_version_valid) {
         return MRCModel::ModelStatus::INVALID_BLOCK_VERSION;
-    } else if (OutOfSyncByAge()) {
-        // Note that m_mrc_status == MRCRequestStatus::NONE if OutOfSyncByAge() is true.
+    } else if (m_mrc.isOutOfSync()) {
+        // Live check (not the cached snapshot value): OutOfSyncByAge() is
+        // time-based and can flip true with no new block/MRCChanged refresh.
+        // Note that m_mrc_status == MRCRequestStatus::NONE if out of sync.
         return MRCModel::ModelStatus::OUT_OF_SYNC;
     } else if (m_block_height <= m_init_block_height) {
         return MRCModel::ModelStatus::NO_BLOCK_UPDATE_FROM_INIT;
@@ -176,7 +166,7 @@ bool MRCModel::isMRCError(MRCRequestStatus &s, QString& e)
     return false;
 }
 
-bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e)
 {
     if (m_mrc_status != MRCRequestStatus::ELIGIBLE) {
         return error("%s: submitMRC called while m_mrc_status, %i, is not ELIGIBLE.",
@@ -184,24 +174,19 @@ bool MRCModel::submitMRC(MRCRequestStatus& s, QString& e) EXCLUSIVE_LOCKS_REQUIR
                      static_cast<int>(m_mrc_status));
     }
 
-    LOCK(pwalletMain->cs_wallet);
+    // The node recreates the claim fresh at the current tip and broadcasts it
+    // under cs_main + cs_wallet, so the submission is atomic. The same fee boost
+    // the user acted on is applied there.
+    const interfaces::MRCSubmitResult result = m_mrc.submit(m_mrc_fee_boost, m_wallet_locked);
 
-    CWalletTx wtx;
-    std::string e_str;
-
-    uint32_t contract_version = IsV13Enabled(nBestHeight) ? 3 : 2;
-
-    std::tie(wtx, e_str) = GRC::SendContract(GRC::MakeContract<GRC::MRC>(contract_version,
-                                                                         GRC::ContractAction::ADD,
-                                                                         m_mrc));
-    if (!e_str.empty()) {
+    if (!result.success) {
         m_mrc_error = true;
         s = m_mrc_status = MRCRequestStatus::SUBMIT_ERROR;
-        e = m_mrc_error_desc = QString::fromStdString(e_str);
+        e = m_mrc_error_desc = QString::fromStdString(result.error);
         return false;
     } else {
-        m_submitted_mrc = m_mrc;
-        m_submitted_height = pindexBest->nHeight;
+        m_submitted_research_subsidy = result.research_subsidy;
+        m_submitted_height = result.submitted_height;
         m_mrc_error = false;
         m_mrc_status = MRCRequestStatus::PENDING;
         m_mrc_error_desc = QString{};
@@ -220,27 +205,54 @@ bool MRCModel::isWalletLocked()
 
 void MRCModel::subscribeToCoreSignals()
 {
-    // Retain the connection so it is severed in unsubscribeFromCoreSignals()
-    // (from ~MRCModel); the callback captures `this` and a signal firing after
-    // this object is gone would otherwise invoke a slot on freed memory.
-    m_handlers.emplace_back(uiInterface.MRCChanged_connect(std::bind(MRCChanged, this)));
+    // Retain the handler so it is severed in unsubscribeFromCoreSignals() (from
+    // ~MRCModel); the callback captures `this` and a signal firing after this
+    // object is gone would otherwise invoke a slot on freed memory. The
+    // notification is marshaled to the GUI thread, so the lambda touches no core
+    // state (issue #3129).
+    m_mrc_handler = m_mrc.handleMRCChanged([this]() {
+        LogPrint(BCLog::LogFlags::QT, "GUI: received MRCChanged() core signal");
+
+        QMetaObject::invokeMethod(this, "mrcChanged", Qt::QueuedConnection);
+    });
 }
 
 void MRCModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client: clearing the retained connections runs
-    // each scoped_connection's destructor, which disconnects it (issue #3129).
-    m_handlers.clear();
+    // Disconnect from the node: resetting the handler runs its destructor, which
+    // disconnects the subscription (issue #3129).
+    m_mrc_handler.reset();
 }
 
-void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void MRCModel::refresh()
 {
     m_mrc_error = false;
     m_mrc_status = MRCRequestStatus::NONE;
     m_mrc_error_desc = QString{};
 
+    // Researcher eligibility is owned GUI-side (ResearcherModel; migrated in
+    // 1d-iv). The node-side snapshot skips its trial CreateMRC when this is
+    // false, so a non-researcher does not raise MRC_error on every block.
+    const bool researcher_eligible = m_researcher_model
+            && m_researcher_model->hasActiveBeacon()
+            && !m_researcher_model->configuredForNoncruncherMode()
+            && !m_researcher_model->detectedPoolMode();
+
+    // One atomic node-side read of the chain tip, version gate, trial
+    // CreateMRC, and mempool MRC queue under a single cs_main hold. This
+    // replaces the former GUI-thread core reads that were annotated
+    // EXCLUSIVE_LOCKS_REQUIRED(cs_main) but ran holding nothing.
+    const interfaces::MRCSnapshot snap = m_mrc.snapshot(m_mrc_fee_boost, m_wallet_locked, researcher_eligible);
+
+    // Cache the version gate for getMRCModelStatus() (block-driven, so it cannot
+    // go stale without a refresh trigger). block_version_valid reflects the
+    // current tip even while out of sync, matching the former
+    // IsV12Enabled(m_block_height) ordering. Out-of-sync is queried live there
+    // (m_mrc.isOutOfSync()), since it is time-based.
+    m_block_version_valid = snap.block_version_valid;
+
     // Stop here if out of sync.
-    if (OutOfSyncByAge()) {
+    if (snap.out_of_sync) {
         return;
     }
 
@@ -250,9 +262,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return;
     }
 
-    if (!m_researcher_model->hasActiveBeacon()
-            || m_researcher_model->configuredForNoncruncherMode()
-            || m_researcher_model->detectedPoolMode()) {
+    if (!researcher_eligible) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::NOT_VALID_RESEARCHER;
         return;
@@ -262,11 +272,11 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 
     // Record initial block height during init run.
     if (!m_init_block_height) {
-        m_init_block_height = pindexBest->nHeight;
+        m_init_block_height = snap.block_height;
     }
 
     // Store this locally so we don't have to get this from the client model, which takes another lock on cs_main.
-    m_block_height = pindexBest->nHeight;
+    m_block_height = snap.block_height;
 
     // Do a balance check before anything else.
     if (m_wallet_model) {
@@ -280,29 +290,32 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         }
     }
 
-    if (!IsV12Enabled(pindexBest->nHeight)) {
+    if (!snap.block_version_valid) {
         return;
     }
 
     // Clear the submitted mrc once the block advances again after the stake (which is one more than the submission block).
-    if (m_submitted_mrc && m_block_height >= m_submitted_height + 2) {
-        m_submitted_mrc = {};
+    if (m_submitted_research_subsidy && m_block_height >= m_submitted_height + 2) {
+        m_submitted_research_subsidy = {};
         m_submitted_height = 0;
     }
 
-    m_mrc_min_fee = 0;
-    m_mrc_fee = 0;
+    // Trial-claim results from the snapshot. m_mrc_fee mirrors the former model
+    // member: min_fee + boost when a boost is set, 0 otherwise.
+    m_mrc_min_fee = snap.min_fee;
+    m_mrc_fee = snap.fee;
+    m_reward = snap.reward;
+    m_mrc_output_limit = snap.output_limit;
 
-    m_mrc_output_limit = static_cast<int>(GetMRCOutputLimit(pindexBest->nVersion, false));
-
-    // Do a first run with m_mrc_min_fee = 0 to compute the mrc min fee required. The lock on pwalletMain is taken in the
-    // call scope of CreateMRC.
-    try {
-        GRC::CreateMRC(pindexBest, m_mrc, m_reward, m_mrc_min_fee, pwalletMain, m_wallet_locked);
-    } catch (GRC::MRC_error& e) {
+    // The four checks below mirror MRCModel::refresh()'s former sequence exactly:
+    // the minimum-fee CreateMRC error, zero-payout, excessive-fee, then the
+    // boosted-fee CreateMRC error. Each overrides the previous status, so the
+    // order is load-bearing (e.g. an out-of-range boost sets EXCESSIVE_FEE, then
+    // the node's boosted-run error overrides it with CREATE_ERROR).
+    if (snap.create_error) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::CREATE_ERROR;
-        m_mrc_error_desc = e.what();
+        m_mrc_error_desc = QString::fromStdString(snap.create_error_msg);
     }
 
     // If the (minimum) fee comes back equal to the reward we are in the zero payout interval (i.e. too soon).
@@ -313,80 +326,37 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
                               "advertisement or last research reward payment, whether by stake or MRC, whichever is later.");
     }
 
-    // If there is a fee boost, add the boost to the fee from the initial run above.
-    if (m_mrc_fee_boost != 0) {
-        m_mrc_fee = m_mrc_min_fee + m_mrc_fee_boost;
-    }
-
-    // If the total mrc free which is the min fee + boost is greater than the reward, then the fee is excessive.
+    // If the total mrc fee which is the min fee + boost is greater than the reward, then the fee is excessive.
     if (m_mrc_fee > m_reward) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::EXCESSIVE_FEE;
         m_mrc_error_desc = tr("The total fee (the minimum fee + fee boost) is greater than the rewards due.");
     }
 
-    // Rerun CreateMRC with that new total fee
-    if (m_mrc_fee_boost != 0) {
-        try {
-            GRC::CreateMRC(pindexBest, m_mrc, m_reward, m_mrc_fee, pwalletMain, m_wallet_locked);
-        } catch (GRC::MRC_error& e) {
-            m_mrc_error |= true;
-            m_mrc_status = MRCRequestStatus::CREATE_ERROR;
-            m_mrc_error_desc = e.what();
-        }
+    // The boosted rerun's CreateMRC error (out-of-range boost), applied last as
+    // in the original so the node's fee-validity verdict wins over EXCESSIVE_FEE.
+    if (snap.boosted_fee_error) {
+        m_mrc_error |= true;
+        m_mrc_status = MRCRequestStatus::CREATE_ERROR;
+        m_mrc_error_desc = QString::fromStdString(snap.boosted_fee_error_msg);
     }
 
-    // We do the mempool loop here regardless of whether there is an error condition or not.
-    m_mrc_queue_length = 0;
-    m_mrc_pos = 0;
-    m_mrc_queue_tail_fee = std::numeric_limits<CAmount>::max();
-    m_mrc_queue_head_fee = 0;
+    // Synthetic MRC queue state, evaluated node-side against this request's fee.
+    m_mrc_queue_length = snap.queue_length;
+    m_mrc_pos = snap.pos;
+    m_mrc_queue_tail_fee = snap.queue_tail_fee;
+    m_mrc_queue_head_fee = snap.queue_head_fee;
+    m_mrc_queue_pay_limit_fee = snap.queue_pay_limit_fee;
 
-    bool found{false};
-
-    // This sorts the MRCs in descending order of MRC fees to allow determination of the payout limit fee.
-
-    // ---------- mrc fee --- cpid ------ descending order
-    // The fee-ordered MRC view comes straight from the mempool's m_mrc_by_fee
-    // index (it replaced a full mempool scan + local multimap build).
-    const std::vector<std::pair<CAmount, GRC::Cpid>> mrc_queue = mempool.GetMRCQueue();
-
-    GRC::Cpid m_mrc_cpid;
-    if (auto cpid = m_mrc.m_mining_id.TryCpid()) m_mrc_cpid = *cpid;
-
-    for (const auto& [mempool_fee, mempool_cpid] : mrc_queue) {
-        found |= mempool_cpid == m_mrc_cpid;
-
-        if (!found && mempool_fee >= m_mrc.m_fee) ++m_mrc_pos;
-        m_mrc_queue_head_fee = std::max(m_mrc_queue_head_fee, mempool_fee);
-        m_mrc_queue_tail_fee = std::min(m_mrc_queue_tail_fee, mempool_fee);
-
-        ++m_mrc_queue_length;
-    }
-
-    // The tail fee converges from the max numeric limit of CAmount; however, when the above loop is done
-    // it cannot end up with a number higher than the head fee. This can happen if there are no MRC transactions
-    // in the loop.
-    m_mrc_queue_tail_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_tail_fee);
-
-    // Here we select the minimum of the queue size - 1 in the case where the queue does not reach the
-    // m_mrc_output_limit - 1, or the m_mrc_output_limit - 1 if the queue is (over)full,
-    // i.e. the number of MRC's in the queue exceeds the m_mrc_output_limit for paying in a block.
-    int pay_limit_fee_pos = std::min<int>(mrc_queue.size(), m_mrc_output_limit) - 1;
-
-    if (pay_limit_fee_pos >= 0) {
-        m_mrc_queue_pay_limit_fee = mrc_queue[pay_limit_fee_pos].first;
-    }
-
-    m_mrc_queue_pay_limit_fee = std::min(m_mrc_queue_head_fee, m_mrc_queue_pay_limit_fee);
+    const bool found = snap.found_in_queue;
 
     // The first if statement is rather complex, but it looks for the situation where... 1. an mrc has been submitted,
     // 2. The block height has advanced from the original submission height, and 3. The accrual is equal or higher than
     // the research subsidy in the submitted MRC, which means the MRC has not been paid by the staker. This method avoids
     // more expensive lookups against the block/transactions.
-    if (m_submitted_mrc
+    if (m_submitted_research_subsidy
             && m_block_height > m_submitted_height
-            && m_submitted_mrc->m_research_subsidy <= m_researcher_model->getAccrual()) {
+            && *m_submitted_research_subsidy <= m_researcher_model->getAccrual()) {
         m_mrc_error |= true;
         m_mrc_status = MRCRequestStatus::STALE_CANCEL;
         m_mrc_error_desc = tr("Your MRC was successfully submitted earlier but has now become stale without being bound "
@@ -420,7 +390,7 @@ void MRCModel::refresh() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 }
 
-void MRCModel::walletStatusChanged(int encryption_status) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+void MRCModel::walletStatusChanged(int encryption_status)
 {
     m_wallet_locked = (encryption_status == static_cast<int>(WalletModel::EncryptionStatus::Locked));
 

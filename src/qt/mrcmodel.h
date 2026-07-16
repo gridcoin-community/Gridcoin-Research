@@ -6,15 +6,19 @@
 #define GRIDCOIN_QT_MRCMODEL_H
 
 #include <QObject>
-#include <vector>
-#include <boost/signals2/connection.hpp>
+#include <memory>
+#include <optional>
 #include "amount.h"
-#include "gridcoin/mrc.h"
 
 class WalletModel;
 class ClientModel;
 class ResearcherModel;
 class MRCRequestPage;
+
+namespace interfaces {
+class Handler;
+class MRC;
+} // namespace interfaces
 
 //!
 //! \brief The MRCRequestStatus enum describes the status of the MRC request
@@ -46,7 +50,8 @@ class MRCModel : public QObject
     Q_OBJECT
 
 public:
-    explicit MRCModel(WalletModel* wallet_model,
+    explicit MRCModel(interfaces::MRC& mrc,
+                      WalletModel* wallet_model,
                       ClientModel* client_model,
                       ResearcherModel* researcher_model,
                       QObject* parent = nullptr);
@@ -88,18 +93,25 @@ private:
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 
-    //! Retained core-signal connections, cleared on teardown so a signal that
+    //! The node-side MRC boundary: one atomic snapshot() per refresh and a
+    //! submit() command, both taken under core locks on the node side. Owned by
+    //! bitcoin.cpp and outlives this model (Phase 1d-i).
+    interfaces::MRC& m_mrc;
+
+    //! Retained MRCChanged subscription, released on teardown so a signal that
     //! fires after this model is destroyed cannot invoke a slot bound to freed
-    //! memory. scoped_connection disconnects on destruction (issue #3129).
-    std::vector<boost::signals2::scoped_connection> m_handlers;
+    //! memory (issue #3129). The Handler disconnects on destruction.
+    std::unique_ptr<interfaces::Handler> m_mrc_handler;
 
     WalletModel* m_wallet_model;
     ClientModel* m_client_model;
     ResearcherModel* m_researcher_model;
     MRCRequestPage* m_mrc_request;
 
-    GRC::MRC m_mrc;
-    std::optional<GRC::MRC> m_submitted_mrc;
+    //! Research subsidy of the last submitted MRC (empty if none pending) —
+    //! retained to detect a stale/unbound MRC without a further core read; the
+    //! full contract lives node-side (Phase 1d-i).
+    std::optional<CAmount> m_submitted_research_subsidy;
     MRCRequestStatus m_mrc_status;
     CAmount m_reward;
     CAmount m_mrc_min_fee;
@@ -115,6 +127,12 @@ private:
     bool m_mrc_error;
     QString m_mrc_error_desc;
     bool m_wallet_locked;
+
+    //! Snapshot-cached version gate (from interfaces::MRCSnapshot), so
+    //! getMRCModelStatus() classifies the block version without a core read. It
+    //! is block-driven, so it cannot go stale without a refresh; out-of-sync is
+    //! instead queried live (m_mrc.isOutOfSync()) because it is time-based.
+    bool m_block_version_valid;
 
     int m_init_block_height;
     int m_block_height;
