@@ -729,6 +729,17 @@ void WalletTxStore::registerView(int viewId, FilterSpec filter, int sort_column,
     emitCursorDeltas(viewId, epoch, deltas);
 }
 
+void WalletTxStore::unregisterView(int viewId)
+{
+    // Drop the view's cursor. Called when a consumer view tears down (Phase
+    // 1c-ii-c) so its per-view index no longer tracks store mutations. No event
+    // is emitted: the consumer is going away and will not drain again.
+    // Idempotent — erasing an absent viewId is a no-op, so a double teardown or
+    // a never-registered view is harmless.
+    LOCK(cs_store);
+    m_cursors.erase(viewId);
+}
+
 void WalletTxStore::setViewSort(int viewId, int sort_column, int sort_order)
 {
     LOCK(cs_store);

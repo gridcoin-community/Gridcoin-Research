@@ -147,6 +147,10 @@ public:
     //!
     void registerView(int viewId, FilterSpec filter, int sort_column, int sort_order);
 
+    //! Qt thread: drop a registered view's cursor on consumer teardown (Phase
+    //! 1c-ii-c). Idempotent; emits no event (the consumer is going away).
+    void unregisterView(int viewId);
+
     //! Qt thread: change a registered view's sort / filter / served-row cap.
     //! Each pushes the cursor's resulting events (Reset for sort/filter,
     //! Insert/Remove at the boundary for a limit change).

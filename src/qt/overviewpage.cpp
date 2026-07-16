@@ -463,6 +463,17 @@ void OverviewPage::setWalletModel(WalletModel *model)
         // Connect the privacy mode setting to the options dialog.
         connect(walletModel->getOptionsModel(), &OptionsModel::MaskValuesChanged, this, &OverviewPage::setPrivacy);
     }
+    else if (!model)
+    {
+        // Detach on teardown (Phase 1c-ii-c): destroy the OverviewTxModel now, so
+        // its destructor unregisters the VIEW_OVERVIEW cursor while the previous
+        // WalletModel and its WalletTxSource are still alive. BitcoinGUI drives
+        // this on shutdown before the source is torn down; deferring to the
+        // page's own destruction (after the source is gone) would dereference a
+        // freed source.
+        ui->listTransactions->setModel(nullptr);
+        m_overviewTxModel.reset();
+    }
 
     // update the display unit, to not use the default ("BTC")
     updateDisplayUnit();

@@ -56,6 +56,12 @@ class DetailedTxModel : public QAbstractTableModel
 public:
     explicit DetailedTxModel(WalletModel* walletModel, QObject* parent = nullptr);
 
+    //! Unregisters the VIEW_DETAILED cursor node-side (Phase 1c-ii-c). Must run
+    //! while the WalletModel/WalletTxSource is still alive — TransactionView
+    //! deletes this model on setModel(nullptr), which BitcoinGUI drives before
+    //! the source is torn down (teardown-ordering contract in bitcoin.cpp).
+    ~DetailedTxModel() override;
+
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
     QVariant data(const QModelIndex& index, int role) const override;

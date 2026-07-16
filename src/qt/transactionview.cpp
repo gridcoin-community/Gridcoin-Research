@@ -252,6 +252,17 @@ void TransactionView::setModel(WalletModel *model)
             this, &TransactionView::updateIcons);
         updateIcons(model->getOptionsModel()->getCurrentStyle());
     }
+    else if (!model && m_detailedModel) {
+        // Detach on teardown (Phase 1c-ii-c): destroy the DetailedTxModel now, so
+        // its destructor unregisters the VIEW_DETAILED cursor while the previous
+        // WalletModel and its WalletTxSource are still alive. BitcoinGUI drives
+        // this on shutdown before the source is torn down; deferring to this
+        // TransactionView's own destruction (after the source is gone) would
+        // dereference a freed source.
+        transactionView->setModel(nullptr);
+        delete m_detailedModel;
+        m_detailedModel = nullptr;
+    }
 }
 
 // The cursor's date bounds are seconds since epoch (FilterSpec defaults

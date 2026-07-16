@@ -46,7 +46,7 @@ public:
     //! returned object owns the node-side machinery, so a headless process
     //! that never calls this pays nothing. Returns nullptr for a null wallet.
     //! \p wallet must outlive the returned object.
-    virtual std::unique_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet);
+    virtual std::shared_ptr<WalletTxSource> makeWalletTxSource(CWallet* wallet);
 };
 
 //! Return the monolithic-build Init implementation.
