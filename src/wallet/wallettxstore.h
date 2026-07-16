@@ -5,6 +5,7 @@
 #ifndef GRIDCOIN_WALLET_WALLETTXSTORE_H
 #define GRIDCOIN_WALLET_WALLETTXSTORE_H
 
+#include "interfaces/wallet_tx_channel.h"
 #include "interfaces/wallet_tx_record.h"
 #include "wallet/cursor.h"
 #include "wallet/txorder.h"
