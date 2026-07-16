@@ -4,6 +4,7 @@
 
 #include "interfaces/init.h"
 
+#include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
@@ -16,6 +17,8 @@ Init::~Init() = default;
 std::unique_ptr<Node> Init::makeNode() { return nullptr; }
 
 std::unique_ptr<StakingStatus> Init::makeStakingStatus() { return nullptr; }
+
+std::unique_ptr<MRC> Init::makeMRC(CWallet* /*wallet*/) { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 

@@ -11,6 +11,7 @@ class CWallet;
 
 namespace interfaces {
 
+class MRC;
 class Node;
 class StakingStatus;
 class Wallet;
@@ -36,6 +37,11 @@ public:
     virtual std::unique_ptr<Node> makeNode();
 
     virtual std::unique_ptr<StakingStatus> makeStakingStatus();
+
+    //! Returns the Manual Research Claim interface over the node's single
+    //! wallet. Returns nullptr for a null wallet; \p wallet must outlive the
+    //! returned object.
+    virtual std::unique_ptr<MRC> makeMRC(CWallet* wallet);
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.

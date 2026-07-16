@@ -19,6 +19,7 @@
 #include "qt/intro.h"
 #include "guiconstants.h"
 #include "interfaces/init.h"
+#include "interfaces/mrc.h"
 #include "interfaces/node.h"
 #include "interfaces/staking.h"
 #include "interfaces/wallet.h"
@@ -671,11 +672,18 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!wallet_tx_source) {
                     throw std::runtime_error("wallet tx source unavailable after init");
                 }
+                // The Manual Research Claim interface over the node's wallet
+                // (Phase 1d-i). Owned here so it outlives the MRCModel that
+                // drives it.
+                std::unique_ptr<interfaces::MRC> mrc = interface_init->makeMRC(pwalletMain);
+                if (!mrc) {
+                    throw std::runtime_error("MRC interface unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
-                MRCModel mrcModel(&walletModel, &clientModel, &researcherModel);
+                MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
                 VotingModel votingModel(clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
