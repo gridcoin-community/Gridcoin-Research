@@ -43,10 +43,12 @@
 #include "validation.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -1139,6 +1141,8 @@ public:
         // pwalletMain is the node's single wallet (== m_wallet); referencing it
         // directly matches SendBeaconContractV3/GenerateBeaconKey's
         // EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet) annotation.
+        // Enforce the single-wallet invariant this relies on.
+        assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
         GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(*cpid);
@@ -1186,6 +1190,10 @@ public:
             return {BeaconStatus::ERROR_INVALID_PROOF_XML};
         }
 
+        // pwalletMain (== the node's single wallet m_wallet) is used to satisfy
+        // SendBeaconContractV3's EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+        // annotation; enforce that single-wallet invariant.
+        assert(pwalletMain && pwalletMain == m_wallet);
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
         if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {

@@ -62,7 +62,7 @@ enum class ResearcherMode
 struct ResearcherSnapshot
 {
     // Identity
-    std::string cpid;             //!< External CPID hex ("" if none).
+    std::string cpid;             //!< MiningId::ToString(): CPID hex, "NONCRUNCHER", or "" (invalid). has_cpid distinguishes an actual CPID.
     bool has_cpid = false;
     bool has_split_cpid = false;
     bool has_rac = false;
