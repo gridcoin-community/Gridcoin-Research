@@ -66,8 +66,8 @@ public:
 class PollSelfVoteResponse
 {
 public:
-    uint8_t m_choice_offset;
-    uint64_t m_weight;
+    uint8_t m_choice_offset = 0;
+    uint64_t m_weight = 0;
 };
 
 //!

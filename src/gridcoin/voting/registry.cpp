@@ -1049,7 +1049,7 @@ void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     m_polls.clear();
     m_polls_by_txid.clear();
     m_latest_poll = nullptr;
-    registry_traversal_in_progress = false;
+    registry_traversal_in_progress = 0;
     reorg_occurred_during_reg_traversal = false;
 }
 
@@ -1344,7 +1344,7 @@ void PollRegistry::DetectReorg()
              reorg_occurred_during_reg_traversal
              );
 
-    if (registry_traversal_in_progress && g_reorg_in_progress) {
+    if (registry_traversal_in_progress > 0 && g_reorg_in_progress) {
         reorg_occurred_during_reg_traversal = true;
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to true.", __func__);
     } else {

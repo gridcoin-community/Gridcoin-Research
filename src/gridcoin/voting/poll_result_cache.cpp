@@ -108,7 +108,11 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
     std::vector<PollResultItem> items;
     PollRegistry& registry = GetPollRegistry();
 
-    registry.registry_traversal_in_progress = true;
+    // Mark a traversal in progress for the whole build (RAII, so it is cleared on
+    // every exit path — including the early return below). The count-based scope
+    // keeps the reorg detector armed even if another traversal (e.g. an RPC tally)
+    // overlaps this one.
+    PollRegistry::TraversalScope traversal(registry);
 
     bool fork_reorg_during_run = false;
 
@@ -175,7 +179,6 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
         // node will shut down, interrupting the sleep.
         while (registry.reorg_occurred_during_reg_traversal) {
             if (!MilliSleep(1000)) {
-                registry.registry_traversal_in_progress = false;
                 return items;
             }
 
@@ -184,8 +187,6 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
 
         fork_reorg_during_run = false;
     }
-
-    registry.registry_traversal_in_progress = false;
 
     g_timer.GetTimes(std::string{"End "} + std::string{__func__}, __func__);
 

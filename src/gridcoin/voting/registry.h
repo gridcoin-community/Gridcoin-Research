@@ -472,7 +472,37 @@ public:
     //!
     void DetectReorg();
 
-    std::atomic<bool> registry_traversal_in_progress = false;      //!< Boolean that registry traversal is in progress.
+    //!
+    //! \brief RAII scope that marks a registry traversal in progress for its
+    //! lifetime.
+    //!
+    //! registry_traversal_in_progress is a COUNT of active traversals, not a
+    //! bool: table builds can overlap (e.g. a GUI PollResultCache::BuildPollTable
+    //! and a concurrent RPC PollResultToJson/VoteDetailsToJson tally). A plain
+    //! bool let the first traversal to finish clear the flag while another was
+    //! still running, so DetectReorg could wrongly clear
+    //! reorg_occurred_during_reg_traversal mid-traversal. Incrementing on entry
+    //! and decrementing on exit (on every path, including exceptions) keeps the
+    //! reorg detector armed until the LAST traversal finishes.
+    //!
+    class TraversalScope
+    {
+    public:
+        explicit TraversalScope(PollRegistry& registry) : m_registry(registry)
+        {
+            ++m_registry.registry_traversal_in_progress;
+        }
+
+        ~TraversalScope() { --m_registry.registry_traversal_in_progress; }
+
+        TraversalScope(const TraversalScope&) = delete;
+        TraversalScope& operator=(const TraversalScope&) = delete;
+
+    private:
+        PollRegistry& m_registry;
+    };
+
+    std::atomic<int> registry_traversal_in_progress = 0;           //!< Count of registry traversals in progress.
     std::atomic<bool> reorg_occurred_during_reg_traversal = false; //!< Boolean to indicate whether a reorg occurred.
 
 private:
