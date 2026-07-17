@@ -4,17 +4,28 @@
 
 #include "interfaces/staking.h"
 #include "interfaces/mrc.h"
+#include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/voting.h"
 
 #include "amount.h"
 #include "chainparams.h"
+#include "fs.h"
+#include "gridcoin/beacon.h"
+#include "gridcoin/boinc.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
+#include "gridcoin/magnitude.h"
 #include "gridcoin/mrc.h"
+#include "gridcoin/project.h"
+#include "gridcoin/quorum.h"
+#include "gridcoin/researcher.h"
+#include "gridcoin/scraper/scraper.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
+#include "gridcoin/superblock.h"
+#include "gridcoin/support/xml.h"
 #include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/filter.h"
 #include "gridcoin/voting/fwd.h"
@@ -29,16 +40,25 @@
 #include "sync.h"
 #include "txmempool.h"
 #include "util/strencodings.h"
+#include "util/string.h"
 #include "validation.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
+#include <set>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
+
+extern CWallet* pwalletMain;
+extern ConvergedScraperStats ConvergedScraperStatsCache;
 
 namespace interfaces {
 namespace {
@@ -807,6 +827,602 @@ private:
     }
 };
 
+//! Maps a core BeaconError to the interface BeaconStatus. Ported verbatim from
+//! the former GUI ResearcherModel::MapAdvertiseBeaconError so the classification
+//! is byte-for-byte identical, now computed node-side.
+BeaconStatus MapBeaconError(const GRC::BeaconError error)
+{
+    switch (error) {
+        case GRC::BeaconError::NONE:               return BeaconStatus::ACTIVE;
+        case GRC::BeaconError::INSUFFICIENT_FUNDS: return BeaconStatus::ERROR_INSUFFICIENT_FUNDS;
+        case GRC::BeaconError::MISSING_KEY:        return BeaconStatus::ERROR_MISSING_KEY;
+        case GRC::BeaconError::NO_CPID:            return BeaconStatus::NO_CPID;
+        case GRC::BeaconError::NOT_NEEDED:         return BeaconStatus::ERROR_NOT_NEEDED;
+        case GRC::BeaconError::PENDING:            return BeaconStatus::PENDING;
+        case GRC::BeaconError::TX_FAILED:          return BeaconStatus::ERROR_TX_FAILED;
+        case GRC::BeaconError::V14_NOT_ENABLED:    return BeaconStatus::ERROR_TX_FAILED;
+        case GRC::BeaconError::WALLET_LOCKED:      return BeaconStatus::ERROR_WALLET_LOCKED;
+        case GRC::BeaconError::ALEADY_IN_MEMPOOL:  return BeaconStatus::ALREADY_IN_MEMPOOL;
+    }
+
+    assert(false); // unreachable: every BeaconError enumerator is handled above
+    return BeaconStatus::UNKNOWN;
+}
+
+//! Beacon-renewal warning window (mirrors the former GUI ResearcherModel constant
+//! BEACON_RENEWAL_WARNING_THRESHOLD): a beacon expiring within 15 days reads as
+//! RENEWAL_NEEDED.
+constexpr int64_t BEACON_RENEWAL_WARNING_THRESHOLD = 15 * 24 * 60 * 60;
+
+//! Classify a whitelist entry's status into a ResearcherProjectRow::WhitelistStatus,
+//! matching the former buildProjectTable's if/else chain. \p is_label_status is
+//! set true for the greylisted/excluded cases where the status itself is the row's
+//! error label (so the caller clears any baseline error, letting the GUI derive the
+//! label from the status).
+ResearcherProjectRow::WhitelistStatus ClassifyWhitelist(const GRC::ProjectEntry& wl,
+                                                        const std::vector<std::string>& excluded,
+                                                        bool& is_label_status)
+{
+    using WS = ResearcherProjectRow::WhitelistStatus;
+
+    is_label_status = true;
+
+    if (wl.m_status == GRC::ProjectEntryStatus::MAN_GREYLISTED) {
+        return WS::MANUALLY_GREYLISTED;
+    }
+    if (wl.m_status == GRC::ProjectEntryStatus::AUTO_GREYLISTED) {
+        return WS::AUTOMATICALLY_GREYLISTED;
+    }
+    if (std::find(excluded.begin(), excluded.end(), wl.m_name) != excluded.end()) {
+        return WS::EXCLUDED;
+    }
+
+    is_label_status = false;
+
+    if (wl.m_status == GRC::ProjectEntryStatus::UNKNOWN) {
+        return WS::NOT_WHITELISTED;
+    }
+
+    // Remaining REG_ACTIVE / AUTO_GREYLIST_OVERRIDE == the ACTIVE whitelist filter.
+    return WS::WHITELISTED;
+}
+
+//! Copy a whitelist entry's magnitude/RAC into the row from the ExplainMagnitude
+//! results (matches the inner lookup loops in the former buildProjectTable).
+void ApplyExplainMagnitude(ResearcherProjectRow& row,
+                           const std::string& project_name,
+                           const std::vector<GRC::ExplainMagnitudeProject>& explain_mag)
+{
+    for (const auto& explain_mag_project : explain_mag) {
+        if (explain_mag_project.m_name == project_name) {
+            row.magnitude = explain_mag_project.m_magnitude;
+            row.rac = explain_mag_project.m_rac;
+            return;
+        }
+    }
+}
+
+//! In-process ResearcherContext (Phase 1d-iv). Owns the node's single wallet
+//! pointer for the beacon-key/advertise/V3 paths; every read runs node-side so the
+//! Qt ResearcherModel holds no GRC::Researcher / GRC::Beacon and touches no beacon
+//! registry, quorum, whitelist, or scraper-cache global directly.
+class ResearcherContextImpl : public ResearcherContext
+{
+public:
+    explicit ResearcherContextImpl(CWallet* wallet) : m_wallet(wallet) {}
+
+    ResearcherSnapshot snapshot() override
+    {
+        LOCK(cs_main);
+        return BuildSnapshotLocked();
+    }
+
+    std::optional<ResearcherSnapshot> trySnapshot() override
+    {
+        TRY_LOCK(cs_main, locked);
+        if (!locked) {
+            return std::nullopt;
+        }
+        return BuildSnapshotLocked();
+    }
+
+    bool outOfSync() override
+    {
+        // Lock-free, matching the former ResearcherModel::refresh()'s unguarded
+        // OutOfSyncByAge() call.
+        return OutOfSyncByAge();
+    }
+
+    bool hasV3CapableProjects() override
+    {
+        return !GetProjectsWithOwnershipProofSupport().empty();
+    }
+
+    std::vector<ResearcherProjectRow> projects(bool extended) override
+    {
+        // Fuses the same three loosely-related record types the former
+        // ResearcherModel::buildProjectTable did: local BOINC projects, the
+        // Gridcoin whitelist, and scraper magnitude statistics.
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        // One whitelist snapshot, reused for both TryWhitelist() and the
+        // whitelist-only pass below (the former GUI took two snapshots; one is
+        // more internally consistent and cheaper).
+        const GRC::WhitelistSnapshot whitelist =
+            GRC::GetWhitelist().Snapshot(GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED);
+
+        std::vector<std::string> excluded_projects;
+        {
+            LOCK(cs_ConvergedScraperStatsCache);
+            excluded_projects = ConvergedScraperStatsCache.Convergence.vExcludedProjects;
+        }
+
+        const std::vector<std::string> external_adapter_projects = GetProjectsExternalAdapterRequired();
+
+        std::vector<GRC::ExplainMagnitudeProject> explain_mag;
+        if (extended) {
+            if (const GRC::CpidOption cpid = researcher->Id().TryCpid()) {
+                explain_mag = GRC::Quorum::ExplainMagnitude(*cpid);
+            }
+        }
+
+        std::map<std::string, ResearcherProjectRow> rows;
+
+        // Pass 1: local BOINC projects, linked to the whitelist where possible.
+        for (const auto& project_pair : researcher->Projects()) {
+            const GRC::MiningProject& project = project_pair.second;
+
+            ResearcherProjectRow row;
+
+            if (!project.m_cpid.IsZero()) {
+                row.cpid = project.m_cpid.ToString();
+            }
+
+            const bool eligible = project.Eligible();
+            if (!eligible) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::CORE_MESSAGE;
+                row.error_message = project.ErrorMessage();
+            }
+
+            if (const GRC::ProjectEntry* whitelist_project = project.TryWhitelist(whitelist)) {
+                bool is_label_status = false;
+                row.whitelisted = ClassifyWhitelist(*whitelist_project, excluded_projects, is_label_status);
+
+                // Greylisted/excluded: the status IS the label, so drop the
+                // baseline core error and let the GUI render the status label.
+                if (is_label_status) {
+                    row.error_kind = ResearcherProjectRow::ErrorKind::NONE;
+                    row.error_message.clear();
+                }
+
+                // Display name in original case; the GUI lowercases it with
+                // QString::toLower() (Unicode-aware, as the former code did).
+                row.name = whitelist_project->DisplayName();
+                ApplyExplainMagnitude(row, whitelist_project->m_name, explain_mag);
+                row.gdpr_controls = whitelist_project->HasGDPRControls();
+
+                rows.emplace(whitelist_project->m_name, std::move(row));
+            } else {
+                row.whitelisted = ResearcherProjectRow::WhitelistStatus::NOT_WHITELISTED;
+                row.name = project.m_name;
+                row.rac = project.m_rac;
+
+                if (eligible) {
+                    row.error_kind = ResearcherProjectRow::ErrorKind::NOT_WHITELISTED;
+                    row.error_message.clear();
+                }
+
+                rows.emplace(project.m_name, std::move(row));
+            }
+        }
+
+        // Pass 2: whitelisted projects not detected from the local BOINC client.
+        for (const auto& project : whitelist) {
+            if (rows.find(project.m_name) != rows.end()) {
+                continue;
+            }
+
+            ResearcherProjectRow row;
+            row.gdpr_controls = project.HasGDPRControls();
+            row.name = project.DisplayName();
+            row.magnitude = 0.0;
+
+            const bool requires_external_adapter =
+                project.RequiresExtAdapter().has_value() && project.RequiresExtAdapter().value();
+            const bool legacy_external_adapter = std::find(external_adapter_projects.begin(),
+                                                           external_adapter_projects.end(),
+                                                           project.m_name) != external_adapter_projects.end();
+
+            if (requires_external_adapter || legacy_external_adapter) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::USES_EXTERNAL_ADAPTER;
+            } else {
+                row.error_kind = ResearcherProjectRow::ErrorKind::NOT_ATTACHED;
+            }
+
+            bool is_label_status = false;
+            row.whitelisted = ClassifyWhitelist(project, excluded_projects, is_label_status);
+            if (is_label_status) {
+                row.error_kind = ResearcherProjectRow::ErrorKind::NONE;
+            }
+
+            ApplyExplainMagnitude(row, project.m_name, explain_mag);
+
+            rows.emplace(project.m_name, std::move(row));
+        }
+
+        std::vector<ResearcherProjectRow> rows_out;
+        rows_out.reserve(rows.size());
+        for (auto& row_pair : rows) {
+            rows_out.emplace_back(std::move(row_pair.second));
+        }
+
+        return rows_out;
+    }
+
+    std::vector<WhitelistProject> whitelistProjects() override
+    {
+        // Matches the former VotingModel::getActiveProjectNames/getActiveProjectUrls
+        // exactly: the ACTIVE-filter snapshot, Sorted(), raw m_name/m_url (not the
+        // Display* variants the researcher table uses). A single call now backs both
+        // of the wizard's parallel name/url lists, so their indices still align.
+        std::vector<WhitelistProject> result;
+
+        for (const auto& project : GRC::GetWhitelist().Snapshot().Sorted()) {
+            result.push_back({project.m_name, project.m_url});
+        }
+
+        return result;
+    }
+
+    int maxProjectNameLength() override { return static_cast<int>(GRC::Project::MAX_NAME_SIZE); }
+
+    int maxProjectUrlLength() override { return static_cast<int>(GRC::Project::MAX_URL_SIZE); }
+
+    std::vector<WhitelistProject> v3CapableProjects() override
+    {
+        // Ports ResearcherModel::buildV3ProjectList: the whitelist entries whose
+        // (trailing-slash-normalized) base URL is in the ownership-proof set.
+        const std::set<std::string> v3_urls = GetProjectsWithOwnershipProofSupport();
+
+        std::vector<WhitelistProject> result;
+        if (v3_urls.empty()) {
+            return result;
+        }
+
+        for (const auto& project : GRC::GetWhitelist().Snapshot(
+                 GRC::ProjectEntry::ProjectFilterFlag::ALL_BUT_DELETED)) {
+            std::string base_url = project.BaseUrl();
+            if (!base_url.empty() && base_url.back() != '/') {
+                base_url += '/';
+            }
+
+            if (v3_urls.count(base_url) > 0) {
+                result.push_back({project.DisplayName(), project.DisplayUrl()});
+            }
+        }
+
+        return result;
+    }
+
+    bool switchMode(ResearcherMode mode, const std::string& email) override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        switch (mode) {
+            case ResearcherMode::SOLO:
+                return researcher->ChangeMode(GRC::ResearcherMode::SOLO, email);
+            case ResearcherMode::POOL:
+                return researcher->ChangeMode(GRC::ResearcherMode::POOL, std::string());
+            case ResearcherMode::NONCRUNCHER:
+                return researcher->ChangeMode(GRC::ResearcherMode::NONCRUNCHER, std::string());
+        }
+
+        return false;
+    }
+
+    BeaconAdvertiseResult advertiseBeacon() override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::AdvertiseBeaconResult result = researcher->AdvertiseBeacon();
+
+        return {MapBeaconError(result.Error())};
+    }
+
+    std::string generateBeaconKeyForV3() override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::CpidOption cpid = researcher->Id().TryCpid();
+
+        // The wizard flow requires a CPID before the beacon page, so this is not
+        // reachable in practice; defensive only.
+        if (!cpid) {
+            return std::string();
+        }
+
+        // pwalletMain is the node's single wallet (== m_wallet); referencing it
+        // directly matches SendBeaconContractV3/GenerateBeaconKey's
+        // EXCLUSIVE_LOCKS_REQUIRED(cs_main, pwalletMain->cs_wallet) annotation.
+        // Enforce the single-wallet invariant this relies on.
+        assert(pwalletMain && pwalletMain == m_wallet);
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        GRC::AdvertiseBeaconResult result = GRC::GenerateBeaconKey(*cpid);
+
+        if (auto public_key = result.TryPublicKey()) {
+            return HexStr(*public_key);
+        }
+
+        return std::string();
+    }
+
+    BeaconAdvertiseResult advertiseBeaconV3(const std::string& ownership_proof_xml) override
+    {
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+        const GRC::CpidOption cpid = researcher->Id().TryCpid();
+
+        if (!cpid) {
+            return {BeaconStatus::NO_CPID};
+        }
+
+        const std::string master_url = TrimString(ExtractXML(ownership_proof_xml, "<master_url>", "</master_url>"));
+        const std::string msg = TrimString(ExtractXML(ownership_proof_xml, "<msg>", "</msg>"));
+        const std::string sig_b64 = TrimString(ExtractXML(ownership_proof_xml, "<signature>", "</signature>"));
+
+        if (master_url.empty() || msg.empty() || sig_b64.empty()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        // Parse the msg field: "{account_id} {beacon_public_key_hex}".
+        const size_t space_pos = msg.find(' ');
+        if (space_pos == std::string::npos || space_pos + 1 >= msg.size()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        uint32_t account_id = 0;
+        if (!ParseUInt32(msg.substr(0, space_pos), &account_id) || account_id == 0) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        const std::string public_key_hex = msg.substr(space_pos + 1);
+        const std::vector<uint8_t> pubkey_bytes = ParseHex(public_key_hex);
+        CPubKey beacon_pubkey(pubkey_bytes);
+
+        if (!beacon_pubkey.IsValid()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        // pwalletMain (== the node's single wallet m_wallet) is used to satisfy
+        // SendBeaconContractV3's EXCLUSIVE_LOCKS_REQUIRED(pwalletMain->cs_wallet)
+        // annotation; enforce that single-wallet invariant.
+        assert(pwalletMain && pwalletMain == m_wallet);
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        if (!pwalletMain->HaveKey(beacon_pubkey.GetID())) {
+            return {BeaconStatus::ERROR_MISSING_KEY};
+        }
+
+        bool b64_invalid = false;
+        const std::vector<uint8_t> rsa_sig_bytes = DecodeBase64(sig_b64.c_str(), &b64_invalid);
+
+        if (b64_invalid || rsa_sig_bytes.empty()) {
+            return {BeaconStatus::ERROR_INVALID_PROOF_XML};
+        }
+
+        GRC::Beacon beacon(beacon_pubkey);
+        GRC::OwnershipProof proof;
+        proof.m_master_url = master_url;
+        proof.m_account_id = account_id;
+        proof.m_rsa_signature = rsa_sig_bytes;
+
+        GRC::AdvertiseBeaconResult result = GRC::SendBeaconContractV3(*cpid, beacon, std::move(proof));
+
+        return {MapBeaconError(result.Error())};
+    }
+
+    void reload() override
+    {
+        LOCK(cs_main);
+        GRC::Researcher::Reload();
+    }
+
+    std::unique_ptr<Handler> handleResearcherChanged(ResearcherChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.ResearcherChanged_connect(std::move(fn)));
+    }
+
+    std::unique_ptr<Handler> handleBeaconChanged(BeaconChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.BeaconChanged_connect(std::move(fn)));
+    }
+
+    std::unique_ptr<Handler> handleAccrualChanged(AccrualChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.AccrualChangedFromStakeOrMRC_connect(std::move(fn)));
+    }
+
+    std::unique_ptr<Handler> handleBlocksChanged(BlocksChangedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.NotifyBlocksChanged_connect(std::move(fn)));
+    }
+
+private:
+    CWallet* m_wallet;
+
+    //! Build the full snapshot with cs_main held. Shared by snapshot() (blocking)
+    //! and trySnapshot() (TRY_LOCK). The whole snapshot is built under one cs_main
+    //! hold so it reflects a single consistent tip (identity/magnitude reads off
+    //! the immutable Researcher::Get() pointer do not strictly need cs_main, but
+    //! holding it is harmless and keeps the beacon/version reads consistent).
+    ResearcherSnapshot BuildSnapshotLocked() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+    {
+        ResearcherSnapshot snap;
+
+        const GRC::ResearcherPtr researcher = GRC::Researcher::Get();
+
+        const GRC::MiningId id = researcher->Id();
+        snap.has_cpid = id.Which() == GRC::MiningId::Kind::CPID;
+        snap.has_eligible_projects = snap.has_cpid;
+        snap.cpid = id.ToString();
+        snap.has_split_cpid = researcher->hasSplitCpid();
+        snap.has_rac = researcher->HasRAC();
+        snap.has_pool_projects = researcher->Projects().ContainsPool();
+        snap.detected_pool_mode = !snap.has_eligible_projects && snap.has_pool_projects;
+        snap.email = GRC::Researcher::Email();
+        snap.configured_for_noncruncher_mode = GRC::Researcher::ConfiguredForNoncruncherMode();
+
+        const GRC::Magnitude magnitude = researcher->Magnitude();
+        snap.magnitude = magnitude.Floating();
+        snap.magnitude_text = magnitude.ToString();
+        snap.has_magnitude = magnitude != 0;
+        snap.accrual = researcher->Accrual();
+        snap.accrual_near_limit = researcher->AccrualNearLimit();
+
+        snap.out_of_sync = OutOfSyncByAge();
+        snap.is_v14_enabled = IsV14Enabled(nBestHeight);
+
+        // msMiningErrors is shared with the getstakinginfo RPC; read it under its
+        // own lock. cs_msMiningErrors is a leaf everywhere it is taken
+        // (StoreResearcher, getstakinginfo, and here all acquire it alone and
+        // release without acquiring cs_main under it), so nesting it beneath
+        // cs_main here introduces no lock-order inversion.
+        {
+            LOCK(cs_msMiningErrors);
+            snap.mining_status = msMiningErrors;
+        }
+
+        DeriveBeacon(*researcher, snap);
+        snap.action_needed = ComputeActionNeeded(snap);
+        // UTF-8 for user-facing display: fsbridge::LongPathString is the in-tree
+        // helper documented "for error messages, log output, and any user-facing
+        // display" (it restores the long Unicode form on Windows before UTF-8
+        // encoding), so the GUI's QString::fromStdString() renders non-ASCII paths
+        // correctly cross-platform. Matches the datadir display in bitcoin.cpp.
+        snap.boinc_data_dir = fsbridge::LongPathString(GRC::GetBoincDataDir());
+
+        return snap;
+    }
+
+    //! Ports ResearcherModel::updateBeacon(): derive the beacon status and flatten
+    //! the committed active/pending beacons into the snapshot's value fields.
+    void DeriveBeacon(const GRC::Researcher& researcher, ResearcherSnapshot& snap)
+    {
+        const GRC::CpidOption cpid = researcher.Id().TryCpid();
+
+        if (!cpid) {
+            snap.beacon_status = BeaconStatus::NO_CPID;
+            return;
+        }
+
+        if (snap.out_of_sync) {
+            snap.beacon_status = BeaconStatus::UNKNOWN;
+            return;
+        }
+
+        bool beacon_key_present = false;
+        std::unique_ptr<GRC::Beacon> beacon;
+        std::unique_ptr<GRC::Beacon> pending_beacon;
+
+        if (auto beacon_option = researcher.TryBeacon()) {
+            beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
+            beacon_key_present = beacon->WalletHasPrivateKey(m_wallet);
+        }
+
+        if (auto beacon_option = researcher.TryPendingBeacon()) {
+            pending_beacon = std::make_unique<GRC::Beacon>(std::move(*beacon_option));
+            beacon_key_present = pending_beacon->WalletHasPrivateKey(m_wallet);
+        }
+
+        BeaconStatus beacon_status;
+
+        if (beacon_key_present) {
+            beacon_status = MapBeaconError(researcher.BeaconError());
+        } else if (!beacon && !pending_beacon) {
+            beacon_status = BeaconStatus::NO_BEACON;
+        } else {
+            beacon_status = BeaconStatus::ERROR_MISSING_KEY;
+        }
+
+        const int64_t now = GetAdjustedTime();
+
+        if (beacon_status != BeaconStatus::ACTIVE) {
+            // Keep the mapped/derived status.
+        } else if (pending_beacon) {
+            beacon_status = BeaconStatus::PENDING;
+        } else if (beacon) {
+            if (beacon->Expired(now + BEACON_RENEWAL_WARNING_THRESHOLD)) {
+                beacon_status = BeaconStatus::RENEWAL_NEEDED;
+            } else if (beacon->Renewable(now)) {
+                beacon_status = BeaconStatus::RENEWAL_POSSIBLE;
+            } else if (researcher.Magnitude() == 0) {
+                beacon_status = BeaconStatus::NO_MAGNITUDE;
+            } else {
+                beacon_status = BeaconStatus::ACTIVE;
+            }
+        }
+
+        snap.beacon_status = beacon_status;
+
+        FillBeaconFields(beacon.get(), pending_beacon.get(), now, snap);
+    }
+
+    //! Flatten the committed active/pending beacons into the snapshot's value
+    //! fields — the booleans the former ResearcherModel getters returned plus the
+    //! epochs (Unix seconds) the GUI formats locally.
+    static void FillBeaconFields(const GRC::Beacon* beacon,
+                                 const GRC::Beacon* pending,
+                                 int64_t now,
+                                 ResearcherSnapshot& snap)
+    {
+        snap.beacon_present = beacon != nullptr;
+        snap.pending_beacon_present = pending != nullptr;
+        snap.has_active_beacon = beacon && !beacon->Expired(now);
+        snap.beacon_expired = beacon && beacon->Expired(now);
+        snap.has_renewable_beacon = beacon && beacon->Renewable(now);
+
+        bool has_pending = false;
+        if (pending) {
+            GRC::PendingBeacon pending_beacon(*pending);
+            has_pending = !pending_beacon.PendingExpired(now);
+        }
+        snap.has_pending_beacon = has_pending;
+
+        if (!has_pending) {
+            snap.needs_beacon_auth = false;
+        } else if (!snap.has_active_beacon) {
+            snap.needs_beacon_auth = true;
+        } else {
+            snap.needs_beacon_auth = beacon->m_public_key != pending->m_public_key;
+        }
+
+        if (beacon) {
+            snap.beacon_timestamp = beacon->m_timestamp;
+            snap.beacon_age = beacon->Age(now);
+            snap.time_to_beacon_expiration = GRC::Beacon::MAX_AGE - beacon->Age(now);
+            snap.beacon_address = EncodeDestination(beacon->GetAddress());
+        }
+
+        if (pending) {
+            snap.time_to_pending_beacon_expiration = GRC::PendingBeacon::RETENTION_AGE - pending->Age(now);
+            snap.beacon_verification_code = pending->GetVerificationCode();
+        }
+    }
+
+    //! Ports ResearcherModel::actionNeeded() over the already-filled snapshot.
+    static bool ComputeActionNeeded(const ResearcherSnapshot& snap)
+    {
+        if (snap.out_of_sync) {
+            return false;
+        }
+        if (snap.configured_for_noncruncher_mode) {
+            return false;
+        }
+        if (snap.has_eligible_projects) {
+            return snap.has_split_cpid || (!snap.has_active_beacon && !snap.has_pending_beacon);
+        }
+        return !snap.has_pool_projects;
+    }
+};
+
 } // namespace
 
 std::unique_ptr<StakingStatus> MakeStakingStatus()
@@ -827,6 +1443,11 @@ std::unique_ptr<SideStakeManager> MakeSideStakeManager()
 std::unique_ptr<VotingManager> MakeVotingManager()
 {
     return std::make_unique<VotingManagerImpl>();
+}
+
+std::unique_ptr<ResearcherContext> MakeResearcherContext(CWallet* wallet)
+{
+    return std::make_unique<ResearcherContextImpl>(wallet);
 }
 
 } // namespace interfaces

@@ -100,19 +100,6 @@ src/qt/psgtpooltablemodel.cpp:wallet/wallet.h
 src/qt/psgtpooltablemodel.h:node/psgt_pool.h
 src/qt/qtipcserver.cpp:node/ui_interface.h
 src/qt/qtipcserver.cpp:util.h
-src/qt/researcher/projecttablemodel.cpp:gridcoin/researcher.h
-src/qt/researcher/researchermodel.cpp:chainparams.h
-src/qt/researcher/researchermodel.cpp:gridcoin/beacon.h
-src/qt/researcher/researchermodel.cpp:gridcoin/boinc.h
-src/qt/researcher/researchermodel.cpp:gridcoin/magnitude.h
-src/qt/researcher/researchermodel.cpp:gridcoin/project.h
-src/qt/researcher/researchermodel.cpp:gridcoin/quorum.h
-src/qt/researcher/researchermodel.cpp:gridcoin/researcher.h
-src/qt/researcher/researchermodel.cpp:gridcoin/scraper/scraper.h
-src/qt/researcher/researchermodel.cpp:gridcoin/superblock.h
-src/qt/researcher/researchermodel.cpp:gridcoin/support/xml.h
-src/qt/researcher/researchermodel.cpp:main.h
-src/qt/researcher/researchermodel.cpp:node/ui_interface.h
 src/qt/researcher/researcherwizardpoolpage.cpp:key.h
 src/qt/rpcconsole.cpp:banman.h
 src/qt/rpcconsole.cpp:rpc/client.h
@@ -133,7 +120,6 @@ src/qt/voting/polltablemodel.cpp:util.h
 src/qt/voting/polltablemodel.h:gridcoin/voting/filter.h
 src/qt/voting/poll_types.cpp:gridcoin/voting/poll.h
 src/qt/voting/pollwizarddetailspage.cpp:main.h
-src/qt/voting/votingmodel.cpp:gridcoin/project.h
 src/qt/voting/votingmodel.cpp:gridcoin/voting/poll.h
 src/qt/voting/votingmodel.h:gridcoin/voting/filter.h
 src/qt/voting/votingmodel.h:gridcoin/voting/poll.h

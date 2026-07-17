@@ -13,6 +13,7 @@ namespace interfaces {
 
 class MRC;
 class Node;
+class ResearcherContext;
 class SideStakeManager;
 class StakingStatus;
 class VotingManager;
@@ -54,6 +55,12 @@ public:
     //! poll/vote submission commands) over the global poll registry and the
     //! node's single wallet.
     virtual std::unique_ptr<VotingManager> makeVotingManager();
+
+    //! Returns the researcher/beacon interface (identity/magnitude/accrual/beacon
+    //! snapshot, the fused project table, and beacon/mode commands) over the
+    //! global researcher registries and the node's single wallet. Returns nullptr
+    //! for a null wallet; \p wallet must outlive the returned object.
+    virtual std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet);
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.

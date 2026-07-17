@@ -3,9 +3,9 @@
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
 #include "amount.h"
-#include "gridcoin/project.h"
 #include "gridcoin/voting/poll.h"
 #include "interfaces/handler.h"
+#include "interfaces/researcher.h"
 #include "interfaces/voting.h"
 #include "logging.h"
 #include "optionsmodel.h"
@@ -95,10 +95,12 @@ PollItem MapToPollItem(const interfaces::PollTableItem& src)
 
 VotingModel::VotingModel(
     interfaces::VotingManager& voting_manager,
+    interfaces::ResearcherContext& researcher_context,
     ClientModel& client_model,
     OptionsModel& options_model,
     WalletModel& wallet_model)
     : m_voting(voting_manager)
+    , m_researcher_context(researcher_context)
     , m_client_model(client_model)
     , m_options_model(options_model)
     , m_wallet_model(wallet_model)
@@ -186,22 +188,22 @@ int VotingModel::maxPollAdditionalFieldValueLength()
     return Poll::AdditionalField::MAX_VALUE_SIZE;
 }
 
-int VotingModel::maxPollProjectNameLength()
+int VotingModel::maxPollProjectNameLength() const
 {
     // Not strictly accurate: the protocol limits the max length in bytes, but
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Project::MAX_NAME_SIZE;
+    return m_researcher_context.maxProjectNameLength();
 }
 
-int VotingModel::maxPollProjectUrlLength()
+int VotingModel::maxPollProjectUrlLength() const
 {
     // Not strictly accurate: the protocol limits the max length in bytes, but
     // Qt limits field lengths in UTF-8 characters which may be represented by
     // more than one byte.
     //
-    return Project::MAX_URL_SIZE;
+    return m_researcher_context.maxProjectUrlLength();
 }
 
 OptionsModel& VotingModel::getOptionsModel()
@@ -220,8 +222,10 @@ QStringList VotingModel::getActiveProjectNames() const
 {
     QStringList names;
 
-    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
-        names << QString::fromStdString(project.m_name);
+    // The whitelist read moved node-side (Phase 1d-iv); whitelistProjects()
+    // preserves the former ACTIVE-filter, Sorted(), raw-m_name semantics.
+    for (const auto& project : m_researcher_context.whitelistProjects()) {
+        names << QString::fromStdString(project.name);
     }
 
     return names;
@@ -231,8 +235,8 @@ QStringList VotingModel::getActiveProjectUrls() const
 {
     QStringList Urls;
 
-    for (const auto& project : GetWhitelist().Snapshot().Sorted()) {
-        Urls << QString::fromStdString(project.m_url);
+    for (const auto& project : m_researcher_context.whitelistProjects()) {
+        Urls << QString::fromStdString(project.url);
     }
 
     return Urls;

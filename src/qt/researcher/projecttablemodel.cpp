@@ -2,8 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include "gridcoin/researcher.h"
-
 #include "qt/researcher/projecttablemodel.h"
 #include "qt/researcher/researchermodel.h"
 

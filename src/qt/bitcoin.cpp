@@ -21,6 +21,7 @@
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
@@ -696,12 +697,20 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!voting_manager) {
                     throw std::runtime_error("voting interface unavailable after init");
                 }
+                // The researcher/beacon interface (Phase 1d-iv) over the node's
+                // wallet. Owned here so it outlives the ResearcherModel that drives
+                // it (and the MRCModel/VotingModel that read researcher state).
+                std::unique_ptr<interfaces::ResearcherContext> researcher_context =
+                    interface_init->makeResearcherContext(pwalletMain);
+                if (!researcher_context) {
+                    throw std::runtime_error("researcher interface unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
-                ResearcherModel researcherModel;
+                ResearcherModel researcherModel(*researcher_context);
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
-                VotingModel votingModel(*voting_manager, clientModel, optionsModel, walletModel);
+                VotingModel votingModel(*voting_manager, *researcher_context, clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);

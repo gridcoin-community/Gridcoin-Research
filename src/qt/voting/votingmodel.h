@@ -22,6 +22,7 @@
 
 namespace interfaces {
 class Handler;
+class ResearcherContext;
 class VotingManager;
 } // namespace interfaces
 
@@ -142,6 +143,7 @@ class VotingModel : public QObject
 public:
     VotingModel(
         interfaces::VotingManager& voting_manager,
+        interfaces::ResearcherContext& researcher_context,
         ClientModel& client_model,
         OptionsModel& options_model,
         WalletModel& wallet_model);
@@ -155,8 +157,10 @@ public:
     static int maxPollChoiceLabelLength();
     static int maxPollAdditionalFieldNameLength();
     static int maxPollAdditionalFieldValueLength();
-    static int maxPollProjectNameLength();
-    static int maxPollProjectUrlLength();
+    // Non-static (unlike the other max* limits): these read GRC::Project field
+    // sizes through the researcher interface rather than gridcoin/project.h.
+    int maxPollProjectNameLength() const;
+    int maxPollProjectUrlLength() const;
 
     OptionsModel& getOptionsModel();
     QString getCurrentPollTitle() const;
@@ -204,6 +208,12 @@ private:
     //! result cache, poll/vote submission, and the new-poll / new-vote
     //! notifications. Owned by the process and outlives this model.
     interfaces::VotingManager& m_voting;
+
+    //! The researcher/beacon boundary (Phase 1d-iv). Used here only for the poll
+    //! wizard's active-project pickers (getActiveProjectNames/getActiveProjectUrls),
+    //! which read the whitelist through it. Owned by the process; outlives this model.
+    interfaces::ResearcherContext& m_researcher_context;
+
     ClientModel& m_client_model;
     OptionsModel& m_options_model;
     WalletModel& m_wallet_model;
