@@ -226,7 +226,12 @@ void MultisignPSGTDialog::setWorking(const std::vector<unsigned char>& psgt_byte
 {
     m_working = psgt_bytes;
 
-    const QString b64 = QString::fromStdString(EncodeBase64(m_working.data(), m_working.size()));
+    // Guard the empty case: an empty vector's data() may be nullptr, and
+    // EncodeBase64 does pointer arithmetic (pch + len) that is UB for a null
+    // pointer even when len == 0.
+    const QString b64 = m_working.empty()
+        ? QString()
+        : QString::fromStdString(EncodeBase64(m_working.data(), m_working.size()));
 
     // The input box stays the working PSGT so it can be re-signed/combined/finalized;
     // the result box mirrors it for copy-out. The decoded view is refreshed

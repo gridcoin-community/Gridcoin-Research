@@ -1523,20 +1523,28 @@ public:
     PSGTSignStatus signPoolEntry(const std::string& image_hex, std::string& error,
                                  std::string& txid) override
     {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return PSGTSignStatus::NOT_FOUND;
+        }
         // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
         // holds the wallet unlocked (WalletModel::UnlockContext) around this.
         uint256 tx_hash;
         const PSGTSignStatus status =
-            MapPSGTSignResult(SignAndAdvancePSGT(ImageFromHex(image_hex), error, &tx_hash));
+            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
         txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
         return status;
     }
 
     bool removePoolEntry(const std::string& image_hex) override
     {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return false;
+        }
         // ::PSGTRemovalReason is the core enum; the unqualified name would resolve
         // to interfaces::PSGTRemovalReason (the GUI-facing mirror) inside this namespace.
-        return g_psgt_pool.Remove(ImageFromHex(image_hex), ::PSGTRemovalReason::LOCAL_REMOVE);
+        return g_psgt_pool.Remove(image, ::PSGTRemovalReason::LOCAL_REMOVE);
     }
 
     PSGTPoolStatus poolStatus() override
@@ -1551,7 +1559,11 @@ public:
 
     PSGTBytes poolEntryPsgt(const std::string& image_hex) override
     {
-        if (const auto entry = g_psgt_pool.Get(ImageFromHex(image_hex))) {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return {};
+        }
+        if (const auto entry = g_psgt_pool.Get(image)) {
             return SerializePSGT(entry->psgt);
         }
         return {};
@@ -1852,11 +1864,19 @@ public:
 private:
     CWallet* m_wallet;
 
-    static CScriptID ImageFromHex(const std::string& image_hex)
+    //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
+    //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so
+    //! validate first — this is an interface boundary (headed for IPC) and must not
+    //! act on image 0 for a garbled hex string.
+    static bool TryImageFromHex(const std::string& image_hex, CScriptID& out)
     {
+        if (image_hex.size() != 40 || !IsHex(image_hex)) {
+            return false;
+        }
         uint160 hash;
         hash.SetHex(image_hex);
-        return CScriptID(hash);
+        out = CScriptID(hash);
+        return true;
     }
 
     //! Port of the former MakeRow payment/destination derivation: the largest

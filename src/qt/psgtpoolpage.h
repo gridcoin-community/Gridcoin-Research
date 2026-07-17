@@ -67,6 +67,10 @@ private:
     QPushButton* m_details_button = nullptr;
     QPushButton* m_refresh_button = nullptr;
 
+    //! Build the interface-backed table model once both the wallet model and the
+    //! PSGT interface are present (called from either setter, in any order).
+    void createTableModelIfReady();
+
     //! The multisig image of the selected row, or nullopt if no row selected.
     bool selectedImageHex(std::string& image_hex_out) const;
 };

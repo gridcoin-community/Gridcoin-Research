@@ -88,6 +88,10 @@ void PSGTPoolPage::setPSGTPoolContext(interfaces::PSGTPoolContext* context)
         m_table_model = nullptr;
     }
 
+    // Build the model here too, so the page works regardless of whether the
+    // context or the wallet model is set first.
+    createTableModelIfReady();
+
     updateActiveState();
     updateButtons();
 }
@@ -95,9 +99,16 @@ void PSGTPoolPage::setPSGTPoolContext(interfaces::PSGTPoolContext* context)
 void PSGTPoolPage::setWalletModel(WalletModel* wallet_model)
 {
     m_wallet_model = wallet_model;
-    if (!wallet_model || !m_psgt_context) return;
+    createTableModelIfReady();
+}
 
-    m_table_model = new PSGTPoolTableModel(*m_psgt_context, wallet_model, this);
+void PSGTPoolPage::createTableModelIfReady()
+{
+    // The table model needs both the wallet model and the PSGT interface; either
+    // setter may complete the pair. Build it once, when both are present.
+    if (m_table_model || !m_wallet_model || !m_psgt_context) return;
+
+    m_table_model = new PSGTPoolTableModel(*m_psgt_context, m_wallet_model, this);
     m_table->setModel(m_table_model);
     m_table->horizontalHeader()->setSectionResizeMode(
         PSGTPoolTableModel::Image, QHeaderView::Stretch);
