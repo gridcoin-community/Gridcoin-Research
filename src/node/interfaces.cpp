@@ -14,6 +14,7 @@
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
+#include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
 #include "interfaces/voting.h"
@@ -200,6 +201,11 @@ public:
     std::unique_ptr<VotingManager> makeVotingManager() override
     {
         return MakeVotingManager();
+    }
+
+    std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet) override
+    {
+        return wallet ? MakeResearcherContext(wallet) : nullptr;
     }
 
     std::unique_ptr<Wallet> makeWallet() override
