@@ -1292,10 +1292,12 @@ private:
 
         DeriveBeacon(*researcher, snap);
         snap.action_needed = ComputeActionNeeded(snap);
-        // UTF-8 so the GUI's QString::fromStdString() is correct cross-platform
-        // (path.string() is the system code page on Windows); mirrors the former
-        // GUIUtil::boostPathToQString handling via the in-tree helper.
-        snap.boinc_data_dir = fsbridge::Utf8PathString(GRC::GetBoincDataDir());
+        // UTF-8 for user-facing display: fsbridge::LongPathString is the in-tree
+        // helper documented "for error messages, log output, and any user-facing
+        // display" (it restores the long Unicode form on Windows before UTF-8
+        // encoding), so the GUI's QString::fromStdString() renders non-ASCII paths
+        // correctly cross-platform. Matches the datadir display in bitcoin.cpp.
+        snap.boinc_data_dir = fsbridge::LongPathString(GRC::GetBoincDataDir());
 
         return snap;
     }
