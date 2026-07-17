@@ -178,8 +178,15 @@ UniValue PollResultToJson(const PollReference& poll_ref)
 
     GetPollRegistry().registry_traversal_in_progress = true;
 
+    // Pin the chain tip once so the whole tally reads a single consistent tip.
+    const CBlockIndex* pindex_tip = nullptr;
+    {
+        LOCK(cs_main);
+        pindex_tip = pindexBest;
+    }
+
     try {
-         if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+         if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
             GetPollRegistry().registry_traversal_in_progress = false;
 
             return PollResultToJson(*result, poll_ref);
@@ -231,8 +238,15 @@ UniValue VoteDetailsToJson(const PollReference& poll_ref)
 {
     GetPollRegistry().registry_traversal_in_progress = true;
 
+    // Pin the chain tip once so the whole tally reads a single consistent tip.
+    const CBlockIndex* pindex_tip = nullptr;
+    {
+        LOCK(cs_main);
+        pindex_tip = pindexBest;
+    }
+
     try {
-        if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
+        if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
             GetPollRegistry().registry_traversal_in_progress = false;
 
             return VoteDetailsToJson(*result);

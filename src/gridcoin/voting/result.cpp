@@ -645,10 +645,21 @@ public:
     //! \brief Initialize a legacy vote counter context.
     //!
     //! \param poll The poll to count votes for.
+    //! \param pindex_tip The pinned chain tip whose money supply feeds the legacy
+    //! magnitude factor (see GetMagnitudeFactor).
+    //! \param current_superblock The current superblock as of the pinned tip,
+    //! captured under cs_main by the caller. Pinning it (rather than calling the
+    //! cs_main-guarded Quorum::CurrentSuperblock() during the lock-free tally)
+    //! keeps the magnitude factor consistent with the pinned tip and avoids
+    //! taking cs_main mid-tally.
     //!
-    LegacyVoteCounterContext(const Poll& poll)
+    LegacyVoteCounterContext(const Poll& poll,
+                             const CBlockIndex* pindex_tip,
+                             SuperblockPtr current_superblock)
         : m_poll(poll)
         , m_magnitude_factor(0)
+        , m_pindex_tip(pindex_tip)
+        , m_current_superblock(std::move(current_superblock))
     {
     }
 
@@ -690,13 +701,14 @@ public:
     //!
     //! https://github.com/gridcoin-community/Gridcoin-Research/issues/87
     //!
-    // TODO(#2869 — voting): pindexBest read needs cs_main. Reached from
-    // ProcessLegacyVote, whose call site already has a pragma suppression
-    // because the surrounding VoteResolver chain does not hold cs_main.
-    // The standing voting-redesign work replaces this legacy class entirely;
-    // leaving the suppression in place rather than restructuring caller
-    // chains that the redesign will remove.
-    Weight GetMagnitudeFactor() NO_THREAD_SAFETY_ANALYSIS
+    // Both inputs are pinned: the current superblock and the tip money supply are
+    // captured once under cs_main by BuildFor and handed to this context, rather
+    // than read live (Quorum::CurrentSuperblock() is cs_main-guarded and the old
+    // pindexBest->nMoneySupply read was lock-free). nMoneySupply is immutable once
+    // a block is connected and the CBlockIndex is never freed, so both reads here
+    // are safe without cs_main — which is why the former NO_THREAD_SAFETY_ANALYSIS
+    // suppression on this method is gone.
+    Weight GetMagnitudeFactor()
     {
         if (m_magnitude_factor != 0) {
             return m_magnitude_factor;
@@ -708,9 +720,8 @@ public:
         // behavior here so that legacy poll results match existing nodes,
         // but we may want to fix this in the future:
         //
-        const SuperblockPtr superblock = Quorum::CurrentSuperblock();
-        const uint32_t total_mag = superblock->m_cpids.TotalMagnitude();
-        const uint64_t supply = pindexBest->nMoneySupply;
+        const uint32_t total_mag = m_current_superblock->m_cpids.TotalMagnitude();
+        const uint64_t supply = m_pindex_tip->nMoneySupply;
 
         // Legacy money supply factor calculations added 0.01 to the total
         // magnitude as a lazy way to prevent a division-by-zero error. We
@@ -749,6 +760,16 @@ private:
     LegacyChoiceMap m_legacy_choices_cache;
     Weight m_magnitude_factor;
     std::set<std::string> m_seen_keys;
+
+    //! Pinned chain tip supplying the money supply for the legacy magnitude
+    //! factor. Captured once under cs_main by the caller; the CBlockIndex is
+    //! never freed and nMoneySupply is immutable once the block is connected, so
+    //! reading it here without cs_main is safe.
+    const CBlockIndex* m_pindex_tip;
+
+    //! Pinned current superblock (as of m_pindex_tip), captured under cs_main by
+    //! the caller so the magnitude factor needs no lock during the tally.
+    SuperblockPtr m_current_superblock;
 }; // LegacyVoteCounterContext
 
 //!
@@ -765,13 +786,18 @@ public:
     //! \param poll_start_height Block height of the poll's starting block,
     //! used to anchor consensus-critical PoolRegistry queries (AVW) so
     //! every node tallying the same poll uses an identical registry view.
+    //! \param pindex_tip Pinned chain tip, forwarded to the legacy vote counter
+    //! for the money supply that feeds its magnitude factor.
+    //! \param current_superblock Pinned current superblock (as of pindex_tip),
+    //! forwarded to the legacy vote counter for its magnitude factor.
     //!
-    VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height)
+    VoteCounter(CTxDB& txdb, const Poll& poll, int poll_start_height,
+                const CBlockIndex* pindex_tip, SuperblockPtr current_superblock)
         : m_txdb(txdb)
         , m_poll(poll)
         , m_poll_start_height(poll_start_height)
         , m_resolver(txdb, poll)
-        , m_legacy(poll)
+        , m_legacy(poll, pindex_tip, std::move(current_superblock))
     {
         // Snapshot the pool CPID set at the poll's start height into an
         // unordered_set for O(1) membership in ProcessVote. Single
@@ -1113,10 +1139,13 @@ private:
 //! specified poll.
 //!
 //! \param poll Poll to fetch the superblock for.
+//! \param pindex_tip Pinned chain tip to walk back from (in place of the live
+//! pindexBest) so the result is consistent with the rest of the tally.
 //!
 //! \return Latest superblock active during the poll.
 //!
-SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+SuperblockPtr ResolveSuperblockForPoll(const Poll& poll, const CBlockIndex* pindex_tip)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     SuperblockPtr superblock = Quorum::CurrentSuperblock();
 
@@ -1124,7 +1153,7 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRE
         return superblock;
     }
 
-    const CBlockIndex* pindex = pindexBest;
+    const CBlockIndex* pindex = pindex_tip;
 
     // Seek past the current superblock:
     for (; pindex && pindex->nHeight >= superblock.m_height; pindex = pindex->pprev);
@@ -1147,17 +1176,20 @@ SuperblockPtr ResolveSuperblockForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRE
 //! weight for the specified poll.
 //!
 //! \param poll Poll to fetch the money supply for.
+//! \param pindex_tip Pinned chain tip to walk back from (in place of the live
+//! pindexBest) so the result is consistent with the rest of the tally.
 //!
 //! \return Money supply as of the last block in the poll window in units of
 //! 1/100000000 GRC.
 //!
-CAmount ResolveMoneySupplyForPoll(const Poll& poll) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+CAmount ResolveMoneySupplyForPoll(const Poll& poll, const CBlockIndex* pindex_tip)
+    EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
-    if (!poll.Expired(pindexBest->nTime)) {
-        return pindexBest->nMoneySupply;
+    if (!poll.Expired(pindex_tip->nTime)) {
+        return pindex_tip->nMoneySupply;
     }
 
-    const CBlockIndex* pindex = pindexBest;
+    const CBlockIndex* pindex = pindex_tip;
     const int64_t poll_expiration = poll.Expiration();
 
     for (; pindex && pindex->nTime > poll_expiration; pindex = pindex->pprev);
@@ -1206,7 +1238,7 @@ PollResult::PollResult(Poll poll)
     m_responses.resize(m_poll.Choices().size());
 }
 
-PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
+PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip)
 {
     g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
 
@@ -1220,17 +1252,24 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
         // current tip so VoteCounter still functions; the per-vote
         // recording is best-effort in that degenerate case.
         //
-        // Both GetStartingHeight() (it walks the chain index) and
-        // nBestHeight (annotated GUARDED_BY(cs_main)) require cs_main —
+        // GetStartingHeight() walks the chain index, so it requires cs_main —
         // matching the pattern in PollReference::GetActiveVoteWeight at
-        // voting/registry.cpp:510.
+        // voting/registry.cpp:510. The degenerate fallback uses the pinned tip's
+        // height (nHeight is immutable per block index and the object is never
+        // freed, so it needs no lock) instead of the live nBestHeight.
         int poll_start_height;
+        SuperblockPtr current_superblock;
         {
             LOCK(cs_main);
-            poll_start_height = poll_ref.GetStartingHeight().value_or(nBestHeight);
+            poll_start_height = poll_ref.GetStartingHeight().value_or(pindex_tip->nHeight);
+
+            // Pin the current superblock (as of the pinned tip) for the legacy
+            // magnitude factor, under the same cs_main we already hold here, so
+            // the tally itself stays lock-free.
+            current_superblock = Quorum::CurrentSuperblock();
         }
 
-        VoteCounter counter(txdb, result.m_poll, poll_start_height);
+        VoteCounter counter(txdb, result.m_poll, poll_start_height, pindex_tip, std::move(current_superblock));
 
         if (result.m_poll.IncludesMagnitudeWeight()) {
             SuperblockPtr superblock;
@@ -1238,8 +1277,8 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
 
             {
                 LOCK(cs_main);
-                superblock = ResolveSuperblockForPoll(result.m_poll);
-                supply = ResolveMoneySupplyForPoll(result.m_poll);
+                superblock = ResolveSuperblockForPoll(result.m_poll, pindex_tip);
+                supply = ResolveMoneySupplyForPoll(result.m_poll, pindex_tip);
             }
 
             counter.EnableMagnitudeWeight(std::move(superblock), supply);
@@ -1255,7 +1294,7 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref)
                  poll_ref.Time(),
                  poll_ref.GetMagnitudeWeightFactor().ToString());
 
-        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result)) {
+        if (auto active_vote_weight = poll_ref.GetActiveVoteWeight(result, pindex_tip)) {
             result.m_active_vote_weight = active_vote_weight;
 
             result.m_vote_percent_avw = (double) result.m_total_weight / (double) *result.m_active_vote_weight * 100.0;

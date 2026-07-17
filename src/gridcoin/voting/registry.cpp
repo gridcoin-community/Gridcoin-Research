@@ -540,7 +540,8 @@ Fraction PollReference::GetMagnitudeWeightFactor() const
     return m_magnitude_weight_factor;
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result,
+                                                          const CBlockIndex* pindex_tip) const
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
@@ -560,9 +561,12 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
 
-    // If the poll is still active, then pindex_end will be nullptr, so then use the current chain head.
+    // If the poll is still active, then pindex_end will be nullptr, so then use the pinned chain tip
+    // supplied by the caller (captured once under cs_main) rather than re-reading the live pindexBest.
+    // This keeps every active poll in a table build anchored to the same end height; on a genuine tip
+    // change the poll-result cache re-tallies against the new tip.
     if (pindex_end == nullptr) {
-        pindex_end = pindexBest;
+        pindex_end = pindex_tip;
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll is still active. Using head of the chain (%i) as end height.",
                  __func__, pindex_end->nHeight);

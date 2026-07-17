@@ -172,9 +172,12 @@ public:
     //!
     //! \brief Computes the Active Vote Weight for the poll, which is used to determine whether the poll is validated.
     //! \param result: The actual tabulated votes (poll result)
+    //! \param pindex_tip: Pinned chain tip used as the end of the range for an
+    //! active poll, so every poll in a table build tallies against one consistent
+    //! tip rather than a live pindexBest that shifts each block.
     //! \return ActiveVoteWeight
     //!
-    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result) const;
+    std::optional<CAmount> GetActiveVoteWeight(const PollResultOption &result, const CBlockIndex* pindex_tip) const;
 
     //!
     //! \brief Provides string equivalent of PollNotificationType

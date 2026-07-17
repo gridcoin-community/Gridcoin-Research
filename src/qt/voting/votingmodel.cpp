@@ -48,12 +48,12 @@ void NewVoteReceived(VotingModel* model, uint256 poll_txid)
                               Q_ARG(QString, QString().fromStdString(poll_txid.ToString())));
 }
 
-std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
+std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter, const CBlockIndex* pindex_tip)
 {
     g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
 
     const PollReference& ref = iter->Ref();
-    const PollResultOption result = PollResult::BuildFor(ref);
+    const PollResultOption result = PollResult::BuildFor(ref, pindex_tip);
 
     if (!result) {
         return std::nullopt;
@@ -320,6 +320,16 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
     // We do up to three tries if there was a reorg/fork during the middle of the run. This is more than enough.
     for (unsigned int i = 0; i < 3; ++i)
     {
+        // Pin the chain tip once per attempt (captured under cs_main, which is released before
+        // cs_poll_registry is taken below, preserving the cs_main -> cs_poll_registry order). Every
+        // poll tallied in this attempt uses this single tip, so the table is internally consistent;
+        // a reorg mid-run is caught by the detector below and the next attempt re-pins a fresh tip.
+        const CBlockIndex* pindex_tip = nullptr;
+        {
+            LOCK(cs_main);
+            pindex_tip = pindexBest;
+        }
+
         for (const auto& iter : WITH_LOCK(m_registry.cs_poll_registry, return m_registry.Polls().Where(flags))) {
             // First check to see if the poll item already exists, and if so is it stale (i.e. a new vote has
             // been received for that poll). If it is stale, it will need rebuilding. If not, we insert the cached
@@ -360,7 +370,7 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
 
             if (pollitem_needs_rebuild) {
                 try {
-                    if (std::optional<PollItem> item = BuildPollItem(iter)) {
+                    if (std::optional<PollItem> item = BuildPollItem(iter, pindex_tip)) {
                         // This will replace any stale existing entry in the cache with the freshly built item.
                         // It will also correctly add a new entry for a new item. The state of the pending expiry
                         // notification is retained from the stale entry to the refreshed one.
