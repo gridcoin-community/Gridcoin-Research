@@ -13,6 +13,8 @@
 
 #include <vector>
 
+class CBlockIndex;
+
 namespace GRC {
 //!
 //! \brief Contains the results of a poll.
@@ -124,11 +126,19 @@ public:
     //! \brief Generate the result for the specified poll.
     //!
     //! \param poll_ref Refers to the poll to generate the result for.
+    //! \param pindex_tip The chain tip to tally the poll against, captured once
+    //! by the caller under cs_main. Pinning a single tip for the whole tally
+    //! (rather than re-reading the live pindexBest at each step) keeps the money
+    //! supply, superblock, and active-vote-weight reads mutually consistent, and
+    //! lets the legacy magnitude factor read the tip's money supply without
+    //! holding cs_main (the tip's CBlockIndex is never freed and nMoneySupply is
+    //! immutable once connected). Block-index chain walks still take a tight
+    //! per-operation cs_main; the poll-result cache re-tallies on a tip change.
     //!
     //! \return An object that contains the calculated result for the poll or
     //! no result if an error occurred.
     //!
-    static PollResultOption BuildFor(const PollReference& poll_ref);
+    static PollResultOption BuildFor(const PollReference& poll_ref, const CBlockIndex* pindex_tip);
 
     //!
     //! \brief Get the offset of the poll choice with the most votes.

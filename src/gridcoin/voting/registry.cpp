@@ -540,7 +540,8 @@ Fraction PollReference::GetMagnitudeWeightFactor() const
     return m_magnitude_weight_factor;
 }
 
-std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result) const
+std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption& result,
+                                                          const CBlockIndex* pindex_tip) const
 {
     // Instrument this so we can log real time performance.
     g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
@@ -560,9 +561,12 @@ std::optional<CAmount> PollReference::GetActiveVoteWeight(const PollResultOption
     LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll start height = %i.",
              __func__, pindex_start->nHeight);
 
-    // If the poll is still active, then pindex_end will be nullptr, so then use the current chain head.
+    // If the poll is still active, then pindex_end will be nullptr, so then use the pinned chain tip
+    // supplied by the caller (captured once under cs_main) rather than re-reading the live pindexBest.
+    // This keeps every active poll in a table build anchored to the same end height; on a genuine tip
+    // change the poll-result cache re-tallies against the new tip.
     if (pindex_end == nullptr) {
-        pindex_end = pindexBest;
+        pindex_end = pindex_tip;
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Poll is still active. Using head of the chain (%i) as end height.",
                  __func__, pindex_end->nHeight);
@@ -1045,7 +1049,7 @@ void PollRegistry::Reset() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     m_polls.clear();
     m_polls_by_txid.clear();
     m_latest_poll = nullptr;
-    registry_traversal_in_progress = false;
+    registry_traversal_in_progress = 0;
     reorg_occurred_during_reg_traversal = false;
 }
 
@@ -1334,13 +1338,13 @@ void PollRegistry::DetectReorg()
     // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
     // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
     // these handlers are only triggered by those two contract types.
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, ",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %d, reorg_occurred_during_reg_traversal = %d, ",
              __func__,
-             registry_traversal_in_progress,
-             reorg_occurred_during_reg_traversal
+             registry_traversal_in_progress.load(),
+             reorg_occurred_during_reg_traversal.load()
              );
 
-    if (registry_traversal_in_progress && g_reorg_in_progress) {
+    if (registry_traversal_in_progress > 0 && g_reorg_in_progress) {
         reorg_occurred_during_reg_traversal = true;
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Setting reorg_occurred_during_reg_traversal to true.", __func__);
     } else {

@@ -5,14 +5,23 @@
 #include "interfaces/staking.h"
 #include "interfaces/mrc.h"
 #include "interfaces/sidestake.h"
+#include "interfaces/voting.h"
 
 #include "amount.h"
+#include "chainparams.h"
 #include "gridcoin/contract/contract.h"
 #include "gridcoin/contract/message.h"
 #include "gridcoin/mrc.h"
 #include "gridcoin/sidestake.h"
 #include "gridcoin/staking/difficulty.h"
 #include "gridcoin/staking/status.h"
+#include "gridcoin/voting/builders.h"
+#include "gridcoin/voting/filter.h"
+#include "gridcoin/voting/fwd.h"
+#include "gridcoin/voting/poll.h"
+#include "gridcoin/voting/poll_result_cache.h"
+#include "gridcoin/voting/registry.h"
+#include "gridcoin/voting/result.h"
 #include "interfaces/handler.h"
 #include "key_io.h"
 #include "main.h"
@@ -543,6 +552,261 @@ private:
     }
 };
 
+//! In-process VotingManager implementation. buildPollTable drives the core
+//! PollResultCache (tally memoization, pinned-tip consistency and the reorg-retry
+//! all live in the cache) and flattens each result into a value row; submitPoll /
+//! submitVote reproduce the former VotingModel send paths through the poll/vote
+//! builders, choosing the payload version node-side. The GUI keeps the wallet
+//! unlock (a modal it drives through the wallet interface) and all presentation
+//! — see interfaces/voting.h.
+class VotingManagerImpl : public VotingManager
+{
+public:
+    std::vector<PollTableItem> buildPollTable(int filter_flags) override
+    {
+        std::vector<PollTableItem> table;
+
+        for (const GRC::PollResultItem& src :
+             GRC::GetPollResultCache().BuildPollTable(static_cast<GRC::PollFilterFlag>(filter_flags))) {
+            table.push_back(ToTableItem(src));
+        }
+
+        return table;
+    }
+
+    CAmount estimatePollFee() override
+    {
+        // Matches the former VotingModel::estimatePollFee. TODO: derive a precise
+        // fee from the balance-attestation output count rather than a flat value.
+        return 50 * COIN;
+    }
+
+    std::string currentPollTitle() override
+    {
+        // Raw title; the GUI applies its cosmetic formatting (length cap, '_' -> ' ').
+        return GRC::GetCurrentPollTitle();
+    }
+
+    int64_t latestActivePollTime() override
+    {
+        // The newest active poll's timestamp. This needs only cs_poll_registry:
+        // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
+        // reads a stored timestamp — neither touches cs_main — so it is not taken
+        // (avoiding needless cs_main contention). The sequence is built under
+        // cs_poll_registry (matching PollResultCache::BuildPollTable's Where()
+        // WITH_LOCK); the per-ref reads then run outside the registry lock as in
+        // that walk.
+        GRC::PollRegistry& registry = GRC::GetPollRegistry();
+
+        int64_t latest = 0;
+        for (const auto& iter : WITH_LOCK(registry.cs_poll_registry, return registry.Polls().OnlyActive())) {
+            latest = std::max<int64_t>(latest, iter->Ref().Time());
+        }
+
+        return latest;
+    }
+
+    VotingSubmitResult submitPoll(const PollSubmission& poll) override
+    {
+        // The payload version (and, pre-v3, the forced SURVEY type) depend on the
+        // chain height, so they are resolved node-side rather than in the GUI.
+        uint32_t payload_version = 0;
+        GRC::PollType type_by_version = GRC::PollType::SURVEY;
+        {
+            LOCK(cs_main);
+            const bool v3_enabled = IsPollV3Enabled(nBestHeight);
+            payload_version = v3_enabled ? 3 : 2;
+            type_by_version = v3_enabled ? static_cast<GRC::PollType>(poll.type) : GRC::PollType::SURVEY;
+        }
+
+        std::vector<GRC::Poll::AdditionalField> additional_fields;
+        for (const auto& field : poll.additional_fields) {
+            additional_fields.push_back(GRC::Poll::AdditionalField(field.name, field.value, field.required));
+        }
+
+        try {
+            GRC::PollBuilder builder = GRC::PollBuilder();
+
+            {
+                // SetPayloadVersion reads nBestHeight; the other setters do not.
+                LOCK(cs_main);
+                builder = std::move(builder).SetPayloadVersion(payload_version);
+            }
+
+            builder = std::move(builder)
+                          .SetType(type_by_version)
+                          .SetTitle(poll.title)
+                          .SetDuration(poll.duration_days)
+                          .SetQuestion(poll.question)
+                          .SetWeightType(poll.weight_type)
+                          .SetResponseType(poll.response_type)
+                          .SetUrl(poll.url)
+                          .SetAdditionalFields(additional_fields);
+
+            for (const auto& choice : poll.choices) {
+                builder = builder.AddChoice(choice);
+            }
+
+            // The wallet must already be unlocked by the caller; SendPollContract
+            // signs and broadcasts. A VotingError (or any other failure) is turned
+            // into a result rather than thrown across the interface boundary.
+            const uint256 txid = GRC::SendPollContract(std::move(builder));
+            return Submitted(txid);
+        } catch (const std::exception& e) {
+            return Failed(e.what());
+        }
+    }
+
+    VotingSubmitResult submitVote(const std::string& poll_txid,
+                                  const std::vector<uint8_t>& choice_offsets) override
+    {
+        const uint256 txid = uint256S(poll_txid);
+
+        // Look up and read the poll under both locks it needs, then copy out the
+        // poll and its txid and release before building/broadcasting the vote:
+        //   - cs_poll_registry: TryByTxid reads the registry map, and
+        //     TryReadFromDisk mutates the PollReference (m_timestamp,
+        //     m_magnitude_weight_factor).
+        //   - cs_main: TryReadFromDisk's ResolveMagnitudeWeightFactor walks the
+        //     chain index (GetStartingBlockIndexPtr).
+        // SendVoteContract takes cs_main + cs_wallet itself, so the build/broadcast
+        // must run OUTSIDE these locks (and cs_main is no longer held across it).
+        GRC::PollOption poll;
+        uint256 poll_reference_txid;
+        {
+            LOCK2(cs_main, GRC::GetPollRegistry().cs_poll_registry);
+
+            const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
+            if (!ref) {
+                return SubmitStatus(VotingSubmitStatus::POLL_NOT_FOUND);
+            }
+
+            poll_reference_txid = ref->Txid();
+            poll = ref->TryReadFromDisk();
+        }
+
+        if (!poll) {
+            return SubmitStatus(VotingSubmitStatus::POLL_LOAD_FAILED);
+        }
+
+        try {
+            GRC::VoteBuilder builder = GRC::VoteBuilder::ForPoll(*poll, poll_reference_txid);
+            builder = builder.AddResponses(choice_offsets);
+
+            const uint256 vote_txid = GRC::SendVoteContract(std::move(builder));
+            return Submitted(vote_txid);
+        } catch (const std::exception& e) {
+            return Failed(e.what());
+        }
+    }
+
+    std::unique_ptr<Handler> handleNewPollReceived(NewPollReceivedFn fn) override
+    {
+        return MakeSignalHandler(uiInterface.NewPollReceived_connect(std::move(fn)));
+    }
+
+    std::unique_ptr<Handler> handleNewVoteReceived(NewVoteReceivedFn fn) override
+    {
+        // The core signal carries a uint256; hand the consumer its hex form so no
+        // core type crosses the boundary.
+        return MakeSignalHandler(uiInterface.NewVoteReceived_connect(
+            [fn = std::move(fn)](const uint256& poll_txid) { fn(poll_txid.ToString()); }));
+    }
+
+private:
+    //! Flatten a core tally bundle into the pointer-free value row the GUI renders.
+    //! Mirrors the former VotingModel BuildPollItem field-for-field, but produces
+    //! std::string / value types and leaves cosmetic string transforms (underscore
+    //! substitution, URL scheme prefixing) to the GUI.
+    static PollTableItem ToTableItem(const GRC::PollResultItem& src)
+    {
+        const GRC::PollResult& result = src.result;
+        const GRC::Poll& poll = result.m_poll;
+
+        PollTableItem item;
+        item.txid = src.txid.ToString();
+        item.payload_version = src.payload_version;
+        item.type_str = poll.PollTypeToString();
+        item.title = poll.m_title;
+        item.question = poll.m_question;
+        item.url = poll.m_url;
+        item.start_time = poll.m_timestamp;
+        item.expiration = poll.Expiration();
+        item.duration_days = poll.m_duration_days;
+        item.weight_type = poll.m_weight_type.Raw();
+        item.weight_type_str = poll.WeightTypeToString();
+        item.response_type = poll.ResponseTypeToString();
+        item.total_votes = result.m_votes.size();
+        item.total_weight = result.m_total_weight / COIN;
+
+        if (result.m_active_vote_weight) {
+            item.active_weight = *result.m_active_vote_weight / COIN;
+        }
+
+        if (result.m_vote_percent_avw) {
+            item.vote_percent_avw = *result.m_vote_percent_avw;
+        }
+
+        item.validated = result.m_poll_results_validated;
+        item.finished = result.m_finished;
+        item.multiple_choice = poll.AllowsMultipleChoices();
+
+        for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+            PollAdditionalField field;
+            field.name = poll.AdditionalFields().At(i)->m_name;
+            field.value = poll.AdditionalFields().At(i)->m_value;
+            field.required = poll.AdditionalFields().At(i)->m_required;
+            item.additional_fields.push_back(std::move(field));
+        }
+
+        for (size_t i = 0; i < result.m_responses.size(); ++i) {
+            PollChoiceResult choice;
+            choice.label = poll.Choices().At(i)->m_label;
+            choice.votes = result.m_responses[i].m_votes;
+            choice.weight = result.m_responses[i].m_weight / COIN;
+            item.choices.push_back(std::move(choice));
+        }
+
+        item.self_voted = result.m_self_voted;
+        if (result.m_self_voted) {
+            for (const auto& response : result.m_self_vote_detail.m_responses) {
+                item.self_vote_responses.push_back(PollSelfVoteResponse{response.first, response.second});
+            }
+        }
+
+        if (!result.m_votes.empty()) {
+            item.top_answer = result.WinnerLabel();
+        }
+
+        return item;
+    }
+
+    static VotingSubmitResult Submitted(const uint256& txid)
+    {
+        VotingSubmitResult res;
+        res.status = VotingSubmitStatus::OK;
+        res.txid = txid.ToString();
+        return res;
+    }
+
+    //! A categorized failure (GUI maps the status to translated text).
+    static VotingSubmitResult SubmitStatus(VotingSubmitStatus status)
+    {
+        VotingSubmitResult res;
+        res.status = status;
+        return res;
+    }
+
+    //! A failure carrying a dynamic message (e.g. a VotingError) shown as-is.
+    static VotingSubmitResult Failed(std::string error)
+    {
+        VotingSubmitResult res;
+        res.status = VotingSubmitStatus::FAILED;
+        res.error = std::move(error);
+        return res;
+    }
+};
+
 } // namespace
 
 std::unique_ptr<StakingStatus> MakeStakingStatus()
@@ -558,6 +822,11 @@ std::unique_ptr<MRC> MakeMRC(CWallet* wallet)
 std::unique_ptr<SideStakeManager> MakeSideStakeManager()
 {
     return std::make_unique<SideStakeManagerImpl>();
+}
+
+std::unique_ptr<VotingManager> MakeVotingManager()
+{
+    return std::make_unique<VotingManagerImpl>();
 }
 
 } // namespace interfaces

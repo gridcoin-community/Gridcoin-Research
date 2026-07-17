@@ -9,18 +9,21 @@
 #include "gridcoin/voting/filter.h"
 #include "qt/voting/poll_types.h"
 #include "gridcoin/voting/poll.h"
-#include "gridcoin/voting/result.h"
 
 #include <QDateTime>
 #include <QObject>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <vector>
 #include <QVariant>
 #include <QStringList>
-#include <boost/signals2/connection.hpp>
 
-namespace GRC {
-class PollRegistry;
-}
+namespace interfaces {
+class Handler;
+class VotingManager;
+} // namespace interfaces
 
 class ClientModel;
 class OptionsModel;
@@ -55,6 +58,21 @@ public:
 };
 
 //!
+//! \brief One selected choice of the wallet holder's own vote: the offset into
+//! the poll's choices and the voting weight resolved for it.
+//!
+//! This is the GUI value type that replaces the former embedded core
+//! GRC::PollResult::VoteDetail — the node side (interfaces::PollTableItem)
+//! precomputes it, so no core type crosses into the GUI.
+//!
+class PollSelfVoteResponse
+{
+public:
+    uint8_t m_choice_offset = 0;
+    uint64_t m_weight = 0;
+};
+
+//!
 //! \brief Represents a poll contract and associated responses.
 //!
 class PollItem
@@ -83,9 +101,15 @@ public:
     std::vector<AdditionalFieldEntry> m_additional_field_entries;
     std::vector<VoteResultItem> m_choices;
     bool m_self_voted;
-    GRC::PollResult::VoteDetail m_self_vote_detail;
+    std::vector<PollSelfVoteResponse> m_self_vote_responses;
 
-    bool m_stale = true;
+    //! Display flag for the "Stale results" column / pollcard indicator: set when
+    //! a new vote for this poll arrives (handlePollStaleFlag) after the row was
+    //! built, and cleared when the table is next rebuilt. This is purely a GUI
+    //! freshness hint — the authoritative tally invalidation lives in the core
+    //! PollResultCache — so a freshly mapped row starts not stale.
+    bool m_stale = false;
+
     bool m_expire_notified = false;
 };
 
@@ -117,6 +141,7 @@ class VotingModel : public QObject
 
 public:
     VotingModel(
+        interfaces::VotingManager& voting_manager,
         ClientModel& client_model,
         OptionsModel& options_model,
         WalletModel& wallet_model);
@@ -175,29 +200,36 @@ signals:
     void newVoteReceived(QString poll_txid_string);
 
 private:
-    GRC::PollRegistry& m_registry;
+    //! The node-side voting boundary (Phase 1d-iii): poll table over the core
+    //! result cache, poll/vote submission, and the new-poll / new-vote
+    //! notifications. Owned by the process and outlives this model.
+    interfaces::VotingManager& m_voting;
     ClientModel& m_client_model;
     OptionsModel& m_options_model;
     WalletModel& m_wallet_model;
     int64_t m_last_poll_time;
 
     //!
-    //! \brief m_pollitems. A cache of poll items associated with the polls in the registry.
-    //! Each entry in the cache has a stale flag which is set when vote activity occurs, and is
-    //! defaulted to true (in construction) when the item is rebuilt by BuildPollItem inBuildPollTable,
-    //! then changed to false when BuildPollItem completes. When a vote is received (or "un" received
-    //! in a reorg situation), the NewVoteReceived signal from the core will cause the stale flag
-    //! in the appropriate corresponding poll item in this cache to be changed back to true.
+    //! \brief m_pollitems. A GUI-side store of the poll items last returned by
+    //! buildPollTable, keyed by poll txid. It is NOT the tally cache — the core
+    //! PollResultCache memoizes tallies now — but it retains the per-poll
+    //! m_expire_notified flag across rebuilds so getExpiringPollsNotNotified can
+    //! give a single-shot expiry notification per poll.
     //!
     std::map<uint256, PollItem> m_pollitems;
+
+    //! Guards m_pollitems: buildPollTable updates it on the PollTableModel worker
+    //! thread while getExpiringPollsNotNotified reads/mutates it on the GUI thread,
+    //! so both must hold this mutex.
+    std::mutex m_pollitems_mutex;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 
-    //! Retained core-signal connections, cleared on teardown so a signal that
-    //! fires after this model is destroyed cannot invoke a slot bound to freed
-    //! memory. scoped_connection disconnects on destruction (issue #3129).
-    std::vector<boost::signals2::scoped_connection> m_handlers;
+    //! Retained interface subscriptions, released on teardown so a notification
+    //! that fires after this model is destroyed cannot invoke a callback bound to
+    //! freed memory. The Handlers disconnect on destruction (issue #3129).
+    std::vector<std::unique_ptr<interfaces::Handler>> m_handlers;
 
 private slots:
     void handleNewPoll(int64_t poll_time);

@@ -23,6 +23,7 @@
 #include "interfaces/node.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
+#include "interfaces/voting.h"
 #include "interfaces/wallet.h"
 #include "interfaces/wallet_tx_source.h"
 #include "init.h"
@@ -688,12 +689,19 @@ int StartGridcoinQt(int argc, char *argv[], QApplication& app, OptionsModel& opt
                 if (!mrc) {
                     throw std::runtime_error("MRC interface unavailable after init");
                 }
+                // The voting interface (Phase 1d-iii): the poll table over the
+                // core result cache and poll/vote submission. Owned here so it
+                // outlives the VotingModel that drives it.
+                std::unique_ptr<interfaces::VotingManager> voting_manager = interface_init->makeVotingManager();
+                if (!voting_manager) {
+                    throw std::runtime_error("voting interface unavailable after init");
+                }
 
                 ClientModel clientModel(*node, *staking_status, &optionsModel);
                 WalletModel walletModel(*wallet, *wallet_tx_source, pwalletMain, &optionsModel);
                 ResearcherModel researcherModel;
                 MRCModel mrcModel(*mrc, &walletModel, &clientModel, &researcherModel);
-                VotingModel votingModel(clientModel, optionsModel, walletModel);
+                VotingModel votingModel(*voting_manager, clientModel, optionsModel, walletModel);
 
                 window.setResearcherModel(&researcherModel);
                 window.setClientModel(&clientModel);

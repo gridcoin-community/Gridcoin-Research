@@ -176,21 +176,29 @@ UniValue PollResultToJson(const PollReference& poll_ref)
 {
     g_timer.InitTimer("buildPollTable", LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
 
-    GetPollRegistry().registry_traversal_in_progress = true;
+    // Mark a traversal in progress for the whole call (RAII, cleared on every
+    // return/throw below); the count-based scope keeps the reorg detector armed
+    // even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    // Pin the chain tip once so the whole tally reads a single consistent tip.
+    const CBlockIndex* pindex_tip = nullptr;
+    {
+        LOCK(cs_main);
+        pindex_tip = pindexBest;
+    }
+
+    if (!pindex_tip) {
+        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
+    }
 
     try {
-         if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-            GetPollRegistry().registry_traversal_in_progress = false;
-
+         if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
             return PollResultToJson(*result, poll_ref);
         }
     } catch (InvalidDuetoReorgFork& e) {
-        GetPollRegistry().registry_traversal_in_progress = false;
-
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-
-    GetPollRegistry().registry_traversal_in_progress = false;
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk");
 }
@@ -229,21 +237,29 @@ UniValue VoteDetailsToJson(const PollResult& result)
 
 UniValue VoteDetailsToJson(const PollReference& poll_ref)
 {
-    GetPollRegistry().registry_traversal_in_progress = true;
+    // Mark a traversal in progress for the whole call (RAII, cleared on every
+    // return/throw below); the count-based scope keeps the reorg detector armed
+    // even if this overlaps a GUI table build.
+    PollRegistry::TraversalScope traversal(GetPollRegistry());
+
+    // Pin the chain tip once so the whole tally reads a single consistent tip.
+    const CBlockIndex* pindex_tip = nullptr;
+    {
+        LOCK(cs_main);
+        pindex_tip = pindexBest;
+    }
+
+    if (!pindex_tip) {
+        throw JSONRPCError(RPC_IN_WARMUP, "Chain tip not available yet");
+    }
 
     try {
-        if (const PollResultOption result = PollResult::BuildFor(poll_ref)) {
-            GetPollRegistry().registry_traversal_in_progress = false;
-
+        if (const PollResultOption result = PollResult::BuildFor(poll_ref, pindex_tip)) {
             return VoteDetailsToJson(*result);
         }
     } catch (InvalidDuetoReorgFork& e) {
-        GetPollRegistry().registry_traversal_in_progress = false;
-
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk due to reorg in progress during inquiry.");
     }
-
-    GetPollRegistry().registry_traversal_in_progress = false;
 
     throw JSONRPCError(RPC_INTERNAL_ERROR, "Failed to load poll from disk.");
 }

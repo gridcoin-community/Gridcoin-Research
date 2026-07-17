@@ -2,143 +2,103 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or https://opensource.org/licenses/mit-license.php.
 
-#include <optional>
-
-#include "hash.h"
-#include "chainparams.h"
-#include "gridcoin/contract/contract.h"
+#include "amount.h"
 #include "gridcoin/project.h"
-#include "gridcoin/voting/builders.h"
 #include "gridcoin/voting/poll.h"
-#include "gridcoin/voting/registry.h"
-#include "gridcoin/voting/result.h"
-#include "gridcoin/voting/payloads.h"
+#include "interfaces/handler.h"
+#include "interfaces/voting.h"
 #include "logging.h"
-#include "main.h"
 #include "optionsmodel.h"
 #include "qt/clientmodel.h"
 #include "qt/voting/votingmodel.h"
 #include "qt/walletmodel.h"
-#include "sync.h"
-#include "node/ui_interface.h"
+#include "uint256.h"
+#include "util/time.h"
 
-#include <boost/signals2/signal.hpp>
+#include <optional>
 
 using namespace GRC;
 using LogFlags = BCLog::LogFlags;
 
 namespace {
 //!
-//! \brief Model callback bound to the \c NewPollReceived core signal.
+//! \brief Map a node-side poll row (interfaces::PollTableItem — all value data,
+//! tally already run and canonical strings already resolved by the core) to the
+//! Qt PollItem the views render. Only cosmetic transforms remain here: '_' -> ' '
+//! in free text, trimming and http:// prefixing the URL, and Unix-seconds ->
+//! QDateTime (milliseconds). Weights that display in whole GRC were already
+//! divided by COIN on the node side.
 //!
-void NewPollReceived(VotingModel* model, int64_t poll_time)
+PollItem MapToPollItem(const interfaces::PollTableItem& src)
 {
-    LogPrint(LogFlags::QT, "INFO: %s: received NewPollReceived() core signal", __func__);
-
-    QMetaObject::invokeMethod(model, "handleNewPoll", Qt::QueuedConnection,
-                              Q_ARG(int64_t, poll_time));
-}
-
-void NewVoteReceived(VotingModel* model, uint256 poll_txid)
-{
-    LogPrint(LogFlags::QT, "INFO: %s: received NewVoteReceived() core signal", __func__);
-
-    // Ugly but uint256 is not registered as a Metatype.
-    QMetaObject::invokeMethod(model, "handleNewVote", Qt::QueuedConnection,
-                              Q_ARG(QString, QString().fromStdString(poll_txid.ToString())));
-}
-
-std::optional<PollItem> BuildPollItem(const PollRegistry::Sequence::Iterator& iter)
-{
-    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, "buildPollTable");
-
-    const PollReference& ref = iter->Ref();
-    const PollResultOption result = PollResult::BuildFor(ref);
-
-    if (!result) {
-        return std::nullopt;
-    }
-
-    const Poll& poll = result->m_poll;
-
     PollItem item;
-    item.m_id = QString::fromStdString(iter->Ref().Txid().ToString());
-    item.m_version = ref.GetPollPayloadVersion();
-    item.m_title = QString::fromStdString(poll.m_title).replace("_", " ");
-    item.m_type_str = QString::fromStdString(poll.PollTypeToString());
-    item.m_question = QString::fromStdString(poll.m_question).replace("_", " ");
-    item.m_url = QString::fromStdString(poll.m_url).trimmed();
-    item.m_start_time = QDateTime::fromMSecsSinceEpoch(poll.m_timestamp * 1000);
-    item.m_expiration = QDateTime::fromMSecsSinceEpoch(poll.Expiration() * 1000);
-    item.m_duration = poll.m_duration_days;
-    item.m_weight_type = poll.m_weight_type.Raw();
-    item.m_weight_type_str = QString::fromStdString(poll.WeightTypeToString());
-    item.m_response_type = QString::fromStdString(poll.ResponseTypeToString());
-    item.m_total_votes = result->m_votes.size();
-    item.m_total_weight = result->m_total_weight / COIN;
-
-    item.m_active_weight = 0;
-    if (result->m_active_vote_weight) {
-        item.m_active_weight = *result->m_active_vote_weight / COIN;
-    }
-
-    item.m_vote_percent_AVW = 0;
-    if (result->m_vote_percent_avw) {
-        item.m_vote_percent_AVW = *result->m_vote_percent_avw;
-    }
+    item.m_id = QString::fromStdString(src.txid);
+    item.m_version = src.payload_version;
+    item.m_title = QString::fromStdString(src.title).replace("_", " ");
+    item.m_type_str = QString::fromStdString(src.type_str);
+    item.m_question = QString::fromStdString(src.question).replace("_", " ");
+    item.m_url = QString::fromStdString(src.url).trimmed();
+    item.m_start_time = QDateTime::fromMSecsSinceEpoch(src.start_time * 1000);
+    item.m_expiration = QDateTime::fromMSecsSinceEpoch(src.expiration * 1000);
+    item.m_duration = src.duration_days;
+    item.m_weight_type = src.weight_type;
+    item.m_weight_type_str = QString::fromStdString(src.weight_type_str);
+    item.m_response_type = QString::fromStdString(src.response_type);
+    item.m_total_votes = src.total_votes;
+    item.m_total_weight = src.total_weight;
+    item.m_active_weight = src.active_weight;
+    item.m_vote_percent_AVW = src.vote_percent_avw;
 
     item.m_validated = QString{};
-    if (result->m_poll_results_validated) {
-        item.m_validated = *result->m_poll_results_validated;
+    if (src.validated) {
+        item.m_validated = *src.validated;
     }
 
-    item.m_finished = result->m_finished;
-    item.m_multiple_choice = poll.AllowsMultipleChoices();
+    item.m_finished = src.finished;
+    item.m_multiple_choice = src.multiple_choice;
 
     if (!item.m_url.startsWith("http://") && !item.m_url.startsWith("https://")) {
         item.m_url.prepend("http://");
     }
 
-    for (size_t i = 0; i < poll.m_additional_fields.size(); ++i) {
+    for (const auto& field : src.additional_fields) {
         item.m_additional_field_entries.emplace_back(
-                    QString::fromStdString(poll.AdditionalFields().At(i)->m_name),
-                    QString::fromStdString(poll.AdditionalFields().At(i)->m_value),
-                    poll.AdditionalFields().At(i)->m_required);
+            QString::fromStdString(field.name),
+            QString::fromStdString(field.value),
+            field.required);
     }
 
-    for (size_t i = 0; i < result->m_responses.size(); ++i) {
+    for (const auto& choice : src.choices) {
         item.m_choices.emplace_back(
-            QString::fromStdString(poll.Choices().At(i)->m_label),
-            result->m_responses[i].m_votes,
-            result->m_responses[i].m_weight / COIN);
+            QString::fromStdString(choice.label),
+            choice.votes,
+            choice.weight);
     }
 
-    item.m_self_voted = result->m_self_voted;
-    if (result->m_self_voted) {
-        item.m_self_vote_detail = result->m_self_vote_detail;
+    item.m_self_voted = src.self_voted;
+    for (const auto& response : src.self_vote_responses) {
+        item.m_self_vote_responses.push_back(
+            PollSelfVoteResponse{response.choice_offset, response.weight});
     }
 
-    if (!result->m_votes.empty()) {
-        item.m_top_answer = QString::fromStdString(result->WinnerLabel()).replace("_", " ");
+    if (!src.top_answer.empty()) {
+        item.m_top_answer = QString::fromStdString(src.top_answer).replace("_", " ");
     }
 
-    // Mark stale flag false since we just rebuilt the item.
-    item.m_stale = false;
-
-    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, "buildPollTable");
     return item;
 }
-} // Anonymous namespace
+} // anonymous namespace
 
 // -----------------------------------------------------------------------------
 // Class: VotingModel
 // -----------------------------------------------------------------------------
 
 VotingModel::VotingModel(
+    interfaces::VotingManager& voting_manager,
     ClientModel& client_model,
     OptionsModel& options_model,
     WalletModel& wallet_model)
-    : m_registry(GetPollRegistry())
+    : m_voting(voting_manager)
     , m_client_model(client_model)
     , m_options_model(options_model)
     , m_wallet_model(wallet_model)
@@ -150,13 +110,7 @@ VotingModel::VotingModel(
     // The voting model is constructed after core init finishes. Remember the
     // time of the most recent active poll found on start-up to avoid showing
     // notifications for these if the node reorganizes the chain:
-    {
-        LOCK(cs_main);
-
-        for (const auto& iter : m_registry.Polls().OnlyActive()) {
-            m_last_poll_time = std::max(m_last_poll_time, iter->Ref().Time());
-        }
-    }
+    m_last_poll_time = m_voting.latestActivePollTime();
 }
 
 VotingModel::~VotingModel()
@@ -257,7 +211,7 @@ OptionsModel& VotingModel::getOptionsModel()
 
 QString VotingModel::getCurrentPollTitle() const
 {
-    return QString::fromStdString(GRC::GetCurrentPollTitle())
+    return QString::fromStdString(m_voting.currentPollTitle())
         .left(80)
         .replace(QChar('_'), QChar(' '), Qt::CaseSensitive);
 }
@@ -292,6 +246,10 @@ QStringList VotingModel::getExpiringPollsNotNotified()
 
     qint64 poll_expire_warning = static_cast<qint64>(m_options_model.getPollExpireNotification() * 3600.0 * 1000.0);
 
+    // Runs on the GUI thread while buildPollTable may be updating m_pollitems on
+    // the PollTableModel worker thread, so guard the whole read/mutate.
+    std::lock_guard<std::mutex> lock(m_pollitems_mutex);
+
     // Populate the list and mark the poll items included in the list m_expire_notified true.
     for (auto& poll : m_pollitems) {
         if (!poll.second.m_finished
@@ -308,118 +266,39 @@ QStringList VotingModel::getExpiringPollsNotNotified()
 
 std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
 {
-    g_timer.InitTimer(__func__, LogInstance().WillLogCategory(BCLog::LogFlags::VOTE));
-    g_timer.GetTimes(std::string{"Begin "} + std::string{__func__}, __func__);
-
+    // The tally, its cache, the reorg-retry and the registry walk all live in the
+    // core now (interfaces::VotingManager over PollResultCache). This maps the
+    // value snapshot the node returns into Qt PollItems and refreshes the GUI-side
+    // store, carrying each poll's m_expire_notified across rebuilds so the expiry
+    // notifier stays single-shot.
     std::vector<PollItem> items;
 
-    m_registry.registry_traversal_in_progress = true;
-
-    bool fork_reorg_during_run = false;
-
-    // We do up to three tries if there was a reorg/fork during the middle of the run. This is more than enough.
-    for (unsigned int i = 0; i < 3; ++i)
-    {
-        for (const auto& iter : WITH_LOCK(m_registry.cs_poll_registry, return m_registry.Polls().Where(flags))) {
-            // First check to see if the poll item already exists, and if so is it stale (i.e. a new vote has
-            // been received for that poll). If it is stale, it will need rebuilding. If not, we insert the cached
-            // poll item into the results and move on.
-
-            bool pollitem_needs_rebuild = true;
-            bool pollitem_expire_notified = false;
-            auto pollitems_iter = m_pollitems.find(iter->Ref().Txid());
-
-            // Note that the NewVoteReceived core signal will also be fired during reorgs where votes are reverted,
-            // i.e. unreceived. This will cause the stale flag to be set on polls during reorg where votes have been
-            // removed during reorg, which is what is desired.
-            if (pollitems_iter != m_pollitems.end()) {
-                if (!pollitems_iter->second.m_stale) {
-                    // Not stale... the cache entry is good. Insert into items to return and go to the next one.
-                    items.push_back(pollitems_iter->second);
-                    pollitem_needs_rebuild = false;
-                } else {
-                    // Retain state for expire notification in the case of a stale poll item that needs to be
-                    // refreshed.
-                    pollitem_expire_notified = pollitems_iter->second.m_expire_notified;
-                }
-            }
-
-            // Note that we are implementing a coarse-grained fork/rollback detector here.
-            // We do this because we have eliminated the cs_main lock to free up the GUI.
-            // Instead we have reversed the locking scheme and have the contract actions (add/delete)
-            // place a lock on cs_poll_registry when they make an update. This preserves the integrity
-            // of the registry itself. It also will preserve the integrity of transaction access in leveldb,
-            // PROVIDED that a rollback/reorg has not happened during this run. The main state
-            // will not change during the individual BuildPollItem calls, because BuildPollItem places
-            // a lock on cs_poll_registry for its duration. This means a contract change from the
-            // contract interface handler will block on it, given that it also puts a lock on
-            // cs_poll_registry. I am a little worried about holding up main for this, but that was happening
-            // on a recursive lock on cs_main before for the ENTIRE run, and this is certainly better.
-            // Transactions that have not been rolled back by a reorg can be safely accessed for reading
-            // by another thread as we are doing here.
-
-            if (pollitem_needs_rebuild) {
-                try {
-                    if (std::optional<PollItem> item = BuildPollItem(iter)) {
-                        // This will replace any stale existing entry in the cache with the freshly built item.
-                        // It will also correctly add a new entry for a new item. The state of the pending expiry
-                        // notification is retained from the stale entry to the refreshed one.
-                        item->m_expire_notified = pollitem_expire_notified;
-                        m_pollitems[iter->Ref().Txid()] = *item;
-                        items.push_back(std::move(*item));
-                    }
-                } catch (InvalidDuetoReorgFork& e) {
-                    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.",
-                             __func__);
-                }
-            }
-
-            // This must be AFTER BuildPollItem. If a reorg occurred during reg traversal that could invalidate
-            // a Ref pointed to by the sequence, the increment of the iterator to the next position must be
-            // prevented to avoid a segfault. A new Sequence must be formed and the loop started over.
-
-            if (m_registry.reorg_occurred_during_reg_traversal) {
-                items.clear();
-                fork_reorg_during_run = true;
-
-                g_timer.GetTimes(std::string{"Restart due to reorg "} + std::string{__func__}, __func__);
-
-                // Break from the poll registry traversal loop
-                break;
-            }
-        }
-
-        // exit retry loop if no fork/reorg during run
-        if (!fork_reorg_during_run) break;
-
-        // Periodically recheck until reorg/fork has cleared. The reorg_occurred_during_reg_traversal will
-        // be cleared by the DetectReorg function as soon as the g_reorg_in_progress is cleared by the caller of
-        // ReorganizeChain. If ReorganizeChain returns a fatal error, but does not directly end program execution,
-        // then g_reorg_in_progress may remain set. The call chain will eventually end program execution in that case,
-        // in which this thread will be interrupted on the MilliSleep call. We do not want to attempt to resume
-        // the tally if a reorganize is unsuccessful.
-        while (m_registry.reorg_occurred_during_reg_traversal) {
-            // Return here is for thread interrupt during shutdown.
-            if (!MilliSleep(1000)) return items;
-
-            m_registry.PollRegistry::DetectReorg();
-        }
-
-        // If the fork_reorg_during_run was set (true), then this run through the loop is invalid due to a
-        // fork/reorg. Now that reorg_occurred_during_reg_traversal has cleared, reset to false for another try.
-        fork_reorg_during_run = false;
+    for (const interfaces::PollTableItem& src : m_voting.buildPollTable(static_cast<int>(flags))) {
+        items.push_back(MapToPollItem(src));
     }
 
-    m_registry.registry_traversal_in_progress = false;
+    // Refresh the GUI-side store under its mutex (getExpiringPollsNotNotified reads
+    // it on the GUI thread), carrying each poll's m_expire_notified across rebuilds.
+    // The expensive interface tally above ran outside the lock.
+    {
+        std::lock_guard<std::mutex> lock(m_pollitems_mutex);
 
-    g_timer.GetTimes(std::string{"End "} + std::string{__func__}, __func__);
+        for (PollItem& item : items) {
+            const uint256 txid = uint256S(item.m_id.toStdString());
+            if (auto existing = m_pollitems.find(txid); existing != m_pollitems.end()) {
+                item.m_expire_notified = existing->second.m_expire_notified;
+            }
+
+            m_pollitems[txid] = item;
+        }
+    }
+
     return items;
 }
 
 CAmount VotingModel::estimatePollFee() const
 {
-    // TODO: add core API for more precise fee estimation.
-    return 50 * COIN;
+    return m_voting.estimatePollFee();
 }
 
 VotingResult VotingModel::sendPoll(
@@ -433,126 +312,101 @@ VotingResult VotingModel::sendPoll(
         const QStringList& choices,
         const std::vector<AdditionalFieldEntry>& additional_field_entries) const
 {
-    // The poll types must be constrained based on the poll payload version, since < v3 only the SURVEY type is
-    // actually used, regardless of what is selected in the GUI. In v3+, all of the types are valid. This code
-    // can be removed at the next mandatory after Kermit's Mom, when PollV3Height is passed.
-    uint32_t payload_version = 0;
-    PollType type_by_poll_payload_version;
+    // The payload version (and, pre-v3, the forced SURVEY type) are resolved by
+    // the node from the chain height, so the GUI just forwards the entered
+    // fields as a value submission.
+    interfaces::PollSubmission submission;
+    submission.type = static_cast<int>(type);
+    submission.title = title.toStdString();
+    submission.duration_days = duration_days;
+    submission.question = question.toStdString();
+    submission.url = url.toStdString();
+    submission.weight_type = weight_type;
+    submission.response_type = response_type;
 
-    {
-        LOCK(cs_main);
-
-        bool v3_enabled = IsPollV3Enabled(nBestHeight);
-
-        payload_version = v3_enabled ? 3 : 2;
-
-        // This is slightly different than what is in the rpc addpoll, because the types have already been constrained
-        // by the GUI code.
-        type_by_poll_payload_version = v3_enabled ? type : PollType::SURVEY;
+    for (const auto& choice : choices) {
+        submission.choices.push_back(choice.toStdString());
     }
-
-    std::vector<Poll::AdditionalField> additional_fields;
 
     for (const auto& field : additional_field_entries) {
-        additional_fields.push_back(Poll::AdditionalField(field.m_name.toStdString(),
-                                                          field.m_value.toStdString(),
-                                                          field.m_required));
+        submission.additional_fields.push_back(
+            {field.m_name.toStdString(), field.m_value.toStdString(), field.m_required});
     }
 
-    PollBuilder builder = PollBuilder();
-
-    try {
-        {
-            // SetPayloadVersion reads nBestHeight; the other setters do not.
-            // Scope cs_main tightly to just that call.
-            LOCK(cs_main);
-            builder = std::move(builder).SetPayloadVersion(payload_version);
-        }
-
-        builder = std::move(builder)
-            .SetType(type_by_poll_payload_version)
-            .SetTitle(title.toStdString())
-            .SetDuration(duration_days)
-            .SetQuestion(question.toStdString())
-            .SetWeightType(weight_type)
-            .SetResponseType(response_type)
-            .SetUrl(url.toStdString())
-            .SetAdditionalFields(additional_fields);
-
-        for (const auto& choice : choices) {
-            builder = builder.AddChoice(choice.toStdString());
-        }
-    } catch (const VotingError& e) {
-        return VotingResult(QString::fromStdString(e.what()));
-    }
-
+    // Unlock the wallet before handing the submission to the node. The modal
+    // stays in the GUI and is raised OUTSIDE any core lock.
     const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
 
     if (!unlock_context.isValid()) {
         return VotingResult(tr("Please unlock the wallet."));
     }
 
-    uint256 txid;
+    const interfaces::VotingSubmitResult result = m_voting.submitPoll(submission);
 
-    try {
-        txid = SendPollContract(std::move(builder));
-    } catch (const VotingError& e) {
-        return VotingResult(QString::fromStdString(e.what()));
+    // submitPoll yields only OK or FAILED (with a dynamic message).
+    if (result.status != interfaces::VotingSubmitStatus::OK) {
+        return VotingResult(QString::fromStdString(result.error));
     }
 
-    return VotingResult(txid);
+    return VotingResult(uint256S(result.txid));
 }
 
 VotingResult VotingModel::sendVote(
     const QString& poll_id,
     const std::vector<uint8_t>& choice_offsets) const
 {
-    LOCK(cs_main);
+    // Unlock the wallet before the node builds and broadcasts the vote. The modal
+    // is raised here in the GUI, no longer while holding cs_main (the node takes
+    // cs_main internally for the registry lookup and broadcast).
+    const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
 
-    const uint256 poll_txid = uint256S(poll_id.toStdString());
-    const PollReference* ref = m_registry.TryByTxid(poll_txid);
+    if (!unlock_context.isValid()) {
+        return VotingResult(tr("Please unlock the wallet."));
+    }
 
-    if (!ref) {
+    const interfaces::VotingSubmitResult result =
+        m_voting.submitVote(poll_id.toStdString(), choice_offsets);
+
+    // Map the node's categorized status to translated GUI text; FAILED carries a
+    // dynamic message (e.g. a VotingError) shown as-is.
+    switch (result.status) {
+    case interfaces::VotingSubmitStatus::OK:
+        return VotingResult(uint256S(result.txid));
+    case interfaces::VotingSubmitStatus::POLL_NOT_FOUND:
         return VotingResult(tr("Poll not found."));
-    }
-
-    const PollOption poll = ref->TryReadFromDisk();
-
-    if (!poll) {
+    case interfaces::VotingSubmitStatus::POLL_LOAD_FAILED:
         return VotingResult(tr("Failed to load poll from disk"));
+    case interfaces::VotingSubmitStatus::FAILED:
+        break;
     }
 
-    try {
-        VoteBuilder builder = VoteBuilder::ForPoll(*poll, ref->Txid());
-        builder = builder.AddResponses(choice_offsets);
-
-        const WalletModel::UnlockContext unlock_context(m_wallet_model.requestUnlock());
-
-        if (!unlock_context.isValid()) {
-            return VotingResult(tr("Please unlock the wallet."));
-        }
-
-        const uint256 txid = SendVoteContract(std::move(builder));
-
-        return VotingResult(txid);
-    } catch (const VotingError& e){
-        return VotingResult(e.what());
-    }
+    return VotingResult(QString::fromStdString(result.error));
 }
 
 void VotingModel::subscribeToCoreSignals()
 {
-    // Retain each connection so it is severed in unsubscribeFromCoreSignals()
-    // (from ~VotingModel). Both callbacks capture `this`; a signal firing after
-    // this object is gone would otherwise invoke a slot on freed memory.
-    m_handlers.emplace_back(uiInterface.NewPollReceived_connect(std::bind(NewPollReceived, this, std::placeholders::_1)));
-    m_handlers.emplace_back(uiInterface.NewVoteReceived_connect(std::bind(NewVoteReceived, this, std::placeholders::_1)));
+    // Retain each subscription so it is released in unsubscribeFromCoreSignals()
+    // (from ~VotingModel). The callbacks fire on a core thread and capture `this`,
+    // so they marshal to the GUI thread via a queued slot invocation; releasing
+    // the Handler on teardown severs the callback before `this` is destroyed
+    // (issue #3129).
+    m_handlers.emplace_back(m_voting.handleNewPollReceived([this](int64_t poll_time) {
+        LogPrint(LogFlags::QT, "INFO: VotingModel: received NewPollReceived() notification");
+        QMetaObject::invokeMethod(this, "handleNewPoll", Qt::QueuedConnection, Q_ARG(int64_t, poll_time));
+    }));
+
+    m_handlers.emplace_back(m_voting.handleNewVoteReceived([this](std::string poll_txid) {
+        LogPrint(LogFlags::QT, "INFO: VotingModel: received NewVoteReceived() notification");
+        // uint256 is not a registered Qt metatype, so marshal the hex string.
+        QMetaObject::invokeMethod(this, "handleNewVote", Qt::QueuedConnection,
+                                  Q_ARG(QString, QString::fromStdString(poll_txid)));
+    }));
 }
 
 void VotingModel::unsubscribeFromCoreSignals()
 {
-    // Disconnect signals from client: clearing the retained connections runs
-    // each scoped_connection's destructor, which disconnects it (issue #3129).
+    // Clearing the retained subscriptions runs each Handler's destructor, which
+    // disconnects it (issue #3129).
     m_handlers.clear();
 }
 
@@ -569,17 +423,10 @@ void VotingModel::handleNewPoll(int64_t poll_time)
 
 void VotingModel::handleNewVote(QString poll_txid_string)
 {
-    uint256 poll_txid;
-
-    poll_txid.SetHex(poll_txid_string.toStdString());
-
-    auto pollitems_iter = m_pollitems.find(poll_txid);
-
-    if (pollitems_iter != m_pollitems.end()) {
-        // Set stale flag on poll item associated with vote.
-        pollitems_iter->second.m_stale = true;
-    }
-
+    // Tally invalidation for the affected poll now lives in the core
+    // PollResultCache (a new vote arrives in a block, which moves the tip and
+    // invalidates the active poll's cached tally). The GUI just forwards the
+    // notification so the views refresh.
     emit newVoteReceived(poll_txid_string);
 }
 

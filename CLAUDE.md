@@ -148,7 +148,7 @@ Every `vRPCCommands[]` row in `src/rpc/server.cpp` carries a **mandatory heritag
 - Framework: Boost Unit Test
 - Test files: `src/test/<source>_tests.cpp` or `src/test/gridcoin/<source>_tests.cpp`
 - Suite naming: `<source_filename>_tests`
-- Fixtures: `TestChain100Setup` (from `src/test/test_gridcoin.h`) provides a 100-block test chain
+- Fixture: `TestingSetup` (a `BOOST_GLOBAL_FIXTURE` in `src/test/test_gridcoin.cpp`) runs for every test — it sets up an in-memory tx database, a mock wallet (`pwalletMain`), ECC, and quiescent net managers. It does **not** build a block chain: there is no `CreateAndProcessBlock` helper and no 100-block fixture. (`TestChain100Setup` appears once in `util_tests.cpp` but is not defined in-tree and lives in a disabled suite — do not rely on it.) Tests that need block context build mock `CBlockIndex` entries with `GRC::MockBlockIndex::InsertBlockIndex(...)` (see `beacon_tests.cpp`, `mrc_tests.cpp`, `pool_tests.cpp`).
 
 ## PR Title Prefixes
 

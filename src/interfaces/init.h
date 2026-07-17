@@ -15,6 +15,7 @@ class MRC;
 class Node;
 class SideStakeManager;
 class StakingStatus;
+class VotingManager;
 class Wallet;
 class WalletTxSource;
 
@@ -48,6 +49,11 @@ public:
     //! sidestake table and local add/edit/delete commands). Over the global
     //! registry, so no wallet argument.
     virtual std::unique_ptr<SideStakeManager> makeSideStakeManager();
+
+    //! Returns the voting interface (poll table over the core result cache, and
+    //! poll/vote submission commands) over the global poll registry and the
+    //! node's single wallet.
+    virtual std::unique_ptr<VotingManager> makeVotingManager();
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.
