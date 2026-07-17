@@ -20,13 +20,22 @@ PollResultCache& GRC::GetPollResultCache()
     return g_poll_result_cache;
 }
 
-bool GRC::PollResultReusable(bool finished,
+bool GRC::PollResultReusable(bool cached_finished,
+                             bool now_finished,
                              const uint256& tallied_tip_hash,
                              int tallied_tip_height,
                              const uint256& current_tip_hash,
                              int current_tip_height)
 {
-    if (finished) {
+    // Finished state is time-based (Poll::Expired(GetAdjustedTime())), so a poll
+    // can transition active -> finished even with a stalled tip. If that state has
+    // changed since the tally, the cached m_finished and AVW-derived fields are
+    // stale regardless of the tip, so force a rebuild.
+    if (cached_finished != now_finished) {
+        return false;
+    }
+
+    if (cached_finished) {
         // Closed poll: its votes and its fixed AVW end block are immutable while
         // the tip only advances. A backward reorg (the tip below the height we
         // tallied at) could reach the poll window, so rebuild to be safe. This is
@@ -44,8 +53,13 @@ bool GRC::PollResultReusable(bool finished,
 
 bool PollResultCache::IsEntryValid(const CacheEntry& entry, const uint256& tip_hash, int tip_height) const
 {
-    return PollResultReusable(entry.finished, entry.tallied_tip_hash, entry.tallied_tip_height,
-                              tip_hash, tip_height);
+    // Re-evaluate the poll's finished state against the current adjusted time so a
+    // poll that expired by wall-clock time (with no new block) invalidates its
+    // cached "active" tally.
+    const bool now_finished = entry.item.result.m_poll.Expired(GetAdjustedTime());
+
+    return PollResultReusable(entry.finished, now_finished, entry.tallied_tip_hash,
+                              entry.tallied_tip_height, tip_hash, tip_height);
 }
 
 std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& ref,

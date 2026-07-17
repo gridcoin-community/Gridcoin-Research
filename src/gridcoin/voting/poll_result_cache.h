@@ -116,7 +116,15 @@ private:
 //! This is the cache's whole invalidation policy, factored out of PollResultCache
 //! as a pure function of the tally's chain state and the current tip so it can be
 //! unit-tested without polls, a chain, or disk:
-//!   - Closed poll (\p finished): its votes and its fixed AVW end block are
+//!   - Finished-state transition: a poll's finished state comes from
+//!     Poll::Expired(GetAdjustedTime()), i.e. wall-clock time, so an active poll
+//!     can expire even while the tip is stalled (no new block). If \p now_finished
+//!     differs from the \p cached_finished the entry was tallied with, the cached
+//!     m_finished and AVW-derived fields are stale regardless of the tip, so the
+//!     entry is rebuilt. Without this, an active poll cached just before expiry on
+//!     a stalled tip would stay "active" indefinitely (and the GUI would keep
+//!     offering voting on it).
+//!   - Closed poll (\p cached_finished): its votes and its fixed AVW end block are
 //!     immutable while the tip only advances, so it is reusable exactly while
 //!     \p current_tip_height >= \p tallied_tip_height. A backward reorg (the tip
 //!     dropping below the tally height) could reach the poll window, so it forces
@@ -127,12 +135,15 @@ private:
 //!     advance; it is reusable only while \p current_tip_hash equals the
 //!     \p tallied_tip_hash it was computed against.
 //!
-//! \param finished             Whether the poll was closed when it was tallied.
+//! \param cached_finished      Whether the poll was closed when it was tallied.
+//! \param now_finished         Whether the poll is closed as of the current
+//!                             adjusted time (Poll::Expired(GetAdjustedTime())).
 //! \param tallied_tip_hash     Hash of the tip the tally was computed against.
 //! \param tallied_tip_height   Height of that tip.
 //! \param current_tip_hash     Hash of the current pinned tip.
 //! \param current_tip_height   Height of the current pinned tip.
-bool PollResultReusable(bool finished,
+bool PollResultReusable(bool cached_finished,
+                        bool now_finished,
                         const uint256& tallied_tip_hash,
                         int tallied_tip_height,
                         const uint256& current_tip_hash,

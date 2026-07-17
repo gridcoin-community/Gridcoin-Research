@@ -589,13 +589,13 @@ public:
 
     int64_t latestActivePollTime() override
     {
-        // The newest active poll's timestamp. cs_main is held for the chain reads,
-        // and the active-poll sequence is built under cs_poll_registry (matching
-        // PollResultCache::BuildPollTable, which WITH_LOCKs cs_poll_registry to
-        // construct its Where() sequence); the per-ref reads then run outside the
-        // registry lock as in that walk. Lock order is cs_main -> cs_poll_registry.
-        LOCK(cs_main);
-
+        // The newest active poll's timestamp. This needs only cs_poll_registry:
+        // Polls().OnlyActive() filters on GetAdjustedTime() and PollReference::Time()
+        // reads a stored timestamp — neither touches cs_main — so it is not taken
+        // (avoiding needless cs_main contention). The sequence is built under
+        // cs_poll_registry (matching PollResultCache::BuildPollTable's Where()
+        // WITH_LOCK); the per-ref reads then run outside the registry lock as in
+        // that walk.
         GRC::PollRegistry& registry = GRC::GetPollRegistry();
 
         int64_t latest = 0;
