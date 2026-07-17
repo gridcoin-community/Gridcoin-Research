@@ -139,6 +139,11 @@ public:
     //! "current poll" line.
     virtual std::string currentPollTitle() = 0;
 
+    //! The timestamp (Unix seconds) of the most recent active poll, or 0 if
+    //! none. The GUI reads this once at construction so its new-poll
+    //! notifications skip polls that already existed at start-up.
+    virtual int64_t latestActivePollTime() = 0;
+
     //! Build, sign and broadcast a poll contract. The wallet must already be
     //! unlocked by the caller (the GUI arranges the modal unlock through the
     //! wallet interface); a locked wallet yields a failure result rather than a

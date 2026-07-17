@@ -43,20 +43,20 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
 
         int64_t my_total_weight = 0;
 
-        for (const auto& choice : poll_item.m_self_vote_detail.m_responses) {
+        for (const auto& response : poll_item.m_self_vote_responses) {
             if (!choices_str.isEmpty()) {
-                choices_str += ", " + QString(poll_item.m_choices[choice.first].m_label);
+                choices_str += ", " + QString(poll_item.m_choices[response.m_choice_offset].m_label);
             } else {
-                choices_str = QString(poll_item.m_choices[choice.first].m_label);
+                choices_str = QString(poll_item.m_choices[response.m_choice_offset].m_label);
             }
 
             if (!weights_str.isEmpty()) {
-                weights_str += ", " + QString::number(choice.second / COIN);
+                weights_str += ", " + QString::number(response.m_weight / COIN);
             } else {
-                weights_str = QString::number(choice.second / COIN);
+                weights_str = QString::number(response.m_weight / COIN);
             }
 
-            my_total_weight += choice.second / COIN;
+            my_total_weight += response.m_weight / COIN;
         }
 
         ui->myLastVoteAnswerLabel->setText(choices_str);

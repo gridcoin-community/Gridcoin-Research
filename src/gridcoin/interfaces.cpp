@@ -587,6 +587,20 @@ public:
         return GRC::GetCurrentPollTitle();
     }
 
+    int64_t latestActivePollTime() override
+    {
+        // Mirrors the former VotingModel ctor: the newest active poll's timestamp,
+        // read under cs_main (the registry walk and Ref().Time() touch chain state).
+        LOCK(cs_main);
+
+        int64_t latest = 0;
+        for (const auto& iter : GRC::GetPollRegistry().Polls().OnlyActive()) {
+            latest = std::max<int64_t>(latest, iter->Ref().Time());
+        }
+
+        return latest;
+    }
+
     VotingSubmitResult submitPoll(const PollSubmission& poll) override
     {
         // The payload version (and, pre-v3, the forced SURVEY type) depend on the
