@@ -13,6 +13,7 @@ namespace interfaces {
 
 class MRC;
 class Node;
+class PSGTPoolContext;
 class ResearcherContext;
 class SideStakeManager;
 class StakingStatus;
@@ -61,6 +62,12 @@ public:
     //! global researcher registries and the node's single wallet. Returns nullptr
     //! for a null wallet; \p wallet must outlive the returned object.
     virtual std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet);
+
+    //! Returns the PSGT pool + multisig-workbench interface (pool table reads/
+    //! commands and the PSGT sign/combine/submit/finalize operations) over the
+    //! global PSGT pool and the node's single wallet. Returns nullptr for a null
+    //! wallet; \p wallet must outlive the returned object.
+    virtual std::unique_ptr<PSGTPoolContext> makePSGTPoolContext(CWallet* wallet);
 
     //! Returns the interface for the node's single wallet. May return nullptr
     //! before wallet startup completes.

@@ -14,6 +14,7 @@
 #include "interfaces/handler.h"
 #include "interfaces/init.h"
 #include "interfaces/mrc.h"
+#include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
@@ -206,6 +207,11 @@ public:
     std::unique_ptr<ResearcherContext> makeResearcherContext(CWallet* wallet) override
     {
         return wallet ? MakeResearcherContext(wallet) : nullptr;
+    }
+
+    std::unique_ptr<PSGTPoolContext> makePSGTPoolContext(CWallet* wallet) override
+    {
+        return wallet ? MakePSGTPoolContext(wallet) : nullptr;
     }
 
     std::unique_ptr<Wallet> makeWallet() override

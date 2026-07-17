@@ -6,6 +6,7 @@
 
 #include "interfaces/mrc.h"
 #include "interfaces/node.h"
+#include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/staking.h"
@@ -28,6 +29,8 @@ std::unique_ptr<SideStakeManager> Init::makeSideStakeManager() { return nullptr;
 std::unique_ptr<VotingManager> Init::makeVotingManager() { return nullptr; }
 
 std::unique_ptr<ResearcherContext> Init::makeResearcherContext(CWallet* /*wallet*/) { return nullptr; }
+
+std::unique_ptr<PSGTPoolContext> Init::makePSGTPoolContext(CWallet* /*wallet*/) { return nullptr; }
 
 std::unique_ptr<Wallet> Init::makeWallet() { return nullptr; }
 
