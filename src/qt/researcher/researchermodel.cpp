@@ -11,6 +11,7 @@
 #include "qt/researcher/researcherwizard.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QIcon>
 #include <QMessageBox>
 
@@ -319,7 +320,13 @@ QString ResearcherModel::formatBeaconAge() const
         return QString();
     }
 
-    return GUIUtil::formatDurationStr(m_snapshot.beacon_age);
+    // Compute the age live from the beacon timestamp so the 60s beacon-tooltip
+    // timer ticks between snapshot refreshes (the former model recomputed
+    // Beacon::Age() on each call). Local wall-clock time is used rather than the
+    // node's network-adjusted time; the difference is at most a few seconds and
+    // invisible at formatDurationStr's granularity.
+    const int64_t age = QDateTime::currentSecsSinceEpoch() - m_snapshot.beacon_timestamp;
+    return GUIUtil::formatDurationStr(age);
 }
 
 QString ResearcherModel::formatTimeToBeaconExpiration() const
@@ -328,7 +335,12 @@ QString ResearcherModel::formatTimeToBeaconExpiration() const
         return QString();
     }
 
-    return GUIUtil::formatDurationStr(m_snapshot.time_to_beacon_expiration);
+    // Recompute the remaining time live for the same reason. The beacon's max age
+    // is constant, recovered here as (snapshot age + snapshot remaining) so no
+    // core constant has to cross the interface boundary.
+    const int64_t max_age = m_snapshot.beacon_age + m_snapshot.time_to_beacon_expiration;
+    const int64_t age = QDateTime::currentSecsSinceEpoch() - m_snapshot.beacon_timestamp;
+    return GUIUtil::formatDurationStr(max_age - age);
 }
 
 QString ResearcherModel::formatTimeToPendingBeaconExpiration() const

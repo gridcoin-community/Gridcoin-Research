@@ -10,6 +10,7 @@
 
 #include "amount.h"
 #include "chainparams.h"
+#include "fs.h"
 #include "gridcoin/beacon.h"
 #include "gridcoin/boinc.h"
 #include "gridcoin/contract/contract.h"
@@ -1291,7 +1292,10 @@ private:
 
         DeriveBeacon(*researcher, snap);
         snap.action_needed = ComputeActionNeeded(snap);
-        snap.boinc_data_dir = GRC::GetBoincDataDir().string();
+        // UTF-8 so the GUI's QString::fromStdString() is correct cross-platform
+        // (path.string() is the system code page on Windows); mirrors the former
+        // GUIUtil::boostPathToQString handling via the in-tree helper.
+        snap.boinc_data_dir = fsbridge::Utf8PathString(GRC::GetBoincDataDir());
 
         return snap;
     }
