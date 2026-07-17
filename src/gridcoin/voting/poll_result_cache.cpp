@@ -155,7 +155,15 @@ std::vector<PollResultItem> PollResultCache::BuildPollTable(PollFilterFlag flags
                     items.push_back(std::move(*item));
                 }
             } catch (const InvalidDuetoReorgFork&) {
+                // A reorg aborted this poll's tally. Treat that as a hard signal to
+                // abandon the whole attempt and retry from a freshly pinned tip,
+                // rather than falling through and possibly returning a table that
+                // is missing this poll (the flag check below could miss it if the
+                // reorg clears between the throw and the check).
                 LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: Invalidated due to reorg/fork. Starting over.", __func__);
+                items.clear();
+                fork_reorg_during_run = true;
+                break;
             }
 
             // Must be checked AFTER GetOrBuild: if a reorg during traversal
