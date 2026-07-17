@@ -246,6 +246,10 @@ QStringList VotingModel::getExpiringPollsNotNotified()
 
     qint64 poll_expire_warning = static_cast<qint64>(m_options_model.getPollExpireNotification() * 3600.0 * 1000.0);
 
+    // Runs on the GUI thread while buildPollTable may be updating m_pollitems on
+    // the PollTableModel worker thread, so guard the whole read/mutate.
+    std::lock_guard<std::mutex> lock(m_pollitems_mutex);
+
     // Populate the list and mark the poll items included in the list m_expire_notified true.
     for (auto& poll : m_pollitems) {
         if (!poll.second.m_finished
@@ -270,15 +274,23 @@ std::vector<PollItem> VotingModel::buildPollTable(const PollFilterFlag flags)
     std::vector<PollItem> items;
 
     for (const interfaces::PollTableItem& src : m_voting.buildPollTable(static_cast<int>(flags))) {
-        PollItem item = MapToPollItem(src);
+        items.push_back(MapToPollItem(src));
+    }
 
-        const uint256 txid = uint256S(src.txid);
-        if (auto existing = m_pollitems.find(txid); existing != m_pollitems.end()) {
-            item.m_expire_notified = existing->second.m_expire_notified;
+    // Refresh the GUI-side store under its mutex (getExpiringPollsNotNotified reads
+    // it on the GUI thread), carrying each poll's m_expire_notified across rebuilds.
+    // The expensive interface tally above ran outside the lock.
+    {
+        std::lock_guard<std::mutex> lock(m_pollitems_mutex);
+
+        for (PollItem& item : items) {
+            const uint256 txid = uint256S(item.m_id.toStdString());
+            if (auto existing = m_pollitems.find(txid); existing != m_pollitems.end()) {
+                item.m_expire_notified = existing->second.m_expire_notified;
+            }
+
+            m_pollitems[txid] = item;
         }
-
-        m_pollitems[txid] = item;
-        items.push_back(std::move(item));
     }
 
     return items;

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <vector>
 #include <QVariant>
 #include <QStringList>
@@ -216,6 +217,11 @@ private:
     //! give a single-shot expiry notification per poll.
     //!
     std::map<uint256, PollItem> m_pollitems;
+
+    //! Guards m_pollitems: buildPollTable updates it on the PollTableModel worker
+    //! thread while getExpiringPollsNotNotified reads/mutates it on the GUI thread,
+    //! so both must hold this mutex.
+    std::mutex m_pollitems_mutex;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();

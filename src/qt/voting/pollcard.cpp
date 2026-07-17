@@ -44,6 +44,13 @@ PollCard::PollCard(const PollItem& poll_item, QWidget* parent)
         int64_t my_total_weight = 0;
 
         for (const auto& response : poll_item.m_self_vote_responses) {
+            // Defensive: the choice offset comes from node-side data, so skip any
+            // response that would index past the choices rather than risk an
+            // out-of-range crash.
+            if (response.m_choice_offset >= poll_item.m_choices.size()) {
+                continue;
+            }
+
             if (!choices_str.isEmpty()) {
                 choices_str += ", " + QString(poll_item.m_choices[response.m_choice_offset].m_label);
             } else {
