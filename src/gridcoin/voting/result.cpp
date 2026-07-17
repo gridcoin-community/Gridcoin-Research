@@ -1284,10 +1284,21 @@ PollResultOption PollResult::BuildFor(const PollReference& poll_ref, const CBloc
             counter.EnableMagnitudeWeight(std::move(superblock), supply);
         }
 
-        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
-                 __func__, poll_ref.Votes().size(), result.m_poll.m_title);
+        // Snapshot the vote txid list under cs_poll_registry before tallying:
+        // PollReference::LinkVote/UnlinkVote mutate this vector under that lock on
+        // the block-connection thread, so iterating the live Votes() reference in
+        // CountVotes could race with a concurrent link/unlink (and crash if the
+        // vector reallocates). The copy is taken inside the lock scope.
+        std::vector<uint256> vote_txids;
+        {
+            LOCK(GetPollRegistry().cs_poll_registry);
+            vote_txids = poll_ref.Votes();
+        }
 
-        counter.CountVotes(result, poll_ref.Votes());
+        LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: number of votes = %u for poll %s",
+                 __func__, vote_txids.size(), result.m_poll.m_title);
+
+        counter.CountVotes(result, vote_txids);
 
         LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: poll_ref.Time() = %" PRId64 " poll.GetMagnitudeWeightFactor() = %s",
                  __func__,

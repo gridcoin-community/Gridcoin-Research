@@ -660,21 +660,37 @@ public:
     VotingSubmitResult submitVote(const std::string& poll_txid,
                                   const std::vector<uint8_t>& choice_offsets) override
     {
-        LOCK(cs_main);
-
         const uint256 txid = uint256S(poll_txid);
-        const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
-        if (!ref) {
-            return Failed("Poll not found.");
+
+        // Look up and read the poll under both locks it needs, then copy out the
+        // poll and its txid and release before building/broadcasting the vote:
+        //   - cs_poll_registry: TryByTxid reads the registry map, and
+        //     TryReadFromDisk mutates the PollReference (m_timestamp,
+        //     m_magnitude_weight_factor).
+        //   - cs_main: TryReadFromDisk's ResolveMagnitudeWeightFactor walks the
+        //     chain index (GetStartingBlockIndexPtr).
+        // SendVoteContract takes cs_main + cs_wallet itself, so the build/broadcast
+        // must run OUTSIDE these locks (and cs_main is no longer held across it).
+        GRC::PollOption poll;
+        uint256 poll_reference_txid;
+        {
+            LOCK2(cs_main, GRC::GetPollRegistry().cs_poll_registry);
+
+            const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
+            if (!ref) {
+                return Failed("Poll not found.");
+            }
+
+            poll_reference_txid = ref->Txid();
+            poll = ref->TryReadFromDisk();
         }
 
-        const GRC::PollOption poll = ref->TryReadFromDisk();
         if (!poll) {
             return Failed("Failed to load poll from disk");
         }
 
         try {
-            GRC::VoteBuilder builder = GRC::VoteBuilder::ForPoll(*poll, ref->Txid());
+            GRC::VoteBuilder builder = GRC::VoteBuilder::ForPoll(*poll, poll_reference_txid);
             builder = builder.AddResponses(choice_offsets);
 
             const uint256 vote_txid = GRC::SendVoteContract(std::move(builder));
