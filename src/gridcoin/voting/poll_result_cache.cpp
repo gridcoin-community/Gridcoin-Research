@@ -20,22 +20,32 @@ PollResultCache& GRC::GetPollResultCache()
     return g_poll_result_cache;
 }
 
-bool PollResultCache::IsEntryValid(const CacheEntry& entry, const uint256& tip_hash, int tip_height) const
+bool GRC::PollResultReusable(bool finished,
+                             const uint256& tallied_tip_hash,
+                             int tallied_tip_height,
+                             const uint256& current_tip_hash,
+                             int current_tip_height)
 {
-    if (entry.finished) {
+    if (finished) {
         // Closed poll: its votes and its fixed AVW end block are immutable while
         // the tip only advances. A backward reorg (the tip below the height we
         // tallied at) could reach the poll window, so rebuild to be safe. This is
         // conservative — it also rebuilds on shallow backward reorgs that never
         // touch the window — but backward reorgs are rare, so the extra work is
         // negligible and it keeps the closed-poll path free of a chain walk.
-        return tip_height >= entry.tallied_tip_height;
+        return current_tip_height >= tallied_tip_height;
     }
 
     // Active poll: PollReference::GetActiveVoteWeight ends the AVW range at the
     // tip, and that range grows every block, so the result changes on every tip
     // advance. Reuse only while the tip is exactly the one we tallied against.
-    return entry.tallied_tip_hash == tip_hash;
+    return tallied_tip_hash == current_tip_hash;
+}
+
+bool PollResultCache::IsEntryValid(const CacheEntry& entry, const uint256& tip_hash, int tip_height) const
+{
+    return PollResultReusable(entry.finished, entry.tallied_tip_hash, entry.tallied_tip_height,
+                              tip_hash, tip_height);
 }
 
 std::optional<PollResultItem> PollResultCache::GetOrBuild(const PollReference& ref,

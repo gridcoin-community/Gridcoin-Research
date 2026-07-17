@@ -111,6 +111,33 @@ private:
     std::map<uint256, CacheEntry> m_entries GUARDED_BY(m_mutex);
 };
 
+//! \brief Whether a cached tally may still be served for the current pinned tip.
+//!
+//! This is the cache's whole invalidation policy, factored out of PollResultCache
+//! as a pure function of the tally's chain state and the current tip so it can be
+//! unit-tested without polls, a chain, or disk:
+//!   - Closed poll (\p finished): its votes and its fixed AVW end block are
+//!     immutable while the tip only advances, so it is reusable exactly while
+//!     \p current_tip_height >= \p tallied_tip_height. A backward reorg (the tip
+//!     dropping below the tally height) could reach the poll window, so it forces
+//!     a rebuild. This is conservative — it also rebuilds on shallow backward
+//!     reorgs that never touch the window — but backward reorgs are rare.
+//!   - Active poll: PollReference::GetActiveVoteWeight ends the AVW range at the
+//!     tip, and that range grows every block, so the result changes on every tip
+//!     advance; it is reusable only while \p current_tip_hash equals the
+//!     \p tallied_tip_hash it was computed against.
+//!
+//! \param finished             Whether the poll was closed when it was tallied.
+//! \param tallied_tip_hash     Hash of the tip the tally was computed against.
+//! \param tallied_tip_height   Height of that tip.
+//! \param current_tip_hash     Hash of the current pinned tip.
+//! \param current_tip_height   Height of the current pinned tip.
+bool PollResultReusable(bool finished,
+                        const uint256& tallied_tip_hash,
+                        int tallied_tip_height,
+                        const uint256& current_tip_hash,
+                        int current_tip_height);
+
 //! \brief The process-wide poll result cache (a singleton like the registries).
 PollResultCache& GetPollResultCache();
 
