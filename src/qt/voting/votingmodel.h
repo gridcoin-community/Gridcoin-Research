@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QObject>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <vector>
 #include <QVariant>

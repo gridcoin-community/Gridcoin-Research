@@ -678,7 +678,7 @@ public:
 
             const GRC::PollReference* ref = GRC::GetPollRegistry().TryByTxid(txid);
             if (!ref) {
-                return Failed("Poll not found.");
+                return SubmitStatus(VotingSubmitStatus::POLL_NOT_FOUND);
             }
 
             poll_reference_txid = ref->Txid();
@@ -686,7 +686,7 @@ public:
         }
 
         if (!poll) {
-            return Failed("Failed to load poll from disk");
+            return SubmitStatus(VotingSubmitStatus::POLL_LOAD_FAILED);
         }
 
         try {
@@ -784,15 +784,24 @@ private:
     static VotingSubmitResult Submitted(const uint256& txid)
     {
         VotingSubmitResult res;
-        res.ok = true;
+        res.status = VotingSubmitStatus::OK;
         res.txid = txid.ToString();
         return res;
     }
 
+    //! A categorized failure (GUI maps the status to translated text).
+    static VotingSubmitResult SubmitStatus(VotingSubmitStatus status)
+    {
+        VotingSubmitResult res;
+        res.status = status;
+        return res;
+    }
+
+    //! A failure carrying a dynamic message (e.g. a VotingError) shown as-is.
     static VotingSubmitResult Failed(std::string error)
     {
         VotingSubmitResult res;
-        res.ok = false;
+        res.status = VotingSubmitStatus::FAILED;
         res.error = std::move(error);
         return res;
     }

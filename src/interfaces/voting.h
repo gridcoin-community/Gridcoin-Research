@@ -96,15 +96,26 @@ struct PollSubmission
     std::vector<PollAdditionalField> additional_fields;
 };
 
-//! Outcome of a submitPoll/submitVote command. On success \p txid is the hex
-//! transaction id; on failure \p error carries a human-readable message (the
-//! same text the former VotingModel returned). Kept as a value so the whole
+//! Categorized outcome of a submitPoll/submitVote command. The node returns a
+//! status the GUI maps to translated text, so fixed user-facing wording is not
+//! baked into the cross-process boundary (mirrors SideStakeEditStatus in 1d-ii).
+//! FAILED carries a dynamic message in \p error — e.g. a VotingError raised by
+//! the builder — that the GUI shows as-is (these were never translated).
+enum class VotingSubmitStatus
+{
+    OK,               //!< Submitted; \p txid holds the hex transaction id.
+    POLL_NOT_FOUND,   //!< No poll matches the supplied txid.
+    POLL_LOAD_FAILED, //!< The poll could not be read from disk.
+    FAILED,           //!< Other failure; \p error carries the message.
+};
+
+//! Outcome of a submitPoll/submitVote command. Kept as a value so the whole
 //! command is a single request/response across the boundary.
 struct VotingSubmitResult
 {
-    bool ok = false;
-    std::string txid;
-    std::string error;
+    VotingSubmitStatus status = VotingSubmitStatus::FAILED;
+    std::string txid;  //!< Hex transaction id when status == OK.
+    std::string error; //!< Dynamic message when status == FAILED (else empty).
 };
 
 //! Called when the node connects a new poll (uiInterface.NewPollReceived). The

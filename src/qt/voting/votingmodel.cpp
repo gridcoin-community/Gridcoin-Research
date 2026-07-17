@@ -331,7 +331,8 @@ VotingResult VotingModel::sendPoll(
 
     const interfaces::VotingSubmitResult result = m_voting.submitPoll(submission);
 
-    if (!result.ok) {
+    // submitPoll yields only OK or FAILED (with a dynamic message).
+    if (result.status != interfaces::VotingSubmitStatus::OK) {
         return VotingResult(QString::fromStdString(result.error));
     }
 
@@ -354,11 +355,20 @@ VotingResult VotingModel::sendVote(
     const interfaces::VotingSubmitResult result =
         m_voting.submitVote(poll_id.toStdString(), choice_offsets);
 
-    if (!result.ok) {
-        return VotingResult(QString::fromStdString(result.error));
+    // Map the node's categorized status to translated GUI text; FAILED carries a
+    // dynamic message (e.g. a VotingError) shown as-is.
+    switch (result.status) {
+    case interfaces::VotingSubmitStatus::OK:
+        return VotingResult(uint256S(result.txid));
+    case interfaces::VotingSubmitStatus::POLL_NOT_FOUND:
+        return VotingResult(tr("Poll not found."));
+    case interfaces::VotingSubmitStatus::POLL_LOAD_FAILED:
+        return VotingResult(tr("Failed to load poll from disk"));
+    case interfaces::VotingSubmitStatus::FAILED:
+        break;
     }
 
-    return VotingResult(uint256S(result.txid));
+    return VotingResult(QString::fromStdString(result.error));
 }
 
 void VotingModel::subscribeToCoreSignals()

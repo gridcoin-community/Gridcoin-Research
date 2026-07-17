@@ -1338,10 +1338,10 @@ void PollRegistry::DetectReorg()
     // Note that doing the reorg detection here, in the contract handler, means that we only flag a reorg IF
     // a transaction happened to occur that involves a poll or vote contract in the scope of the reorg, because
     // these handlers are only triggered by those two contract types.
-    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %u, reorg_occurred_during_reg_traversal = %u, ",
+    LogPrint(BCLog::LogFlags::VOTE, "INFO: %s: registry_traversal_in_progress = %d, reorg_occurred_during_reg_traversal = %d, ",
              __func__,
-             registry_traversal_in_progress,
-             reorg_occurred_during_reg_traversal
+             registry_traversal_in_progress.load(),
+             reorg_occurred_during_reg_traversal.load()
              );
 
     if (registry_traversal_in_progress > 0 && g_reorg_in_progress) {
