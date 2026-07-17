@@ -31,6 +31,10 @@ class PSGTPoolPage;
 class SignVerifyMessageDialog;
 class MultisignPSGTDialog;
 class Notificator;
+
+namespace interfaces {
+class PSGTPoolContext;
+} // namespace interfaces
 class RPCConsole;
 class DiagnosticsDialog;
 class ClickLabel;
@@ -69,6 +73,11 @@ public:
         functionality.
     */
     void setWalletModel(WalletModel *walletModel);
+
+    /** Provide the PSGT pool interface (Phase 1d-v) to the PSGT pool page and the
+        multisign dialog. Set before setWalletModel(), which builds the page's
+        interface-backed table model. */
+    void setPSGTPoolContext(interfaces::PSGTPoolContext *context);
 
     /** Set the researcher model.
         The researcher model provides the BOINC context for the research reward system.

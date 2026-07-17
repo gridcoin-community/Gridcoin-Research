@@ -4,6 +4,7 @@
 
 #include "interfaces/staking.h"
 #include "interfaces/mrc.h"
+#include "interfaces/psgt.h"
 #include "interfaces/researcher.h"
 #include "interfaces/sidestake.h"
 #include "interfaces/voting.h"
@@ -36,12 +37,19 @@
 #include "interfaces/handler.h"
 #include "key_io.h"
 #include "main.h"
+#include "net_processing.h"
+#include "node/psgt_pool.h"
 #include "node/ui_interface.h"
+#include "psgt.h"
+#include "script/interpreter.h"
+#include "script/standard.h"
+#include "streams.h"
 #include "sync.h"
 #include "txmempool.h"
 #include "util/strencodings.h"
 #include "util/string.h"
 #include "validation.h"
+#include "version.h"
 #include "wallet/wallet.h"
 
 #include <algorithm>
@@ -1423,6 +1431,518 @@ private:
     }
 };
 
+// --- PSGT enum mappers (mirror the core enums; explicit switches so a future
+//     reordering of either side is a compile error rather than a silent skew) ---
+
+PSGTSignStatus MapPSGTSignResult(::PSGTSignResult r)
+{
+    switch (r) {
+        case ::PSGTSignResult::SIGNED_AND_RELAYED:      return PSGTSignStatus::SIGNED_AND_RELAYED;
+        case ::PSGTSignResult::COMPLETED_AND_BROADCAST: return PSGTSignStatus::COMPLETED_AND_BROADCAST;
+        case ::PSGTSignResult::NO_NEW_SIGNATURES:       return PSGTSignStatus::NO_NEW_SIGNATURES;
+        case ::PSGTSignResult::ALREADY_KNOWN:           return PSGTSignStatus::ALREADY_KNOWN;
+        case ::PSGTSignResult::NOT_FOUND:               return PSGTSignStatus::NOT_FOUND;
+        case ::PSGTSignResult::FAILED:                  return PSGTSignStatus::FAILED;
+    }
+    assert(false);
+    return PSGTSignStatus::FAILED;
+}
+
+PSGTPoolAddStatus MapPSGTPoolAddResult(::PSGTPoolAddResult r)
+{
+    switch (r) {
+        case ::PSGTPoolAddResult::ACCEPTED_NEW:           return PSGTPoolAddStatus::ACCEPTED_NEW;
+        case ::PSGTPoolAddResult::ACCEPTED_REPLACEMENT:   return PSGTPoolAddStatus::ACCEPTED_REPLACEMENT;
+        case ::PSGTPoolAddResult::DUPLICATE:              return PSGTPoolAddStatus::DUPLICATE;
+        case ::PSGTPoolAddResult::REJECTED_POOL_FULL:     return PSGTPoolAddStatus::REJECTED_POOL_FULL;
+        case ::PSGTPoolAddResult::REJECTED_NOT_BETTER:    return PSGTPoolAddStatus::REJECTED_NOT_BETTER;
+        case ::PSGTPoolAddResult::REJECTED_NOT_INITIATOR: return PSGTPoolAddStatus::REJECTED_NOT_INITIATOR;
+    }
+    assert(false);
+    return PSGTPoolAddStatus::DUPLICATE;
+}
+
+PSGTPoolRejectReason MapPSGTPoolReject(::PSGTPoolReject r)
+{
+    switch (r) {
+        case ::PSGTPoolReject::NONE:               return PSGTPoolRejectReason::NONE;
+        case ::PSGTPoolReject::TOO_LARGE:          return PSGTPoolRejectReason::TOO_LARGE;
+        case ::PSGTPoolReject::MALFORMED:          return PSGTPoolRejectReason::MALFORMED;
+        case ::PSGTPoolReject::HAS_UNKNOWN_FIELDS: return PSGTPoolRejectReason::HAS_UNKNOWN_FIELDS;
+        case ::PSGTPoolReject::DUPLICATE_REVISION: return PSGTPoolRejectReason::DUPLICATE_REVISION;
+        case ::PSGTPoolReject::STRUCTURAL:         return PSGTPoolRejectReason::STRUCTURAL;
+        case ::PSGTPoolReject::INVALID_SIG:        return PSGTPoolRejectReason::INVALID_SIG;
+        case ::PSGTPoolReject::NO_VALID_SIG:       return PSGTPoolRejectReason::NO_VALID_SIG;
+        case ::PSGTPoolReject::COMPLETE:           return PSGTPoolRejectReason::COMPLETE;
+        case ::PSGTPoolReject::UTXO_MISSING:       return PSGTPoolRejectReason::UTXO_MISSING;
+        case ::PSGTPoolReject::UTXO_SPENT:         return PSGTPoolRejectReason::UTXO_SPENT;
+        case ::PSGTPoolReject::FEE_TOO_LOW:        return PSGTPoolRejectReason::FEE_TOO_LOW;
+        case ::PSGTPoolReject::FEE_ABSURD:         return PSGTPoolRejectReason::FEE_ABSURD;
+    }
+    assert(false);
+    return PSGTPoolRejectReason::MALFORMED;
+}
+
+//! In-process PSGTPoolContext (Phase 1d-v). Owns the node's single wallet for the
+//! sign paths and the per-row wallet-relevance derivation. Every read/command runs
+//! node-side so the Qt PSGTPoolPage/PSGTPoolTableModel and MultisignPSGTDialog hold
+//! no core PartiallySignedTransaction and touch no g_psgt_pool / pwalletMain / cs_*.
+class PSGTPoolContextImpl : public PSGTPoolContext
+{
+public:
+    explicit PSGTPoolContextImpl(CWallet* wallet) : m_wallet(wallet) {}
+
+    std::vector<PSGTPoolRow> entries() override
+    {
+        std::vector<PSGTPoolRow> out;
+        const std::vector<PSGTPoolEntry> all = g_psgt_pool.GetAll();
+
+        // The pool GetAll() returns a copy under its own leaf lock, so no pool lock
+        // is held here and cs_main is not needed; the per-row wallet-relevance read
+        // takes cs_wallet inside DeriveRelevance (the former MakeRow's scope).
+        for (const PSGTPoolEntry& entry : all) {
+            PSGTPoolRow row;
+            row.image_hex = entry.image.ToString();
+            row.image_address = EncodeDestination(CTxDestination(entry.image));
+            row.revision_hex = entry.revision_hash.GetHex();
+            row.valid_sigs = entry.valid_sigs;
+            row.sigs_required = entry.sigs_required;
+            row.sigs_total = entry.sigs_total;
+            row.time_received = entry.time_received;
+            row.in_pool = true;
+
+            FillPayment(entry, row);
+            row.relevance = DeriveRelevance(entry);
+
+            out.push_back(std::move(row));
+        }
+
+        return out;
+    }
+
+    PSGTSignStatus signPoolEntry(const std::string& image_hex, std::string& error,
+                                 std::string& txid) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return PSGTSignStatus::NOT_FOUND;
+        }
+        // SignAndAdvancePSGT takes cs_main + the wallet lock internally; the GUI
+        // holds the wallet unlocked (WalletModel::UnlockContext) around this.
+        uint256 tx_hash;
+        const PSGTSignStatus status =
+            MapPSGTSignResult(SignAndAdvancePSGT(image, error, &tx_hash));
+        txid = tx_hash.ToString(); // meaningful only for COMPLETED_AND_BROADCAST
+        return status;
+    }
+
+    bool removePoolEntry(const std::string& image_hex) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return false;
+        }
+        // ::PSGTRemovalReason is the core enum; the unqualified name would resolve
+        // to interfaces::PSGTRemovalReason (the GUI-facing mirror) inside this namespace.
+        return g_psgt_pool.Remove(image, ::PSGTRemovalReason::LOCAL_REMOVE);
+    }
+
+    PSGTPoolStatus poolStatus() override
+    {
+        LOCK(cs_main);
+        PSGTPoolStatus status;
+        status.v15_enabled = IsV15Enabled(nBestHeight);
+        status.out_of_sync = OutOfSyncByAge();
+        status.active = status.v15_enabled && !status.out_of_sync;
+        return status;
+    }
+
+    PSGTBytes poolEntryPsgt(const std::string& image_hex) override
+    {
+        CScriptID image;
+        if (!TryImageFromHex(image_hex, image)) {
+            return {};
+        }
+        if (const auto entry = g_psgt_pool.Get(image)) {
+            return SerializePSGT(entry->psgt);
+        }
+        return {};
+    }
+
+    PSGTDescription describePSGT(const PSGTBytes& bytes) override
+    {
+        PSGTDescription d;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, d.error)) {
+            return d; // valid == false
+        }
+        d.valid = true;
+
+        const CTransaction ctx(psgt.tx);
+        d.txid = ctx.GetHash().GetHex();
+        d.version = psgt.tx.nVersion;
+        d.time = psgt.tx.nTime;
+        d.lock_time = psgt.tx.nLockTime;
+        d.input_count = static_cast<int>(psgt.tx.vin.size());
+
+        int signed_inputs = 0;
+        for (unsigned int i = 0; i < psgt.tx.vin.size(); ++i) {
+            const CTxIn& txin = psgt.tx.vin[i];
+            PSGTInputInfo info;
+            info.prevout_hash = txin.prevout.hash.GetHex();
+            info.prevout_n = txin.prevout.n;
+
+            if (i < psgt.inputs.size()) {
+                info.has_metadata = true;
+                const PSGTInput& input = psgt.inputs[i];
+
+                if (!input.non_witness_utxo.IsNull()
+                    && txin.prevout.n < input.non_witness_utxo.vout.size()
+                    && input.non_witness_utxo.GetHash() == txin.prevout.hash) {
+                    info.amount_state = PSGTInputAmountState::HAVE;
+                    info.amount = input.non_witness_utxo.vout[txin.prevout.n].nValue;
+                } else if (!input.non_witness_utxo.IsNull()) {
+                    info.amount_state = PSGTInputAmountState::MISMATCH;
+                } else {
+                    info.amount_state = PSGTInputAmountState::NOT_LOADED;
+                }
+
+                if (PSGTInputSigned(input)) {
+                    info.sig_state = PSGTInputSigState::FINALIZED;
+                    ++signed_inputs;
+                } else if (!input.partial_sigs.empty()) {
+                    info.sig_state = PSGTInputSigState::PARTIAL;
+                    info.partial_sig_count = static_cast<int>(input.partial_sigs.size());
+                } else {
+                    info.sig_state = PSGTInputSigState::UNSIGNED;
+                }
+
+                if (!input.redeem_script.empty()) {
+                    info.has_redeem = true;
+                    const CScriptID scriptID(input.redeem_script);
+                    info.p2sh_address = EncodeDestination(scriptID);
+                    info.p2sh_hash_hex = scriptID.ToString();
+
+                    txnouttype rtype;
+                    std::vector<std::vector<unsigned char>> rsols;
+                    if (Solver(input.redeem_script, rtype, rsols) && rtype == TX_MULTISIG && rsols.size() >= 3) {
+                        info.is_multisig = true;
+                        info.multisig_m = static_cast<int>(rsols.front()[0]);
+                        info.multisig_n = static_cast<int>(rsols.size()) - 2;
+                    }
+                }
+            }
+
+            d.inputs.push_back(std::move(info));
+        }
+        d.signed_input_count = signed_inputs;
+
+        for (const CTxOut& txout : psgt.tx.vout) {
+            PSGTOutputInfo oi;
+            txnouttype type;
+            std::vector<CTxDestination> addresses;
+            int n_required = 0;
+            if (ExtractDestinations(txout.scriptPubKey, type, addresses, n_required)) {
+                oi.is_standard = true;
+                for (const CTxDestination& addr : addresses) {
+                    oi.destinations.push_back(EncodeDestination(addr));
+                }
+                oi.n_required = n_required;
+            }
+            oi.amount = txout.nValue;
+            d.outputs.push_back(std::move(oi));
+        }
+
+        PartiallySignedTransaction copy = psgt;
+        d.complete = FinalizePSGT(copy);
+
+        return d;
+    }
+
+    PSGTSignResult signPSGT(const PSGTBytes& bytes) override
+    {
+        PSGTSignResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res; // ok == false
+        }
+
+        // The GUI holds the wallet unlocked (UnlockContext) around this call.
+        LOCK2(cs_main, m_wallet->cs_wallet);
+
+        // Updater: fill non_witness_utxo + redeem_script (mirrors walletprocesspsgt).
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            if (psgt.inputs[i].non_witness_utxo.IsNull()) {
+                const uint256& prev_hash = psgt.tx.vin[i].prevout.hash;
+                CTransaction prev_tx;
+                uint256 hash_block;
+                if (GetTransaction(prev_hash, prev_tx, hash_block)) {
+                    psgt.inputs[i].non_witness_utxo = prev_tx;
+                }
+            }
+
+            if (psgt.inputs[i].redeem_script.empty() && !psgt.inputs[i].non_witness_utxo.IsNull()) {
+                const COutPoint& prevout = psgt.tx.vin[i].prevout;
+                if (prevout.n < psgt.inputs[i].non_witness_utxo.vout.size()) {
+                    const CScript& script_pub_key = psgt.inputs[i].non_witness_utxo.vout[prevout.n].scriptPubKey;
+                    if (script_pub_key.IsPayToScriptHash()) {
+                        const CScriptID script_id(uint160(std::vector<unsigned char>(
+                            script_pub_key.begin() + 2, script_pub_key.begin() + 22)));
+                        CScript redeem_script;
+                        if (m_wallet->GetCScript(script_id, redeem_script)) {
+                            psgt.inputs[i].redeem_script = redeem_script;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Snapshot per-input signing state (SignPSGTInput's bool is unreliable for
+        // multisig; count new partial sigs / newly-final scriptSigs instead).
+        std::vector<size_t> sigs_before(psgt.inputs.size());
+        std::vector<bool> final_before(psgt.inputs.size());
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            sigs_before[i] = psgt.inputs[i].partial_sigs.size();
+            final_before[i] = !psgt.inputs[i].final_script_sig.empty();
+        }
+
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            SignPSGTInput(*m_wallet, psgt, i, SIGHASH_ALL);
+        }
+
+        int signed_now = 0;
+        for (unsigned int i = 0; i < psgt.inputs.size(); ++i) {
+            const bool final_now = !psgt.inputs[i].final_script_sig.empty();
+            if (psgt.inputs[i].partial_sigs.size() > sigs_before[i] || (final_now && !final_before[i])) {
+                ++signed_now;
+            }
+        }
+
+        PartiallySignedTransaction psgt_copy = psgt;
+        const bool complete = FinalizePSGT(psgt_copy);
+
+        for (unsigned int i = 0; i < psgt.outputs.size(); ++i) {
+            UpdatePSGTOutput(*m_wallet, psgt, i);
+        }
+
+        const PSGTAnalysis analysis = AnalyzePSGT(psgt);
+        int could_not_sign = 0;
+        for (const PSGTInputAnalysis& ia : analysis.inputs) {
+            for (const CKeyID& keyid : ia.missing_sigs) {
+                if (m_wallet->HaveKey(keyid)) {
+                    ++could_not_sign;
+                    break;
+                }
+            }
+        }
+        int needs_data = 0;
+        for (const PSGTInputAnalysis& ia : analysis.inputs) {
+            if (!ia.is_final && (!ia.has_utxo || ia.missing_redeem_script)) {
+                ++needs_data;
+            }
+        }
+
+        res.psgt = SerializePSGT(psgt);
+        res.ok = true;
+        res.complete = complete;
+        res.signed_now = signed_now;
+        res.needs_data = needs_data;
+        res.could_not_sign = could_not_sign;
+        return res;
+    }
+
+    PSGTCombineResult combinePSGTs(const std::vector<PSGTBytes>& blobs) override
+    {
+        PSGTCombineResult res;
+        std::vector<PartiallySignedTransaction> psgts;
+        for (const PSGTBytes& b : blobs) {
+            PartiallySignedTransaction p;
+            if (!DecodePSGTBytes(p, b, res.error)) {
+                return res; // ok == false, error set (a decode failure)
+            }
+            psgts.push_back(std::move(p));
+        }
+
+        PartiallySignedTransaction merged;
+        if (!CombinePSGTs(merged, psgts)) {
+            // ok == false, error left empty -> the GUI shows its "not the same
+            // transaction" translated message (distinguished by empty error).
+            return res;
+        }
+
+        res.psgt = SerializePSGT(merged);
+        res.ok = true;
+        return res;
+    }
+
+    PSGTSubmitResult submitPSGTToPool(const PSGTBytes& bytes) override
+    {
+        PSGTSubmitResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res; // decoded == false
+        }
+        res.decoded = true;
+
+        const std::vector<unsigned char> wire = SerializePSGT(psgt);
+
+        PSGTPoolEntry entry;
+        uint256 revision_hash;
+        std::string reject_reason;
+        ::PSGTPoolAddResult add_result;
+        {
+            // Hold cs_main continuously from validation through Add so the
+            // funding-unspent guarantee still holds at insertion (Add's contract).
+            LOCK(cs_main);
+            const ::PSGTPoolReject reject =
+                ValidatePSGTForPool(g_psgt_pool, wire, GetAdjustedTime(), entry, res.error);
+            if (reject != ::PSGTPoolReject::NONE) {
+                res.validated = false;
+                res.reject_reason = MapPSGTPoolReject(reject);
+                res.reject_text = PSGTPoolRejectToString(reject);
+                return res;
+            }
+            revision_hash = entry.revision_hash;
+            add_result = g_psgt_pool.Add(std::move(entry), reject_reason);
+        }
+
+        res.add_status = MapPSGTPoolAddResult(add_result);
+        res.revision_hex = revision_hash.GetHex();
+        res.error = reject_reason; // non-accepted add cases carry a reason here
+        res.accepted = add_result == ::PSGTPoolAddResult::ACCEPTED_NEW
+                       || add_result == ::PSGTPoolAddResult::ACCEPTED_REPLACEMENT;
+        if (res.accepted) {
+            RelayPSGT(revision_hash);
+        }
+        return res;
+    }
+
+    PSGTFinalizeResult finalizeToRawTxHex(const PSGTBytes& bytes) override
+    {
+        PSGTFinalizeResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res;
+        }
+
+        CMutableTransaction mtx;
+        if (!FinalizeAndExtractPSGT(psgt, mtx)) {
+            // complete == false, error empty -> GUI shows its "not complete" message.
+            return res;
+        }
+
+        CDataStream ss_tx(SER_NETWORK, PROTOCOL_VERSION);
+        ss_tx << mtx;
+        res.raw_tx_hex = HexStr(ss_tx);
+        res.complete = true;
+        return res;
+    }
+
+    PSGTDecodeResult decodePSGT(const PSGTBytes& bytes) override
+    {
+        PSGTDecodeResult res;
+        PartiallySignedTransaction psgt;
+        if (!DecodePSGTBytes(psgt, bytes, res.error)) {
+            return res;
+        }
+        res.psgt = SerializePSGT(psgt); // canonical re-serialization
+        res.ok = true;
+        return res;
+    }
+
+    bool walletHasSignature(const PSGTBytes& bytes) override
+    {
+        PartiallySignedTransaction psgt;
+        std::string error;
+        if (!DecodePSGTBytes(psgt, bytes, error)) {
+            return false;
+        }
+        LOCK(m_wallet->cs_wallet);
+        return PSGTSignedBy(*m_wallet, psgt);
+    }
+
+private:
+    CWallet* m_wallet;
+
+    //! Parse a pool image hex into a CScriptID, rejecting anything that is not a
+    //! full 20-byte hash. uint160::SetHex() silently maps malformed input to 0, so
+    //! validate first — this is an interface boundary (headed for IPC) and must not
+    //! act on image 0 for a garbled hex string.
+    static bool TryImageFromHex(const std::string& image_hex, CScriptID& out)
+    {
+        if (image_hex.size() != 40 || !IsHex(image_hex)) {
+            return false;
+        }
+        uint160 hash;
+        hash.SetHex(image_hex);
+        out = CScriptID(hash);
+        return true;
+    }
+
+    //! Port of the former MakeRow payment/destination derivation: the largest
+    //! output that is not change (change returns to the arrangement's own image).
+    static void FillPayment(const PSGTPoolEntry& entry, PSGTPoolRow& row)
+    {
+        CAmount best = 0;
+        const CTxOut* payment = nullptr;
+        CAmount best_any = 0;
+        const CTxOut* payment_any = nullptr;
+        for (const CTxOut& txout : entry.psgt.tx.vout) {
+            if (txout.nValue >= best_any) {
+                best_any = txout.nValue;
+                payment_any = &txout;
+            }
+            CTxDestination dest;
+            const bool is_change = ExtractDestination(txout.scriptPubKey, dest)
+                && std::holds_alternative<CScriptID>(dest)
+                && std::get<CScriptID>(dest) == entry.image;
+            if (!is_change && txout.nValue >= best) {
+                best = txout.nValue;
+                payment = &txout;
+            }
+        }
+        if (!payment) payment = payment_any; // all outputs were change (degenerate)
+        if (payment) {
+            row.amount = payment->nValue;
+            CTxDestination dest;
+            row.destination = ExtractDestination(payment->scriptPubKey, dest)
+                                  ? EncodeDestination(dest)
+                                  : std::string(); // GUI shows "(nonstandard)" on empty
+        }
+    }
+
+    //! Port of the former MakeRow wallet-relevance derivation. Takes cs_wallet
+    //! per row (matching MakeRow's scope), not across the entries() loop, so the
+    //! lock is not held during the lock-free FillPayment/dest derivation.
+    PSGTRelevance DeriveRelevance(const PSGTPoolEntry& entry)
+    {
+        LOCK(m_wallet->cs_wallet);
+
+        bool is_mine = false;
+        if (!entry.psgt.inputs.empty()) {
+            txnouttype script_type;
+            std::vector<std::vector<unsigned char>> solutions;
+            if (Solver(entry.psgt.inputs[0].redeem_script, script_type, solutions)
+                && script_type == TX_MULTISIG) {
+                for (unsigned int i = 1; i + 1 < solutions.size(); ++i) {
+                    const CPubKey pubkey(solutions[i]);
+                    if (pubkey.IsValid() && m_wallet->HaveKey(pubkey.GetID())) {
+                        is_mine = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!is_mine) {
+            return PSGTRelevance::NOT_MINE;
+        }
+        return PSGTSignedBy(*m_wallet, entry.psgt)
+                   ? PSGTRelevance::MINE_AWAITING_OTHERS
+                   : PSGTRelevance::MINE_AWAITING_YOU;
+    }
+};
+
 } // namespace
 
 std::unique_ptr<StakingStatus> MakeStakingStatus()
@@ -1448,6 +1968,11 @@ std::unique_ptr<VotingManager> MakeVotingManager()
 std::unique_ptr<ResearcherContext> MakeResearcherContext(CWallet* wallet)
 {
     return std::make_unique<ResearcherContextImpl>(wallet);
+}
+
+std::unique_ptr<PSGTPoolContext> MakePSGTPoolContext(CWallet* wallet)
+{
+    return std::make_unique<PSGTPoolContextImpl>(wallet);
 }
 
 } // namespace interfaces

@@ -5,30 +5,23 @@
 #include "psgtpooltablemodel.h"
 
 #include "bitcoinunits.h"
+#include "interfaces/psgt.h"
 #include "optionsmodel.h"
 #include "walletmodel.h"
-
-#include <key_io.h>
-#include <node/psgt_pool.h>
-#include <psgt.h>
-#include <script/standard.h>
-#include <util.h>
-#include <wallet/wallet.h>
 
 #include <QDateTime>
 
 #include <algorithm>
-#include <variant>
-
-extern CWallet* pwalletMain;
 
 namespace {
 //! Newest-first, deduplicated-by-image cap on the recently-completed history.
 constexpr int MAX_HISTORY_ROWS = 20;
 } // namespace
 
-PSGTPoolTableModel::PSGTPoolTableModel(WalletModel* wallet_model, QObject* parent)
+PSGTPoolTableModel::PSGTPoolTableModel(interfaces::PSGTPoolContext& psgt_context,
+                                       WalletModel* wallet_model, QObject* parent)
     : QAbstractTableModel(parent)
+    , m_psgt_context(psgt_context)
     , m_wallet_model(wallet_model)
 {
     refresh();
@@ -50,70 +43,28 @@ const PSGTPoolTableModel::Row* PSGTPoolTableModel::rowAt(int row) const
     return &m_rows.at(row);
 }
 
-PSGTPoolTableModel::Row PSGTPoolTableModel::MakeRow(const PSGTPoolEntry& entry) const
+PSGTPoolTableModel::Row PSGTPoolTableModel::MapRow(const interfaces::PSGTPoolRow& src) const
 {
+    // The wallet-relevance and payment-destination derivation now happens
+    // node-side (interfaces::PSGTPoolContext::entries); this only maps the value
+    // row to the display Row.
     Row row;
-    row.image = entry.image;
-    row.revision = entry.revision_hash;
-    row.sigs_valid = entry.valid_sigs;
-    row.sigs_required = entry.sigs_required;
-    row.sigs_total = entry.sigs_total;
-    row.time_received = entry.time_received;
-
-    // The payment is the largest output that is NOT change. On a multisig
-    // spend the change returns to the arrangement's own P2SH address (the
-    // image), and change can exceed the payment -- so exclude any output paying
-    // back to the image before taking the largest. If every output pays to the
-    // image (degenerate) fall back to the largest overall so the row still
-    // shows something.
-    CAmount best = 0;
-    const CTxOut* payment = nullptr;
-    CAmount best_any = 0;
-    const CTxOut* payment_any = nullptr;
-    for (const CTxOut& txout : entry.psgt.tx.vout) {
-        if (txout.nValue >= best_any) {
-            best_any = txout.nValue;
-            payment_any = &txout;
-        }
-        CTxDestination dest;
-        const bool is_change = ExtractDestination(txout.scriptPubKey, dest)
-            && std::holds_alternative<CScriptID>(dest)
-            && std::get<CScriptID>(dest) == entry.image;
-        if (!is_change && txout.nValue >= best) {
-            best = txout.nValue;
-            payment = &txout;
-        }
-    }
-    if (!payment) payment = payment_any; // all outputs were change (degenerate)
-    if (payment) {
-        row.amount = payment->nValue;
-        CTxDestination dest;
-        row.destination = ExtractDestination(payment->scriptPubKey, dest)
-                              ? QString::fromStdString(EncodeDestination(dest))
-                              : QObject::tr("(nonstandard)");
-    }
-
-    // Wallet relevance: does this wallet hold a key of the arrangement?
-    if (pwalletMain && !entry.psgt.inputs.empty()) {
-        txnouttype script_type;
-        std::vector<std::vector<unsigned char>> vSolutions;
-        if (Solver(entry.psgt.inputs[0].redeem_script, script_type, vSolutions)
-            && script_type == TX_MULTISIG) {
-            LOCK(pwalletMain->cs_wallet);
-            for (unsigned int i = 1; i + 1 < vSolutions.size(); ++i) {
-                const CPubKey pubkey(vSolutions[i]);
-                if (pubkey.IsValid() && pwalletMain->HaveKey(pubkey.GetID())) {
-                    row.is_mine = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    const bool awaiting_me = row.is_mine && pwalletMain
-        && !WITH_LOCK(pwalletMain->cs_wallet, return PSGTSignedBy(*pwalletMain, entry.psgt));
-    row.status = awaiting_me ? RowStatus::AwaitingYourSignature : RowStatus::AwaitingOthers;
-
+    row.image_hex = src.image_hex;
+    row.image_address = src.image_address;
+    row.revision_hex = src.revision_hex;
+    row.sigs_valid = src.valid_sigs;
+    row.sigs_required = src.sigs_required;
+    row.sigs_total = src.sigs_total;
+    row.time_received = src.time_received;
+    row.in_pool = src.in_pool;
+    row.amount = src.amount;
+    row.destination = src.destination.empty()
+                          ? QObject::tr("(nonstandard)")
+                          : QString::fromStdString(src.destination);
+    row.is_mine = src.relevance != interfaces::PSGTRelevance::NOT_MINE;
+    row.status = (src.relevance == interfaces::PSGTRelevance::MINE_AWAITING_YOU)
+                     ? RowStatus::AwaitingYourSignature
+                     : RowStatus::AwaitingOthers;
     return row;
 }
 
@@ -122,8 +73,8 @@ void PSGTPoolTableModel::refresh()
     beginResetModel();
     m_rows.clear();
 
-    for (const PSGTPoolEntry& entry : g_psgt_pool.GetAll()) {
-        m_rows.push_back(MakeRow(entry));
+    for (const interfaces::PSGTPoolRow& src : m_psgt_context.entries()) {
+        m_rows.push_back(MapRow(src));
     }
 
     // Append the recently-completed history (rows no longer pooled).
@@ -144,25 +95,24 @@ void PSGTPoolTableModel::handlePoolChanged(const QString& revision_hash, quint8 
     // pending. Prior CT_UPDATED events have already refresh()ed the cached
     // rows, so a live row's revision matches the pool's current revision.
     if (change_type == CT_DELETED) {
-        uint256 removed;
-        removed.SetHex(revision_hash.toStdString());
+        const std::string removed = revision_hash.toStdString();
 
         for (const Row& row : m_rows) {
-            if (row.in_pool && row.is_mine && row.revision == removed) {
+            if (row.in_pool && row.is_mine && row.revision_hex == removed) {
                 Row completed = row;
                 // Map the pool's removal reason (int, see ui_interface) to a
                 // specific terminal status so the history row is meaningful.
-                switch (static_cast<PSGTRemovalReason>(reason)) {
-                case PSGTRemovalReason::EXPIRED:          completed.status = RowStatus::Expired;    break;
-                case PSGTRemovalReason::COMPLETED:        completed.status = RowStatus::Completed;   break;
-                case PSGTRemovalReason::CONFLICT_MEMPOOL:
-                case PSGTRemovalReason::CONFLICT_BLOCK:   completed.status = RowStatus::Conflicted;  break;
-                default:                                  completed.status = RowStatus::Removed;     break;
+                switch (static_cast<interfaces::PSGTRemovalReason>(reason)) {
+                case interfaces::PSGTRemovalReason::EXPIRED:          completed.status = RowStatus::Expired;    break;
+                case interfaces::PSGTRemovalReason::COMPLETED:        completed.status = RowStatus::Completed;   break;
+                case interfaces::PSGTRemovalReason::CONFLICT_MEMPOOL:
+                case interfaces::PSGTRemovalReason::CONFLICT_BLOCK:   completed.status = RowStatus::Conflicted;  break;
+                default:                                              completed.status = RowStatus::Removed;     break;
                 }
                 completed.in_pool = false;
                 // Newest first; dedupe by image; bound the length.
                 for (int i = m_history.size() - 1; i >= 0; --i) {
-                    if (m_history.at(i).image == completed.image) m_history.removeAt(i);
+                    if (m_history.at(i).image_hex == completed.image_hex) m_history.removeAt(i);
                 }
                 m_history.prepend(completed);
                 while (m_history.size() > MAX_HISTORY_ROWS) {
@@ -218,12 +168,10 @@ QVariant PSGTPoolTableModel::data(const QModelIndex& index, int role) const
             return tr("%n day(s)", nullptr, (int)(secs / 86400));
         }
         case Image:
-            // Show the arrangement's P2SH address, not the raw CScriptID hex.
-            // row.image.ToString() is the uint160 in reversed-byte form, which a
-            // user cannot correlate with the multisig address; encode it as the
-            // recognizable P2SH address instead. The raw image hash remains in
-            // the Details dialog and the RPC.
-            return QString::fromStdString(EncodeDestination(CTxDestination(row.image)));
+            // The arrangement's P2SH address (precomputed node-side), not the raw
+            // image hash, which a user cannot correlate with the multisig address.
+            // The raw image hash remains the command id and the RPC key.
+            return QString::fromStdString(row.image_address);
         }
     } else if (role == Qt::TextAlignmentRole) {
         if (index.column() == Amount || index.column() == Signatures) {

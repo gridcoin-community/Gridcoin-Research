@@ -5,12 +5,17 @@
 #ifndef BITCOIN_QT_PSGTPOOLTABLEMODEL_H
 #define BITCOIN_QT_PSGTPOOLTABLEMODEL_H
 
-#include <node/psgt_pool.h>
-
 #include <QAbstractTableModel>
 #include <QList>
 
+#include <string>
+
 class WalletModel;
+
+namespace interfaces {
+class PSGTPoolContext;
+struct PSGTPoolRow;
+} // namespace interfaces
 
 //!
 //! \brief Table model of the local PSGT pool (#2910) for the PSGT Pool page.
@@ -26,7 +31,8 @@ class PSGTPoolTableModel : public QAbstractTableModel
     Q_OBJECT
 
 public:
-    explicit PSGTPoolTableModel(WalletModel* wallet_model, QObject* parent = nullptr);
+    PSGTPoolTableModel(interfaces::PSGTPoolContext& psgt_context, WalletModel* wallet_model,
+                       QObject* parent = nullptr);
 
     enum ColumnIndex {
         Status = 0,
@@ -50,8 +56,9 @@ public:
     };
 
     struct Row {
-        CScriptID image;
-        uint256 revision;
+        std::string image_hex;     //!< The pool key / command id (raw Hash160 hex).
+        std::string image_address; //!< The arrangement's P2SH address, for the Image column.
+        std::string revision_hex;  //!< The revision hash, matched against the removal signal.
         RowStatus status = RowStatus::AwaitingOthers;
         QString destination;
         qint64 amount = 0;
@@ -83,6 +90,7 @@ public Q_SLOTS:
     void handlePoolChanged(const QString& revision_hash, quint8 change_type, int reason);
 
 private:
+    interfaces::PSGTPoolContext& m_psgt_context;
     WalletModel* m_wallet_model;
     QList<Row> m_rows;
 
@@ -90,7 +98,7 @@ private:
     //! bounded. Merged after the live pool rows in refresh().
     QList<Row> m_history;
 
-    Row MakeRow(const PSGTPoolEntry& entry) const;
+    Row MapRow(const interfaces::PSGTPoolRow& src) const;
 };
 
 #endif // BITCOIN_QT_PSGTPOOLTABLEMODEL_H
